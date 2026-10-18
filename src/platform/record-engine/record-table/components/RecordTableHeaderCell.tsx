@@ -28,10 +28,14 @@ import { defaultGroupBy, getViewGroupBy, isGroupableField, withViewGroupBy } fro
 export function RecordTableHeaderCell({
   recordField,
   isLabelIdentifier = false,
+  lockIdentifier = isLabelIdentifier,
   collapsed = false,
 }: {
   recordField: RecordField;
+  /** The column that opens the record (styled and pinned as the identifier). */
   isLabelIdentifier?: boolean;
+  /** The object's own identifier field: it cannot be moved or hidden. */
+  lockIdentifier?: boolean;
   /** Folded to zero width while the preview panel condenses the table. */
   collapsed?: boolean;
 }) {
@@ -57,9 +61,9 @@ export function RecordTableHeaderCell({
   const visibleIndex = visibleColumns.findIndex(
     (column) => column.viewFieldId === recordField.viewFieldId,
   );
-  const canMoveLeft = !isLabelIdentifier && visibleIndex > 1;
+  const canMoveLeft = !lockIdentifier && visibleIndex > 1;
   const canMoveRight =
-    !isLabelIdentifier &&
+    !lockIdentifier &&
     visibleIndex >= 1 &&
     visibleIndex < visibleColumns.length - 1;
 
@@ -102,7 +106,7 @@ export function RecordTableHeaderCell({
     );
     const nextIndex = currentIndex + direction;
     if (
-      isLabelIdentifier ||
+      lockIdentifier ||
       currentIndex < 0 ||
       nextIndex < 1 ||
       nextIndex >= currentVisible.length
@@ -309,14 +313,14 @@ export function RecordTableHeaderCell({
             </button>
             <button
               type="button"
-              disabled={isLabelIdentifier}
+              disabled={lockIdentifier}
               onClick={() => {
                 handle.get().toggleColumnVisibility(recordField.viewFieldId);
                 setMenuOpen(false);
               }}
             >
               <EyeOff size={13} />
-              <span>{isLabelIdentifier ? "Identifier field" : "Hide field"}</span>
+              <span>{lockIdentifier ? "Identifier field" : "Hide field"}</span>
             </button>
           </ViewportPopover>
           </div>,

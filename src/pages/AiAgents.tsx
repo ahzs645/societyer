@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { InfoPopover } from "../components/InfoPopover";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useAction, useQuery } from "convex/react";
-import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSquare, Play, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2, Wrench, XCircle } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSquare, Play, Plug, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2, Wrench, XCircle } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
@@ -10,6 +11,7 @@ import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
+import { AiConnectorsCard } from "../features/aiConnectors/AiConnectorsCard";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
@@ -71,7 +73,22 @@ type AiModelCatalog = {
   categories?: Record<string, AiModelInfo[]>;
 };
 
-type AiAgentSection = "chat" | "tools" | "skills" | "catalog" | "runs";
+type AiAgentSection = "chat" | "tools" | "skills" | "catalog" | "runs" | "connectors";
+const AI_AGENT_SECTIONS: readonly AiAgentSection[] = ["chat", "tools", "skills", "catalog", "runs", "connectors"];
+
+/** `?draft=<id>` (the link an AI connector returns) scrolls to that pending draft once the list loads. */
+function useFocusedDraft(drafts: readonly { _id: string }[] | undefined) {
+  const [searchParams] = useSearchParams();
+  const focused = searchParams.get("draft");
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!focused || scrolled.current || !drafts?.some((draft) => draft._id === focused)) return;
+    scrolled.current = true;
+    document.getElementById(`ai-tool-draft-${focused}`)?.scrollIntoView({ block: "center" });
+  }, [drafts, focused]);
+  const section = searchParams.get("section");
+  return { focused, section: AI_AGENT_SECTIONS.find((value) => value === section) };
+}
 
 export function AiAgentsPage() {
   const society = useSociety();
@@ -122,7 +139,8 @@ export function AiAgentsPage() {
   const [chatBusy, setChatBusy] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
   const [modelBusy, setModelBusy] = useState(false);
-  const [activeSection, setActiveSection] = useState<AiAgentSection>("chat");
+  const focusedDraft = useFocusedDraft(toolDrafts);
+  const [activeSection, setActiveSection] = useState<AiAgentSection>(() => (focusedDraft.focused ? "chat" : focusedDraft.section ?? "chat"));
   const [lastResult, setLastResult] = useState<any | null>(null);
   const [aiSetup, setAiSetup] = useState({
     scope: "personal",
@@ -399,6 +417,8 @@ export function AiAgentsPage() {
           { id: "skills", label: "Skills", icon: <BrainCircuit size={14} /> },
           { id: "catalog", label: "Catalog", icon: <ListTree size={14} /> },
           { id: "runs", label: "Runs", icon: <History size={14} /> },
+          // Tokens for the hosted MCP endpoint. Also in Settings; this tab reaches members without settings access.
+          ...(isLocalDataRuntime() ? [] : [{ id: "connectors", label: "Connectors", icon: <Plug size={14} /> }]),
         ]}
         activeTab={activeSection}
         onTabChange={(section) => setActiveSection(section as AiAgentSection)}
@@ -625,7 +645,13 @@ export function AiAgentsPage() {
               <div className="muted">No AI tool drafts yet.</div>
             ) : (
               (canWriteTasks ? toolDrafts ?? [] : []).map((draft) => (
-                <div key={draft._id} className="row" style={{ alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingBottom: 10, borderBottom: "1px solid var(--border)" }}>
+                <div
+                  key={draft._id}
+                  id={`ai-tool-draft-${draft._id}`}
+                  className={`row${focusedDraft.focused === draft._id ? " ai-tool-draft--focused" : ""}`}
+                  aria-current={focusedDraft.focused === draft._id ? "true" : undefined}
+                  style={{ alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingBottom: 10, borderBottom: "1px solid var(--border)" }}
+                >
                   <div className="col" style={{ gap: 4, minWidth: 0 }}>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                       <Badge tone={draft.status === "executed" ? "success" : draft.status === "rejected" ? "danger" : "warn"}>{draft.status}</Badge>
@@ -998,6 +1024,8 @@ export function AiAgentsPage() {
           </div>
         </div>
         )}
+
+        {activeSection === "connectors" && !isLocalDataRuntime() && <AiConnectorsCard societyId={society._id} />}
       </SettingsShell>
     </div>
   );

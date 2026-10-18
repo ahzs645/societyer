@@ -783,6 +783,17 @@ export function TasksPage() {
                 groupBy={groupBy}
                 onGroupBy={setGroupBy}
                 showGrouping={layout === "list"}
+                savedViews={objectMetadata ? {
+                  views: tableData.views.map((view) => ({ id: String(view._id), name: view.name })),
+                  currentId: String(currentViewId ?? tableData.views[0]?._id ?? "") || null,
+                  onPick: (viewId) => {
+                    // Same per-browser memory the toolbar's view picker writes
+                    // (RecordTableViewToolbar), so a reload reopens this view.
+                    writeStored(`societyer:record-view:${society._id}:${objectMetadata._id}`, viewId);
+                    setCurrentViewId(viewId as Id<"views">);
+                    setLayout("engine");
+                  },
+                } : undefined}
               />
             )}
             <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
@@ -850,6 +861,8 @@ export function TasksPage() {
             onViewPicked={() => setLayout("engine")}
             onOpenFilter={() => setFilterOpen((value) => !value)}
             listView={register === "current" ? { active: layout === "list", onSelect: () => setLayout("list"), onLeave: () => setLayout("engine") } : undefined}
+            // Phones pick the saved view in the task view sheet (TaskViewSummaryButton).
+            hideViewPickerOnPhone
           />
           <RecordTableFilterPopover
             open={filterOpen}

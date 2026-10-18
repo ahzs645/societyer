@@ -1,7 +1,11 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { KeyRound } from "lucide-react";
+import { AuthShell } from "../auth/AuthShell";
+import { AuthFailure, authFailureFromResponse, toAuthFailure } from "../auth/authErrors";
+import { PasswordField } from "../auth/PasswordField";
 import { loadSessionAuthClient } from "../lib/sessionAuthClient";
+
+const MIN_PASSWORD_LENGTH = 10;
 
 /** Landing page for a password-reset email link (Convex-hosted sign-in). */
 export function ResetPasswordPage() {
@@ -11,15 +15,26 @@ export function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(
-    searchParams.get("error") ? "This reset link is invalid or has expired. Request a new one from the sign-in page." : null,
-  );
+  const [error, setError] = useState<AuthFailure | null>(null);
+  // Better Auth redirects here with `?error=INVALID_TOKEN` for an expired or
+  // used link; the server can also reject the token on submit.
+  const [tokenRejected, setTokenRejected] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const focusAfterError = useRef(false);
+
+  // The fields are disabled while busy; move focus to the error once they are live again.
+  useEffect(() => {
+    if (busy || !error || !focusAfterError.current) return;
+    focusAfterError.current = false;
+    errorRef.current?.focus();
+  }, [busy, error]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy || !token) return;
     if (password !== confirm) {
-      setError("The passwords don't match.");
+      focusAfterError.current = true;
+      setError(new AuthFailure("other", "The passwords don't match."));
       return;
     }
     setBusy(true);
@@ -27,47 +42,73 @@ export function ResetPasswordPage() {
     try {
       const { authClient } = await loadSessionAuthClient();
       const result = await authClient.resetPassword({ newPassword: password, token });
-      if (result.error) throw new Error(result.error.message || "The password could not be changed");
+      if (result.error) {
+        throw authFailureFromResponse(result.error, "The password could not be changed.", { minPasswordLength: MIN_PASSWORD_LENGTH });
+      }
       navigate("/login?reset=1", { replace: true });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "The password could not be changed");
+      const failure = toAuthFailure(err, "The password could not be changed.");
+      if (failure.kind === "invalid-token") {
+        setPassword("");
+        setConfirm("");
+        setTokenRejected(true);
+        return;
+      }
+      focusAfterError.current = true;
+      setError(failure);
     } finally {
       setBusy(false);
     }
   };
 
+  const linkUsable = Boolean(token) && !searchParams.get("error") && !tokenRejected;
+
+  if (!linkUsable) {
+    // Better Auth sends `?error=INVALID_TOKEN` without a token for a dead link.
+    const lede = token || searchParams.get("error")
+      ? "It may have expired or already been used. Reset links work once, for one hour."
+      : "Part of the link is missing. Open it from your email again, or ask for a new one.";
+    return (
+      <AuthShell
+        title="This reset link doesn't work"
+        lede={lede}
+        stateKey="link-broken"
+        after={<p><Link to="/login" className="auth__link">Back to sign in</Link></p>}
+      >
+        <Link to="/login?mode=forgot" className="btn btn--primary auth__submit">Send a new link</Link>
+      </AuthShell>
+    );
+  }
+
   return (
-    <div className="landing" style={{ minHeight: "100vh" }}>
-      <section className="landing__hero" style={{ minHeight: "100vh" }}>
-        <div className="landing__container" style={{ maxWidth: 520 }}>
-          <div className="landing__eyebrow"><KeyRound size={12} /> Account recovery</div>
-          <h1 className="landing__h1" style={{ marginBottom: 12 }}>Choose a new password</h1>
-          <form onSubmit={onSubmit} className="card" style={{ padding: 20, display: "grid", gap: 14 }}>
-            {token && !searchParams.get("error") && (
+    <AuthShell
+      title="Choose a new password"
+      lede={`Pick a password with at least ${MIN_PASSWORD_LENGTH} characters. You'll sign in with it next.`}
+      stateKey="form"
+      after={<p><Link to="/login" className="auth__link">Back to sign in</Link></p>}
+    >
+      <form onSubmit={onSubmit} className="auth__form">
+        <fieldset className="auth__fieldset" disabled={busy}>
+          <PasswordField label="New password" minLength={MIN_PASSWORD_LENGTH} value={password}
+            onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" enterKeyHint="next" required />
+          <PasswordField label="Confirm new password" minLength={MIN_PASSWORD_LENGTH} value={confirm}
+            onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" enterKeyHint="go" required />
+          {error && (
+            <div ref={errorRef} role="alert" tabIndex={-1} className="notice notice--danger auth__notice auth__error">
+              {error.message}
+            </div>
+          )}
+          <button type="submit" className={`btn btn--primary auth__submit${busy ? " is-busy" : ""}`}>
+            <span className="auth__submit-label" aria-hidden={busy || undefined}>Change password</span>
+            {busy && (
               <>
-                <label className="field">
-                  <span className="field__label">New password</span>
-                  <input className="input" type="password" minLength={10} value={password}
-                    onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required />
-                </label>
-                <label className="field">
-                  <span className="field__label">Confirm new password</span>
-                  <input className="input" type="password" minLength={10} value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
-                </label>
+                <span className="spinner spinner--md auth__submit-spinner" aria-hidden="true" />
+                <span className="sr-only">Please wait…</span>
               </>
             )}
-            {!token && !error && <p style={{ margin: 0 }}>This reset link is incomplete. Open the link from your email again.</p>}
-            {error && <div role="alert" style={{ color: "var(--danger)" }}>{error}</div>}
-            {token && !searchParams.get("error") && (
-              <button className="landing__btn landing__btn--primary" disabled={busy}>
-                {busy ? "Please wait…" : "Change password"}
-              </button>
-            )}
-            <Link to="/login" className="landing__btn landing__btn--ghost">Back to sign in</Link>
-          </form>
-        </div>
-      </section>
-    </div>
+          </button>
+        </fieldset>
+      </form>
+    </AuthShell>
   );
 }

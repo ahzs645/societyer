@@ -1,12 +1,13 @@
 import { EVIDENCE_FIELDS, validateGenericEvidence } from "../evidenceReview";
 import { buildSourceMinuteSections, hasRecordedMinuteSectionContent, attachSourceMinuteSectionLinks } from "../sourceMinutesTransposition";
 import { buildSourceMeetingRecord, preflightSourceMeetingRecord, type SourceMeetingDocumentInput } from "../sourceMeetingRecord";
-import { requireDocumentAccess, documentAccessPredicate } from "./documents";
+import { requireDocumentAccess, documentAclPredicate } from "./documents";
 import { visibleDirectoryRows } from "./peopleDirectory";
 import { minutesEvidenceOptions } from "../minutesExportEvidence";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 import { normalizeMeetingHistory, assertMeetingHistoryMutable, MEETING_HISTORY_FIELDS, type MeetingHistory, type ActionObservation } from "../meetingHistory";
 import { normalizeMeetingQuorum } from "../minutesQuorum";
+import { minutesDraftBlocker } from "../minutesDraftInput";
 /**
  * PORTABLE FUNCTIONS: the minutes domain
  * (list / getByMeeting / create / update / upsertFromDraft /
@@ -28,6 +29,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
+import { readerAccessGate, minutesForReader } from "./minutesPrivacy";
 import {
   applyProceduralTags,
   classifyProceduralMotion,
@@ -299,6 +301,7 @@ export async function syncMotionsForMinutes(
         sourceLocator: m.sourceLocator,
         sourceOutcomeText,
         outcomeOverrideNote: m.outcomeOverrideNote,
+        transcriptRef: m.transcriptRef,
         sourceExternalIds: Array.isArray(m.sourceExternalIds) && m.sourceExternalIds.length ? m.sourceExternalIds : undefined,
         source: "minutes",
       });
@@ -310,6 +313,9 @@ export async function syncMotionsForMinutes(
       if (linkId) {
         const prev: any = existingById.get(String(linkId));
         await ctx.db.replace(linkId, {
+          // The transcript link is set by transcripts:linkMinutesItem; a save
+          // that does not carry it (agenda sync, drafting) must not drop it.
+          ...(prev?.transcriptRef ? { transcriptRef: prev.transcriptRef } : {}),
           ...fields,
           history: [historyEntry],
           createdAtISO: prev?.createdAtISO ?? now,
@@ -380,7 +386,7 @@ async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: a
  * document access predicate and each source document once, not N times.
  */
 type SourceAccessMemo = {
-  predicates: Map<string, Promise<Awaited<ReturnType<typeof documentAccessPredicate>>>>;
+  predicates: Map<string, Promise<Awaited<ReturnType<typeof documentAclPredicate>>>>;
   documents: Map<string, Promise<any>>;
 };
 function newSourceAccessMemo(): SourceAccessMemo {
@@ -409,7 +415,8 @@ async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any, memo: Sour
     const societyId = String(minutes.societyId);
     let predicate = memo.predicates.get(societyId);
     if (!predicate) {
-      predicate = requirePermissionPortable(ctx,societyId,"documents:read").then(() => documentAccessPredicate(ctx,societyId));
+      // The ACL only: in-camera minutes lose their source copies in minutesForReader, after this.
+      predicate = requirePermissionPortable(ctx,societyId,"documents:read").then(() => documentAclPredicate(ctx,societyId));
       memo.predicates.set(societyId, predicate);
     }
     const allows = await predicate;
@@ -446,8 +453,9 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
   // table-sourced transparently. The live embedded `motions[]` stays untouched on
   // the row for the editor's write path. See docs/motions-migration-finish-scope.md.
   const memo = newSourceAccessMemo();
+  const inCamera = readerAccessGate(ctx);
   return Promise.all(
-    rows.map(async (m) => sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }, memo)),
+    rows.map(async (m) => minutesForReader(ctx, await sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }, memo), inCamera)),
   );
 }
 
@@ -475,8 +483,9 @@ export async function listLightPortable(ctx: PortableQueryCtx, { societyId }: { 
   ]);
   const factsById = new Map(factRows.map((row) => [row.id, row.facts]));
   const memo = newSourceAccessMemo();
+  const inCamera = readerAccessGate(ctx);
   const rows = await Promise.all(
-    light.map(async (m) => sourceMinutesView(ctx, { ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }, memo, factsById.get(String(m._id)) ?? { check: true, sourceIds: [] })),
+    light.map(async (m) => minutesForReader(ctx, await sourceMinutesView(ctx, { ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }, memo, factsById.get(String(m._id)) ?? { check: true, sourceIds: [] }), inCamera)),
   );
   return rows.map((row: any) => {
     const restricted = row?.sourceTransposition?.reviewStatus === "restricted" ? row.sourceTransposition : undefined;
@@ -498,7 +507,7 @@ export async function getByMeetingPortable(
     .collect();
   const m = rows[0];
   if (!m) return null;
-  return sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) });
+  return minutesForReader(ctx, await sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }));
 }
 
 /**
@@ -924,8 +933,8 @@ export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: an
   validateGenericEvidence(payload, existing[0]);
   await assertMeetingHistoryReferences(ctx, args.societyId, payload, existing[0]?._id, args.heldAt);
   if (existing[0]) {
-    if (existing[0].approvedAt || existing[0].adoptedSnapshot || Array.isArray(existing[0].motionSnapshots)) throw new Error("Adopted minutes are frozen. Start an amendment before importing a draft.");
-    if (hasRecordedMinuteSectionContent(existing[0].sections)) throw new Error("Existing minute sections contain recorded content. Review the new draft separately before replacing them.");
+    const draftBlocker = minutesDraftBlocker(existing[0]);
+    if (draftBlocker) throw new Error(draftBlocker);
     assertMeetingHistoryMutable(existing[0], normalizeMeetingHistory(payload));
     await ctx.db.patch(existing[0]._id, payload);
     await syncMotionsForMinutes(ctx, {

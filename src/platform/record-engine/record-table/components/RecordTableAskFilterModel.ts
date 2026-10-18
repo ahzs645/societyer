@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { filterTreeSignature } from "../utils/filterTree";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { useAction, useQuery } from "convex/react";
-import { readLlmPrefs, readLocalApiKey, providerBaseUrl } from "@/features/intake/localLlm";
+import { useDeviceAi } from "@/lib/localAi/useDeviceAi";
+import { deviceAiClient } from "@/lib/localAi/client";
 import { api } from "@/lib/convexApi";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "@/lib/staticRuntime";
 import { useSociety } from "@/hooks/useSociety";
@@ -83,33 +84,14 @@ export function useApplyAskFilter() {
  *   people who may use the AI assistant (tasks:write). Runs the minimal
  *   aiFilterActions:suggestRecordFilter server action — no chat thread, no
  *   workspace context, schema only.
- * - "device": local/desktop workspaces (no server to hold a provider key) with
- *   the device-local key from the intake AI settings.
+ * - "device": local/desktop workspaces (no server to hold a provider key)
+ *   with the On-device AI settings (Settings → On-device AI, assistant toggle).
+ *   A local server such as Ollama needs no key.
  * - null: the static demo, AI hidden by the person, or no provider. Hosted
  *   workspaces never fall back to a device key, so the workspace's AI choice
  *   (including turning its provider off) always holds.
  */
 export type AskAiRoute = "workspace" | "device" | null;
-
-function useDeviceAiKey(enabled: boolean): boolean {
-  const [available, setAvailable] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    if (!enabled || !readLlmPrefs().enabled) {
-      setAvailable(false);
-      return;
-    }
-    readLocalApiKey()
-      .then((key) => {
-        if (!cancelled) setAvailable(Boolean(key));
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled]);
-  return available;
-}
 
 /** The optional AI path for the mounted table: whether it is offered, and how to ask. */
 export function useAskAi(): { route: AskAiRoute; ask: (query: string, signal?: AbortSignal) => Promise<NlParseResult> } {
@@ -126,8 +108,8 @@ export function useAskAi(): { route: AskAiRoute; ask: (query: string, signal?: A
     | { effective?: { scope?: string; status?: string } | null }
     | undefined;
   const workspaceProvider = workspaceEligible && settings?.effective?.scope === "workspace" && settings.effective.status === "active";
-  const deviceKey = useDeviceAiKey(local && !demo && !aiHidden);
-  const route: AskAiRoute = workspaceProvider ? "workspace" : local && !demo && !aiHidden && deviceKey ? "device" : null;
+  const deviceAi = useDeviceAi("assistant");
+  const route: AskAiRoute = workspaceProvider ? "workspace" : local && !demo && !aiHidden && deviceAi.ready ? "device" : null;
   const suggest = useAction(api.aiFilterActions.suggestRecordFilter);
   const nameSingular = objectMetadata.nameSingular;
 
@@ -158,16 +140,14 @@ export function useAskAi(): { route: AskAiRoute; ask: (query: string, signal?: A
  * validates the reply with the same shared validator as the server.
  */
 async function askDeviceAiForFilter(fields: NlField[], query: string, context: NlContext, signal?: AbortSignal): Promise<NlParseResult> {
-  const prefs = readLlmPrefs();
-  const apiKey = await readLocalApiKey();
-  if (!prefs.enabled || !apiKey) throw new Error("No AI provider is set up on this device.");
-  const [{ createOpenAI }, { generateText }] = await Promise.all([import("@ai-sdk/openai"), import("ai")]);
-  const baseURL = providerBaseUrl(prefs);
-  const provider = createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
-  const model = prefs.provider === "openai" ? provider(prefs.modelId) : provider.chat(prefs.modelId);
   const { system, user } = buildAiFilterPrompt(fields, query.trim().slice(0, AI_FILTER_LIMITS.query), context);
-  const reply = await generateText({ model, system, prompt: user, abortSignal: signal, maxOutputTokens: 800, temperature: 0 });
-  const raw = extractJsonObject(reply.text);
+  const text = await deviceAiClient().completeText({
+    messages: [{ role: "system", content: system }, { role: "user", content: user }],
+    signal,
+    maxTokens: 800,
+    temperature: 0,
+  });
+  const raw = extractJsonObject(text);
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("The AI reply wasn't a filter. Try rephrasing the request.");
   return validateAiFilterReply(raw, fields, query);
 }

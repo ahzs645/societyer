@@ -570,6 +570,63 @@
   border-top: 1px solid token('border');
 }
 
+// Phones: each source is one compact row (name and status, one meta line,
+// the action on the right) instead of a 300px card, so 24 sources read as a
+// list. Trust level, cadence and tags stay on the source's Details page.
+@media (max-width: 760px) {
+  .grant-source-library .grid-auto {
+    gap: token('s-2');
+  }
+  .grant-source-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px token('s-2');
+    min-height: 0;
+    padding: token('s-3') token('s-3') token('s-3') token('s-4');
+  }
+  .grant-source-card__head {
+    grid-column: 1;
+    grid-row: 1;
+    align-items: center;
+    padding: 0;
+    border-bottom: 0;
+  }
+  .grant-source-card__title {
+    font-size: token('fs-sm');
+  }
+  .grant-source-card__status:not(.is-notable) {
+    display: none;
+  }
+  .grant-source-card__body {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 0;
+  }
+  .grant-source-card__meta {
+    display: block;
+    overflow: hidden;
+    font-size: token('fs-xs');
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    span + span::before { content: " · "; }
+  }
+  .grant-source-card__signals,
+  .grant-source-card .grant-source-tags {
+    display: none;
+  }
+  .grant-source-card__footer {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    padding: 0;
+    border-top: 0;
+  }
+  .grant-source-card .grant-source-actions {
+    flex-wrap: nowrap;
+  }
+}
+
 .grant-source-table-source {
   display: grid;
   gap: 2px;

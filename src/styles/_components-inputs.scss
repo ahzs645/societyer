@@ -30,29 +30,97 @@
    * InspectorHost publishes --inspector-inset while one is open on desktop.
    * A paused (hovered) toast must never sit on the button being reached for. */
   right: calc(max(16px, env(safe-area-inset-right, 0px)) + var(--inspector-inset, 0px));
-  @include flex-column;
-  align-items: stretch;
-  gap: 8px;
+  /* The toasts are stacked cards (Toast.tsx measures them and publishes
+   * --toast-front-h / --toast-stack-h here, and --toast-depth, --toast-h and
+   * --toast-offset on each toast). Collapsed, the newest is in front and two
+   * older ones peek out behind it; hovering, focusing or tapping the stack
+   * fans it out into a list. --toast-dir is the way older toasts move: -1
+   * (up) for a stack at the bottom, 1 (down) for one at the top. */
+  --toast-dir: -1;
+  --toast-peek: 9px;
+  width: min(360px, calc(100vw - 32px));
+  height: var(--toast-stack-h, auto);
   z-index: token('z-toast');
   pointer-events: none;
-  max-width: min(360px, calc(100vw - 32px));
 }
+/* Fanned out, the gaps between toasts still count as the stack, so the
+ * pointer can cross them without folding it back. */
+.toast-stack[data-expanded="true"] { pointer-events: auto; }
 .toast {
+  /* Depth 2 is the deepest visible card; older toasts tuck behind it,
+   * transparent but still in the DOM (and the live region). */
+  --toast-depth-shown: min(var(--toast-depth, 0), 2);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   pointer-events: auto;
   display: flex;
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
   @include surface-floating;
-  /* Tone stripe drawn inside the radius so the corners stay round. */
-  background-image: linear-gradient(to right, var(--toast-tone, #{token('border-strong')}) 3px, transparent 3px);
+  /* Tone stripe drawn inside the radius so the corners stay round. Sized
+   * rather than a hard stop so it can fold away on the cards behind. */
+  background-image: linear-gradient(var(--toast-tone, #{token('border-strong')}), var(--toast-tone, #{token('border-strong')}));
+  background-repeat: no-repeat;
+  background-size: 3px 100%;
   padding-left: 15px;
+  /* Collapsed: line each card's far edge up with the front toast's, then
+   * step it back by --toast-peek and shrink it 4% per level. */
+  transform-origin: top center;
+  transform:
+    translateX(var(--toast-swipe-x, 0px))
+    translateY(calc(var(--toast-dir) * (var(--toast-front-h, 0px) - var(--toast-h, var(--toast-front-h, 0px)) + var(--toast-depth-shown) * var(--toast-peek))))
+    scale(calc(1 - var(--toast-depth-shown) * 0.04));
+  opacity: clamp(0, 3 - var(--toast-depth, 0), 1);
+  z-index: calc(100 - var(--toast-depth, 0));
+  /* Room for the shadow; a card taller than the front one is cut off where
+   * the front one ends (below), so it never shows beneath it. */
+  clip-path: inset(-48px);
+  /* Sideways drags swipe the toast away; vertical ones still scroll. */
+  touch-action: pan-y;
+  transition:
+    transform token('motion-move') token('ease-move'),
+    opacity token('motion-fade') token('ease-fade'),
+    clip-path token('motion-move') token('ease-move'),
+    background-size token('motion-fade') token('ease-fade');
   animation: toastIn token('motion-move') token('ease-move');
 }
+/* Enter on `translate` so it composes with the stacking transform. */
 @keyframes toastIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; translate: 0 12px; }
 }
+/* Collapsed cards behind the front one show only their edge. */
+.toast > * { transition: opacity token('motion-fade') token('ease-fade'); }
+.toast-stack:not([data-expanded="true"]) .toast:not([data-depth="0"]) {
+  clip-path: inset(-48px -48px max(-48px, calc(var(--toast-h, 0px) - var(--toast-front-h, 0px))) -48px);
+  /* Only the edge of these cards shows, and a tone stripe there reads as a
+   * coloured tab poking out at the corner. */
+  background-size: 0 100%;
+}
+.toast-stack:not([data-expanded="true"]) .toast:not([data-depth="0"]) > * { opacity: 0; }
+/* Fanned out: a spaced list, newest nearest the edge of the screen. */
+.toast-stack[data-expanded="true"] .toast {
+  opacity: 1;
+  transform:
+    translateX(var(--toast-swipe-x, 0px))
+    translateY(calc(var(--toast-dir) * var(--toast-offset, 0px)));
+}
+/* Following a finger: no easing until it lets go. */
+.toast[data-swiping] { transition: none; }
+/* Leaving: fade and drop back toward the edge (a swipe keeps sliding
+ * sideways instead), then Toast.tsx removes it. */
+.toast-stack .toast[data-leaving] {
+  opacity: 0;
+  pointer-events: none;
+  translate: 0 calc(var(--toast-dir) * -8px);
+  transition:
+    transform 180ms token('ease-disappear'),
+    opacity 180ms token('ease-disappear'),
+    translate 180ms token('ease-disappear');
+}
+.toast-stack .toast[data-leaving="swipe"] { translate: none; }
 .toast--success { --toast-tone: #{token('success')}; }
 .toast--error { --toast-tone: #{token('danger')}; }
 .toast--warn { --toast-tone: #{token('warn')}; }
@@ -91,6 +159,119 @@
   transition: background token('motion-fade-fast') token('ease-fade');
 }
 .toast__action:hover { background: token('bg-hover-alpha'); }
+
+/* ============================================================
+   Animated checkbox: `.check-anim` on a native checkbox
+   ============================================================ */
+/* Still a real <input type="checkbox">, so keyboard, forms and screen
+ * readers behave natively; the global :focus-visible ring applies. Ticking
+ * fills the box from the centre (160ms), then draws the tick in left to
+ * right (180ms). A `.check-anim-label` after it, as a sibling or inside one,
+ * then gets a strike-through that grows left to right (220ms) while its
+ * text fades to the muted colour. Unticking runs it all back quickly. */
+$check-anim-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
+.check-anim {
+  appearance: none;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  border: 1px solid token('border-strong');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  cursor: pointer;
+  transition: border-color token('motion-fade-fast') token('ease-fade');
+}
+.check-anim:hover:not(:disabled),
+.check-anim:checked,
+.check-anim:indeterminate { border-color: token('accent'); }
+/* The fill. */
+.check-anim::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: token('accent');
+  transform: scale(0);
+  transition: transform 90ms token('ease-disappear');
+}
+/* The tick, revealed along its strokes. */
+.check-anim::after {
+  content: "";
+  position: relative;
+  width: 75%;
+  height: 75%;
+  background: token('accent-on');
+  mask: $check-anim-tick center / contain no-repeat;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 80ms token('ease-disappear');
+}
+.check-anim:checked::before,
+.check-anim:indeterminate::before {
+  transform: scale(1);
+  transition: transform 160ms token('ease-move');
+}
+.check-anim:checked::after {
+  clip-path: inset(0);
+  transition: clip-path 180ms token('ease-appear') 120ms;
+}
+/* Indeterminate (set from script): a bar in place of the tick. */
+.check-anim:indeterminate::after {
+  width: 50%;
+  height: 2px;
+  border-radius: 1px;
+  mask: none;
+  clip-path: inset(0);
+  transition: clip-path 140ms token('ease-appear') 80ms;
+}
+.check-anim:disabled {
+  cursor: not-allowed;
+  opacity: token('opacity-disabled');
+}
+.check-anim-label {
+  position: relative;
+  transition: color 100ms token('ease-fade');
+}
+.check-anim-label::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: token('text-tertiary');
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 100ms token('ease-disappear');
+  pointer-events: none;
+}
+/* Follows the tick: starts as it finishes drawing. */
+.check-anim:checked ~ .check-anim-label,
+.check-anim:checked ~ * .check-anim-label {
+  color: token('text-tertiary');
+  transition: color 220ms token('ease-fade') 260ms;
+}
+.check-anim:checked ~ .check-anim-label::after,
+.check-anim:checked ~ * .check-anim-label::after {
+  transform: scaleX(1);
+  transition: transform 220ms token('ease-move') 260ms;
+}
+/* The global reduced-motion rule zeroes durations but not delays. */
+@media (prefers-reduced-motion: reduce) {
+  .check-anim::after,
+  .check-anim-label,
+  .check-anim-label::after { transition-delay: 0s !important; }
+}
+/* Forced colours repaint backgrounds, which would hide a masked tick:
+ * fall back to the system checkbox. */
+@media (forced-colors: active) {
+  .check-anim { appearance: auto; }
+  .check-anim::before,
+  .check-anim::after { display: none; }
+}
 
 /* ============================================================
    TextInput / TextArea

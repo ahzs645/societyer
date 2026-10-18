@@ -1,0 +1,251 @@
+@use "tokens" as *;
+
+// Settings → AI connectors: workspace opt-in, token form, token list and
+// client setup snippets (src/features/aiConnectors/AiConnectorsCard.tsx).
+
+.ai-connectors {
+  min-width: 0;
+}
+
+.ai-connectors__heading {
+  margin: 0;
+  font-size: token('fs-sm');
+  font-weight: token('fw-semibold');
+  color: token('text-secondary');
+}
+
+.ai-connectors__form {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-4');
+  padding: token('s-4');
+  border: 1px solid token('border');
+  border-radius: token('r-card');
+  background: token('bg-subtle');
+  min-width: 0;
+}
+
+.ai-connectors__form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-3');
+  align-items: flex-start;
+
+  > .field { min-width: 0; }
+  > .field--grow { flex: 1 1 240px; }
+}
+
+.ai-connectors__scopes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: token('s-3');
+}
+
+.ai-connectors__write-label {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+
+.ai-connectors__grant-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+}
+
+.ai-connectors__grant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1') token('s-3');
+  margin-top: token('s-1');
+  font-size: token('fs-xs');
+}
+
+.ai-connectors__grant-body {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+// Disconnect lines up with the app's name, above its sessions.
+.ai-connectors__grant:has(.ai-connectors__sessions) {
+  align-items: flex-start;
+}
+
+// A connected app's sessions (one per approval), each revocable on its own.
+.ai-connectors__sessions {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-2');
+  margin: token('s-2') 0 0;
+  padding: 0 0 0 token('s-3');
+  border-left: 2px solid token('border');
+  list-style: none;
+}
+
+.ai-connectors__session {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: token('s-3');
+  font-size: token('fs-xs');
+}
+
+.ai-connectors__session-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-connectors__sessions-empty {
+  margin: token('s-2') 0 0;
+  font-size: token('fs-xs');
+}
+
+.ai-connectors__reveal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+  margin-top: token('s-2');
+}
+
+.ai-connectors__token {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: token('s-1') token('s-2');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+  overflow-wrap: anywhere;
+}
+
+.ai-connectors__snippets {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-3');
+  margin-top: token('s-3');
+  min-width: 0;
+}
+
+.ai-connectors__snippet {
+  min-width: 0;
+}
+
+.ai-connectors__snippet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+  margin-bottom: token('s-1');
+  font-size: token('fs-sm');
+}
+
+.ai-connectors__code {
+  margin: 0;
+  padding: token('s-2') token('s-3');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+  color: token('text-primary');
+  font-family: token('font-mono');
+  font-size: token('fs-xs');
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-connectors__setup > summary {
+  cursor: pointer;
+  font-weight: token('fw-medium');
+}
+
+.ai-connectors__setup > p {
+  margin: token('s-2') 0 0;
+  font-size: token('fs-sm');
+}
+
+.ai-connectors__footnote {
+  margin: 0;
+  font-size: token('fs-sm');
+}
+
+// AI agents → AI tool drafts: the draft an AI connector linked to (`?draft=<id>`).
+.ai-tool-draft--focused {
+  margin-inline: calc(-1 * #{token('s-2')});
+  padding: token('s-2');
+  border-radius: token('r-card');
+  background: token('accent-soft');
+  box-shadow: inset 0 0 0 1px token('accent');
+}
+
+// OAuth consent page (src/features/aiConnectors/OAuthConsentPage.tsx), inside the auth card.
+.oauth-consent {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-4');
+  min-width: 0;
+}
+
+.oauth-consent__facts {
+  display: grid;
+  gap: token('s-2');
+  margin: 0;
+  padding: token('s-3');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+  font-size: token('fs-sm');
+
+  > div {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: token('s-2');
+  }
+
+  dt { color: token('text-secondary'); }
+  dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+}
+
+.oauth-consent__group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.oauth-consent__legend {
+  margin-bottom: token('s-2');
+  padding: 0;
+  font-size: token('fs-sm');
+  font-weight: token('fw-semibold');
+  color: token('text-secondary');
+}
+
+.oauth-consent__scopes {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-2');
+}
+
+.oauth-consent__note,
+.oauth-consent__privacy {
+  margin: 0;
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+}
+
+.oauth-consent__privacy {
+  padding-top: token('s-3');
+  border-top: 1px solid token('border-alpha');
+}
+
+.ai-connectors__client-host {
+  overflow-wrap: anywhere;
+}
+
+.oauth-consent__unverified {
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+}

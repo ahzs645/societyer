@@ -1,0 +1,23 @@
+@use "tokens" as *;
+
+// SignaturePanel (src/components/SignaturePanel.tsx). With no sign-offs yet
+// the panel is a single row: the title over "None yet", and "Add signature",
+// which opens the sign form. The form's own rows live in _forms.scss.
+.signature-panel--collapsed > .card__head {
+  border-bottom: 0;
+}
+.signature-panel__titles {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.signature-panel__status {
+  font-size: token('fs-sm');
+}
+.signature-panel__add {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+}

@@ -1,4 +1,9 @@
-import { MeetingEvidenceCard } from "../features/meetings/components/MeetingEvidenceCard";
+import { TranscriptWorkspace } from "../features/meetings/transcript/TranscriptWorkspace";
+import { motionTranscriptChip } from "../features/meetings/transcript/TranscriptTimeChip";
+import { motionDisplayName, motionNumbers, motionTallySummary } from "../lib/motionDisplay";
+import { speakerCandidates } from "../features/meetings/transcript/speakerCandidates";
+import { MeetingEvidenceCard, meetingEvidenceRowCount } from "../features/meetings/components/MeetingEvidenceCard";
+import { MeetingRecordsFold } from "../features/meetings/components/MeetingRecordsFold";
 import { meetingStatusLabel, meetingStatusTone } from "../../shared/meetingStatus";
 import { formatMeetingDate, meetingCalendarDate } from "../../shared/meetingDates";
 import { todayDateOnly } from "../../shared/dateOnly";
@@ -14,7 +19,11 @@ import { MeetingGapsPanel } from "../features/meetings/components/MeetingGapsPan
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { MeetingSourcesCard } from "../features/meetings/components/MeetingSourcesCard";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { minutesDraftBlocker, minutesDraftTranscript } from "../../shared/minutesDraftInput";
+import { TRANSCRIPT_READ_PERMISSION, TRANSCRIPT_WITHHELD_IN_CAMERA, transcriptTextWithoutInCamera } from "../../shared/minutesPrivacy";
+import { TranscriptAccessNotice, type TranscriptAccess } from "../features/meetings/components/TranscriptAccessNotice";
 import { bylawBaselineForOrganization, quorumRequiresLegalRegisterFor } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
@@ -34,10 +43,10 @@ import { Menu } from "../components/Menu";
 import { useIsMobile } from "../lib/useIsMobile";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, Calendar, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, Merge, MoreHorizontal, PackageCheck, Pencil, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AudioLines, ArrowLeft, BookMarked, NotebookPen, Calendar, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, Merge, MoreHorizontal, PackageCheck, Pencil, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
-import { isPostponedOutcome, normalizeMotionOutcome } from "../lib/motionGovernance";
+import { isPostponedOutcome } from "../lib/motionGovernance";
 import { escapeHtml } from "../lib/html";
 import { exportWordDocx } from "../lib/docx";
 import { exportPdfDownload, printPdfDocument } from "../lib/pdf";
@@ -83,11 +92,21 @@ import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
-import { MeetingHistoryPanel, type HistoryMinutes } from "../features/meetings/components/MeetingHistoryPanel";
+import { MeetingHistoryPanel, meetingHistoryRowCount, type HistoryMinutes } from "../features/meetings/components/MeetingHistoryPanel";
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
 import { MinutesMetadataCard } from "../features/meetings/components/MinutesMetadataCard";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
+import { useLocalMinutesDraft } from "../features/meetings/useLocalMinutesDraft";
+import { DeviceAiError } from "../lib/localAi/transport";
+import { DRAFT_CANCELLED, isDraftCancelled } from "../features/meetings/deviceDraftProgress";
+
+const LOCAL_DRAFT_UNAVAILABLE =
+  "AI minutes drafting needs a connected server or an on-device model. Set up on-device AI in Settings, or write minutes manually.";
+import { MeetingNotesTab } from "../features/meetings/components/MeetingNotesTab";
+import { MeetingRecordKindPrompt } from "../features/meetings/components/MeetingRecordKindPrompt";
+import { MeetingRecordStepper } from "../features/meetings/components/MeetingRecordStepper";
+import { meetingRecordKind, meetingRecordSteps, resolveMeetingTab, visibleMeetingTabs, type MeetingDetailTabId } from "../../shared/meetingRecordKind";
 import { MinutesDocumentPreview } from "../features/meetings/components/MinutesDocumentPreview";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
@@ -116,7 +135,44 @@ import {
   personLinkCandidates,
   sourceExternalIdsForMinutes,
 } from "../features/meetings/components/MeetingDetailSupport";
-type MeetingDetailTab = "overview" | "minutes" | "motions" | "package" | "export" | "sources";
+/** The Overview's notes line; a minutes meeting's notes are withheld with its in-camera session (decision A3). */
+function notesLabel(meeting: { workingNotes?: string; workingNotesWithheld?: string }): string {
+  return meeting.workingNotesWithheld ? "Restricted" : notesWordCount(meeting.workingNotes);
+}
+
+function notesWordCount(notes: string | undefined): string {
+  const words = (notes ?? "").replace(/<[^>]+>/g, " ").trim().split(/\s+/).filter(Boolean).length;
+  return words ? `${words.toLocaleString()} words` : "None";
+}
+
+/** The Overview's transcript line. Without transcript access it says who may read one (decision A1). */
+function transcriptLengthLabel(transcript: { durationSeconds?: number; segments?: unknown[]; withheld?: string } | null | undefined, canRead = true): string {
+  if (!canRead) return "Minute-takers only";
+  if (transcript?.withheld) return "Restricted";
+  if (!transcript?.segments?.length) return "None";
+  const minutes = Math.round((transcript.durationSeconds ?? 0) / 60);
+  return minutes >= 1 ? `${minutes} min` : "<1 min";
+}
+
+/** "1 topic", "7 topics". */
+function countLabel(count: number, noun: string): string {
+  return `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+type MeetingDetailTab = MeetingDetailTabId;
+type MeetingTabItem = { id: MeetingDetailTab; label: string; count?: number | null; icon?: ReactNode };
+
+/**
+ * Phones: tabs with nothing in them ("Motions 0") move after the ones that
+ * have content, so the first screen of the strip is useful; they stay
+ * reachable so motions and sources can still be added. Export moves to the
+ * ⋯ menu unless it is the open tab. Desktop keeps the full order.
+ */
+function phoneTabOrder(items: MeetingTabItem[], isPhone: boolean, activeTab: MeetingDetailTab): MeetingTabItem[] {
+  if (!isPhone) return items;
+  const shown = items.filter((item) => item.id !== "export" || activeTab === "export");
+  return [...shown.filter((item) => item.count !== 0), ...shown.filter((item) => item.count === 0)];
+}
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -148,7 +204,14 @@ export function MeetingDetailPage() {
     if (minutes.approvedAt || Array.isArray(minutes.motionSnapshots)) {
       return minutesMotionsForDisplay(minutes) as Motion[];
     }
-    if (liveMotionRows !== undefined) return (liveMotionRows as any[]).map(motionRowToEmbedded) as Motion[];
+    if (liveMotionRows !== undefined) {
+      // The index returns rows in storage order; the minutes' motionIds hold
+      // the recorded order, which motion numbers ("Motion 2") follow.
+      const order = new Map(((minutes.motionIds ?? []) as string[]).map((id, index) => [String(id), index]));
+      const rank = (row: { _id: string }) => order.get(String(row._id)) ?? Number.MAX_SAFE_INTEGER;
+      const rows = [...(liveMotionRows as Array<{ _id: string }>)].sort((a, b) => rank(a) - rank(b));
+      return rows.map(motionRowToEmbedded) as Motion[];
+    }
     return minutesMotionsForDisplay(minutes) as Motion[];
   }, [minutes, liveMotionRows]);
   const agendaRecord = useQuery(api.agendas.getForMeeting, can("agendas:read") && meetingId ? { meetingId } : "skip");
@@ -161,10 +224,15 @@ export function MeetingDetailPage() {
     api.documents.getMany,
     can("documents:read") && sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds } : "skip",
   );
+  // Working transcripts are for the people who keep the minutes (decision A1, shared/minutesPrivacy.ts).
+  const canReadTranscript = can("meetings:read") && can(TRANSCRIPT_READ_PERMISSION);
   const transcriptRecord = useQuery(
     api.transcripts.getByMeeting,
-    can("meetings:read") && meetingId ? { meetingId } : "skip",
+    canReadTranscript && meetingId ? { meetingId } : "skip",
   );
+  const transcriptAccess: TranscriptAccess | null = permissionsLoaded && !canReadTranscript
+    ? "permission"
+    : transcriptRecord?.withheld === TRANSCRIPT_WITHHELD_IN_CAMERA ? "in_camera" : null;
   const directors = useQuery(
     api.directors.list,
     can("directors:read") && society && permissionsLoaded && can("directors:read") ? { societyId: society._id } : "skip",
@@ -220,6 +288,8 @@ export function MeetingDetailPage() {
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
+  // Local and desktop workspaces draft with the on-device model when one is set up.
+  const localDraft = useLocalMinutesDraft();
   const navigate = useNavigate();
   const createMeeting = usePermissionedMutation(api.meetings.create, can("meetings:write"));
   const carryForwardToMeeting = usePermissionedMutation(api.motionBacklog.carryForwardToMeeting, can("motions:write"));
@@ -305,9 +375,11 @@ export function MeetingDetailPage() {
   // setter writes back to the URL so the address bar reflects what's shown
   // and the back button restores the previous tab.
   const [searchParams, setSearchParams] = useSearchParams();
-  const TAB_VALUES: MeetingDetailTab[] = ["overview", "minutes", "motions", "package", "export", "sources"];
-  const tabFromUrl = searchParams.get("tab") as MeetingDetailTab | null;
-  const activeTab: MeetingDetailTab = tabFromUrl && TAB_VALUES.includes(tabFromUrl) ? tabFromUrl : "overview";
+  // What the meeting keeps decides which tabs exist; `?tab=minutes` on a
+  // notes meeting opens Notes (shared/meetingRecordKind.ts).
+  const recordKind = meetingRecordKind(meeting);
+  const visibleTabs = visibleMeetingTabs(recordKind);
+  const activeTab: MeetingDetailTab = resolveMeetingTab(searchParams.get("tab"), recordKind);
   const setActiveTab = (next: MeetingDetailTab) => {
     setSearchParams(
       (prev) => {
@@ -368,52 +440,99 @@ export function MeetingDetailPage() {
   // a transcript record first — used by the Minutes-tab empty-state CTA.
   // Defined above the early returns because the `?intent=draft-minutes`
   // effect needs to call it.
-  const runGenerate = async (overrideText?: string) => {
-    if (!(canMinutesWrite)) return;
-    if (isLocalDataRuntime()) { toast.info("AI minutes drafting requires a connected server. Your saved transcripts and manual minutes remain available."); return; }
+  const runGenerate = async (overrideText?: string): Promise<boolean> => {
+    if (!(canMinutesWrite)) return false;
+    if (isLocalDataRuntime() && !localDraft.ready) { toast.info(LOCAL_DRAFT_UNAVAILABLE); return false; }
     if (!meeting) {
       toast.error("Meeting not loaded yet.");
-      return;
+      return false;
     }
     const draftRaw = String(minutes?.draftTranscript ?? "");
-    const draftMeta = parseDocumentMetadata(draftRaw);
-    const draftIsImportMeta = isImportTranscriptMetadata(draftMeta);
-    const onFile = transcriptRecord?.text ?? (draftIsImportMeta ? "" : draftRaw);
-    const sourceTranscript = (overrideText ?? "").trim() || transcript.trim() || onFile.trim();
+    // The transcript row's text carries assigned speaker names ("Jane Doe: …").
+    const sourceTranscript = minutesDraftTranscript({
+      explicitText: (overrideText ?? "").trim() || transcript,
+      transcriptRow: transcriptRecord,
+      draftTranscript: draftRaw,
+      draftIsImportMetadata: isImportTranscriptMetadata(parseDocumentMetadata(draftRaw)),
+    });
     if (!sourceTranscript) {
       toast.error("Add a transcript first.");
-      return;
+      return false;
     }
     setBusy(true);
     try {
-      await generate({ meetingId: meeting._id, transcript: sourceTranscript });
+      await draftMinutes(sourceTranscript);
       setTranscript("");
-      toast.success("Minutes drafted from transcript.");
-    } catch (err: any) {
-      toast.error(err?.message ?? "Drafting minutes failed");
+      toast.success(isLocalDataRuntime() ? `Minutes drafted on this device with ${localDraft.model}.` : "Minutes drafted from transcript.");
+      return true;
+    } catch (err: unknown) {
+      toastDraftError(err);
+      return false;
     } finally {
       setBusy(false);
     }
+  };
+
+  // One draft call for either runtime: the server action, or the on-device
+  // model followed by the portable upsert.
+  const draftMinutes = async (sourceTranscript: string) => {
+    if (!meeting) throw new Error("Meeting not loaded yet.");
+    if (!isLocalDataRuntime()) {
+      await generate({ meetingId: meeting._id, transcript: sourceTranscript });
+      return;
+    }
+    await localDraft.run({ meeting, transcript: sourceTranscript, existingMinutes: minutes });
+  };
+
+  const toastDraftError = (err: unknown, cancelledMessage = DRAFT_CANCELLED) => {
+    // Cancel on an on-device draft: nothing was written, so no error.
+    if (isDraftCancelled(err)) {
+      toast.info(cancelledMessage);
+      return;
+    }
+    const hint = err instanceof DeviceAiError ? err.hint : undefined;
+    const message = err instanceof Error && err.message ? err.message : "Drafting minutes failed";
+    toast.error(message, hint);
   };
 
   // Wrapper for the Sources-tab "Draft from transcript" button — guards
   // against silently overwriting minutes the user has already started or
   // approved. Empty-state CTA paths skip this wrapper since the CTA only
   // renders when minutes are still a skeleton.
-  const runGenerateWithOverwriteGuard = async () => {
-    if (!(canMinutesWrite)) return;
+  const runGenerateWithOverwriteGuard = async (): Promise<boolean> => {
+    if (!(canMinutesWrite)) return false;
+    // Adopted minutes and recorded sections are refused by the server; say so
+    // before asking to replace anything.
+    const draftBlocker = minutesDraftBlocker(minutes);
+    if (draftBlocker) {
+      toast.error(draftBlocker);
+      return false;
+    }
     if (hasStartedMinutesDraft(minutes)) {
       const ok = await confirm({
         title: "Replace existing minutes?",
-        message: minutes?.approvedAt
-          ? "These minutes have been approved. Re-drafting will overwrite the existing minutes — including the approval record."
-          : "These minutes already have content. Re-drafting will overwrite what's there with a fresh AI draft from the transcript on file.",
+        message: "These minutes already have content. Re-drafting will overwrite what's there with a fresh AI draft from the transcript on file.",
         confirmLabel: "Replace minutes",
         tone: "warn",
       });
-      if (!ok) return;
+      if (!ok) return false;
     }
-    await runGenerate();
+    return runGenerate();
+  };
+
+  // Transcript-tab draft: same guard, then land on the Minutes tab like the
+  // `?intent=draft-minutes` handoff, unless the user has moved to another tab.
+  const draftFromTranscriptTab = async () => {
+    if (!(await runGenerateWithOverwriteGuard())) return;
+    setSearchParams(
+      (prev) => {
+        if (prev.get("tab") !== "transcript") return prev;
+        const next = new URLSearchParams(prev);
+        next.set("tab", "minutes");
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   // Used by the Minutes-tab empty-state CTA when a user pastes a transcript
@@ -421,7 +540,7 @@ export function MeetingDetailPage() {
   // lost on reload, then runs the AI draft against the same text.
   const draftFromPastedTranscript = async (pastedText: string) => {
     if (!(canMinutesWrite && canMeetingsWrite)) return;
-    if (isLocalDataRuntime()) { toast.info("AI minutes drafting requires a connected server. Save your transcript from Sources or write minutes manually."); return; }
+    if (isLocalDataRuntime() && !localDraft.ready) { toast.info(LOCAL_DRAFT_UNAVAILABLE); return; }
     if (!meeting) {
       toast.error("Meeting not loaded yet.");
       return;
@@ -439,10 +558,10 @@ export function MeetingDetailPage() {
         text: trimmed,
         provider: "manual",
       });
-      await generate({ meetingId: meeting._id, transcript: trimmed });
-      toast.success("Minutes drafted from pasted transcript.");
-    } catch (err: any) {
-      toast.error(err?.message ?? "Drafting minutes failed");
+      await draftMinutes(trimmed);
+      toast.success(isLocalDataRuntime() ? `Minutes drafted on this device with ${localDraft.model}.` : "Minutes drafted from pasted transcript.");
+    } catch (err: unknown) {
+      toastDraftError(err, "Draft cancelled. The pasted transcript was saved; the minutes were not changed.");
     } finally {
       setBusy(false);
     }
@@ -520,6 +639,21 @@ export function MeetingDetailPage() {
     void backfillMinutesQuorum({ id: minutes._id }).catch(() => undefined);
   }, [canMinutesWrite, backfillMinutesQuorum, minutes?._id, minutes?.quorumComputedAtISO, minutes?.quorumRequired, minutes?.quorumSourceLabel]);
 
+  // Who a transcript speaker can be: attendance first, then the expected
+  // attendees, the committee and the board (notes meetings record no attendance).
+  const speakerAttendees = useMemo(
+    () =>
+      speakerCandidates({
+        minutes,
+        attendeeIds: meeting?.attendeeIds,
+        committeeMembers: meeting?.committeeId ? meetingCommitteeDetail?.members : undefined,
+        directors,
+        members,
+        todayISO: todayDateOnly(),
+      }),
+    [minutes, meeting?.attendeeIds, meeting?.committeeId, meetingCommitteeDetail?.members, directors, members],
+  );
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (meeting === undefined) return <PageLoading />;
@@ -545,13 +679,26 @@ export function MeetingDetailPage() {
   const businessMotions = displayMotions.filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
   const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
-  const minutesDraftTranscript = minutes?.draftTranscript ?? "";
-  const minutesDraftMetadata = parseDocumentMetadata(minutesDraftTranscript);
+  // Not named minutesDraftTranscript: that would shadow the shared helper runGenerate calls.
+  const savedDraftTranscript = String(minutes?.draftTranscript ?? "");
+  const minutesDraftMetadata = parseDocumentMetadata(savedDraftTranscript);
   const minutesDraftIsImportMetadata = isImportTranscriptMetadata(minutesDraftMetadata);
-  const transcriptOnFile = transcriptRecord?.text ?? (minutesDraftIsImportMetadata ? "" : minutesDraftTranscript);
+  const transcriptOnFile = transcriptRecord?.text ?? (minutesDraftIsImportMetadata ? "" : savedDraftTranscript);
   const importNote = minutesDraftIsImportMetadata ? importTranscriptNote(minutesDraftMetadata, sourceExternalIdsForMinutes(minutes)) : null;
+  const recordSteps = meetingRecordSteps({
+    kind: recordKind,
+    hasTranscript: transcriptOnFile.trim().length > 0 || (transcriptRecord?.segments?.length ?? 0) > 0,
+    hasNotes: String(meeting.workingNotes ?? "").trim().length > 0,
+    minutesStarted: hasStartedMinutesDraft(minutes),
+    minutesApproved: Boolean(minutes?.approvedAt),
+  });
+  // A transcript pasted or imported as plain text lives on the minutes
+  // (minutes.draftTranscript), not in the transcripts table. Show it on the
+  // Transcript tab too; it is edited where it is kept, under Sources.
+  const transcriptKeptWithMinutes = transcriptRecord === null && transcriptOnFile.trim().length > 0;
+  const workspaceTranscript = transcriptKeptWithMinutes ? { text: transcriptOnFile } : transcriptRecord;
   const transcriptProvider = transcriptOnFile
-    ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
+    ? transcriptRecord?.provider ?? (savedDraftTranscript ? "manual" : null)
     : null;
   // A board meeting of a BC company with recorded articles counts directors in
   // office; shareholder quorum still needs the legal registers.
@@ -683,7 +830,7 @@ export function MeetingDetailPage() {
 
   const uploadAudioAndRun = async (draftMinutes: boolean) => {
     if (!canMeetingsWrite || (draftMinutes && !canMinutesWrite)) return;
-    if (isLocalDataRuntime()) { toast.info("Audio transcription requires a connected server. Saved text transcripts remain available."); return; }
+    if (isLocalDataRuntime()) { toast.info("Audio upload needs a connected server. To transcribe on this device, open the recording in the Transcript tab."); return; }
     if (!audioFile) {
       toast.error("Choose an audio or video file first.");
       return;
@@ -1100,6 +1247,8 @@ export function MeetingDetailPage() {
       actionObservations: redact || publicOnly ? [] : minutes.actionObservations,
       importedSourceVersions: redact || publicOnly ? [] : minutes.importedSourceVersions,
       draftTranscript: redact || publicOnly ? null : minutes.draftTranscript ?? null,
+      // A public copy's transcript: only what was recorded outside marked in-camera ranges (decision A2).
+      audienceTranscript: publicOnly && !redact && transcriptRecord ? transcriptTextWithoutInCamera(transcriptRecord, minutes) : null,
     };
   };
 
@@ -2019,6 +2168,26 @@ export function MeetingDetailPage() {
     toast.success("Meeting template saved");
   };
 
+  const keepsMinutes = recordKind === "minutes";
+  const motionNumberByIndex = motionNumbers(displayMotions);
+  // Conflicts can be declared at any meeting; only formal minutes have motions to recuse from.
+  const conflictsCard = society && can("conflicts:read") ? (
+    <MeetingConflictsCard
+      societyId={society._id}
+      meetingId={meeting._id}
+      directors={directors ?? []}
+      motions={keepsMinutes
+        ? displayMotions
+            .map((motion, index) => ({ motion, index, number: motionNumberByIndex[index] }))
+            .filter(({ number }) => number != null)
+            .map(({ motion, index, number }) => ({
+              index,
+              label: motionDisplayName(number, motion),
+              text: motion.text ?? "",
+            }))
+        : []}
+    />
+  ) : null;
   // The sidebar column is rendered on four tabs with an identical ~40-prop set;
   // bundle the shared props here and spread them so each call site only lists
   // what actually differs (visible panels, read-only/gaps flags, draft action).
@@ -2098,6 +2267,17 @@ export function MeetingDetailPage() {
       })
     : [];
   const duplicateIds = duplicateIndex((allMeetings ?? []) as any[], (committees ?? []) as any[]).get(String(meeting._id)) ?? [];
+  // Phones fold the stat cells into the header's one line (see the subtitle).
+  const phoneMeetingFacts: string[] = !isPhone || minutesLoading ? [] : recordKind === "minutes"
+    ? [
+        `${minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0} ${meetingNotYetHeld(meeting) ? "expected" : "present"}`,
+        countLabel(visibleAgendaEntries(agendaTree, (minutes?.sections ?? []) as any[], minutes?.sourceMeetingRecord).length, "topic"),
+      ]
+    : [
+        `${minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0} ${meetingNotYetHeld(meeting) ? "expected" : "present"}`,
+        ...(["None", "Restricted"].includes(notesLabel(meeting)) ? [] : [`${notesLabel(meeting)} of notes`]),
+        ...(!canReadTranscript || ["None", "Restricted"].includes(transcriptLengthLabel(transcriptRecord)) ? [] : [`${transcriptLengthLabel(transcriptRecord)} transcript`]),
+      ];
 
   return (
     <div className="page page--wide meeting-detail-page">
@@ -2106,7 +2286,20 @@ export function MeetingDetailPage() {
       </Link>
       <PageHeader
         title={meeting.title}
-        subtitle={
+        subtitle={isPhone ? (
+          // Phones: one line, "Jun 19, 2025 · Held · 4 present · 7 topics", in
+          // place of the body/date/place line, the chip row and the four stat
+          // cells. Motions and materials are counted on their tabs; the time,
+          // place and body are on the Overview tab.
+          <span className="meeting-detail-meta" data-testid="meeting-subtitle">
+            <span className="meeting-detail-meta__date">{formatMeetingDate(meeting, { withTime: false })}</span>
+            <Badge tone={meetingStatusTone(meeting.status)}>{meetingStatusLabel(meeting.status)}</Badge>
+            {sourceReviewStatus === "imported_needs_review" && <Badge tone="warn">Review source</Badge>}
+            {phoneMeetingFacts.length > 0 && <span className="meeting-detail-meta__facts">{phoneMeetingFacts.join(" · ")}</span>}
+            <UnsupportedDetailsBadge table="meetings" id={meeting._id} />
+            <SourceProvenanceButton table="meetings" id={meeting._id} />
+          </span>
+        ) : (
           <>
             <span className="meeting-detail-subtitle" data-testid="meeting-subtitle">
               {/* The body names the committee; link it rather than repeating the name. */}
@@ -2132,7 +2325,7 @@ export function MeetingDetailPage() {
               </span>
             )}
           </>
-        }
+        )}
         actions={
           <>
             {canMeetingsWrite && (
@@ -2238,13 +2431,15 @@ export function MeetingDetailPage() {
                       disabled: !canMeetingsWrite,
                       onSelect: toggleNoticeSent,
                     },
-                    {
-                      id: "record-approval",
-                      label: minutes?.approvedAt ? "Edit minutes approval" : "Record minutes approval",
-                      icon: <FileText size={12} />,
-                      disabled: !minutes || meeting.status !== "Held" || !canApproveMinutes,
-                      onSelect: startApprovalEdit,
-                    },
+                    ...(keepsMinutes
+                      ? [{
+                          id: "record-approval",
+                          label: minutes?.approvedAt ? "Edit minutes approval" : "Record minutes approval",
+                          icon: <FileText size={12} />,
+                          disabled: !minutes || meeting.status !== "Held" || !canApproveMinutes,
+                          onSelect: startApprovalEdit,
+                        }]
+                      : []),
                   ],
                 },
                 {
@@ -2269,7 +2464,12 @@ export function MeetingDetailPage() {
                 {
                   id: "minutes-export",
                   label: "Minutes export",
-                  items: [
+                  // Notes and no-write-up meetings have no minutes to export.
+                  items: !keepsMinutes ? [] : [
+                    // Phones keep the Export tab out of the strip (phoneTabOrder).
+                    ...(isPhone
+                      ? [{ id: "export-tab", label: "Export settings and preview", icon: <Settings2 size={12} />, onSelect: () => setActiveTab("export") }]
+                      : []),
                     {
                       id: "preview-page",
                       label: "Open preview page",
@@ -2306,41 +2506,87 @@ export function MeetingDetailPage() {
         }
       />
 
-      <div className="meeting-detail-summary">
-        <div>
-          <span>Agenda topics</span>
-          <strong>{visibleAgendaEntries(agendaTree, (minutes?.sections ?? []) as any[], minutes?.sourceMeetingRecord).length}</strong>
-        </div>
+      {!isPhone && <div className="meeting-detail-summary">
+        {recordKind === "minutes" ? (
+          <div>
+            <span>Agenda topics</span>
+            <strong>{visibleAgendaEntries(agendaTree, (minutes?.sections ?? []) as any[], minutes?.sourceMeetingRecord).length}</strong>
+          </div>
+        ) : null}
         <div>
           <span>{meetingNotYetHeld(meeting) ? "Expected" : "Present"}</span>
           <strong>{minutesLoading ? "…" : minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
         </div>
-        <div>
-          <span>Motions</span>
-          <strong>{minutesLoading ? "…" : businessMotions.length}</strong>
-        </div>
+        {recordKind === "minutes" ? (
+          <div>
+            <span>Motions</span>
+            <strong>{minutesLoading ? "…" : businessMotions.length}</strong>
+          </div>
+        ) : (
+          // Notes and no-write-up meetings have no agenda or motions to count.
+          <>
+            <div>
+              <span>Notes</span>
+              <strong>{notesLabel(meeting)}</strong>
+            </div>
+            <div>
+              <span>Transcript</span>
+              <strong>{transcriptLengthLabel(transcriptRecord, canReadTranscript)}</strong>
+            </div>
+          </>
+        )}
       <div>
         <span>Materials</span>
         <strong>{packageMaterials.length}</strong>
       </div>
-    </div>
+    </div>}
 
       <Tabs<MeetingDetailTab>
         tabRoles
         ariaLabel="Meeting sections"
         value={activeTab}
         onChange={setActiveTab}
-        items={[
+        items={phoneTabOrder(([
           { id: "overview", label: "Overview", icon: <ClipboardCheck size={12} /> },
           { id: "minutes", label: "Agenda & minutes", icon: <FileText size={12} /> },
+          { id: "notes", label: "Notes", icon: <NotebookPen size={12} /> },
+          { id: "transcript", label: "Transcript", icon: <AudioLines size={12} /> },
           { id: "motions", label: "Motions", count: businessMotions.length, icon: <Gavel size={12} /> },
           { id: "package", label: "Materials", count: packageMaterials.length, icon: <PackageCheck size={12} /> },
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
-        ]}
+        ] satisfies MeetingTabItem[]).filter((item) => visibleTabs.includes(item.id)), isPhone, activeTab)}
       />
 
       <div className="meeting-detail-tabpanel">
+        {activeTab === "transcript" && transcriptAccess && (
+          <TranscriptAccessNotice
+            reason={transcriptAccess}
+            onReadMinutes={recordKind === "minutes" ? () => setActiveTab("minutes") : recordKind === "notes" ? () => setActiveTab("notes") : undefined}
+          />
+        )}
+        {activeTab === "transcript" && !transcriptAccess && <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} />}
+        {(activeTab === "overview" || activeTab === "minutes") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} />}
+        {activeTab === "overview" && recordKind === "meeting" && (
+          <MeetingRecordKindPrompt
+            meetingId={meeting._id}
+            canWrite={canMeetingsWrite}
+            canStartMinutes={canMeetingsWrite && canMinutesWrite}
+            onSwitched={setActiveTab}
+          />
+        )}
+        {activeTab === "notes" && (
+          <MeetingNotesTab
+            key={meeting._id}
+            meetingId={meeting._id}
+            workingNotes={meeting.workingNotes}
+            canWrite={canMeetingsWrite}
+            canStartMinutes={canMeetingsWrite && canMinutesWrite}
+            minutesApproved={Boolean(minutes?.approvedAt)}
+            steps={recordSteps}
+            onMinutesStarted={() => setActiveTab("minutes")}
+          />
+        )}
         {activeTab === "overview" && (
           <>
           <div className="meeting-governance-strip">
@@ -2357,6 +2603,7 @@ export function MeetingDetailPage() {
                 {meeting.noticeSentAt ? "Clear" : "Mark sent"}
               </button>
             </div>
+            {recordKind === "minutes" && (
             <div className="meeting-governance-strip__item">
               <div className="meeting-governance-strip__label">Minutes approval</div>
               <div className="meeting-governance-strip__value">
@@ -2388,6 +2635,7 @@ export function MeetingDetailPage() {
                 {minutes?.approvedAt ? "Edit" : "Record approval"}
               </button>
             </div>
+            )}
             <div className="meeting-governance-strip__item">
               <div className="meeting-governance-strip__label">Next meeting</div>
               <div className="meeting-governance-strip__value">
@@ -2396,7 +2644,7 @@ export function MeetingDetailPage() {
                 ) : (
                   <span className="muted">Not planned</span>
                 )}
-                {carriedForwardMotions.length > 0 && (
+                {keepsMinutes && carriedForwardMotions.length > 0 && (
                   <Badge tone="warn">{carriedForwardMotions.length} to carry forward</Badge>
                 )}
               </div>
@@ -2411,25 +2659,10 @@ export function MeetingDetailPage() {
                 {...sharedSidebarProps}
                 visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
               />
-              <MeetingGapsPanel meetingId={meeting._id} minutesId={minutes?._id} />
-              {society && can("conflicts:read") && (
-                <div className="meeting-signatures-card">
-                  <MeetingConflictsCard
-                    societyId={society._id}
-                    meetingId={meeting._id}
-                    directors={directors ?? []}
-                    motions={(displayMotions as any[])
-                      .map((motion, index) => ({ motion, index }))
-                      .filter(({ motion }) => !isAdjournmentMotion(motion))
-                      .map(({ motion, index }) => ({
-                        index,
-                        label: motion.name || motion.text || `Motion ${index + 1}`,
-                        text: motion.text ?? "",
-                      }))}
-                  />
-                </div>
-              )}
-              {society && can("proxies:read") && (
+              {keepsMinutes && <MeetingGapsPanel meetingId={meeting._id} minutesId={minutes?._id} />}
+              {keepsMinutes && conflictsCard && <div className="meeting-signatures-card">{conflictsCard}</div>}
+              {/* Proxies, signatures and export readiness belong to formal minutes. */}
+              {keepsMinutes && society && can("proxies:read") && (
                 <div className="meeting-signatures-card">
                   <MeetingProxiesCard
                     societyId={society._id}
@@ -2447,7 +2680,7 @@ export function MeetingDetailPage() {
                   />
                 </div>
               )}
-              {minutes && society && can("documents:read") && (
+              {keepsMinutes && minutes && society && can("documents:read") && (
                 <div className="meeting-signatures-card">
                   <SignaturePanel
                     societyId={society._id}
@@ -2459,16 +2692,21 @@ export function MeetingDetailPage() {
                 </div>
               )}
             </div>
-            <MeetingSidebarColumn
-              {...sharedSidebarProps}
-              visiblePanels={["export"]}
-              exportControlsReadOnly
-              showExportGaps
-            />
+            {keepsMinutes ? (
+              <MeetingSidebarColumn
+                {...sharedSidebarProps}
+                visiblePanels={["export"]}
+                exportControlsReadOnly
+                showExportGaps
+              />
+            ) : (
+              <div>{conflictsCard}</div>
+            )}
           </div>
           </>
         )}
 
+        {activeTab === "minutes" && <MeetingRecordStepper steps={recordSteps} />}
         {activeTab === "minutes" && !hasStartedMinutesDraft(minutes) && (
           <MinutesDraftEmptyState
             canDraft={canMinutesWrite}
@@ -2486,7 +2724,7 @@ export function MeetingDetailPage() {
             audioFile={audioFile}
             busy={busy || pipelineBusy}
             onDraftFromPastedText={draftFromPastedTranscript}
-            onDraftFromSavedTranscript={runGenerate}
+            onDraftFromSavedTranscript={async () => { await runGenerate(); }}
             onUploadAudioAndDraft={() => uploadAudioAndRun(true)}
           />
         )}
@@ -2541,21 +2779,23 @@ export function MeetingDetailPage() {
             saveTranscriptEditText={saveTranscriptEditText}
             savingTranscript={savingTranscript}
           />
-          <MeetingEvidenceCard key={`evidence-${minutes?._id ?? "none"}`} minutes={minutes} allMinutes={allMinutes} meetings={allMeetings} />
           <MinutesMetadataCard key={`metadata-${minutes?._id ?? "none"}`} minutes={minutes} meetingType={meeting.type} committees={committees} people={directoryPeople} />
+          {/* Evidence, history and person links: one closed fold below the minutes. */}
+          {minutes && (
+            <MeetingRecordsFold count={meetingEvidenceRowCount(minutes) + meetingHistoryRowCount(minutes as unknown as HistoryMinutes)}>
+              <MeetingEvidenceCard key={`evidence-${minutes._id}`} minutes={minutes} allMinutes={allMinutes} meetings={allMeetings} />
+              <MeetingHistoryPanel
+                key={minutes._id}
+                readOnly={!canMinutesWrite || Boolean(minutes.adoptedSnapshot) || Array.isArray(minutes.motionSnapshots) || minutes.sourceTransposition?.reviewStatus === "restricted"}
+                minutes={minutes as unknown as HistoryMinutes}
+                otherMinutes={(allMinutes ?? []) as unknown as HistoryMinutes[]}
+                meetings={allMeetings ?? []}
+                onSave={async (patch) => { await updateMinutes({ id: minutes._id, patch }); }}
+                onCarry={async (args) => { await carryActionObservation({ ...args, sourceMinutesId: args.sourceMinutesId as Id<"minutes">, targetMinutesId: args.targetMinutesId as Id<"minutes"> }); }}
+              />
+            </MeetingRecordsFold>
+          )}
           </>
-        )}
-
-        {activeTab === "minutes" && minutes && (
-          <MeetingHistoryPanel
-            key={minutes._id}
-            readOnly={!canMinutesWrite || Boolean(minutes.adoptedSnapshot) || Array.isArray(minutes.motionSnapshots) || minutes.sourceTransposition?.reviewStatus === "restricted"}
-            minutes={minutes as unknown as HistoryMinutes}
-            otherMinutes={(allMinutes ?? []) as unknown as HistoryMinutes[]}
-            meetings={allMeetings ?? []}
-            onSave={async (patch) => { await updateMinutes({ id: minutes._id, patch }); }}
-            onCarry={async (args) => { await carryActionObservation({ ...args, sourceMinutesId: args.sourceMinutesId as Id<"minutes">, targetMinutesId: args.targetMinutesId as Id<"minutes"> }); }}
-          />
         )}
 
         {activeTab === "motions" && (
@@ -2566,22 +2806,9 @@ export function MeetingDetailPage() {
                 <Gavel size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
                 Motions
               </h2>
-              {businessMotions.length ? (
-                <span className="card__subtitle">
-                  {/* Normalize before tallying — legacy data stores lowercase
-                      outcomes, which the carry-forward logic already accepts. */}
-                  {businessMotions.filter((motion: any) => normalizeMotionOutcome(motion.outcome) === "Carried").length} carried
-                  {" / "}
-                  {businessMotions.filter((motion: any) => normalizeMotionOutcome(motion.outcome) === "Defeated").length} defeated
-                  {" / "}
-                  {businessMotions.filter((motion: any) => isPostponedOutcome(motion.outcome)).length} tabled/deferred
-                  {(() => {
-                    const pending = businessMotions.filter(
-                      (motion: any) => !motion.outcome || normalizeMotionOutcome(motion.outcome) === "Pending",
-                    ).length;
-                    return pending ? ` / ${pending} pending` : "";
-                  })()}
-                </span>
+              {displayMotions.length ? (
+                // Counts what the tab lists: numbered business motions, then the adjournment record.
+                <span className="card__subtitle">{motionTallySummary(displayMotions)}</span>
               ) : null}
               <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {sourceWordingUpdates.length > 0 && (
@@ -2621,6 +2848,7 @@ export function MeetingDetailPage() {
                 adoptionTargets={adoptionTargets}
                 directoryPeople={directoryPeople as any}
                 documentOptions={motionDocumentOptions}
+                renderMotionAccessory={motionTranscriptChip}
               />
             </div>
           </div>
@@ -2704,7 +2932,7 @@ export function MeetingDetailPage() {
           <MeetingSidebarColumn
             {...sharedSidebarProps}
             visiblePanels={["sources", "transcript"]}
-            draftFromTranscript={runGenerateWithOverwriteGuard}
+            draftFromTranscript={async () => { await runGenerateWithOverwriteGuard(); }}
             draftingFromTranscript={busy}
           />
         )}

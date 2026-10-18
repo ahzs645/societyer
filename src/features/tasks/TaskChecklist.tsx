@@ -41,24 +41,30 @@ export function TaskChecklist({
             <li key={item.id} className={`task-checklist__item${item.done ? " is-done" : ""}`}>
               <input
                 type="checkbox"
+                className="check-anim"
                 checked={item.done}
                 disabled={readOnly}
                 aria-label={`${item.done ? "Untick" : "Tick"} ${item.title}`}
                 onChange={() => onChange(items.map((entry) => (entry.id === item.id ? { ...entry, done: !entry.done } : entry)))}
               />
-              <input
-                className="task-checklist__text"
-                defaultValue={item.title}
-                readOnly={readOnly}
-                maxLength={300}
-                aria-label="Checklist step"
-                onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-                onBlur={(event) => {
-                  const title = event.currentTarget.value.trim();
-                  if (!title) { event.currentTarget.value = item.title; return; }
-                  if (title !== item.title) onChange(items.map((entry) => (entry.id === item.id ? { ...entry, title } : entry)));
-                }}
-              />
+              {/* The strike-through is drawn on a text-sized copy of the title
+                  laid over the field (inputs have no ::after). */}
+              <span className="task-checklist__label">
+                <input
+                  className="task-checklist__text check-anim-label"
+                  defaultValue={item.title}
+                  readOnly={readOnly}
+                  maxLength={300}
+                  aria-label="Checklist step"
+                  onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                  onBlur={(event) => {
+                    const title = event.currentTarget.value.trim();
+                    if (!title) { event.currentTarget.value = item.title; return; }
+                    if (title !== item.title) onChange(items.map((entry) => (entry.id === item.id ? { ...entry, title } : entry)));
+                  }}
+                />
+                <span className="task-checklist__strike check-anim-label" aria-hidden="true">{item.title}</span>
+              </span>
               {!readOnly && (
                 <button type="button" className="task-icon-button task-checklist__remove" aria-label={`Remove ${item.title}`} onClick={() => onChange(items.filter((entry) => entry.id !== item.id))}>
                   <X size={12} />

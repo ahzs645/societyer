@@ -825,6 +825,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "meetings:update", handler: meetingsFns.updatePortable }),
   definePortableMutation({ name: "meetings:markSourceReview", handler: meetingsFns.markSourceReviewPortable }),
   definePortableMutation({ name: "meetings:setPackageReviewStatus", handler: meetingsFns.setPackageReviewStatusPortable }),
+  definePortableMutation({ name: "meetings:startMinutesFromNotes", handler: meetingsFns.startMinutesFromNotesPortable }),
   definePortableMutation({ name: "meetings:remove", handler: meetingsFns.removePortable }),
   definePortableQuery({ name: "meetings:mergePreview", handler: meetingsMergePreviewPortable }),
   definePortableMutation({ name: "meetings:merge", handler: meetingsMergePortable }),
@@ -905,6 +906,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "aiChat:archiveThread", handler: aiChatFns.archiveThreadPortable }),
   definePortableMutation({ name: "aiChat:renameThread", handler: aiChatFns.renameThreadPortable }),
   definePortableMutation({ name: "aiChat:deleteThread", handler: aiChatFns.deleteThreadPortable }),
+  definePortableMutation({ name: "aiChat:appendDeviceMessage", handler: aiChatFns.appendDeviceMessagePortable }),
 
   // entitySigners
   definePortableQuery({ name: "entitySigners:list", handler: entitySignersFns.listPortable }),
@@ -1276,6 +1278,13 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "transcripts:saveTranscript", handler: transcriptsFns.saveTranscriptPortable }),
   definePortableMutation({ name: "transcripts:saveText", handler: transcriptsFns.saveTextPortable }),
   definePortableMutation({ name: "transcripts:importVtt", handler: transcriptsFns.importVttPortable }),
+  definePortableMutation({ name: "transcripts:assignSpeaker", handler: transcriptsFns.assignSpeakerPortable }),
+  definePortableMutation({ name: "transcripts:updateSegment", handler: transcriptsFns.updateSegmentPortable }),
+  definePortableMutation({ name: "transcripts:mergeSpeakers", handler: transcriptsFns.mergeSpeakersPortable }),
+  definePortableMutation({ name: "transcripts:unmergeSpeaker", handler: transcriptsFns.unmergeSpeakerPortable }),
+  definePortableMutation({ name: "transcripts:markInCameraRange", handler: transcriptsFns.markInCameraRangePortable }),
+  definePortableMutation({ name: "transcripts:importTimed", handler: transcriptsFns.importTimedPortable }),
+  definePortableMutation({ name: "transcripts:linkMinutesItem", handler: transcriptsFns.linkMinutesItemPortable }),
 
   // grants
   definePortableMutation({ name: "grants:upsertEmployeeLink", handler: grantsFns.upsertEmployeeLinkPortable }),

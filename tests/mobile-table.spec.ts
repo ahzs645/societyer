@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { MembersPage } from "./pom/membersPage";
 import { RecordTablePage } from "./pom/recordTablePage";
 
@@ -8,14 +8,33 @@ import { RecordTablePage } from "./pom/recordTablePage";
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 800 };
 
-test.describe("record table mobile view", () => {
-  test("on a phone the table drops selection + drag columns and freezes the first column", async ({ page }) => {
-    await page.setViewportSize(PHONE);
+// Phones show registers that open records (Members, Tasks, Deadlines…) as
+// cards, so the column-table treatment is checked on a register that stays a
+// table on phones: Attestations (seven demo rows, a little wider than a phone).
+async function gotoPhoneTable(page: Page) {
+  await page.setViewportSize(PHONE);
+  await page.goto("/demo/app/attestations", { waitUntil: "networkidle" });
+  const table = new RecordTablePage(page);
+  await expect(table.firstBodyCell()).toBeVisible();
+  return table;
+}
 
-    const members = new MembersPage(page);
-    await members.gotoDemo();
+test.describe("record table mobile view", () => {
+  test("on a phone the selectable Members register reads as cards without selection or drag columns", async ({ page }) => {
+    await page.setViewportSize(PHONE);
+    await page.goto("/demo/app/members", { waitUntil: "networkidle" });
 
     const table = new RecordTablePage(page);
+    await expect(page.locator(".record-cards").first()).toBeVisible();
+    await expect(page.locator(".record-table__row")).toHaveCount(0);
+    // Selection waits behind "Select records"; nothing to drag.
+    await expect(table.bodySelectionCheckboxes()).toHaveCount(0);
+    await expect(page.locator(".record-table__mobile-selection-checkbox")).toHaveCount(0);
+    await expect(table.dragHandles()).toHaveCount(0);
+  });
+
+  test("on a phone a column table drops drag columns and freezes the first column", async ({ page }) => {
+    const table = await gotoPhoneTable(page);
 
     // Leading structural columns are dropped so the name column is flush left.
     await expect(table.bodySelectionCheckboxes()).toHaveCount(0);
@@ -43,12 +62,7 @@ test.describe("record table mobile view", () => {
   });
 
   test("the frozen first column stays pinned when the table is scrolled sideways", async ({ page }) => {
-    await page.setViewportSize(PHONE);
-
-    const members = new MembersPage(page);
-    await members.gotoDemo();
-
-    const table = new RecordTablePage(page);
+    const table = await gotoPhoneTable(page);
     const firstCell = table.firstBodyCell();
     await expect(firstCell).toBeVisible();
 
@@ -67,12 +81,7 @@ test.describe("record table mobile view", () => {
   });
 
   test("caps the frozen first column so it doesn't dominate the phone width", async ({ page }) => {
-    await page.setViewportSize(PHONE);
-
-    const members = new MembersPage(page);
-    await members.gotoDemo();
-
-    const table = new RecordTablePage(page);
+    const table = await gotoPhoneTable(page);
     const box = await table.firstBodyCell().boundingBox();
     expect(box).not.toBeNull();
     // The column carries an inline width from the field size (e.g. 240px). On a
@@ -89,12 +98,7 @@ test.describe("record table mobile view", () => {
   // scrolled sideways. That is what this asserts; a gradient would be a
   // regression back to the removed design.
   test("marks a sideways-scrolled table so the frozen column reads as pinned, not cut off", async ({ page }) => {
-    await page.setViewportSize(PHONE);
-
-    const members = new MembersPage(page);
-    await members.gotoDemo();
-
-    const table = new RecordTablePage(page);
+    const table = await gotoPhoneTable(page);
     const frame = table.scrollFrame();
 
     await expect(frame).not.toHaveClass(/is-scrolled-x/);

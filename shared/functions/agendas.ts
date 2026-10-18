@@ -15,6 +15,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
+import { agendaItemsForReader } from "./minutesPrivacy";
 
 // ----- queries --------------------------------------------------------------
 
@@ -53,7 +54,8 @@ export async function getForMeetingPortable(
     .withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id))
     .collect();
   items.sort((a, b) => a.order - b.order);
-  return { agenda, items };
+  // Items inside an in-camera session read "In-camera item" without in-camera access.
+  return { agenda, items: await agendaItemsForReader(ctx, meeting, items) };
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { agendaId }: { agendaId: string }) {
@@ -66,7 +68,8 @@ export async function getPortable(ctx: PortableQueryCtx, { agendaId }: { agendaI
     .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
     .collect();
   items.sort((a, b) => a.order - b.order);
-  return { agenda, items };
+  const meeting = typeof agenda.meetingId === "string" ? await ctx.db.get(agenda.meetingId, "meetings") : null;
+  return { agenda, items: meeting ? await agendaItemsForReader(ctx, meeting, items) : items };
 }
 
 export async function listForSocietyPortable(

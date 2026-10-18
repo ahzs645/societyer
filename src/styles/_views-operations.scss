@@ -67,6 +67,7 @@
   .users-table__role { width: auto; grid-column: 2; grid-row: 1; }
   .users-table__actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 4px; }
   .users-table td[colspan] { grid-column: 1 / -1; }
+  .users-table .avatar { font-size: token('fs-tiny'); }
 }
 
 // Accounting backfill review.
@@ -221,3 +222,134 @@
 }
 .access-policy-table tbody th { border-bottom: 1px solid token('border-color-light'); }
 .access-summary__text { font-weight: 400; }
+
+/* Users & access on phones: one role at a time, one row per module. */
+.role-access__picker {
+  display: grid;
+  gap: 6px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid token('border-color-light');
+
+  /* All five roles fit on a 390px screen without scrolling. */
+  .segmented { align-self: stretch; }
+  .segmented__btn { flex: 1 1 0; min-width: 0; min-height: 36px; padding-inline: 4px; }
+}
+.role-access__holders {
+  margin: 0;
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.role-access__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.role-access__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid token('border-color-light');
+
+  .badge { justify-self: end; white-space: nowrap; }
+  .info-popover__trigger { justify-self: center; }
+}
+.role-access__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.role-access__label {
+  font-size: token('fs-sm');
+  font-weight: token('fw-medium');
+  color: token('text-primary');
+}
+.role-access__meta {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  line-height: 1.35;
+}
+.role-access__own-rules {
+  border-bottom: 1px solid token('border-color-light');
+
+  > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 52px;
+    padding: 8px 16px;
+    cursor: pointer;
+    list-style: none;
+    font-size: token('fs-sm');
+    color: token('text-secondary');
+    &::-webkit-details-marker { display: none; }
+  }
+  .role-access__row:last-child { border-bottom: 0; }
+}
+.role-access__own-rules-title { flex: 1; min-width: 0; }
+.role-access__chevron {
+  flex-shrink: 0;
+  color: token('text-tertiary');
+  transition: transform token('motion-move') token('ease-move');
+}
+.role-access__own-rules[open] .role-access__chevron { transform: rotate(180deg); }
+.role-access__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: token('fs-sm');
+
+  .btn-action { min-height: 36px; }
+}
+
+/* "Compare all roles": the role-by-module grid in a sheet. */
+.role-compare.drawer__body { padding: 0; }
+.role-compare__scroll { overflow-x: auto; }
+.role-compare__legend {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  line-height: 1.4;
+}
+/* Five role columns fit a phone; the module column stays put if a long
+ * label ever pushes the grid sideways. */
+.role-compare .table.role-compare__table {
+  display: table;
+  width: 100%;
+  min-width: 0;
+
+  th, td {
+    height: auto;
+    min-width: 0;
+    padding: 8px 1px;
+    white-space: nowrap;
+  }
+  th:first-child { padding-left: 12px; }
+  th:last-child, td:last-child { padding-right: 8px; }
+  thead th { font-size: token('fs-xs'); }
+  .badge { padding: 0 5px; }
+  tbody th {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: 78px;
+    min-width: 78px;
+    max-width: 96px;
+    white-space: normal;
+    font-weight: token('fw-medium');
+    font-size: token('fs-xs');
+    text-align: left;
+    background: token('bg-panel');
+  }
+  thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: token('bg-panel');
+  }
+}

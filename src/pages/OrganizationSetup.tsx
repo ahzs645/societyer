@@ -5,6 +5,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Banner, Skeleton } from "../components/ui";
 import { SetupRing } from "../components/SetupPill";
 import { useSociety } from "../hooks/useSociety";
+import { useIsMobile } from "../lib/useIsMobile";
 import { usePermissions } from "../hooks/usePermissions";
 import { organizationTodayISO } from "../lib/dateRanges";
 import { isCorporation } from "../../shared/organizationDomain";
@@ -41,7 +42,12 @@ export function OrganizationSetupPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const welcome = searchParams.get("welcome") === "1";
   const registry = society ? setupCopyContext(society).registry : "the registry";
-  const disclosure = useSetupDisclosure(progress);
+  // Phones: the next-step card is the one mention of the next step on the
+  // first screen; the phases below start collapsed (their headers carry the
+  // counts) and the phase chips are left out, since those headers list the
+  // same phases.
+  const isMobile = useIsMobile();
+  const disclosure = useSetupDisclosure(progress, { startCollapsed: isMobile });
   const handlers = useSetupHandlers(society, registry);
   const waitingForRegistry = isWaitingForRegistry(progress);
 
@@ -107,9 +113,11 @@ export function OrganizationSetupPage() {
             <div className="setup-layout__next">
               <NextStepCard progress={progress} />
             </div>
-            <div className="setup-layout__rail">
-              <SetupPhaseRail progress={progress} activePhase={disclosure.activePhase} onSelect={disclosure.selectPhase} />
-            </div>
+            {!isMobile && (
+              <div className="setup-layout__rail">
+                <SetupPhaseRail progress={progress} activePhase={disclosure.activePhase} onSelect={disclosure.selectPhase} />
+              </div>
+            )}
             <div className="setup-layout__phases">
               {progress.phases.map((phase, index) => (
                 <SetupPhaseSection

@@ -1,7 +1,8 @@
 import { validateUploadMetadata } from "../../shared/storage/uploadVerification";
 import { isDemoMode } from "./demoMode";
 import { writeLocalDocumentVersion } from "./documentStorage";
-import { getDocumentStorageProvider, getRuntimeMode, isNativeFileStorageEnabled } from "./runtimeMode";
+import { getDocumentStorageProvider, getRuntimeMode, isNativeFileStorageEnabled, isDocumentVersionStorageEnabled } from "./runtimeMode";
+import { fetchDocumentDownload, isAuthenticatedDocumentUrl } from "./documentDownload";
 import { isLocalDataRuntime } from "./staticRuntime";
 import { hashBytes } from "./workspaceArchive";
 
@@ -36,7 +37,7 @@ export async function uploadDocumentVersion({
   recordUploadedVersion: (args: any) => Promise<any>;
   completeUpload?: (args: any) => Promise<any>;
 }) {
-  if (!isNativeFileStorageEnabled()) {
+  if (!isDocumentVersionStorageEnabled()) {
     throw new Error(NATIVE_FILE_STORAGE_DISABLED_MESSAGE);
   }
   const storageProvider = getDocumentStorageProvider();
@@ -105,6 +106,11 @@ export async function uploadDocumentVersion({
     mimeType: file.type,
     fileSizeBytes: file.size,
   });
+  if (presigned.provider === "sharepoint") {
+    if (!isAuthenticatedDocumentUrl(presigned.url)) throw new Error("SharePoint upload target is outside this deployment.");
+    const res = await fetchDocumentDownload(presigned.url, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
+    if (!res.ok) throw new Error(`SharePoint upload failed (${res.status}).`);
+  }
   if (presigned.provider === "rustfs" || presigned.provider === "r2") {
     const res = await fetch(presigned.url, {
       method: "PUT",

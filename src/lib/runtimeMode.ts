@@ -8,6 +8,7 @@ export type DocumentStorageProvider =
   | "convex"
   | "rustfs"
   | "r2"
+  | "sharepoint"
   | "local-filesystem"
   | "demo"
   | "none";
@@ -36,6 +37,8 @@ export function getRuntimeMode(): RuntimeMode {
 }
 
 export function getDocumentStorageProvider(): DocumentStorageProvider {
+  // External document versions remain available when Convex-native blobs are disabled.
+  if (import.meta.env.VITE_DOCUMENT_STORAGE_PROVIDER === "sharepoint") return "sharepoint";
   // A deployment can hard-disable all native file storage. When it does, no
   // provider is "native": uploads are blocked and only external document
   // connectors (e.g. Paperless) remain as read-only sources.
@@ -62,7 +65,11 @@ function isNativeFileStorageDisabledByFlag(): boolean {
  * stale client cannot smuggle a file in even if this returns the wrong value.
  */
 export function isNativeFileStorageEnabled(): boolean {
-  return getDocumentStorageProvider() !== "none";
+  return !isNativeFileStorageDisabledByFlag() && getDocumentStorageProvider() !== "none" && getDocumentStorageProvider() !== "sharepoint";
+}
+
+export function isDocumentVersionStorageEnabled(): boolean {
+  return getDocumentStorageProvider() === "sharepoint" || isNativeFileStorageEnabled();
 }
 
 export function getRuntimeDescriptor(): RuntimeDescriptor {
@@ -123,7 +130,7 @@ function isRuntimeMode(value: string): value is RuntimeMode {
 function isDocumentStorageProvider(value: string): value is DocumentStorageProvider {
   return (
     value === "convex" ||
-    value === "rustfs" || value === "r2" ||
+    value === "rustfs" || value === "r2" || value === "sharepoint" ||
     value === "local-filesystem" ||
     value === "demo" ||
     value === "none"

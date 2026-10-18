@@ -14,11 +14,29 @@ export function RecordTableSortPopover({
   onClose: () => void;
   anchorRef: RefObject<HTMLElement | null>;
 }) {
+  if (!open) return null;
+
+  return (
+    <ViewportPopover open onClose={onClose} anchorRef={anchorRef} label="Sort records" className="record-table__sort-popover">
+      <div className="record-table__popover-head">
+        <strong>Sort records</strong>
+        <button type="button" className="record-table__secondary-btn" onClick={onClose}>
+          Done
+        </button>
+      </div>
+      <RecordTableSortEditor />
+    </ViewportPopover>
+  );
+}
+
+/**
+ * The sort rules and "Add sort": the body of the Sort popover, and of the
+ * Sort section in the phone "View options" sheet.
+ */
+export function RecordTableSortEditor() {
   const columns = useRecordTableState((state) => state.columns);
   const sorts = useRecordTableState((state) => state.sorts);
   const handle = useRecordTableStoreHandle();
-
-  if (!open) return null;
 
   const setSorts = (next: typeof sorts) => handle.get().setSorts(next);
   const addSort = () => {
@@ -30,13 +48,7 @@ export function RecordTableSortPopover({
   };
 
   return (
-    <ViewportPopover open onClose={onClose} anchorRef={anchorRef} label="Sort records" className="record-table__sort-popover">
-      <div className="record-table__popover-head">
-        <strong>Sort records</strong>
-        <button type="button" className="record-table__secondary-btn" onClick={onClose}>
-          Done
-        </button>
-      </div>
+    <>
       {sorts.length === 0 ? (
         <div className="record-table__popover-empty">No sort rules.</div>
       ) : (
@@ -91,6 +103,6 @@ export function RecordTableSortPopover({
         <Plus size={12} />
         <span>Add sort</span>
       </button>
-    </ViewportPopover>
+    </>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Circle, CircleDashed, CircleDot, Clock3, EyeOff, Lock, MinusCircle } from "lucide-react";
-import { useSetupGuideHidden } from "../hooks/useSetupProgress";
+import { useSetupGuideHidden, useSetupSummaryOnScreen } from "../hooks/useSetupProgress";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { useOrganizationSetup } from "../features/organizationSetup/useOrganizationSetup";
@@ -64,13 +64,16 @@ const POPOVER_WIDTH = 340;
  * Compact "Setup 3/14" pill. Follows the user across pages (sidebar header,
  * icon rail, or the phone top bar) and opens a popover with the current
  * phase's steps and a link to the setup view. Reads the same progress as the
- * setup view and the Dashboard summary card. Hidden once setup is complete or
- * the viewer hides it (shared with the Dashboard card; never hides the view).
+ * setup view and the Dashboard summary card. Hidden once setup is complete,
+ * while the Dashboard card is on screen, or when the viewer hides it here
+ * (that hides the Dashboard card too; never the view). Dismissing only the
+ * Dashboard card keeps the pill, so there is still a way back to setup.
  */
 export function SetupPill({ variant }: { variant: Variant }) {
   const society = useSociety();
   const societyId = society?._id ? String(society._id) : null;
   const { hidden, setHidden } = useSetupGuideHidden(societyId);
+  const summaryOnScreen = useSetupSummaryOnScreen();
   // Skip the query entirely once the viewer hid the pill.
   const progress = useOrganizationSetup(hidden ? null : societyId);
   const permissions = usePermissions();
@@ -150,8 +153,9 @@ export function SetupPill({ variant }: { variant: Variant }) {
   }, [open]);
 
   if (hidden || !progress || progress.complete || progress.counts.total === 0) return null;
-  // The Dashboard has the summary card and the setup view has everything.
-  if (location.pathname === "/app" || location.pathname === "/app/" || isOrganizationSetupPath(location.pathname)) return null;
+  // Progress shows once: the Dashboard's summary card (while it is on screen)
+  // or the setup view itself. A dismissed card leaves the pill as the way back.
+  if (summaryOnScreen || isOrganizationSetupPath(location.pathname)) return null;
 
   const { done: completed, total } = progress.counts;
   const percent = setupPercent(progress);

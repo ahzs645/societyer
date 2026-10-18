@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { FileUp, Loader2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { DatePicker } from "../../components/DatePicker";
+import { FileDropZone, type FileRejection } from "../../components/FileDropZone";
 import { Select } from "../../components/Select";
 import { Drawer, Field } from "../../components/ui";
 import { usePermissions } from "../../hooks/usePermissions";
 import { uploadDocumentVersion } from "../../lib/documentVersionUpload";
-import { isNativeFileStorageEnabled } from "../../lib/runtimeMode";
+import { isDocumentVersionStorageEnabled } from "../../lib/runtimeMode";
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -39,14 +39,15 @@ export function RecordCertificateDrawer({
 }) {
   const { can, loaded } = usePermissions();
   const canReadDocuments = loaded && can("documents:read");
-  const canUpload = loaded && can("documents:write") && isNativeFileStorageEnabled();
+  const canUpload = loaded && can("documents:write") && isDocumentVersionStorageEnabled();
   const documents = useQuery(api.documents.listSummaries, open && canReadDocuments ? { societyId: society._id } : "skip") as any[] | undefined;
   const createDocument = useMutation(api.documents.create);
   const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
   const beginUpload = useAction(api.documentVersions.beginUpload);
   const completeUpload = useAction(api.documentVersions.completeUpload);
   const recordUploadedVersion = useMutation(api.documentVersions.recordUploadedVersion);
-  const fileRef = useRef<HTMLInputElement>(null);
+  // Pasting a scan works anywhere in the drawer, not only on the zone.
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [documentId, setDocumentId] = useState("");
   const [number, setNumber] = useState("");
@@ -79,7 +80,7 @@ export function RecordCertificateDrawer({
 
   const upload = async (file: File | undefined) => {
     if (!file || !canUpload) return;
-    if (file.size > MAX_BYTES) { setErrors({ document: "That file is over 25 MB. Upload a smaller scan." }); return; }
+    if (file.size > MAX_BYTES) { setErrors({ upload: "That file is over 25 MB. Upload a smaller scan." }); return; }
     setUploading(true);
     setErrors({});
     try {
@@ -96,11 +97,19 @@ export function RecordCertificateDrawer({
       setUploaded({ id: String(id), title });
       setDocumentId(String(id));
     } catch (err: any) {
-      setErrors({ document: err?.message ?? "The certificate couldn't be uploaded." });
+      setErrors({ upload: err?.message ?? "The certificate couldn't be uploaded." });
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
+  };
+
+  const onReject = ([first]: FileRejection[]) => {
+    if (!first) return;
+    setErrors({
+      upload: first.reason === "size"
+        ? "That file is over 25 MB. Upload a smaller scan."
+        : "That file type isn't supported. Upload a PDF or a photo of the certificate.",
+    });
   };
 
   const numberLabel = corporation ? "Corporation number" : "Society number";
@@ -136,7 +145,7 @@ export function RecordCertificateDrawer({
         </>
       }
     >
-      <form className="setup-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <form ref={formRef} className="setup-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
         <p className="setup-form__lead">
           Your {corporation ? "corporation" : "society"} exists from the date on the certificate. Recording it marks the {corporation ? "corporation" : "society"} as incorporated and active, and starts its deadlines from that date.
         </p>
@@ -151,14 +160,24 @@ export function RecordCertificateDrawer({
           />
         </Field>
         {canUpload && (
-          <div className="setup-upload">
-            <button type="button" className="btn" disabled={uploading} onClick={() => fileRef.current?.click()}>
-              {uploading ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <FileUp size={14} aria-hidden="true" />}
-              {uploading ? "Uploading…" : "Upload the certificate"}
-            </button>
-            <span className="setup-step__hint">PDF or photo, up to 25 MB. It's saved to Documents.</span>
-            <input ref={fileRef} type="file" accept="application/pdf,image/*" hidden tabIndex={-1} onChange={(event) => void upload(event.target.files?.[0])} />
-          </div>
+          <FileDropZone
+            className="setup-upload"
+            ariaLabel="Certificate upload"
+            title="Drop the certificate here"
+            touchTitle="Upload the certificate"
+            chooseLabel="Choose file"
+            busy={uploading}
+            busyLabel="Uploading…"
+            hint="PDF or photo, up to 25 MB. You can also paste a scan. It's saved to Documents."
+            accept="application/pdf,image/*"
+            maxBytes={MAX_BYTES}
+            // Upload problems, rejected drops included, live in errors.upload; ""
+            // keeps the zone's own rejection line from doubling them up.
+            error={errors.upload ?? ""}
+            pasteTargetRef={formRef}
+            onFiles={(files) => upload(files[0])}
+            onReject={onReject}
+          />
         )}
         <Field label={numberLabel} required error={errors.number}>
           <input className="input" value={number} maxLength={40} autoComplete="off" onChange={(event) => { setNumber(event.target.value); setErrors((prev) => ({ ...prev, number: "" })); }} />

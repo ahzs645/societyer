@@ -16,7 +16,11 @@ export type MeetingHistoryPanelProps = {
   onCarry: (args: { sourceMinutesId: string; targetMinutesId: string; sourceEntryId: string }) => Promise<unknown>;
 };
 const keys: HistoryKey[] = ["actionObservations", "importedSourceVersions"];
-const tabs = { actionObservations: "Action observations", importedSourceVersions: "Imported source versions" };
+const tabs = { actionObservations: "Action items noticed", importedSourceVersions: "Imported source versions" };
+/** Rows kept in the meeting history (action items noticed and imported source versions). */
+export function meetingHistoryRowCount(minutes: Pick<HistoryMinutes, HistoryKey> | null | undefined): number {
+  return keys.reduce((total, key) => total + (minutes?.[key]?.length ?? 0), 0);
+}
 const statusLabels: Record<string, string> = { unknown: "Unknown", open: "Open", in_progress: "In progress", ongoing: "Ongoing", on_hold: "On hold", completed: "Completed", cancelled: "Cancelled", confirmed: "Met", not_met: "Not met", not_recorded: "Not recorded", draft: "Draft", revised: "Revised", adopted: "Adopted" };
 const str = (v: unknown) => typeof v === "string" ? v : v == null ? "" : String(v);
 const copy = (m: HistoryMinutes): History => Object.fromEntries(keys.map(k => [k, structuredClone(m[k] ?? [])])) as History;
@@ -65,6 +69,7 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
   const [search, setSearch] = useState("");
   const [carrySource, setCarrySource] = useState("");
   const [carryEntry, setCarryEntry] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const latest = JSON.stringify(copy(minutes));
   const baseline = useRef(latest);
   const changedOnServer = dirty && baseline.current !== latest;
@@ -99,7 +104,7 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
     setError("");
     if (changedOnServer) { setError("This history changed elsewhere. Copy any unsaved work, then reload the saved history before editing again."); return; }
     try {
-      for (const a of draft.actionObservations) if (!str(a.text).trim() || !str(a.actionKey).trim()) throw new Error("Each action observation needs text and an action identity.");
+      for (const a of draft.actionObservations) if (!str(a.text).trim() || !str(a.actionKey).trim()) throw new Error("Each action item needs text and an action identity.");
       for (const v of draft.importedSourceVersions) {
         if (!str(v.label).trim()) throw new Error("Each source version needs a label.");
         if (!Array.isArray(v.sourceExternalIds) || !v.sourceExternalIds.some(id => str(id).trim())) throw new Error("Each source version needs at least one source reference.");
@@ -120,10 +125,18 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
     try { await onCarry({ sourceMinutesId: carrySource, targetMinutesId: minutes._id, sourceEntryId: carryEntry }); setNotice("Action carried forward as a new observation with unknown status. Review its status and as-of date here."); setCarryEntry(""); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
+  // Nothing recorded: hide it from readers, give editors one "Add" row.
+  if (!expanded && !dirty && keys.every(k => draft[k].length === 0)) {
+    if (approved || readOnly) return null;
+    return <section className="card meeting-history-add" aria-label="Meeting history" style={{ marginTop: 16 }}>
+      <div className="card__head"><h2 className="card__title">Meeting history</h2><span className="card__subtitle">None recorded</span>
+        <button type="button" className="btn-action" style={{ marginLeft: "auto" }} onClick={() => setExpanded(true)}>Add history</button></div>
+    </section>;
+  }
   return <section className="card" aria-label="Meeting history" style={{ marginTop: 20 }}>
     <div className="card__head"><h2 className="card__title">Meeting history</h2></div>
     <div className="card__body" style={{ display: "grid", gap: 16 }}>
-      <p className="muted" style={{ margin: 0 }}>Keep action observations and imported source document versions with their evidence. Edit quorum checkpoints in Source decisions and meeting evidence.</p>
+      <p className="muted" style={{ margin: 0 }}>Action items noticed in the minutes, and imported versions of the source document, each with its evidence. Quorum at each vote is under Decisions and evidence.</p>
       {approved && <p role="status">These minutes are approved. History is read only; use the existing reopen approval workflow before making changes. External adoption assertions stay protected.</p>}
       <div role="tablist" aria-label="Meeting history sections" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{keys.map(k => <button type="button" key={k} role="tab" aria-selected={tab === k} className={`btn btn--sm ${tab === k ? "btn--accent" : "btn--ghost"}`} onClick={() => setTab(k)}>{tabs[k]} ({draft[k].length})</button>)}</div>
       {error && <p role="alert" style={{ color: "var(--danger, #a21d26)", whiteSpace: "pre-wrap" }}>{error}</p>}
@@ -140,7 +153,7 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
           </details>
         </>}
         {tab === "importedSourceVersions" && <p>Source adoption is separate from approving an imported candidate. An “approved” filename alone is not adoption evidence. Imported source document versions and external adoption assertions are distinct from this app’s approved minutes revision. Saved external adoption assertions cannot be changed; append a revision instead.</p>}
-        {draft[tab].length === 0 && <p>No {tabs[tab].toLowerCase()} recorded yet.</p>}
+        {draft[tab].length === 0 && <p>No {tab === "actionObservations" ? "action items" : "source versions"} recorded yet.</p>}
         {draft[tab].map((row, index) => {
           if (tab === "actionObservations" && ((filter !== "all" && row.status !== filter) || !`${str(row.text)} ${str(row.actionKey)}`.toLowerCase().includes(search.toLowerCase()))) return null;
           const frozen = tab === "importedSourceVersions" && savedAdopted.has(row.versionId);
@@ -181,7 +194,7 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
             </>}
           </details>;
         })}
-        <button type="button" className="btn" disabled={locked} onClick={() => { setFilter("all"); setSearch(""); add(tab); }}>Add {tab === "actionObservations" ? "action observation" : "source version"}</button>
+        <button type="button" className="btn" disabled={locked} onClick={() => { setFilter("all"); setSearch(""); add(tab); }}>Add {tab === "actionObservations" ? "action item" : "source version"}</button>
       </div>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn btn--accent" disabled={locked || !dirty || changedOnServer} onClick={save}>{busy ? "Saving…" : "Save history"}</button><button type="button" className="btn btn--ghost" disabled={busy || !dirty} onClick={() => { setDraft(copy(minutes)); setDirty(false); setError(""); setNotice("Saved history reloaded; unsaved edits discarded."); baseline.current = latest; }}>Reload saved history</button>{dirty && <span role="status">Unsaved history changes</span>}</div>
     </div>

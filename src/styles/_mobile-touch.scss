@@ -1,4 +1,5 @@
 @use "tokens" as *;
+@use "mixins" as *;
 
 /* Touch ergonomics. Desktop keeps its dense controls; coarse pointers
  * (phones, tablets) get hit areas closer to the 44px platform guidance.
@@ -67,6 +68,68 @@
   .page > a.row.muted:first-child {
     min-height: 32px;
     align-items: center;
+  }
+}
+
+/* Small inline controls: an invisible 44px hit area (`tap-area`) so the
+ * visual size stays put. Phone widths get it too, not just coarse pointers:
+ * a narrow window driven by a mouse still lays these out at their 16-24px
+ * phone size. Controls packed side by side grow their hit area vertically
+ * only. */
+$small-tap-both: (
+  ".info-popover__trigger",
+  ".task-icon-button",
+  "a.card__subtitle",
+  ".kbar__pin"
+);
+$small-tap-block: (
+  ".invoice-table__link",
+  ".segmented__btn",
+  ".access-notes > summary",
+  "a.meta" // Year-end "Open →" (a 19px line; rows sit 90px+ apart)
+);
+@media (pointer: coarse), (max-width: 760px) {
+  :where(#{$small-tap-both}, #{$small-tap-block}, .citation-badge, .legal-guide-badge) {
+    position: relative;
+  }
+  #{$small-tap-both} {
+    @include tap-area;
+  }
+  #{$small-tap-block} {
+    @include tap-area(block);
+  }
+
+  /* Citation badges stack flush when a list of them wraps, where a 44px hit
+   * area would reach into the badge above. They grow to 32px with 4px of
+   * margin above and below instead, and a 40px hit area that fills it. */
+  .citation-badge,
+  .legal-guide-badge {
+    min-height: 32px;
+    margin-block: 4px;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: -4px 0;
+    }
+  }
+
+  /* "Evidence (n)": a 16px line 6px from the next action. The shared
+   * disclosure row (_disclosure.scss) makes the toggle 44px; the negative
+   * margin gives back part of that. */
+  .annual-cycle-evidence > summary {
+    margin-block: -6px;
+  }
+
+  /* "← Meetings" above a detail page title (24x36 there). */
+  .breadcrumbs__back {
+    position: relative;
+    @include tap-area;
+  }
+
+  /* Minutes agenda list: one button per line, 6px apart, so a hit area would
+   * reach into the next line. The rows themselves grow to 44px instead. */
+  .meeting-minutes-agenda-link {
+    min-height: token('tap-target');
   }
 }
 

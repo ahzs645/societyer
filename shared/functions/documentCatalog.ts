@@ -16,7 +16,8 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
-import { documentAccessPredicate, requireDocumentAccess } from "./documents";
+import { documentReadPolicy, requireDocumentAccess } from "./documents";
+import { withheldInCameraDocument } from "../minutesPrivacy";
 import {
   documentCategoryGroupKey,
   documentCategoryLabel,
@@ -39,6 +40,8 @@ type Row = Record<string, any>;
  * Visible, non-internal documents WITHOUT their `content`. Provenance (which is
  * parsed out of `content`) is attached per row from a memoized projection, so a
  * reactive re-run neither reloads nor re-parses unchanged documents' content.
+ * In-camera material the reader may not see is a placeholder
+ * (`inCameraWithheld`) with no provenance.
  */
 async function visibleSocietyDocuments(ctx: PortableQueryCtx, societyId: string, withProvenance = true) {
   const visible = () =>
@@ -46,17 +49,25 @@ async function visibleSocietyDocuments(ctx: PortableQueryCtx, societyId: string,
       .query("documents")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .filter((doc: Row) => !isInternalDocumentRecord(doc));
-  const [allows, docs, provenance] = await Promise.all([
-    documentAccessPredicate(ctx, societyId),
+  const [policy, docs, provenance] = await Promise.all([
+    documentReadPolicy(ctx, societyId),
     visible().omitFields("content").collect(),
     withProvenance
       ? visible().collectProjected("documentCatalog.provenance/v1", (doc: Row) => ({ id: String(doc._id), value: documentProvenance(doc) }))
       : Promise.resolve([]),
   ]);
   const byId = new Map(provenance.map((entry) => [entry.id, entry.value]));
-  for (const doc of docs) attachDocumentProvenance(doc, byId.get(String(doc._id)));
-  return docs.filter((doc: Row) => allows(doc));
+  return docs
+    .filter((doc: Row) => policy.opens(doc))
+    .map((doc: Row) => {
+      if (policy.inCamera(doc)) return withheldInCameraDocument(doc);
+      attachDocumentProvenance(doc, byId.get(String(doc._id)));
+      return doc;
+    });
 }
+
+/** Placeholders take no part in duplicate and version grouping, and carry no file or evidence details. */
+const isWithheld = (doc: Row) => Boolean(doc.inCameraWithheld);
 
 function latestVersionsByDocument(versions: Row[], societyId: string) {
   const latest = new Map<string, Row>();
@@ -153,6 +164,7 @@ function projectRow(doc: Row, extras: {
     versionKey: extras.group?.versionKey,
     versionCount: extras.group?.versionCount ?? 1,
     supersededById: extras.group?.supersededById,
+    ...(doc.inCameraWithheld ? { inCameraWithheld: doc.inCameraWithheld } : {}),
   };
 }
 
@@ -179,9 +191,9 @@ export async function browsePortable(ctx: PortableQueryCtx, { societyId }: { soc
   }
   const materialsByDoc = new Map<string, number>();
   for (const row of materials) materialsByDoc.set(String(row.documentId), (materialsByDoc.get(String(row.documentId)) ?? 0) + 1);
-  const groups = buildDocumentGroups(docs.map((doc: Row) => versionable(doc, latest.get(String(doc._id)))));
+  const groups = buildDocumentGroups(docs.filter((doc: Row) => !isWithheld(doc)).map((doc: Row) => versionable(doc, latest.get(String(doc._id)))));
   const rows = docs
-    .map((doc: Row) => projectRow(doc, {
+    .map((doc: Row) => projectRow(doc, isWithheld(doc) ? {} : {
       group: groups.get(String(doc._id)),
       latestVersion: latest.get(String(doc._id)),
       versionFileCount: counts.get(String(doc._id)),
@@ -218,10 +230,11 @@ export async function categoryCountsPortable(ctx: PortableQueryCtx, { societyId 
 export async function versionsForPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
   const document = await requireDocumentAccess(ctx, id);
   const societyId = String(document.societyId);
-  const [docs, versions] = await Promise.all([
+  const [listed, versions] = await Promise.all([
     visibleSocietyDocuments(ctx, societyId),
     ctx.db.query("documentVersions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
   ]);
+  const docs = listed.filter((doc: Row) => !isWithheld(doc));
   const { latest } = latestVersionsByDocument(versions, societyId);
   const groups = buildDocumentGroups(docs.map((doc: Row) => versionable(doc, latest.get(String(doc._id)))));
   const self = groups.get(String(id));

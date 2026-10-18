@@ -73,6 +73,14 @@
   .membership-subscribers-table tbody td[colspan] { grid-column: 1 / -1; grid-row: auto; }
 }
 
+// Membership plans inside their phone fold: the fold already names the
+// section, and the plan cards get the fold's inner padding.
+.mobile-fold__body > .membership-plans {
+  margin: 0 !important;
+  padding: token('s-3') token('s-4') token('s-4');
+}
+.mobile-fold__body .membership-plans__head { display: none; }
+
 // FY detail inspector: sections sit flat inside the inspector panel rather
 // than as bordered cards nested in it.
 .finance-inspector__section {

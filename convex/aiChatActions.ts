@@ -8,6 +8,8 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 import { composeAiMessage } from "../shared/aiAttachments";
+import { aiProviderErrorMessage } from "../shared/ai/providerErrors";
+import { HOSTED_AI_ADDRESS_REJECTED, hostedAiFetch, isHostedAiUrlAllowed } from "./lib/aiEndpointPolicy";
 
 function env(name: string): string | undefined {
   return process.env[name];
@@ -152,7 +154,8 @@ export const sendChatMessage = authorizedAction("aiChatActions:sendChatMessage",
     } catch (error: any) {
       provider = "deterministic_fallback";
       assistantText = fallbackResponse({
-        error: error?.message,
+        // Provider messages can echo request details; only a generic reason is kept.
+        error: runtimeConfig.configuredFrom === "blocked_address" ? HOSTED_AI_ADDRESS_REJECTED : runtimeConfig.model ? aiProviderErrorMessage(error) : "No AI provider key is configured.",
         content: args.content,
         context,
       });
@@ -273,13 +276,21 @@ export async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUse
   }).catch(() => null);
   const effective = settings?.effective;
   const secret = effective?.secretVaultItemId
-    ? await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId }).catch(() => null)
+    ? await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId, societyId }).catch(() => null)
     : null;
   const provider = effective?.provider ?? (env("OPENROUTER_API_KEY") ? "openrouter" : "openai");
-  const apiKey = secret?.value ?? (provider === "openrouter" ? env("OPENROUTER_API_KEY") : env("OPENAI_API_KEY")) ?? env("OPENAI_API_KEY");
+  // The deployment's own key is never sent to a workspace-chosen address.
+  const environmentKey = effective?.baseUrl ? undefined : (provider === "openrouter" ? env("OPENROUTER_API_KEY") : env("OPENAI_API_KEY")) ?? env("OPENAI_API_KEY");
+  const apiKey = secret?.value ?? environmentKey;
   const modelId = requestedModelId ?? effective?.modelId ?? env("SOCIETYER_AI_MODEL") ?? (provider === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini");
   const baseURL = effective?.baseUrl || (provider === "openrouter" ? OPENROUTER_BASE_URL : undefined);
-  const openai = apiKey ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) }) : null;
+  // A workspace-saved address is fetched by this server: public HTTPS only,
+  // checked again on every request, no redirects (see lib/aiEndpointPolicy).
+  const savedAddress = Boolean(effective?.baseUrl);
+  const addressBlocked = savedAddress && !isHostedAiUrlAllowed(String(baseURL), "ai_chat");
+  const openai = apiKey && !addressBlocked
+    ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}), ...(savedAddress ? { fetch: hostedAiFetch("ai_chat") } : {}) })
+    : null;
   const model = openai
     ? provider === "openrouter" || provider === "openai-compatible"
       ? openai.chat(modelId)
@@ -289,7 +300,7 @@ export async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUse
     provider,
     modelId,
     model,
-    configuredFrom: secret?.value ? effective.scope : apiKey ? "environment" : "missing",
+    configuredFrom: addressBlocked ? "blocked_address" : secret?.value ? effective.scope : apiKey ? "environment" : "missing",
     /** Scope of the active provider setting ("workspace" / "personal"), or null when only the environment supplies a key. */
     settingScope: (effective?.scope as string | undefined) ?? null,
   };

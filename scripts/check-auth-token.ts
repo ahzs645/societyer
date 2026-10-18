@@ -5,10 +5,16 @@ const originalFetch = globalThis.fetch;
 const originalWindow = (globalThis as any).window;
 const originalMode = process.env.VITE_AUTH_MODE;
 const originalRuntime = process.env.VITE_RUNTIME_MODE;
+const originalAuthBase = process.env.VITE_AUTH_BASE_URL;
+const originalSite = process.env.VITE_CONVEX_SITE_URL;
+const originalBackend = process.env.VITE_CONVEX_URL;
 
 async function checkMode(mode: string, runtime: string, requiresToken: boolean) {
   process.env.VITE_AUTH_MODE = mode;
   process.env.VITE_RUNTIME_MODE = runtime;
+  process.env.VITE_AUTH_BASE_URL = "https://auth.example.test";
+  process.env.VITE_CONVEX_SITE_URL = "https://broker.example.test";
+  process.env.VITE_CONVEX_URL = runtime === "convex-cloud" ? "https://broker.example.convex.cloud" : "http://127.0.0.1:3220";
   const browser = {
     location: { pathname: "/app", origin: "https://app.example.test" },
     localStorage: { getItem: (_key: string): string | null => null },
@@ -49,6 +55,8 @@ async function checkMode(mode: string, runtime: string, requiresToken: boolean) 
       for (const url of [
         "/api/v1/workflow-generated-documents/file-id?societyId=society-a",
         "https://app.example.test/api/v1/workflow-generated-documents/file-id?societyId=society-a",
+        "https://broker.example.test/document-storage/sharepoint/download?versionId=version-a",
+        "https://broker.example.test/document-storage/sharepoint/upload?uploadHandleId=handle-a",
       ]) {
         await documents.fetchDocumentDownload(url);
         assert.equal(new Headers(request?.init?.headers).get("authorization"), "Bearer session-jwt");
@@ -57,6 +65,10 @@ async function checkMode(mode: string, runtime: string, requiresToken: boolean) 
       for (const url of [
         "https://bucket.example.test/file?signature=signed",
         "https://company.sharepoint.com/documents/file",
+        "https://other.example.test/document-storage/sharepoint/download?versionId=version-a",
+        "https://broker.example.test.evil.test/document-storage/sharepoint/download",
+        "https://user:password@broker.example.test/document-storage/sharepoint/download",
+        "https://broker.example.test/api/auth/token",
         "https://other.example.test/api/v1/workflow-generated-documents/file-id",
         "https://app.example.test/api/v1/other-endpoint",
         "//other.example.test/api/v1/workflow-generated-documents/file-id",
@@ -88,6 +100,7 @@ async function checkMode(mode: string, runtime: string, requiresToken: boolean) 
 
 try {
   await checkMode("clerk", "convex-cloud", true);
+  await checkMode("convex", "convex-cloud", true);
   await checkMode("better-auth", "convex-self-hosted", true);
   await checkMode("none", "convex-self-hosted", false);
   await checkMode("clerk", "local-indexeddb", false);
@@ -99,4 +112,10 @@ try {
   else process.env.VITE_AUTH_MODE = originalMode;
   if (originalRuntime === undefined) delete process.env.VITE_RUNTIME_MODE;
   else process.env.VITE_RUNTIME_MODE = originalRuntime;
+  if (originalAuthBase === undefined) delete process.env.VITE_AUTH_BASE_URL;
+  else process.env.VITE_AUTH_BASE_URL = originalAuthBase;
+  if (originalSite === undefined) delete process.env.VITE_CONVEX_SITE_URL;
+  else process.env.VITE_CONVEX_SITE_URL = originalSite;
+  if (originalBackend === undefined) delete process.env.VITE_CONVEX_URL;
+  else process.env.VITE_CONVEX_URL = originalBackend;
 }

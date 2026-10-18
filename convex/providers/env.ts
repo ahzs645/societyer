@@ -13,10 +13,14 @@ function env(name: string): string | undefined {
   }
 }
 
+import { sharePointDeploymentConfigured } from "../../shared/storage/sharePointDeployment";
+import { emailProviderConfiguration, type EmailProviderId } from "../../shared/emailConfiguration";
+
 export const providers = {
-  storage(): Provider<"rustfs" | "r2" | "demo"> {
+  storage(): Provider<"rustfs" | "r2" | "sharepoint" | "demo"> {
     const selected = env("SOCIETYER_STORAGE_PROVIDER");
-    if (selected && !["rustfs", "r2", "demo"].includes(selected)) throw new Error("Unsupported deployment storage provider.");
+    if (selected && !["rustfs", "r2", "sharepoint", "demo"].includes(selected)) throw new Error("Unsupported deployment storage provider.");
+    if (selected === "sharepoint") return { id: "sharepoint", live: sharePointDeploymentConfigured(process.env) };
     if (selected === "r2") {
       const live = !!(env("R2_ENDPOINT") || env("R2_ACCOUNT_ID")) && !!env("R2_BUCKET") && !!env("R2_ACCESS_KEY_ID") && !!env("R2_SECRET_ACCESS_KEY");
       return { id: "r2", live };
@@ -38,9 +42,8 @@ export const providers = {
     if (env("OPENAI_API_KEY")) return { id: "openai", live: true };
     return { id: "demo", live: false };
   },
-  email(): Provider<"resend" | "demo"> {
-    const live = !!env("RESEND_API_KEY");
-    return { id: live ? "resend" : "demo", live };
+  email(): Provider<EmailProviderId> {
+    return emailProviderConfiguration(process.env);
   },
   accounting(): Provider<"wave" | "demo"> {
     const live = !!env("WAVE_ACCESS_TOKEN") && !!env("WAVE_BUSINESS_ID");
@@ -81,4 +84,9 @@ export function assertNativeFileStorageEnabled(): void {
   if (isNativeFileStorageDisabled()) {
     throw new Error(NATIVE_FILE_STORAGE_DISABLED_MESSAGE);
   }
+}
+
+/** SharePoint version uploads never write Convex native storage. All other upload paths retain the native-storage guard. */
+export function assertDocumentVersionStorageEnabled(): void {
+  if (providers.storage().id !== "sharepoint") assertNativeFileStorageEnabled();
 }

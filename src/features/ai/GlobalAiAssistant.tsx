@@ -18,10 +18,10 @@ import {
   Paperclip,
   Pencil,
   Plus,
-  Search,
   Send,
   Settings,
   Sparkles,
+  Square,
   Trash2,
   Wrench,
   X,
@@ -40,64 +40,47 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { streamChatMessage, isChatStreamUnavailable } from "../../lib/aiChatStream";
-import { AI_ATTACHMENT_ACCEPT, AI_ATTACHMENT_MAX_FILES, readAiTextAttachment, type AiTextAttachment } from "../../../shared/aiAttachments";
+import { AI_ATTACHMENT_ACCEPT, AI_ATTACHMENT_MAX_BYTES, AI_ATTACHMENT_MAX_FILES, composeAiMessage, readAiTextAttachment, type AiTextAttachment } from "../../../shared/aiAttachments";
+import { buildLocalAssistantMessages } from "../../../shared/ai/localAssistantPrompt";
+import { todayDateOnly } from "../../../shared/dateOnly";
+import { DEVICE_AI_SETTINGS_HREF, useDeviceAi, useDeviceToolSupport } from "../../lib/localAi/useDeviceAi";
+import { deviceAiClient } from "../../lib/localAi/client";
+import { rememberDeviceToolSupport } from "../../lib/localAi/toolSupport";
+import { dismissedChange, runApprovedChange, runDeviceAssistantTurn, type DeviceAssistantEvent } from "../../lib/localAi/assistantToolLoop";
+import { DEVICE_TOOL_RECORD_LIMITS, parseDeviceToolRecords, type DeviceToolRecord } from "../../../shared/ai/deviceToolRecords";
+import { findAgentTool } from "../../../shared/agentTools";
+import { useDeviceAssistantTools } from "./useDeviceAssistantTools";
+import { DeviceToolActivity } from "./DeviceToolActivity";
 import { resolveRouteIdentity } from "../../lib/routeIdentity";
 import { useCurrentUserId } from "../../hooks/useCurrentUser";
 import { useSociety } from "../../hooks/useSociety";
 import { Skeleton } from "../../components/ui";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/Modal";
 
 import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT, takePendingAiAssistantOpen } from "./aiAssistantEvents";
 import { Tooltip } from "../../components/Tooltip";
 import { useDialogFocus } from "../../lib/useDialogFocus";
 import { useKeyboardInsetTracking } from "../../lib/useVisualViewportBottomInset";
 import { MarkdownTable } from "./MarkdownTable";
+import { assistantCapabilities, assistantEmptyHint, assistantPlaceholder, assistantSuggestions, type SuggestedPrompt } from "./assistantSuggestions";
 export { openGlobalAiAssistant } from "./aiAssistantEvents";
 
-type SuggestedPrompt = {
-  id: string;
-  label: string;
-  icon: typeof Search;
-  prefills: string[];
-};
-
-const SUGGESTED_PROMPTS: SuggestedPrompt[] = [
-  {
-    id: "find-record",
-    label: "Find a record",
-    icon: Search,
-    prefills: [
-      "Find the directors whose terms expire in the next 60 days.",
-      "Show me all active members joined in the last 90 days, sorted by join date.",
-      "List filings due to BC Registry in the next 30 days that are still in draft.",
-    ],
-  },
-  {
-    id: "summarize-page",
-    label: "Summarize this page",
-    icon: FileText,
-    prefills: [
-      "Summarize what's on the current screen and flag anything that needs my attention.",
-      "Give me the key facts from this page in 3-5 bullets.",
-      "What's overdue or missing on this record? Be concise.",
-    ],
-  },
-  {
-    id: "draft-task",
-    label: "Draft a task",
-    icon: Plus,
-    prefills: [
-      "Draft a task to follow up on this record next week, priority Medium. Details: ",
-      "Draft a task assigned to the secretary to file the AGM minutes by month-end. Details: ",
-      "Draft a high-priority task to renew the society's annual report. Details: ",
-    ],
-  },
-];
-
 type ModelOption = { id: string; label: string; provider: string };
+
+/** Stop pressed before the on-device model wrote anything: nothing to keep. */
+class StoppedBeforeReply extends Error {
+  constructor() {
+    super("Stopped before the reply started.");
+    this.name = "StoppedBeforeReply";
+  }
+}
+
+/** Shown on the Attach button (tooltip, and its accessible description). */
+const AI_ATTACHMENT_LIMITS = `Up to ${AI_ATTACHMENT_MAX_FILES} UTF-8 TXT, Markdown, CSV or JSON files, ${AI_ATTACHMENT_MAX_BYTES / 1024} KiB each. PDF, images and office files need an extraction service.`;
 
 const FALLBACK_MODELS: ModelOption[] = [
   { id: "google/gemma-2-27b-it:free", label: "Gemma 2 27B (free)", provider: "openrouter" },
@@ -113,20 +96,46 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   const canRead = can("tasks:read");
   const canWrite = can("tasks:write");
   const localOnly = isLocalDataRuntime() && !isStaticDemoRuntime();
-  const canSend = canWrite && !localOnly;
+  // Local and desktop workspaces chat with the on-device model when one is set up,
+  // with the shared agent tools when they are turned on and the model takes them.
+  const deviceAi = useDeviceAi("assistant");
+  const deviceChat = localOnly && deviceAi.ready;
+  const deviceModel = deviceAi.config.model;
+  const deviceToolSupport = useDeviceToolSupport(deviceAi.config);
+  // Suggestions, placeholder and notices follow what the assistant can do here.
+  const capabilities = assistantCapabilities({ localOnly, deviceChat, deviceConfig: deviceAi.config, deviceToolSupport });
+  const suggestions = assistantSuggestions(capabilities);
+  const emptyHint = assistantEmptyHint(capabilities);
+  const canSend = canWrite && (!localOnly || deviceChat);
   const canReadSettings = can("settings:read");
   const canListModels = can("settings:write") && !localOnly;
   const [open, setOpen] = useState(initiallyOpen);
   const closeAssistant = useCallback(() => setOpen(false), []);
   const actingUserId = useCurrentUserId() ?? undefined;
+  const deviceWorkspace = useMemo(
+    () => (society ? { id: String(society._id), name: society.name, jurisdictionCode: society.jurisdictionCode, entityType: society.entityType } : undefined),
+    [society],
+  );
+  const deviceTools = useDeviceAssistantTools({
+    enabled: deviceChat && capabilities.toolsAvailable,
+    proposeChanges: localOnly && deviceAi.config.assistantTools.proposeChanges,
+    workspace: localOnly ? deviceWorkspace : undefined,
+    userId: actingUserId,
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const sendChatMessage = useAction(api.aiChatActions.sendChatMessage);
   const listProviderModels = useAction(api.aiSettingsActions.listProviderModels);
   const archiveThread = usePermissionedMutation(api.aiChat.archiveThread, canWrite);
   const renameThread = usePermissionedMutation(api.aiChat.renameThread, canWrite);
   const deleteThread = usePermissionedMutation(api.aiChat.deleteThread, canWrite);
+  const createThread = usePermissionedMutation(api.aiChat.createThread, canWrite);
+  const appendDeviceMessage = usePermissionedMutation(api.aiChat.appendDeviceMessage, canWrite);
+  const deviceAbortRef = useRef<AbortController | null>(null);
+  /** Set by Stop, so an abort keeps the partial reply instead of failing. */
+  const deviceStopRef = useRef(false);
   const approveDraft = usePermissionedMutation(api.aiAgents.approveToolDraft, canWrite);
   const rejectDraft = usePermissionedMutation(api.aiAgents.rejectToolDraft, canWrite);
 
@@ -147,6 +156,12 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   const [creatingNewThread, setCreatingNewThread] = useState(false);
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState("");
+  // On-device turns are saved only once the model answers; show the question meanwhile.
+  const [pendingQuestion, setPendingQuestion] = useState("");
+  // What the on-device model is looking up while it works on the reply.
+  const [liveToolRecords, setLiveToolRecords] = useState<DeviceToolRecord[]>([]);
+  // A proposed change being approved or dismissed (one at a time).
+  const [settlingProposalId, setSettlingProposalId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pickedModelId, setPickedModelId] = useState<string | undefined>();
   const [modelCatalog, setModelCatalog] = useState<ModelOption[] | undefined>();
@@ -193,7 +208,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
   const effectiveProvider = aiSettings?.effective;
   const draftCount = canWrite ? (toolDrafts ?? []).filter((draft) => draft.status === "draft").length : 0;
-  const hasMessages = canWrite && ((messages?.length ?? 0) > 0 || Boolean(streamingText));
+  const hasMessages = canWrite && ((messages?.length ?? 0) > 0 || Boolean(streamingText) || Boolean(pendingQuestion));
   const threadsLoading = canWrite && threads === undefined;
   const messagesLoading = Boolean(selectedThreadId) && messages === undefined;
 
@@ -207,6 +222,11 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     lockedModelId ?? pickedModelId ?? effectiveProvider?.modelId ?? undefined;
 
   const threadGroups = useMemo(() => groupThreadsByDate(canWrite ? threads ?? [] : []), [threads, canWrite]);
+  // A proposal is settled once a later on-device message approves or dismisses it.
+  const settledProposalIds = useMemo(
+    () => new Set((messages ?? []).flatMap((message) => parseDeviceToolRecords(message.toolCalls)).flatMap((record) => (record.resolves ? [record.resolves] : []))),
+    [messages],
+  );
   const pendingDraftsForThread = useMemo(() => {
     if (!selectedThreadId) return [];
     return (toolDrafts ?? []).filter(
@@ -267,6 +287,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     setModelCatalog(undefined);
     setCatalogLoaded(false);
     if (!localOnly || !canWrite) setInput("");
+    return () => deviceAbortRef.current?.abort();
   }, [society?._id, actingUserId, localOnly, canWrite]);
 
   useEffect(() => {
@@ -330,7 +351,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
         browsingContext,
         modelId: modelIdForRequest,
       });
-      const result = isStaticDemoRuntime() ? await sendAction() : await streamChatMessage({
+      const result = deviceChat ? await sendOnDevice(content, submissionAuthority) : isStaticDemoRuntime() ? await sendAction() : await streamChatMessage({
         societyId: society._id,
         threadId: selectedThreadId,
         content,
@@ -352,6 +373,11 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
       setAttachedFiles([]);
     } catch (error: any) {
       if (authorityRef.current !== submissionAuthority) return;
+      // Stopped before the model said anything: nothing was saved and the draft stays.
+      if (error instanceof StoppedBeforeReply) {
+        setStreamingText("");
+        return;
+      }
       const message = error?.message ?? "Couldn't send AI message";
       setLastError(message);
       toast.error(message);
@@ -360,9 +386,107 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     }
   };
 
+  /**
+   * On-device turn: stream the reply from this device's model, then save the
+   * question and answer through the portable chat mutations. With tools on,
+   * the model may look records up first (runDeviceAssistantTurn); what it
+   * looked up or proposed is saved with the answer. Nothing is saved when the
+   * model fails, so the draft can simply be sent again.
+   */
+  const sendOnDevice = async (text: string, submissionAuthority: string) => {
+    if (!society) throw new Error("Workspace not loaded yet.");
+    const current = () => authorityRef.current === submissionAuthority;
+    const userContent = composeAiMessage(text, attachedFiles);
+    setPendingQuestion(text);
+    const history = selectedThreadId ? (messages ?? []).filter((message) => message.status !== "error") : [];
+    const turns = [...history, { role: "user", content: userContent }];
+    const promptContext = { organizationName: society.name, pageLabel: browsingContext.label, route: browsingContext.route, today: todayDateOnly() };
+    const messagesWithoutTools = buildLocalAssistantMessages(promptContext, turns);
+    const tools = deviceTools.tools;
+    deviceAbortRef.current?.abort();
+    const controller = new AbortController();
+    deviceAbortRef.current = controller;
+    deviceStopRef.current = false;
+    let partial = "";
+    const records = new Map<string, DeviceToolRecord>();
+    const onEvent = (event: DeviceAssistantEvent) => {
+      if (event.type === "token") {
+        partial += event.text;
+        if (current()) setStreamingText((streamed) => streamed + event.text);
+      } else if (event.type === "discard_text") {
+        // That text was a tool call, not the answer.
+        partial = "";
+        if (current()) setStreamingText("");
+      } else if (event.type === "tool") {
+        records.set(event.record.id, event.record);
+        if (current()) setLiveToolRecords([...records.values()]);
+      } else {
+        rememberDeviceToolSupport(deviceAi.config, "unsupported");
+      }
+    };
+    try {
+      const client = deviceAiClient();
+      const reply = await (tools.length
+        ? runDeviceAssistantTurn({
+            client,
+            adapter: deviceTools.adapter(),
+            messages: buildLocalAssistantMessages(promptContext, turns, { canProposeChanges: tools.some((tool) => tool.kind !== "read") }),
+            messagesWithoutTools,
+            tools,
+            onEvent,
+            signal: controller.signal,
+          }).then((turn) => {
+            if (turn.records.length) rememberDeviceToolSupport(deviceAi.config, "supported");
+            return turn.text;
+          })
+        : client.streamChat({ messages: messagesWithoutTools, onToken: (token) => onEvent({ type: "token", text: token }), signal: controller.signal })
+      ).catch((error: unknown) => {
+        if (controller.signal.aborted && deviceStopRef.current) return null;
+        throw error;
+      });
+      if (reply === null && !partial.trim()) throw new StoppedBeforeReply();
+      // A stopped reply is kept as far as it got, and says so.
+      const content = reply ?? `${partial.trimEnd()}\n\n*(stopped)*`;
+      const toolCalls = [...records.values()].filter((record) => record.status !== "running").slice(0, DEVICE_TOOL_RECORD_LIMITS.perMessage);
+      const threadId = selectedThreadId ?? await createThread({ societyId: society._id, title: text, modelId: deviceModel, browsingContext });
+      await appendDeviceMessage({ societyId: society._id, threadId, role: "user", content: userContent, modelId: deviceModel });
+      await appendDeviceMessage({ societyId: society._id, threadId, role: "assistant", content, modelId: deviceModel, ...(toolCalls.length ? { toolCalls } : {}) });
+      return { threadId, provider: "on_device", status: "complete" };
+    } finally {
+      setPendingQuestion("");
+      setLiveToolRecords([]);
+      if (deviceAbortRef.current === controller) deviceAbortRef.current = null;
+    }
+  };
+
+  /**
+   * Approve runs the proposed change as this person, exactly as shown; Dismiss
+   * runs nothing. Either way a short note is saved in the chat, which settles
+   * the proposal and tells the model next turn.
+   */
+  const settleProposal = async (proposal: DeviceToolRecord, decision: "approve" | "dismiss") => {
+    if (!canWrite || !society || !selectedThreadId || settlingProposalId) return;
+    setSettlingProposalId(proposal.id);
+    try {
+      const outcome = decision === "approve" ? await runApprovedChange(deviceTools.adapter(), proposal, deviceTools.changeTools) : dismissedChange(proposal);
+      const note = decision === "approve" ? `Approved: ${outcome.summary}.` : "Dismissed the proposed change. Nothing was changed.";
+      await appendDeviceMessage({ societyId: society._id, threadId: selectedThreadId, role: "assistant", content: note, modelId: deviceModel, toolCalls: [outcome] });
+      if (decision === "approve") toast.success(outcome.summary, "Made in this workspace as you.");
+    } catch (error) {
+      toast.error(decision === "approve" ? "Couldn't make the change" : "Couldn't dismiss the change", error instanceof Error ? error.message : undefined);
+    } finally {
+      setSettlingProposalId(null);
+    }
+  };
+
+  const stopOnDevice = () => {
+    deviceStopRef.current = true;
+    deviceAbortRef.current?.abort();
+  };
+
   const openSettings = () => {
     if (!canReadSettings) return;
-    navigate("/app/ai-agents");
+    navigate(localOnly ? DEVICE_AI_SETTINGS_HREF : "/app/ai-agents");
     setOpen(false);
   };
 
@@ -404,7 +528,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
   const handleDelete = async (threadId: string) => {
     if (!canWrite) return;
-    if (!window.confirm("Delete this chat thread? This can't be undone.")) return;
+    if (!(await confirm({ title: "Delete chat thread?", message: "This can't be undone.", confirmLabel: "Delete thread", tone: "danger" }))) return;
     try {
       await deleteThread({ threadId: threadId as any });
       if (threadId === selectedThreadId) setSelectedThreadId(undefined);
@@ -492,7 +616,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                 </span>
                 <div>
                   <strong>AI assistant</strong>
-                  <span>{browsingContext.label}</span>
+                  <span>{deviceChat ? `On-device model: ${deviceModel} · ${browsingContext.label}` : browsingContext.label}</span>
                 </div>
               </div>
               <div className="global-ai-head-actions">
@@ -553,8 +677,9 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                   ) : !hasMessages ? (
                     <div className="global-ai-empty">
                       <div className="global-ai-empty__title">What can I help you with?</div>
+                      {emptyHint && <p className="global-ai-empty__hint">{emptyHint}</p>}
                       <div className="global-ai-empty__prompts">
-                        {SUGGESTED_PROMPTS.map((prompt) => {
+                        {suggestions.map((prompt) => {
                           const Icon = prompt.icon;
                           return (
                             <button
@@ -572,10 +697,22 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                     </div>
                   ) : (
                     (canWrite ? messages ?? [] : []).map((message) => (
-                      <GlobalAiMessage key={message._id} message={message} />
+                      <GlobalAiMessage
+                        key={message._id}
+                        message={message}
+                        proposals={{
+                          settled: settledProposalIds,
+                          settlingId: settlingProposalId,
+                          onApprove: (proposal) => void settleProposal(proposal, "approve"),
+                          onDismiss: (proposal) => void settleProposal(proposal, "dismiss"),
+                        }}
+                      />
                     ))
                   )}
-                  {canWrite && streamingText && (
+                  {canWrite && pendingQuestion && (
+                    <GlobalAiMessage message={{ _id: "pending-question", role: "user", content: pendingQuestion }} />
+                  )}
+                  {canWrite && (streamingText || liveToolRecords.length > 0) && (
                     <GlobalAiMessage
                       message={{
                         _id: "streaming",
@@ -583,9 +720,12 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                         content: streamingText,
                         status: "streaming",
                       }}
+                      liveToolRecords={liveToolRecords}
                     />
                   )}
-                  {busy && !streamingText && hasMessages && <ShimmerLine label="Thinking" />}
+                  {busy && !streamingText && hasMessages && (
+                    <ShimmerLine label={liveToolRecords.some((record) => record.status === "running") ? "Looking up records" : "Thinking"} />
+                  )}
                   {canWrite && pendingDraftsForThread.length > 0 && (
                     <div className="global-ai-drafts">
                       {pendingDraftsForThread.map((draft) => (
@@ -609,10 +749,25 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
                 <form className="global-ai-composer" onSubmit={submit}>
                   {!canWrite && <p className="muted" role="status">Private AI conversations require current AI chat write permission and belong to their creator.</p>}
-                  {localOnly && <p className="muted" role="status">Live AI requires a connected workspace. Saved conversations remain available locally. Typed drafts stay on this device; selected files must be attached again after reload.</p>}
+                  {deviceChat && (
+                    <p className="muted" role="status">
+                      Replies come from {deviceModel} at the address in Settings.
+                      {capabilities.toolsAvailable
+                        ? " It looks up records you can see, here on this device; what it reads goes only to that address."
+                        : " This model cannot see or change workspace records; paste or attach what it needs."}
+                      {!capabilities.toolsAvailable && deviceAi.config.assistantTools.lookUpRecords && deviceToolSupport === "unsupported" && (
+                        <> {deviceModel} doesn't accept tools, so it can't look anything up. Settings suggests models that do.</>
+                      )}
+                    </p>
+                  )}
+                  {localOnly && !deviceChat && (
+                    <p className="muted" role="status">
+                      Live AI requires a connected workspace or an on-device model. Saved conversations remain available locally. Typed drafts stay on this device; selected files must be attached again after reload.
+                      {deviceAi.supported && canReadSettings && <> <Link to={DEVICE_AI_SETTINGS_HREF} onClick={() => setOpen(false)}>Set up on-device AI in Settings</Link></>}
+                    </p>
+                  )}
                   {isStaticDemoRuntime() && <p className="muted" role="status">Demo replies are simulated; no AI provider is contacted.</p>}
                   <ContextChipRow context={browsingContext} />
-                  <p className="muted">Attach up to four UTF-8 TXT, Markdown, CSV or JSON files, 32 KiB each. PDF, images and office files require an extraction service.</p>
                   {filesLoading && <p className="muted" role="status">Reading text files on this device…</p>}
                   {canWrite && attachedFiles.length > 0 && <p className="muted" role="status">Sending includes extracted file contents for the configured AI provider and saves selected text in this workspace’s chat history. Review the text below before sending.</p>}
                   {canWrite && attachedFiles.length > 0 && (
@@ -643,7 +798,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                       readOnly={!canWrite || busy}
                       value={input}
                       onChange={(event) => setInput(event.target.value)}
-                      placeholder="Ask the assistant to inspect this page, find records, draft tasks, or use workspace tools."
+                      placeholder={assistantPlaceholder(capabilities, deviceChat)}
                       rows={3}
                       onKeyDown={(event) => {
                         // Enter sends; Shift+Enter adds a line (IME composition is left alone).
@@ -655,17 +810,19 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                     />
                     <div className="global-ai-composer__bar">
                       <div className="global-ai-composer__left">
-                        <Tooltip content="Attach text files">
+                        <Tooltip content={<>Attach text files<br />{AI_ATTACHMENT_LIMITS}</>}>
                           <button
                             type="button"
                             className="global-ai-icon-btn"
                             aria-label="Attach text files"
+                            aria-describedby="global-ai-attach-limits"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={!canWrite || busy || filesLoading}
                           >
                             <Paperclip size={13} />
                           </button>
                         </Tooltip>
+                        <span id="global-ai-attach-limits" className="sr-only">{AI_ATTACHMENT_LIMITS}</span>
                         <input
                           ref={fileInputRef}
                           type="file"
@@ -677,24 +834,38 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                             event.target.value = "";
                           }}
                         />
-                        <ModelSelector
-                          value={currentModelId}
-                          options={modelOptions}
-                          onChange={setPickedModelId}
-                          providerActive={providerActive}
-                          locked={!canSend || isModelLocked}
-                          providerLabel={effectiveProvider?.label}
-                        />
+                        {!localOnly && (
+                          <ModelSelector
+                            value={currentModelId}
+                            options={modelOptions}
+                            onChange={setPickedModelId}
+                            providerActive={providerActive}
+                            locked={!canSend || isModelLocked}
+                            providerLabel={effectiveProvider?.label}
+                          />
+                        )}
                       </div>
-                      <button
-                        type="submit"
-                        className="global-ai-send"
-                        disabled={!canSend || busy || filesLoading || !input.trim() || !society}
-                        aria-label="Send message"
-                        title="Send (⌘/Ctrl + Enter)"
-                      >
-                        {busy ? <Loader2 size={13} className="spin" /> : <Send size={13} />}
-                      </button>
+                      {deviceChat && busy ? (
+                        <button
+                          type="button"
+                          className="global-ai-send"
+                          onClick={stopOnDevice}
+                          aria-label="Stop the reply"
+                          title="Stop the reply; what it has written so far is kept"
+                        >
+                          <Square size={11} fill="currentColor" aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          className="global-ai-send"
+                          disabled={!canSend || busy || filesLoading || !input.trim() || !society}
+                          aria-label="Send message"
+                          title="Send (⌘/Ctrl + Enter)"
+                        >
+                          {busy ? <Loader2 size={13} className="spin" /> : <Send size={13} />}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </form>
@@ -717,7 +888,15 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   );
 }
 
-function GlobalAiMessage({ message }: { message: any }) {
+type ProposalHandlers = {
+  /** Proposal ids a later message approved or dismissed. */
+  settled: ReadonlySet<string>;
+  settlingId: string | null;
+  onApprove: (proposal: DeviceToolRecord) => void;
+  onDismiss: (proposal: DeviceToolRecord) => void;
+};
+
+function GlobalAiMessage({ message, proposals, liveToolRecords }: { message: any; proposals?: ProposalHandlers; liveToolRecords?: readonly DeviceToolRecord[] }) {
   const isAssistant = message.role === "assistant";
   const [copied, setCopied] = useState(false);
   const isStreaming = message.status === "streaming";
@@ -733,7 +912,10 @@ function GlobalAiMessage({ message }: { message: any }) {
   };
 
   const reasoning = message.parts?.reasoning ?? message.parts?.thinking;
-  const toolCalls = parseToolCalls(message.toolCalls);
+  // On-device replies carry their own tool records (chips and proposals); hosted ones the tool-call cards.
+  const deviceRecords = liveToolRecords ?? (message.parts?.provider === "on_device" ? parseDeviceToolRecords(message.toolCalls) : []);
+  const toolCalls = deviceRecords.length ? [] : parseToolCalls(message.toolCalls);
+  const openProposals = proposals ? deviceRecords.filter((record) => record.status === "proposed" && !proposals.settled.has(record.id)) : [];
 
   return (
     <article className={`global-ai-message ${isAssistant ? "global-ai-message--assistant" : "global-ai-message--user"}`}>
@@ -753,6 +935,22 @@ function GlobalAiMessage({ message }: { message: any }) {
             <span style={{ whiteSpace: "pre-wrap" }}>{message.content}</span>
           )}
           {isStreaming && <span className="global-ai-cursor" />}
+        </div>
+      )}
+      {deviceRecords.length > 0 && <DeviceToolActivity records={deviceRecords} />}
+      {proposals && openProposals.length > 0 && (
+        <div className="global-ai-drafts">
+          {openProposals.map((proposal) => (
+            <ToolDraftCard
+              key={proposal.id}
+              draft={{ toolName: findAgentTool(proposal.name)?.title ?? proposal.name, summary: proposal.summary, payload: parseJsonOrText(proposal.argsJson) }}
+              note="Runs on this device as you when you approve. Nothing has changed yet."
+              dismissLabel="Dismiss"
+              busy={proposals.settlingId !== null}
+              onApprove={() => proposals.onApprove(proposal)}
+              onReject={() => proposals.onDismiss(proposal)}
+            />
+          ))}
         </div>
       )}
       {isAssistant && message.content && !isStreaming && (
@@ -849,12 +1047,28 @@ function ToolCallCard({ call }: { call: ToolCallShape }) {
   );
 }
 
+function parseJsonOrText(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 function ToolDraftCard({
   draft,
+  note,
+  dismissLabel = "Discard",
+  busy = false,
   onApprove,
   onReject,
 }: {
   draft: any;
+  /** A line under the summary, e.g. where the change runs. */
+  note?: string;
+  dismissLabel?: string;
+  /** Approve or dismiss is in progress. */
+  busy?: boolean;
   onApprove: () => void;
   onReject: () => void;
 }) {
@@ -866,15 +1080,16 @@ function ToolDraftCard({
         <span className="global-ai-draft__pill">awaiting approval</span>
       </div>
       {draft.summary && <div className="global-ai-draft__summary">{draft.summary}</div>}
+      {note && <div className="global-ai-draft__note">{note}</div>}
       {draft.payload && (
         <pre className="global-ai-draft__payload">{JSON.stringify(draft.payload, null, 2)}</pre>
       )}
       <div className="global-ai-draft__actions">
-        <button type="button" className="global-ai-draft__btn global-ai-draft__btn--ghost" onClick={onReject}>
-          <X size={11} /> Discard
+        <button type="button" className="global-ai-draft__btn global-ai-draft__btn--ghost" onClick={onReject} disabled={busy}>
+          <X size={11} /> {dismissLabel}
         </button>
-        <button type="button" className="global-ai-draft__btn global-ai-draft__btn--accent" onClick={onApprove}>
-          <Check size={11} /> Approve
+        <button type="button" className="global-ai-draft__btn global-ai-draft__btn--accent" onClick={onApprove} disabled={busy}>
+          {busy ? <Loader2 size={11} className="spin" /> : <Check size={11} />} Approve
         </button>
       </div>
     </div>

@@ -382,26 +382,101 @@
  * Mirrors twenty-ui's MOBILE_VIEWPORT (768px) — see NavigationDrawer.tsx
  * styled-component `StyledAnimatedContainer` which sets width: 100% on mobile. */
 @media (max-width: 768px) {
+  /* "More" is a bottom sheet on phones (Layout: useSheetDrag with a
+   * full-height detent). It rises from the bottom edge to ~85% of the
+   * screen, leaving the page visible above it as the "outside" to tap;
+   * `.is-expanded` (dragged up, or the nav filter focused) takes the full
+   * height under the status bar, like the record panel's page sheet. dvh
+   * keeps iOS's collapsing URL bar from cutting the sheet off. */
   .app-shell.is-mobile .sidebar,
   .app-shell.is-mobile.is-collapsed .sidebar {
-    /* Not quite full-width: leave a scrim strip on the side so the drawer has an
-     * "outside" to tap (and room to swipe it away). A full-width drawer hid the
-     * backdrop entirely, leaving the tiny top-right button as the only exit. */
-    width: min(360px, 88vw);
-    max-width: 88vw;
+    inset: auto 0 0;
+    width: 100%;
+    max-width: none;
+    height: 85vh;
+    height: 85dvh;
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - 8px);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px);
+    border-right-width: 0;
+    border-radius: token('r-lg') token('r-lg') 0 0;
+    box-shadow: token('elevation-3');
+    /* The grabber and header give the top its spacing; the footer sits
+     * above the home indicator. */
+    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    transform: translate3d(0, 100%, 0);
+    transition:
+      transform 240ms token('ease-panel'),
+      height 240ms token('ease-panel'),
+      visibility 0s linear 240ms;
   }
-  .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
-    /* Full-screen scrim behind the drawer; the exposed strip dims the page and
-     * is tappable to dismiss (default .sidebar-backdrop background = scrim). */
-    left: 0;
+  .app-shell.is-mobile.is-mobile-nav-open .sidebar {
+    transform: translate3d(0, 0, 0);
+    transition:
+      transform 240ms token('ease-panel'),
+      height 240ms token('ease-panel'),
+      visibility 0s;
+  }
+  .app-shell.is-mobile .sidebar.is-expanded {
+    height: calc(100vh - env(safe-area-inset-top, 0px) - 8px);
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px);
+  }
+  /* While the filter raises the keyboard, the expanded sheet sits on it and
+   * fits the visible area (useKeyboardInsetTracking), and the footer steps
+   * aside so the matches get its rows. */
+  :root[data-keyboard-open] .app-shell.is-mobile .sidebar.is-expanded {
+    bottom: var(--keyboard-inset, 0px);
+    height: calc(var(--visible-height, 100dvh) - env(safe-area-inset-top, 0px) - 8px);
+    max-height: calc(var(--visible-height, 100dvh) - env(safe-area-inset-top, 0px) - 8px);
+    padding-bottom: 0;
+  }
+  :root[data-keyboard-open] .app-shell.is-mobile .sidebar.is-expanded .sidebar__identity {
+    display: none;
   }
 
-  /* Nav items scale up to font size LG (19.7px) with taller rows for
-   * comfortable tap targets. Matches twenty's NavigationDrawerItem sizing on
-   * mobile (font.size.lg + larger vertical padding). */
+  /* The sheet's scrim stays mounted so it fades in and out with the sheet
+   * (useSheetDrag also fades it with the drag). */
+  .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
+    left: 0;
+  }
+  .app-shell.is-mobile .sidebar-backdrop--sheet {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 240ms token('ease-panel'), visibility 0s linear 240ms;
+  }
+  .app-shell.is-mobile .sidebar-backdrop--sheet.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 240ms token('ease-panel'), visibility 0s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app-shell.is-mobile .sidebar,
+    .app-shell.is-mobile.is-collapsed .sidebar {
+      transform: none;
+      opacity: 0;
+      transition: opacity token('motion-fade') token('ease-fade'), visibility 0s linear token('motion-fade');
+    }
+    .app-shell.is-mobile.is-mobile-nav-open .sidebar {
+      transform: none;
+      opacity: 1;
+      transition: opacity token('motion-fade') token('ease-fade'), visibility 0s;
+    }
+    .app-shell.is-mobile .sidebar-backdrop--sheet {
+      transition: opacity token('motion-fade') token('ease-fade'), visibility 0s linear token('motion-fade');
+    }
+    .app-shell.is-mobile .sidebar-backdrop--sheet.is-open {
+      transition: opacity token('motion-fade') token('ease-fade'), visibility 0s;
+    }
+  }
+
+  /* Drawer rows: one 44px tap height for sections, pages and favourites
+   * (edit list), 16px labels (15px for pages inside a section). */
   .app-shell.is-mobile .sidebar__item {
-    font-size: token('fs-lg');
-    padding: 10px 10px;
+    font-size: token('fs-input-touch');
+    min-height: token('tap-target');
+    padding: 8px 10px;
     gap: 12px;
   }
   .app-shell.is-mobile .sidebar__item svg,
@@ -413,10 +488,17 @@
     font-size: token('fs-sm');
     padding-top: token('s-4');
   }
-  /* L2 rows sit one step smaller than their L1 parent. */
+  /* L2 rows sit one step smaller than their L1 parent, same height. The rail
+   * runs down the centre of the section icon (10px row padding + half the
+   * 22px tile) and the page labels start where the section label does
+   * (10px + 22px tile + 12px gap). */
+  .app-shell.is-mobile .sidebar__children {
+    margin-left: 21px;
+    padding-left: token('s-3');
+  }
   .app-shell.is-mobile .sidebar__item--child {
     font-size: token('fs-md');
-    padding: 9px 10px;
+    padding: 8px 10px 8px 11px;
   }
 
   /* Inspector becomes a page sheet on phones: it rises from the bottom,
@@ -603,18 +685,26 @@
   .bottom-nav__item {
     @include flex-column;
     align-items: center;
+    /* A label still too long for its slot (a long pinned page on a narrow
+     * phone) wraps to a second line instead of being cut off. */
     justify-content: center;
-    gap: 2px;
-    flex: 1;
-    min-width: 0;
+    gap: 1px;
+    /* Slots share the bar by label length plus an equal share of what's
+     * left, so "Annual cycle" gets the room "Tasks" doesn't need. */
+    flex: 1 1 auto;
+    /* Never narrower than its longest word: labels wrap between words. */
+    min-width: min-content;
     color: token('text-tertiary');
-    font-size: 10px;
+    font-size: token('fs-tiny');
+    line-height: 1.1;
     font-weight: token('fw-medium');
     border: 0;
     background: transparent;
-    /* Rounded-rect hit area — matches twenty's nav item chrome. */
-    margin: 6px 2px;
-    padding: 4px 2px;
+    /* Rounded-rect hit area — matches twenty's nav item chrome. The item
+     * fills the bar's height so two-line labels fit. */
+    margin: 0 2px;
+    align-self: stretch;
+    padding: 2px;
     border-radius: token('r-sm');
     transition: background token('anim-fast') token('anim-ease'), color token('anim-fast') token('anim-ease');
     -webkit-tap-highlight-color: transparent;
@@ -641,8 +731,8 @@
     40% { transform: scale(1.18) translateY(-1px); }
     100% { transform: scale(1); }
   }
-  /* One pill that glides to the active tab (BottomNavIndicator). Sits on
-   * the same 6px inset as the items so it reads as their background. */
+  /* One pill that glides to the active tab (BottomNavIndicator), 6px
+   * inside the bar around the icon and label. */
   .bottom-nav__indicator {
     position: absolute;
     top: 6px;
@@ -673,10 +763,13 @@
     stroke-width: 2;
   }
   .bottom-nav__item span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     max-width: 100%;
+    overflow: hidden;
+    text-align: center;
+    text-wrap: balance;
   }
 
   /* Leave room for the fixed top bar + bottom nav. */

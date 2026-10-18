@@ -22,6 +22,8 @@ export class OutboundUrlPolicyError extends Error {
 }
 
 const INTERNAL_SUFFIXES = [
+  // RFC 6761: *.localhost resolves to loopback in browsers and many resolvers.
+  ".localhost",
   ".internal",
   ".local",
   ".localdomain",

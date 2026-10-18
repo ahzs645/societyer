@@ -410,10 +410,11 @@ $tap-block: (
 // ============================================================
 // Phone toolbars (<= 560px; tablet and desktop unchanged).
 //
-// RecordTable: one row — the view picker (name truncates, count in a chip),
-// then 32px icon buttons for view type (a menu), Filter, Sort, Group and
-// Options (a menu that also holds Search and "Select records"). The search
-// field and unsaved-view controls get their own line only while in use.
+// RecordTable: one row — the view picker (name, count in a chip), then two
+// icon buttons: Filter and "View options" (a bottom sheet with view type,
+// sort, group, density, fields, export, Search and "Select records"); while
+// selecting, "Done" replaces "View options". The search field and
+// unsaved-view controls get their own line only while in use.
 // ============================================================
 .record-table__toolbar-dirty {
   display: contents;
@@ -512,7 +513,7 @@ $tap-block: (
     }
   }
 
-  // Icon buttons: view type, Filter, Sort, Group, Options (+ Exit selection).
+  // Icon buttons: Filter and View options.
   .record-table__toolbar-right > .record-table__toolbar-button,
   .record-table__toolbar-right > .record-table__view-switcher > .record-table__toolbar-button {
     position: relative;
@@ -548,12 +549,183 @@ $tap-block: (
     text-align: center;
     pointer-events: none;
   }
-  .record-table__view-type-menu .record-table__menu-item,
-  .record-table__menu-section--tools .record-table__menu-action {
+  // "Done" (exit selection) is a word, not an icon.
+  .record-table__toolbar-right > .record-table__toolbar-button.record-table__toolbar-button--text {
+    width: auto;
+    padding: 0 12px;
+    > span {
+      display: inline;
+      font-size: token('fs-sm');
+      font-weight: token('fw-semibold');
+    }
+  }
+}
+// Phone "View options" sheet (RecordTableViewOptionsSheet): quick actions,
+// then Layout, Sort, Group, Density and Fields as labelled sections, sized
+// for thumbs. The sort and group editors are the desktop popovers' bodies.
+.record-view-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-4');
+  padding-block: token('s-1') token('s-2');
+  font-size: token('fs-sm');
+}
+.record-view-sheet__actions {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-card');
+  overflow: hidden;
+}
+.record-view-sheet__action {
+  display: flex;
+  align-items: center;
+  gap: token('s-3');
+  width: 100%;
+  min-height: token('tap-target');
+  padding: 0 token('s-3');
+  border: 0;
+  background: token('bg-panel');
+  color: token('text-primary');
+  font: inherit;
+  font-size: token('fs-sm');
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  & + & {
+    border-top: 1px solid token('border-color-light');
+  }
+  > svg {
+    flex: none;
+    color: token('text-secondary');
+  }
+  &:active {
+    background: token('bg-hover');
+  }
+  &[aria-pressed='true'] {
+    color: token('accent');
+    > svg {
+      color: token('accent');
+    }
+  }
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: -2px;
+  }
+}
+.record-view-sheet__section {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-2');
+  min-width: 0;
+}
+.record-view-sheet__label,
+.record-view-sheet .record-table__menu-label {
+  margin: 0;
+  color: token('text-tertiary');
+  font-size: token('fs-xxs');
+  font-weight: token('fw-semibold');
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.record-view-sheet .record-table__density-options {
+  padding: 3px;
+  > button {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: token('tap-target');
+    padding: 4px;
+    font-size: token('fs-xs');
+    &.is-active {
+      color: token('accent');
+      font-weight: token('fw-semibold');
+      box-shadow: token('shadow-sm');
+    }
+    &:focus-visible {
+      outline: token('focus-ring-width') solid token('focus-ring-color');
+      outline-offset: -2px;
+    }
+  }
+}
+.record-view-sheet__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.record-view-sheet .record-table__menu-select {
+  height: token('control-h-touch');
+  font-size: token('fs-sm');
+}
+// Sort: one rule per line; the field picker takes the room left of the
+// direction toggle and the remove button.
+.record-view-sheet__sort {
+  .record-table__popover-empty {
+    padding: 0;
+    font-size: token('fs-sm');
+  }
+  .record-table__sort-list {
+    margin-bottom: 0;
+  }
+  .record-table__sort-row {
+    grid-template-columns: minmax(0, 1fr) auto token('control-h-touch-icon');
+  }
+  .record-table__sort-row > .record-table__toolbar-button,
+  > .record-table__toolbar-button {
+    height: token('control-h-touch');
+    font-size: token('fs-sm');
+  }
+  > .record-table__toolbar-button {
+    align-self: flex-start;
+  }
+  .record-table__icon-btn {
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+  }
+}
+// Group: the editor's own labelled sections, without the popover's rules.
+.record-view-sheet__group {
+  gap: token('s-3');
+  .record-table__menu-section {
+    padding: 0;
+    border-top: 0;
+  }
+  .record-table__menu-action {
     min-height: token('tap-target');
     font-size: token('fs-sm');
   }
 }
+.record-view-sheet__fields {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-card');
+  overflow: hidden;
+  .record-table__menu-checkbox {
+    gap: token('s-3');
+    min-height: token('tap-target');
+    padding: 0 token('s-3');
+    font-size: token('fs-sm');
+    & + .record-table__menu-checkbox {
+      border-top: 1px solid token('border-color-light');
+    }
+    &:hover {
+      border-radius: 0;
+    }
+    > input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+  }
+}
+.record-view-sheet__page-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
 // The narrowest phones (320px): the icon buttons sit 4px apart so the view
 // name keeps some room, and their hit areas shrink sideways to match (44px
 // tall, 36px wide) so none reaches into its neighbour. The count chip goes;
@@ -651,16 +823,33 @@ $tap-block: (
       border-right: 0;
     }
   }
-  // "Related: Library · Minute book …" scrolls on one line.
+  // "Related: Library · Minute book …" scrolls on one line, and the cut edge
+  // fades (data-overflow from RelatedDocumentViews) so a clipped chip reads as
+  // "swipe for more" rather than a layout bug.
   .related-views {
     flex-wrap: nowrap;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     padding-block: 6px;
     margin-block: -6px 6px !important;
     white-space: nowrap;
     &::-webkit-scrollbar { display: none; }
     > * { flex: none; }
+    &[data-overflow='end'] {
+      mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+    }
+    &[data-overflow='start'] {
+      mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+    }
+    &[data-overflow='both'] {
+      mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+    }
+    // The last chip can scroll clear of the fade.
+    &::after {
+      content: '';
+      flex: 0 0 24px;
+    }
   }
   // Invoice cards: at true text sizes "RCS-0025 Recurring" no longer fits
   // beside the status on a 320px phone — let the tag drop under the number.
@@ -698,6 +887,24 @@ $tap-block: (
   grid-template-columns: minmax(0, 1fr);
   gap: token('s-2');
   padding-top: token('s-1');
+}
+// Windowed (long lists): Virtuoso measures each slot, so the gap is padding
+// inside the slot rather than grid gap between them.
+.record-cards--virtual {
+  display: block;
+}
+.record-cards__virtual-list {
+  display: block;
+}
+.record-cards__slot {
+  min-width: 0;
+  padding-bottom: token('s-2');
+  > .record-cards__group {
+    margin-top: token('s-2');
+  }
+}
+.record-cards__slot:first-child > .record-cards__group {
+  margin-top: 0;
 }
 .record-cards__group {
   margin-top: token('s-2');
@@ -739,6 +946,211 @@ $tap-block: (
   font-weight: token('fw-regular');
 }
 
+// "Select records" on: an overlay over each card takes the tap and toggles
+// it; the checkbox sits in a gutter the card makes room for.
+.record-cards__item {
+  position: relative;
+  min-width: 0;
+}
+.record-cards__item.is-selecting {
+  padding-inline-start: 40px;
+}
+.record-cards__select {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding-inline-start: token('s-3');
+  border-radius: token('r-card');
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  > input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: token('accent');
+  }
+}
+.record-cards__item.is-selected .record-phone-card {
+  border-color: token('accent');
+  background: token('accent-soft');
+}
+
+// RecordTablePhoneCard: name + status badge, one secondary line, the whole
+// card one tap target that opens the record.
+.record-phone-card {
+  display: grid;
+  // Title and meta stack in column 1; badge and chevron sit centred on the
+  // whole card so they line up with each other.
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: token('s-2');
+  row-gap: 2px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px token('s-2') 10px token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-card');
+  background: token('bg-panel');
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: background token('motion-fade-fast') token('ease-fade');
+  &:active {
+    background: token('bg-hover');
+  }
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+  }
+}
+.record-phone-card__title {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+  line-height: 1.3;
+}
+.record-phone-card__badge {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: inline-flex;
+}
+.record-phone-card__meta {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  line-height: 1.35;
+}
+.record-phone-card__dot {
+  color: token('text-tertiary');
+}
+.record-phone-card__warn {
+  color: token('warn');
+  font-weight: token('fw-medium');
+}
+.record-phone-card__chevron {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: token('text-tertiary');
+}
+
+// RecordTable's automatic phone card (RecordTableAutoPhoneCard): the
+// standard card, plus a "…" button for the row's actions in the chevron's
+// place. Cell content keeps its own look (select tags, an overdue red) but
+// sits on one meta line.
+.record-phone-card-shell {
+  position: relative;
+  min-width: 0;
+  &.has-actions > .record-phone-card {
+    padding-right: 48px;
+    > .record-phone-card__chevron {
+      display: none;
+    }
+  }
+}
+// Generated titles can be long ("Organization Visa statement (last month)"):
+// two lines before the ellipsis.
+.record-phone-card-shell .record-phone-card__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.record-phone-card__actions {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  > .record-phone-card__actions-button {
+    width: token('tap-target');
+    height: token('tap-target');
+    color: token('text-tertiary');
+  }
+}
+.record-phone-card__badge {
+  // A page's badge or a select tag: one line, never wider than ~40% of the card.
+  max-width: 40vw;
+  min-width: 0;
+  overflow: hidden;
+  > * {
+    max-width: 100%;
+  }
+}
+.record-phone-card__meta {
+  // Cell renderers bring block wrappers and their own font sizes; on the
+  // meta line they all read as one run of secondary text.
+  .record-phone-card__fact,
+  .record-phone-card__auto-fact,
+  .record-phone-card__auto-fact * {
+    display: inline;
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .record-phone-card__auto-fact .record-cell__text {
+    color: inherit;
+  }
+  // A select or badge on the meta line reads as its label: the card's one
+  // coloured pill is the status badge.
+  .record-phone-card__auto-fact :is(.ui-tag, .badge, .record-cell__chip) {
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-weight: inherit;
+  }
+}
+.record-phone-card__fact-label {
+  color: token('text-tertiary');
+}
+
+// Loading, card mode: card-shaped placeholders instead of table rows.
+.record-table__loading--cards {
+  gap: token('s-2');
+  padding-top: token('s-1');
+}
+.record-table__loading-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 10px token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-card');
+  background: token('bg-panel');
+}
+.record-table__loading-line {
+  display: block;
+  width: 38%;
+  height: 10px;
+  border-radius: token('r-pill');
+  background: linear-gradient(90deg, token('bg-subtle') 25%, token('bg-hover') 50%, token('bg-subtle') 75%);
+  background-size: 200% 100%;
+  animation: record-table-skeleton 1.4s ease-in-out infinite;
+  &--title {
+    width: 62%;
+    height: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .record-table__loading-line {
+    animation: none;
+  }
+}
+
 // Tasks (phones): "Current · All · Status" summary in the header row opens
 // a sheet with the register switch, scopes and grouping.
 // Sized so "Current · All · Status" fits beside the title at 390px; on
@@ -754,8 +1166,22 @@ $tap-block: (
   }
 }
 .page__header:not([data-actions-fit="compact"]) .task-summary-button > svg:first-child,
-.page__header[data-actions-fit="compact"] .task-summary-button__caret {
+.page__header:not([data-actions-fit="compact"]) .task-summary-button__short,
+.page__header[data-actions-fit="compact"] .task-summary-button__caret,
+.page__header[data-actions-fit="compact"] .task-summary-button__text {
   display: none;
+}
+// Compact header: icon plus "Current" / "History" instead of a bare icon
+// square (which matched the toolbar's view-options button below it).
+.page__header[data-actions-fit="compact"] .page__actions .btn-action.task-summary-button {
+  width: auto;
+  padding-inline: 8px 10px;
+  gap: 4px;
+  font-size: token('fs-xs');
+  > svg {
+    width: 14px;
+    height: 14px;
+  }
 }
 .task-summary-button__text {
   min-width: 0;

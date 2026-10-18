@@ -20,7 +20,7 @@ test("native minute-book private core ACL reports unknown to Viewer and full cov
     }
     await page.locator(".sidebar__workspace").click();
     await page.getByRole("button", { name: /^Packet authorization qualification\b/ }).click();
-    if (await page.getByRole("dialog", { name: "navigation", exact: true }).isVisible()) await page.keyboard.press("Escape");
+    if (await page.locator("aside.sidebar[role='dialog']").isVisible()) await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: "Minute book", exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => localStorage.getItem("societyer.currentSocietyId"))).toBe(fixture.societyId);
     await page.reload();

@@ -4,7 +4,9 @@
 /* Organization setup view (/app/organization-setup):
  * src/pages/OrganizationSetup.tsx + src/features/organizationSetup/*.
  *
- * Phones and tablets: one column (progress, next step, phase chips, phases).
+ * Tablets: one column (progress, next step, phase chips, phases).
+ * Phones (<= 760px, useIsMobile): no phase chips; the collapsed phase headers
+ * list the same phases.
  * Desktop (>= 1024px): a sticky phase rail beside the phases. */
 
 $setup-desktop: 1024px;
@@ -21,6 +23,11 @@ $setup-phone: 640px;
   grid-template-areas: "progress" "next" "rail" "phases";
   gap: token('s-4');
   min-width: 0;
+}
+// Phones render no phase chips (see OrganizationSetup.tsx), so drop their row
+// rather than leave an empty one between two gaps.
+@media (max-width: 760px) {
+  .setup-layout { grid-template-areas: "progress" "next" "phases"; }
 }
 .setup-layout--loading {
   display: grid;
@@ -629,11 +636,8 @@ $setup-phone: 640px;
   }
   input { flex: none; margin: 0; }
 }
+/* The certificate drop zone (a shared .file-drop), tucked under its field. */
 .setup-upload {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: token('s-2');
   margin-top: calc(-1 * #{token('s-2')});
 }
 

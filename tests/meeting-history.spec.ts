@@ -28,8 +28,13 @@ test("meeting history persists form edits, preserves source observations and pro
     return { societyId, source, target };
   });
   await page.goto(`/app/meetings/${fixture.target.meetingId}?tab=minutes`);
+  // Evidence, history and person links sit in one closed "Records & evidence" fold.
+  const recordsFold = page.getByTestId("meeting-records-fold").locator("summary");
+  await recordsFold.click({ timeout: 30_000 });
   const panel = page.getByRole("region", { name: "Meeting history", exact: true });
   await expect(panel).toBeVisible({ timeout: 30_000 });
+  // With nothing recorded yet the panel is a single "Add history" row.
+  await panel.getByRole("button", { name: "Add history", exact: true }).click();
   await panel.getByText("Carry an action forward from earlier minutes", { exact: true }).click();
   await panel.getByLabel("Previous minutes", { exact: true }).selectOption(fixture.source.minutesId);
   await panel.getByLabel("Prior action observation", { exact: true }).selectOption("source-observation");
@@ -42,10 +47,10 @@ test("meeting history persists form edits, preserves source observations and pro
   await panel.getByRole("button", { name: "Save history", exact: true }).click();
   await expect(panel.getByText("History saved.", { exact: true })).toBeVisible();
 
-  const evidence = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Source decisions and meeting evidence' }) });
-  await evidence.getByRole('button', { name: 'Edit evidence', exact: true }).click();
-  await evidence.getByText('Decision-time quorum checkpoints (0)', { exact: true }).click();
-  const checkpoints = evidence.locator('details').filter({ hasText: 'Decision-time quorum checkpoints' });
+  const evidence = page.locator('.meeting-records-fold__body > .card').filter({ has: page.getByRole('heading', { name: 'Decisions and evidence' }) });
+  await evidence.getByRole('button', { name: 'Add evidence', exact: true }).click();
+  await evidence.getByText('Quorum at each vote (0)', { exact: true }).click();
+  const checkpoints = evidence.locator('details').filter({ hasText: 'Quorum at each vote' });
   await checkpoints.getByRole('button', { name: 'Add row', exact: true }).click();
   await checkpoints.getByLabel('Scope', { exact: true }).selectOption('session');
   await checkpoints.getByLabel('Session or agenda item', { exact: true }).fill('Board session');
@@ -68,6 +73,7 @@ test("meeting history persists form edits, preserves source observations and pro
   await panel.getByRole("button", { name: "Save history", exact: true }).click();
   await expect(panel.getByText("History saved.", { exact: true })).toBeVisible();
   await page.reload();
+  await recordsFold.click({ timeout: 30_000 });
   await expect(panel).toBeVisible();
   await panel.getByRole("tab", { name: /^Imported source versions/ }).click();
   await expect(panel.getByLabel("Source content text (optional)", { exact: true })).toHaveValue("Original wording | retained unchanged");

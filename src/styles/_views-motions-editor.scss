@@ -484,6 +484,14 @@
   flex: 1;
   min-width: 0;
 }
+// "Motion 3": the number the transcript pills, citations and Link-to menu use.
+.motion__number {
+  display: block;
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  color: token('text-tertiary');
+  white-space: nowrap;
+}
 .motion__actions {
   @include flex-column;
   gap: 4px;

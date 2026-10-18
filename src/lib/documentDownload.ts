@@ -1,8 +1,11 @@
 import { authenticatedFetch } from "./authToken";
+import { convexAuthSiteUrl } from "./convexSite";
+import { isSharePointBrokerUrl } from "../../shared/storage/sharePointBrokerUrl";
 
 /** Only our generated-file endpoint may receive the signed-in session token. */
 export function isAuthenticatedDocumentUrl(value: string): boolean {
   if (typeof window === "undefined") return false;
+  if (isSharePointBrokerUrl(value, convexAuthSiteUrl())) return true;
   try {
     const url = new URL(value, window.location.origin);
     return (url.protocol === "https:" || url.protocol === "http:") &&

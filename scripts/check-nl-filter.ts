@@ -80,7 +80,7 @@ const filingColumns = [
 
 const tables = {
   transactions: { columns: transactionColumns, context: { today: TODAY, fiscalYearEnd: "03-31", objectLabelPlural: "Transactions", objectLabelSingular: "Transaction" }, labelId: "description" },
-  members: { columns: memberColumns, context: { today: TODAY, fiscalYearEnd: null, objectLabelPlural: "Members", objectLabelSingular: "Member" }, labelId: "fullName" },
+  members: { columns: memberColumns, context: { today: TODAY, fiscalYearEnd: null, objectLabelPlural: "Members", objectLabelSingular: "Member" }, labelId: "firstName" },
   tasks: { columns: taskColumns, context: { today: TODAY, objectLabelPlural: "Tasks", objectLabelSingular: "Task" }, labelId: "title" },
   filings: { columns: filingColumns, context: { today: TODAY, objectLabelPlural: "Filings", objectLabelSingular: "Filing" }, labelId: "title" },
 } satisfies Record<string, { columns: RecordField[]; context: NlContext; labelId: string }>;

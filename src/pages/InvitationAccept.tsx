@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { KeyRound } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { MembershipResolution } from "../../shared/functions/users";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useAuth } from "../auth/AuthProvider";
+import { AuthPending, AuthShell } from "../auth/AuthShell";
 
 const FAILURE_MESSAGES: Partial<Record<MembershipResolution["status"], string>> = {
   "invitation-expired": "This invitation has expired. Ask a workspace administrator to issue another link.",
@@ -56,7 +56,7 @@ export function InvitationAcceptPage() {
 
   if (auth.mode === "none") return <Navigate to="/app" replace />;
   if (!token) return <InvitationState message="This invitation link is invalid." />;
-  if (auth.sessionStatus === "loading") return <InvitationState message="Checking your sign-in…" />;
+  if (auth.sessionStatus === "loading") return <InvitationState pending message="Checking your sign-in…" />;
   // Without this, a rejected Convex token (e.g. a missing Clerk JWT template)
   // or a failed membership lookup leaves the page on "Accepting invitation…".
   const authProblem = auth.fatalError?.message
@@ -66,11 +66,11 @@ export function InvitationAcceptPage() {
   if (authProblem) {
     return (
       <InvitationState message={authProblem}>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="auth__actions">
           {auth.fatalError?.retryable && (
-            <button className="btn" type="button" onClick={auth.retryAuthentication}>Retry</button>
+            <button className="btn btn--primary auth__submit" type="button" onClick={auth.retryAuthentication}>Retry</button>
           )}
-          <button className="btn" type="button" onClick={() => void auth.signOut()}>Sign out</button>
+          <button className="btn auth__submit" type="button" onClick={() => void auth.signOut()}>Sign out</button>
         </div>
       </InvitationState>
     );
@@ -80,11 +80,11 @@ export function InvitationAcceptPage() {
     return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
   }
   if (error) return <InvitationState message={error} />;
-  if (!result) return <InvitationState message="Accepting invitation…" />;
+  if (!result) return <InvitationState pending message="Accepting invitation…" />;
   if (result.status === "invitation-accepted" || result.status === "bound") {
     return (
       <InvitationState message="Invitation accepted. Your workspace membership is ready.">
-        <button className="landing__btn landing__btn--primary" onClick={() => navigate("/app")}>
+        <button className="btn btn--primary auth__submit" type="button" onClick={() => navigate("/app")}>
           Open workspace
         </button>
       </InvitationState>
@@ -99,22 +99,20 @@ export function InvitationAcceptPage() {
 function InvitationState({
   children,
   message,
+  pending = false,
 }: {
   children?: React.ReactNode;
   message: string;
+  pending?: boolean;
 }) {
+  // Pending steps update the spinner's own status line; a result moves focus
+  // to the title and the shell's live region reads the message.
   return (
-    <div className="landing" style={{ minHeight: "100vh" }}>
-      <section className="landing__hero" style={{ minHeight: "100vh" }}>
-        <div className="landing__container" style={{ maxWidth: 520 }}>
-          <div className="landing__eyebrow"><KeyRound size={12} /> Workspace invitation</div>
-          <h1 className="landing__h1" style={{ marginBottom: 12 }}>Join this workspace</h1>
-          <div className="card" role="status" style={{ padding: 20, display: "grid", gap: 14 }}>
-            <p style={{ margin: 0 }}>{message}</p>
-            {children}
-          </div>
-        </div>
-      </section>
-    </div>
+    <AuthShell title="Join this workspace" stateKey={pending ? "pending" : message} announce={pending ? undefined : message}>
+      <div className="auth__state">
+        {pending ? <AuthPending>{message}</AuthPending> : <p className="auth__message">{message}</p>}
+        {children}
+      </div>
+    </AuthShell>
   );
 }

@@ -222,6 +222,13 @@
   padding: 0 4px;
 }
 
+.global-ai-empty__hint {
+  margin: 0;
+  padding: 0 4px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+
 .global-ai-empty__prompts {
   @include flex-column;
   align-items: flex-start;
@@ -345,10 +352,6 @@
     bottom: 0;
     z-index: 1;
   }
-  /* The static attachment hint returns once the keyboard closes. */
-  .global-ai-composer > p.muted:not([role]) {
-    display: none;
-  }
 }
 
 .global-ai-composer__context {
@@ -462,6 +465,23 @@
 .global-ai-send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Phones and touch: Send and Attach were 30px and 28px. They draw at 36px
+ * with a 44px hit area; the bar's 4px gap and padding keep neighbours clear. */
+@media (pointer: coarse), (max-width: 760px) {
+  .global-ai-composer__bar .global-ai-send,
+  .global-ai-composer__left > .global-ai-icon-btn {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    @include tap-area;
+  }
+  .global-ai-composer__bar .global-ai-send svg,
+  .global-ai-composer__left > .global-ai-icon-btn svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 .spin {
@@ -787,6 +807,102 @@
   line-height: 1.5;
 }
 
+/* ---- On-device tool activity ("Looked up: meetings (12) · …") ---- */
+
+.global-ai-tool-activity {
+  @include flex-column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.global-ai-tool-activity__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.global-ai-tool-activity__label {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+
+.global-ai-tool-chip {
+  @include inline-flex-center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid token('border');
+  border-radius: token('r-pill');
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  cursor: pointer;
+}
+
+.global-ai-tool-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-ai-tool-chip svg {
+  flex: none;
+  color: token('text-tertiary');
+}
+
+.global-ai-tool-chip:hover:not(:disabled),
+.global-ai-tool-chip.is-open {
+  border-color: token('border-strong');
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+
+.global-ai-tool-chip:focus-visible {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: token('focus-ring-offset');
+}
+
+.global-ai-tool-chip:disabled {
+  cursor: default;
+}
+
+.global-ai-tool-chip--error,
+.global-ai-tool-chip--refused {
+  border-color: token('warn');
+  background: token('warn-soft');
+}
+
+.global-ai-tool-chip--error svg,
+.global-ai-tool-chip--refused svg {
+  color: token('warn');
+}
+
+.global-ai-tool-chip--executed svg {
+  color: token('success');
+}
+
+.global-ai-tool-activity__detail {
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+}
+
+.global-ai-tool-activity__detail pre {
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  max-height: 200px;
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: token('fs-xxs');
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ---- Reasoning panel ---- */
 
 .global-ai-reasoning {
@@ -875,6 +991,32 @@
   color: token('text-primary');
   font-size: token('fs-sm');
   line-height: 1.45;
+}
+
+/* A proposal from the on-device assistant sits inside its reply: keep it in the column. */
+.global-ai-message .global-ai-drafts {
+  width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.global-ai-message .global-ai-draft {
+  min-width: 0;
+}
+
+.global-ai-message .global-ai-draft__payload {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.global-ai-draft__note {
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+}
+
+.global-ai-draft__btn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .global-ai-draft__payload {

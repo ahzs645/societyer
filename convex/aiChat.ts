@@ -9,6 +9,7 @@ import {
   archiveThreadPortable,
   renameThreadPortable,
   deleteThreadPortable,
+  appendDeviceMessagePortable,
   requireAiThreadAccess,
 } from "../shared/functions/aiChat";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -76,6 +77,32 @@ export const deleteThread = authorizedMutation("aiChat:deleteThread", mutation)(
   },
   returns: v.any(),
   handler: async (ctx, args) => deleteThreadPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// On-device assistant turns (local/desktop runtimes): the page calls the
+// device's model and saves the exchange through this portable mutation.
+export const appendDeviceMessage = authorizedMutation("aiChat:appendDeviceMessage", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    threadId: v.id("aiChatThreads"),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    status: v.optional(v.union(v.literal("complete"), v.literal("error"))),
+    modelId: v.optional(v.string()),
+    // Bounds and shape are checked by the portable handler (shared/ai/deviceToolRecords.ts).
+    toolCalls: v.optional(v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      kind: v.union(v.literal("read"), v.literal("draft"), v.literal("write"), v.literal("unknown")),
+      status: v.union(v.literal("complete"), v.literal("error"), v.literal("refused"), v.literal("proposed"), v.literal("executed"), v.literal("dismissed")),
+      summary: v.string(),
+      argsJson: v.string(),
+      resultPreview: v.optional(v.string()),
+      resolves: v.optional(v.string()),
+    }))),
+  },
+  returns: v.id("aiMessages"),
+  handler: async (ctx, args) => appendDeviceMessagePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const _appendMessage = internalMutation({

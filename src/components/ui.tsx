@@ -640,7 +640,7 @@ export function Drawer({
         <div className="drawer__head inspector-panel__head">
           {header ? <div id={titleId}>{header}</div> : <h2 className="drawer__title" id={titleId}>{title}</h2>}
           <div style={{ flex: 1 }} />
-          <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close drawer">
+          <button className="btn btn--ghost btn--icon drawer__close" onClick={onClose} aria-label="Close drawer">
             <X />
           </button>
         </div>
@@ -666,7 +666,7 @@ export function Drawer({
         <div className="drawer__head">
           {header ? <div id={titleId}>{header}</div> : <h2 className="drawer__title" id={titleId}>{title}</h2>}
           <div style={{ flex: 1 }} />
-          <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close drawer">
+          <button className="btn btn--ghost btn--icon drawer__close" onClick={onClose} aria-label="Close drawer">
             <X />
           </button>
         </div>

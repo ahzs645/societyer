@@ -1,7 +1,9 @@
-import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Sparkles, Upload, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "../../../components/ui";
+import { DEVICE_AI_SETTINGS_HREF, useAiDraftAvailability } from "../../../lib/localAi/useDeviceAi";
+import { DeviceDraftStatus } from "./DeviceDraftStatus";
 
 /**
  * Rendered above MeetingMinutesColumn when the meeting's minutes record is
@@ -47,7 +49,10 @@ export function MinutesDraftEmptyState({
   onDraftFromSavedTranscript: () => Promise<void> | void;
   onUploadAudioAndDraft: () => Promise<void> | void;
 }) {
-  const remoteAvailable = !isLocalDataRuntime();
+  // Drafting runs on the server or the on-device model; audio transcription is server-only for now.
+  const ai = useAiDraftAvailability();
+  const remoteAvailable = ai.server;
+  const draftAvailable = ai.available;
   const [pasted, setPasted] = useState("");
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -74,14 +79,26 @@ export function MinutesDraftEmptyState({
         </h2>
         {!collapsed && (
           <span className="card__subtitle">
-            {remoteAvailable ? "Paste or upload a transcript to generate a draft you can edit below." : "AI drafting is unavailable in this local workspace. Write minutes manually or save a text transcript from Sources."}
+            {remoteAvailable
+              ? "Paste or upload a transcript to generate a draft you can edit below."
+              : ai.device
+                ? `Paste a transcript to draft with the on-device model ${ai.deviceModel}. Edit the draft below.`
+                : "AI drafting is unavailable in this local workspace. Write minutes manually or save a text transcript from Sources."}
           </span>
         )}
         {hasSavedTranscript && <Badge tone="info">Transcript on file</Badge>}
       </div>
       {collapsed ? null : (
       <div className="card__body col" style={{ gap: 12 }}>
-        {!remoteAvailable && <p className="muted" role="status">AI minutes drafting and audio transcription require a connected server. Saved transcripts and manual minutes remain available.</p>}
+        <DeviceDraftStatus meetingId={meetingId} />
+        {!remoteAvailable && (ai.device ? (
+          <p className="muted" role="status">On-device model: {ai.deviceModel}. To transcribe a recording on this device, open it in the Transcript tab.</p>
+        ) : (
+          <p className="muted" role="status">
+            AI minutes drafting and audio transcription require a connected server. Saved transcripts and manual minutes remain available.
+            {ai.canSetUpDevice && <> <Link to={DEVICE_AI_SETTINGS_HREF}>Set up on-device AI in Settings</Link></>}
+          </p>
+        ))}
         {hasSavedTranscript && (
           <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -90,7 +107,7 @@ export function MinutesDraftEmptyState({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={!canDraft || busy || !remoteAvailable}
+              disabled={!canDraft || busy || !draftAvailable}
               onClick={() => { if (canDraft) return onDraftFromSavedTranscript(); }}
             >
               <Sparkles size={12} /> {busy ? "Drafting..." : "Draft from saved transcript"}
@@ -109,13 +126,13 @@ export function MinutesDraftEmptyState({
             value={pasted}
             onChange={(e) => setPasted(e.target.value)}
             placeholder="Paste the meeting transcript or your raw notes — anything in plain text works."
-            disabled={!canPasteDraft || busy || !remoteAvailable}
+            disabled={!canPasteDraft || busy || !draftAvailable}
           />
           <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
             <button
               type="button"
               className="btn btn--primary"
-              disabled={!canPasteDraft || busy || !remoteAvailable || pasted.trim().length === 0}
+              disabled={!canPasteDraft || busy || !draftAvailable || pasted.trim().length === 0}
               onClick={async () => {
                 if (!canPasteDraft) return;
                 await onDraftFromPastedText(pasted);

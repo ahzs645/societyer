@@ -96,7 +96,9 @@ async function signUpAndVerify(email: string, name: string, password: string) {
 try {
   // Deployment advertises the broker and email delivery.
   const anonymous = new ConvexHttpClient(convexUrl);
-  assert.deepEqual(await anonymous.query(api.http.authCapabilities, {}), { mode: "convex", emailDelivery: true });
+  // Instance name and support email are optional display settings the test deployment may carry.
+  const { instanceName: _instanceName, supportEmail: _supportEmail, ...capabilities } = await anonymous.query(api.http.authCapabilities, {});
+  assert.deepEqual(capabilities, { mode: "convex", emailDelivery: true, allowedEmailDomains: [], signUpEnabled: true });
 
   // 1. Sign up, verify, create a workspace as Owner.
   const aliceEmail = `alice-${run}@example.org`;

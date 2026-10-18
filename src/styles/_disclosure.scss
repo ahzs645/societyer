@@ -1,0 +1,79 @@
+@use "tokens" as *;
+
+// ============================================================
+// Expand/collapse rows: one style for <details> toggles.
+//
+//   <details className="disclosure"><summary>Rule packs (3)</summary>…
+//
+// The summary is a row with a chevron at its end that turns over when open,
+// in place of the browser's ▶ marker. Touch gets a 44px tall row.
+//
+// It also covers, without a class:
+//   - unclassed <details> with an unclassed <summary> inside the app (they
+//     had no styling at all: minutes evidence, privacy laws, history lists);
+//   - the toggles below whose markup lives in features we style but don't
+//     edit here.
+// Everything sits in :where(), so a host's own rule (colour, size, padding)
+// still wins and this only fills in the row, marker and chevron.
+//
+// Not for collapsible cards (`details.card > summary`, the card head) or
+// MobileFold (`.mobile-fold__summary`), which have their own heads.
+// ============================================================
+
+$disclosure-hosts: (
+  ".disclosure",
+  ".minutes-export-summary__all", // "Show all checks" (meeting sidebar)
+  ".meeting-package-empty-topics", // "6 agenda topics without linked materials"
+  ".meeting-minutes-narrative", // "Overall discussion summary"
+  ".meeting-package-drawer" // "Source review", "Package review"
+);
+
+// Lucide chevron-down, drawn through a mask in the tertiary text colour.
+$disclosure-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+$disclosure-summary: ":where(#{$disclosure-hosts}) > summary, :where(.app-shell, .drawer, .modal, [role='dialog']) details:not([class]) > summary:not([class])";
+
+:where(#{$disclosure-summary}) {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  cursor: pointer;
+  list-style: none;
+  border-radius: token('r-sm');
+  -webkit-tap-highlight-color: transparent;
+
+  &::-webkit-details-marker { display: none; }
+  &::marker { content: ""; }
+
+  &::after {
+    content: "";
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-inline-start: auto;
+    background-color: token('text-tertiary');
+    mask: $disclosure-chevron center / 16px no-repeat;
+    transition: transform token('motion-move-fast') token('ease-move');
+  }
+
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: 2px;
+  }
+}
+
+:where(details[open]) > :where(#{$disclosure-summary})::after {
+  transform: rotate(180deg);
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  :where(#{$disclosure-summary}) {
+    min-height: token('tap-target');
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(#{$disclosure-summary})::after {
+    transition: none;
+  }
+}

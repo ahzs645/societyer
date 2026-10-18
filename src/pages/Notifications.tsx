@@ -10,7 +10,7 @@ import { Segmented, Tabs } from "../components/primitives";
 import { useUrlTab } from "../hooks/useUrlTab";
 import { NotificationSettings } from "../features/notifications/NotificationSettings";
 import { Bell, CheckCheck, Send, Trash2 } from "lucide-react";
-import { formatDateTime } from "../lib/format";
+import { formatDate, formatDateTime, relative } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
@@ -22,6 +22,18 @@ function kindLabel(kind?: string) {
   const text = String(kind ?? "").replace(/[_-]+/g, " ").trim();
   if (!text) return "General";
   return text.replace(/\bai\b/gi, "AI").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+/** Recent alerts read "3 hours ago" (as the activity timeline does); older ones get the app's date. */
+function notificationTime(iso?: string) {
+  const time = iso ? new Date(iso).getTime() : Number.NaN;
+  if (!Number.isFinite(time)) return formatDateTime(iso);
+  return Math.abs(Date.now() - time) < 7 * 24 * 60 * 60 * 1000 ? relative(iso) : formatDate(iso);
+}
+
+/** Alert bodies are written server-side with ISO days ("Due 2026-05-12."); show them in the app's date format. */
+function formatBodyDates(body: string) {
+  return body.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (day) => formatDate(day));
 }
 
 export function NotificationsPage() {
@@ -40,6 +52,8 @@ export function NotificationsPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
+  // "All" is the inbox — everything not cleared — so its count matches the
+  // Inbox tab; cleared alerts live under "Cleared" only.
   const [scope, setScope] = useState<"all" | "unread" | "dismissed">("all");
   const [tab, setTab] = useUrlTab(["inbox", "settings"] as const, "inbox");
 
@@ -48,8 +62,9 @@ export function NotificationsPage() {
     const list = [...(notifications ?? [])].sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
     if (scope === "unread") return list.filter((n) => !n.readAt && !n.dismissedAt);
     if (scope === "dismissed") return list.filter((n) => n.dismissedAt);
-    return list;
+    return list.filter((n) => !n.dismissedAt);
   }, [notifications, scope]);
+  const inboxCount = (notifications ?? []).filter((n) => !n.dismissedAt).length;
   const unreadCount = (notifications ?? []).filter((n) => !n.readAt && !n.dismissedAt).length;
   const dismissedCount = (notifications ?? []).filter((n) => n.dismissedAt).length;
 
@@ -71,9 +86,10 @@ export function NotificationsPage() {
         </>}
         actions={tab === "inbox" ? (
           <>
+            <Tooltip content="Send digest — emails everyone who opted in to notification emails">
             <button
               className="btn-action"
-              title="Send a digest email to workspace users who have opted in to notification emails."
+              aria-label="Send digest"
               disabled={busy || !digestAvailable}
               onClick={async () => {
                 if (!digestAvailable) return;
@@ -100,17 +116,22 @@ export function NotificationsPage() {
                 }
               }}
             >
-              <Send size={12} /> Send digest
+              <Send size={12} aria-hidden="true" /> Send digest
             </button>
+            </Tooltip>
+            <Tooltip content="Mark all read">
             <button
               className="btn-action"
+              aria-label="Mark all read"
+              disabled={unreadCount === 0}
               onClick={async () => {
                 await markAllRead({ societyId: society._id, userId });
                 toast.success("Marked all read");
               }}
             >
-              <CheckCheck size={12} /> Mark all read
+              <CheckCheck size={12} aria-hidden="true" /> Mark all read
             </button>
+            </Tooltip>
           </>
         ) : undefined}
       />
@@ -121,7 +142,7 @@ export function NotificationsPage() {
         tabRoles
         ariaLabel="Notifications views"
         items={[
-          { id: "inbox", label: "Inbox", count: unreadCount || null },
+          { id: "inbox", label: "Inbox", count: inboxCount || null },
           { id: "settings", label: "Settings" },
         ]}
       />
@@ -161,9 +182,9 @@ export function NotificationsPage() {
               value={scope}
               onChange={setScope}
               items={[
-                { id: "all", label: `All (${notifications?.length ?? 0})` },
+                { id: "all", label: `All (${inboxCount})` },
                 { id: "unread", label: `Unread (${unreadCount})` },
-                { id: "dismissed", label: `Dismissed (${dismissedCount})` },
+                { id: "dismissed", label: `Cleared (${dismissedCount})` },
               ]}
             />
           </div>
@@ -181,7 +202,9 @@ export function NotificationsPage() {
             )
           )}
           {filtered.map((n) => (
-            <div key={n._id} className="notif-row" style={n.dismissedAt ? { opacity: 0.6 } : undefined}>
+            <div key={n._id} className="notif-row notif-row--page" style={n.dismissedAt ? { opacity: 0.6 } : undefined}>
+              {/* Fixed-width slot on desktop; under the title on phones, so
+                  every title starts at the same x. */}
               <span className="notif-row__kind"><Badge
                 tone={
                   n.severity === "success"
@@ -213,18 +236,18 @@ export function NotificationsPage() {
                     </span>
                   )}
                 </div>
-                {n.body && <div className="muted" style={{ fontSize: 13 }}>{n.body}</div>}
+                {n.body && <div className="muted" style={{ fontSize: 13 }}>{formatBodyDates(n.body)}</div>}
               </div>
               <span className="muted notif-row__meta" style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {n.dismissedAt && <Badge tone="neutral">Cleared</Badge>}
-                {formatDateTime(n.createdAtISO)}
+                <time dateTime={n.createdAtISO} title={formatDateTime(n.createdAtISO)}>{notificationTime(n.createdAtISO)}</time>
               </span>
               {n.dismissedAt && (
                 <Tooltip content="Delete permanently">
                   <button
                     className="btn-action btn-action--icon"
                     aria-label="Delete permanently"
-                    style={{ marginLeft: 8, color: "var(--danger)" }}
+                    style={{ color: "var(--danger)" }}
                     onClick={async () => {
                       try {
                         await removeNotification({ id: n._id });

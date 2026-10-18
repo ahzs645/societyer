@@ -34,7 +34,7 @@ import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { automatedComplianceChecksLabel } from "../../shared/entityRuleScope";
-import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
+import { ContinuityChecksCard, type ContinuityCheck } from "../features/gaps/ContinuityChecksCard";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { RollingNumber } from "../components/RollingNumber";
@@ -43,9 +43,14 @@ import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { pluralizeCounts } from "../lib/pluralizeCounts";
 import { DashboardFinanceSnapshotLazy } from "../features/financials/insights/lazy";
 import { StatTile } from "../components/StatTile";
+import { useIsMobile } from "../lib/useIsMobile";
 import { useSetupGuideHidden } from "../hooks/useSetupProgress";
 import { useOrganizationSetup } from "../features/organizationSetup/useOrganizationSetup";
 import { SetupSummaryCard } from "../features/dashboard/SetupSummaryCard";
+import { NeedsAttentionCard, buildAttentionItems } from "../features/dashboard/NeedsAttentionCard";
+import { ATTENTION_MODULES, DashboardPhoneLayout, type DashboardDisclosure } from "../features/dashboard/DashboardPhoneLayout";
+import { isModuleEnabled } from "../lib/modules";
+import type { DashboardComplianceFlag, DashboardRemediationAction } from "../../shared/dashboardComplianceRules";
 import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
 
 export function Dashboard() {
@@ -60,6 +65,7 @@ export function Dashboard() {
   const currentUserId = useCurrentUserId();
   const dashboardLayout = useDashboardLayout(currentUserId, society?._id);
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const isMobile = useIsMobile();
   const data = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
   const activity = useQuery(api.activity.list, society && can("audit:read") ? { societyId: society._id, limit: 10 } : "skip");
   // Corporations keep directors, officers and shareholders in the role-holder
@@ -78,6 +84,18 @@ export function Dashboard() {
   // shell's setup pill; hiding the summary here hides the pill too, live.
   const { hidden: onboardingFlowHidden, setHidden: setOnboardingFlowHidden } = useSetupGuideHidden(society?._id ? String(society._id) : null);
   const setupProgress = useOrganizationSetup(society?._id && !onboardingFlowHidden ? String(society._id) : null);
+  // Phones merge continuity checks into "Needs attention" and count expiring
+  // agreements in a disclosure summary. Same queries and arguments as the
+  // cards themselves, so Convex shares one subscription with them.
+  const continuity = useQuery(
+    api.continuity.dashboardChecks,
+    society && isMobile && can("deadlines:read") ? { societyId: society._id } : "skip",
+  ) as { checks: ContinuityCheck[] } | undefined;
+  const agreementsEnabled = Boolean(society && can("agreements:read") && isModuleEnabled(society, "agreements"));
+  const agreementsSummary = useQuery(
+    api.agreements.summary,
+    society && isMobile && agreementsEnabled ? { societyId: society._id, windowDays: 90 } : "skip",
+  ) as { total?: number; expiring?: unknown[] } | undefined;
 
   if (society === undefined) return <PageLoading variant="cards" />;
   if (society === null) return <SeedPrompt />;
@@ -101,17 +119,31 @@ export function Dashboard() {
     if (dashboardLayout.hiddenSet.has(id)) dashboardLayout.setHidden(id, false);
     if (id === "setup") setOnboardingFlowHidden(false);
   };
-  // The setup guide's visibility lives in the shared per-organization flag
-  // (read by the shell's setup pill too); other modules live in the layout.
+  // Hiding the setup card is a layout choice like any other module: the
+  // shell's setup pill then comes back as the way into setup. The shared
+  // per-organization flag (set from the pill's Hide) still hides the card,
+  // and showing the card again clears both.
   const hideModule = (id: DashboardModuleId) =>
     void undoable({
       message: `${moduleLabel(id)} hidden`,
-      description: "Bring it back any time from Customize.",
+      description: id === "setup"
+        ? `Setup progress stays ${isMobile ? "in the top bar" : "in the sidebar"}. Bring the card back any time from Customize.`
+        : "Bring it back any time from Customize.",
       dedupeKey: `dashboard-hide-${id}`,
-      run: () => (id === "setup" ? setOnboardingFlowHidden(true) : dashboardLayout.setHidden(id, true)),
+      run: () => dashboardLayout.setHidden(id, true),
       undo: () => showModule(id),
       undoneMessage: false,
     });
+
+  const remediationPermission = (action: DashboardRemediationAction) =>
+    action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write";
+  const visibleRemediationActions = (flag: DashboardComplianceFlag) =>
+    (flag.remediationActions ?? []).filter((action) => {
+      const permission = action.intent === "navigate" && action.to ? interfaceRouteReadPermission(action.to) : null;
+      return !permission || canRead(permission);
+    });
+  const remediationActionDisabled = (flag: DashboardComplianceFlag, action: DashboardRemediationAction) =>
+    busyRemediationAction === `${flag.ruleId}:${action.id}` || (action.intent !== "navigate" && !can(remediationPermission(action)));
 
   const runRemediationAction = async (flag: any, action: any) => {
     if (action.intent === "navigate") {
@@ -260,18 +292,14 @@ export function Dashboard() {
                       </ul>
                     </InfoPopover>
                   ) : null;
-                  const visibleActions = (f.remediationActions ?? []).filter((action: any) => {
-                    const permission = action.intent === "navigate" ? interfaceRouteReadPermission(action.to) : null;
-                    return !permission || canRead(permission);
-                  });
-                  const actionDisabled = (action: any) => busyRemediationAction === `${f.ruleId}:${action.id}`
-                    || (action.intent !== "navigate" && !can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write"));
+                  const visibleActions = visibleRemediationActions(f);
+                  const actionDisabled = (action: any) => remediationActionDisabled(f, action);
                   const [primary, ...secondary] = visibleActions;
                   if (!primary) return evidenceInfo ? <div className="dashboard-remediation__actions">{evidenceInfo}</div> : null;
                   // One primary action per row; the rest sit in a ⋯ menu.
                   return (
                     <div className="dashboard-remediation__actions">
-                      {primary.intent === "navigate" ? (
+                      {primary.intent === "navigate" && primary.to ? (
                         <Link className="btn btn--sm" to={primary.to}>
                           {primary.label}
                         </Link>
@@ -549,6 +577,70 @@ export function Dashboard() {
   const availableModules = DEFAULT_MODULE_ORDER.filter((id) => moduleContent[id] != null);
   const visibleModules = dashboardLayout.layout.order.filter((id) => moduleContent[id] != null && !isModuleHidden(id));
 
+  // Phones: compliance, continuity and filings become one list, built from
+  // the visible modules' data only (a hidden module adds nothing to it).
+  const attentionVisible = isMobile && visibleModules.some((id) => ATTENTION_MODULES.has(id));
+  const filingsVisible = visibleModules.includes("filings");
+  const attentionItems = attentionVisible
+    ? buildAttentionItems({
+        flags: visibleModules.includes("compliance") ? complianceFlags : undefined,
+        checks: visibleModules.includes("continuity") ? continuity?.checks : undefined,
+        overdueFilings: filingsVisible ? overdueFilings : undefined,
+        upcomingFilings: filingsVisible ? upcomingFilings : undefined,
+        todayISO,
+        filingLabel: kindLabel,
+        canOpen: (to) => {
+          const permission = interfaceRouteReadPermission(to.split(/[?#]/)[0]);
+          return !permission || can(permission);
+        },
+        flagLink: (flag) => visibleRemediationActions(flag).find((action) => action.intent === "navigate" && action.to)?.to,
+        flagActions: (flag, rowLink) => {
+          const others = visibleRemediationActions(flag).filter((action) => !(action.intent === "navigate" && action.to === rowLink));
+          if (!others.length) return null;
+          return (
+            <div className="attention-pop__actions">
+              {others.map((action) =>
+                action.intent === "navigate" && action.to ? (
+                  <Link key={action.id} className="btn btn--sm" to={action.to}>{action.label}</Link>
+                ) : (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={remediationActionDisabled(flag, action)}
+                    onClick={() => runRemediationAction(flag, action)}
+                  >
+                    {busyRemediationAction === `${flag.ruleId}:${action.id}` ? "Working..." : action.label}
+                  </button>
+                ),
+              )}
+            </div>
+          );
+        },
+      })
+    : [];
+  const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+  const expiringAgreements = agreementsSummary?.expiring?.length;
+  const disclosures: Partial<Record<DashboardModuleId, DashboardDisclosure>> = {
+    meetings: {
+      title: "Upcoming meetings",
+      summary: upcomingMeetings.length
+        ? `${upcomingMeetings.length} upcoming · next ${relative(upcomingMeetings[0].scheduledAt)}`
+        : "None scheduled",
+    },
+    agreements: {
+      title: "Agreements expiring",
+      summary: expiringAgreements === undefined ? undefined : `${plural(expiringAgreements, "agreement")} ending within 90 days`,
+    },
+    goals: { title: "Goals", summary: `${counts.openGoals} open` },
+    finance: { title: "Finances", summary: "Bank balance and this month's money in and out" },
+    organization: { title: entityCopy.organizationTitle, summary: society.incorporationNumber || society.name },
+    board: { title: "Board of directors", summary: plural(counts.directors, "active director") },
+    activity: { title: "Recent activity", summary: activity === undefined ? undefined : activity.length ? plural(activity.length, "recent change") : "No activity yet" },
+    tasks: { title: "Open tasks", summary: `${counts.openTasks} open` },
+  };
+
+
   return (
     <div className="page dashboard-page">
       <PageHeader
@@ -561,7 +653,23 @@ export function Dashboard() {
         }
       />
 
-      <DashboardModuleGrid modules={visibleModules} content={moduleContent} layout={dashboardLayout.layout} />
+      {isMobile ? (
+        <DashboardPhoneLayout
+          modules={visibleModules}
+          content={moduleContent}
+          disclosures={disclosures}
+          attention={
+            <NeedsAttentionCard
+              items={attentionItems}
+              note={visibleModules.includes("compliance") && !completeComplianceAccess
+                ? "Some checks need an administrator. This list uses records your role can see."
+                : undefined}
+            />
+          }
+        />
+      ) : (
+        <DashboardModuleGrid modules={visibleModules} content={moduleContent} layout={dashboardLayout.layout} />
+      )}
 
       {visibleModules.length === 0 && (
         <EmptyState
@@ -593,7 +701,9 @@ export function Dashboard() {
         placement="right"
         title="Pin pages to Favorites"
       >
-        Hover any page in the sidebar and select the pin to keep it in Favorites at the top. Right-click a page for the same option.
+        {isMobile
+          ? "Open More, tap Edit beside Favorites, then tap the pin on any page to add it. The first four favorites fill the bottom bar."
+          : "Hover any page in the sidebar and select the pin to keep it in Favorites at the top. Right-click a page for the same option."}
       </Spotlight>
       <Spotlight
         spotlightKey="command-palette"

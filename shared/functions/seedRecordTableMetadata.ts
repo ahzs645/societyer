@@ -124,6 +124,17 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
       .collect();
     const fieldByName = new Map(seededFields.map((f: any) => [f.name, f]));
+
+    // Repair an identifier that names no field (members and directors were
+    // seeded with "fullName", which they never had). An identifier someone
+    // pointed at a real field is theirs and stays.
+    if (
+      objectRow.labelIdentifierFieldName !== obj.labelIdentifierFieldName &&
+      !fieldByName.has(objectRow.labelIdentifierFieldName) &&
+      fieldByName.has(obj.labelIdentifierFieldName)
+    ) {
+      await ctx.db.patch(objectRow._id, { labelIdentifierFieldName: obj.labelIdentifierFieldName, updatedAtISO: now });
+    }
     const liveFieldIds = new Set(seededFields.map((f: any) => String(f._id)));
     const resolveFieldId = (fieldName?: string): string | undefined => {
       if (!fieldName) return undefined;

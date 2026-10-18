@@ -74,7 +74,7 @@ export function GrantSourceLibrarySection({
 
   return (
     <>
-      <section aria-labelledby="grant-source-library-title">
+      <section className="grant-source-library" aria-labelledby="grant-source-library-title">
         <div className="section-title" style={{ marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Globe2 size={14} />
@@ -199,9 +199,12 @@ function GrantSourceCard({ row, actions }: { row: any; actions: ReactNode }) {
           {row.rowKind !== "library" && <div className="grant-source-card__eyebrow">Workspace source</div>}
           <h3 className="grant-source-card__title">{row.name}</h3>
         </div>
-        <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>
-          {row.installed ? "Installed" : formatSourceLabel(row.status)}
-        </Badge>
+        {/* Phones show only the Installed and non-active states; "Active" is every library listing. */}
+        <span className={`grant-source-card__status${row.installed || row.status !== "active" ? " is-notable" : ""}`}>
+          <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>
+            {row.installed ? "Installed" : formatSourceLabel(row.status)}
+          </Badge>
+        </span>
       </div>
       <div className="grant-source-card__body">
         <div className="grant-source-card__meta">

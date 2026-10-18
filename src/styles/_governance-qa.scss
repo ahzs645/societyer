@@ -128,3 +128,116 @@
     hyphens: manual;
   }
 }
+
+// Meeting detail header on phones: the content starts on the first screen.
+// Row 1 is "← [title] [Edit] [⋯]" (the back link keeps its "Meetings" name
+// for assistive tech but shows only the arrow), row 2 is one line of facts
+// ("Jun 19, 2025 · Held · 4 present · 7 topics"), then the tab strip. The
+// four stat cells are not rendered on phones (MeetingDetail folds them into
+// that line; motions and materials are counted on their tabs).
+@media (max-width: 760px) {
+  // One grid for the whole header (the wrappers step aside), so the facts
+  // line runs the full width under the actions.
+  .meeting-detail-page .page__header.page__header--with-crumbs {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 2px;
+    row-gap: 2px;
+    margin-bottom: token('s-2');
+    padding-bottom: 0;
+    > .page__header-main,
+    > .page__header-main > .page__intro {
+      display: contents;
+    }
+  }
+  .meeting-detail-page .page__intro > .breadcrumbs {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+  .meeting-detail-page .page__intro > .page__title,
+  .meeting-detail-page .page__intro > .page__title-row {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .meeting-detail-page .page__intro > .page__subtitle {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    margin: 0;
+  }
+  .meeting-detail-page .breadcrumbs__back {
+    justify-content: center;
+    width: token('control-h-touch-icon');
+    min-height: token('control-h-touch');
+    margin-left: -8px;
+    padding: 0;
+    > span {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    > svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+  // The calendar tile repeats what the page is; the title gets its room.
+  .meeting-detail-page .page__header .page__icon {
+    display: none;
+  }
+  .meeting-detail-page .page__title {
+    font-size: token('fs-lg');
+    line-height: 1.25;
+  }
+  .meeting-detail-page .page__header.page__header--with-crumbs > .page__actions {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    width: auto;
+    margin-left: token('s-2');
+    flex-wrap: nowrap;
+  }
+  // One line: the date and status always show; the counts give way first.
+  .meeting-detail-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
+    color: token('text-secondary');
+    font-size: token('fs-sm');
+    line-height: 1.4;
+    white-space: nowrap;
+    > * { flex: none; }
+  }
+  .meeting-detail-meta__facts {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    &::before {
+      content: '·';
+      margin-right: 6px;
+      color: token('text-tertiary');
+    }
+  }
+  // 44px tabs: the strip is the page's main control. It already scrolls
+  // sideways, fades its cut edge and keeps the active tab in view (Tabs).
+  .meeting-detail-page > .tabs {
+    margin-top: 0;
+    padding-top: 0;
+    margin-bottom: token('s-2');
+  }
+  .meeting-detail-page > .tabs .tab {
+    height: token('tap-target');
+  }
+  .meeting-detail-page > .tabs .tab::after {
+    top: 0;
+  }
+}

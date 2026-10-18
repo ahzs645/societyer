@@ -13,7 +13,8 @@ import type { PdfJsModule } from "../../../shared/intake/extract/pdf";
 import { buildImportBundle, coverageReport } from "../../../shared/intake/bundle";
 import type { GenerateObjectFn } from "../../../shared/intake/llm";
 import { withOcrActivity, type OcrHost } from "../../../shared/intake/extract/ocr";
-import type { IntakeWorkerRequest, IntakeWorkerResponse, WorkerLlmConfig, WorkerOcrConfig } from "./workerProtocol";
+import type { IntakeWorkerRequest, IntakeWorkerResponse, WorkerAiFetchResult, WorkerLlmConfig, WorkerOcrConfig } from "./workerProtocol";
+import { DEVICE_AI_SDK_BASE_URL, deviceAiSdkFetch, type DeviceAiTransport } from "../../lib/localAi/transport";
 
 type WorkerScope = { postMessage: (message: IntakeWorkerResponse, transfer?: Transferable[]) => void; onmessage: ((event: MessageEvent<IntakeWorkerRequest>) => void) | null };
 const scope = self as unknown as WorkerScope;
@@ -54,15 +55,38 @@ async function sha256(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+const pendingAiFetches = new Map<number, (result: WorkerAiFetchResult) => void>();
+let aiFetchId = 0;
+
+/** Relays one model request to the page, which owns the device AI transport. */
+const relayTransport: DeviceAiTransport = {
+  kind: "direct",
+  send(path, init) {
+    const id = ++aiFetchId;
+    return new Promise<Response>((resolve, reject) => {
+      pendingAiFetches.set(id, (result) => {
+        if ("error" in result) reject(new Error(result.error));
+        else resolve(new Response(result.body, { status: result.status, headers: { "content-type": result.contentType ?? "application/json" } }));
+      });
+      post({ type: "aiFetch", id, path, method: init.method, body: init.body });
+    });
+  },
+};
+
 async function makeLlm(config: WorkerLlmConfig): Promise<{ generate: GenerateObjectFn; provider: string; model: string; budgetTokens: number; concurrency: number }> {
   const [{ createOpenAI }, { makeGenerateObject }] = await Promise.all([import("@ai-sdk/openai"), import("../../../shared/intake/aiGenerate")]);
-  const provider = createOpenAI({ apiKey: config.apiKey, ...(config.baseUrl ? { baseURL: config.baseUrl } : {}) });
-  const model = config.provider === "openai" ? provider(config.modelId) : provider.chat(config.modelId);
-  return { generate: makeGenerateObject(model), provider: config.provider, model: config.modelId, budgetTokens: config.budgetTokens, concurrency: config.concurrency };
+  // Chat completions for every kind: the device proxy only forwards allow-listed paths.
+  const provider = createOpenAI({ apiKey: "on-device", baseURL: DEVICE_AI_SDK_BASE_URL, fetch: deviceAiSdkFetch(relayTransport) });
+  return { generate: makeGenerateObject(provider.chat(config.modelId)), provider: config.provider, model: config.modelId, budgetTokens: config.budgetTokens, concurrency: config.concurrency };
 }
 
 scope.onmessage = (event) => {
   const message = event.data;
+  if (message.type === "aiFetchResult") {
+    pendingAiFetches.get(message.id)?.(message);
+    pendingAiFetches.delete(message.id);
+    return;
+  }
   if (message.type === "convertResult") {
     pendingConversions.get(message.id)?.(message.bytes ? new Uint8Array(message.bytes) : null);
     pendingConversions.delete(message.id);

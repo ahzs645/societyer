@@ -1,9 +1,12 @@
 import { usePermissions } from "@/hooks/usePermissions";
-import { isLocalDataRuntime } from "../../../lib/staticRuntime";
+import { Link } from "react-router-dom";
+import { DEVICE_AI_SETTINGS_HREF, useAiDraftAvailability } from "../../../lib/localAi/useDeviceAi";
 import { Mic, Save, Sparkles, Upload } from "lucide-react";
 import { Badge } from "../../../components/ui";
+import { DeviceDraftStatus } from "./DeviceDraftStatus";
 
 export function MeetingTranscriptCard({
+  meetingId,
   vttInputRef,
   audioInputRef,
   transcriptOnFile,
@@ -24,6 +27,8 @@ export function MeetingTranscriptCard({
   onUploadAudioAndRun,
   onDraftFromTranscript,
 }: {
+  /** For the on-device draft progress and Cancel. */
+  meetingId?: string;
   vttInputRef: any;
   audioInputRef: any;
   transcriptOnFile: string;
@@ -52,7 +57,9 @@ export function MeetingTranscriptCard({
   const { can } = usePermissions();
   const canWrite = can("meetings:write");
   const canDraft = can("minutes:write");
-  const remoteAvailable = !isLocalDataRuntime();
+  // Drafting runs on the server or the on-device model; audio transcription is server-only for now.
+  const ai = useAiDraftAvailability();
+  const remoteAvailable = ai.server;
   const canDraftFromTranscript =
     !!onDraftFromTranscript && transcriptOnFile.trim().length > 0;
   return (
@@ -145,9 +152,9 @@ export function MeetingTranscriptCard({
               {canDraftFromTranscript && (
                 <button
                   className="btn-action btn-action--primary"
-                  disabled={!canDraft || (!remoteAvailable || savingTranscript || pipelineBusy || draftingFromTranscript)}
+                  disabled={!canDraft || (!ai.available || savingTranscript || pipelineBusy || draftingFromTranscript)}
                   onClick={() => { if (canDraft) onDraftFromTranscript?.(); }}
-                  title="Generate a minutes draft from the saved transcript using AI."
+                  title={ai.device ? `Generate a minutes draft with the on-device model ${ai.deviceModel}.` : "Generate a minutes draft from the saved transcript using AI."}
                 >
                   <Sparkles size={12} /> {draftingFromTranscript ? "Drafting..." : "Draft from transcript"}
                 </button>
@@ -169,7 +176,15 @@ export function MeetingTranscriptCard({
           )}
         </div>
 
-        {!remoteAvailable && <p className="muted" role="status">AI minutes drafting and audio transcription require a connected server. Saved text transcripts remain available.</p>}
+        {meetingId && <DeviceDraftStatus meetingId={meetingId} />}
+        {!remoteAvailable && (ai.device ? (
+          <p className="muted" role="status">On-device model: {ai.deviceModel}. To transcribe a recording on this device, open it in the Transcript tab.</p>
+        ) : (
+          <p className="muted" role="status">
+            AI minutes drafting and audio transcription require a connected server. Saved text transcripts remain available.
+            {ai.canSetUpDevice && <> <Link to={DEVICE_AI_SETTINGS_HREF}>Set up on-device AI in Settings</Link></>}
+          </p>
+        ))}
         <div className="meeting-audio-tools">
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
             VTT/audio imports are optional.

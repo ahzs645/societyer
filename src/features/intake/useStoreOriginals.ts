@@ -7,7 +7,7 @@ import { useAction } from "convex/react";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { uploadDocumentVersion, usesBrowserWorkspaceFileStore } from "../../lib/documentVersionUpload";
-import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "../../lib/runtimeMode";
+import { getDocumentStorageProvider, isDocumentVersionStorageEnabled } from "../../lib/runtimeMode";
 import { isLocalDataRuntime } from "../../lib/staticRuntime";
 import { isDemoMode } from "../../lib/demoMode";
 import { getOriginal } from "./originalsCache";
@@ -15,7 +15,7 @@ import { getOriginal } from "./originalsCache";
 export type SourceDocumentRef = { fileKey: string; documentId: string; name: string; sha256?: string; mimeType?: string };
 
 export function canStoreOriginals(): boolean {
-  if (!isNativeFileStorageEnabled()) return false;
+  if (!isDocumentVersionStorageEnabled()) return false;
   if (isDemoMode()) return true;
   if (getDocumentStorageProvider() === "local-filesystem") return true;
   // The browser local workspace keeps originals in IndexedDB (exported in ZIP backups).

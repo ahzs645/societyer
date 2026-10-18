@@ -1,9 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { pinnedRowActions, rowActionsArePinned, runRowAction } from "./helpers/rowActions";
+import { pinnedRowActions, recordRows, rowActionsArePinned, runRowAction } from "./helpers/rowActions";
 
-/** The first filing row that still offers "Mark filed". */
+/** The first filing row (a card on phones) that still offers "Mark filed". */
 function unfiledRow(page: Page) {
-  return page.locator(".record-table__row").filter({ has: page.locator("button", { hasText: "Mark filed" }) }).first();
+  return recordRows(page).filter({ has: page.locator("button", { hasText: "Mark filed" }) }).first();
 }
 
 // Layering, focus return, outside taps and the on-screen keyboard for the
@@ -163,7 +163,7 @@ test("an outside tap closes an anchored select inside a modal but keeps the moda
 
 test("closing a confirm by Esc or Cancel returns focus to the control that opened it", async ({ page }) => {
   await page.goto("/demo/app/filings");
-  const row = page.locator(".record-table__row").filter({ has: page.locator('button[aria-label="Delete filing"]') }).first();
+  const row = recordRows(page).filter({ has: page.locator('button[aria-label="Delete filing"]') }).first();
   // A table wider than its frame runs the delete from the pinned "Row
   // actions" menu, which hands focus back to that button.
   const del = await rowActionsArePinned(row) ? pinnedRowActions(row) : row.getByRole("button", { name: "Delete filing" });

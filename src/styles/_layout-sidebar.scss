@@ -455,11 +455,25 @@
   max-height: 100%;
   display: block;
 }
+// No logo yet: the frame shows the initial on the theme's own surface. The
+// white/near-black frames above are for previewing an uploaded logo; empty,
+// the white one was a bright square on the dark theme.
+.organization-logo-preview:has(> .organization-logo-preview__placeholder) {
+  background: token('bg-subtle');
+  color: token('text-secondary');
+}
 .organization-logo-preview__placeholder {
   font-size: token('fs-xl');
   font-weight: 700;
   color: inherit;
   opacity: 0.55;
+}
+// An empty letterhead says so in body text; the organisation name in display
+// type wrapped and clipped in the 240×80 frame.
+.organization-logo-preview__placeholder--letterhead {
+  font-size: token('fs-sm');
+  font-weight: 500;
+  text-align: center;
 }
 .sidebar__brand-name {
   font-weight: 500;

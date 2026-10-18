@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { chooseViewType, revealSelectRecords } from "./helpers/recordTableToolbar";
-import { openRowMenu, pinnedRowActions, rowActionsArePinned, runRowAction } from "./helpers/rowActions";
+import { chooseViewType, closePhoneViewOptions, openPhoneViewOptions, revealSelectRecords } from "./helpers/recordTableToolbar";
+import { openRowMenu, pinnedRowActions, recordRows, rowActionsArePinned, runRowAction } from "./helpers/rowActions";
 
 // Multi-route and role-switch scenarios include several cold development loads.
 // Keep assertion deadlines strict while allowing the whole lifecycle to finish.
@@ -172,7 +172,7 @@ test("shared navigation and command palette contain keyboard focus and restore i
   if (page.viewportSize()!.width < 980) {
     const more = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
     await more.click();
-    const navigation = page.getByRole("dialog", { name: "navigation", exact: true });
+    const navigation = page.locator("aside.sidebar[role='dialog']");
     await expect(navigation).toBeVisible();
     await expect(navigation.getByRole("button").first()).toBeFocused();
     await page.keyboard.press("Shift+Tab");
@@ -270,41 +270,55 @@ test("nested date and selection controls close independently of their record dra
 
 test("record table menus fit the viewport and alternate views retain usable controls", async ({ page }) => {
   await page.goto("/demo/app/members");
-  await expect(page.locator(".record-table__row").first()).toBeVisible();
-  const statusCell = page.locator(".record-table__row").first().locator('[data-field-name="status"]');
-  const originalStatus = await statusCell.innerText();
-  if (page.viewportSize()!.width <= 760) await statusCell.tap();
-  else await statusCell.dblclick();
-  const editorOptions = page.getByRole("listbox");
-  await expect(editorOptions).toBeVisible();
-  await page.keyboard.press("Tab");
-  await expect(editorOptions).toBeHidden();
-  await expect(page.locator(".record-table__cell-editor-popover")).toHaveCount(0);
-  await expect(statusCell).toBeFocused();
-  await expect(statusCell).toHaveText(originalStatus);
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Options", exact: true }).click();
-  const options = page.getByRole("dialog", { name: "Table options", exact: true });
-  await expectInViewport(page, options);
-  await options.getByRole("radio", { name: "Comfortable", exact: true }).click();
-  await expect(options.getByRole("radio", { name: "Comfortable", exact: true })).toHaveAttribute("aria-checked", "true");
-  await page.keyboard.press("Escape");
-  await expect(options).toBeHidden();
-  await page.getByRole("button", { name: "Sort", exact: true }).click();
-  const sort = page.getByRole("dialog", { name: "Sort records", exact: true });
-  await expectInViewport(page, sort);
-  await sort.getByRole("button", { name: "Add sort", exact: true }).click();
-  await expectInViewport(page, sort);
-  await page.keyboard.press("Escape");
-  await expect(sort).toBeHidden();
+  await expect(recordRows(page).first()).toBeVisible();
+  // Phones list members as cards and keep layout, density, sort and fields
+  // in one "View options" sheet beside Filter.
+  const phoneSheet = await openPhoneViewOptions(page);
+  if (phoneSheet) {
+    await expectInViewport(page, phoneSheet);
+    await phoneSheet.getByRole("radio", { name: "Comfortable", exact: true }).click();
+    await expect(phoneSheet.getByRole("radio", { name: "Comfortable", exact: true })).toHaveAttribute("aria-checked", "true");
+    await phoneSheet.getByRole("button", { name: "Add sort", exact: true }).click();
+    await expect(phoneSheet.locator(".record-table__sort-row")).toHaveCount(1);
+    await expectInViewport(page, phoneSheet);
+    await closePhoneViewOptions(page);
+  } else {
+    const statusCell = page.locator(".record-table__row").first().locator('[data-field-name="status"]');
+    const originalStatus = await statusCell.innerText();
+    if (page.viewportSize()!.width <= 760) await statusCell.tap();
+    else await statusCell.dblclick();
+    const editorOptions = page.getByRole("listbox");
+    await expect(editorOptions).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(editorOptions).toBeHidden();
+    await expect(page.locator(".record-table__cell-editor-popover")).toHaveCount(0);
+    await expect(statusCell).toBeFocused();
+    await expect(statusCell).toHaveText(originalStatus);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Options", exact: true }).click();
+    const options = page.getByRole("dialog", { name: "Table options", exact: true });
+    await expectInViewport(page, options);
+    await options.getByRole("radio", { name: "Comfortable", exact: true }).click();
+    await expect(options.getByRole("radio", { name: "Comfortable", exact: true })).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    await expect(options).toBeHidden();
+    await page.getByRole("button", { name: "Sort", exact: true }).click();
+    const sort = page.getByRole("dialog", { name: "Sort records", exact: true });
+    await expectInViewport(page, sort);
+    await sort.getByRole("button", { name: "Add sort", exact: true }).click();
+    await expectInViewport(page, sort);
+    await page.keyboard.press("Escape");
+    await expect(sort).toBeHidden();
+  }
   await page.getByRole("button", { name: "Filter", exact: true }).click();
   await expectInViewport(page, page.locator(".record-table__filter-popover"));
+  await page.keyboard.press("Escape");
   await chooseViewType(page, "Kanban view");
   await expect(page.locator(".kanban")).toBeVisible();
   await chooseViewType(page, "Calendar view");
   await expect(page.locator(".calendar-view")).toBeVisible();
   await chooseViewType(page, "Table view");
-  await expect(page.locator(".record-table__row").first()).toBeVisible();
+  await expect(recordRows(page).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 });
 
@@ -331,17 +345,31 @@ test("saved view writes stay disabled for Member and Viewer while local sorting 
   const closeNavigation = async () => {
     if (page.viewportSize()!.width < 980) await page.keyboard.press("Escape");
   };
+  // Sorting locally makes the view unsaved. Phones sort from the View
+  // options sheet (no column headers on member cards), where "Select
+  // records" would also sit for roles that may select.
+  const sortLocally = async ({ selectable }: { selectable: boolean }) => {
+    const sheet = await openPhoneViewOptions(page);
+    if (!sheet) {
+      await page.locator(".record-table__header-row").getByRole("button", { name: "First name", exact: true }).click();
+      return;
+    }
+    await sheet.getByRole("button", { name: "Add sort", exact: true }).click();
+    await expect(sheet.locator(".record-table__sort-row").first()).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Select records", exact: true })).toHaveCount(selectable ? 1 : 0);
+    await closePhoneViewOptions(page);
+  };
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
   await palette.getByRole("combobox").fill("Members");
   await palette.getByRole("option", { name: /^Members/ }).first().click();
-  await expect(page.locator(".record-table__row").first()).toBeVisible();
+  await expect(recordRows(page).first()).toBeVisible();
   for (const role of ["Member", "Viewer"]) {
     await openPicker();
     await page.getByRole("listbox", { name: "Acting user", exact: true }).getByText(`Interface Table ${role}`, { exact: true }).click();
     await closeNavigation();
-    await expect(page.locator(".record-table__row").first()).toBeVisible();
-    await page.locator(".record-table__header-row").getByRole("button", { name: "First name", exact: true }).click();
+    await expect(recordRows(page).first()).toBeVisible();
+    await sortLocally({ selectable: false });
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Save as", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Discard", exact: true })).toBeEnabled();
@@ -351,8 +379,8 @@ test("saved view writes stay disabled for Member and Viewer while local sorting 
   await openPicker();
   await page.getByText("Owner", { exact: true }).click();
   await closeNavigation();
-  await expect(page.locator(".record-table__row").first()).toBeVisible();
-  await page.locator(".record-table__header-row").getByRole("button", { name: "First name", exact: true }).click();
+  await expect(recordRows(page).first()).toBeVisible();
+  await sortLocally({ selectable: true });
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Save as", exact: true })).toBeEnabled();
 });
@@ -360,18 +388,22 @@ test("saved view writes stay disabled for Member and Viewer while local sorting 
 
 test("phone touch selection reaches bulk actions without changing the default frozen table", async ({ page }) => {
   await page.goto("/demo/app/members");
-  await expect(page.locator(".record-table__row").first()).toBeVisible();
+  await expect(recordRows(page).first()).toBeVisible();
   const select = page.getByRole("button", { name: "Select records", exact: true });
   if (page.viewportSize()!.width > 760) {
     await expect(select).toHaveCount(0);
     await expect(page.locator(".record-table__checkbox-cell").first()).toBeVisible();
     return;
   }
+  // Phones list members as cards: while selecting, each card is one tap
+  // target (`.record-cards__select`) holding its checkbox.
+  const selectTargets = page.locator(".record-table__mobile-selection-checkbox, .record-cards__select");
   await expect(page.locator(".record-table__checkbox-cell")).toHaveCount(0);
-  await expect(page.locator(".record-table__mobile-selection-checkbox")).toHaveCount(0);
-  // Phones keep "Select records" in the table's Options menu; the row then
+  await expect(selectTargets).toHaveCount(0);
+  // Phones keep "Select records" in the View options sheet; the toolbar then
   // shows an "Exit selection" toggle while selecting.
-  const exit = page.getByRole("button", { name: "Exit selection", exact: true });
+  // Phones label it "Done" (titled "Exit selection"); tablets "Exit selection".
+  const exit = page.locator(".record-table__toolbar").getByRole("button", { name: /^(Exit selection|Done)$/ });
   const toggle = await revealSelectRecords(page);
   await toggle.focus();
   await page.keyboard.press("Space");
@@ -387,11 +419,11 @@ test("phone touch selection reaches bulk actions without changing the default fr
   await expect(exit).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Bulk actions", exact: true })).toHaveCount(0);
   await (await revealSelectRecords(page)).tap();
-  const checkboxes = page.locator(".record-table__mobile-selection-checkbox input");
-  await expect.poll(() => checkboxes.first().evaluate((element) => element.closest("td")!.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  const checkboxes = selectTargets.locator("input");
+  await expect.poll(() => checkboxes.first().evaluate((element) => element.closest("td, .record-cards__item")!.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
   await expect.poll(() => checkboxes.first().evaluate((element) => element.closest("label")!.getBoundingClientRect().width)).toBeGreaterThanOrEqual(44);
-  await checkboxes.nth(0).tap();
-  await checkboxes.nth(1).tap();
+  await selectTargets.nth(0).tap();
+  await selectTargets.nth(1).tap();
   await expect(checkboxes.nth(0)).toBeChecked();
   await expect(checkboxes.nth(1)).toBeChecked();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -404,10 +436,10 @@ test("phone touch selection reaches bulk actions without changing the default fr
   await expectInViewport(page, edit);
   await edit.getByRole("button", { name: "Cancel", exact: true }).tap();
   await expect(edit).toBeHidden();
-  await page.getByRole("button", { name: "Exit selection", exact: true }).tap();
+  await exit.tap();
   await expect(bulk).toHaveCount(0);
   await expect(checkboxes).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Exit selection", exact: true })).toHaveCount(0);
+  await expect(exit).toHaveCount(0);
   await expect(page.locator(".record-table__checkbox-cell")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -446,7 +478,8 @@ test("workflow preparation is readable for Viewer while workflow and package wri
   await expect(page.locator(".record-table__cell--editable")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^(Pause|Resume)$/, includeHidden: true }).first()).toBeDisabled();
   await expect(page.getByRole("button", { name: /^Remove /, includeHidden: true }).first()).toBeDisabled();
-  await page.locator(".record-table__identifier-button").first().click();
+  // A table row opens from its identifier; a phone card is itself the button.
+  await page.locator(".record-table__identifier-button, .record-phone-card").first().click();
   const preview = page.getByRole("dialog");
   if (await preview.count()) await preview.getByRole("button", { name: /^Open/ }).click();
   if (page.viewportSize()!.width <= 620) {

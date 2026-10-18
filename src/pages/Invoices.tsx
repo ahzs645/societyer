@@ -521,6 +521,10 @@ export function InvoicesPage() {
                   <tr
                     key={row._id}
                     className={[selected.has(row._id) ? "is-selected" : "", row._id === openId ? "is-open" : "", row.status === "void" ? "is-void" : ""].filter(Boolean).join(" ") || undefined}
+                    // Phone cards show one amount when the balance due is the
+                    // whole total (or nothing is owed), and label both when
+                    // part has been paid.
+                    data-amounts={row.status !== "void" && row.status !== "paid" && row.balanceCents !== row.totalCents ? "split" : "single"}
                     onClick={() => setParam({ invoice: row._id })}
                   >
                     <td className="invoice-table__check" onClick={(event) => event.stopPropagation()}>

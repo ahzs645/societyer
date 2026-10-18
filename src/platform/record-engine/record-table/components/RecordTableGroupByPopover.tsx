@@ -62,6 +62,20 @@ export function RecordTableGroupByPopover({
   onClose: () => void;
   anchorRef: RefObject<HTMLElement | null>;
 }) {
+  if (!open) return null;
+
+  return (
+    <ViewportPopover open onClose={onClose} anchorRef={anchorRef} label="Group records" className="record-table__menu record-table__menu--right record-table__group-popover">
+      <RecordTableGroupByEditor />
+    </ViewportPopover>
+  );
+}
+
+/**
+ * The group-by sections: the body of the Group popover, and of the Group
+ * section in the phone "View options" sheet.
+ */
+export function RecordTableGroupByEditor() {
   const columns = useRecordTableState((s) => s.columns);
   const viewGroups = useRecordTableState((s) => s.viewGroups);
   const collapsedCount = useRecordTableState((s) => s.collapsedGroupKeys.size);
@@ -72,14 +86,12 @@ export function RecordTableGroupByPopover({
   const column = groupBy ? columns.find((entry) => entry.fieldMetadataId === groupBy.fieldMetadataId) : undefined;
   const orders = orderOptions(column, columns);
 
-  if (!open) return null;
-
   const setGroupBy = (next: ViewGroupBy | null) => {
     handle.get().setViewGroups(withViewGroupBy(handle.get().viewGroups, next));
   };
 
   return (
-    <ViewportPopover open onClose={onClose} anchorRef={anchorRef} label="Group records" className="record-table__menu record-table__menu--right record-table__group-popover">
+    <>
       <div className="record-table__menu-section">
         <label className="record-table__menu-label" htmlFor="record-table-group-field">
           Group by
@@ -172,6 +184,6 @@ export function RecordTableGroupByPopover({
           </button>
         </div>
       )}
-    </ViewportPopover>
+    </>
   );
 }

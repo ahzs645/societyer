@@ -57,6 +57,7 @@ import { SourceMinutesContext, sourceIsProposal } from "./SourceMinutesContext";
 import { MeetingAttendanceGrid } from "./MeetingAttendanceGrid";
 import { meetingNotYetHeld } from "../lib/noticeWindow";
 import { MeetingActionItemsCard } from "./MeetingActionItemsCard";
+import { TranscriptTimeChip } from "../transcript/TranscriptTimeChip";
 import { AgendaItemDetailsModal, requestedActionLabel } from "./AgendaItemDetailsModal";
 import { Tooltip } from "../../../components/Tooltip";
 
@@ -1021,6 +1022,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                                 motion.secondedBy ? `Seconded by ${motionPersonDisplayName(motion.secondedBy, motionPeople, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}` : "",
                                                 motion.outcome ?? "",
                                               ].filter(Boolean).join(" · ")}
+                                              <TranscriptTimeChip transcriptRef={motion.transcriptRef} label={motion.name || motion.text} />
                                             </span>
                                           </div>
                                         ))}
@@ -1034,6 +1036,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                       {section.actionItems.map((item: any, actionIndex: number) => (
                                         <li key={actionIndex}>
                                           {item.assignee ? `${item.assignee}: ` : ""}{item.text}
+                                          <TranscriptTimeChip transcriptRef={item.transcriptRef} label={item.text} />
                                         </li>
                                       ))}
                                     </ul>

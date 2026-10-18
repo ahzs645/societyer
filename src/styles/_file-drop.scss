@@ -1,0 +1,187 @@
+@use "tokens" as *;
+
+/* Shared file drop zone (src/components/FileDropZone.tsx).
+ * States arrive as .is-idle / .is-over / .is-over-reject / .is-busy / .is-error.
+ * The dashed outline is an SVG rect so its dash offset can animate while a
+ * file is held over the zone; a CSS dashed border can't. */
+
+@keyframes file-drop-march {
+  to { stroke-dashoffset: -12; }
+}
+@keyframes file-drop-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+.file-drop {
+  --file-drop-stroke: #{token(border-strong)};
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: token(s-3);
+  padding: token(s-3);
+  border-radius: token(r-card);
+  background: token(bg-subtle);
+  cursor: pointer;
+  transition:
+    background-color token(motion-fade-fast) token(ease-fade),
+    transform token(motion-move-fast) token(ease-move);
+
+  &:focus-visible {
+    outline: token(focus-ring-width) solid token(focus-ring-color);
+    outline-offset: token(focus-ring-offset);
+  }
+
+  &.is-over {
+    --file-drop-stroke: #{token(accent)};
+    background: token(accent-soft);
+    transform: scale(1.01);
+  }
+  &.is-over-reject {
+    --file-drop-stroke: #{token(danger)};
+    background: token(danger-soft);
+  }
+  &.is-error { --file-drop-stroke: #{token(danger)}; }
+  &.is-busy { cursor: progress; }
+  &.is-disabled {
+    cursor: default;
+    opacity: 0.75;
+  }
+}
+
+.file-drop__border {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+
+  rect {
+    rx: token(r-card);
+    ry: token(r-card);
+    fill: none;
+    stroke: var(--file-drop-stroke);
+    stroke-width: 1;
+    stroke-dasharray: 6 6;
+    transition: stroke token(motion-fade-fast) token(ease-fade);
+  }
+  .file-drop.is-over & rect {
+    stroke-width: 1.5;
+    animation: file-drop-march 0.6s linear infinite;
+  }
+}
+
+.file-drop__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: token(r-pill);
+  background: token(bg-panel);
+  color: token(text-secondary);
+  transition:
+    transform token(motion-move-fast) token(ease-move),
+    color token(motion-fade-fast) token(ease-fade);
+
+  .file-drop.is-over & {
+    color: token(accent);
+    transform: translateY(-3px);
+  }
+  .file-drop.is-over-reject & { color: token(danger); }
+}
+
+.file-drop__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-1) token(s-2);
+  min-width: 0;
+  font-size: token(fs-sm);
+}
+.file-drop__title { color: token(text-primary); }
+.file-drop.is-over-reject .file-drop__title { color: token(danger); }
+.file-drop__title-touch { display: none; }
+.file-drop__hint,
+.file-drop__error,
+.file-drop__progress {
+  flex-basis: 100%;
+  font-size: token(fs-xs);
+}
+.file-drop__error { color: token(danger); }
+
+.file-drop__progress {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: token(r-pill);
+  background: token(bg-muted);
+}
+.file-drop__progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: token(accent);
+  transition: width token(motion-move) token(ease-move);
+
+  .file-drop__progress.is-indeterminate & {
+    width: 40%;
+    animation: file-drop-indeterminate 1.2s token(ease-move) infinite;
+  }
+}
+
+/* A wider area wired with useFileDrop behind a compact upload button (a
+ * drawer body, a dense card): no chrome of its own until a file is held over
+ * it, then the same accent (or danger) wash and dashed edge as the zone. The
+ * outline sits just inside the box so scroll containers don't clip it. */
+.file-drop-target {
+  outline: 1.5px dashed transparent;
+  outline-offset: -1.5px;
+  transition:
+    background-color token(motion-fade-fast) token(ease-fade),
+    outline-color token(motion-fade-fast) token(ease-fade);
+
+  &.is-over {
+    outline-color: token(accent);
+    background-color: token(accent-soft);
+  }
+  &.is-over-reject {
+    outline-color: token(danger);
+    background-color: token(danger-soft);
+  }
+}
+/* A bare region (a drawer body's content) has no shape of its own: round
+ * it, and fill a flex parent so the space below the content takes drops too.
+ * A card keeps its own radius. */
+.file-drop-target--fill {
+  min-height: 100%;
+  border-radius: token(r-card);
+}
+
+/* Touch screens can't drag files in: the whole zone is the tap target. */
+@media (hover: none) and (pointer: coarse) {
+  .file-drop {
+    min-height: token(tap-target);
+    padding: token(s-4) token(s-3);
+  }
+  .file-drop__title-pointer { display: none; }
+  .file-drop__title-touch { display: inline; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-drop,
+  .file-drop-target,
+  .file-drop__icon,
+  .file-drop__progress-bar { transition: none; }
+  .file-drop.is-over { transform: none; }
+  .file-drop.is-over .file-drop__icon { transform: none; }
+  .file-drop.is-over .file-drop__border rect { animation: none; }
+  .file-drop__progress.is-indeterminate .file-drop__progress-bar {
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
+}

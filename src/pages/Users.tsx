@@ -100,7 +100,7 @@ export function UsersPage() {
           </summary>
           <div className="access-summary__body">
             {permissions.map((p) => (
-              <code key={p} className="chip" style={{ fontSize: 11 }}>{p}</code>
+              <code key={p} className="chip chip--sm">{p}</code>
             ))}
           </div>
         </details>

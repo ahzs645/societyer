@@ -9,6 +9,8 @@ import { useToast } from "@/components/Toast";
 import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, statusForNewMeeting } from "../lib/noticeWindow";
 import { normalizedMeetingTitle, suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
 import {
+  MEETING_CONFLICT_NOTE_ID,
+  MeetingConflictFooterNote,
   MeetingFormFields,
   blankMeetingDraft,
   makeMeetingDraft,
@@ -49,9 +51,8 @@ function MeetingCreateModalForm({
   const [form, setForm] = useState<MeetingDraft>(() => blankMeetingDraft());
   const data = useMeetingFormData(societyId, open ? form.scheduledAt : undefined);
   const [saving, setSaving] = useState(false);
-  const hasUnacknowledgedConflict =
-    meetingScheduleConflicts(data.meetings, form.scheduledAt).length > 0 &&
-    !form.conflictAcknowledged;
+  const conflictCount = meetingScheduleConflicts(data.meetings, form.scheduledAt).length;
+  const hasUnacknowledgedConflict = conflictCount > 0 && !form.conflictAcknowledged;
 
   // Refresh the draft when the dialog opens. Re-run once the default template /
   // notice window load so the fresh draft reflects them.
@@ -86,7 +87,7 @@ function MeetingCreateModalForm({
     const past = isPastMeeting(form.scheduledAt);
     setSaving(true);
     try {
-      const { conflictAcknowledged: _conflictAcknowledged, committeeId, ...payload } = form;
+      const { conflictAcknowledged: _conflictAcknowledged, recordKindPicked: _recordKindPicked, committeeId, ...payload } = form;
       const meetingId = await create({
         societyId,
         ...payload,
@@ -119,10 +120,17 @@ function MeetingCreateModalForm({
       resizeKey="meeting-create"
       footer={
         <>
+          <MeetingConflictFooterNote count={hasUnacknowledgedConflict ? conflictCount : 0} />
           <button className="btn" type="button" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn btn--accent" type="button" onClick={save} disabled={!canCreate || saving || hasUnacknowledgedConflict}>
+          <button
+            className="btn btn--accent"
+            type="button"
+            onClick={save}
+            disabled={!canCreate || saving || hasUnacknowledgedConflict}
+            aria-describedby={hasUnacknowledgedConflict ? MEETING_CONFLICT_NOTE_ID : undefined}
+          >
             {saving ? createLabels.busy : createLabels.action}
           </button>
         </>

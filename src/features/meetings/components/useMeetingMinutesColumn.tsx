@@ -65,6 +65,7 @@ import type {
 
 import { minutesPresentCount } from "../../../../shared/meetingAttendanceGrid";
 import { Tooltip } from "../../../components/Tooltip";
+import { motionTranscriptChip } from "../transcript/TranscriptTimeChip";
 
 export type MeetingMinutesColumnProps = {
   minutes: any;
@@ -1443,6 +1444,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               people={motionPeople}
               adoptionTargets={adoptionTargets}
               directoryPeople={props.directoryPeople as any}
+              renderMotionAccessory={motionTranscriptChip}
               agendaSections={sections.map((section: any) => ({
                 title: section.title || "Untitled section",
                 discussion: section.discussion ?? "",

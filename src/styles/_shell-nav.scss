@@ -884,14 +884,184 @@
   }
 }
 
-/* 320px phones: five bottom-nav labels fit without ellipsis. */
+/* ---------- Phone/tablet "More" drawer ----------------------- */
+
+/* Phones: the drawer is a bottom sheet (geometry in _layout-workbench).
+ * Grabber, then the header (workspace switcher + AI), then the list, which
+ * scrolls on its own and never chains its scroll to the page; the footer
+ * stays at the sheet's bottom edge. */
+@media (max-width: 768px) {
+  .app-shell.is-mobile .sidebar > .sheet-grabber {
+    padding-bottom: token('s-1');
+  }
+  .app-shell.is-mobile .sidebar > .sheet-grabber + .sidebar__brand {
+    padding-top: 0;
+    min-height: 0;
+    /* A drag starting here moves the sheet (up to expand, down to close). */
+    touch-action: none;
+  }
+  /* A full-width sheet leaves the name room to spare; keep it beside the
+   * logo rather than centred in the button. */
+  .app-shell.is-mobile .sidebar__brand-name {
+    text-align: start;
+  }
+  .app-shell.is-mobile .sidebar .sidebar__nav {
+    overscroll-behavior: contain;
+  }
+}
+
+/* The Favorites wrapper only lays out on phones (the tile grid); elsewhere
+ * its rows sit in the nav column as if it weren't there. */
+.sidebar__favorites {
+  display: contents;
+}
+
+/* The nav filter leads the drawer and stays pinned while the list scrolls.
+ * It bleeds to the nav's edges so rows scroll out of sight under it. */
+/* Sticky offsets count from inside the nav's padding, so it sticks at
+ * -padding to sit flush with the nav's top edge. */
+.app-shell.is-mobile .sidebar__drawer-search {
+  position: sticky;
+  top: calc(-1 * #{token('s-3')});
+  z-index: 2;
+  @include flex-column;
+  gap: token('s-2');
+  flex-shrink: 0;
+  margin: calc(-1 * #{token('s-3')}) calc(-1 * #{token('s-5')}) 0;
+  padding: token('s-3') token('s-5') token('s-2');
+  background: token('bg-app');
+}
+/* A short fade under the pinned filter instead of a hard edge. */
+.app-shell.is-mobile .sidebar__drawer-search::after {
+  content: "";
+  position: absolute;
+  inset: 100% 0 auto;
+  height: token('s-2');
+  background: linear-gradient(token('bg-app'), transparent);
+  pointer-events: none;
+}
+.app-shell.is-mobile .sidebar__drawer-search .sidebar__nav-filter {
+  height: token('tap-target');
+  margin: 0;
+  padding: 0 token('s-1') 0 token('s-3');
+  gap: token('s-2');
+  border-radius: token('r-md');
+}
+.app-shell.is-mobile .sidebar__drawer-search .sidebar__nav-filter input {
+  height: 100%;
+}
+.app-shell.is-mobile .sidebar__drawer-search .sidebar__nav-filter button {
+  width: 36px;
+  height: 36px;
+}
+
+/* The area choice (All · Governance · Finance) narrows the list below, so on
+ * phones it reads as quiet scope chips under the filter rather than a heavy
+ * segmented control above everything. Typing searches every area, so the
+ * chips step aside while there is a query. */
+.app-shell.is-mobile .sidebar__drawer-search .sidebar-area {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  gap: token('s-2');
+  background: transparent;
+}
+.app-shell.is-mobile .sidebar__drawer-search .sidebar-area__btn {
+  position: relative;
+  @include tap-area(block);
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 token('s-3');
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-pill');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+
+  &.is-active {
+    border-color: transparent;
+    background: token('bg-selected-alpha');
+    color: token('text-primary');
+    box-shadow: none;
+  }
+}
+
+/* The first heading under the pinned filter doesn't need its own top gap. */
+.app-shell.is-mobile .sidebar__drawer-search + .sidebar__section {
+  padding-top: 0;
+}
+
+/* In the drawer the Operations desk sits inside the nav, which already
+ * carries the side padding. */
+.app-shell.is-mobile .sidebar__nav > .sidebar__spotlight {
+  padding-inline: 0;
+}
+
+/* Favorites as a two-column grid of tiles: icon, label (up to two lines),
+ * count. Edit mode switches back to the list for the reorder controls. */
+.app-shell.is-mobile .sidebar__favorites--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-2');
+}
+.app-shell.is-mobile .sidebar__favorites--grid .sidebar__favorite-end-zone {
+  display: none;
+}
+.app-shell.is-mobile .sidebar__favorites--grid > .sidebar__item-slot {
+  min-width: 0;
+}
+.app-shell.is-mobile .sidebar__favorites--grid > .sidebar__item-slot > :is(.sidebar__item, .sidebar__nav-item) {
+  position: relative;
+  min-height: 52px;
+  height: 100%;
+  padding: 6px 6px 6px token('s-2');
+  gap: token('s-2');
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  font-size: token('fs-md');
+  white-space: normal;
+
+  &.is-active {
+    border-color: transparent;
+    background: token('bg-selected-alpha');
+  }
+}
+.app-shell.is-mobile .sidebar__favorites--grid :is(.sidebar__label, .sidebar__nav-label) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.25;
+  white-space: normal;
+}
+.app-shell.is-mobile .sidebar__favorites--grid .sidebar__item:has(.sidebar__count) .sidebar__label {
+  padding-right: 18px;
+}
+.app-shell.is-mobile .sidebar__favorites--grid :is(.sidebar__icon-chip, .sidebar__nav-icon) {
+  flex-shrink: 0;
+}
+/* A half tile leaves no room for a count beside the label, so it sits as a
+ * badge in the tile's top corner. */
+.app-shell.is-mobile .sidebar__favorites--grid .sidebar__count {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  justify-content: center;
+  font-size: token('fs-tiny');
+  line-height: 18px;
+}
+
+/* 320-360px phones: the five bottom-nav labels get the full bar width
+ * (slots share it by label length, see _layout-workbench). */
 @media (max-width: 360px) {
   .bottom-nav {
     padding-inline: max(#{token('s-1')}, env(safe-area-inset-left, 0px));
   }
   .bottom-nav__item {
     margin-inline: 0;
-    padding-inline: 0;
     letter-spacing: -0.01em;
   }
 }

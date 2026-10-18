@@ -321,7 +321,8 @@
   }
 
   .global-ai-body {
-    grid-template-columns: 1fr;
+    /* minmax(0, …): a long thread title must not widen the column past the screen. */
+    grid-template-columns: minmax(0, 1fr);
     /* The chat row takes what the thread strip leaves and no more, so the
      * composer stays inside the drawer when the keyboard shortens it. */
     grid-template-rows: auto minmax(0, 1fr);

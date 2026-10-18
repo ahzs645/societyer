@@ -86,6 +86,11 @@ assert.equal(
   manyColumns,
   "desktop renders the full set (same reference, no copy)",
 );
+assert.deepEqual(
+  limitColumnsForPhone(["status", "date", "name", "email"], true, (column) => column === "name"),
+  ["name", "status", "date"],
+  "phone keeps the identifier column first plus the leading others",
+);
 const fewColumns = ["name", "status"];
 assert.equal(
   limitColumnsForPhone(fewColumns, true),
@@ -133,8 +138,13 @@ assert.match(
 );
 assert.match(
   recordTableCellSource,
-  /isMobile && canEdit && !isLabelIdentifier[\s\S]*startEdit\(\)/,
-  "phone table cells enter edit mode from one tap while the identifier remains a record-open action",
+  /const tapOpensRecord = isMobile && !!tableCtx\.onRecordClick;[\s\S]*const canInlineEdit = canEdit && !tapOpensRecord;/,
+  "phone taps open the record (no inline editor) whenever the table can open one",
+);
+assert.match(
+  recordTableCellSource,
+  /isMobile && canInlineEdit && !isLabelIdentifier[\s\S]*startEdit\(\)/,
+  "phone tables without a record to open still edit a field from one tap",
 );
 assert.match(
   recordTableCellSource,

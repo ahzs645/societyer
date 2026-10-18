@@ -13,6 +13,15 @@ export type SharePointAdapterDependencies = { token: GraphTokenSupplier; fetch?:
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const CHUNK = 320 * 1024;
 
+function expectsNextChunk(ranges: unknown, nextStart: number, totalBytes: number): boolean {
+  if (!Array.isArray(ranges) || ranges.length !== 1 || typeof ranges[0] !== "string") return false;
+  const range = /^(\d+)-(\d*)$/.exec(ranges[0]);
+  if (!range || Number(range[1]) !== nextStart) return false;
+  if (!range[2]) return true;
+  const lastByte = Number(range[2]);
+  return Number.isSafeInteger(lastByte) && lastByte >= nextStart && lastByte < totalBytes;
+}
+
 function identifier(value: string): string {
   if (!value || value.length > 512 || /[\x00-\x1f]/.test(value)) throw new Error("Invalid SharePoint resource identifier.");
   return encodeURIComponent(value);
@@ -133,7 +142,7 @@ export class SharePointAdapter {
         if (end < bytes.byteLength) {
           if (response.status !== 202) throw new Error("Graph resumable upload did not accept a bounded chunk.");
           const progress = await this.json(response);
-          if (!Array.isArray(progress.nextExpectedRanges) || progress.nextExpectedRanges[0] !== `${end}-`) throw new Error("Graph resumable upload returned an unexpected chunk position.");
+          if (!expectsNextChunk(progress.nextExpectedRanges, end, bytes.byteLength)) throw new Error("Graph resumable upload returned an unexpected chunk position.");
         } else {
           if (!response.ok || response.status === 202) throw new Error("Graph resumable upload did not finalize.");
           const item = this.item(await this.json(response));

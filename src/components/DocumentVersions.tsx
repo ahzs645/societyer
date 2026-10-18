@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useState, type DragEvent } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { Drawer, Field, Badge } from "./ui";
+import { FileDropZone, useFileDrop } from "./FileDropZone";
 import { useToast } from "./Toast";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
@@ -12,7 +13,7 @@ import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { getRestoredFile } from "../lib/workspaceArchiveFiles";
 import { triggerBlobDownload } from "../lib/zip";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
-import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
+import { isDocumentVersionStorageEnabled } from "../lib/runtimeMode";
 
 export function DocumentVersionsDrawer({
   open,
@@ -41,12 +42,9 @@ export function DocumentVersionsDrawer({
   const toast = useToast();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
-  const fileRef = useRef<HTMLInputElement | null>(null);
   const [changeNote, setChangeNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const nativeStorage = isNativeFileStorageEnabled();
-
-  if (!documentId) return null;
+  const nativeStorage = isDocumentVersionStorageEnabled();
 
   const handleFile = async (file: File) => {
     if (!documentId || !canEdit || busy) return;
@@ -72,9 +70,28 @@ export function DocumentVersionsDrawer({
       toast.error(err?.message ?? "Upload failed");
     } finally {
       setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   };
+
+  // Any file type, no size cap here (the storage provider enforces its own).
+  // The footer button opens the picker; dropping a file anywhere on the drawer
+  // body uploads it too. No paste: an image pasted into the change note would
+  // silently become a new version.
+  const drop = useFileDrop({
+    disabled: !nativeStorage || busy || !canEdit,
+    onFiles: (files) => handleFile(files[0]),
+  });
+  // The empty state has its own full zone inside the body; leave its drags to it.
+  const outsideZone = (event: DragEvent<HTMLElement>) => !(event.target instanceof Element && event.target.closest(".file-drop"));
+  const { onDragEnter, onDragOver, onDragLeave, onDrop } = drop.rootProps;
+  const bodyDropHandlers = {
+    onDragEnter: (event: DragEvent<HTMLElement>) => { if (outsideZone(event)) onDragEnter(event); },
+    onDragOver: (event: DragEvent<HTMLElement>) => { if (outsideZone(event)) onDragOver(event); },
+    onDragLeave: (event: DragEvent<HTMLElement>) => { if (outsideZone(event)) onDragLeave(event); },
+    onDrop: (event: DragEvent<HTMLElement>) => { if (outsideZone(event)) onDrop(event); },
+  };
+
+  if (!documentId) return null;
 
   const download = async (versionId: Id<"documentVersions">) => {
     const restored = await getRestoredFile({ versionId });
@@ -96,15 +113,7 @@ export function DocumentVersionsDrawer({
       footer={
         <>
           {nativeStorage && (
-            <input
-              ref={fileRef}
-              type="file"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
+            <input {...drop.inputProps} />
           )}
           <button className="btn" onClick={onClose}>
             Close
@@ -113,7 +122,7 @@ export function DocumentVersionsDrawer({
             <button
               className="btn btn--accent"
               disabled={busy || !canEdit}
-              onClick={() => fileRef.current?.click()}
+              onClick={drop.open}
             >
               <Upload size={12} /> Upload new version
             </button>
@@ -121,98 +130,109 @@ export function DocumentVersionsDrawer({
         </>
       }
     >
-      {permissions.loaded && !canEdit && <p className="muted">Document editing permission is required to upload or restore versions.</p>}
-      {nativeStorage ? (
-        <Field
-          label="Change note (optional)"
-          hint="Shown alongside this version in history — e.g. 'Board approved v4'."
-        >
-          <input
-            className="input"
-            value={changeNote}
-            onChange={(e) => setChangeNote(e.target.value)}
-            placeholder="What changed?"
-          />
-        </Field>
-      ) : (
-        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-          Native file storage is disabled — new versions can't be uploaded here. Manage the file through a document connector (e.g. Paperless).
-        </div>
-      )}
-
-      <div className="field__label" style={{ marginTop: 16 }}>
-        <History size={14} /> History
-      </div>
-
-      {versions === undefined && <div className="muted">Loading…</div>}
-      {versions && versions.length === 0 && (
-        <div className="empty-state empty-state--sm empty-state--start">
-          {nativeStorage ? "No versions yet. Upload a file to create v1." : "No versions. File storage is disabled on this deployment."}
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-        {(versions ?? []).map((v) => (
-          <div
-            key={v._id}
-            className="panel"
-            style={{
-              padding: 10,
-              border: v.isCurrent
-                ? "1px solid var(--accent)"
-                : "1px solid var(--border)",
-              borderRadius: "var(--r-sm)",
-            }}
+      <div className={`file-drop-target file-drop-target--fill is-${drop.dragState}`} {...(nativeStorage ? bodyDropHandlers : {})}>
+        {permissions.loaded && !canEdit && <p className="muted">Document editing permission is required to upload or restore versions.</p>}
+        {nativeStorage ? (
+          <Field
+            label="Change note (optional)"
+            hint="Shown alongside this version in history — e.g. 'Board approved v4'."
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <strong>v{v.version}</strong>
-              {v.isCurrent && <Badge tone="success">Current</Badge>}
-              <Badge tone="info">{v.storageProvider}</Badge>
-              <div style={{ flex: 1 }} />
-              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                {formatDate(v.uploadedAtISO)}
-              </span>
-            </div>
-            <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
-              <span className="mono">{v.fileName}</span>
-              {v.fileSizeBytes != null && (
-                <span className="muted"> · {formatBytes(v.fileSizeBytes)}</span>
-              )}
-            </div>
-            {v.uploadedByName && (
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                by {v.uploadedByName}
-              </div>
-            )}
-            {v.changeNote && (
-              <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{v.changeNote}</div>
-            )}
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={() => download(v._id).catch((error: any) => toast.error("Could not download version", error?.message ?? String(error)))}
-              >
-                <Download size={12} /> Download
-              </button>
-              {!v.isCurrent && (
-                <button
-                  className="btn btn--ghost btn--sm"
-                  disabled={!canEdit}
-                  onClick={async () => {
-                    try {
-                      await rollback({ versionId: v._id });
-                      toast.success(`Rolled back to v${v.version}`);
-                    } catch (error: any) {
-                      toast.error("Could not restore version", error?.message ?? String(error));
-                    }
-                  }}
-                >
-                  <RotateCcw size={12} /> Restore
-                </button>
-              )}
-            </div>
+            <input
+              className="input"
+              value={changeNote}
+              onChange={(e) => setChangeNote(e.target.value)}
+              placeholder="What changed?"
+            />
+          </Field>
+        ) : (
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            Native file storage is disabled — new versions can't be uploaded here. Manage the file through a document connector (e.g. Paperless).
+          </div>
+        )}
+
+        <div className="field__label" style={{ marginTop: 16 }}>
+          <History size={14} /> History
+        </div>
+
+        {versions === undefined && <div className="muted">Loading…</div>}
+        {versions && versions.length === 0 && (nativeStorage ? (
+          <FileDropZone
+            ariaLabel="Upload the first version"
+            title="No versions yet. Drop a file here to create v1."
+            touchTitle="No versions yet. Upload a file to create v1."
+            busy={busy}
+            disabled={!canEdit}
+            onFiles={(files) => handleFile(files[0])}
+          />
+        ) : (
+          <div className="empty-state empty-state--sm empty-state--start">
+            No versions. File storage is disabled on this deployment.
           </div>
         ))}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+          {(versions ?? []).map((v) => (
+            <div
+              key={v._id}
+              className="panel"
+              style={{
+                padding: 10,
+                border: v.isCurrent
+                  ? "1px solid var(--accent)"
+                  : "1px solid var(--border)",
+                borderRadius: "var(--r-sm)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <strong>v{v.version}</strong>
+                {v.isCurrent && <Badge tone="success">Current</Badge>}
+                <Badge tone="info">{v.storageProvider}</Badge>
+                <div style={{ flex: 1 }} />
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  {formatDate(v.uploadedAtISO)}
+                </span>
+              </div>
+              <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
+                <span className="mono">{v.fileName}</span>
+                {v.fileSizeBytes != null && (
+                  <span className="muted"> · {formatBytes(v.fileSizeBytes)}</span>
+                )}
+              </div>
+              {v.uploadedByName && (
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  by {v.uploadedByName}
+                </div>
+              )}
+              {v.changeNote && (
+                <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{v.changeNote}</div>
+              )}
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => download(v._id).catch((error: any) => toast.error("Could not download version", error?.message ?? String(error)))}
+                >
+                  <Download size={12} /> Download
+                </button>
+                {!v.isCurrent && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    disabled={!canEdit}
+                    onClick={async () => {
+                      try {
+                        await rollback({ versionId: v._id });
+                        toast.success(`Rolled back to v${v.version}`);
+                      } catch (error: any) {
+                        toast.error("Could not restore version", error?.message ?? String(error));
+                      }
+                    }}
+                  >
+                    <RotateCcw size={12} /> Restore
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </Drawer>
   );

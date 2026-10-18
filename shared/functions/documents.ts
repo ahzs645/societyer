@@ -28,6 +28,8 @@ import {
 import { todayDateOnly } from "../dateOnly";
 import { organizationRuleScope } from "../entityRuleScope";
 import { documentPreparationReviewView, isAnnualPacketRecord } from "../preparationDocumentState";
+import { withheldInCameraDocument } from "../minutesPrivacy";
+import { inCameraDocumentTest, publicInCameraDocumentTest } from "./minutesPrivacy";
 
 // Documents are listed whatever their category (finding D-04): categories are
 // an open, normalized model (shared/documentCategories.ts). Only Societyer's
@@ -227,13 +229,41 @@ export function committeeAppointmentIsActive(row: { joinedAt?: string; leftAt?: 
   return Number.isFinite(joined) && joined <= now && left > now;
 }
 
-/** Resolve the authenticated actor once and apply the same ACL to every delivery path. */
-export async function documentAccessPredicate(ctx: PortableQueryCtx, societyId: string) {
+/**
+ * The document rules for the current reader in one workspace: `opens` is the
+ * ACL, and `inCamera` marks documents it opens that hold in-camera content
+ * the reader may not see (security review H1). Lists show those as a
+ * placeholder (`withheldInCameraDocument`); nothing else delivers them.
+ */
+export async function documentReadPolicy(ctx: PortableQueryCtx, societyId: string) {
+  const [context, materials, inCamera] = await Promise.all([
+    documentAccessContextForActor(ctx, societyId),
+    ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    inCameraDocumentTest(ctx, societyId),
+  ]);
+  return {
+    opens: (document: any, access = "view") => !!context && String(document?.societyId) === societyId && canAccessDocument(document, materials, context, access),
+    inCamera: (document: any) => inCamera(document, materials),
+  };
+}
+
+/**
+ * The ACL alone, for checks whose result is itself redacted for in-camera
+ * content afterwards: minutes citing a source the reader may open stay
+ * readable, and `minutesForReader` drops the source copies of in-camera minutes.
+ */
+export async function documentAclPredicate(ctx: PortableQueryCtx, societyId: string) {
   const [context, materials] = await Promise.all([
     documentAccessContextForActor(ctx, societyId),
     ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
   ]);
   return (document: any, access = "view") => !!context && String(document?.societyId) === societyId && canAccessDocument(document, materials, context, access);
+}
+
+/** Resolve the authenticated actor once and apply the same ACL to every delivery path. In-camera material is never delivered. */
+export async function documentAccessPredicate(ctx: PortableQueryCtx, societyId: string) {
+  const policy = await documentReadPolicy(ctx, societyId);
+  return (document: any, access = "view") => policy.opens(document, access) && !policy.inCamera(document);
 }
 
 export async function requireDocumentAccess(ctx: PortableQueryCtx, documentId: string, access = "view") {
@@ -274,8 +304,11 @@ export async function filterDocumentLinkedRows(ctx: PortableQueryCtx, societyId:
 }
 
 export async function publicDocumentAccessPredicate(ctx: PortableQueryCtx, societyId: string) {
-  const materials = await ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-  return (document: any) => String(document?.societyId) === societyId && canAccessDocument(document, materials, { userRole: "Viewer" });
+  const [materials, inCamera] = await Promise.all([
+    ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    publicInCameraDocumentTest(ctx, societyId),
+  ]);
+  return (document: any) => String(document?.societyId) === societyId && canAccessDocument(document, materials, { userRole: "Viewer" }) && !inCamera(document, materials);
 }
 
 /* ------------------------------- handlers --------------------------------- */
@@ -315,7 +348,7 @@ async function listVisibleDocuments(
   omitted: readonly string[],
 ) {
   const principalId = await principalUserId(ctx, societyId);
-  const [docs, linkedMaterials, accessContext] = await Promise.all([
+  const [docs, linkedMaterials, accessContext, inCamera] = await Promise.all([
     // Internal import rows are excluded inside the query, so the local engine
     // never loads their (large) content; `omitted` projects heavy fields away.
     ctx.db
@@ -329,12 +362,17 @@ async function listVisibleDocuments(
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect(),
     documentAccessContextForActor(ctx, societyId, principalId),
+    inCameraDocumentTest(ctx, societyId),
   ]);
   const visible = docs
     .filter((doc) => !isInternalDocumentRecord(doc))
     .filter((doc) => accessContext && canAccessDocument(doc, linkedMaterials, accessContext))
     .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
-  return withPreparationReview(ctx, societyId, visible);
+  const withheld = new Set(visible.filter((doc) => inCamera(doc, linkedMaterials)).map((doc) => String(doc._id)));
+  if (!withheld.size) return withPreparationReview(ctx, societyId, visible);
+  // In-camera material stays in the list, in place, as a placeholder.
+  const reviewed = new Map((await withPreparationReview(ctx, societyId, visible.filter((doc) => !withheld.has(String(doc._id))))).map((doc) => [String(doc._id), doc]));
+  return visible.map((doc) => (withheld.has(String(doc._id)) ? withheldInCameraDocument(doc) : reviewed.get(String(doc._id)) ?? doc));
 }
 
 export async function getPortable(
@@ -342,18 +380,23 @@ export async function getPortable(
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
   const candidate = await ctx.db.get(id, "documents");
-  if (!candidate) return null;
+  // Import bookkeeping rows (sessions, candidates) are never documents to open, as the lists already treat them.
+  if (!candidate || isInternalDocumentRecord(candidate)) return null;
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
   const principalId = await principalUserId(ctx, String(document.societyId));
-  const [linkedMaterials, accessContext] = await Promise.all([
+  const [linkedMaterials, accessContext, inCamera] = await Promise.all([
     ctx.db
       .query("meetingMaterials")
       .withIndex("by_society", (q) => q.eq("societyId", document.societyId))
       .collect(),
     documentAccessContextForActor(ctx, document.societyId, principalId),
+    inCameraDocumentTest(ctx, String(document.societyId)),
   ]);
-  return accessContext && canAccessDocument(document, linkedMaterials, accessContext) ? (await withPreparationReview(ctx, String(document.societyId), [document]))[0] : null;
+  if (!accessContext || !canAccessDocument(document, linkedMaterials, accessContext)) return null;
+  // In-camera material: the reader learns it exists and why it's withheld, never its content (H1).
+  if (inCamera(document, linkedMaterials)) return withheldInCameraDocument(document);
+  return (await withPreparationReview(ctx, String(document.societyId), [document]))[0];
 }
 
 export async function getManyPortable(
@@ -363,7 +406,7 @@ export async function getManyPortable(
   const documents: any[] = [];
   for (const id of ids) {
     const candidate = await ctx.db.get(id, "documents");
-    if (!candidate) continue;
+    if (!candidate || isInternalDocumentRecord(candidate)) continue;
     await requireSocietyMembership(ctx, String(candidate.societyId));
     documents.push(await getOwned(ctx, "documents", id, String(candidate.societyId)));
   }
@@ -372,26 +415,34 @@ export async function getManyPortable(
   const societyIds = Array.from(new Set(documents.map((doc: any) => String(doc.societyId))));
   const materialsBySociety = new Map<string, any[]>();
   const contextBySociety = new Map<string, any>();
+  const inCameraBySociety = new Map<string, Awaited<ReturnType<typeof inCameraDocumentTest>>>();
   for (const societyId of societyIds) {
     const principalId = await principalUserId(ctx, societyId);
-    const [materials, accessContext] = await Promise.all([
+    const [materials, accessContext, inCamera] = await Promise.all([
       ctx.db
         .query("meetingMaterials")
         .withIndex("by_society", (q) => q.eq("societyId", societyId as any))
         .collect(),
       documentAccessContextForActor(ctx, societyId as any, principalId),
+      inCameraDocumentTest(ctx, societyId),
     ]);
     materialsBySociety.set(societyId, materials);
     contextBySociety.set(societyId, accessContext);
+    inCameraBySociety.set(societyId, inCamera);
   }
   const visible = documents.filter((document: any) => {
     const societyId = String(document.societyId);
     const accessContext = contextBySociety.get(societyId);
     return accessContext && canAccessDocument(document, materialsBySociety.get(societyId) ?? [], accessContext);
   });
-  const reviewed = (await Promise.all(societyIds.map(societyId => withPreparationReview(ctx, societyId, visible.filter(document => String(document.societyId) === societyId))))).flat();
+  const isWithheld = (document: any) => {
+    const societyId = String(document.societyId);
+    return inCameraBySociety.get(societyId)?.(document, materialsBySociety.get(societyId) ?? []) ?? false;
+  };
+  const open = visible.filter((document) => !isWithheld(document));
+  const reviewed = (await Promise.all(societyIds.map(societyId => withPreparationReview(ctx, societyId, open.filter(document => String(document.societyId) === societyId))))).flat();
   const byId = new Map(reviewed.map(document => [String(document._id), document]));
-  return visible.map(document => byId.get(String(document._id)));
+  return visible.map(document => (isWithheld(document) ? withheldInCameraDocument(document) : byId.get(String(document._id))));
 }
 
 export async function createPortable(
@@ -596,6 +647,7 @@ export async function reviewQueuesPortable(
       .take(DOCUMENT_QUEUE_RELATED_SCAN_LIMIT),
     documentAccessContextForActor(ctx, societyId, principalId),
   ]);
+  const inCamera = await inCameraDocumentTest(ctx, societyId);
 
   const documentsById = new Map<string, any>();
   for (const doc of [...documentGroups.flat(), ...recentlyOpened]) {
@@ -633,7 +685,11 @@ export async function reviewQueuesPortable(
     }
   }
 
-  const docs = await withPreparationReview(ctx, societyId, [...documentsById.values()]);
+  const listed = [...documentsById.values()];
+  const docs = [
+    ...await withPreparationReview(ctx, societyId, listed.filter((doc) => !inCamera(doc, materials))),
+    ...listed.filter((doc) => inCamera(doc, materials)).map(withheldInCameraDocument),
+  ];
   const annotate = (doc: any) => ({
     _id: doc._id,
     title: doc.title,
@@ -648,6 +704,7 @@ export async function reviewQueuesPortable(
     openCommentCount: openCommentCounts.get(String(doc._id)) ?? 0,
     signatureCount: signatureCounts.get(String(doc._id)) ?? 0,
     linkedToMeetingPackage: materialDocIds.has(String(doc._id)) || !!doc.meetingId,
+    ...(doc.inCameraWithheld ? { inCameraWithheld: doc.inCameraWithheld } : {}),
   });
 
   const annotated = docs.map(annotate);

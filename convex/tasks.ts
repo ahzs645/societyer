@@ -59,6 +59,8 @@ export const create = authorizedMutation("tasks:create", mutation)({
     eventId: v.optional(v.string()),
     tags: v.array(v.string()),
     checklist: v.optional(v.array(v.object({ id: v.string(), title: v.string(), done: v.boolean() }))),
+    /** "Create task from action": the minutes section the action item is in (absent for the minutes' general actions). */
+    minutesSectionIndex: v.optional(v.number()),
   },
   returns: v.any(),
   handler: async (ctx, args) => taskCreate(await toPortableMutationCtx(ctx), args),

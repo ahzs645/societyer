@@ -28,7 +28,7 @@ test("live shared navigation and command palette retain keyboard focus on every 
   if (page.viewportSize()!.width < 980) {
     const more = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
     await more.tap();
-    const navigation = page.getByRole("dialog", { name: "navigation", exact: true });
+    const navigation = page.locator("aside.sidebar[role='dialog']");
     await expectInsideViewport(page, navigation);
     await page.keyboard.press("Shift+Tab");
     expect(await navigation.evaluate((element) => element.contains(document.activeElement))).toBe(true);

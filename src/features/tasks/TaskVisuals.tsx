@@ -112,7 +112,14 @@ export function TaskPriorityPill({ priority }: { priority: string }) {
 
 export function TaskDue({ dueDate, status, showIcon = false, emptyLabel }: { dueDate?: string; status: string; showIcon?: boolean; emptyLabel?: string }) {
   const info = dueInfo(dueDate, status);
-  if (!info) return emptyLabel ? <span className="task-due task-due--empty">{emptyLabel}</span> : null;
+  if (!info) {
+    return emptyLabel ? (
+      <span className="task-due task-due--empty">
+        <CalendarDays size={12} aria-hidden="true" />
+        {emptyLabel}
+      </span>
+    ) : null;
+  }
   return (
     <span className={`task-due task-due--${info.tone}`} title={info.title}>
       {showIcon && <CalendarDays size={12} aria-hidden="true" />}

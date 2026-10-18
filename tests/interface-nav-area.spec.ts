@@ -5,7 +5,7 @@ test.setTimeout(150_000);
 async function openNavigation(page: Page) {
   if (page.viewportSize()!.width < 980) {
     await page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "navigation", exact: true })).toBeVisible();
+    await expect(page.locator("aside.sidebar[role='dialog']")).toBeVisible();
   }
 }
 
@@ -66,6 +66,10 @@ test("the command palette switches area", async ({ page }) => {
 
 test("the cash-flow Sankey reads by hover, selection and table", async ({ page }) => {
   await page.goto("/demo/app/financials");
+  // Phones fold the chart behind its title (MobileFold); open it first.
+  const fold = page.locator("details.mobile-fold").filter({ hasText: "Where the money came from and went" });
+  await expect(fold.or(page.locator(".cash-flow-sankey")).first()).toBeVisible({ timeout: 60_000 });
+  if (await fold.count()) await fold.locator("summary").click();
   const card = page.locator(".cash-flow-sankey");
   await expect(card).toBeVisible({ timeout: 60_000 });
   await card.scrollIntoViewIfNeeded();

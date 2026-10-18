@@ -71,6 +71,7 @@ import {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -92,7 +93,10 @@ import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { useLocalWorkspaceReady } from "../hooks/useLocalWorkspaceReady";
-import { getDialogFocusables } from "../lib/useDialogFocus";
+import { useDialogFocus } from "../lib/useDialogFocus";
+import { useMediaQuery, useSheetDrag } from "../lib/useSheetDrag";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
+import { backdropDismissProps } from "../lib/floatingLayer";
 import { UserPicker } from "./UserPicker";
 import { RouteAccessGate } from "./RouteAccessGate";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
@@ -108,7 +112,7 @@ import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibilit
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import type { ThemePreference } from "../lib/theme";
 import { applyResolvedTheme } from "../lib/theme";
-import { mobileSidebarMediaQuery } from "../lib/breakpoints";
+import { mobileMediaQuery, mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
 import { useUIStore, type PinnedView } from "../lib/store";
 import { getDesktopBridge } from "../lib/desktopBridge";
@@ -180,6 +184,7 @@ import { ShortcutHint } from "./ShortcutHint";
 import { openShortcutHelp } from "./ShortcutHelp";
 import { navParentForPath, navRouteForPath } from "../lib/navTree";
 import { useGoToShortcuts } from "../hooks/useGoToShortcuts";
+import { useAnchorReveal } from "../hooks/useAnchorReveal";
 import { useNavAreaShell, useSwitchNavArea } from "../hooks/useNavArea";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { BottomNavIndicator } from "./BottomNavIndicator";
@@ -194,6 +199,10 @@ export function Layout() {
     window.matchMedia(mobileSidebarMediaQuery).matches,
   );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  // Phones (<= 768px): "More" is a bottom sheet rather than the tablet's
+  // left drawer. It opens at ~85% of the screen and drags up to full height.
+  const isPhone = useMediaQuery(mobileMediaQuery);
+  const [navSheetExpanded, setNavSheetExpanded] = useState(false);
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   // Mobile "More" drawer: favorites management is behind an explicit Edit mode
   // (declutters rows), and the 90+-item nav catalog gets a local filter.
@@ -234,6 +243,8 @@ export function Layout() {
   );
   const railFlyoutRef = useRef<((id: string, focusFirst: boolean) => void) | null>(null);
   useGoToShortcuts();
+  // `#id` links and deep links open the fold hiding their target.
+  useAnchorReveal();
   const { area: navArea, labels: navAreaLabels } = useNavAreaShell();
   const switchNavArea = useSwitchNavArea();
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -254,7 +265,10 @@ export function Layout() {
   const [operationsDeskMenu, setOperationsDeskMenu] = useState<
     { top: number; left: number } | null
   >(null);
-  const sidebarRef = useRef<HTMLElement | null>(null);
+  // Open on phones/tablets, the drawer is a modal dialog: focus moves in,
+  // Tab stays inside, Escape closes, and focus goes back to the More tab.
+  const sidebarRef = useDialogFocus<HTMLElement>(isMobileNav && mobileSidebarOpen, () => setMobileSidebarOpen(false));
+  const brandNameId = useId();
   const mainRef = useRef<HTMLDivElement | null>(null);
   const topbarRef = useRef<HTMLElement | null>(null);
   const workbenchContentRef = useRef<HTMLDivElement | null>(null);
@@ -491,43 +505,63 @@ export function Layout() {
     if (!mobileSidebarOpen) {
       setFavoritesEditing(false);
       setNavFilter("");
+      setNavSheetExpanded(false);
     }
   }, [mobileSidebarOpen]);
 
+  // The page behind the open drawer/sheet leaves the tab order and the AT
+  // tree (focus trap, Escape and focus return: useDialogFocus above).
   useEffect(() => {
     if (!isMobileNav || !mobileSidebarOpen) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
     const main = mainRef.current as (HTMLDivElement & { inert?: boolean }) | null;
     main?.setAttribute("aria-hidden", "true");
     if (main) main.inert = true;
-    const focusTimer = window.setTimeout(() => {
-      sidebarRef.current?.querySelector<HTMLElement>("button, a")?.focus();
-    }, 0);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest('[role="dialog"],[role="listbox"]') && !sidebarRef.current?.contains(target)) return;
-      if (event.key === "Escape") { event.preventDefault(); setMobileSidebarOpen(false); }
-      if (event.key === "Tab") {
-        const focusable = getDialogFocusables(sidebarRef.current);
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && (document.activeElement === first || !sidebarRef.current?.contains(document.activeElement))) {
-          event.preventDefault(); last?.focus({ preventScroll: true });
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault(); first?.focus({ preventScroll: true });
-        }
-      }
-    };
-    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("keydown", onKey);
-      window.clearTimeout(focusTimer);
       main?.removeAttribute("aria-hidden");
       if (main) main.inert = false;
-      previousFocus?.focus?.();
     };
   }, [isMobileNav, mobileSidebarOpen]);
+
+  // Phone sheet: pull the grabber or header (or the list, once scrolled to
+  // its top) down to dismiss; pull the grabber or header up for full height.
+  const isNavSheet = isMobileNav && isPhone;
+  useSheetDrag(sidebarRef, {
+    enabled: isNavSheet && mobileSidebarOpen,
+    onDismiss: () => setMobileSidebarOpen(false),
+    expand: {
+      expanded: navSheetExpanded,
+      onExpandedChange: setNavSheetExpanded,
+      handle: ".sheet-grabber, .sidebar__brand",
+    },
+  });
+  // The sheet sits on the on-screen keyboard while the nav filter has focus
+  // (--keyboard-inset / --visible-height on <html>).
+  useKeyboardInsetTracking(isNavSheet && mobileSidebarOpen);
+
+  // Opening the phone drawer brings the current page's section into view: its
+  // heading sits just under the pinned filter, or, in a long section, the
+  // current page sits near the bottom of the view. The section is already
+  // expanded (openParents follows the route).
+  useEffect(() => {
+    if (!isMobileNav || !mobileSidebarOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const nav = sidebarRef.current?.querySelector<HTMLElement>(".sidebar__nav");
+      const row = nav?.querySelector<HTMLElement>('.sidebar__tree [aria-current="page"]');
+      if (!nav || !row) return;
+      const navTop = nav.getBoundingClientRect().top;
+      const toContent = (el: Element) => el.getBoundingClientRect().top - navTop + nav.scrollTop;
+      const pinnedHeight = nav.querySelector<HTMLElement>(".sidebar__drawer-search")?.offsetHeight ?? 0;
+      const heading = row.closest(".sidebar__parent")?.querySelector(".sidebar__group-toggle") ?? row;
+      const rowBottom = toContent(row) + row.offsetHeight;
+      const visibleTop = nav.scrollTop + pinnedHeight;
+      const visibleBottom = nav.scrollTop + nav.clientHeight;
+      if (toContent(heading) >= visibleTop && rowBottom <= visibleBottom) return;
+      let target = toContent(heading) - pinnedHeight - 8;
+      if (rowBottom - target > nav.clientHeight) target = rowBottom - nav.clientHeight + 16;
+      nav.scrollTop = Math.max(0, target);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isMobileNav, mobileSidebarOpen, sidebarRef]);
 
   // Keep the persistent mobile top bar out of the tab order + AT tree while a
   // drawer (sidebar or inspector) is open over it — mirrors the main/workbench
@@ -707,6 +741,24 @@ export function Layout() {
   const navFilterQuery = navFilter.trim().toLowerCase();
   // The area switcher narrows the tree; typing in the filter searches every area.
   const areaNavTree = filterEntriesForArea(visibleNavTree, navArea);
+  // Phones: the bottom bar shows the first four pinned pages, so the More
+  // drawer's Favorites leaves them out (they come back while editing, so the
+  // order can still be changed).
+  const bottomBarRoutes = new Set(isMobileNav ? visiblePinnedNav.slice(0, 4).map((item) => item.to) : []);
+  // The Operations desk links Tasks and Deadlines with their counts. In the
+  // drawer those pages already sit in the bottom bar, Favorites or the tree
+  // with the same counts, so it only repeats them, unless it is carrying the
+  // deadlines "Set up" hint.
+  const drawerRoutes = new Set(visiblePinnedNav.map((item) => item.to));
+  for (const entry of areaNavTree) {
+    if (entry.kind === "item") drawerRoutes.add(entry.item.to);
+    else for (const child of entry.children) drawerRoutes.add(child.to);
+  }
+  const deadlinesNeedSetup = Boolean(
+    counts && counts.openDeadlines === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd),
+  );
+  const operationsDeskRepeatsNav =
+    isMobileNav && !deadlinesNeedSetup && drawerRoutes.has("/app/tasks") && drawerRoutes.has("/app/deadlines");
   const displayedNavTree: VisibleNavEntry[] = navFilterQuery
     ? visibleNavTree.flatMap<VisibleNavEntry>((entry) => {
         const matches = (item: NavItem) =>
@@ -1088,6 +1140,102 @@ export function Layout() {
     setNavContextMenu(null);
   };
 
+  // The Operations desk: under the brand on desktop; in the phone drawer it
+  // sits under the nav filter (hidden while filtering) so the filter is the
+  // first thing in the drawer.
+  const operationsDesk =
+    !operationsDeskHidden && !isRail && !operationsDeskRepeatsNav ? (
+      <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
+        <button
+          type="button"
+          className="sidebar__spotlight-toggle"
+          onClick={() => setSpotlightCollapsed((v) => !v)}
+          onContextMenu={handleOperationsDeskContextMenu}
+          aria-expanded={!spotlightCollapsed}
+        >
+          <span className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</span>
+          <ChevronDown size={12} className="sidebar__spotlight-chevron" />
+        </button>
+        {!spotlightCollapsed && (
+          <>
+            <NavLink
+              to="/app/tasks"
+              className={({ isActive }) =>
+                `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+              }
+            >
+              <span>{t("sidebar.openTasks")}</span>
+              {counts ? <NavCountPill to="/app/tasks" count={counts.openTasks} /> : <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>}
+            </NavLink>
+            <NavLink
+              to="/app/deadlines"
+              className={({ isActive }) =>
+                `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+              }
+            >
+              <span>{t("sidebar.upcomingDeadlines")}</span>
+              {/* P20: "0" looked healthy for an unconfigured workspace;
+                  say that deadlines are not computed yet instead. */}
+              {!counts ? (
+                <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>
+              ) : counts.openDeadlines === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd) ? (
+                <span title="No deadlines are tracked yet. Add the incorporation date and fiscal year end on the organization profile and record held annual meetings to compute statutory deadlines.">
+                  <Pill size="sm" tone="warn">Set up</Pill>
+                </span>
+              ) : (
+                <NavCountPill to="/app/deadlines" count={counts.openDeadlines} />
+              )}
+            </NavLink>
+          </>
+        )}
+      </div>
+    ) : null;
+
+  // While filtering on a phone only the matches show: Favorites, the section
+  // headings, the area chips and the Operations desk step aside.
+  const navFilterOnly = isMobileNav && Boolean(navFilterQuery);
+  // With ~95 routes, type-to-jump beats scrolling. Matches L1 and L2 labels;
+  // matching sections expand.
+  const navFilterField = (
+    <div className="sidebar__nav-filter">
+      <Search size={isMobileNav ? 16 : 13} aria-hidden="true" />
+      <input
+        type="text"
+        value={navFilter}
+        onChange={(event) => {
+          const value = event.target.value;
+          setNavFilter(value);
+          const box = event.currentTarget.parentElement;
+          const nav = box?.closest<HTMLElement>(".sidebar__nav");
+          if (!value || !box || !nav) return;
+          // Phones: the filter is pinned at the top, so the matches start
+          // right under it. Desktop: the filter sits below Favorites; lift it
+          // (and the matches under it) to the top of the scrolling nav.
+          if (isMobileNav) {
+            nav.scrollTop = 0;
+            return;
+          }
+          const offset = box.getBoundingClientRect().top - nav.getBoundingClientRect().top - 36;
+          if (offset > 0) nav.scrollBy({ top: offset });
+        }}
+        // Phone sheet: typing raises the keyboard, so the sheet takes the
+        // full height to keep the matches in view.
+        onFocus={isNavSheet ? () => setNavSheetExpanded(true) : undefined}
+        placeholder={t("sidebar.filterNav", "Filter navigation…")}
+        aria-label={t("sidebar.filterNav", "Filter navigation…")}
+      />
+      {navFilter && (
+        <button
+          type="button"
+          aria-label={t("common.clear", "Clear")}
+          onClick={() => setNavFilter("")}
+        >
+          <X size={isMobileNav ? 16 : 12} />
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <InspectorProvider>
       <CommandPaletteSafe />
@@ -1106,7 +1254,14 @@ export function Layout() {
         {t("sidebar.skipToMain", "Skip to main content")}
       </a>
       <div className={shellClassName}>
-        {isMobileNav && mobileSidebarOpen && (
+        {/* Phones: the sheet's scrim stays mounted so it can fade out with
+          * the sheet (and with the drag). Tablets: the drawer's scrim button. */}
+        {isNavSheet ? (
+          <div
+            className={`sidebar-backdrop sidebar-backdrop--sheet${mobileSidebarOpen ? " is-open" : ""}`}
+            {...backdropDismissProps(() => setMobileSidebarOpen(false))}
+          />
+        ) : isMobileNav && mobileSidebarOpen && (
           <button
             className="sidebar-backdrop"
             onClick={() => setMobileSidebarOpen(false)}
@@ -1126,16 +1281,19 @@ export function Layout() {
           </Tooltip>
         )}
         <aside
-          className="sidebar"
+          className={`sidebar${isNavSheet && navSheetExpanded ? " is-expanded" : ""}`}
           ref={sidebarRef}
           role={isMobileNav && mobileSidebarOpen ? "dialog" : undefined}
           aria-modal={isMobileNav && mobileSidebarOpen || undefined}
-          aria-label={t("sidebar.navigation")}
-          onTouchStart={isMobileNav ? (e) => {
+          // The phone sheet is named after the workspace in its header.
+          aria-labelledby={isNavSheet && mobileSidebarOpen && society?.name ? brandNameId : undefined}
+          aria-label={isNavSheet && mobileSidebarOpen && society?.name ? undefined : t("sidebar.navigation")}
+          tabIndex={isMobileNav && mobileSidebarOpen ? -1 : undefined}
+          onTouchStart={isMobileNav && !isNavSheet ? (e) => {
             const touch = e.touches[0];
             swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
           } : undefined}
-          onTouchEnd={isMobileNav ? (e) => {
+          onTouchEnd={isMobileNav && !isNavSheet ? (e) => {
             const start = swipeStartRef.current;
             swipeStartRef.current = null;
             if (!start || !mobileSidebarOpen) return;
@@ -1146,6 +1304,7 @@ export function Layout() {
             if (dx < -60 && Math.abs(dx) > Math.abs(dy)) setMobileSidebarOpen(false);
           } : undefined}
         >
+          {isNavSheet && <div className="sheet-grabber" aria-hidden="true" />}
           <div className="sidebar__brand">
             <button
               ref={workspaceButtonRef}
@@ -1183,7 +1342,7 @@ export function Layout() {
                   </div>
                 );
               })()}
-              <span className="sidebar__brand-name">{society?.name ?? t("sidebar.selectWorkspace")}</span>
+              <span className="sidebar__brand-name" id={brandNameId}>{society?.name ?? t("sidebar.selectWorkspace")}</span>
               <span className="sidebar__brand-workspace">
                 <ChevronDown size={12} />
               </span>
@@ -1192,12 +1351,14 @@ export function Layout() {
               {/* On mobile the bell + search live in the persistent top bar; keep
                * them out of the drawer to avoid duplicate controls. */}
               {!isMobileNav && <NotificationBellSafe />}
+              {/* Opens the AI assistant chat over the page. Not a duplicate of
+                * the "AI agents" page (where agents are set up). */}
               {!aiChatHidden && (
                 <Tooltip content="AI assistant">
                   <button
-                    className="sidebar__icon-btn"
+                    className="sidebar__icon-btn sidebar__ai-btn"
                     onClick={openGlobalAiAssistant}
-                    aria-label="AI assistant"
+                    aria-label="Open AI assistant"
                   >
                     <Bot size={14} />
                   </button>
@@ -1231,58 +1392,14 @@ export function Layout() {
               )}
             </div>
           </div>
-          {!isRail && <SidebarAreaSwitcher area={navArea} labels={navAreaLabels} onChange={switchNavArea} />}
+          {/* Phones show the area choice as scope chips under the nav filter. */}
+          {!isRail && !isMobileNav && <SidebarAreaSwitcher area={navArea} labels={navAreaLabels} onChange={switchNavArea} />}
           {!isMobileNav && !isRail && (
             <div className="sidebar__setup">
               <SetupPill variant="sidebar" />
             </div>
           )}
-          {!operationsDeskHidden && !isRail && (
-            <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
-              <button
-                type="button"
-                className="sidebar__spotlight-toggle"
-                onClick={() => setSpotlightCollapsed((v) => !v)}
-                onContextMenu={handleOperationsDeskContextMenu}
-                aria-expanded={!spotlightCollapsed}
-              >
-                <span className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</span>
-                <ChevronDown size={12} className="sidebar__spotlight-chevron" />
-              </button>
-              {!spotlightCollapsed && (
-                <>
-                  <NavLink
-                    to="/app/tasks"
-                    className={({ isActive }) =>
-                      `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
-                    }
-                  >
-                    <span>{t("sidebar.openTasks")}</span>
-                    {counts ? <NavCountPill to="/app/tasks" count={counts.openTasks} /> : <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>}
-                  </NavLink>
-                  <NavLink
-                    to="/app/deadlines"
-                    className={({ isActive }) =>
-                      `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
-                    }
-                  >
-                    <span>{t("sidebar.upcomingDeadlines")}</span>
-                    {/* P20: "0" looked healthy for an unconfigured workspace;
-                        say that deadlines are not computed yet instead. */}
-                    {!counts ? (
-                      <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>
-                    ) : counts.openDeadlines === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd) ? (
-                      <span title="No deadlines are tracked yet. Add the incorporation date and fiscal year end on the organization profile and record held annual meetings to compute statutory deadlines.">
-                        <Pill size="sm" tone="warn">Set up</Pill>
-                      </span>
-                    ) : (
-                      <NavCountPill to="/app/deadlines" count={counts.openDeadlines} />
-                    )}
-                  </NavLink>
-                </>
-              )}
-            </div>
-          )}
+          {!isMobileNav && operationsDesk}
 
           <nav
             className="sidebar__nav"
@@ -1338,6 +1455,17 @@ export function Layout() {
               </>
             ) : (
             <>
+            {/* Phones: the filter leads the drawer and stays pinned while the
+              * list scrolls; the area choice rides under it as scope chips. */}
+            {isMobileNav && (
+              <div className="sidebar__drawer-search">
+                {navFilterField}
+                {!navFilterQuery && <SidebarAreaSwitcher area={navArea} labels={navAreaLabels} onChange={switchNavArea} />}
+              </div>
+            )}
+            {isMobileNav && !navFilterOnly && operationsDesk}
+            {!navFilterOnly && (
+            <>
             <div className="sidebar__section sidebar__section--compact sidebar__section--favorites">
               <span>{t("nav.favorites")}</span>
               {/* iOS-style list editing: view mode keeps rows clean; Edit
@@ -1354,6 +1482,12 @@ export function Layout() {
                 </button>
               )}
             </div>
+            {/* Phones browse Favorites as a two-column grid of tiles; Edit
+              * mode returns to the list so the reorder controls have room.
+              * Desktop: `display: contents`, the rows sit in the nav as before. */}
+            <div
+              className={`sidebar__favorites${isMobileNav && !favoritesEditing ? " sidebar__favorites--grid" : ""}`}
+            >
             {favoritesOrder.map((ref, index) => {
               const isDragging = favoriteDragIndex === index;
               const showDropAbove = favoriteDropIndex === index;
@@ -1363,6 +1497,7 @@ export function Layout() {
               if (ref.kind === "route") {
                 const item = visiblePinnedNav.find((nav) => nav.to === ref.id);
                 if (!item) return null;
+                if (!favoritesEditing && bottomBarRoutes.has(item.to)) return null;
                 const Icon = item.icon;
                 const count = getCount(item.to, counts);
                 const label = getNavItemLabel(item);
@@ -1499,41 +1634,13 @@ export function Layout() {
                 aria-hidden="true"
               />
             )}
+            </div>
             <div className="sidebar__section sidebar__section--compact">
               <span>{navArea === "all" ? t("nav.allRecords") : navAreaLabels[navArea]}</span>
             </div>
-            {/* With ~95 routes, type-to-jump beats scrolling. Matches L1 and
-              * L2 labels; matching sections expand. */}
-            <div className="sidebar__nav-filter">
-              <Search size={13} aria-hidden="true" />
-              <input
-                type="text"
-                value={navFilter}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setNavFilter(value);
-                  // The filter sits below Favorites; lift it (and the matches
-                  // under it) to the top of the scrolling nav while typing.
-                  const box = event.currentTarget.parentElement;
-                  const nav = box?.closest<HTMLElement>(".sidebar__nav");
-                  if (value && box && nav) {
-                    const offset = box.getBoundingClientRect().top - nav.getBoundingClientRect().top - 36;
-                    if (offset > 0) nav.scrollBy({ top: offset });
-                  }
-                }}
-                placeholder={t("sidebar.filterNav", "Filter navigation…")}
-                aria-label={t("sidebar.filterNav", "Filter navigation…")}
-              />
-              {navFilter && (
-                <button
-                  type="button"
-                  aria-label={t("common.clear", "Clear")}
-                  onClick={() => setNavFilter("")}
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
+            </>
+            )}
+            {!isMobileNav && navFilterField}
             {navFilterQuery && displayedNavTree.length === 0 && (
               <div className="sidebar__filter-empty">{t("sidebar.noNavMatches", "No matches")}</div>
             )}
@@ -1560,6 +1667,8 @@ export function Layout() {
                 })
               }
             />
+            {!navFilterOnly && (
+            <>
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.resources")}</span>
             </div>
@@ -1587,6 +1696,8 @@ export function Layout() {
                 <span className="sidebar__label">Keyboard shortcuts</span>
                 <ShortcutHint id="help" className="sidebar__shortcut" />
               </button>
+            )}
+            </>
             )}
             </>
             )}
@@ -1926,7 +2037,8 @@ export function Layout() {
              * at 4 so it stays <= 5 with "More"; extra pins live in the More
              * drawer. Pinned *commands* are actions, not destinations, so they're
              * excluded from the nav bar. */}
-            <BottomNavIndicator activeKey={loc.pathname} />
+            {/* While the More sheet/drawer is open, More is the active tab. */}
+            <BottomNavIndicator activeKey={mobileSidebarOpen ? "more" : loc.pathname} />
             {visiblePinnedNav.slice(0, 4).map((item) => {
               const Icon = item.icon;
               return (
@@ -1935,7 +2047,7 @@ export function Layout() {
                   to={item.to}
                   end={item.end}
                   tabIndex={mobileOverlayOpen ? -1 : undefined}
-                  className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
+                  className={({ isActive }) => `bottom-nav__item${isActive && !mobileSidebarOpen ? " is-active" : ""}`}
                 >
                   <Icon size={16} />
                   <span>{getNavItemLabel(item)}</span>
@@ -1944,9 +2056,16 @@ export function Layout() {
             })}
             <button
               type="button"
-              className="bottom-nav__item"
+              className={`bottom-nav__item${mobileSidebarOpen ? " is-active" : ""}`}
               tabIndex={mobileOverlayOpen ? -1 : undefined}
-              onClick={openSidebar}
+              aria-haspopup="dialog"
+              aria-expanded={mobileSidebarOpen}
+              onClick={(event) => {
+                // iOS doesn't focus a tapped button; focus it so closing the
+                // sheet hands focus back here.
+                event.currentTarget.focus({ preventScroll: true });
+                openSidebar();
+              }}
             >
               <Menu size={16} strokeWidth={2} />
               <span>{t("sidebar.more", "More")}</span>

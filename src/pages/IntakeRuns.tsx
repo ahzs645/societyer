@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
-import { AlertTriangle, CheckCircle2, Circle, FileSearch, FolderOpen, Files, Loader2, Lock, ScanText, ScrollText, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, FileSearch, FolderOpen, Files, Loader2, Lock, ScanText, ScrollText, Sparkles } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -22,7 +22,8 @@ import {
 import { runIntake, type IntakeProgress, type IntakeStageId } from "../features/intake/runIntake";
 import { cacheRunOriginals, importPipelineOutput, pipelineOutputFiles, type ImportProgress, type PipelineOutputFiles } from "../features/intake/importPipelineOutput";
 import { clearOriginals, originalsUsage } from "../features/intake/originalsCache";
-import { defaultModelFor, keyStorageLabel, providerHost, readLlmPrefs, readLocalApiKey, storeLocalApiKey, writeLlmPrefs, type LocalLlmProvider } from "../features/intake/localLlm";
+import { deviceIntakeLlm, providerHost, readLlmPrefs, writeLlmPrefs } from "../features/intake/localLlm";
+import { DEVICE_AI_SETTINGS_HREF, useDeviceAi } from "../lib/localAi/useDeviceAi";
 import { CompactRunPanel } from "../features/intake/CompactRunPanel";
 import "../features/intake/intake.css";
 import { StatTile } from "../components/StatTile";
@@ -84,15 +85,12 @@ export function IntakeRunsPage() {
   const [usage, setUsage] = useState<{ files: number; bytes: number } | null>(null);
   const prefs = useMemo(() => readLlmPrefs(), []);
   const [llmEnabled, setLlmEnabled] = useState(prefs.enabled);
-  const [provider, setProvider] = useState<LocalLlmProvider>(prefs.provider);
-  const [modelId, setModelId] = useState(prefs.modelId);
-  const [baseUrl, setBaseUrl] = useState(prefs.baseUrl ?? "");
   const [budgetTokens, setBudgetTokens] = useState(prefs.budgetTokens);
-  const [apiKey, setApiKey] = useState("");
+  // The server, model and key are the device's On-device AI settings.
+  const deviceAi = useDeviceAi("intake");
   // OCR of scanned pages runs on this device; the page budget bounds how long a run can take.
   const [ocrEnabled, setOcrEnabled] = useState(() => readOcrPrefs().enabled);
   const [ocrPageBudget, setOcrPageBudget] = useState(() => readOcrPrefs().pageBudget);
-  const [keyStored, setKeyStored] = useState(false);
   const filesInput = useRef<HTMLInputElement>(null);
   const outputInput = useRef<HTMLInputElement>(null);
   const originalsInput = useRef<HTMLInputElement>(null);
@@ -104,16 +102,8 @@ export function IntakeRunsPage() {
 
   useEffect(() => {
     void originalsUsage().then(setUsage);
-    void readLocalApiKey().then((key) => setKeyStored(Boolean(key)));
   }, []);
-  // Workspace AI settings seed the device-local provider and model.
   const effective = aiSettings?.effective;
-  useEffect(() => {
-    if (!effective || prefs.enabled) return;
-    if (["openai", "openrouter", "openai-compatible"].includes(effective.provider)) setProvider(effective.provider);
-    if (effective.modelId) setModelId(effective.modelId);
-    if (effective.baseUrl) setBaseUrl(effective.baseUrl);
-  }, [effective, prefs.enabled]);
 
   const summary = useMemo(() => summarizeSelection(selection, { ocr: ocrEnabled }), [selection, ocrEnabled]);
   const desktop = desktopIntakeBridge();
@@ -162,22 +152,13 @@ export function IntakeRunsPage() {
     if (!selection?.files.length || !canWrite) return;
     let llm;
     if (!hosted && llmEnabled) {
-      const key = apiKey.trim() || (await readLocalApiKey());
-      if (!key) {
-        toast.error("Add an API key", "Turn off AI extraction to use the deterministic extractor only.");
+      const device = deviceIntakeLlm({ enabled: true, budgetTokens, concurrency: 2 });
+      if (!device.ok) {
+        toast.error("Set up on-device AI first", `${device.reason} Turn off AI extraction to use the deterministic extractor only.`);
         return;
       }
-      if (apiKey.trim()) {
-        await storeLocalApiKey(apiKey.trim()).catch(() => undefined);
-        setKeyStored(true);
-        setApiKey("");
-      }
-      llm = { provider, modelId: modelId.trim() || defaultModelFor(provider), baseUrl: baseUrl.trim() || undefined, apiKey: key, budgetTokens, concurrency: 2 };
-      if (provider === "openai-compatible" && !baseUrl.trim()) {
-        toast.error("Add the provider's base URL");
-        return;
-      }
-      writeLlmPrefs({ enabled: true, provider, modelId: llm.modelId, baseUrl: llm.baseUrl, budgetTokens, concurrency: 2 });
+      llm = device.config;
+      writeLlmPrefs({ enabled: true, budgetTokens, concurrency: 2 });
       const ok = await confirm({
         title: "Send redacted text to an AI provider?",
         message: `Extracted text of up to ${summary.extract} files will be sent to ${providerHost(llm)} (${llm.modelId}) with phone numbers, emails, SIN, account and card numbers and postal codes masked. Restricted files (payroll, banking, contact lists, consent forms) are never sent. Every call is listed in the run's processing log. Budget: ${budgetTokens.toLocaleString()} tokens.`,
@@ -185,7 +166,7 @@ export function IntakeRunsPage() {
         tone: "warn",
       });
       if (!ok) return;
-    } else if (!hosted) writeLlmPrefs({ enabled: false, provider, modelId, baseUrl: baseUrl || undefined, budgetTokens, concurrency: 2 });
+    } else if (!hosted) writeLlmPrefs({ enabled: false, budgetTokens, concurrency: 2 });
     setBusy(true);
     abort.current = new AbortController();
     setProgress({ stage: "inventory", done: 0, total: selection.files.length, counts: { files: selection.files.length }, errors: [] });
@@ -318,16 +299,13 @@ export function IntakeRunsPage() {
                 </div>
                 {llmEnabled && (
                   <div className="intake-llm__grid">
-                    <Field label="Provider">
-                      <Select aria-label="Provider" value={provider} onChange={(value) => { setProvider(value as LocalLlmProvider); setModelId(defaultModelFor(value as LocalLlmProvider)); }} options={[{ value: "openai", label: "OpenAI" }, { value: "openrouter", label: "OpenRouter" }, { value: "openai-compatible", label: "OpenAI-compatible" }]} />
-                    </Field>
-                    <Field label="Model"><input className="input" value={modelId} onChange={(event) => setModelId(event.target.value)} /></Field>
-                    {provider === "openai-compatible" && <Field label="Base URL"><input className="input" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://…/v1" /></Field>}
-                    <Field label="API key" hint={keyStored ? `A key is stored in ${keyStorageLabel()}. Enter a new one to replace it.` : `Kept in ${keyStorageLabel()}; never saved to the workspace.`}>
-                      <input className="input" type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={keyStored ? "•••••••• (stored)" : "sk-…"} />
-                    </Field>
+                    <p className="muted" style={{ margin: 0 }} role="status">
+                      {deviceAi.ready
+                        ? <>On-device AI: {deviceAi.config.model} at {providerHost({ host: hostLabel(deviceAi.config.baseUrl) })}. </>
+                        : <>{deviceAi.reason ?? "On-device AI is not set up."} </>}
+                      <Link to={DEVICE_AI_SETTINGS_HREF}>{deviceAi.ready ? "Change in Settings" : "Set up on-device AI in Settings"}</Link>
+                    </p>
                     <Field label="Token budget for this run"><input className="input" type="number" min={10000} step={10000} value={budgetTokens} onChange={(event) => setBudgetTokens(Math.max(10000, Number(event.target.value) || 10000))} /></Field>
-                    {keyStored && <button type="button" className="btn btn--sm" onClick={() => void storeLocalApiKey("").then(() => setKeyStored(false))}><Trash2 size={12} /> Forget stored key</button>}
                   </div>
                 )}
               </fieldset>
@@ -344,7 +322,7 @@ export function IntakeRunsPage() {
               {busy && <button type="button" className="btn" onClick={() => abort.current?.abort()}>Cancel</button>}
               {!canWrite && loaded && <span className="muted">Only Owners and Admins can start a run.</span>}
             </div>
-            <details className="intake-import" data-testid="intake-import-output">
+            <details className="disclosure intake-import" data-testid="intake-import-output">
               <summary>Import a run processed on another computer</summary>
               <p className="muted" style={{ margin: "6px 0", display: "flex", gap: 6, alignItems: "center" }}>
                 Choose the output folder of a run made on a workstation.
@@ -615,5 +593,13 @@ function writeOcrPrefs(prefs: { enabled: boolean; pageBudget: number }) {
     localStorage.setItem(OCR_PREFS_KEY, JSON.stringify(prefs));
   } catch {
     // not remembered
+  }
+}
+
+function hostLabel(baseUrl: string) {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return baseUrl;
   }
 }

@@ -34,6 +34,11 @@ import { useNavigate } from "react-router-dom";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { MembersTrendCardLazy } from "../features/people/insights/lazy";
+import { MobileFold } from "../components/MobileFold";
+import { useIsMobile } from "../lib/useIsMobile";
+
+/** Phones list this many subscribers before a "Show all" button. */
+const PHONE_SUBSCRIBER_LIMIT = 20;
 
 const PLAN_INTERVALS = [
   { value: "month", label: "Monthly" },
@@ -138,6 +143,8 @@ export function MembershipPage() {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [levyImportOpen, setLevyImportOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [showAllSubs, setShowAllSubs] = useState(false);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -145,6 +152,11 @@ export function MembershipPage() {
   const activePlans = (plans ?? []).filter((p) => p.active);
   const activeSubs = (subs ?? []).filter((s) => s.status === "active");
   const activeFeePeriods = (feeTimeline ?? []).filter((p: any) => p.status === "active");
+  const allSubs = subs ?? [];
+  const visibleSubs = isMobile && !showAllSubs ? allSubs.slice(0, PHONE_SUBSCRIBER_LIMIT) : allSubs;
+  const planSummary = (plans ?? []).length
+    ? (plans ?? []).map((p) => `${p.name} ${money(p.priceCents)}/${p.interval === "one_time" ? "once" : intervalLabel(p.interval)}`).join(" · ")
+    : "No plans yet";
 
   return (
     <div className="page">
@@ -211,16 +223,15 @@ export function MembershipPage() {
         />
       </div>
 
-      <MembersTrendCardLazy societyId={society._id} />
-
-      <section style={{ marginBottom: 16 }}>
-        <div className="row" style={{ gap: 6, alignItems: "center", margin: "0 0 8px" }}>
+      <MobileFold title="Fee tiers & plans" summary={planSummary} defaultOpen>
+      <section className="membership-plans" style={{ marginBottom: 16 }}>
+        <div className="row membership-plans__head" style={{ gap: 6, alignItems: "center", margin: "0 0 8px" }}>
           <h2 className="card__title">Fee tiers & plans</h2>
           <InfoPopover label="About fee tiers">
             <p>Active tiers are shown on the self-serve signup page. Each tier can also carry dated fee periods.</p>
           </InfoPopover>
         </div>
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))" }}>
+        <div className="membership-plans__grid" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))" }}>
           {(plans ?? []).map((p) => (
             <div
               key={p._id}
@@ -295,7 +306,13 @@ export function MembershipPage() {
           )}
         </div>
       </section>
+      </MobileFold>
 
+      <MobileFold title="Members over time" summary="Membership trend and joins and departures by year">
+        <MembersTrendCardLazy societyId={society._id} />
+      </MobileFold>
+
+      <MobileFold title="Member fee timeline" summary={`${pluralCount((feeTimeline ?? []).length, "fee period")} · ${activeFeePeriods.length} active`}>
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Member fee timeline</h2>
@@ -385,11 +402,13 @@ export function MembershipPage() {
           </tbody>
         </table>
       </div>
+      </MobileFold>
 
+      <MobileFold title="Subscribers" summary={`${allSubs.length} total · ${activeSubs.length} active`}>
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Subscribers</h2>
-          <span className="card__subtitle">{(subs ?? []).length} total</span>
+          <span className="card__subtitle">{allSubs.length} total</span>
         </div>
         <table className="table table--comfortable membership-subscribers-table">
           <thead>
@@ -404,7 +423,7 @@ export function MembershipPage() {
             </tr>
           </thead>
           <tbody>
-            {(subs ?? []).map((s) => {
+            {visibleSubs.map((s) => {
               const plan = (plans ?? []).find((p) => p._id === s.planId);
               return (
                 <tr key={s._id}>
@@ -485,7 +504,15 @@ export function MembershipPage() {
             )}
           </tbody>
         </table>
+        {visibleSubs.length < allSubs.length && (
+          <div className="card__body">
+            <button type="button" className="btn" style={{ width: "100%" }} onClick={() => setShowAllSubs(true)}>
+              Show all {allSubs.length} subscribers
+            </button>
+          </div>
+        )}
       </div>
+      </MobileFold>
 
       <Drawer
         open={!!planDraft}
@@ -835,4 +862,8 @@ export function MembershipPage() {
       />
     </div>
   );
+}
+
+function pluralCount(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }

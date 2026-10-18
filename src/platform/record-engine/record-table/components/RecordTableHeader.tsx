@@ -22,7 +22,7 @@ export function RecordTableHeader({
   const handle = useRecordTableStoreHandle();
   const filtered = useFilteredRecords();
   const { objectMetadata } = useRecordTableContextOrThrow();
-  const { columns: visibleColumns, collapsed } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
+  const { columns: visibleColumns, identifierFieldName, collapsed } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
 
   const allSelected = useMemo(() => {
     if (filtered.length === 0) return false;
@@ -65,9 +65,10 @@ export function RecordTableHeader({
           key={column.viewFieldId}
           recordField={column}
           collapsed={collapsed.has(column.viewFieldId)}
-          isLabelIdentifier={
-            column.field.name === objectMetadata.labelIdentifierFieldName
-          }
+          isLabelIdentifier={column.field.name === identifierFieldName}
+          // Only the object's own identifier is pinned in place and cannot be
+          // hidden; a first column standing in for it moves and hides freely.
+          lockIdentifier={column.field.name === objectMetadata.labelIdentifierFieldName}
         />
       ))}
       {hasRowActions && (

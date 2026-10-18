@@ -142,11 +142,87 @@ export type DesktopSecretKey =
   | "rustfs-access-key"
   | "rustfs-secret-key"
   | "ai-api-key"
+  | "stt-api-key"
   | "sync-token";
 
 export type DesktopSecretStatus = {
   stored: boolean;
 };
+
+/**
+ * On-device AI settings kept by the desktop host (never the key). The main
+ * process reads these to build every model request itself.
+ */
+export type DesktopLocalAiConfig = {
+  kind: "ollama" | "lmstudio" | "openai-compatible" | "openai" | "openrouter" | "none";
+  preset: "ollama" | "lmstudio" | "llamacpp" | "openai-compatible" | "openai" | "openrouter";
+  baseUrl: string;
+  model: string;
+  features: { minutes: boolean; assistant: boolean; intake: boolean };
+  minutesChunkChars: number;
+  speechToText: { kind: "none" | "openai-compatible" | "whisper-cpp" | "whisperx"; baseUrl: string; model: string };
+  /** The on-device assistant's record tools (read by the renderer only). */
+  assistantTools: { lookUpRecords: boolean; proposeChanges: boolean };
+  updatedAtISO?: string;
+};
+
+/** Paths the desktop AI proxy forwards; the main process enforces this list. */
+export type DesktopLocalAiPath = "/models" | "/chat/completions" | "/api/tags";
+
+export type DesktopLocalAiRequest = {
+  /** Chosen by the renderer so a request can be aborted. */
+  requestId: string;
+  path: DesktopLocalAiPath;
+  method: "GET" | "POST";
+  /** JSON request body. */
+  body?: string;
+  timeoutMs?: number;
+};
+
+export type DesktopLocalAiResponse = {
+  status: number;
+  ok: boolean;
+  body: string;
+  contentType?: string;
+};
+
+export type DesktopLocalAiStreamEvent =
+  | { type: "head"; status: number; ok: boolean; contentType?: string }
+  | { type: "chunk"; text: string }
+  | { type: "end" }
+  | { type: "error"; code: "network" | "timeout" | "aborted" | "refused"; message: string };
+
+/**
+ * On-device transcription. The renderer copies the recording it already holds
+ * to the main process in ordered pieces (no single huge IPC message); the main
+ * process keeps it in a private temporary file, optionally prepares it with
+ * ffmpeg, sends it to the configured speech-to-text server and deletes it.
+ */
+export type DesktopTranscriptionUpload = {
+  requestId: string;
+  fileName: string;
+  totalBytes: number;
+  /** Byte offset of this piece; 0 starts a new upload. */
+  offset: number;
+  bytes: ArrayBuffer;
+};
+
+export type DesktopTranscriptionRequest = { requestId: string; language?: string };
+
+export type DesktopTranscriptionEvent =
+  | { type: "converting" }
+  | { type: "part"; index: number; total: number };
+
+export type DesktopTranscriptionResult =
+  | {
+      ok: true;
+      /** One server reply per part, in recording order; `offsetSec` is where the part starts. */
+      parts: Array<{ offsetSec: number; body: string }>;
+      overlapSec: number;
+      /** ffmpeg prepared the audio (16 kHz mono WAV, in parts for long recordings). */
+      converted: boolean;
+    }
+  | { ok: false; code: "status" | "refused" | "network" | "timeout" | "aborted"; status?: number; message: string };
 
 export type DesktopNativeThemeState = {
   shouldUseDarkColors: boolean;
@@ -208,7 +284,20 @@ export type SocietyerDesktopBridge = {
   openWorkspaceFolder(): Promise<void>;
   openBackupFolder(backupPath?: string): Promise<void>;
   openLogFolder(): Promise<void>;
+  /** Refuses "ai-api-key" and "stt-api-key": those keys are only read by the main-process AI proxy. */
   getSecret(key: DesktopSecretKey): Promise<string | null>;
+  hasSecret(key: DesktopSecretKey): Promise<boolean>;
+  getLocalAiConfig(): Promise<DesktopLocalAiConfig>;
+  saveLocalAiConfig(config: DesktopLocalAiConfig): Promise<DesktopLocalAiConfig>;
+  /** One request to the configured on-device AI server, made by the main process. */
+  localAiRequest(input: DesktopLocalAiRequest): Promise<DesktopLocalAiResponse>;
+  /** A streamed request; events arrive in order and the promise settles after "end" or "error". */
+  localAiStream(input: DesktopLocalAiRequest, onEvent: (event: DesktopLocalAiStreamEvent) => void): Promise<void>;
+  /** Also stops a transcription and deletes its temporary file. */
+  localAiAbort(requestId: string): Promise<void>;
+  localAiTranscriptionUpload(input: DesktopTranscriptionUpload): Promise<{ received: number }>;
+  /** Progress events arrive while it runs; settles with the server's replies or a failure. */
+  localAiTranscribe(input: DesktopTranscriptionRequest, onEvent: (event: DesktopTranscriptionEvent) => void): Promise<DesktopTranscriptionResult>;
   setSecret(key: DesktopSecretKey, value: string): Promise<DesktopSecretStatus>;
   removeSecret(key: DesktopSecretKey): Promise<DesktopSecretStatus>;
   printToPdf(input: DesktopPrintToPdfInput): Promise<DesktopPrintToPdfResult>;

@@ -57,6 +57,18 @@ export default [
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+      // Application dialogs must use the styled, accessible modal providers.
+      "no-restricted-globals": ["error", ...["alert", "confirm", "prompt"].map(name => ({
+        name,
+        message: "Use the app's Modal, useConfirm or usePrompt instead of native browser dialogs.",
+      }))],
+      "no-restricted-properties": ["error", ...["window", "globalThis", "self"].flatMap(object =>
+        ["alert", "confirm", "prompt"].map(property => ({
+          object,
+          property,
+          message: "Use the app's Modal, useConfirm or usePrompt instead of native browser dialogs.",
+        })),
+      )],
       // God-file guardrail: keep a unit small enough to hold in your head.
       // Data/definition files (fixtures, metadata catalogs) are expected exceptions.
       "max-lines": ["warn", { max: 500, skipBlankLines: true, skipComments: true }],

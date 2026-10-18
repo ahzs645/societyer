@@ -10,6 +10,7 @@ import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
 import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
 import { Tooltip } from "../../../../components/Tooltip";
 import { useLongPress } from "../hooks/useLongPress";
+import { recordTitleText } from "../utils/recordTitle";
 
 /**
  * Class list for a record's `<tr>`: the base row class plus the new-row flash,
@@ -61,7 +62,7 @@ export function RecordTableRow({
   );
   const handle = useRecordTableStoreHandle();
   const { records: rowRecords } = useRecordTableRowModel();
-  const { columns: visibleColumns, collapsed } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
+  const { columns: visibleColumns, identifierFieldName, collapsed } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
   const recordId = String(record._id);
 
   const toggleRow = (extendRange = false) => {
@@ -175,9 +176,7 @@ export function RecordTableRow({
           recordField={column}
           columnIndex={idx}
           collapsed={collapsed.has(column.viewFieldId)}
-          isLabelIdentifier={
-            column.field.name === objectMetadata.labelIdentifierFieldName
-          }
+          isLabelIdentifier={column.field.name === identifierFieldName}
           selectionControl={mobileSelectionMode && idx === 0 ? (
             <label className="record-table__mobile-selection-checkbox"
               onClick={(event) => event.stopPropagation()}
@@ -262,6 +261,9 @@ export function RecordTableRow({
 
 /** The record's name (its label identifier field), for labelling its actions. */
 function recordDisplayName(record: any, fieldName: string | undefined): string | null {
+  // "Ada Lovelace", not "Ada", for people identified by a first-name field.
+  const title = recordTitleText(record, fieldName);
+  if (title) return title;
   const value = fieldName ? record?.[fieldName] : undefined;
   if (value == null) return null;
   if (typeof value === "string" || typeof value === "number") return String(value).trim() || null;
@@ -279,7 +281,7 @@ function recordDisplayName(record: any, fieldName: string | undefined): string |
  * cell, so each item runs the real control's own click handler: pages keep
  * one definition of their actions and both layouts stay in step.
  */
-function collectRowActionItems(source: HTMLElement | null, recordName: string): MenuItem[] {
+export function collectRowActionItems(source: HTMLElement | null, recordName: string): MenuItem[] {
   if (!source) return [];
   return Array.from(source.querySelectorAll<HTMLElement>("button, a[href]"))
     .filter((control) => !control.hasAttribute("data-row-actions-kebab"))
@@ -327,12 +329,17 @@ function ClonedIcon({ icon }: { icon: SVGElement }) {
  * table is wider than its frame; then it is the way to every action of the
  * row, read from the hidden inline buttons each time it opens.
  */
-function PinnedRowActionsMenu({
+export function PinnedRowActionsMenu({
   recordName,
   getSections,
+  triggerClassName = "record-table__row-actions-more",
+  disabled = false,
 }: {
   recordName: string;
   getSections: () => MenuSection[];
+  /** The phone card's actions button is always shown (not CSS-pinned). */
+  triggerClassName?: string;
+  disabled?: boolean;
 }) {
   const [sections, setSections] = useState<MenuSection[]>([]);
   return (
@@ -345,8 +352,10 @@ function PinnedRowActionsMenu({
       trigger={
         <button
           type="button"
-          className="btn btn--ghost btn--sm btn--icon record-table__row-actions-more"
+          className={`btn btn--ghost btn--sm btn--icon ${triggerClassName}`}
           aria-label={`Row actions for ${recordName}`}
+          disabled={disabled || undefined}
+          tabIndex={disabled ? -1 : undefined}
           // Same as the kebab above: no focus scroll on press, which would
           // dismiss the menu that this click opens.
           onMouseDown={(e) => e.preventDefault()}

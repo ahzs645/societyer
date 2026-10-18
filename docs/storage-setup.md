@@ -51,10 +51,13 @@ their 15-minute expiry; do not describe them as immediately revoked.
 
 Before marking a provider connection verified, record successful synthetic
 upload/download, checksum comparison, cross-workspace denial, historical-version
-export, credential revocation and independent restore results. No live provider
-probe was performed as part of this implementation.
+export, credential revocation and independent restore results. DDC North's live
+SharePoint transfer checks are recorded in its runbook; restore and complete
+end-user qualification remain separate from those checks.
 
-SharePoint currently has tested, injectable server-side Graph primitives. It is
-not an active deployment adapter. Token custody, administrator consent, explicit
-selected-resource grants, approved tenant/site/library IDs, retention and an
-authorized proof of concept are required before deployment wiring is enabled.
+SharePoint has an authenticated, bounded document-version broker and server-side
+Graph application authentication. It is enabled only after configuring credentials,
+selected-resource grants and approved tenant/site/library/transfer-host bindings.
+Convex-native file storage can remain disabled while these document versions live
+in SharePoint. Live qualification remains separate from mocked checks; see the
+[connection runbook and setup lessons](sharepoint-connection-runbook.md).

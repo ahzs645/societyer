@@ -28,6 +28,8 @@ import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
+import { defaultRecordKindForType, meetingRecordKind, type MeetingRecordKind } from "../../../../shared/meetingRecordKind";
+import { MeetingRecordKindPicker } from "./MeetingRecordKindPicker";
 
 export type MeetingDraft = {
   type: string;
@@ -44,6 +46,10 @@ export type MeetingDraft = {
   notes?: string;
   /** B8: a special meeting of the board or a committee. */
   special?: boolean;
+  /** What the meeting keeps. Follows the body's default until picked. */
+  recordKind?: MeetingRecordKind;
+  /** Form-only: the user chose `recordKind`, so a body change keeps it. Strip before saving. */
+  recordKindPicked?: boolean;
 };
 
 type BylawRules = ReturnType<typeof useBylawRules>["rules"];
@@ -168,6 +174,7 @@ export function blankMeetingDraft(overrides: Partial<MeetingDraft> = {}): Meetin
     meetingTemplateId: "",
     committeeId: "",
     conflictAcknowledged: false,
+    recordKind: defaultRecordKindForType(overrides.type ?? "Board"),
     ...overrides,
   };
 }
@@ -207,6 +214,8 @@ export function meetingToDraft(meeting: Doc<"meetings">): MeetingDraft {
     conflictAcknowledged: false,
     notes: meeting.notes ?? "",
     special: !!(meeting as any).special,
+    recordKind: meetingRecordKind(meeting),
+    recordKindPicked: true,
   };
 }
 
@@ -223,11 +232,16 @@ export function numberOrUndefined(value: unknown) {
   return Number.isFinite(number) ? number : undefined;
 }
 
-function templateSummary(template: Doc<"meetingTemplates"> | undefined) {
+/** What the chosen template brings. Only formal minutes get its recurring motions now. */
+function templateSummary(template: Doc<"meetingTemplates"> | undefined, recordKind: MeetingRecordKind) {
   if (!template) return "Template details are loading.";
   const items = Array.isArray(template.items) ? template.items : [];
   const motionCount = items.filter((item) => item.motionTemplateId || item.motionText).length;
-  return `${items.length} agenda item${items.length === 1 ? "" : "s"}${
+  const topics = `${items.length} agenda topic${items.length === 1 ? "" : "s"}`;
+  if (recordKind !== "minutes") {
+    return motionCount ? `${topics} · motions are added if you switch to minutes.` : `${topics}.`;
+  }
+  return `${topics}${
     motionCount ? `, ${motionCount} recurring motion${motionCount === 1 ? "" : "s"}` : ""
   }. New meetings receive a snapshot.`;
 }
@@ -304,6 +318,7 @@ export function MeetingFormFields({
                 availableTemplates.find(
                   (template) => String(template._id) === value.meetingTemplateId,
                 ),
+                value.recordKind ?? defaultRecordKindForType(value.type),
               )}
             </p>
           ) : (
@@ -336,6 +351,7 @@ export function MeetingFormFields({
                 committeeId: body.committeeId ?? "",
                 special: body.special,
                 meetingTemplateId: editingId ? value.meetingTemplateId : template ? String(template._id) : "",
+                ...(editingId || value.recordKindPicked ? {} : { recordKind: defaultRecordKindForType(body.type) }),
               });
             }}
             options={meetingBodyOptions((committees ?? []).map((committee) => ({ _id: String(committee._id), name: committee.name, status: (committee as any).status })))
@@ -350,6 +366,10 @@ export function MeetingFormFields({
           />
         </Field>
       </div>
+      <MeetingRecordKindPicker
+        value={value.recordKind ?? defaultRecordKindForType(value.type)}
+        onChange={(recordKind) => onChange({ recordKind, recordKindPicked: true })}
+      />
       {editingId && (
         <Field label="Status">
           <Select
@@ -388,7 +408,7 @@ export function MeetingFormFields({
           onChange={(e) => onChange({ quorumRequired: e.target.value })}
         />
       </Field>
-      <Field label="Notes">
+      <Field label="Preparation notes" hint="For organisers. Not part of the meeting notes or minutes.">
         <MarkdownEditor
           rows={4}
           value={value.notes ?? ""}
@@ -409,6 +429,7 @@ export function MeetingFormFields({
       )}
       {overlaps.length > 0 && (
           <div
+            id={MEETING_CONFLICT_ID}
             style={{
               marginTop: 8,
               padding: 10,
@@ -441,6 +462,34 @@ export function MeetingFormFields({
           </div>
       )}
     </div>
+  );
+}
+
+const MEETING_CONFLICT_ID = "meeting-form-conflict";
+export const MEETING_CONFLICT_NOTE_ID = "meeting-form-conflict-note";
+
+/**
+ * Sits beside the disabled Schedule button while a time conflict is not yet
+ * acknowledged: says why, and takes the user to the acknowledgement, which can
+ * be far up the form.
+ */
+export function MeetingConflictFooterNote({ count }: { count: number }) {
+  if (!count) return null;
+  const review = () => {
+    const box = document.getElementById(MEETING_CONFLICT_ID);
+    if (!box) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    box.querySelector<HTMLInputElement>("input[type=checkbox]")?.focus({ preventScroll: true });
+  };
+  return (
+    <span className="meeting-conflict-note" id={MEETING_CONFLICT_NOTE_ID} role="status">
+      <AlertTriangle size={12} aria-hidden="true" />
+      <span>
+        Overlaps {count} other meeting{count === 1 ? "" : "s"}.{" "}
+        <button type="button" className="link-button" onClick={review}>Review conflict</button>
+      </span>
+    </span>
   );
 }
 

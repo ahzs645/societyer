@@ -5,6 +5,18 @@ import { v } from "convex/values";
  * Transcripts + custom-field tables.
  * Extracted from convex/schema.ts (modularization); spread back into defineSchema.
  */
+export const transcriptSegmentValidator = v.object({
+  speaker: v.string(),
+  text: v.string(),
+  startSec: v.number(),
+  endSec: v.number(),
+  words: v.optional(v.array(v.object({
+    text: v.string(),
+    startSec: v.number(),
+    endSec: v.number(),
+  }))),
+});
+
 export const transcriptTables = {
   transcripts: defineTable({
     societyId: v.id("societies"),
@@ -14,14 +26,15 @@ export const transcriptTables = {
     durationSeconds: v.optional(v.number()),
     language: v.optional(v.string()),
     text: v.string(),
-    segments: v.array(
-      v.object({
-        speaker: v.string(),
-        text: v.string(),
-        startSec: v.number(),
-        endSec: v.number(),
-      }),
-    ),
+    segments: v.array(transcriptSegmentValidator),
+    speakers: v.optional(v.array(v.object({
+      label: v.string(),
+      name: v.optional(v.string()),
+      personId: v.optional(v.id("peopleDirectory")),
+      // Raw label this one is combined into; segments keep their own label.
+      mergedInto: v.optional(v.string()),
+    }))),
+    wordsDropped: v.optional(v.boolean()),
     createdAtISO: v.string(),
     demo: v.boolean(),
   })

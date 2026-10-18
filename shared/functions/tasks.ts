@@ -11,6 +11,8 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { HISTORICAL_ACTION_TAG, PROMOTED_ACTION_TAG, TASK_STATUSES, actionTitleKey, isHistoricalSourceAction, sourceAssigneeFromTitle } from "../taskStatus";
 import { normalizeTaskChecklist, type TaskChecklistItem } from "../taskChecklist";
+import { isInCameraSection, sectionTitleAt } from "../minutesPrivacy";
+import { tasksForReader } from "./minutesPrivacy";
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -50,12 +52,14 @@ async function assertTaskEventReference(ctx: PortableMutationCtx, eventId: strin
   await getOwned(ctx, "commitments", String(event.commitmentId), societyId);
 }
 
+// Every task read goes through `tasksForReader`: tasks made from in-camera
+// action items read "In-camera action" for readers without in-camera access.
 export async function tasksList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  return ctx.db
+  return tasksForReader(ctx, societyId, await ctx.db
     .query("tasks")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
+    .collect());
 }
 
 export async function tasksByCommittee(ctx: PortableQueryCtx, { committeeId }: { committeeId: string }) {
@@ -63,10 +67,10 @@ export async function tasksByCommittee(ctx: PortableQueryCtx, { committeeId }: {
   if (!committee || typeof committee.societyId !== "string") throw new Error("committees not found.");
   await requireSocietyMembership(ctx, committee.societyId);
   await getOwned(ctx, "committees", committeeId, committee.societyId);
-  return ctx.db
+  return tasksForReader(ctx, committee.societyId, await ctx.db
     .query("tasks")
     .withIndex("by_committee", (q) => q.eq("committeeId", committeeId))
-    .collect();
+    .collect());
 }
 
 export async function tasksByGoal(ctx: PortableQueryCtx, { goalId }: { goalId: string }) {
@@ -74,10 +78,10 @@ export async function tasksByGoal(ctx: PortableQueryCtx, { goalId }: { goalId: s
   if (!goal || typeof goal.societyId !== "string") throw new Error("goals not found.");
   await requireSocietyMembership(ctx, goal.societyId);
   await getOwned(ctx, "goals", goalId, goal.societyId);
-  return ctx.db
+  return tasksForReader(ctx, goal.societyId, await ctx.db
     .query("tasks")
     .withIndex("by_goal", (q) => q.eq("goalId", goalId))
-    .collect();
+    .collect());
 }
 
 export async function tasksByMeeting(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
@@ -85,10 +89,28 @@ export async function tasksByMeeting(ctx: PortableQueryCtx, { meetingId }: { mee
   if (!meeting || typeof meeting.societyId !== "string") throw new Error("meetings not found.");
   await requireSocietyMembership(ctx, meeting.societyId);
   await getOwned(ctx, "meetings", meetingId, meeting.societyId);
-  return ctx.db
+  return tasksForReader(ctx, meeting.societyId, await ctx.db
     .query("tasks")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-    .collect();
+    .collect());
+}
+
+/**
+ * A task made from a minutes action item records the section it came from
+ * (the index and the section's title as the minutes hold it, never a title
+ * the client sends), and `inCamera: true` when that section is in camera now.
+ * Whether the task is withheld is decided when it is read, against the
+ * current minutes (`isInCameraTask`); this is provenance, not the decision.
+ */
+async function minutesActionProvenance(ctx: PortableMutationCtx, args: { meetingId?: string; tags: string[] }, sectionIndex: number | undefined) {
+  if (!args.meetingId || sectionIndex === undefined) return {};
+  const minutes = await ctx.db.query("minutes").withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId)).first();
+  const title = sectionTitleAt(minutes, sectionIndex);
+  return {
+    minutesSectionIndex: sectionIndex,
+    ...(title ? { minutesSectionTitle: title } : {}),
+    ...(isInCameraSection(minutes, sectionIndex) ? { inCamera: true } : {}),
+  };
 }
 
 export async function taskCreate(
@@ -117,6 +139,8 @@ export async function taskCreate(
     eventId?: string;
     tags: string[];
     checklist?: TaskChecklistItem[];
+    /** "Create task from action": the minutes section the action item is in (absent for general actions). */
+    minutesSectionIndex?: number;
   },
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
@@ -134,9 +158,12 @@ export async function taskCreate(
   for (const userId of args.responsibleUserIds ?? []) {
     await getOwned(ctx, "users", userId, args.societyId);
   }
+  // Provenance comes only from the minutes: a caller can't send its own in-camera hint or section title.
+  const { minutesSectionIndex, inCamera: _hint, minutesSectionTitle: _title, ...fields } = args as typeof args & { inCamera?: unknown; minutesSectionTitle?: unknown };
   const id = await ctx.db.insert("tasks", {
-    ...args,
+    ...fields,
     ...(args.checklist ? { checklist: normalizeTaskChecklist(args.checklist) } : {}),
+    ...(await minutesActionProvenance(ctx, args, minutesSectionIndex)),
     createdAtISO: new Date().toISOString(),
   });
   await ctx.db.insert("activity", {

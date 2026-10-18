@@ -28,6 +28,9 @@ for (const name of ["documentVersions:getDownloadTarget", "documentVersions:getD
   assert.equal(actionPermission(name, "action"), "documents:read", `${name} reads existing document content`);
 }
 assert.equal(actionPermission("documentVersions:completeUpload", "action"), "documents:write");
+for (const name of ["meetingSources:appendText", "meetingSources:speechCapabilities", "meetingSources:textPage", "meetingSources:useTranscript", "meetingSourceSpeech:start"]) {
+  for (const kind of ["query", "mutation", "action"] as const) assert.equal(actionPermission(name, kind), "meetings:write");
+}
 
 const portableDb = new MemoryDb({ seed: { societies: [{ _id: "local-society", name: "Local" }], users: [
   { _id: "local-member", societyId: "local-society", role: "Member", status: "Active" },

@@ -67,6 +67,76 @@
   }
 }
 
+// Minute book on phones: each connected record is one tappable row.
+.minute-book-bundle-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  > li + li { border-top: 1px solid token('border-color-light'); }
+}
+.minute-book-bundle-list__empty {
+  padding: token('s-5') token('s-4');
+  text-align: center;
+}
+.minute-book-bundle-row {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  min-height: token('control-h-touch');
+  padding: token('s-3') token('s-4');
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+a.minute-book-bundle-row:active { background: token('bg-hover'); }
+.minute-book-bundle-row__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.minute-book-bundle-row__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-2');
+
+  strong { min-width: 0; overflow-wrap: anywhere; }
+  .badge { flex: none; }
+}
+.minute-book-bundle-row__meta {
+  overflow: hidden;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.minute-book-bundle-row__gaps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.minute-book-bundle-row__chevron {
+  flex: none;
+  color: token('text-tertiary');
+}
+// The four linked-record lists inside their phone fold: one flat column.
+.mobile-fold__body > .minute-book-linked {
+  gap: 0;
+
+  > .card {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  > .card + .card { border-top: 1px solid token('border-color-light'); }
+}
+
 // Research library: one compact filter row, records listed in one card.
 .research-filters {
   display: flex;
@@ -220,6 +290,169 @@ details.exports-tables {
   }
 }
 
+// Desktop columns are narrow: link, then the toggle under it. Phones put
+// them on one line (below).
+.annual-cycle-card__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: token('s-2');
+
+  > .annual-cycle-evidence[open] {
+    flex-basis: 100%;
+    order: 2;
+  }
+}
+
+.annual-cycle-phase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: token('s-4');
+}
+
+.annual-cycle-sources { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.annual-cycle-evidence-list {
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+
+  ul {
+    margin: 2px 0 0;
+    padding-left: token('s-5');
+  }
+}
+.annual-cycle-evidence-list__label {
+  font-weight: token('fw-medium');
+  color: token('text-primary');
+}
+
+// A ready or upcoming step: one line that opens in place.
+.annual-cycle-row {
+  border-radius: token('r-sm');
+
+  &[open] { background: token('bg-subtle'); }
+}
+.annual-cycle-row__head {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  min-height: 36px;
+  padding: 6px token('s-2');
+  border-radius: inherit;
+  cursor: pointer;
+  list-style: none;
+  font-size: token('fs-sm');
+  &::-webkit-details-marker { display: none; }
+  &:hover { background: token('bg-hover-alpha'); }
+}
+.annual-cycle-row__title {
+  flex: 1;
+  min-width: 0;
+  color: token('text-primary');
+  font-weight: token('fw-medium');
+}
+.annual-cycle-row__meta {
+  flex-shrink: 0;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  white-space: nowrap;
+}
+.annual-cycle-row__chevron {
+  flex-shrink: 0;
+  color: token('text-tertiary');
+  transition: transform token('motion-move') token('ease-move');
+}
+.annual-cycle-row[open] .annual-cycle-row__chevron { transform: rotate(180deg); }
+.annual-cycle-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-2');
+  padding: 0 token('s-2') token('s-3') calc(16px + #{token('s-2')} * 2);
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+
+  p { margin: 0; line-height: 1.45; }
+}
+
+// Phones: section headings and collapsed phases below the hero.
+.annual-cycle-section { margin-top: token('s-5'); }
+.annual-cycle-section__title {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  margin: 0 0 token('s-2');
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+  color: token('text-primary');
+}
+.annual-cycle-section__count {
+  color: token('text-tertiary');
+  font-weight: token('fw-medium');
+}
+.annual-cycle-phases {
+  @include surface-card;
+  overflow: hidden;
+}
+.annual-cycle-phase + .annual-cycle-phase { border-top: 1px solid token('border-color-light'); }
+.annual-cycle-phase__head {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  min-height: 52px;
+  padding: 0 token('s-3');
+  cursor: pointer;
+  list-style: none;
+  &::-webkit-details-marker { display: none; }
+}
+.annual-cycle-phase__icon { flex-shrink: 0; color: token('accent'); }
+.annual-cycle-phase__title {
+  flex: 1;
+  min-width: 0;
+  font-weight: token('fw-semibold');
+  color: token('text-primary');
+}
+.annual-cycle-phase__count {
+  font-family: token('font-mono');
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+}
+.annual-cycle-phase__chevron {
+  flex-shrink: 0;
+  color: token('text-tertiary');
+  transition: transform token('motion-move') token('ease-move');
+}
+.annual-cycle-phase[open] .annual-cycle-phase__chevron { transform: rotate(180deg); }
+.annual-cycle-phase__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 token('s-2') token('s-3');
+}
+.annual-cycle-phase__subtitle,
+.annual-cycle-phase__note {
+  margin: 0 0 token('s-1');
+  padding: 0 token('s-2');
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  line-height: 1.4;
+}
+.annual-cycle-phase__note { margin: token('s-1') 0 0; }
+
+// Phones: the stat tiles' facts as one wrapping line.
+.annual-cycle-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px token('s-3');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+}
+.annual-cycle-facts__danger { color: token('danger'); font-weight: token('fw-medium'); }
+.annual-cycle-facts__warn { color: token('warn'); font-weight: token('fw-medium'); }
+.annual-cycle-facts__ok { color: token('success'); }
+
 @media (max-width: 760px) {
   // Full-width hero; the next action is a section of it, not a card inside it.
   .onboarding-flow.annual-cycle-hero {
@@ -237,7 +470,49 @@ details.exports-tables {
       background: transparent;
       padding: token('s-3') 0 0;
     }
+
+    .onboarding-flow__story h2 { padding-right: 0; }
+    .onboarding-flow__status {
+      align-items: flex-end;
+      text-align: right;
+    }
+    .onboarding-flow__story {
+      flex-direction: row;
+      align-items: flex-end;
+    }
+    .onboarding-flow__eyebrow { font-size: token('fs-tiny'); }
+    // The single primary action on the page: full width, a full tap target.
+    .onboarding-flow__next .btn-action--primary {
+      justify-content: center;
+      min-height: 44px;
+      font-size: token('fs-sm');
+      background: token('accent');
+      border-color: token('accent');
+      color: token('accent-on');
+      &:hover { background: token('accent-hover'); border-color: token('accent-hover'); }
+    }
   }
+
+  // Steps that need work: the reason in three lines (all of it once the
+  // details are open), with the toggle and the step's link on one line.
+  .annual-cycle-card__detail {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+  .annual-cycle-card:has(.annual-cycle-evidence[open]) .annual-cycle-card__detail {
+    display: block;
+  }
+  .annual-cycle-card__foot {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  // Rows inside a phase are full tap targets on phones.
+  .annual-cycle-row__head { min-height: 44px; }
 
   .annual-cycle-stats > :last-child:nth-child(odd) {
     grid-column: 1 / -1;

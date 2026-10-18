@@ -15,7 +15,8 @@ import { stageRunInWorkspace, type MutationCaller } from "../../../shared/intake
 import type { IntakeRunResult } from "../../../shared/intake/bundle";
 import { desktopLegacyConverter, keptByJunkFilter, materializeSelection, type IntakeSelection } from "./collectFiles";
 import { putOriginal } from "./originalsCache";
-import { providerBaseUrl, type LocalLlmConfig } from "./localLlm";
+import type { LocalLlmConfig } from "./localLlm";
+import { deviceAiTransport } from "../../lib/localAi/transport";
 import type { IntakeWorkerRequest, IntakeWorkerResponse, WorkerFileInput } from "./workerProtocol";
 
 export type IntakeStageId = "inventory" | "junk" | "extract" | "cluster" | "classify" | "fields" | "stage" | "server" | "done";
@@ -80,7 +81,7 @@ export async function runIntake(selection: IntakeSelection, options: RunIntakeOp
     const result = await runWorker(inputs, {
       name: options.name, sourceKind: selection.sourceKind, sourceRoot: selection.root, fieldExtraction: !options.hosted,
       ...(options.ocr ? { ocr: { pageBudget: options.ocr.pageBudget, workers: 1 } } : {}),
-      ...(options.llm && !options.hosted ? { llm: { provider: options.llm.provider, modelId: options.llm.modelId, apiKey: options.llm.apiKey, baseUrl: providerBaseUrl(options.llm), budgetTokens: options.llm.budgetTokens, concurrency: options.llm.concurrency } } : {}),
+      ...(options.llm && !options.hosted ? { llm: { provider: options.llm.provider, modelId: options.llm.modelId, budgetTokens: options.llm.budgetTokens, concurrency: options.llm.concurrency } } : {}),
     }, (stage, done, total) => {
       if (stage === "ocr") emit({ stage: "extract", message: `Reading scanned pages by OCR on this device: ${done} of up to ${total} pages.` });
       else emit({ stage: stage === "fields" ? "fields" : "extract", done, total, ...(stage === "fields" ? { message: undefined } : {}) });
@@ -170,7 +171,14 @@ function runWorker(
     worker.onmessage = (event: MessageEvent<IntakeWorkerResponse>) => {
       const message = event.data;
       if (message.type === "progress") onProgress(message.stage, message.done, message.total);
-      else if (message.type === "convert") {
+      else if (message.type === "aiFetch") {
+        // The worker's model requests go out through the page's device AI transport.
+        void deviceAiTransport()
+          .send(message.path, { method: message.method, body: message.body, signal })
+          .then(async (response) => ({ type: "aiFetchResult" as const, id: message.id, status: response.status, body: await response.text(), contentType: response.headers.get("content-type") ?? undefined }))
+          .catch((error: unknown) => ({ type: "aiFetchResult" as const, id: message.id, error: error instanceof Error ? error.message : "The AI request failed." }))
+          .then((result) => worker.postMessage(result satisfies IntakeWorkerRequest));
+      } else if (message.type === "convert") {
         void (async () => {
           const bytes = convert ? await convert({ fileName: message.name, bytes: message.bytes, target: message.target }).catch(() => null) : null;
           worker.postMessage({ type: "convertResult", id: message.id, bytes } satisfies IntakeWorkerRequest, bytes ? [bytes] : []);

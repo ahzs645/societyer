@@ -10,7 +10,7 @@ import { Badge, Field } from "./ui";
 import { useToast } from "./Toast";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Pen, Trash2, Upload, UserX } from "lucide-react";
+import { Pen, Plus, Trash2, Upload, UserX } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { SignaturePad } from "./SignaturePad";
@@ -124,6 +124,12 @@ export function SignaturePanel({
   const [saveToProfile, setSaveToProfile] = useState(true);
   const [customizeSignature, setCustomizeSignature] = useState(false);
   const [localSignatures, setLocalSignatures] = useState<any[]>([]);
+  // With no sign-offs yet the panel is one row ("Signatures · None yet ·
+  // Add signature") until someone adds one; the form's state is kept while
+  // it is folded away.
+  const [formRequested, setFormRequested] = useState(false);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+  const focusFormOnOpen = useRef(false);
 
   const directorSigners = useMemo(
     () =>
@@ -176,13 +182,34 @@ export function SignaturePanel({
     [selectedSigner, signatureProfiles, typedName],
   );
 
+  // Who the capture belongs to: the picked director or member, or null while
+  // the name doesn't match anyone yet (mid-typing, or a free-typed signer).
+  const signerKey = selectedSigner
+    ? selectedSigner.directorId
+      ? `director:${selectedSigner.directorId}`
+      : selectedSigner.memberId
+        ? `member:${selectedSigner.memberId}`
+        : `name:${normalizeSignerName(selectedSigner.name)}`
+    : null;
+  const lastSignerKeyRef = useRef<string | null>(null);
+
+  // A drawn or uploaded signature belongs to the person it was captured for,
+  // so picking a different person drops it. Editing the name doesn't: drawing
+  // first and typing the name after, or fixing a typo, keeps the drawing. In
+  // Type mode there is nothing to lose, so stale captures clear as before.
   useEffect(() => {
+    const previous = lastSignerKeyRef.current;
+    if (signerKey) lastSignerKeyRef.current = signerKey;
+    const signerChanged = !!signerKey && !!previous && signerKey !== previous;
+    if (signMode !== "typed" && !signerChanged) return;
     setCustomizeSignature(false);
     setDrawnDataUrl(null);
     setUploadedDataUrl(null);
     setUploadedMimeType(null);
     setSignMode("typed");
-  }, [typedName]);
+    // signMode is read, not watched: switching modes is not a name change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typedName, signerKey]);
 
   const displayedSignatures = useMemo(() => {
     const persisted = signatures ?? [];
@@ -237,6 +264,8 @@ export function SignaturePanel({
     (useSavedProfile || signMode === "typed" || (signMode === "drawn" && !!drawnDataUrl) || (signMode === "uploaded" && !!uploadedDataUrl));
 
   const resetCapture = () => {
+    // The next signer starts fresh, even if they draw before typing a name.
+    lastSignerKeyRef.current = null;
     setTypedName("");
     setDrawnDataUrl(null);
     setUploadedDataUrl(null);
@@ -264,13 +293,65 @@ export function SignaturePanel({
     );
   };
 
+  const empty = displayedSignatures.length === 0;
+  const formOpen = !empty || formRequested;
+
+  useEffect(() => {
+    if (!formOpen || !focusFormOnOpen.current) return;
+    focusFormOnOpen.current = false;
+    // Focus lands on "Cancel", where "Add signature" was; the name field
+    // is next. Focusing the field itself would open its suggestion list over
+    // the Type / Draw / Upload choice (and the keyboard, on phones).
+    cancelRef.current?.focus();
+  }, [formOpen]);
+
+  const heading = (
+    <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>
+      <Pen size={13} style={{ verticalAlign: -1, marginRight: 6 }} />
+      {title ?? "Signatures"}
+    </h3>
+  );
+
+  if (!formOpen) {
+    return (
+      <div className="card signature-panel signature-panel--collapsed">
+        <div className="card__head signature-panel__row">
+          <div className="signature-panel__titles">
+            {heading}
+            <span className="signature-panel__status muted">None yet</span>
+          </div>
+          {canWrite && (
+            <button
+              type="button"
+              className="btn btn--sm signature-panel__add"
+              aria-expanded={false}
+              onClick={() => {
+                focusFormOnOpen.current = true;
+                setFormRequested(true);
+              }}
+            >
+              <Plus size={12} /> Add signature
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="card">
+    <div className="card signature-panel">
       <div className="card__head">
-        <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>
-          <Pen size={13} style={{ verticalAlign: -1, marginRight: 6 }} />
-          {title ?? "Signatures"}
-        </h3>
+        {heading}
+        {empty && (
+          <button
+            type="button"
+            ref={cancelRef}
+            className="btn btn--ghost btn--sm signature-panel__add"
+            onClick={() => setFormRequested(false)}
+          >
+            Cancel
+          </button>
+        )}
       </div>
       <div className="card__body signature-panel__body">
         {displayedSignatures.map((s) => {

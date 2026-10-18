@@ -26,6 +26,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { CommitteeStructureCard } from "../features/committees/CommitteeStructureCard";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { formatMeetingDate } from "../../shared/meetingDates";
+import { describeCadenceRule } from "../../shared/continuityRules";
 import { PersonPicker, useDirectoryPeople } from "../components/PersonPicker";
 import { BuildRostersButton } from "../features/committees/BuildRostersButton";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -386,7 +387,9 @@ export function CommitteeDetailPage() {
         <ArrowLeft size={12} /> All committees
       </Link>
       <RecordShowPage
-        layout={{ societyId: society._id, pageId: "committee-detail", objectId: String(committee._id) }}
+        // The Layout customizer (reorder/hide sections) is a desktop tool;
+        // phones still get any saved layout, just not the button.
+        layout={{ societyId: society._id, pageId: "committee-detail", objectId: String(committee._id), enableControls: !isPhone }}
         title={committee.name}
         subtitle={committee.description}
         actions={
@@ -422,7 +425,9 @@ export function CommitteeDetailPage() {
         // add something.
         chips={<UnsupportedDetailsBadge table="committees" id={committee._id} />}
         summary={[
-          { label: "Cadence", value: cadenceLabel(committee.cadence) },
+          // Same source as the "Body, cadence and mandate" card: the structured
+          // rule when there is one, otherwise the free-text label.
+          { label: "Cadence", value: committee.cadenceRule ? describeCadenceRule(committee.cadenceRule) : cadenceLabel(committee.cadence) },
           { label: "Status", value: committeeStatusLabel(committee.status) },
           { label: "Members", value: currentMembers.length },
           { label: "Open tasks", value: openTasks },

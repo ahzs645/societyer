@@ -26,6 +26,9 @@ import { clockTextTo24h, meetingDateDraftFrom, meetingDateDraftIssue, meetingDat
 import { normalizedMeetingTitle, titleForChangedDate } from "../lib/meetingDetailHelpers";
 import { cleanSourceLocation } from "../../../../shared/meetingSourceHeader";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
+import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
+import { meetingRecordKind, type MeetingRecordKind } from "../../../../shared/meetingRecordKind";
+import { MeetingRecordKindPicker } from "./MeetingRecordKindPicker";
 
 export const COMMON_TIME_ZONES = [
   "America/Vancouver",
@@ -49,6 +52,7 @@ type Draft = {
   status: string;
   quorumRequired: string;
   notes: string;
+  recordKind: MeetingRecordKind;
 };
 
 function viewerTimeZone() {
@@ -70,6 +74,7 @@ function draftFromMeeting(meeting: any): Draft {
     status: meeting.status ?? "Scheduled",
     quorumRequired: meeting.quorumRequired != null ? String(meeting.quorumRequired) : "",
     notes: meeting.notes ?? "",
+    recordKind: meetingRecordKind(meeting),
   };
 }
 
@@ -99,6 +104,8 @@ export function EditMeetingDrawer({
   const { can } = usePermissions();
   const canWrite = can("meetings:write");
   const update = usePermissionedMutation(api.meetings.update, canWrite);
+  const canStartMinutes = canWrite && can("minutes:write");
+  const startMinutesFromNotes = usePermissionedMutation(api.meetings.startMinutesFromNotes, canStartMinutes);
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [initial, setInitial] = useState<string>("");
@@ -158,6 +165,11 @@ export function EditMeetingDrawer({
     try {
       const body = bodyPatchForValue(draft.body);
       const quorum = draft.quorumRequired.trim() ? Number(draft.quorumRequired) : undefined;
+      // Switching to minutes carries the notes into the minutes draft and adds
+      // the template's recurring motions, the same as "Turn notes into minutes".
+      const seedMinutesFromNotes = canStartMinutes
+        && draft.recordKind === "minutes"
+        && meetingRecordKind(meeting) !== "minutes";
       await update({
         id: meeting._id,
         patch: {
@@ -174,8 +186,10 @@ export function EditMeetingDrawer({
           status: draft.status,
           ...(quorum !== undefined ? { quorumRequired: quorum } : {}),
           notes: draft.notes,
+          ...(seedMinutesFromNotes ? {} : { recordKind: draft.recordKind }),
         },
       });
+      if (seedMinutesFromNotes) await startMinutesFromNotes({ id: meeting._id });
       toast.success("Meeting updated", normalizedMeetingTitle(draft.title));
       setInitial(JSON.stringify(draft));
       onClose();
@@ -317,7 +331,15 @@ export function EditMeetingDrawer({
               <input className="input" type="number" min={0} value={draft.quorumRequired} onChange={(event) => patchDraft({ quorumRequired: event.target.value })} />
             </Field>
           </div>
-          <Field label="Notes">
+          <MeetingRecordKindPicker
+            value={draft.recordKind}
+            onChange={(recordKind) => patchDraft({ recordKind })}
+            disabled={!canWrite}
+            hint={draft.recordKind !== "minutes" && hasStartedMinutesDraft(minutes)
+              ? "The minutes already started stay saved and return if you switch back to formal minutes."
+              : "Change it any time. Notes can become minutes later."}
+          />
+          <Field label="Preparation notes" hint="For organisers. Not part of the meeting notes or minutes.">
             <MarkdownEditor rows={3} value={draft.notes} onChange={(notes) => patchDraft({ notes })} />
           </Field>
           {showErrors && issues.length > 0 && (

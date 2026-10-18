@@ -28,7 +28,11 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableBulkBar,
+  RecordTablePhoneCard,
+  recordPersonName,
+  recordText,
   useObjectRecordTableData,
+  type RecordTableCardRenderer,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
@@ -52,6 +56,9 @@ export function DirectorsPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [selected, setSelected] = useState<any>(null);
+  // A new record's "Required before saving" note waits until a field has
+  // been left or Save was pressed, so an empty form doesn't open in red.
+  const [problemsRevealed, setProblemsRevealed] = useState(false);
   const [open, setOpen] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -140,6 +147,7 @@ export function DirectorsPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    setProblemsRevealed(false);
     setSelected({
       firstName: "", lastName: "", email: "",
       position: "Director", isBCResident: false, residentCanadianStatus: "unknown",
@@ -150,6 +158,7 @@ export function DirectorsPage() {
   };
 
   const selectedProblems = selected ? directorProblems(selected) : [];
+  const showSelectedProblems = selectedProblems.length > 0 && (Boolean(selected?._id) || problemsRevealed);
   const deleteSelected = async () => {
     if (!selected?._id || !canManage) return;
     const name = `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() || "this unnamed director";
@@ -170,6 +179,7 @@ export function DirectorsPage() {
   const save = async () => {
     if (!selected || !canManage) return;
     if (selectedProblems.length) {
+      setProblemsRevealed(true);
       toast.error("Director not saved", selectedProblems[0]);
       return;
     }
@@ -288,6 +298,7 @@ export function DirectorsPage() {
                   ) : null}
                 </button>
               ) : undefined}
+              renderPhoneCard={directorPhoneCard}
             />
             <RecordTableBulkBar
               actions={canManage ? [
@@ -341,14 +352,14 @@ export function DirectorsPage() {
               </button>
             ) : null}
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage || selectedProblems.length > 0}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || showSelectedProblems}>Save</button>
           </>
         }
       >
         {selected?._id && <div style={{ marginBottom: 8 }}><SourceProvenanceButton table="directors" id={selected._id} /></div>}
         {selected && (
-          <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-            {selectedProblems.length > 0 && (
+          <fieldset disabled={!canManage} onBlur={() => setProblemsRevealed(true)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {showSelectedProblems && (
               <InspectorNote tone="danger" title="Required before saving">
                 {selectedProblems.join(" ")}
               </InspectorNote>
@@ -563,3 +574,26 @@ function roleStatusTone(status?: string) {
   if (status === "NeedsReview") return "warn";
   return "neutral";
 }
+
+/**
+ * Phones: name, status, and position · term end; the card opens the director.
+ * A lapsed term reads as a warning, as the table's "Term ended" badge does.
+ */
+const directorPhoneCard: RecordTableCardRenderer = (record, { open, field, selecting }) => {
+  const termEnd = recordText(record.termEnd);
+  const lapsed = directorTermLapsed({ status: recordText(record.status), termEnd }, calendarDateKey(new Date()));
+  const term = !termEnd
+    ? "No term end"
+    : lapsed
+      ? <span className="record-phone-card__warn">Term ended {formatDate(termEnd)}</span>
+      : `Term ends ${formatDate(termEnd)}`;
+  return (
+    <RecordTablePhoneCard
+      title={recordPersonName(record) ?? "Unnamed director"}
+      badge={field("status")}
+      meta={[recordText(record.position), term]}
+      onOpen={open}
+      selecting={selecting}
+    />
+  );
+};

@@ -15,6 +15,8 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableHeader } from "./RecordTableHeader";
 import { RecordTableRow, useRecordRowClassName } from "./RecordTableRow";
 import { RecordTableEmpty } from "./RecordTableEmpty";
+import { RecordTableCardList, type RecordTableCardRenderer } from "./RecordTableCardList";
+import { useAutoPhoneCard } from "./RecordTableAutoPhoneCard";
 import { RecordTableAggregateFooter, RecordTableAggregateFooterRow } from "./RecordTableAggregateFooter";
 import { RecordTableActionRow, RecordTableActionRowCells } from "./RecordTableActionRow";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
@@ -256,6 +258,8 @@ export type RecordTableCellRenderer = (ctx: {
 /** Columns grow to share spare width, but not past this multiple of their saved size. */
 const MAX_COLUMN_STRETCH = 1.8;
 const FILL_COLUMN_MIN = 24;
+/** Phones shrink columns to fit the frame, but not below this multiple of their saved size. */
+const MIN_PHONE_COLUMN_STRETCH = 0.5;
 
 export function RecordTable({
   selectable = false,
@@ -267,6 +271,8 @@ export function RecordTable({
   renderCell,
   keyboardNavigation = true,
   showAggregateFooter = true,
+  renderPhoneCard,
+  autoPhoneCard = true,
 }: {
   selectable?: boolean;
   emptyState?: ReactNode;
@@ -294,6 +300,20 @@ export function RecordTable({
   renderCell?: RecordTableCellRenderer;
   keyboardNavigation?: boolean;
   showAggregateFooter?: boolean;
+  /**
+   * Phones, table view: draw each record as this card instead of a
+   * frozen-column row. The cards follow the same search, filters, sort and
+   * group-by (group headers sit between them); "Select records" and a long
+   * press select cards for the bulk bar. Kanban and calendar are unchanged.
+   * `RecordTablePhoneCard` is the standard card.
+   *
+   * Without one, a table that can open records gets an automatic card on
+   * phones (title, status badge, a short fact and a date, row actions behind
+   * "…"; see useAutoPhoneCard) whenever its view has a title-like identifier.
+   */
+  renderPhoneCard?: RecordTableCardRenderer;
+  /** Set false to keep the phone column table instead of the automatic card. */
+  autoPhoneCard?: boolean;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const density = useRecordTableState((s) => s.density);
@@ -339,6 +359,14 @@ export function RecordTable({
       if (scopeChanged || mobileSelectionMode) handle.get().clearSelection();
     }
   }, [actorId, objectMetadata._id, isMobile, selectable, viewType, mobileSelectionMode, handle]);
+  const autoPhoneCardRenderer = useAutoPhoneCard({
+    enabled: autoPhoneCard && !renderPhoneCard && isMobile && viewType === "table" && !!onRecordClick,
+    renderCell,
+    renderRowActions,
+    rowMenuSections,
+  });
+  // Phones, table view: the page's card, else the automatic one, else rows.
+  const phoneCard = isMobile && viewType === "table" ? renderPhoneCard ?? autoPhoneCardRenderer ?? undefined : undefined;
   const mobileSelectionControls = isMobile && selectable && !toolbarMounted ? (
     <div className="record-table__mobile-selection-controls">
       <button type="button" className="btn btn--sm" aria-pressed={inlineSelection}
@@ -386,8 +414,20 @@ export function RecordTable({
         : !touch.matches && !rowActionsFitInline(stretchRoot, scroller, columnSizeTotal + fixed) ? "pinned" : "inline";
       if (actionsLayout === null) delete stretchRoot.dataset.rowActions;
       else if (stretchRoot.dataset.rowActions !== actionsLayout) stretchRoot.dataset.rowActions = actionsLayout;
-      if (isMobile || !columnSizeTotal) {
+      // Phones: the capped table (identifier + a couple of columns) shrinks
+      // its columns, frozen identifier included, to share the frame instead
+      // of panning (`data-phone-fit`, see _record-table.scss). Trailing row
+      // actions stay in the scroller, a short swipe away.
+      if (isMobile && columnSizeTotal) stretchRoot.dataset.phoneFit = "";
+      else delete stretchRoot.dataset.phoneFit;
+      if (!columnSizeTotal) {
         setColumnStretch(1);
+        return;
+      }
+      if (isMobile) {
+        const room = scroller.clientWidth - FILL_COLUMN_MIN - 2;
+        const next = Math.min(1, Math.max(MIN_PHONE_COLUMN_STRETCH, room / columnSizeTotal));
+        setColumnStretch((current) => (Math.abs(current - next) < 0.005 ? current : next));
         return;
       }
       const actionsHead = stretchRoot.querySelector<HTMLElement>(".record-table__header-row > .record-table__row-actions-head")?.offsetWidth ?? 0;
@@ -613,6 +653,18 @@ export function RecordTable({
   }, [handle]);
 
   if (loading) {
+    if (phoneCard) {
+      return (
+        <div className="record-table__loading record-table__loading--cards" aria-busy="true">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="record-table__loading-card">
+              <span className="record-table__loading-line record-table__loading-line--title" />
+              <span className="record-table__loading-line" />
+            </div>
+          ))}
+        </div>
+      );
+    }
     return (
       <div className="record-table__loading">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -658,6 +710,20 @@ export function RecordTable({
       emptyState ?? (
         <RecordTableEmpty title={`No ${lowerLabel(objectMetadata.labelPlural)} yet`} />
       )
+    );
+  }
+
+  if (phoneCard) {
+    return (
+      <>
+        {mobileSelectionControls}
+        <RecordTableCardList
+          renderCard={phoneCard}
+          emptyState={emptyState}
+          label={objectMetadata.labelPlural}
+          selectable={selectable}
+        />
+      </>
     );
   }
 

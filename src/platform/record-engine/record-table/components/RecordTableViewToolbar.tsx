@@ -24,6 +24,7 @@ export function RecordTableViewToolbar({
   actions,
   listView,
   onViewPicked,
+  hideViewPickerOnPhone,
 }: {
   societyId: Id<"societies">;
   objectMetadataId: Id<"objectMetadata">;
@@ -38,6 +39,8 @@ export function RecordTableViewToolbar({
   listView?: TableListViewOption;
   /** Called when the user picks or saves a view (not when one is restored on load). */
   onViewPicked?: (viewId: string) => void;
+  /** See RecordTableToolbar: the page offers the saved views itself on phones. */
+  hideViewPickerOnPhone?: boolean;
 }) {
   const { saveCurrentView, saveAsNewView } = usePersistView({ societyId, objectMetadataId });
   const storageKey = `societyer:record-view:${societyId}:${objectMetadataId}`;
@@ -76,6 +79,7 @@ export function RecordTableViewToolbar({
       }}
       actions={actions}
       listView={listView}
+      hideViewPickerOnPhone={hideViewPickerOnPhone}
     />
   );
 }

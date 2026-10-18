@@ -48,7 +48,9 @@ import { resolvePrivacyProfile, privacyCitationIdsFor, type PrivacyRule } from "
 import { buildPrivacyPolicyDraft, privacyPolicyDraftTitle, privacyPolicyDraftTags } from "../../shared/privacyPolicyTemplate";
 import { citationIdsForOrganization } from "../lib/regulatoryCitations";
 import { todayDateOnly } from "../../shared/dateOnly";
-import { PrivacyScopeAssessment } from "../components/PrivacyScopeAssessment";
+import { PrivacyScopeAssessment, privacyJurisdictionSummary, privacyStatusText } from "../components/PrivacyScopeAssessment";
+import { MobileFold } from "../components/MobileFold";
+import type { ResolvedPrivacyProfile } from "../../shared/privacyRuleProfiles";
 import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
 import { privacyRecordTemplate, type PrivacyRecordTemplateKind } from "../../shared/privacyRecordTemplates";
 
@@ -77,6 +79,9 @@ const MEMBER_DATA_ACCESS_STATUS_OPTIONS = [
   "Institution-held",
   "Not applicable",
 ].map((value) => ({ value, label: value }));
+
+/** The setup checklist links here ("Program status", "Data access"). */
+const PRIVACY_OPERATIONS_ANCHORS = ["privacy-operations"] as const;
 
 export function PrivacyPage() {
   const society = useSociety();
@@ -111,6 +116,7 @@ export function PrivacyPage() {
   const [draftBusy, setDraftBusy] = useState(false);
   const [privacyForm, setPrivacyForm] = useState<any>(null);
   const [privacySaving, setPrivacySaving] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
 
   useEffect(() => {
     if (society && (!privacyForm || String(privacyForm._id) !== String(society._id))) {
@@ -177,6 +183,21 @@ export function PrivacyPage() {
     consentTrainingTone === "success" || consentTrainingTone === "info",
   ];
   const completedSetupCount = setupChecks.filter(Boolean).length;
+  const nextSetupStep = [
+    !hasOfficer && "Designate the privacy officer",
+    !privacyProgramDocumented && "Adopt the policy and complaint process",
+    !hasPolicyEvidence && "Link the adopted evidence",
+    !nonSociety && !memberDataReady && "Document member-data access",
+    consentTrainingTone === "warn" && "Track communication preferences and training",
+  ].find(Boolean);
+  const scopeProfile = resolvePrivacyProfile(privacyOpsForm);
+  const openScopeAssessment = () => {
+    setScopeOpen(true);
+    // The fold (phones) mounts its body on open; scroll once it has.
+    window.requestAnimationFrame(() => {
+      document.getElementById("privacy-scope")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  };
 
   const openPolicyDraft = async () => {
     if (policyDraft) {
@@ -396,7 +417,7 @@ export function PrivacyPage() {
   return (
     <div className="page">
       <PageHeader
-        title={privacyProfile.label}
+        title="Privacy"
         icon={<Shield size={16} />}
         iconColor="green"
         subtitle={nonSociety ? "Set up privacy policies, complaints, consent and training." : "Set up privacy policies, complaints, member-data access and training."}
@@ -419,7 +440,17 @@ export function PrivacyPage() {
         }
       />
 
-      <PrivacyScopeAssessment organization={privacyOpsForm} canEdit={canWriteSociety} saving={privacySaving} onChange={setPrivacyField} onSave={savePrivacyOperations} />
+      <PrivacyStatusLine profile={privacyProfile} onConfirm={openScopeAssessment} />
+
+      <MobileFold
+        id="privacy-scope"
+        title="Where privacy law applies"
+        summary={`${scopeProfile.operatingJurisdictions.length ? `Applies in: ${privacyJurisdictionSummary(scopeProfile.operatingJurisdictions)}` : "Provinces not recorded"}${scopeProfile.unresolvedFacts.length ? ` · ${scopeProfile.unresolvedFacts.length} facts to confirm` : ""}`}
+        open={scopeOpen}
+        onOpenChange={setScopeOpen}
+      >
+        <PrivacyScopeAssessment organization={privacyOpsForm} canEdit={canWriteSociety} saving={privacySaving} onChange={setPrivacyField} onSave={savePrivacyOperations} />
+      </MobileFold>
 
       <div className="two-col privacy-layout">
         <div className="col privacy-main-col">
@@ -465,6 +496,7 @@ export function PrivacyPage() {
             </div>
           </div>
 
+          <MobileFold title="Setup motions backlog" summary={pipaSetupMotionCount ? `${pipaSetupMotionCount} privacy setup motions in backlog` : "None in the backlog yet"}>
           <div className="card privacy-create-card">
             <div className="card__head">
               <div>
@@ -498,7 +530,9 @@ export function PrivacyPage() {
               </div>
             </div>
           </div>
+          </MobileFold>
 
+          <MobileFold title="Privacy operational records" summary="Incident register, access log, impact assessment">
           <div className="card">
             <div className="card__head"><h2 className="card__title"><ClipboardList size={14} /> Privacy operational records</h2></div>
             <div className="card__body">
@@ -511,7 +545,9 @@ export function PrivacyPage() {
               <p><small>Templates are working records. Record the actual assessment and notification actions before marking a task complete.</small></p>
             </div>
           </div>
+          </MobileFold>
 
+          <MobileFold title="Privacy operations record" anchors={PRIVACY_OPERATIONS_ANCHORS} summary={`Program: ${privacyProgramStatus}${nonSociety ? "" : ` · Member data: ${memberDataAccessStatus}`}`}>
           <div className="card" id="privacy-operations">
             <div className="card__head">
               <div>
@@ -596,7 +632,14 @@ export function PrivacyPage() {
               </div>
             </div>
           </div>
+          </MobileFold>
 
+          <MobileFold
+            title="Privacy setup checklist"
+            summary={`${completedSetupCount}/${setupChecks.length} ready${nextSetupStep ? ` · Next: ${nextSetupStep}` : ""}`}
+            className="privacy-mobile-first"
+            defaultOpen
+          >
           <div className="card privacy-setup-card">
             <div className="card__head">
               <div>
@@ -723,9 +766,11 @@ export function PrivacyPage() {
             </PrivacyStep>
           </div>
         </div>
+          </MobileFold>
         </div>
 
         <div className="col privacy-side-col">
+          <MobileFold title="Template and source material" summary={`${privacyResources.length} templates and sources`}>
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">
@@ -749,7 +794,9 @@ export function PrivacyPage() {
               ))}
             </div>
           </div>
+          </MobileFold>
 
+          <MobileFold title="Policy baseline" summary={`${legal.policyRequirements.length} things the policy should cover`}>
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">
@@ -763,8 +810,11 @@ export function PrivacyPage() {
               </ul>
             </div>
           </div>
+          </MobileFold>
 
-          <LegalRecordsRequirements organization={society} inspection />
+          <MobileFold title="Inspection rights by record category" summary="Who may inspect each kind of record">
+            <LegalRecordsRequirements organization={society} inspection />
+          </MobileFold>
         </div>
       </div>
 
@@ -857,6 +907,19 @@ export function PrivacyPage() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function PrivacyStatusLine({ profile, onConfirm }: { profile: ResolvedPrivacyProfile; onConfirm: () => void }) {
+  const status = privacyStatusText(profile);
+  return (
+    <div className="privacy-status-line" role="status">
+      <span className={`privacy-status-line__dot${status.confirm ? " is-warn" : ""}`} aria-hidden="true" />
+      <span className="privacy-status-line__text">{status.text}</span>
+      <button type="button" className="btn btn--ghost btn--sm privacy-status-line__action" onClick={onConfirm}>
+        {status.confirm ? "Confirm" : "Review"}
+      </button>
     </div>
   );
 }

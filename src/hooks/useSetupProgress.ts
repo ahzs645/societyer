@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 /**
- * Per-organization dismissal of the setup summary (Dashboard card) and the
- * shell's setup pill. The checklist itself lives in `useOrganizationSetup`
+ * Per-organization dismissal of the setup reminders: the shell's setup pill
+ * and, with it, the Dashboard card. (Dismissing only the Dashboard card is a
+ * dashboard layout choice and keeps the pill.) The checklist itself lives in `useOrganizationSetup`
  * (`/app/organization-setup`); this only remembers, per browser, that the
  * viewer hid the reminders. It never hides the setup view.
  *
@@ -62,4 +63,37 @@ export function useSetupGuideHidden(societyId: string | null | undefined) {
     [societyId],
   );
   return { hidden, setHidden };
+}
+
+/*
+ * Setup progress shows in one place at a time: while the Dashboard's setup
+ * card is on screen, the shell's setup pill (top-bar ring on phones) stays
+ * out of the way. The card registers itself here; once it is dismissed or
+ * setup is done the pill comes back as the way into setup.
+ */
+let setupSummaryMounts = 0;
+const setupSummaryListeners = new Set<() => void>();
+const notifySetupSummary = () => setupSummaryListeners.forEach((listener) => listener());
+const subscribeSetupSummary = (listener: () => void) => {
+  setupSummaryListeners.add(listener);
+  return () => {
+    setupSummaryListeners.delete(listener);
+  };
+};
+
+/** Call from the setup summary card: marks it on screen while mounted. */
+export function useRegisterSetupSummary() {
+  useEffect(() => {
+    setupSummaryMounts += 1;
+    notifySetupSummary();
+    return () => {
+      setupSummaryMounts -= 1;
+      notifySetupSummary();
+    };
+  }, []);
+}
+
+/** True while a setup summary card is on screen. */
+export function useSetupSummaryOnScreen(): boolean {
+  return useSyncExternalStore(subscribeSetupSummary, () => setupSummaryMounts > 0, () => false);
 }

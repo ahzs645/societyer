@@ -1,6 +1,7 @@
 import { requireAiThreadAccess } from "../shared/functions/aiChat";
 import { requirePermissionPortable } from "../shared/functions/permissions";
 import { requireDocumentAccess } from "../shared/functions/documents";
+import { readerAccessGate, minutesForReader, tasksForReader } from "../shared/functions/minutesPrivacy";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, internalMutation, query } from "./lib/untypedServer";
@@ -936,13 +937,18 @@ async function executeToolWithEffects(
             .take(limit);
     const scopedRows = rows.filter((row: any) => table === "societies" ? row?._id === societyId : row?.societyId === societyId);
     const readableRows: any[] = [];
-    const portable = table === "documents" ? await toPortableQueryCtx(ctx) : undefined;
-    for (const row of scopedRows) {
-      if (portable) {
+    const portable = table === "documents" || table === "minutes" || table === "tasks" ? await toPortableQueryCtx(ctx) : undefined;
+    const inCamera = portable && table === "minutes" ? readerAccessGate(portable) : undefined;
+    // Tasks made from in-camera action items lose their wording before search sees them.
+    const visibleRows = portable && table === "tasks" ? await tasksForReader(portable, String(societyId), scopedRows) : scopedRows;
+    for (const row of visibleRows) {
+      if (portable && table === "documents") {
         try { await requireDocumentAccess(portable, String(row._id)); }
         catch { continue; } // Hidden document metadata and references are confidential too.
       }
-      readableRows.push(row);
+      // In-camera minutes content is redacted before search sees it, so a
+      // match never reveals withheld wording.
+      readableRows.push(portable && inCamera ? await minutesForReader(portable, row, inCamera) : row);
     }
     const filteredRows = filterSearch(readableRows, args?.search).slice(0, limit);
     return {

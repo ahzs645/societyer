@@ -294,7 +294,7 @@ export function ComplianceObligationsPage() {
             </p>
           )}
           {jurisdictionModule.compliancePackIds.length ? (
-            <details className="obligations-packs">
+            <details className="disclosure obligations-packs">
               <summary>Rule packs ({jurisdictionModule.compliancePackIds.length})</summary>
               <ul>
                 {jurisdictionModule.compliancePackIds.map((packId) => (

@@ -13,6 +13,7 @@ import { documentSyncTables } from "./tables/documentSync";
 import { communicationsTables } from "./tables/communications";
 import { waveCacheTables } from "./tables/waveCache";
 import { transcriptTables } from "./tables/transcripts";
+import { meetingSourceTables } from "./tables/meetingSources";
 import { volunteerTables } from "./tables/volunteers";
 import { filingTables } from "./tables/filings";
 import { inventoryTables } from "./tables/inventory";
@@ -44,8 +45,16 @@ import { financeWorkflowTables } from "./tables/financeWorkflows";
 import { invoiceTables } from "./tables/invoices";
 import { businessRegisterTables } from "./tables/businessRegisters";
 import { expensePolicyTables } from "./tables/expensePolicies";
+import { agentConnectorTables } from "./tables/agentConnectors";
+import { mcpOAuthTables } from "./tables/mcpOAuth";
 
 export default defineSchema({
+  developmentAuthEmails: defineTable({
+    to: v.string(), subject: v.string(), text: v.string(),
+    tag: v.union(v.literal("auth-verify-email"), v.literal("auth-reset-password")),
+    createdAtMs: v.number(), expiresAtMs: v.number(),
+  }).index("by_createdAtMs", ["createdAtMs"]),
+  ...meetingSourceTables,
   ...reviewEvidenceTables,
   ...personHistoryTables,
   ...offlineMeetingTables,
@@ -55,6 +64,8 @@ export default defineSchema({
   ...invoiceTables,
   ...businessRegisterTables,
   ...expensePolicyTables,
+  ...agentConnectorTables,
+  ...mcpOAuthTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     onboardingAnswersJson: v.optional(v.string()),

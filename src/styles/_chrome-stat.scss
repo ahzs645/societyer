@@ -134,9 +134,10 @@
    * divider on its neighbor. */
   .stat:last-child:nth-child(odd) { border-right: 0; }
 
+  /* 12px: the eyebrow's 11px uppercase was too small to read on a phone. */
   .stat__label {
-    font-size: token('fs-xxs');
-    letter-spacing: 0.06em;
+    font-size: token('fs-tiny');
+    letter-spacing: 0.04em;
   }
   .stat__label svg {
     width: 12px;

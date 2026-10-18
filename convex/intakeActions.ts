@@ -12,6 +12,7 @@ import { api } from "./_generated/api";
 import { authorizedAction } from "./lib/authorizedServer";
 import { action } from "./lib/untypedServer";
 import { resolveAiRuntimeConfig } from "./aiChatActions";
+import { aiProviderErrorMessage } from "../shared/ai/providerErrors";
 import { makeGenerateObject } from "../shared/intake/aiGenerate";
 import { extractWithLlm, mapWithConcurrency, TokenBudget, type GenerateObjectFn } from "../shared/intake/llm";
 import { EXTRACTION_CLASSES, PROVIDER_EXCLUDED_CLASSES } from "../shared/intake/classify";
@@ -42,7 +43,7 @@ async function extractOne(ctx: any, args: { societyId: any; runId: any; fileKey:
       }
       if (result.skippedReason === "budget") return { fileKey: args.fileKey, engine: "skipped", reason: "Run token budget exhausted." };
     } catch (error) {
-      await ctx.runMutation((api as any).intake.appendProcessingLog, { societyId: args.societyId, runId: args.runId, entries: [{ atISO: new Date().toISOString(), fileKey: args.fileKey, stage: "llm_skipped", provider: runtime.provider, model: runtime.modelId, sentToProvider: true, note: `Provider error; deterministic fallback used: ${error instanceof Error ? error.message.slice(0, 300) : String(error)}` }] });
+      await ctx.runMutation((api as any).intake.appendProcessingLog, { societyId: args.societyId, runId: args.runId, entries: [{ atISO: new Date().toISOString(), fileKey: args.fileKey, stage: "llm_skipped", provider: runtime.provider, model: runtime.modelId, sentToProvider: true, note: `Provider error; deterministic fallback used: ${aiProviderErrorMessage(error)}` }] });
     }
   } else {
     await ctx.runMutation((api as any).intake.appendProcessingLog, { societyId: args.societyId, runId: args.runId, entries: [{ atISO: new Date().toISOString(), fileKey: args.fileKey, stage: "llm_skipped", sentToProvider: false, note: restricted ? "Restricted file: never sent to a model provider." : "No AI provider configured; deterministic extractor used." }] });

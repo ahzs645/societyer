@@ -73,49 +73,8 @@
 }
 
 /* ---------------------------------------------------------- receipt drop */
-.receipt-drop {
-  display: flex;
-  align-items: flex-start;
-  gap: token(s-3);
-  margin-top: token(s-3);
-  padding: token(s-3);
-  border: 1px dashed token(border-strong);
-  border-radius: token(r-card);
-  background: token(bg-subtle);
-  transition: background-color token(motion-fade-fast) token(ease-fade), border-color token(motion-fade-fast) token(ease-fade);
-  &.is-dragging {
-    border-color: token(accent);
-    background: token(accent-soft);
-  }
-  &.is-disabled { opacity: 0.75; }
-}
-.receipt-drop__icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: token(r-pill);
-  background: token(bg-panel);
-  color: token(text-secondary);
-}
-.receipt-drop__text {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 token(s-1);
-  min-width: 0;
-  font-size: token(fs-sm);
-}
-.receipt-drop__title { color: token(text-primary); }
-.receipt-drop__choose { font-size: inherit; }
-.receipt-drop__hint,
-.receipt-drop__error {
-  flex-basis: 100%;
-  font-size: token(fs-xs);
-}
-.receipt-drop__error { color: token(danger); }
+/* The zone itself is the shared .file-drop (_file-drop.scss). */
+.receipt-drop { margin-top: token(s-3); }
 
 /* ---------------------------------------------- policy and duplicate checks */
 .claim-check {

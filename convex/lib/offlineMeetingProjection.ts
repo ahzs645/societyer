@@ -5,6 +5,7 @@ import { assertOfflineMeetingPreparationEnabled, offlineMeetingPreparationEnable
 import { toPortableQueryCtx } from "./portable";
 import { hostedPrincipal } from "./authIdentity";
 import { hasPermission, requirePermissionPortable } from "../../shared/functions/permissions";
+import { agendaItemsForReader, minutesForReader } from "../../shared/functions/minutesPrivacy";
 import { listPortable as listMeetings } from "../../shared/functions/meetings";
 import { listForMeetingPortable } from "../../shared/functions/meetingMaterials";
 import type { PortableQueryCtx } from "../../shared/portable/ctx";
@@ -36,6 +37,9 @@ export async function visibleSnapshots(portable: PortableQueryCtx, societyId: st
     if (!minutes || minutes.societyId !== societyId || minutes.meetingId !== meeting._id) continue;
     const agenda = await portable.db.query("agendas").withIndex("by_meeting", q => q.eq("meetingId", meeting._id)).unique();
     const items = agenda ? await portable.db.query("agendaItems").withIndex("by_agenda", q => q.eq("agendaId", agenda._id)).collect() : [];
+    // In-camera agenda titles read "In-camera item" without in-camera access (decision A3).
+    const visibleItems = await agendaItemsForReader(portable, meeting, [...items].sort((a, b) => a.order - b.order));
+    const agendaTitles = new Map(visibleItems.map(item => [item._id, item.title]));
     // Existing material availability, explicit grants AND document ACLs apply.
     const materials = await listForMeetingPortable(portable, { meetingId: meeting._id });
     const file: FileDescriptor | undefined = aggregate.file ? JSON.parse(aggregate.file) : undefined;
@@ -48,7 +52,7 @@ export async function visibleSnapshots(portable: PortableQueryCtx, societyId: st
     result.push({ meetingUuid: aggregate.uuid, revision: aggregate.revision, title: meeting.title, scheduledAt: meeting.scheduledAt,
       ids: { minutes: mappings.find(row => row.table === "minutes")!.uuid, agenda: mappings.find(row => row.table === "agendas")!.uuid,
         items: items.map(item => mappings.find(row => row.nativeId === item._id)!.uuid) }, editable: canEdit && Boolean(agenda) && !minutes?.approvedAt,
-      notes: meeting.notes ?? "", discussion: minutes?.discussion ?? "", agenda: items.map(row => row.title), files });
+      notes: meeting.notes ?? "", discussion: (await minutesForReader(portable, minutes))?.discussion ?? "", agenda: items.map(row => agendaTitles.get(row._id) ?? row.title), files });
   }
   return result;
 }

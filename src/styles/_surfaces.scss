@@ -48,11 +48,11 @@
     left: max(16px, env(safe-area-inset-left, 0px));
     right: max(16px, env(safe-area-inset-right, 0px));
     bottom: calc(52px + env(safe-area-inset-bottom, 0px) + #{token('s-3')});
-    max-width: none;
-    align-items: center;
+    width: auto;
   }
   .toast {
     width: min(420px, 100%);
+    margin-inline: auto;
   }
 }
 
@@ -70,14 +70,21 @@
     calc(100% - var(--keyboard-inset, 0px) - var(--visible-height, 100%) + #{token('s-2')})
   );
   bottom: auto;
+  // Older toasts peek out below the front one and the list fans downward.
+  --toast-dir: 1;
 
   .toast {
+    top: 0;
+    bottom: auto;
+    transform-origin: bottom center;
     animation-name: toastDropIn;
+  }
+  &:not([data-expanded="true"]) .toast:not([data-depth="0"]) {
+    clip-path: inset(max(-48px, calc(var(--toast-h, 0px) - var(--toast-front-h, 0px))) -48px -48px -48px);
   }
 }
 @keyframes toastDropIn {
-  from { opacity: 0; transform: translateY(-12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; translate: 0 -12px; }
 }
 @media (max-width: 768px) {
   body:has(.app-shell.is-mobile .inspector-host.is-open, .drawer) .toast-stack {

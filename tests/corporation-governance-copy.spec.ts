@@ -214,9 +214,10 @@ test("a BC company keeps BC privacy wording without society-only fields", async 
   await expect(sidebar.getByRole("link", { name: "PIPA training", exact: true })).toBeVisible();
 
   // The assessment labels the presumption and asks for the facts that could displace it.
-  await visit("/app/privacy", "Privacy (BC PIPA — presumed: confirm facts)");
+  await visit("/app/privacy", "Privacy");
+  await expect(page.locator(".privacy-status-line")).toContainText("BC PIPA applies (assumed)");
   const assessment = page.getByRole("region", { name: "Privacy-law scope", exact: true });
-  await expect(assessment.locator("summary").filter({ hasText: /^BC PIPA Presumed: confirm facts$/ })).toHaveCount(1);
+  await expect(assessment.locator("summary").filter({ hasText: /^BC PIPA Assumed: confirm$/ })).toHaveCount(1);
   await expect(assessment).not.toContainText("Assessed as applicable");
   await expect(assessment).toContainText("federal work, undertaking or business");
 

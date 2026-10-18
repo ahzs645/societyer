@@ -82,7 +82,9 @@ export function buildConvexCapabilities(ctx?: ConvexStorageCtx, options?: { demo
               return { uploadUrl: res.url, storageKey: res.key };
             },
             async getDownloadUrl(input) {
-              const url = await createDownloadUrl({ provider: providers.storage().id, key: input.storageKey });
+              const provider = providers.storage().id;
+              if (provider === "sharepoint") throw new Error("SharePoint files require a document version and authenticated broker access.");
+              const url = await createDownloadUrl({ provider, key: input.storageKey });
               return { url };
             },
             async delete() {

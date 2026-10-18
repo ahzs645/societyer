@@ -153,6 +153,11 @@ class ConvexPortableDb implements TransactionalDb {
   }
 }
 
+/** The portable `ctx.db` over a real Convex `ctx.db`, for server code that builds its own principal. */
+export function convexPortableDb(db: object): TransactionalDb {
+  return new ConvexPortableDb(db);
+}
+
 const NO_CAPABILITIES = makeCapabilities({});
 
 /** Wrap a real Convex query ctx as a portable query ctx. */

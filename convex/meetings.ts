@@ -12,6 +12,7 @@ import {
   setPackageReviewStatusPortable,
   removePortable,
   backfillQuorumSnapshotPortable,
+  startMinutesFromNotesPortable,
 } from "../shared/functions/meetings";
 import { mergePortable, mergePreviewPortable } from "../shared/functions/meetingMerge";
 import { attendanceRecordsForMeetingPortable } from "../shared/functions/minutesAttendance";
@@ -128,6 +129,14 @@ export const update = authorizedMutation("meetings:update", mutation)({
   },
   returns: v.any(),
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
+});
+
+// "Turn notes into minutes": switches the meeting to formal minutes and seeds
+// the minutes discussion with its working notes. Needs minutes:write too.
+export const startMinutesFromNotes = authorizedMutation("meetings:startMinutesFromNotes", mutation)({
+  args: { id: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, args) => startMinutesFromNotesPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markSourceReview = authorizedMutation("meetings:markSourceReview", mutation)({

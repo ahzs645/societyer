@@ -1,6 +1,7 @@
 import type { UserIdentity } from "convex/server";
 import type { PortablePrincipal } from "../../shared/portable/ctx";
 import { resolveAuthIssuer, resolveClerkIssuer, resolveSessionBroker } from "../../shared/authConfiguration";
+import { allowedAuthEmailDomains, authEmailAllowed } from "../../shared/authEmailPolicy";
 
 export function betterAuthIssuer(): string {
   return resolveAuthIssuer(process.env);
@@ -16,6 +17,10 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
   if (!identity) return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
   const mode = resolveSessionBroker(process.env);
   if (mode === "convex") {
+    const domains = allowedAuthEmailDomains(process.env);
+    if (domains.length && (!authEmailAllowed(identity.email, domains) || identity.emailVerified !== true)) {
+      return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
+    }
     // Only this deployment's own signer is trusted; there is no machine bridge.
     const convexIssuer = convexHostedIssuer();
     if (!convexIssuer || identity.issuer !== convexIssuer) return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };

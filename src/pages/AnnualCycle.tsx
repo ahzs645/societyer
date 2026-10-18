@@ -8,6 +8,7 @@ import {
   ArrowRight,
   CalendarCheck,
   CheckCircle2,
+  ChevronDown,
   Circle,
   Clock,
   FileCheck2,
@@ -25,6 +26,7 @@ import { InfoPopover } from "../components/InfoPopover";
 import { formatDate, relative } from "../lib/format";
 import { organizationVocabulary, type OrganizationVocabulary } from "../lib/organizationVocabulary";
 import { StatTile } from "../components/StatTile";
+import { useIsMobile } from "../lib/useIsMobile";
 
 type CycleItem = {
   id: string;
@@ -88,6 +90,7 @@ function phasesFor(entity: OrganizationVocabulary): Phase[] {
 export function AnnualCyclePage() {
   const society = useSociety();
   const [year, setYear] = useState(new Date().getFullYear());
+  const isMobile = useIsMobile();
   const data = useQuery(api.annualCycle.summary, society ? { societyId: society._id, year } : "skip");
 
   const years = useMemo(() => {
@@ -114,6 +117,13 @@ export function AnnualCyclePage() {
   const progress = counts.total > 0 ? Math.round((counts.completed / counts.total) * 100) : 0;
   const nextItem = (data.nextItem ?? fallbackItems.find((item) => item.status !== "complete") ?? fallbackItems[0]) as CycleItem | undefined;
 
+  const attentionItems = fallbackItems
+    .filter((item) => item.status === "blocked" || item.status === "attention")
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
+  const filed = data.annualReport?.status === "Filed";
+  const reportOverdue = !filed
+    && !!data.annualReportDueDate && data.annualReportDueDate < calendarDateKey(new Date());
+
   return (
     <div className="page">
       <PageHeader
@@ -132,29 +142,49 @@ export function AnnualCyclePage() {
       />
 
       <section className="onboarding-flow annual-cycle-hero" aria-labelledby="annual-cycle-title">
-        <div className="onboarding-flow__story">
-          <div>
-            <h2 id="annual-cycle-title">{data.society?.name ?? entity.organizationTitle} annual compliance cycle</h2>
-            <p>
-              {data.currentStage ?? "Annual cycle"}. {counts.completed}/{counts.total} evidence checks are complete,
-              with {counts.blocked} blocked and {counts.attention} needing attention.
-            </p>
+        {isMobile ? (
+          /* Phones: phase and progress in one line; the facts the desktop shows
+             as stat tiles fold into a single wrap-around line under the bar. */
+          <div className="onboarding-flow__story">
+            <div>
+              <span className="onboarding-flow__eyebrow">Current phase</span>
+              <h2 id="annual-cycle-title">{data.currentStage ?? "Annual cycle"}</h2>
+            </div>
+            <div className="onboarding-flow__status">
+              <span className="mono">{progress}%</span>
+              <span>{counts.completed}/{counts.total} ready</span>
+            </div>
           </div>
-          <div className="onboarding-flow__status">
-            <span className="mono">{progress}%</span>
-            <span>evidence ready</span>
+        ) : (
+          <div className="onboarding-flow__story">
+            <div>
+              <h2 id="annual-cycle-title">{data.society?.name ?? entity.organizationTitle} annual compliance cycle</h2>
+              <p>
+                {data.currentStage ?? "Annual cycle"}. {counts.completed}/{counts.total} evidence checks are complete,
+                with {counts.blocked} blocked and {counts.attention} needing attention.
+              </p>
+            </div>
+            <div className="onboarding-flow__status">
+              <span className="mono">{progress}%</span>
+              <span>evidence ready</span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="onboarding-flow__bar" aria-hidden="true">
           <span style={{ width: `${progress}%` }} />
         </div>
+
+        {isMobile && <CycleFacts variant="line" entity={entity} counts={counts} dueDate={data.annualReportDueDate} filed={filed} overdue={reportOverdue} />}
 
         <div className="onboarding-flow__next">
           <div>
             <span className="onboarding-flow__eyebrow">Next action</span>
             <strong>{nextItem?.title ?? "No next action"}</strong>
             <span>{nextItem?.detail ? humanDates(nextItem.detail) : "No annual-cycle evidence checks are available yet."}</span>
+            {isMobile && nextItem?.dueDate && (
+              <span>Due {formatDate(nextItem.dueDate)} · {relative(nextItem.dueDate)}</span>
+            )}
           </div>
           {nextItem && (
             <Link to={appPath(nextItem.to)} className="btn-action btn-action--primary">
@@ -164,46 +194,13 @@ export function AnnualCyclePage() {
         </div>
       </section>
 
-      <div className="stat-grid stat-grid--3 annual-cycle-stats">
-        {/* votingMembers counts the society member register. */}
-        {entity.isSociety && <StatTile label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
-        <StatTile label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
-        <StatTile
-          label="Annual report due"
-          value={data.annualReportDueDate ? formatDate(data.annualReportDueDate) : "Not computed"}
-          icon={<FileCheck2 size={14} />}
-          // Red only when the report itself is overdue, not because some other
-          // cycle item is blocked (G-12).
-          tone={data.annualReport?.status === "Filed" ? "ok" : data.annualReportDueDate && data.annualReportDueDate < calendarDateKey(new Date()) ? "danger" : undefined}
-        />
-      </div>
+      {!isMobile && <CycleFacts variant="tiles" entity={entity} counts={counts} dueDate={data.annualReportDueDate} filed={filed} overdue={reportOverdue} />}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-        {visiblePhases.map((phase) => {
-          const items = (phases[phase.id] ?? []) as CycleItem[];
-          const complete = items.filter((item) => item.status === "complete").length;
-          const Icon = phase.icon;
-          return (
-            <section className="card" key={phase.id}>
-              <div className="card__head" style={{ alignItems: "flex-start" }}>
-                <div className="row" style={{ gap: 8 }}>
-                  <Icon size={16} style={{ color: "var(--accent)" }} />
-                  <div>
-                    <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
-                      <h2 className="card__title">{phase.title}</h2>
-                      <InfoPopover label={`About ${phase.title}`}><p>{phase.subtitle}</p></InfoPopover>
-                    </div>
-                    <div className="card__subtitle">{complete}/{items.length} complete</div>
-                  </div>
-                </div>
-              </div>
-              <div className="card__body col" style={{ gap: 10 }}>
-                {items.map((item) => <CycleCard key={item.id} item={item} />)}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      {isMobile ? (
+        <MobileCycle phases={visiblePhases} itemsByPhase={phases} attentionItems={attentionItems} nextItemId={nextItem?.id} />
+      ) : (
+        <PhaseGrid phases={visiblePhases} itemsByPhase={phases} />
+      )}
 
       {(data.caveats ?? []).length > 0 && (
         <details
@@ -227,7 +224,7 @@ export function AnnualCyclePage() {
             }}
           >
             <Info size={13} />
-            <strong style={{ fontWeight: 600 }}>Caveats</strong>
+            <strong style={{ fontWeight: 600, flexShrink: 0 }}>Caveats</strong>
             <span>· Rules are evidence checks, not legal conclusions</span>
           </summary>
           <ul style={{ margin: "8px 0 0", paddingLeft: 24 }}>
@@ -241,16 +238,230 @@ export function AnnualCyclePage() {
   );
 }
 
-function CycleCard({ item }: { item: CycleItem }) {
-  const Icon = item.status === "complete"
+type CycleCounts = { completed: number; total: number; blocked: number; attention: number; votingMembers: number; activeDirectors: number };
+
+/** The cycle's headline numbers: stat tiles on desktop, one wrapping line on phones. */
+function CycleFacts({
+  variant,
+  entity,
+  counts,
+  dueDate,
+  filed,
+  overdue,
+}: {
+  variant: "tiles" | "line";
+  entity: OrganizationVocabulary;
+  counts: CycleCounts;
+  dueDate?: string | null;
+  filed: boolean;
+  overdue: boolean;
+}) {
+  if (variant === "line") {
+    return (
+      <ul className="annual-cycle-facts" aria-label="Cycle facts">
+        {counts.blocked > 0 && <li className="annual-cycle-facts__danger">{counts.blocked} blocked</li>}
+        {counts.attention > 0 && <li className="annual-cycle-facts__warn">{counts.attention} need work</li>}
+        <li className={filed ? "annual-cycle-facts__ok" : overdue ? "annual-cycle-facts__danger" : undefined}>
+          Annual report {filed ? "filed" : `due ${dueDate ? formatDate(dueDate) : "not computed"}`}
+        </li>
+        {entity.isSociety && <li>{counts.votingMembers} voting members</li>}
+        <li>{counts.activeDirectors} active directors</li>
+      </ul>
+    );
+  }
+  return (
+    <div className="stat-grid stat-grid--3 annual-cycle-stats">
+      {/* votingMembers counts the society member register. */}
+      {entity.isSociety && <StatTile label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
+      <StatTile label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
+      <StatTile
+        label="Annual report due"
+        value={dueDate ? formatDate(dueDate) : "Not computed"}
+        icon={<FileCheck2 size={14} />}
+        // Red only when the report itself is overdue, not because some other
+        // cycle item is blocked (G-12).
+        tone={filed ? "ok" : overdue ? "danger" : undefined}
+      />
+    </div>
+  );
+}
+
+function PhaseGrid({ phases, itemsByPhase }: { phases: Phase[]; itemsByPhase: Partial<Record<string, unknown[]>> }) {
+  return (
+    <div className="annual-cycle-phase-grid">
+      {phases.map((phase) => {
+        const items = (itemsByPhase[phase.id] ?? []) as CycleItem[];
+        const complete = items.filter((item) => item.status === "complete").length;
+        const Icon = phase.icon;
+        return (
+          <section className="card" key={phase.id}>
+            <div className="card__head" style={{ alignItems: "flex-start" }}>
+              <div className="row" style={{ gap: 8 }}>
+                <Icon size={16} style={{ color: "var(--accent)" }} />
+                <div>
+                  <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
+                    <h2 className="card__title">{phase.title}</h2>
+                    <InfoPopover label={`About ${phase.title}`}><p>{phase.subtitle}</p></InfoPopover>
+                  </div>
+                  <div className="card__subtitle">{complete}/{items.length} complete</div>
+                </div>
+              </div>
+            </div>
+            {/* Steps that need work stay full cards; ready and upcoming steps
+                are one-line rows that open to the same detail. */}
+            <div className="card__body col" style={{ gap: 6 }}>
+              {items.map((item) => needsWork(item)
+                ? <CycleCard key={item.id} item={item} />
+                : <CycleRow key={item.id} item={item} />)}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+const STATUS_ORDER: Record<CycleItem["status"], number> = { blocked: 0, attention: 1, upcoming: 2, complete: 3 };
+
+function needsWork(item: CycleItem) {
+  return item.status === "blocked" || item.status === "attention";
+}
+
+/**
+ * Phones: the hero carries the one next action, then the steps that need work
+ * as cards, then every other step folded into its phase. Each phase summary
+ * keeps the phase's full done/total so the count matches the desktop columns.
+ */
+function MobileCycle({
+  phases,
+  itemsByPhase,
+  attentionItems,
+  nextItemId,
+}: {
+  phases: Phase[];
+  itemsByPhase: Partial<Record<string, unknown[]>>;
+  attentionItems: CycleItem[];
+  nextItemId?: string;
+}) {
+  const cards = attentionItems.filter((item) => item.id !== nextItemId);
+  const shownAbove = new Set([...cards.map((item) => item.id), ...(nextItemId ? [nextItemId] : [])]);
+  return (
+    <>
+      {cards.length > 0 && (
+        <section className="annual-cycle-section" aria-labelledby="annual-cycle-attention">
+          <h2 id="annual-cycle-attention" className="annual-cycle-section__title">
+            Needs attention <span className="annual-cycle-section__count">{cards.length}</span>
+          </h2>
+          <div className="col" style={{ gap: 8 }}>
+            {cards.map((item) => <CycleCard key={item.id} item={item} />)}
+          </div>
+        </section>
+      )}
+
+      <section className="annual-cycle-section" aria-labelledby="annual-cycle-phases">
+        <h2 id="annual-cycle-phases" className="annual-cycle-section__title">All steps by phase</h2>
+        <div className="annual-cycle-phases">
+          {phases.map((phase) => {
+            const items = (itemsByPhase[phase.id] ?? []) as CycleItem[];
+            const complete = items.filter((item) => item.status === "complete").length;
+            const rest = items.filter((item) => !shownAbove.has(item.id));
+            const above = items.length - rest.length;
+            const Icon = phase.icon;
+            return (
+              <details className="annual-cycle-phase" key={phase.id}>
+                <summary className="annual-cycle-phase__head">
+                  <Icon size={16} aria-hidden="true" className="annual-cycle-phase__icon" />
+                  <span className="annual-cycle-phase__title">{phase.title}</span>
+                  <span className="annual-cycle-phase__count" aria-label={`${complete} of ${items.length} complete`}>
+                    {complete}/{items.length}
+                  </span>
+                  <ChevronDown size={16} aria-hidden="true" className="annual-cycle-phase__chevron" />
+                </summary>
+                <div className="annual-cycle-phase__body">
+                  <p className="annual-cycle-phase__subtitle">{phase.subtitle}</p>
+                  {rest.map((item) => <CycleRow key={item.id} item={item} />)}
+                  {above > 0 && (
+                    <p className="annual-cycle-phase__note">
+                      {above === 1 ? "1 more step" : `${above} more steps`} in this phase {above === 1 ? "is" : "are"} listed above.
+                    </p>
+                  )}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function StatusIcon({ status }: { status: CycleItem["status"] }) {
+  const Icon = status === "complete"
     ? CheckCircle2
-    : item.status === "blocked"
+    : status === "blocked"
       ? AlertTriangle
-      : item.status === "attention"
+      : status === "attention"
         ? Clock
         : Circle;
+  return <Icon size={16} aria-hidden="true" style={{ flexShrink: 0, color: statusColor(status) }} />;
+}
+
+/** Sources and evidence: the supporting detail behind a step. */
+function StepSources({ item }: { item: CycleItem }) {
+  return (
+    <>
+      {!!item.sourceIds?.length && (
+        <div className="annual-cycle-sources">{item.sourceIds.map((id) => <CitationBadge key={id} citationId={id} />)}</div>
+      )}
+      {item.evidence.length > 0 && (
+        <div className="annual-cycle-evidence-list">
+          <span className="annual-cycle-evidence-list__label">Evidence</span>
+          <ul>
+            {item.evidence.map((evidence) => <li key={evidence}>{humanDates(evidence)}</li>)}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * A ready or upcoming step as one line: status, title and due date. The whole
+ * line toggles the step open in place, where the legal detail, sources,
+ * evidence and the step's own link live.
+ */
+function CycleRow({ item }: { item: CycleItem }) {
+  return (
+    <details className="annual-cycle-row">
+      <summary className="annual-cycle-row__head">
+        <StatusIcon status={item.status} />
+        <span className="annual-cycle-row__title">{item.title}</span>
+        <span className="sr-only">{statusLabel(item.status)}</span>
+        <span className="annual-cycle-row__meta">
+          {item.dueDate ? formatDate(item.dueDate, "MMM d") : statusLabel(item.status)}
+        </span>
+        <ChevronDown size={14} aria-hidden="true" className="annual-cycle-row__chevron" />
+      </summary>
+      <div className="annual-cycle-row__body">
+        <div className="row" style={{ gap: 6 }}>
+          <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+          {item.dueDate && <span className="muted">Due {formatDate(item.dueDate)} · {relative(item.dueDate)}</span>}
+        </div>
+        <p>{humanDates(item.detail)}</p>
+        <StepSources item={item} />
+        <Link to={appPath(item.to)} className="btn-action" style={{ alignSelf: "flex-start" }}>
+          {item.actionLabel} <ArrowRight size={12} />
+        </Link>
+      </div>
+    </details>
+  );
+}
+
+function CycleCard({ item }: { item: CycleItem }) {
+  const sourceCount = (item.sourceIds?.length ?? 0) + item.evidence.length;
   return (
     <div
+      className="annual-cycle-card"
       style={{
         border: "1px solid var(--border)",
         borderRadius: 8,
@@ -258,9 +469,9 @@ function CycleCard({ item }: { item: CycleItem }) {
         background: item.status === "blocked" ? "var(--danger-soft)" : item.status === "attention" ? "var(--warn-soft)" : "var(--bg-panel)",
       }}
     >
-      <div className="row" style={{ alignItems: "flex-start", gap: 8 }}>
-        <Icon size={16} style={{ marginTop: 2, color: statusColor(item.status) }} />
-        <div className="col" style={{ flex: 1, gap: 6 }}>
+      <div className="row" style={{ alignItems: "flex-start", gap: 8, flexWrap: "nowrap" }}>
+        <span style={{ marginTop: 2, display: "inline-flex" }}><StatusIcon status={item.status} /></span>
+        <div className="col" style={{ flex: 1, gap: 6, minWidth: 0 }}>
           <div
             className="row"
             style={{ justifyContent: "space-between", gap: 8, alignItems: "flex-start", flexWrap: "nowrap" }}
@@ -270,24 +481,29 @@ function CycleCard({ item }: { item: CycleItem }) {
               <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
             </span>
           </div>
-          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{humanDates(item.detail)}</div>
+          <div className="muted annual-cycle-card__detail" style={{ fontSize: "var(--fs-sm)" }}>{humanDates(item.detail)}</div>
           {item.dueDate && (
             <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
               Due {formatDate(item.dueDate)} · {relative(item.dueDate)}
             </div>
           )}
-          {!!item.sourceIds?.length && <div>{item.sourceIds.map(id => <CitationBadge key={id} citationId={id} />)}</div>}
-          {item.evidence.length > 0 && (
-            <details className="annual-cycle-evidence">
-              <summary>Evidence ({item.evidence.length})</summary>
-              <ul>
-                {item.evidence.map((evidence) => <li key={evidence}>{humanDates(evidence)}</li>)}
-              </ul>
-            </details>
-          )}
-          <Link to={appPath(item.to)} className="btn-action" style={{ alignSelf: "flex-start" }}>
-            {item.actionLabel} <ArrowRight size={12} />
-          </Link>
+          {/* Sources and evidence sit behind one toggle beside the step's link,
+              so the reason and the action stay together. */}
+          <div className="annual-cycle-card__foot">
+            <Link to={appPath(item.to)} className="btn-action">
+              {item.actionLabel} <ArrowRight size={12} />
+            </Link>
+            {sourceCount > 0 && (
+              <details className="disclosure annual-cycle-evidence">
+                <summary>
+                  {item.evidence.length > 0 ? `Evidence (${item.evidence.length})` : `Sources (${item.sourceIds?.length ?? 0})`}
+                </summary>
+                <div className="col" style={{ gap: 6, marginTop: 6 }}>
+                  <StepSources item={item} />
+                </div>
+              </details>
+            )}
+          </div>
         </div>
       </div>
     </div>

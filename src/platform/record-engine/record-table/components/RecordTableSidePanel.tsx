@@ -28,6 +28,7 @@ import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import type { FieldMetadata, ObjectMetadata } from "../../types";
 import type { RecordTableContextValue } from "../contexts/RecordTableContext";
 import { useRecordTableState } from "../state/recordTableStore";
+import { recordPersonName, recordTitleText } from "../utils/recordTitle";
 import { RecordTableFloatingCellEditor } from "./RecordTableCell";
 import {
   RecordPanelActionBar,
@@ -78,10 +79,11 @@ export function RecordTableSidePanel({
     [columns, labelIdentifierFieldName],
   );
   // People records keep their name in first/last name fields; without them
-  // the panel and its minimised dock read only "Member".
-  const personName = [record?.firstName, record?.lastName].filter(Boolean).join(" ") || undefined;
+  // the panel and its minimised dock read only "Member" (or just "Ada").
+  const personName = recordPersonName(record);
   const title = String(
-    record?.[labelIdentifierFieldName] ??
+    recordTitleText(record, labelIdentifierFieldName) ??
+      record?.[labelIdentifierFieldName] ??
       record?.name ??
       record?.title ??
       record?.displayName ??

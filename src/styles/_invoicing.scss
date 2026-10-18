@@ -28,6 +28,20 @@
 
 .invoices-page > .tabs { margin-bottom: token(s-4); }
 .invoice-stats { margin-bottom: token(s-4); }
+/* Phones: the four totals as a 2×2 grid rather than a swipe row whose last
+ * tile ("Drafts $1,27…") is cut off at 360–390px. */
+@media (max-width: 560px) {
+  .stat-grid.stat-grid--scroll-phone.invoice-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+    mask-image: none;
+    // The strip bleeds to the screen edge: the left column keeps the page
+    // gutter, the right column loses the swipe row's trailing divider.
+    > .stat-tile:nth-child(odd) { padding-left: 16px; }
+    > .stat-tile:nth-child(even) { padding-left: 12px; border-right: 0; }
+  }
+}
 .invoice-card { overflow-x: auto; container-type: inline-size; }
 .invoice-card > .card__head { gap: token(s-3); }
 .invoice-card > .card__head > .btn { margin-left: auto; flex: none; }
@@ -233,6 +247,37 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   }
   .invoice-table--catalog .invoice-table__actions,
   .invoice-table--customers .invoice-table__actions { grid-column: 2; grid-row: 2 / span 3; align-self: end; width: auto; }
+}
+
+/* Phone list cards: one amount when the balance due is the whole total (a
+ * draft, an unpaid invoice) or nothing is owed (paid, void); "Balance" and
+ * "Total" labels when part has been paid. The invoice number stretches its
+ * tap area over the whole card (the checkbox stays on top). */
+@media (max-width: 760px) {
+  .invoice-table--list tbody tr[data-amounts="single"] td[data-label="Balance due"] { display: none; }
+  .invoice-table--list tbody tr[data-amounts="single"] td[data-label="Amount"] {
+    grid-row: 2;
+    font-size: inherit;
+    color: token(text-primary);
+    font-weight: token(fw-medium);
+  }
+  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Balance due"]::before,
+  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Amount"]::before {
+    margin-right: 4px;
+    font-size: token(fs-xs);
+    font-weight: token(fw-regular);
+    color: token(text-tertiary);
+  }
+  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Balance due"]::before { content: "Balance"; }
+  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Amount"]::before { content: "Total"; }
+
+  .invoice-table--list tbody tr { position: relative; }
+  .invoice-table--list .invoice-table__link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+  .invoice-table--list .invoice-table__check { position: relative; z-index: 1; }
 }
 
 @media (pointer: coarse) {

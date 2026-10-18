@@ -271,7 +271,7 @@ export function ElectionDetailPage() {
     setOpeningElection(true);
     try {
       const result = await snapshotEligibleVoters({ electionId: election._id });
-      toast.success(`Snapshotted ${pluralize(result.eligibleCount, "eligible voter")} and opened voting`);
+      toast.success(`Voting opened for ${pluralize(result.eligibleCount, "eligible voter")}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not open the election.");
     } finally { setOpeningElection(false); }
@@ -356,11 +356,11 @@ export function ElectionDetailPage() {
             <div className="card__body" style={{ display: "grid", gap: 16 }}>
               {!isAuthenticatedAuthMode() && (
                 <div className="muted">
-                  Casting a ballot requires authenticated voter accounts.
+                  Members vote by signing in to their own account.
                 </div>
               )}
               {myEligibilities.length > 0 && (
-                <Field label={isCorporation ? "Voting for shareholder" : "Voting identity"} hint={isCorporation ? "The account acts only for the selected holder. Each holder's voting weight was frozen when this election opened." : undefined}>
+                <Field label={isCorporation ? "Voting for shareholder" : "Voting as"} hint={isCorporation ? "The account acts only for the selected holder. Each holder's voting weight was frozen when this election opened." : undefined}>
                   <Select value={myEligibility?._id ?? ""} onChange={(value) => { setSelectedEligibilityId(value); setSelected({}); setAllocations({}); }} options={myEligibilities.map((row: any) => ({ value: row._id, label: `${row.fullName} · ${pluralize(row.voteWeight ?? 1, "vote")} · ${row.status}` }))} />
                 </Field>
               )}
@@ -447,9 +447,9 @@ export function ElectionDetailPage() {
                   <Field label={reviewDraft?.votingMethod === "cumulative" ? "Seats to fill (cumulative multiplier)" : "Maximum selections"}><input className="input" type="number" min={1} step={1} value={questionDraft.maxSelections} onChange={(event) => setQuestionDraft({ ...questionDraft, maxSelections: Number(event.target.value) })} /></Field>
                   <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
                     <button className="btn" onClick={saveQuestion} disabled={!questionDraft.title.trim() || !questionDraft.options.trim()}><Plus size={12} /> {savingQuestion ? "Adding…" : "Add ballot question"}</button>
-                    <button className="btn btn--accent" onClick={openElection} disabled={electionBundle.questions.length === 0}><Users size={12} /> {openingElection ? "Opening…" : "Snapshot + open"}</button>
+                    <button className="btn btn--accent" onClick={openElection} disabled={electionBundle.questions.length === 0}><Users size={12} /> {openingElection ? "Opening…" : "Lock voter list and open"}</button>
                   </div>
-                  <p className="muted">Finish the questions and accepted nominations before opening. The ballot and eligibility list are frozen when voting opens.</p>
+                  <p className="muted">Finish the questions and accepted nominations before opening. The ballot and the list of who can vote are locked when voting opens.</p>
                 </fieldset>
               )}
 
@@ -623,8 +623,8 @@ export function ElectionDetailPage() {
                 value={<Badge tone={election.status === "Open" ? "success" : "warn"}>{election.status}</Badge>}
               />
               <Row
-                label="Ballot identity storage"
-                value={<Badge tone="info">Separate eligibility ledger</Badge>}
+                label="Secret ballot"
+                value={<Badge tone="info">Votes not linked to names</Badge>}
               />
               <Row
                 label="Results visibility"
@@ -775,7 +775,7 @@ export function ElectionDetailPage() {
             <div className="card__head">
               <h2 className="card__title">Tally</h2>
               <span className="card__subtitle">
-                {pluralize(electionBundle.ballotCount ?? 0, "ballot")} · {election.totalEligibleVotes != null ? `${pluralize(election.totalEligibleVotes, "eligible base vote")}` : "eligible base votes not recorded"}
+                {pluralize(electionBundle.ballotCount ?? 0, "ballot")} · {election.totalEligibleVotes != null ? `${pluralize(election.totalEligibleVotes, "eligible vote")}` : "number of eligible votes not recorded"}
               </span>
             </div>
             <div className="card__body" style={{ display: "grid", gap: 12 }}>

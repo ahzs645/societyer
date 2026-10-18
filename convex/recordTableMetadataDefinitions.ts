@@ -100,7 +100,9 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     icon: "Users",
     iconColor: "blue",
     routePath: "/app/members",
-    labelIdentifierFieldName: "fullName",
+    // People are stored as first + last name; the first-name column opens the
+    // record and record titles read the whole name (see recordTitleText).
+    labelIdentifierFieldName: "firstName",
     fields: [
       { name: "firstName", label: "First name", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true },
       { name: "lastName", label: "Last name", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true },
@@ -177,7 +179,9 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     icon: "ShieldCheck",
     iconColor: "violet",
     routePath: "/app/directors",
-    labelIdentifierFieldName: "fullName",
+    // People are stored as first + last name; the first-name column opens the
+    // record and record titles read the whole name (see recordTitleText).
+    labelIdentifierFieldName: "firstName",
     fields: [
       { name: "firstName", label: "First name", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true },
       { name: "lastName", label: "Last name", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true },

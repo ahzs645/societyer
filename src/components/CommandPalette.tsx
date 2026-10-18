@@ -898,15 +898,15 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
                           {item.label}
                         </span>
                         {item.shortcut ? (
-                          <span className="kbar__hint">
+                          <span className="kbar__hint kbar__hint--keys">
                             <span className="kbar__kbd">{item.shortcut}</span>
                           </span>
                         ) : item.shortcutKeys ? (
-                          <span className="kbar__hint">
+                          <span className="kbar__hint kbar__hint--keys">
                             <ShortcutHint keys={item.shortcutKeys.keys} sequence={item.shortcutKeys.sequence} />
                           </span>
                         ) : (
-                          <span className="kbar__hint">{item.hint ?? (item.run ? "Action" : "Navigate")}</span>
+                          <span className={`kbar__hint${item.hint ? "" : " kbar__hint--generic"}`}>{item.hint ?? (item.run ? "Action" : "Navigate")}</span>
                         )}
                       </button>
                       {canPin && (

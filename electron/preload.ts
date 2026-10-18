@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type * as Electron from "electron";
 import type {
+  DesktopLocalAiStreamEvent,
+  DesktopTranscriptionEvent,
   DesktopReadDocumentVersionInput,
   DesktopWriteDocumentVersionInput,
   SocietyerDesktopBridge,
@@ -63,6 +65,44 @@ const bridge: SocietyerDesktopBridgeWithSnapshot = {
   getSecret: (key) => ipcRenderer.invoke(IpcChannels.GET_SECRET_CHANNEL, key),
   setSecret: (key, value) => ipcRenderer.invoke(IpcChannels.SET_SECRET_CHANNEL, { key, value }),
   removeSecret: (key) => ipcRenderer.invoke(IpcChannels.REMOVE_SECRET_CHANNEL, key),
+  hasSecret: (key) => ipcRenderer.invoke(IpcChannels.HAS_SECRET_CHANNEL, key),
+  getLocalAiConfig: () => ipcRenderer.invoke(IpcChannels.GET_LOCAL_AI_CONFIG_CHANNEL),
+  saveLocalAiConfig: (config) => ipcRenderer.invoke(IpcChannels.SAVE_LOCAL_AI_CONFIG_CHANNEL, config),
+  localAiRequest: (input) => ipcRenderer.invoke(IpcChannels.LOCAL_AI_REQUEST_CHANNEL, input),
+  localAiStream: (input, onEvent) =>
+    new Promise<void>((resolve, reject) => {
+      // Settles on the stream's own terminal event, so no event can arrive
+      // after the caller has stopped listening.
+      const listener = (_event: Electron.IpcRendererEvent, message: unknown) => {
+        if (!message || typeof message !== "object") return;
+        const { requestId, event } = message as { requestId?: unknown; event?: DesktopLocalAiStreamEvent };
+        if (requestId !== input.requestId || !event || typeof event !== "object") return;
+        onEvent(event);
+        if (event.type === "end" || event.type === "error") {
+          ipcRenderer.removeListener(IpcChannels.LOCAL_AI_STREAM_EVENT_CHANNEL, listener);
+          resolve();
+        }
+      };
+      ipcRenderer.on(IpcChannels.LOCAL_AI_STREAM_EVENT_CHANNEL, listener);
+      ipcRenderer.invoke(IpcChannels.LOCAL_AI_STREAM_CHANNEL, input).catch((error: unknown) => {
+        ipcRenderer.removeListener(IpcChannels.LOCAL_AI_STREAM_EVENT_CHANNEL, listener);
+        reject(error);
+      });
+    }),
+  localAiAbort: (requestId) => ipcRenderer.invoke(IpcChannels.LOCAL_AI_ABORT_CHANNEL, requestId),
+  localAiTranscriptionUpload: (input) => ipcRenderer.invoke(IpcChannels.LOCAL_AI_TRANSCRIPTION_UPLOAD_CHANNEL, input),
+  localAiTranscribe: (input, onEvent) => {
+    // Progress events for this request only, until the result arrives.
+    const listener = (_event: Electron.IpcRendererEvent, message: unknown) => {
+      if (!message || typeof message !== "object") return;
+      const { requestId, event } = message as { requestId?: unknown; event?: DesktopTranscriptionEvent };
+      if (requestId === input.requestId && event && typeof event === "object") onEvent(event);
+    };
+    ipcRenderer.on(IpcChannels.LOCAL_AI_TRANSCRIBE_EVENT_CHANNEL, listener);
+    return ipcRenderer
+      .invoke(IpcChannels.LOCAL_AI_TRANSCRIBE_CHANNEL, input)
+      .finally(() => ipcRenderer.removeListener(IpcChannels.LOCAL_AI_TRANSCRIBE_EVENT_CHANNEL, listener));
+  },
   pickIntakeFolder: () => ipcRenderer.invoke(IpcChannels.PICK_INTAKE_FOLDER_CHANNEL),
   readIntakeFile: (input) => ipcRenderer.invoke(IpcChannels.READ_INTAKE_FILE_CHANNEL, input),
   convertLegacyDocument: (input) => ipcRenderer.invoke(IpcChannels.CONVERT_LEGACY_DOCUMENT_CHANNEL, input),

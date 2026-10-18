@@ -23,6 +23,7 @@ import { PersonNameLinkField, type DirectoryPerson } from "../../../components/P
 import { matchDirectoryPerson } from "../../../../shared/meetingAttendanceGrid";
 import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../lib/actionItemTidy";
 import { Tooltip } from "../../../components/Tooltip";
+import { TranscriptTimeChip } from "../transcript/TranscriptTimeChip";
 
 const STATUS_OPTIONS = ACTION_ITEM_STATUSES.map((value) => ({ value, label: ACTION_ITEM_STATUS_LABELS[value] }));
 
@@ -53,7 +54,7 @@ export function MeetingActionItemsCard({
   meetingTitle?: string;
   saveSections: (next: any[]) => void | Promise<void>;
   saveTopLevel?: (items: any[]) => void | Promise<void>;
-  createTask?: (draft: ReturnType<typeof taskDraftFromActionItem>) => Promise<string | undefined>;
+  createTask?: (draft: ReturnType<typeof taskDraftFromActionItem> & { minutesSectionIndex?: number }) => Promise<string | undefined>;
 }) {
   // Each change rewrites the whole list, so it must start from the latest
   // saved list, not from props that the live query has not refreshed yet —
@@ -257,7 +258,11 @@ export function MeetingActionItemsCard({
     if (!createTask) return;
     setBusyKey(key);
     try {
-      const taskId = await createTask(taskDraftFromActionItem(row.item, { meetingTitle, sectionTitle: row.sectionTitle }));
+      // The section index lets the server record whether the action was in camera (tasks.inCamera).
+      const taskId = await createTask({
+        ...taskDraftFromActionItem(row.item, { meetingTitle, sectionTitle: row.sectionTitle }),
+        ...(row.sectionIndex != null ? { minutesSectionIndex: row.sectionIndex } : {}),
+      });
       if (taskId) await patchItem(row, { taskId });
     } finally {
       setBusyKey(null);
@@ -359,6 +364,7 @@ export function MeetingActionItemsCard({
                   <span className="action-item__context">
                     {row.sectionIndex == null ? "Minutes" : `${row.sectionIndex + 1}. ${row.sectionTitle}`}
                     {row.item.sourceStatus ? ` · source: “${row.item.sourceStatus}”` : ""}
+                    <TranscriptTimeChip transcriptRef={row.item.transcriptRef} label={String(row.item.text ?? "")} />
                   </span>
                 </span>
                 <div className="action-item__controls">

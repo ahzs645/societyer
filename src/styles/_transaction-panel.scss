@@ -295,39 +295,7 @@
   font-size: token(fs-xs);
 }
 
-.txn-receipt__drop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: token(s-1);
-  padding: token(s-4) token(s-3);
-  border: 1px dashed token(border-strong);
-  border-radius: token(r-card);
-  color: token(text-secondary);
-  text-align: center;
-  cursor: pointer;
-  transition: background token(motion-fade-fast) token(ease-fade), border-color token(motion-fade-fast) token(ease-fade);
-
-  &:hover { background: token(bg-hover-alpha); }
-  &:focus-within {
-    outline: token(focus-ring-width) solid token(focus-ring-color);
-    outline-offset: token(focus-ring-offset);
-  }
-  &.is-dragging {
-    background: token(accent-soft);
-    border-color: token(accent);
-    color: token(text-primary);
-  }
-  &.is-busy { cursor: progress; opacity: token(opacity-disabled); }
-}
-
-.txn-receipt__drop-title {
-  color: token(text-primary);
-  font-size: token(fs-sm);
-  font-weight: token(fw-medium);
-}
-
-.txn-receipt__drop-hint { font-size: token(fs-xs); }
+/* The empty-state zone is the shared .file-drop (_file-drop.scss). */
 
 .txn-receipt__link {
   align-self: flex-start;

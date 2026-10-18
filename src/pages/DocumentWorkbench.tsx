@@ -9,7 +9,7 @@ import { setStoredSocietyId, useSocieties, useSociety } from "../hooks/useSociet
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Field } from "../components/ui";
+import { Badge, EmptyState, Field } from "../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
@@ -53,6 +53,7 @@ import {
   Layers,
   Link2,
   Loader2,
+  Lock,
   MessageSquare,
   PenLine,
   Save,
@@ -65,9 +66,11 @@ export function DocumentWorkbenchPage() {
   const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
   const document = useRecordQuery<any>(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
+  // In-camera material this reader may not see comes back as a placeholder; nothing else about it is read.
+  const withheld = document?.inCameraWithheld === "in_camera";
   // Panels read the document's versions, comments and signatures once it exists
   // (a missing or foreign id shows the not-found state, not a failed panel).
-  const documentId = document?._id as Id<"documents"> | undefined;
+  const documentId = withheld ? undefined : document?._id as Id<"documents"> | undefined;
   const latest = useQuery(api.documentVersions.latest, documentId ? { documentId } : "skip");
   const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
   const comments = useQuery(api.documentComments.listForDocument, documentId ? { documentId } : "skip");
@@ -114,14 +117,14 @@ export function DocumentWorkbenchPage() {
   }, [society?._id, documentSocietyId, canSwitchToDocumentSociety]);
 
   useEffect(() => {
-    if (!document || openedRef.current) return;
+    if (!document || withheld || openedRef.current) return;
     openedRef.current = true;
     void markOpened({
       id: document._id,
       userId,
       actorName: user?.displayName,
     }).catch(() => undefined);
-  }, [document?._id, markOpened, user?.displayName, userId]);
+  }, [document?._id, withheld, markOpened, user?.displayName, userId]);
 
   // "Original saved" indicator (finding D-03): a restored copy of the source
   // file on this device, checked against the SHA-256 recorded at import.
@@ -147,6 +150,7 @@ export function DocumentWorkbenchPage() {
   if (document === null) {
     return <RecordNotFound recordLabel="Document" backTo="/app/documents" backLabel="All documents" icon={<FileText size={16} />} />;
   }
+  if (withheld) return <InCameraDocumentNotice document={document} />;
 
   const openFile = async () => {
     if (!openable) return;
@@ -422,6 +426,35 @@ export function DocumentWorkbenchPage() {
       </div>
       {/* Who the document names: below the document, not above its title. */}
       {document && society && <PersonRecordLinks societyId={String(document.societyId ?? society._id)} recordTable="documents" recordId={document._id} />}
+    </div>
+  );
+}
+
+/**
+ * A document that holds in-camera content, for a reader without in-camera
+ * access (security review H1): it exists and why it's withheld, nothing more.
+ */
+function InCameraDocumentNotice({ document }: { document: { category?: string; meetingId?: string; createdAtISO?: string } }) {
+  return (
+    <div className="page document-workbench-page">
+      <Link to="/app/documents" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+        <ArrowLeft size={12} /> Documents
+      </Link>
+      <PageHeader
+        title="In-camera material"
+        icon={<Lock size={16} />}
+        iconColor="gray"
+        subtitle={`${documentCategoryLabel(document.category)}${document.createdAtISO ? ` · added ${formatDate(document.createdAtISO)}` : ""}`}
+        actions={<Badge tone="warn">Restricted</Badge>}
+      />
+      <div role="status">
+        <EmptyState
+          icon={<Lock size={20} />}
+          title="Restricted: in-camera material"
+          description="This document holds content from an in-camera session, so its title, file and text aren't shown. Owners, Admins and Directors can open it. AI connectors never receive it."
+          action={document.meetingId ? <Link className="btn" to={`/app/meetings/${document.meetingId}`}>Open the meeting</Link> : undefined}
+        />
+      </div>
     </div>
   );
 }

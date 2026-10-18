@@ -36,13 +36,22 @@ test("registers and executes the Societyer WebMCP contract", async ({ page }) =>
       schema: tool.inputSchema,
     }));
   });
+  // The demo Owner gets every shared agent tool (shared/agentTools).
   expect(catalog.map((tool: any) => tool.name)).toEqual([
     "get_governance_snapshot",
+    "list_meetings",
+    "get_meeting",
+    "get_transcript",
+    "search_documents",
+    "get_document",
+    "list_tasks",
+    "list_deadlines",
+    "list_commitments",
     "create_governance_tasks",
     "open_governance_view",
   ]);
-  expect(catalog[0].annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
-  expect(catalog[1].schema.properties.tasks.maxItems).toBe(8);
+  expect(catalog[0].annotations).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false, untrustedContentHint: true });
+  expect(catalog.find((tool: any) => tool.name === "create_governance_tasks").schema.properties.tasks.maxItems).toBe(8);
 
   const snapshot = await page.evaluate(async () =>
     (window as any).__societyerWebMcpTest.execute("get_governance_snapshot", {

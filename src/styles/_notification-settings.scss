@@ -345,3 +345,36 @@
     }
   }
 }
+
+// --- Inbox rows (Notifications page) ---------------------------------------------
+
+// Category in a fixed-width column, so every title starts at the same x
+// however long its category ("Filing" vs "Commitment"). Phones put the
+// category under the title, beside the time.
+.notif-row.notif-row--page {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) auto auto;
+  grid-template-areas: "kind main meta action";
+  column-gap: token('s-3');
+  row-gap: token('s-1');
+  align-items: start;
+
+  > .notif-row__kind { grid-area: kind; display: inline-flex; min-width: 0; }
+  > .notif-row__kind .badge { max-width: 100%; }
+  > .notif-row__main { grid-area: main; }
+  > .notif-row__meta { grid-area: meta; }
+  > button { grid-area: action; }
+}
+
+@media (max-width: 760px) {
+  .notif-row.notif-row--page {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "main main action"
+      "kind meta action";
+    align-items: center;
+
+    > .notif-row__main { align-self: start; }
+    > .notif-row__meta { white-space: nowrap; }
+  }
+}

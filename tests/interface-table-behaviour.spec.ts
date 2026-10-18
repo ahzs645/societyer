@@ -24,8 +24,10 @@ test("an outside click or tap saves an open inline cell edit; Escape still cance
   const phone = isPhone(testInfo.project.name);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/demo/app/members");
-  const cells = page.locator('td[data-field-name="lastName"]');
+  // Phones list members as cards, so the tap path runs on a register that
+  // stays an editable table on phones (Court orders' file number).
+  await page.goto(phone ? "/demo/app/court-orders" : "/demo/app/members");
+  const cells = page.locator(`td[data-field-name="${phone ? "fileNumber" : "lastName"}"]`);
   const cell = cells.first();
   await expect(cell).toBeVisible();
   const before = (await cell.innerText()).trim();
@@ -177,20 +179,22 @@ test("phones can select tasks from Options or by long-press, and reach bulk acti
   await expect(page.getByRole("region", { name: "Bulk actions" })).toContainText("1 selected");
 });
 
-test("a long-press on a phone table row starts selection without opening the record", async ({ page }, testInfo) => {
+test("a long-press on a phone record card starts selection without opening the record", async ({ page }, testInfo) => {
   test.skip(!isPhone(testInfo.project.name), "touch long-press");
+  // Phones list members as cards; a long-press selects, as on table rows.
   await page.goto("/demo/app/members");
-  const row = page.locator("tr.record-table__row").nth(1);
-  const nameCell = row.locator('td[data-field-name="firstName"]');
-  await expect(nameCell).toBeVisible();
-  const box = await nameCell.boundingBox();
-  if (!box) throw new Error("row not laid out");
+  const cards = page.locator(".record-cards__item");
+  const card = cards.nth(1);
+  await expect(card).toBeVisible();
+  const box = await card.boundingBox();
+  if (!box) throw new Error("card not laid out");
   await longPress(page, box.x + box.width / 2, box.y + box.height / 2);
-  await expect(row.getByRole("checkbox", { name: "Deselect row" })).toBeVisible();
+  await expect(card.getByRole("checkbox", { name: /^Deselect / })).toBeChecked();
   await expect(page.getByRole("region", { name: "Bulk actions" })).toContainText("1 selected");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  // Further taps tick rows rather than opening them.
-  await page.locator("tr.record-table__row").nth(2).locator('td[data-field-name="firstName"]').tap();
+  // Further taps tick cards rather than opening them.
+  await cards.nth(2).tap();
+  await expect(cards.nth(2).getByRole("checkbox", { name: /^Deselect / })).toBeChecked();
   await expect(page.getByRole("region", { name: "Bulk actions" })).toContainText("2 selected");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });

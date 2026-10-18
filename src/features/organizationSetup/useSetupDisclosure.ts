@@ -13,10 +13,12 @@ function toggled(set: Set<string>, key: string) {
 
 /**
  * Which phases and steps are expanded. The current phase (and the phase of
- * the next step) open on first load; `#step-<key>` expands that step, opens
- * its phase and scrolls to it, on load and whenever the hash changes.
+ * the next step) open on first load, unless `startCollapsed` (phones, where
+ * the next-step card already names that step at the top and the open phase
+ * would repeat it); `#step-<key>` expands that step, opens its phase and
+ * scrolls to it, on load and whenever the hash changes.
  */
-export function useSetupDisclosure(progress: OrganizationSetupProgress | undefined) {
+export function useSetupDisclosure(progress: OrganizationSetupProgress | undefined, { startCollapsed = false }: { startCollapsed?: boolean } = {}) {
   const location = useLocation();
   const [openPhases, setOpenPhases] = useState<Set<string>>(new Set());
   const [openSteps, setOpenSteps] = useState<Set<string>>(new Set());
@@ -48,14 +50,18 @@ export function useSetupDisclosure(progress: OrganizationSetupProgress | undefin
   useEffect(() => {
     if (!progress || initialized.current) return;
     initialized.current = true;
-    const phases = new Set<string>([progress.currentPhase]);
+    const phases = new Set<string>();
     const next = findSetupStep(progress, progress.next?.key);
-    if (next) phases.add(next.phase);
+    // With nothing left to do there is no next-step card repeating a step.
+    if (!startCollapsed || !next) {
+      phases.add(progress.currentPhase);
+      if (next) phases.add(next.phase);
+    }
     setOpenPhases(phases);
     setActivePhase(progress.currentPhase);
     const hashKey = STEP_HASH.exec(location.hash)?.[1];
     if (hashKey) focusStep(hashKey);
-  }, [progress, location.hash, focusStep]);
+  }, [progress, location.hash, focusStep, startCollapsed]);
 
   useEffect(() => {
     if (!initialized.current) return;

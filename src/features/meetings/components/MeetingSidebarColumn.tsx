@@ -25,7 +25,9 @@ import {
 } from "./MeetingDetailSupport";
 import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
 import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
-import { meetingDatePrecision } from "../../../../shared/meetingDates";
+import { formatMeetingDate, meetingDatePrecision } from "../../../../shared/meetingDates";
+import { useIsMobile } from "../../../lib/useIsMobile";
+import { meetingRecordKind } from "../../../../shared/meetingRecordKind";
 import { SourceOriginalDownload } from "./SourceOriginalDownload";
 import { NOTICE_CALENDAR_REVIEW_CAVEAT } from "../../../../shared/legalMeetingNotice";
 
@@ -152,6 +154,9 @@ export function MeetingSidebarColumn({
   const { can } = usePermissions();
   const canDownload = can("exports:download");
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
+  const keepsMinutes = meetingRecordKind(meeting) === "minutes";
+  // Phones keep only the date in the page header, so the time and place are listed here.
+  const isPhone = useIsMobile();
   // The 14–60 day notice and 30-day annual report windows are BC Societies Act
   // defaults; other entities follow their Act, articles/by-laws and registry.
   const societyLaw = organizationVocabulary(society).societyLaw;
@@ -168,6 +173,8 @@ export function MeetingSidebarColumn({
             <div className="card__head"><h2 className="card__title">Meeting details</h2></div>
             <div className="card__body col">
               {/* Body, date and location are in the page subtitle; this card holds the rest. */}
+              {isPhone && meeting.scheduledAt && <Detail label="When">{formatMeetingDate(meeting, { dateStyle: "long" })}</Detail>}
+              {isPhone && (meeting.location || meeting.electronic) && <Detail label="Where">{meeting.location || "Online"}</Detail>}
               {meetingDatePrecision(meeting) === "date" && <Detail label="Time">Not recorded (date only)</Detail>}
               {meeting.timeZone && <Detail label="Time zone">{meeting.timeZone}</Detail>}
               {minutes?.sourceMeetingRecord?.header && (minutes.sourceMeetingRecord.header.dateText || minutes.sourceMeetingRecord.header.locationText) && (
@@ -179,11 +186,16 @@ export function MeetingSidebarColumn({
               )}
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
               <Detail label="Notice sent">{meeting.noticeSentAt ? formatDate(meeting.noticeSentAt) : "—"}</Detail>
-              <Detail label="Quorum required">{quorumSnapshot.required ?? meeting.quorumRequired ?? "—"}</Detail>
-              <Detail label="Quorum rule">{quorumSnapshot.label || meeting.quorumSourceLabel || "—"}</Detail>
-              <Detail label="Legal guide">
-                <LegalGuideInline rules={quorumLegalGuides} />
-              </Detail>
+              {/* Quorum is part of formal minutes; notes and no-write-up meetings don't record it. */}
+              {keepsMinutes && (
+                <>
+                  <Detail label="Quorum required">{quorumSnapshot.required ?? meeting.quorumRequired ?? "—"}</Detail>
+                  <Detail label="Quorum rule">{quorumSnapshot.label || meeting.quorumSourceLabel || "—"}</Detail>
+                  <Detail label="Legal guide">
+                    <LegalGuideInline rules={quorumLegalGuides} />
+                  </Detail>
+                </>
+              )}
             </div>
           </div>
           )}
@@ -394,6 +406,7 @@ export function MeetingSidebarColumn({
 
           {show("transcript") && (
           <MeetingTranscriptCard
+            meetingId={meeting._id}
             vttInputRef={vttInputRef}
             audioInputRef={audioInputRef}
             transcriptOnFile={transcriptOnFile}

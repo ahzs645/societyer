@@ -1,10 +1,30 @@
-import { ClipboardCheck, ExternalLink, Save } from "lucide-react";
+import { useState } from "react";
+import { ClipboardCheck, ExternalLink, MapPin, Save } from "lucide-react";
 import { Badge, Banner, Field } from "./ui";
 import { Checkbox } from "./Controls";
 import { Select } from "./Select";
 import { LegalGuideBadge } from "./LegalGuide";
+import { Modal } from "./Modal";
+import { useIsMobile } from "../lib/useIsMobile";
 import { getPrivacyLegalGuideRules } from "../lib/jurisdictionGuideTracks";
-import { PRESUMED_PRIVACY_LAW_LABEL, PRIVACY_CITATIONS, PRIVACY_LAWS, PRIVACY_OPERATING_JURISDICTIONS, resolvePrivacyProfile, type PrivacyAssessmentInput } from "../../shared/privacyRuleProfiles";
+import { PRIVACY_CITATIONS, PRIVACY_LAWS, PRIVACY_OPERATING_JURISDICTIONS, resolvePrivacyProfile, type PrivacyAssessmentInput, type ResolvedPrivacyProfile } from "../../shared/privacyRuleProfiles";
+
+/** "BC, AB +2" from the checked jurisdiction codes, in the list's order. */
+export function privacyJurisdictionSummary(locations: readonly string[], shown = 2) {
+  const codes = PRIVACY_OPERATING_JURISDICTIONS.filter(([code]) => locations.includes(code)).map(([code]) => code.replace(/^CA-/, ""));
+  if (!codes.length) return "None recorded";
+  return codes.length > shown ? `${codes.slice(0, shown).join(", ")} +${codes.length - shown}` : codes.join(", ");
+}
+
+/** "BC PIPA applies (assumed) — confirm": the law the saved facts point to, in plain words. */
+export function privacyStatusText(profile: ResolvedPrivacyProfile) {
+  const laws = profile.applicableLawIds.map((id) => PRIVACY_LAWS[id].label).join(" and ");
+  if (profile.status === "presumed") return { text: `${laws} applies (assumed)`, confirm: true };
+  if (profile.status === "no-general-law-identified") return { text: "No general privacy Act identified", confirm: false };
+  if (!laws) return { text: "Which privacy law applies isn't assessed yet", confirm: true };
+  if (profile.presumedLawIds.length || profile.status === "conditional") return { text: `${laws} ${profile.applicableLawIds.length > 1 ? "apply" : "applies"}, with facts to confirm`, confirm: true };
+  return { text: `${laws} ${profile.applicableLawIds.length > 1 ? "apply" : "applies"}`, confirm: false };
+}
 
 const ANSWERS = [{ value: "unknown", label: "Not assessed" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }];
 
@@ -22,6 +42,15 @@ export function PrivacyScopeAssessment({ organization, canEdit, saving, onChange
   const profile = resolvePrivacyProfile(organization);
   const locations = organization.privacyOperatingJurisdictions ?? [];
   const guides = new Map(getPrivacyLegalGuideRules({ organization }).map((rule) => [rule.id, rule]));
+  const isMobile = useIsMobile();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const toggleLocation = (code: string, checked: boolean) =>
+    onChange("privacyOperatingJurisdictions", checked ? [...locations, code] : locations.filter((item) => item !== code));
+  const locationChecks = (
+    <div className="privacy-scope__locations">
+      {PRIVACY_OPERATING_JURISDICTIONS.map(([code, label]) => <Checkbox key={code} label={label} checked={locations.includes(code)} disabled={!canEdit} onChange={(checked) => toggleLocation(code, checked)} />)}
+    </div>
+  );
   return (
     <section className="card privacy-scope-assessment" aria-labelledby="privacy-scope-title">
       <div className="card__head">
@@ -30,12 +59,35 @@ export function PrivacyScopeAssessment({ organization, canEdit, saving, onChange
       </div>
       <div className="card__body">
         <p>Record where personal information is handled and which activities it supports. Save the assessment before creating a policy. Multiple laws can apply to different records or transactions.</p>
-        <fieldset style={{ border: 0, padding: 0, margin: "16px 0" }}>
-          <legend style={{ marginBottom: 8, fontWeight: 600 }}>Operating provinces and territories</legend>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
-            {PRIVACY_OPERATING_JURISDICTIONS.map(([code, label]) => <Checkbox key={code} label={label} checked={locations.includes(code)} disabled={!canEdit} onChange={(checked) => onChange("privacyOperatingJurisdictions", checked ? [...locations, code] : locations.filter((item) => item !== code))} />)}
+        {isMobile ? (
+          // Phones: the 13 checkboxes live in a sheet; the page shows the selection.
+          <div className="privacy-scope__picker">
+            <div className="privacy-scope__picker-text">
+              <span className="privacy-scope__picker-label">Operating provinces and territories</span>
+              <strong>{locations.length ? `Applies in: ${privacyJurisdictionSummary(locations)}` : "None recorded yet"}</strong>
+            </div>
+            <button type="button" className="btn btn--sm" onClick={() => setPickerOpen(true)}>
+              <MapPin size={12} /> {canEdit ? "Choose" : "View"}
+            </button>
           </div>
-        </fieldset>
+        ) : (
+          <fieldset style={{ border: 0, padding: 0, margin: "16px 0" }}>
+            <legend style={{ marginBottom: 8, fontWeight: 600 }}>Operating provinces and territories</legend>
+            {locationChecks}
+          </fieldset>
+        )}
+        {isMobile && (
+          <Modal
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            title="Operating provinces and territories"
+            size="sm"
+            footer={<button type="button" className="btn btn--accent" onClick={() => setPickerOpen(false)}>Done</button>}
+          >
+            <p className="muted" style={{ marginTop: 0 }}>Where the organization handles personal information. Save the assessment to keep the change.</p>
+            {locationChecks}
+          </Modal>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 }}>
           <Field label="Personal information used in commercial activity">
             <Select value={organization.privacyCommercialActivity ?? "unknown"} options={ANSWERS} disabled={!canEdit} onChange={(value) => onChange("privacyCommercialActivity", value)} />
@@ -64,7 +116,7 @@ export function PrivacyScopeAssessment({ organization, canEdit, saving, onChange
           </Field>}
         </div>
         <div style={{ marginTop: 16 }} aria-live="polite">
-          <Banner tone={profile.status === "assessed" ? "info" : "warn"} title={`Assessment preview: ${profile.label}`}>
+          <Banner tone={profile.status === "assessed" ? "info" : "warn"} title={`Assessment preview: ${privacyStatusText(profile).text}`}>
             {profile.unresolvedFacts.length ? <ul>{profile.unresolvedFacts.map((item) => <li key={item}>{item}</li>)}</ul> : profile.status === "no-general-law-identified" ? "The recorded facts identify no general private-sector Act for this handling. Other privacy, contractual, governance and sector duties can still apply." : "These requirements depend on the accuracy and scope of the recorded facts. Completion of app tasks records evidence, not a legal certification."}
           </Banner>
         </div>
@@ -72,8 +124,8 @@ export function PrivacyScopeAssessment({ organization, canEdit, saving, onChange
           const law = PRIVACY_LAWS[assessment.lawId];
           const definite = assessment.applicability === "applies";
           const presumed = assessment.basis === "presumed";
-          return <details key={law.id} open={definite} style={{ marginTop: 16 }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>{law.label} <Badge tone={definite && !presumed ? "info" : "warn"}>{presumed ? PRESUMED_PRIVACY_LAW_LABEL : definite ? "Assessed as applicable" : "Conditional"}</Badge></summary>
+          return <details key={law.id} open={definite && !isMobile} style={{ marginTop: 16 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>{law.label} <Badge tone={definite && !presumed ? "info" : "warn"}>{presumed ? "Assumed: confirm" : definite ? "Assessed as applicable" : "Conditional"}</Badge></summary>
             <p>{assessment.reason}</p>
             <ul className="privacy-bullet-list">
               {law.rules.map((rule) => {

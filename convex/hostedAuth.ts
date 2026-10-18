@@ -20,22 +20,33 @@ import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import { sendEmail } from "./providers/email";
 import { authSessionDurationSeconds, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
+import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage } from "../shared/authEmailPolicy";
+import { emailProviderConfiguration } from "../shared/emailConfiguration";
+import { developmentMailConfigured, assertDevelopmentMail } from "../shared/developmentMailConfiguration";
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 /** Verification and reset links need a mail sender; without one, accounts stay unverified. */
 export function hostedAuthEmailConfigured(env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(env.RESEND_API_KEY && (env.RESEND_FROM_EMAIL || env.RESEND_FROM));
+  if (env.SOCIETYER_AUTH_DEVELOPMENT_MAIL === "1") return developmentMailConfigured(env);
+  return emailProviderConfiguration(env).live;
 }
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-async function sendAuthLink(to: string, subject: string, intro: string, url: string, tag: string) {
+async function sendAuthLink(ctx: GenericCtx<DataModel>, to: string, subject: string, intro: string, url: string, tag: "auth-verify-email" | "auth-reset-password") {
+  const text = `${intro}\n\n${url}\n\nIf you did not ask for this, you can ignore this email.`;
+  if (process.env.SOCIETYER_AUTH_DEVELOPMENT_MAIL === "1") {
+    assertDevelopmentMail(process.env);
+    if (!("runMutation" in ctx)) throw new Error("Development mail requires an action context.");
+    await ctx.runMutation(internal.developmentMail.capture, { to, subject, text, tag });
+    return;
+  }
   await sendEmail({
     to, subject, tag,
-    text: `${intro}\n\n${url}\n\nIf you did not ask for this, you can ignore this email.`,
+    text,
     html: `<p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(url)}">${escapeHtml(subject)}</a></p><p>If you did not ask for this, you can ignore this email.</p>`,
   });
 }
@@ -66,11 +77,18 @@ async function clientIp(ctx: GenericCtx<DataModel>): Promise<string | null> {
   return meta?.getRequestMetadata ? (await meta.getRequestMetadata()).ip : null;
 }
 
-function throttleHooks(ctx: GenericCtx<DataModel>) {
+function throttleHooks(ctx: GenericCtx<DataModel>, domains: readonly string[], emailConfigured: boolean) {
   // Only HTTP requests (actions) reach these routes; other callers build a static instance.
   if (!("runMutation" in ctx)) return {};
   return {
     before: createAuthMiddleware(async (hook) => {
+      if (domains.length && ["/sign-up/email", "/sign-in/email", "/change-email"].includes(hook.path)) {
+        const email = hook.path === "/change-email" ? hook.body?.newEmail : hook.body?.email;
+        if (!authEmailAllowed(email, domains)) throw new APIError("FORBIDDEN", { message: authEmailPolicyMessage(domains) });
+        if (hook.path === "/sign-up/email" && !emailConfigured) {
+          throw new APIError("FORBIDDEN", { message: "Sign-up is temporarily unavailable while email verification is being configured." });
+        }
+      }
       const rule = THROTTLES[hook.path];
       if (!rule) return;
       const email = throttleEmail(hook.body);
@@ -106,22 +124,33 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     throw new Error("AUTH_MODE=convex requires a BETTER_AUTH_SECRET of at least 32 characters on the Convex deployment.");
   }
   const emailConfigured = hostedAuthEmailConfigured();
+  const domains = allowedAuthEmailDomains(process.env);
+  const checkEmail = (email: unknown) => {
+    if (!authEmailAllowed(email, domains)) throw new APIError("FORBIDDEN", { message: authEmailPolicyMessage(domains) });
+  };
   return betterAuth({
     baseURL: process.env.CONVEX_SITE_URL,
     secret: secret || "inactive-convex-broker-placeholder-secret-0000",
     trustedOrigins: siteUrls,
     database: authComponent.adapter(ctx),
+    databaseHooks: {
+      user: {
+        create: { before: async (user) => { checkEmail(user.email); } },
+        update: { before: async (user) => { if (user.email !== undefined) checkEmail(user.email); } },
+      },
+    },
     emailAndPassword: {
       enabled: true,
+      disableSignUp: domains.length > 0 && !emailConfigured,
       minPasswordLength: 10,
       // A reset ends every session, including one an attacker may hold.
       revokeSessionsOnPasswordReset: true,
       // With mail configured, an account must prove its mailbox before it can
       // sign in. Invitations always require a verified email.
-      requireEmailVerification: emailConfigured,
+      requireEmailVerification: emailConfigured || domains.length > 0,
       ...(emailConfigured ? {
         sendResetPassword: async ({ user, url }) =>
-          sendAuthLink(user.email, "Reset your Societyer password", "Use this link to choose a new password. It expires in one hour.", url, "auth-reset-password"),
+          sendAuthLink(ctx, user.email, "Reset your Societyer password", "Use this link to choose a new password. It expires in one hour.", url, "auth-reset-password"),
       } : {}),
     },
     ...(emailConfigured ? {
@@ -130,7 +159,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         sendOnSignIn: true,
         autoSignInAfterVerification: false,
         sendVerificationEmail: async ({ user, url }) =>
-          sendAuthLink(user.email, "Verify your Societyer email", "Confirm this email address to finish creating your Societyer account.", url, "auth-verify-email"),
+          sendAuthLink(ctx, user.email, "Verify your Societyer email", "Confirm this email address to finish creating your Societyer account.", url, "auth-verify-email"),
       },
     } : {}),
     account: {
@@ -143,7 +172,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     // `throttleHooks` limits by account and by Convex's own client IP instead.
     rateLimit: { enabled: false },
     advanced: { ipAddress: { disableIpTracking: true } },
-    hooks: throttleHooks(ctx),
+    hooks: throttleHooks(ctx, domains, emailConfigured),
     plugins: [
       crossDomain({ siteUrl: siteUrls[0] }),
       convex({

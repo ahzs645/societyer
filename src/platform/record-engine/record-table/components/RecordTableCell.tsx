@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode, type RefObject } from "react";
+import { isValidElement, useCallback, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode, type RefObject } from "react";
 import { columnWidthStyle } from "../utils/columnWidth";
 import { createPortal } from "react-dom";
 import { Copy, ExternalLink, Mail, Pencil } from "lucide-react";
@@ -106,6 +106,11 @@ export function RecordTableCell({
 
   const value = record[recordField.field.name];
   const canEdit = isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
+  // Phones: a tap anywhere on the row opens the record when the table can open
+  // one, and fields are edited in its drawer/panel rather than in the grid.
+  const tapOpensRecord = isMobile && !!tableCtx.onRecordClick;
+  const canInlineEdit = canEdit && !tapOpensRecord;
+  const opensRecord = isLabelIdentifier && !!tableCtx.onRecordClick;
   const isNumeric = isNumericCellType(recordField.field.fieldType);
   const isEditing = canEdit && isEditingThisCell;
   const secondaryActions = useMemo(
@@ -117,15 +122,26 @@ export function RecordTableCell({
     () => cellPreview?.(recordField.field.name, isLabelIdentifier, record) ?? null,
     [cellPreview, recordField.field.name, isLabelIdentifier, record],
   );
-  const cellContent = renderCell?.({ record, field: recordField.field, value }) ?? (
+  const customContent = renderCell?.({ record, field: recordField.field, value });
+  const cellContent = customContent ?? (
     <FieldDisplay value={value} record={record} field={recordField.field} />
   );
+  // A first column standing in for an identifier the view doesn't show may
+  // already be the page's own open-record control (a button); wrapping it in
+  // another button would nest them, so the cell itself opens the record.
+  // Members and directors draw their first-name identifier as such a button
+  // too, so a page's own <button> is never wrapped either.
+  const identifierIsStandIn = opensRecord && recordField.field.name !== tableCtx.objectMetadata.labelIdentifierFieldName;
+  const customIsOwnControl = isValidElement(customContent) && customContent.type === "button";
+  const wrapIdentifierButton = opensRecord && !customIsOwnControl && !(identifierIsStandIn && customContent != null);
   const previewedContent = previewRef ? (
     <EntityHoverCard entity={previewRef}>{cellContent}</EntityHoverCard>
   ) : cellContent;
 
+  const openRecord = () => tableCtx.onRecordClick?.(recordId, record, { source: "row" });
+
   const startEdit = () => {
-    if (!canEdit) return;
+    if (!canInlineEdit) return;
     handle.get().setFocusedCell({ rowIndex, columnIndex });
     handle.get().setEditingInitialValue(undefined);
     handle.get().setEditingCell({ rowIndex, columnIndex });
@@ -150,8 +166,8 @@ export function RecordTableCell({
       className={
         "record-table__cell" +
         (selectionControl ? " record-table__cell--mobile-selecting" : "") +
-        (isLabelIdentifier && tableCtx.onRecordClick ? " record-table__cell--identifier" : "") +
-        (canEdit ? " record-table__cell--editable" : "") +
+        (opensRecord ? " record-table__cell--identifier" : "") +
+        (canInlineEdit ? " record-table__cell--editable" : "") +
         (isHovered ? " record-table__cell--hovered" : "") +
         (isFocused ? " record-table__cell--focused" : "") +
         (isInRange ? " record-table__cell--in-range" : "") +
@@ -177,7 +193,7 @@ export function RecordTableCell({
       // must NOT also try to edit it (the first click already navigates away —
       // that mismatch is what made renaming feel janky). Edit it via the hover
       // pencil instead. Other editable columns keep double-click-to-edit.
-      onDoubleClick={isLabelIdentifier && tableCtx.onRecordClick ? undefined : startEdit}
+      onDoubleClick={opensRecord ? undefined : startEdit}
       onMouseEnter={() => handle.get().setHoverPosition({ rowIndex, columnIndex })}
       onMouseLeave={() => {
         const latest = handle.get().hoverPosition;
@@ -201,14 +217,21 @@ export function RecordTableCell({
           return;
         }
         if (state.rangeAnchor) state.setRangeAnchor(null);
+        // A control inside the cell (the page's own name button, a link)
+        // handles its own tap or click.
+        const ownControl = target.closest("button, a[href], input, label");
+        const inOwnControl = !!ownControl && ownControl !== event.currentTarget && event.currentTarget.contains(ownControl);
+        if ((tapOpensRecord || (opensRecord && !wrapIdentifierButton)) && !inOwnControl) {
+          event.preventDefault();
+          openRecord();
+          return;
+        }
         const wasFocused = state.focusedCell?.rowIndex === rowIndex && state.focusedCell.columnIndex === columnIndex;
         handle.get().setFocusedCell({ rowIndex, columnIndex });
         cellRef.current?.focus({ preventScroll: true });
-        // Researcher's phone table opens an editable field from the cell tap
-        // itself. Keep the identifier/title tap dedicated to opening the
-        // record, while every other editable field enters edit mode in one
-        // tap instead of exposing a tiny pencil that needs a second tap.
-        if (isMobile && canEdit && !isLabelIdentifier) {
+        // A phone table that cannot open records edits a field from the cell
+        // tap itself (one tap, not a tiny pencil that needs a second tap).
+        if (isMobile && canInlineEdit && !isLabelIdentifier) {
           event.preventDefault();
           startEdit();
           return;
@@ -217,7 +240,7 @@ export function RecordTableCell({
         // and shows its pencil; tapping the focused cell again edits it, so
         // nobody has to rely on a double-tap.
         const touch = lastPointerTypeRef.current === "touch" || lastPointerTypeRef.current === "pen";
-        if (touch && wasFocused && canEdit && !(isLabelIdentifier && tableCtx.onRecordClick)) {
+        if (touch && wasFocused && canInlineEdit && !opensRecord) {
           event.preventDefault();
           startEdit();
         }
@@ -228,13 +251,13 @@ export function RecordTableCell({
       ref={cellRef}
     >
       {selectionControl}
-      {isLabelIdentifier && tableCtx.onRecordClick ? (
+      {wrapIdentifierButton ? (
         <button
           type="button"
           className="record-table__identifier-button"
           onClick={(event) => {
             event.stopPropagation();
-            tableCtx.onRecordClick?.(recordId, record, { source: "row" });
+            openRecord();
           }}
         >
           {/* Hidden until the phone table scrolls sideways, when the frozen
@@ -250,9 +273,9 @@ export function RecordTableCell({
       )}
       {/* Only render the overlay when it has at least one action — an empty
           container shows up as a tiny floating box over the cell. */}
-      {(isHovered || isFocused || (isCoarsePointer && isRowFocused && canEdit)) &&
+      {(isHovered || isFocused || (isCoarsePointer && isRowFocused && canInlineEdit)) &&
         !isEditing &&
-        (secondaryActions.length > 0 || canEdit) && (
+        (secondaryActions.length > 0 || canInlineEdit) && (
         <div
           className={
             "record-table__cell-actions" +
@@ -277,7 +300,7 @@ export function RecordTableCell({
           {/* Inline edit pencil for any editable cell, including the identifier
               (title) column — the "open record" affordance lives once per row in
               the trailing actions column (RecordTableRow). */}
-          {canEdit ? (
+          {canInlineEdit ? (
             <Tooltip content={`Edit ${recordField.field.label}`}>
               <button
                 type="button"

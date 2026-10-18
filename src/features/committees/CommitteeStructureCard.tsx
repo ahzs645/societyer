@@ -28,6 +28,23 @@ const PARENT_OPTIONS = [
   { value: "committee", label: "Another committee" },
 ];
 
+/** Rule frequencies the record-gap check counts meetings against. */
+const TRACKED_FREQUENCIES = ["monthly", "quarterly", "per_year_count", "calendar_year", "annual"];
+
+function cadenceLabelText(cadence: unknown): string {
+  const text = typeof cadence === "string" ? cadence.trim() : "";
+  return !text || text === "Unknown" ? "" : text;
+}
+
+/** "Monthly" → a monthly rule, so "Track" pre-fills the editor; null when the label isn't a plain frequency. */
+function ruleFromCadenceLabel(label: string): CadenceRule | null {
+  const text = label.toLowerCase();
+  if (/\bmonthly\b/.test(text)) return { frequency: "monthly" };
+  if (/\bquarterly\b/.test(text)) return { frequency: "quarterly" };
+  if (/\b(annual(ly)?|yearly|once a year)\b/.test(text)) return { frequency: "calendar_year" };
+  return null;
+}
+
 type MandateVersion = { id: string; effectiveFrom: string; effectiveTo?: string; title?: string; mandate?: string; quorumText?: string; notes?: string; documentId?: string; cadenceRule?: CadenceRule };
 
 type StructureForm = {
@@ -63,14 +80,21 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
   const today = calendarDateKey(new Date());
   const current = [...versions].reverse().find((version) => version.effectiveFrom <= today && (!version.effectiveTo || version.effectiveTo >= today));
 
-  const openEditor = () => {
+  // The page header shows `cadence` (a free-text label, e.g. "Monthly");
+  // record-gap tracking needs the structured `cadenceRule`. Seeded and
+  // imported committees often have only the label, so say what it is and
+  // offer to turn it into a rule rather than claim there is no cadence.
+  const labelOnly = !committee.cadenceRule ? cadenceLabelText(committee.cadence) : "";
+  const labelRule = labelOnly ? ruleFromCadenceLabel(labelOnly) : null;
+
+  const openEditor = (structure?: { rule: CadenceRule }) => {
     setError(null);
     setForm({
       kind: committee.kind ?? "",
       parentBody: committee.parentBody ?? "",
       parentCommitteeId: committee.parentCommitteeId ?? "",
-      hasRule: Boolean(committee.cadenceRule),
-      rule: committee.cadenceRule ?? { frequency: "monthly" },
+      hasRule: Boolean(committee.cadenceRule) || Boolean(structure),
+      rule: committee.cadenceRule ?? structure?.rule ?? { frequency: "monthly" },
       cadenceLabel: committee.cadenceRule ? "" : committee.cadence ?? "",
       mandateVersions: versions.map((version) => ({ ...version })),
       quorum: quorumRuleDraft(committee.quorumRule),
@@ -134,7 +158,7 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
       <div className="card__head">
         <h2 className="card__title">Body, cadence and mandate</h2>
         {canWrite && (
-          <button type="button" className="btn btn--sm" style={{ marginLeft: "auto" }} onClick={openEditor}>
+          <button type="button" className="btn btn--sm" style={{ marginLeft: "auto" }} onClick={() => openEditor()}>
             <Pencil size={12} /> Edit
           </button>
         )}
@@ -148,8 +172,17 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
         )}
         <div className="muted" style={{ fontSize: 13 }}>
           {committee.cadenceRule
-            ? <>Structured cadence: {describeCadenceRule(committee.cadenceRule)}. {["monthly", "quarterly", "per_year_count", "calendar_year", "annual"].includes(String(committee.cadenceRule.frequency)) ? <>Missing meetings show on <Link to="/app/coverage?tab=continuity">Coverage &amp; gaps</Link>.</> : <>Set one up in <Link to="/app/coverage?tab=expectations">record gaps</Link>.</>}</>
-            : <>No structured cadence, so missing meetings aren't tracked. Set one up in <Link to="/app/coverage?tab=expectations">record gaps</Link>.</>}
+            ? <>Cadence: {describeCadenceRule(committee.cadenceRule)}. {TRACKED_FREQUENCIES.includes(String(committee.cadenceRule.frequency)) ? <>Missing meetings show on <Link to="/app/coverage?tab=continuity">Coverage &amp; gaps</Link>.</> : <>No fixed schedule, so missing meetings aren't tracked.</>}</>
+            : labelOnly
+            ? <>
+                Cadence: {labelOnly} — recorded as text only, so missing meetings aren't tracked yet.{" "}
+                {canWrite && labelRule
+                  ? <button type="button" className="link-button" onClick={() => openEditor({ rule: labelRule })}>Track {labelOnly.toLowerCase()} meetings</button>
+                  : canWrite
+                  ? <button type="button" className="link-button" onClick={() => openEditor({ rule: { frequency: "monthly" } })}>Set a structured cadence</button>
+                  : null}
+              </>
+            : <>No cadence set, so missing meetings aren't tracked. Set one up in <Link to="/app/coverage?tab=expectations">record gaps</Link>.</>}
         </div>
         {committee.cadenceNotes && <div className="muted">{committee.cadenceNotes}</div>}
         <div style={{ fontSize: 13 }} data-testid="committee-quorum-rule">

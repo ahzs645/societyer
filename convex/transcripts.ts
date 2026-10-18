@@ -4,7 +4,8 @@ import { action, internalMutation, mutation, query } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { transcribeAudio } from "./providers/transcription";
-import { summarizeMinutes } from "./providers/llm";
+import { resolveMinutesEndpoint, summarizeMinutes } from "./providers/llm";
+import { draftToMinutesArgs } from "../shared/ai/draftToMinutesArgs";
 import { providers } from "./providers/env";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import {
@@ -15,15 +16,18 @@ import {
   saveTranscriptPortable,
   saveTextPortable,
   importVttPortable,
+  assignSpeakerPortable,
+  updateSegmentPortable,
+  mergeSpeakersPortable,
+  unmergeSpeakerPortable,
+  importTimedPortable,
+  linkMinutesItemPortable,
+  markInCameraRangePortable,
 } from "../shared/functions/transcripts";
 import { claimStorageId, requireSocietyMembership } from "../shared/functions/access";
 
-const transcriptSegment = v.object({
-  speaker: v.string(),
-  text: v.string(),
-  startSec: v.number(),
-  endSec: v.number(),
-});
+import { transcriptSegmentValidator as transcriptSegment } from "./tables/transcripts";
+import { transcriptRefValidator } from "./validators/meetingModel";
 
 export const getByMeeting = authorizedQuery("transcripts:getByMeeting", query)({
   args: { meetingId: v.id("meetings") },
@@ -105,6 +109,87 @@ export const importVtt = authorizedMutation("transcripts:importVtt", mutation)({
     importVttPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
+const timedResult = v.object({ wordsDropped: v.boolean() });
+
+export const assignSpeaker = authorizedMutation("transcripts:assignSpeaker", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    label: v.string(),
+    name: v.optional(v.string()),
+    personId: v.optional(v.id("peopleDirectory")),
+  },
+  returns: timedResult,
+  handler: async (ctx, args) => assignSpeakerPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const updateSegment = authorizedMutation("transcripts:updateSegment", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    index: v.number(),
+    text: v.optional(v.string()),
+    speaker: v.optional(v.string()),
+  },
+  returns: timedResult,
+  handler: async (ctx, args) => updateSegmentPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const mergeSpeakers = authorizedMutation("transcripts:mergeSpeakers", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    // One label or several, combined into `to` in one step.
+    from: v.union(v.string(), v.array(v.string())),
+    to: v.string(),
+  },
+  returns: timedResult,
+  handler: async (ctx, args) => mergeSpeakersPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/** Undo a combine: the label becomes its own speaker again. */
+export const unmergeSpeaker = authorizedMutation("transcripts:unmergeSpeaker", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    label: v.string(),
+  },
+  returns: timedResult,
+  handler: async (ctx, args) => unmergeSpeakerPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const importTimed = authorizedMutation("transcripts:importTimed", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    provider: v.union(v.literal("vtt"), v.literal("srt"), v.literal("whisper-json"), v.literal("local-whisper")),
+    segments: v.array(transcriptSegment),
+    durationSeconds: v.optional(v.number()),
+  },
+  returns: timedResult,
+  handler: async (ctx, args) => importTimedPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/** Link a draft-minutes motion or action item to a transcript time range (minutes:write). */
+export const linkMinutesItem = authorizedMutation("transcripts:linkMinutesItem", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    kind: v.union(v.literal("motion"), v.literal("actionItem")),
+    motionId: v.optional(v.id("motions")),
+    sectionIndex: v.optional(v.number()),
+    actionIndex: v.optional(v.number()),
+    expectedText: v.optional(v.string()),
+    startSec: v.optional(v.number()),
+    endSec: v.optional(v.number()),
+  },
+  returns: v.object({
+    kind: v.union(v.literal("motion"), v.literal("actionItem")),
+    transcriptRef: v.union(v.null(), transcriptRefValidator),
+  }),
+  handler: async (ctx, args) => linkMinutesItemPortable(await toPortableMutationCtx(ctx), args),
+});
+
 export const _claimPipelineStorage = internalMutation({
   args: {
     societyId: v.id("societies"),
@@ -184,40 +269,12 @@ export const runPipeline = authorizedAction("transcripts:runPipeline", action)({
       if (!meeting) throw new Error("Meeting vanished mid-transcription.");
 
       if (shouldDraftMinutes) {
-        const draft = await summarizeMinutes({
-          transcript: result.text,
-          meetingTitle: meeting.title,
-          meetingType: meeting.type,
-        });
+        const draft = await summarizeMinutes(
+          { transcript: result.text, meetingTitle: meeting.title, meetingType: meeting.type },
+          await resolveMinutesEndpoint(ctx, args.societyId),
+        );
 
-        await ctx.runMutation(api.minutes.upsertFromDraft, {
-          societyId: args.societyId,
-          meetingId: args.meetingId,
-          heldAt: meeting.scheduledAt,
-          chairName: draft.chairName,
-          secretaryName: draft.secretaryName,
-          recorderName: draft.recorderName,
-          calledToOrderAt: draft.calledToOrderAt,
-          adjournedAt: draft.adjournedAt,
-          remoteParticipation: draft.remoteParticipation,
-          detailedAttendance: draft.detailedAttendance,
-          attendees: draft.attendees,
-          absent: draft.absent,
-          quorumMet: meeting.quorumRequired != null && draft.attendees.length >= meeting.quorumRequired,
-          quorumStatus: meeting.quorumRequired == null ? "not_recorded" : draft.attendees.length >= meeting.quorumRequired ? "confirmed" : "not_met",
-          discussion: draft.discussion,
-          sections: draft.sections,
-          motions: draft.motions,
-          decisions: draft.decisions,
-          actionItems: draft.actionItems,
-          nextMeetingAt: draft.nextMeetingAt,
-          nextMeetingLocation: draft.nextMeetingLocation,
-          nextMeetingNotes: draft.nextMeetingNotes,
-          sessionSegments: draft.sessionSegments,
-          appendices: draft.appendices,
-          agmDetails: draft.agmDetails,
-          draftTranscript: result.text,
-        });
+        await ctx.runMutation(api.minutes.upsertFromDraft, draftToMinutesArgs(meeting, draft, result.text));
 
         await ctx.runMutation(api.notifications.create, {
           societyId: args.societyId,
@@ -270,4 +327,17 @@ export const runPipeline = authorizedAction("transcripts:runPipeline", action)({
       throw err;
     }
   },
+});
+
+/** A2: mark where an in-camera session sits in the recording (minutes:write; never on approved minutes). */
+export const markInCameraRange = authorizedMutation("transcripts:markInCameraRange", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    sessionTitle: v.optional(v.string()),
+    startSec: v.optional(v.number()),
+    endSec: v.optional(v.number()),
+  },
+  returns: v.object({ title: v.string(), recordingStartSec: v.union(v.number(), v.null()), recordingEndSec: v.union(v.number(), v.null()) }),
+  handler: async (ctx, args) => markInCameraRangePortable(await toPortableMutationCtx(ctx), args),
 });

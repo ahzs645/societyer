@@ -19,6 +19,14 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { readableProjectionPermissions } from "./projectionPermissions";
 import { requirePermissionPortable, type Permission } from "./permissions";
+import { agendaItemsForReader, meetingForReader, minutesForReader, readerAccessGate, tasksForReader, type ReaderAccess } from "./minutesPrivacy";
+import { IN_CAMERA_DOCUMENT_TITLE, IN_CAMERA_ITEM_TITLE } from "../minutesPrivacy";
+
+/** A material whose document is withheld as in-camera material loses its own label and notes too (H1). */
+function withInCameraMaterialLabel<T extends { document?: unknown }>(row: T): T {
+  const withheld = typeof row.document === "object" && row.document !== null && "inCameraWithheld" in row.document;
+  return withheld ? { ...row, label: IN_CAMERA_DOCUMENT_TITLE, notes: undefined } : row;
+}
 
 // ----- portable access helpers (copied from convex/lib/access/*) ------------
 
@@ -195,8 +203,6 @@ async function documentAccessContextForActor(
 
 // --- Portable copy of convex/lib/agendaItems.ts (ctx.db-only) ----------------
 
-type AgendaEntry = { title: string; depth: 0 | 1 };
-
 async function readMeetingAgendaItems(ctx: PortableQueryCtx, meetingId: string): Promise<any[]> {
   const agendas = await ctx.db
     .query("agendas")
@@ -213,14 +219,22 @@ async function readMeetingAgendaItems(ctx: PortableQueryCtx, meetingId: string):
   return items;
 }
 
-async function readMeetingAgendaEntries(ctx: PortableQueryCtx, meetingId: string): Promise<AgendaEntry[]> {
+/**
+ * Original titles of the agenda items shown as "In-camera item", lower-cased,
+ * so a material filed under one doesn't name it. Empty for readers with
+ * in-camera access.
+ */
+async function inCameraAgendaTitlesHidden(
+  ctx: PortableQueryCtx,
+  meetingId: string,
+  visible: readonly { _id?: unknown; inCameraRedacted?: unknown }[],
+  gate: (societyId: string) => Promise<ReaderAccess>,
+  societyId: string,
+): Promise<Set<string>> {
+  const hiddenIds = new Set(visible.filter((item) => item.inCameraRedacted === true).map((item) => String(item._id)));
+  if (!hiddenIds.size || (await gate(societyId)).inCamera) return new Set();
   const items = await readMeetingAgendaItems(ctx, meetingId);
-  return items
-    .map((item: any) => ({
-      title: String(item.title ?? "").trim(),
-      depth: item.depth === 1 ? (1 as const) : (0 as const),
-    }))
-    .filter((entry: AgendaEntry) => entry.title);
+  return new Set(items.filter((item: any) => hiddenIds.has(String(item._id))).map((item: any) => String(item.title ?? "").trim().toLowerCase()));
 }
 
 // ----- queries --------------------------------------------------------------
@@ -246,7 +260,7 @@ export async function listForMeetingPortable(
       document: await getAccessibleDocument(ctx, { id: String(material.documentId) }),
     })),
   );
-  return rows.filter((row) => row.document).sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
+  return rows.filter((row) => row.document).map(withInCameraMaterialLabel).sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
 }
 
 export async function packageForMeetingPortable(
@@ -285,24 +299,29 @@ export async function packageForMeetingPortable(
       const downloadUrl = document?.storageId
         ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(document.storageId) })).url
         : null;
-      return {
+      return withInCameraMaterialLabel({
         ...material,
         document: document ? { ...document, downloadUrl } : document,
-      };
+      });
     }),
   );
 
-  const agenda = readable.has("agendas:read") ? (await readMeetingAgendaEntries(ctx, meetingId)).map((entry) => entry.title) : [];
+  // In-camera agenda items and a formal-minutes meeting's working notes follow the in-camera rule (decision A3).
+  const gate = readerAccessGate(ctx);
+  const agendaItems = readable.has("agendas:read") ? await agendaItemsForReader(ctx, meeting, await readMeetingAgendaItems(ctx, meetingId), gate) : [];
+  const agenda = agendaItems.map((item: { title?: unknown }) => String(item.title ?? "").trim()).filter(Boolean);
+  const hiddenAgendaTitles = await inCameraAgendaTitlesHidden(ctx, meetingId, agendaItems, gate, String(meeting.societyId));
   const visibleMaterialSummary = summarizeMeetingMaterials(visibleMaterials);
   return {
-    meeting,
+    meeting: await meetingForReader(ctx, meeting, gate),
     restrictedResources,
-    minutes,
+    minutes: await minutesForReader(ctx, minutes, gate),
     agenda,
       materials: materialRows
+      .map((row: any) => (row.agendaLabel && hiddenAgendaTitles.has(String(row.agendaLabel).trim().toLowerCase()) ? { ...row, agendaLabel: IN_CAMERA_ITEM_TITLE } : row))
       .filter((row: any) => row.document)
       .sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO))),
-    tasks: tasks.sort((a, b) => String(a.dueDate ?? "").localeCompare(String(b.dueDate ?? ""))),
+    tasks: (await tasksForReader(ctx, String(meeting.societyId), tasks)).sort((a, b) => String(a.dueDate ?? "").localeCompare(String(b.dueDate ?? ""))),
     counts: {
       agendaItems: agenda.length,
       materials: materials.length,
@@ -336,7 +355,7 @@ export async function listForSocietyPortable(
       meeting: await getOwned(ctx, "meetings", String(material.meetingId), societyId),
     })),
   );
-  return rows.sort((a, b) => String(b.meeting?.scheduledAt ?? "").localeCompare(String(a.meeting?.scheduledAt ?? "")));
+  return rows.map(withInCameraMaterialLabel).sort((a, b) => String(b.meeting?.scheduledAt ?? "").localeCompare(String(a.meeting?.scheduledAt ?? "")));
 }
 
 // ----- mutations ------------------------------------------------------------

@@ -7,6 +7,7 @@ export type DesktopSecretKey =
   | "rustfs-access-key"
   | "rustfs-secret-key"
   | "ai-api-key"
+  | "stt-api-key"
   | "sync-token";
 
 const SECRET_KEYS = new Set<DesktopSecretKey>([
@@ -14,6 +15,7 @@ const SECRET_KEYS = new Set<DesktopSecretKey>([
   "rustfs-access-key",
   "rustfs-secret-key",
   "ai-api-key",
+  "stt-api-key",
   "sync-token",
 ]);
 

@@ -297,15 +297,22 @@ export const revealSecret = authorizedMutation("secrets:revealSecret", mutation)
   },
 });
 
+// Server-side use of a stored key (AI provider calls). Never returned to a client.
+// A human principal carries no society scope, so the calling action names the
+// workspace it already authorized; the caller must be an active member of it
+// and the vault row must belong to it. A scoped principal cannot name another.
 export const _revealForServer = internalQuery({
-  args: { id: v.id("secretVaultItems") },
+  args: { id: v.id("secretVaultItems"), societyId: v.optional(v.id("societies")) },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
+  handler: async (ctx, { id, societyId: requestedSocietyId }) => {
     const portableCtx = await toPortableQueryCtx(ctx);
-    const societyId = portableCtx.principal.kind === "anonymous"
+    const scopedSocietyId = portableCtx.principal.kind === "anonymous"
       ? undefined
       : portableCtx.principal.societyId;
+    if (scopedSocietyId && requestedSocietyId && scopedSocietyId !== requestedSocietyId) throw new Error("Society membership not found.");
+    const societyId = scopedSocietyId ?? requestedSocietyId;
     if (!societyId) throw new Error("Society membership not found.");
+    if (!scopedSocietyId) await requireSocietyMembership(portableCtx, societyId);
     const row = await getOwned(portableCtx, "secretVaultItems", id, societyId);
     if (!row.secretEncrypted) return null;
     return {

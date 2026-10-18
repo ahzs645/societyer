@@ -1,5 +1,5 @@
 import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
-import { query, mutation, action, internalMutation } from "./_generated/server";
+import { query, mutation, action, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -15,7 +15,9 @@ import { providers } from "./providers/env";
 import { DOCUMENT_STORAGE_CAPABILITIES } from "../shared/storage/providerCapabilities";
 import { requireDocumentAccess } from "../shared/functions/documents";
 import { validateUploadMetadata, validateUploadHandle } from "../shared/storage/uploadVerification";
-import { assertNativeFileStorageEnabled } from "./providers/env";
+import { assertNativeFileStorageEnabled, assertDocumentVersionStorageEnabled } from "./providers/env";
+import { decodeSharePointLocator, sharePointDeployment } from "../shared/storage/sharePointDeployment";
+import { sharePointDownloadBrokerUrl } from "../shared/storage/sharePointBrokerUrl";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import {
   listForDocumentPortable,
@@ -55,8 +57,15 @@ export const beginUpload = authorizedAction("documentVersions:beginUpload", acti
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    assertNativeFileStorageEnabled();
+    assertDocumentVersionStorageEnabled();
     const allocated = await ctx.runMutation(internal.documentVersions.allocateUploadHandle, args);
+    if (providers.storage().id === "sharepoint") {
+      const site = process.env.CONVEX_SITE_URL;
+      if (!site) throw new Error("The authenticated file broker origin is not configured.");
+      const url = new URL("/document-storage/sharepoint/upload", site);
+      url.searchParams.set("uploadHandleId", allocated.uploadHandleId);
+      return { presigned: { provider: "sharepoint", key: allocated.stagingKey, url: url.href }, uploadHandleId: allocated.uploadHandleId };
+    }
     const presigned = await createUploadUrl({ key: allocated.stagingKey, mimeType: args.mimeType });
     return { presigned, uploadHandleId: allocated.uploadHandleId };
   },
@@ -76,7 +85,7 @@ export const allocateUploadHandle = internalMutation({
     mimeType: v.optional(v.string()), fileSizeBytes: v.optional(v.number()), actingUserId: v.optional(v.id("users")),
   }, returns: v.any(),
   handler: async (ctx, args) => {
-    assertNativeFileStorageEnabled();
+    assertDocumentVersionStorageEnabled();
     validateUploadMetadata(args);
     const portable = await toPortableMutationCtx(ctx);
     const actor = await requireSocietyMembership(portable, args.societyId);
@@ -87,7 +96,10 @@ export const allocateUploadHandle = internalMutation({
     const storage = providers.storage();
     const provider = storage.id;
     if (!storage.live || provider === "demo") throw new Error("Live upload storage is not configured. Use the explicit demo upload flow.");
-    const stagingKey = buildUploadStorageKey(args.societyId, args.documentId, crypto.randomUUID(), args.fileName);
+    if (provider === "sharepoint" && args.fileSizeBytes! > sharePointDeployment(process.env).maxFileBytes) throw new Error("SharePoint uploads are limited to 8 MiB on this deployment.");
+    const stagingKey = provider === "sharepoint"
+      ? `soc-${args.societyId}-doc-${args.documentId}-${crypto.randomUUID()}-${args.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100)}`
+      : buildUploadStorageKey(args.societyId, args.documentId, crypto.randomUUID(), args.fileName);
     const uploadHandleId = await ctx.db.insert("documentUploadHandles", {
       societyId: args.societyId, documentId: args.documentId, actorUserId: actor._id as Id<"users">,
       provider, stagingKey, fileName: args.fileName, mimeType: args.mimeType,
@@ -98,11 +110,12 @@ export const allocateUploadHandle = internalMutation({
 });
 
 export const claimUploadHandle = internalMutation({
-  args: { uploadHandleId: v.id("documentUploadHandles") }, returns: v.any(),
-  handler: async (ctx, { uploadHandleId }) => {
-    assertNativeFileStorageEnabled();
+  args: { uploadHandleId: v.id("documentUploadHandles"), requiredProvider: v.optional(v.literal("sharepoint")) }, returns: v.any(),
+  handler: async (ctx, { uploadHandleId, requiredProvider }) => {
+    assertDocumentVersionStorageEnabled();
     const handle = await ctx.db.get(uploadHandleId);
     if (!handle) throw new Error("Upload handle not found.");
+    if (requiredProvider && handle.provider !== requiredProvider) throw new Error("Upload handle uses a different storage provider.");
     const portable = await toPortableMutationCtx(ctx);
     const actor = await requireSocietyMembership(portable, handle.societyId);
     if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
@@ -115,20 +128,47 @@ export const claimUploadHandle = internalMutation({
 });
 
 export const markUploadVerified = internalMutation({
-  args: { uploadHandleId: v.id("documentUploadHandles"), sha256: v.string() }, returns: v.null(),
-  handler: async (ctx, { uploadHandleId, sha256 }) => {
+  args: { uploadHandleId: v.id("documentUploadHandles"), sha256: v.string(), storageKey: v.optional(v.string()) }, returns: v.null(),
+  handler: async (ctx, { uploadHandleId, sha256, storageKey }) => {
     const handle = await ctx.db.get(uploadHandleId);
     if (!handle) throw new Error("Upload handle not found.");
-    const actor = await requireSocietyMembership(await toPortableMutationCtx(ctx), handle.societyId);
+    const portable = await toPortableMutationCtx(ctx);
+    const actor = await requireSocietyMembership(portable, handle.societyId);
+    if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
+    await requireDocumentAccess(portable, handle.documentId, "manage");
     validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, "verifying");
-    await ctx.db.patch(uploadHandleId, { status: "verified", sha256, verifiedAtISO: new Date().toISOString() });
+    if (handle.provider === "sharepoint") {
+      if (!storageKey) throw new Error("Verified SharePoint metadata is required.");
+      decodeSharePointLocator(storageKey, sharePointDeployment(process.env));
+    } else if (storageKey !== undefined) throw new Error("Only SharePoint uploads can supply a verified remote locator.");
+    if (!/^[a-f\d]{64}$/.test(sha256)) throw new Error("A SHA-256 checksum is required.");
+    await ctx.db.patch(uploadHandleId, { status: "verified", sha256, ...(storageKey ? { storageKey } : {}), verifiedAtISO: new Date().toISOString() });
     return null;
+  },
+});
+
+export const uploadStatus = internalQuery({
+  args: { uploadHandleId: v.id("documentUploadHandles") }, returns: v.any(),
+  handler: async (ctx, { uploadHandleId }) => {
+    const handle = await ctx.db.get(uploadHandleId);
+    if (!handle) throw new Error("Upload handle not found.");
+    const portable = await toPortableQueryCtx(ctx);
+    const actor = await requireSocietyMembership(portable, handle.societyId);
+    if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
+    await requireDocumentAccess(portable, handle.documentId, "manage");
+    validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, handle.status);
+    return handle;
   },
 });
 
 export const completeUpload = authorizedAction("documentVersions:completeUpload", action)({
   args: { uploadHandleId: v.id("documentUploadHandles") }, returns: v.any(),
   handler: async (ctx, { uploadHandleId }) => {
+    const status = await ctx.runQuery(internal.documentVersions.uploadStatus, { uploadHandleId });
+    if (status.provider === "sharepoint") {
+      if (status.status !== "verified") throw new Error("SharePoint transfer has not been verified.");
+      return { uploadHandleId };
+    }
     const handle = await ctx.runMutation(internal.documentVersions.claimUploadHandle, { uploadHandleId });
     const verified = await verifyAndSealUpload(handle);
     await ctx.runMutation(internal.documentVersions.markUploadVerified, { uploadHandleId, sha256: verified.sha256 });
@@ -152,7 +192,7 @@ export const recordUploadedVersion = authorizedMutation("documentVersions:record
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    assertNativeFileStorageEnabled();
+    assertDocumentVersionStorageEnabled();
     const portableCtx = await toPortableMutationCtx(ctx);
     const uploader = await requireSocietyMembership(portableCtx, args.societyId);
     if (args.actingUserId && String(args.actingUserId) !== uploader._id) {
@@ -279,6 +319,11 @@ async function downloadTargetForVersion(version: any) {
     mimeType: version.mimeType,
     fileSizeBytes: version.fileSizeBytes,
   };
+
+  if (version.storageProvider === "sharepoint") {
+    if (!process.env.CONVEX_SITE_URL) throw new Error("The authenticated file broker origin is not configured.");
+    return { kind: "url", ...baseTarget, url: sharePointDownloadBrokerUrl(process.env.CONVEX_SITE_URL, version._id) };
+  }
 
   if (version.storageProvider === "local-filesystem") {
     return { kind: "local-filesystem", ...baseTarget };

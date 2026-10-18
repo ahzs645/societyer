@@ -4,6 +4,8 @@ import { authorizedAction } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
+import { aiProviderErrorMessage, aiProviderStatusMessage } from "../shared/ai/providerErrors";
+import { HOSTED_AI_ADDRESS_REJECTED, hostedAiFetch, isHostedAiUrlAllowed } from "./lib/aiEndpointPolicy";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -30,6 +32,9 @@ export const validateProviderKey = authorizedAction("aiSettingsActions:validateP
     const apiKey = args.apiKey.trim();
     if (!apiKey) return { ok: false, message: "API key is required." };
     const baseUrl = normalizeBaseUrl(args.baseUrl, provider);
+    if (!isHostedAiUrlAllowed(`${baseUrl}/models`, "ai_validate_key")) {
+      return { ok: false, provider, baseUrl, message: HOSTED_AI_ADDRESS_REJECTED };
+    }
     try {
       const response = await fetchModels(baseUrl, apiKey);
       const payload = await response.json().catch(() => ({}));
@@ -37,7 +42,7 @@ export const validateProviderKey = authorizedAction("aiSettingsActions:validateP
         return {
           ok: false,
           status: response.status,
-          message: payload?.error?.message ?? payload?.message ?? `Provider returned ${response.status}.`,
+          message: aiProviderStatusMessage(response.status),
         };
       }
       const modelIds = Array.isArray(payload?.data)
@@ -55,12 +60,12 @@ export const validateProviderKey = authorizedAction("aiSettingsActions:validateP
         modelIds,
         modelCatalog,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         ok: false,
         provider,
         baseUrl,
-        message: error?.message ?? "Could not reach provider.",
+        message: aiProviderErrorMessage(error),
       };
     }
   },
@@ -85,7 +90,11 @@ export const listProviderModels = authorizedAction("aiSettingsActions:listProvid
       return { ...cached.models, cached: true, stale: false };
     }
 
-    const apiKey = args.apiKey?.trim() || await savedApiKey(ctx, args.societyId, args.actingUserId);
+    if (!isHostedAiUrlAllowed(`${baseUrl}/models`, "ai_list_models")) {
+      return fallbackCatalog(provider, HOSTED_AI_ADDRESS_REJECTED);
+    }
+    // The saved key is only ever sent to the saved provider's own address.
+    const apiKey = args.apiKey?.trim() || await savedApiKey(ctx, provider, baseUrl, args.societyId, args.actingUserId);
     if (!apiKey) {
       if (cached) return { ...cached.models, cached: true, stale: true };
       return fallbackCatalog(provider, "Add or save an API key to refresh the live model list.");
@@ -101,9 +110,9 @@ export const listProviderModels = authorizedAction("aiSettingsActions:listProvid
       const modelCatalog = normalizeModels(provider, payload?.data ?? []);
       await writeModelCache(ctx, provider, cacheKey, modelCatalog);
       return { ...modelCatalog, cached: false, stale: false };
-    } catch (error: any) {
-      if (cached) return { ...cached.models, cached: true, stale: true, message: error?.message ?? "Could not reach provider." };
-      return fallbackCatalog(provider, error?.message ?? "Could not reach provider.");
+    } catch (error: unknown) {
+      if (cached) return { ...cached.models, cached: true, stale: true, message: aiProviderErrorMessage(error) };
+      return fallbackCatalog(provider, aiProviderErrorMessage(error));
     }
   },
 });
@@ -125,7 +134,8 @@ function providerLabel(provider: string) {
 }
 
 function fetchModels(baseUrl: string, apiKey: string) {
-  return fetch(`${baseUrl}/models`, {
+  // Policy-checked again at request time; redirects are refused.
+  return hostedAiFetch("ai_list_models")(`${baseUrl}/models`, {
     method: "GET",
     headers: {
       authorization: `Bearer ${apiKey}`,
@@ -134,8 +144,9 @@ function fetchModels(baseUrl: string, apiKey: string) {
   });
 }
 
-function providerError(payload: any, status: number) {
-  return payload?.error?.message ?? payload?.message ?? `Provider returned ${status}.`;
+function providerError(_payload: unknown, status: number) {
+  // Provider bodies can echo request details; only the status is reported.
+  return aiProviderStatusMessage(status);
 }
 
 function cacheKeyFor(provider: string, baseUrl: string) {
@@ -157,12 +168,14 @@ async function writeModelCache(ctx: any, provider: string, cacheKey: string, mod
   }).catch(() => null);
 }
 
-async function savedApiKey(ctx: any, societyId?: any, actingUserId?: any) {
+async function savedApiKey(ctx: any, provider: string, baseUrl: string, societyId?: any, actingUserId?: any) {
   if (!societyId) return "";
   const settings = await ctx.runQuery((api as any).aiSettings.getEffective, { societyId, actingUserId }).catch(() => null);
   const effective = settings?.effective;
   if (!effective?.secretVaultItemId) return "";
-  const secret = await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId }).catch(() => null);
+  const savedProvider = normalizeProvider(String(effective.provider ?? ""));
+  if (savedProvider !== provider || normalizeBaseUrl(effective.baseUrl, savedProvider) !== baseUrl) return "";
+  const secret = await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId, societyId }).catch(() => null);
   return secret?.value ?? "";
 }
 

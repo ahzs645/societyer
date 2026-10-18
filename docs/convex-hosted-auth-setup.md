@@ -51,11 +51,23 @@ variables, or `npx convex env set NAME value`):
 | `SITE_URL` | Yes | The app's origin, e.g. `https://app.example.org`. Comma-separate extra origins (the first is the primary). Only these origins may call the sign-in routes or receive email links. |
 | `BETTER_AUTH_SECRET` | Yes | At least 32 random characters, e.g. `openssl rand -base64 36`. Keep it stable: changing it signs everyone out. |
 | `SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT=1` | Recommended | Explicit authenticated enforcement, as for other hosted modes |
-| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Recommended | Email delivery for verification, password reset and email-bound invitations (see below) |
+| `SOCIETYER_EMAIL_PROVIDER` | Recommended with both configured | `microsoft365` or `resend`; selects one delivery provider without automatic failover |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | For Resend | Email delivery for verification, password reset and email-bound invitations (see below) |
+| `MICROSOFT_MAIL_TENANT_ID`, `MICROSOFT_MAIL_CLIENT_ID`, `MICROSOFT_MAIL_CLIENT_SECRET`, `MICROSOFT_MAIL_SENDER` | For Microsoft 365 | Dedicated mail app and its single scoped sender mailbox; server only |
 | `AUTH_SESSION_MAX_AGE_SECONDS` | Optional | Session length, 300–86400 seconds (default 8 hours) |
+| `SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS` | Optional | Exact comma-separated allowed email domains, e.g. `ddcnorth.com`. Enforces verified email on backend access and closes sign-up until a mail sender is configured. Unset for unrestricted registration. |
+| `SOCIETYER_AUTH_INSTANCE_NAME` | Optional | Name shown above the sign-in card, e.g. `DDC North` (up to 80 characters). Without it, a single allowed email domain shows as `ddcnorth.com workspace`; otherwise nothing is shown. |
+| `SOCIETYER_AUTH_SUPPORT_EMAIL` | Optional | Address the sign-in pages offer for help, e.g. `it@ddcnorth.com`: the footer reads "Trouble signing in? Contact it@ddcnorth.com." as a mail link. Without it the footer says to contact the workspace administrator. An invalid address is ignored. |
+| `SOCIETYER_MCP_OAUTH`, `SOCIETYER_MCP_OAUTH_REDIRECT_URIS`, `SOCIETYER_MCP_OAUTH_CONSENT_URL` | Optional | OAuth sign-in for AI connectors (claude.ai, ChatGPT, Claude Code, Codex). On by default once `SITE_URL` is set; the consent page is `<SITE_URL>/oauth/consent`. `SOCIETYER_MCP_OAUTH=0` turns it off. See [mcp-connector.md](mcp-connector.md#deployment-settings). |
 
 `CONVEX_SITE_URL` is provided by Convex automatically; it becomes the token
 issuer and the address that serves `/api/auth/*`.
+
+The instance name and support email are display settings: the public
+`http:authCapabilities` query returns them to anyone who opens the sign-in page,
+so use a shared help address rather than a person's private one. Like the other
+variables they are read at request time, so a change shows on the next page load
+without a redeploy once a deployment that includes them is running.
 
 Then deploy (`npx convex deploy`, or `npx convex dev` while developing).
 Like the other modes, a change to `AUTH_MODE` takes effect on the next deploy,
@@ -63,8 +75,113 @@ because Convex reads the auth configuration and HTTP routes at deploy time.
 
 ### Email delivery, invitations and password reset
 
-Use a [Resend](https://resend.com) API key with a sender on a domain you've
-verified with Resend. These are the same variables the communications module uses.
+Both Microsoft 365 and Resend are supported. Configure the intended sender and
+set `SOCIETYER_EMAIL_PROVIDER` to `microsoft365` or `resend`. Both sets of server
+credentials can coexist; changing the selector changes the provider. A failed or
+ambiguous send is never retried through the other provider automatically, which
+could send duplicate verification links. Existing Resend deployments continue
+working without a selector. Without a selector, a complete Resend configuration
+takes precedence, then a complete Microsoft configuration. Explicitly selecting
+an incomplete provider disables mail readiness even if the other is configured.
+
+For Resend, use an API key with a sender on a domain you've verified with
+[Resend](https://resend.com). These are the same variables the communications
+module uses.
+
+For Microsoft 365, use a separate Entra application and Exchange **Application
+Mail.Send** role scoped to the dedicated sender mailbox. Keep the existing
+SharePoint storage app unchanged. Do not add a tenant-wide Graph `Mail.Send`
+application grant alongside the scoped role: Entra and Exchange grants are
+additive. No mailbox-read permission is needed for sending. See the provisioning
+steps below and Microsoft's [application RBAC guide](https://learn.microsoft.com/en-us/exchange/permissions-exo/application-rbac).
+
+Microsoft delivery calls the fixed tenant OAuth endpoint and
+`https://graph.microsoft.com/v1.0/users/{MICROSOFT_MAIL_SENDER}/sendMail` from a
+Convex action. Credentials never go into `VITE_*`, the browser, or Cloudflare
+Pages. Graph's `202` confirms acceptance, not arrival in the recipient's inbox;
+the adapter's identifier is a request correlation ID, not a Microsoft message ID.
+[Graph sendMail contract](https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0).
+
+#### Microsoft 365 provisioning
+
+1. In the correct tenant, choose a licensed existing mailbox or a dedicated
+   shared mailbox such as `societyer@ddcnorth.com`. Verify its actual Exchange
+   eligibility before purchasing any license. Keep sender and recipient distinct
+   for the first delivery test when possible.
+2. Create a single-tenant Entra app named **Societyer DDC North email delivery**.
+   Create its enterprise application/service principal and record its **service
+   principal Object ID**, which differs from the app-registration Object ID.
+   Create an expiring server credential after operator approval. Do not enable
+   delegated sign-in or reuse the storage app's credential.
+3. Connect using an Exchange Administrator/Organization Management account in
+   Exchange Online PowerShell. Create the Exchange pointer with
+   `New-ServicePrincipal -AppId <client-id> -ObjectId <enterprise-app-object-id>`.
+4. Create a resource scope matching only the chosen sender, for example
+   `New-ManagementScope -Name 'Societyer DDC North sender' -RecipientRestrictionFilter "EmailAddresses -eq 'smtp:societyer@ddcnorth.com'"`.
+   Preview the scope and verify exactly one mailbox matches. Use the exact SMTP
+   address rather than a wildcard. Microsoft recommends `EmailAddresses` over
+   `PrimarySmtpAddress` for [recipient filters](https://learn.microsoft.com/en-us/powershell/exchange/recipientfilter-properties?view=exchange-ps).
+5. Assign `Application Mail.Send` to that app with
+   `New-ManagementRoleAssignment -Name 'Societyer DDC North send only' -App <enterprise-app-object-id> -Role 'Application Mail.Send' -CustomResourceScope 'Societyer DDC North sender'`.
+6. Use `Test-ServicePrincipalAuthorization` for the approved sender and an
+   existing mailbox outside the scope: the send role must be in scope only for
+   the approved sender. Separately inspect Entra to confirm there are no unscoped
+   mail grants; this test excludes Entra grants. Exchange permission propagation
+   can take 30 minutes to two hours. A simulated scope test alone does not prove
+   live Graph authorization.
+7. Put the four `MICROSOFT_MAIL_*` settings in the production Convex deployment.
+   Store the secret directly in server environment settings. Select
+   `SOCIETYER_EMAIL_PROVIDER=microsoft365`; leave Resend unconfigured until ready.
+8. Run `npx convex run --prod emailQualification:sendTest '{"to":"Ahmad@ddcnorth.com"}'`
+   and have the owner confirm receipt. This internal action is available only to
+   deployment operators and sends a fixed test message, not a verification link.
+   Then test signup, actual verification-link delivery, sign-in, reset, workspace
+   setup and meeting uploads. The owner enters their own new account password.
+
+Code and mocked provider tests do not establish that tenant permissions, sender
+delivery or the full browser flow are configured. Confirm these live before
+reporting that email is operational. To disable Microsoft mail, remove its
+credential and revoke its Exchange assignment; if another verified provider is
+ready, select it explicitly. Never remove domain/verified-email enforcement as a
+workaround for missing delivery.
+
+For this tenant, the initial Exchange PowerShell device-code sign-in was rejected
+with error `530035`. Microsoft's [Security Defaults guidance](https://learn.microsoft.com/en-us/entra/fundamentals/security-defaults)
+documents device-code blocking for new tenants from July 1, 2026. Use the normal
+interactive browser sign-in instead; do not disable Security Defaults or add an
+exception for provisioning. The owner completed interactive authentication, but
+automatic approval review rejected subsequent input to that open PowerShell
+session, including a read-only status check. The bounded runner
+`scripts/connect-and-provision-ddcnorth-email.ps1` instead connects, runs only
+the reviewed sender provisioning script, and disconnects in `finally`. It uses
+a fresh interactive sign-in. Authentication alone does not establish that the
+Exchange assignment exists; record the runner's authorization result and a
+real Graph send separately. No application credential was created during the
+rejected device-code sign-in.
+
+The first bounded run authenticated successfully and created the Exchange
+service-principal pointer, then `New-ManagementScope` reported that organization
+customization was required. The provisioning script now checks
+`Get-OrganizationConfig.IsDehydrated` and invokes the documented one-time
+[`Enable-OrganizationCustomization`](https://learn.microsoft.com/en-us/powershell/module/exchange/enable-organizationcustomization)
+prerequisite when needed. It stops if customization has not finished propagating;
+it never substitutes an unrestricted mail grant.
+
+On October 17, 2026, the corrected runner completed with `SenderInScope=true`,
+`AhmadMailboxInScope=false`, and `ScopeMatches=1` for `Application Mail.Send`.
+The enterprise application's Admin consent view also showed **No admin consented
+permissions found for the application**, confirming there was no additive Graph
+application mail grant at that check. Runtime credential setup and actual
+delivery are separate qualification steps. The replacement six-month credential
+was subsequently connected to production (expiry April 15, 2027). Both the
+direct Microsoft Graph probe and production `emailQualification:sendTest` were
+accepted. Both delivery-test messages and the real signup-verification messages
+were subsequently observed in Ahmad's Microsoft 365 Inbox. Following the actual
+verification link enabled normal sign-in. An unverified sign-in had first been
+rejected with HTTP 403. The live UI then completed workspace onboarding and
+meeting creation; see the DDC North deployment runbook for the qualification
+record. Acceptance alone still must not be used as evidence of inbox delivery
+for future deployments.
 
 | | With email delivery | Without it |
 |---|---|---|

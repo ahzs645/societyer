@@ -60,6 +60,7 @@ export async function createUploadUrl(args: {
       expiresAtISO,
     };
   }
+  if (p.id === "sharepoint") throw new Error("SharePoint uploads require the authenticated document broker.");
   return {
     provider: p.id,
     key: args.key,

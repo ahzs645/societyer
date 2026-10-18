@@ -1,4 +1,5 @@
 import { getPortable as getAccessibleDocument } from "./documents";
+import { tasksForReader } from "./minutesPrivacy";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
  * PORTABLE FUNCTIONS: the dashboard domain (navCounts / summary).
@@ -373,7 +374,8 @@ export async function summaryPortable(
   const goalPreview = goals
     .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
     .slice(0, 4);
-  const openTaskPreview = tasks.filter((task) => !isHistoricalSourceAction(task as any))
+  // Tasks made from in-camera action items read "In-camera action" for readers without in-camera access.
+  const openTaskPreview = (await tasksForReader(ctx, societyId, tasks)).filter((task) => !isHistoricalSourceAction(task as any))
     .sort((a, b) => compareOptionalDates(a.dueDate, b.dueDate))
     .slice(0, 6);
   const canReadEvidence = ["filings:read", "documents:read", "users:read", "audit:read"].every(permission => readAccess.has(permission as Permission));

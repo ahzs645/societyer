@@ -1,4 +1,6 @@
 import { composeAiMessage } from "../shared/aiAttachments";
+import { aiProviderErrorMessage } from "../shared/ai/providerErrors";
+import { HOSTED_AI_ADDRESS_REJECTED, hostedAiFetch, isHostedAiUrlAllowed } from "./lib/aiEndpointPolicy";
 import { authorizedQuery } from "./lib/authorizedServer";
 import { httpRouter } from "convex/server";
 import { httpAction, query } from "./_generated/server";
@@ -17,10 +19,21 @@ import { hostedPrincipal } from "./lib/authIdentity";
 import { assertExternalIdentityActive, matchesAuthBinding } from "../shared/functions/identity";
 import { workspaceCreationAccessPortable } from "../shared/functions/society";
 import { resolveSessionBroker } from "../shared/authConfiguration";
+import { allowedAuthEmailDomains } from "../shared/authEmailPolicy";
+import { authInstanceDetails } from "../shared/authInstance";
 import { deploymentCapabilities as resolveDeploymentCapabilities } from "../shared/deploymentCapabilities";
 import { authComponent, createAuth, hostedAuthEmailConfigured } from "./hostedAuth";
+import { registerSharePointRoutes } from "./sharePointHttp";
+import { registerMeetingSourceRoutes } from "./meetingSourceHttp";
+import { registerMcpRoutes } from "./mcpHttp";
+import { registerMcpOAuthRoutes } from "./mcpOAuthHttp";
+import { developmentMailConfigured } from "../shared/developmentMailConfiguration";
 
 const http = httpRouter();
+registerSharePointRoutes(http);
+registerMeetingSourceRoutes(http);
+registerMcpRoutes(http);
+registerMcpOAuthRoutes(http);
 // Convex-hosted login (AUTH_MODE=convex) serves Better Auth from this
 // deployment's /api/auth/*. Other brokers keep these routes absent; like
 // auth.config.ts, changing AUTH_MODE takes effect on the next deploy.
@@ -38,10 +51,23 @@ export const deploymentCapabilities = authorizedQuery("http:deploymentCapabiliti
 /** Sign-in page options for the Convex-hosted broker. Deployment settings only, no records. */
 export const authCapabilities = authorizedQuery("http:authCapabilities", query)({
   args: {},
-  returns: v.object({ mode: v.string(), emailDelivery: v.boolean() }),
+  returns: v.object({
+    mode: v.string(),
+    emailDelivery: v.boolean(),
+    allowedEmailDomains: v.array(v.string()),
+    signUpEnabled: v.boolean(),
+    developmentMail: v.optional(v.boolean()),
+    // SOCIETYER_AUTH_INSTANCE_NAME / SOCIETYER_AUTH_SUPPORT_EMAIL; omitted when unset.
+    instanceName: v.optional(v.string()),
+    supportEmail: v.optional(v.string()),
+  }),
   handler: async () => ({
     mode: resolveSessionBroker(process.env),
     emailDelivery: hostedAuthEmailConfigured(),
+    allowedEmailDomains: allowedAuthEmailDomains(process.env),
+    signUpEnabled: !allowedAuthEmailDomains(process.env).length || hostedAuthEmailConfigured(),
+    ...(developmentMailConfigured(process.env) ? { developmentMail: true } : {}),
+    ...authInstanceDetails(process.env),
   }),
 });
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
@@ -295,7 +321,7 @@ http.route({
       async start(controller) {
         let text = "";
         try {
-          if (!runtimeConfig.model) throw new Error("No AI provider key is configured.");
+          if (!runtimeConfig.model) throw new Error(runtimeConfig.addressBlocked ? HOSTED_AI_ADDRESS_REJECTED : "No AI provider key is configured.");
           controller.enqueue(encoder.encode(sse({ threadId, modelId }, "ready")));
           const result = streamText({
             model: runtimeConfig.model,
@@ -340,7 +366,9 @@ http.route({
           });
           controller.enqueue(encoder.encode(sse({ threadId, messageId }, "done")));
         } catch (error: any) {
-          const fallback = `Live streaming is not available: ${error?.message ?? "unknown error"}`;
+          // Provider messages can echo request details; only a generic reason is kept.
+          const reason = !runtimeConfig.model ? String(error?.message ?? "No AI provider key is configured.") : aiProviderErrorMessage(error);
+          const fallback = `Live streaming is not available: ${reason}`;
           try {
             await ctx.runMutation((internal as any).aiChat._appendMessage, {
               societyId,
@@ -381,13 +409,21 @@ async function resolveAiRuntimeConfig(ctx: any, societyId: any, requestedModelId
   }).catch(() => null);
   const effective = settings?.effective;
   const secret = effective?.secretVaultItemId
-    ? await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId }).catch(() => null)
+    ? await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId, societyId }).catch(() => null)
     : null;
   const provider = effective?.provider ?? (env("OPENROUTER_API_KEY") ? "openrouter" : "openai");
-  const apiKey = secret?.value ?? (provider === "openrouter" ? env("OPENROUTER_API_KEY") : env("OPENAI_API_KEY")) ?? env("OPENAI_API_KEY");
+  // The deployment's own key is never sent to a workspace-chosen address.
+  const environmentKey = effective?.baseUrl ? undefined : (provider === "openrouter" ? env("OPENROUTER_API_KEY") : env("OPENAI_API_KEY")) ?? env("OPENAI_API_KEY");
+  const apiKey = secret?.value ?? environmentKey;
   const modelId = requestedModelId ?? effective?.modelId ?? env("SOCIETYER_AI_MODEL") ?? (provider === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini");
   const baseURL = effective?.baseUrl || (provider === "openrouter" ? OPENROUTER_BASE_URL : undefined);
-  const openai = apiKey ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) }) : null;
+  // A workspace-saved address is fetched by this server: public HTTPS only,
+  // checked again on every request, no redirects (see lib/aiEndpointPolicy).
+  const savedAddress = Boolean(effective?.baseUrl);
+  const addressBlocked = savedAddress && !isHostedAiUrlAllowed(String(baseURL), "ai_chat_stream");
+  const openai = apiKey && !addressBlocked
+    ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}), ...(savedAddress ? { fetch: hostedAiFetch("ai_chat_stream") } : {}) })
+    : null;
   const model = openai
     ? provider === "openrouter" || provider === "openai-compatible"
       ? openai.chat(modelId)
@@ -396,6 +432,7 @@ async function resolveAiRuntimeConfig(ctx: any, societyId: any, requestedModelId
   return {
     modelId,
     model,
+    addressBlocked,
   };
 }
 

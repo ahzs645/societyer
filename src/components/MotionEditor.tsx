@@ -1,4 +1,4 @@
-import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
 import {
   MOTION_OUTCOMES,
@@ -18,6 +18,7 @@ import {
 import { usePermissions } from "../hooks/usePermissions";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { hasOutcomeOverride, motionOutcomeConsistencyIssues, motionVoteIssues } from "../../shared/motionValidation";
+import { motionNumberLabel, motionNumbers } from "../lib/motionDisplay";
 // Re-export the pure governance helpers so existing importers can keep pulling
 // them from MotionEditor; the implementations now live in lib/motionGovernance.
 export { isAdjournmentMotion, thresholdFor, motionMeetsThreshold };
@@ -93,12 +94,18 @@ export type Motion = {
   /** C1: the outcome exactly as the source worded it. */
   sourceOutcomeText?: string;
   sourceLocator?: { voteSummary?: string; pageRef?: string; evidenceText?: string; sectionReference?: string; quote?: string; sourceExternalIds?: string[] };
+  /** Where the motion was said in the recording; set from the Transcript tab. */
+  transcriptRef?: { startSec: number; endSec: number };
 };
 
 export type NamedMotionPerson = { name: string; personId?: string; notes?: string };
 
 /** People-directory rows and document choices for the motion editors (A1/A11). */
-type MotionEditorExtras = { directoryPeople?: DirectoryPerson[]; documentOptions?: Array<{ value: string; label: string }> };
+type MotionEditorExtras = {
+  directoryPeople?: DirectoryPerson[];
+  documentOptions?: Array<{ value: string; label: string }>;
+  renderMotionAccessory?: (motion: Motion, number: number | null) => ReactNode;
+};
 const MotionEditorExtrasContext = createContext<MotionEditorExtras>({});
 
 /** Mover / seconder field: a people-directory picker when the directory is
@@ -482,6 +489,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   directoryPeople?: DirectoryPerson[];
   /** Documents that can be linked as a retained dissent report (A11). */
   documentOptions?: Array<{ value: string; label: string }>;
+  /** Extra inline content after each motion's outcome badge (e.g. a recording time link). `number` is the motion's display number (`motionNumbers`), null for the adjournment. */
+  renderMotionAccessory?: (motion: Motion, number: number | null) => ReactNode;
 }>(function MotionEditor({
   motions: motionsProp,
   readOnly = false,
@@ -496,6 +505,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   adoptionTargets = [],
   directoryPeople,
   documentOptions,
+  renderMotionAccessory,
 }, ref) {
   const { can } = usePermissions();
   // Every keystroke in a motion field saves the whole list. Until the saves
@@ -597,6 +607,9 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     () => Array.from(new Set([...directorNames, ...people.flatMap((person) => [person.name, ...(person.aliases ?? [])])])).filter(Boolean).sort(),
     [directorNames, people],
   );
+  // Numbered across the whole list (adjournment excluded), so a section-scoped
+  // editor and the transcript show the same "Motion 3" as the Motions tab.
+  const numbers = motionNumbers(motions);
   const allMotionRows = motions.map((motion, index) => ({ motion, index }));
   // Filter to the scoped section when embedded inside the section editor; the
   // onChange callback still emits the full motions array, so array indexes
@@ -714,7 +727,10 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdjournmentScope, adjournmentRows.length]);
 
-  const extras = useMemo(() => ({ directoryPeople, documentOptions }), [directoryPeople, documentOptions]);
+  const extras = useMemo(
+    () => ({ directoryPeople, documentOptions, renderMotionAccessory }),
+    [directoryPeople, documentOptions, renderMotionAccessory],
+  );
   return (
     <MotionEditorExtrasContext.Provider value={extras}>
     <div onBlur={flushQueuedSave}>
@@ -733,6 +749,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           key={i}
           anchorId={`motion-${i}`}
           motion={m}
+          number={numbers[i]}
           readOnly={readOnly}
           canApproveAdoption={can("minutes:approve")}
           nameOptions={nameOptions}
@@ -1005,6 +1022,7 @@ function MotionRow({
   onAddToBacklog,
   anchorId,
   voteNotice,
+  number = null,
 }: {
   motion: Motion;
   readOnly?: boolean;
@@ -1025,7 +1043,10 @@ function MotionRow({
   anchorId?: string;
   /** Shown when a tally change reset the recorded outcome (G-04). */
   voteNotice?: string;
+  /** Display number (`motionNumbers`); null for the adjournment, which has its own heading. */
+  number?: number | null;
 }) {
+  const { renderMotionAccessory } = useContext(MotionEditorExtrasContext);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [pendingOverrideOutcome, setPendingOverrideOutcome] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -1121,8 +1142,10 @@ function MotionRow({
       <div id={anchorId} className="motion">
         <details open={expanded}>
           <summary className="motion__head">
+            {number != null && <span className="motion__number">{motionNumberLabel(number)}</span>}
             <strong>{titleText || "Untitled motion"}</strong>
             <Badge tone={tone as any}>{motion.outcome}</Badge>
+            {renderMotionAccessory?.(motion, number)}
           </summary>
           <div style={{ marginTop: 10 }}>
             <MarkdownEditor rows={4} value={motion.text} onChange={() => {}} readOnly />
@@ -1153,6 +1176,7 @@ function MotionRow({
     >
       <div className={`motion__head${isLongTitle ? " motion__head--stacked" : ""}`}>
         <div className="motion__head-main">
+          {number != null && <span className="motion__number">{motionNumberLabel(number)}</span>}
           {showTextHeadline ? (
             <div
               className="motion__name-input motion__name-display"
@@ -1182,6 +1206,7 @@ function MotionRow({
           )}
           <div className="motion__meta motion__meta--inline">
             {!expanded && <Badge tone={tone as any}>{motion.outcome}</Badge>}
+            {renderMotionAccessory?.(motion, number)}
             {motion.motionId && <UnsupportedDetailsBadge table="motions" id={motion.motionId} />}
           </div>
         </div>

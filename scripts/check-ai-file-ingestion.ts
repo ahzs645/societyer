@@ -35,14 +35,20 @@ const address = server.address();
 assert.ok(address && typeof address !== "string");
 const originalKey = process.env.OPENAI_API_KEY;
 process.env.OPENAI_API_KEY = "synthetic-local-fixture-key";
+// The fixture provider is on loopback: allowed only through the outbound URL
+// policy's local-development escape hatch, and only with the workspace's own
+// saved key (the deployment key is never sent to a workspace-chosen address).
+const originalLocalDev = process.env.SOCIETYER_OUTBOUND_ALLOW_LOCAL_DEVELOPMENT;
+process.env.SOCIETYER_OUTBOUND_ALLOW_LOCAL_DEVELOPMENT = "true";
 try {
   const fixture = await createFixture({
     "./aiChat.js": () => import("../convex/aiChat"), "./aiChatActions.js": () => import("../convex/aiChatActions"),
     "./aiAgents.js": () => import("../convex/aiAgents"), "./aiSettings.js": () => import("../convex/aiSettings"),
     "./documents.js": () => import("../convex/documents"), "./authorization.js": () => import("../convex/authorization"), "./http.js": () => import("../convex/http"),
+    "./secrets.js": () => import("../convex/secrets"),
   });
   const extra = await fixture.native.run(async ctx => {
-    await ctx.db.insert("aiProviderSettings", { societyId: fixture.ids.societyA, scope: "workspace", provider: "openai-compatible", label: "Loopback fixture", status: "active", modelId: "fixture-model", baseUrl: `http://127.0.0.1:${address.port}/v1`, createdAtISO: "2026-01-01T00:00:00Z", updatedAtISO: "2026-01-01T00:00:00Z" });
+    const settingId = await ctx.db.insert("aiProviderSettings", { societyId: fixture.ids.societyA, scope: "workspace", provider: "openai-compatible", label: "Loopback fixture", status: "active", modelId: "fixture-model", baseUrl: `http://127.0.0.1:${address.port}/v1`, createdAtISO: "2026-01-01T00:00:00Z", updatedAtISO: "2026-01-01T00:00:00Z" });
     const directorId = await ctx.db.insert("users", { societyId: fixture.ids.societyA, role: "Director", status: "Active", email: "director@example.test", displayName: "Director", authSubject: "director-a", authProvider: "clerk", authIssuer: "https://offline-evaluation.clerk.accounts.dev", createdAtISO: "2026-01-01T00:00:00Z" });
     const document = { category: "Other", flaggedForDeletion: false, tags: [], createdAtISO: "2026-01-01T00:00:00Z" };
     const visible = await ctx.db.insert("documents", { ...document, societyId: fixture.ids.societyA, title: "Visible synthetic minutes" });
@@ -50,8 +56,10 @@ try {
     const foreign = await ctx.db.insert("documents", { ...document, societyId: fixture.ids.societyB, title: "Foreign synthetic record" });
     const meeting = await ctx.db.insert("meetings", { societyId: fixture.ids.societyA, title: "Private meeting", type: "Board", scheduledAt: "2026-01-01T00:00:00Z", electronic: false, attendeeIds: [], status: "Draft" } as any);
     await ctx.db.insert("meetingMaterials", { societyId: fixture.ids.societyA, meetingId: meeting, documentId: hidden, order: 0, requiredForMeeting: false, accessLevel: "restricted", accessGrants: [{ subjectType: "user", subjectId: fixture.ids.users["owner-a"] as any, subjectLabel: "Owner", access: "view" }], createdAtISO: "2026-01-01T00:00:00Z" });
-    return { visible, hidden, foreign, directorId };
+    return { visible, hidden, foreign, directorId, settingId };
   });
+  const secretVaultItemId = await fixture.actor("owner-a").mutation(makeFunctionReference<"mutation">("secrets:create"), { societyId: fixture.ids.societyA, name: "Fixture AI key", service: "OpenAI-compatible", credentialType: "api_key", secretValue: "synthetic-workspace-key", custodianPersonName: "Owner" });
+  await fixture.native.run(async ctx => ctx.db.patch(extra.settingId, { secretVaultItemId }));
   const send = makeFunctionReference<"action">("aiChatActions:sendChatMessage");
   const create = makeFunctionReference<"mutation">("aiChat:createThread");
   const messages = makeFunctionReference<"query">("aiChat:messagesForThread");
@@ -106,6 +114,7 @@ try {
   console.log("PASS real SDK streaming completion cannot persist after the authenticated creator is downgraded during generation");
 } finally {
   if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
+  if (originalLocalDev === undefined) delete process.env.SOCIETYER_OUTBOUND_ALLOW_LOCAL_DEVELOPMENT; else process.env.SOCIETYER_OUTBOUND_ALLOW_LOCAL_DEVELOPMENT = originalLocalDev;
   releaseSlowProvider?.();
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 }

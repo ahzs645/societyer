@@ -1,5 +1,5 @@
 import { hasErrors, validateDocumentInput, type FieldErrors } from "../../shared/recordValidation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -7,6 +7,9 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { FileDropZone, useFileDrop } from "../components/FileDropZone";
+import { Tabs } from "../components/primitives";
+import { useIsMobile } from "../lib/useIsMobile";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -21,10 +24,10 @@ import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import type { MenuSection } from "../components/Menu";
-import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, BookOpen, ClipboardCheck, MessageSquare, Copy, Layers, FileSearch } from "lucide-react";
+import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, BookOpen, ClipboardCheck, MessageSquare, Copy, Layers, FileSearch, Lock } from "lucide-react";
 import { formatDate, formatDateTime, pluralize } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
-import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
+import { isDocumentVersionStorageEnabled } from "../lib/runtimeMode";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
@@ -73,8 +76,7 @@ export function DocumentsPage() {
   const [versionsFor, setVersionsFor] = useState<{ id: any; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [formErrors, setFormErrors] = useState<FieldErrors>({});
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const nativeStorage = isNativeFileStorageEnabled();
+  const nativeStorage = isDocumentVersionStorageEnabled();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const categoryParam = searchParams.get("category");
@@ -153,6 +155,31 @@ export function DocumentsPage() {
     }, { replace: true });
   }, [canEdit, params, setParams, society]);
   const categoryOptions = useMemo(() => documentCategoryOptions(allRows.map((row) => row.category), categoryAudience), [allRows, categoryAudience]);
+  // Quick upload: the overflow menu's Upload opens the picker, and a file
+  // dropped anywhere on the page becomes a new document. Drags inside a
+  // drawer or dialog (Add document, File history) or onto a zone belong to
+  // that surface, so the page leaves them alone. Any type, no size cap, no
+  // paste, as before.
+  // quickUpload is declared after the loading returns; the ref reaches it.
+  const quickUploadRef = useRef<((file: File) => Promise<void>) | null>(null);
+  const quickDrop = useFileDrop({
+    disabled: !nativeStorage || busy || !canEdit,
+    onFiles: ([file]) => { if (file) void quickUploadRef.current?.(file); },
+  });
+  const onPage = (event: DragEvent<HTMLElement>) => !(event.target instanceof Element && event.target.closest('[role="dialog"], .file-drop'));
+  // A file let go elsewhere in a drawer that nothing there took must not
+  // open in the tab and drop the user out of the app.
+  const swallow = (event: DragEvent<HTMLElement>) => {
+    if (event.defaultPrevented || !Array.from(event.dataTransfer?.types ?? []).includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "none";
+  };
+  const pageDropHandlers = nativeStorage ? {
+    onDragEnter: (event: DragEvent<HTMLElement>) => { if (onPage(event)) quickDrop.rootProps.onDragEnter(event); },
+    onDragOver: (event: DragEvent<HTMLElement>) => { if (onPage(event)) quickDrop.rootProps.onDragOver(event); else swallow(event); },
+    onDragLeave: (event: DragEvent<HTMLElement>) => { if (onPage(event)) quickDrop.rootProps.onDragLeave(event); },
+    onDrop: (event: DragEvent<HTMLElement>) => { if (onPage(event)) quickDrop.rootProps.onDrop(event); else swallow(event); },
+  } : {};
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -213,6 +240,7 @@ export function DocumentsPage() {
       setBusy(false);
     }
   };
+  quickUploadRef.current = quickUpload;
 
   const openFile = async (row: any) => {
     try {
@@ -264,7 +292,7 @@ export function DocumentsPage() {
   const pendingDocumentCandidates = Number(pendingImports?.byKind?.documentCandidate ?? 0);
 
   return (
-    <div className="page">
+    <div className={`page file-drop-target is-${quickDrop.dragState}`} {...pageDropHandlers}>
       <PageHeader
         title="Documents"
         icon={<FolderOpen size={16} />}
@@ -279,13 +307,7 @@ export function DocumentsPage() {
         actions={
           <>
             {nativeStorage && (
-              <input ref={fileInputRef} type="file" style={{ display: "none" }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file) await quickUpload(file);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-              />
+              <input {...quickDrop.inputProps} />
             )}
             <MoreActionsMenu
               items={[
@@ -308,7 +330,7 @@ export function DocumentsPage() {
                         label: "Upload",
                         icon: <Upload size={14} />,
                         disabled: busy || !canEdit,
-                        onSelect: () => fileInputRef.current?.click(),
+                        onSelect: quickDrop.open,
                       },
                     ]
                   : []),
@@ -324,13 +346,7 @@ export function DocumentsPage() {
       <RelatedDocumentViews current="/app/documents" />
       {permissions.loaded && !canEdit && <p className="muted">Your role can read accessible documents. Document editing permission is required to create, upload, sync or delete records.</p>}
 
-      {reviewQueues && (
-        <>
-          <h2 className="card__title" style={{ marginBottom: 8 }}>Quick access</h2>
-          <DocumentQueues queues={reviewQueues} />
-          <div className="hr" style={{ marginBottom: 16 }} />
-        </>
-      )}
+      {reviewQueues && <DocumentQueues queues={reviewQueues} />}
 
       {(pendingImports?.pending ?? 0) > 0 && (
         <div className="card documents-import-card">
@@ -449,10 +465,12 @@ export function DocumentsPage() {
             </Field>
             {nativeStorage ? (
               <Field label="Attach file" hint="Stored as document version history.">
-                <input type="file" onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) setForm({ ...form, _file: file, fileName: file.name });
-                }} />
+                <FileDropZone
+                  ariaLabel="Attach file"
+                  title="Drop a file here"
+                  touchTitle="Attach a file"
+                  onFiles={([file]) => { if (file) setForm({ ...form, _file: file, fileName: file.name }); }}
+                />
                 {form.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{form.fileName}</div>}
               </Field>
             ) : (
@@ -506,6 +524,7 @@ function DocumentTitleCell({ row }: { row: any }) {
         {row.versionKey && row.versionCount > 1 && (
           <span title="Other versions of this record exist (draft, approved, revised…)"><Badge tone="purple"><Layers size={10} /> {row.versionCount} versions</Badge></span>
         )}
+        {row.inCameraWithheld && <span title="Holds in-camera content. Owners, Admins and Directors can open it."><Badge tone="warn"><Lock size={10} /> Restricted</Badge></span>}
         {row.archivedAtISO && <Badge>Archived</Badge>}
         {secondary && <span className="mono muted document-title-markers__file" title={secondary}>{secondary}</span>}
       </div>
@@ -513,28 +532,66 @@ function DocumentTitleCell({ row }: { row: any }) {
   );
 }
 
-function DocumentQueues({ queues }: { queues: any }) {
+type QueueDocument = {
+  _id: string;
+  title: string;
+  category?: string;
+  createdAtISO?: string;
+  lastOpenedAtISO?: string;
+  reviewStatus?: string;
+  openCommentCount: number;
+  openTaskCount: number;
+  signatureCount: number;
+  linkedToMeetingPackage: boolean;
+};
+type DocumentQueueSet = { recent: QueueDocument[]; actionRequired: QueueDocument[]; workInProgress: QueueDocument[] };
+type QueueId = "action" | "recent" | "progress";
+
+/**
+ * Quick access: recent documents, documents needing action, and work in
+ * progress. A document needing action is listed there only, not again under
+ * Recent. Phones show one card with a tab per queue (needing action first)
+ * instead of three stacked cards under a stacked "Quick access" heading.
+ */
+function DocumentQueues({ queues }: { queues: DocumentQueueSet }) {
+  const isMobile = useIsMobile();
+  const actionIds = new Set(queues.actionRequired.map((doc) => String(doc._id)));
+  const recent = queues.recent.filter((doc) => !actionIds.has(String(doc._id)));
+  const recentEmpty = queues.recent.length > 0 ? "Your recent documents are all under Action required." : "No recent document activity.";
+  const lists: Record<QueueId, { title: string; tab: string; icon: ReactNode; documents: QueueDocument[]; empty: string }> = {
+    action: { title: "Action required", tab: "Action required", icon: <MessageSquare size={14} />, documents: queues.actionRequired, empty: "No document actions waiting." },
+    recent: { title: "Recent documents", tab: "Recent", icon: <History size={14} />, documents: recent, empty: recentEmpty },
+    progress: { title: "Work in progress", tab: "In progress", icon: <ClipboardCheck size={14} />, documents: queues.workInProgress, empty: "Nothing awaiting review." },
+  };
+  const [chosen, setChosen] = useState<QueueId | null>(null);
+  const active: QueueId = chosen ?? (queues.actionRequired.length > 0 ? "action" : "recent");
+
+  if (isMobile) {
+    const list = lists[active];
+    return (
+      <section className="card document-queue-card document-queues-tabs" aria-label="Quick access">
+        <Tabs<QueueId>
+          tabRoles
+          ariaLabel="Quick access"
+          value={active}
+          onChange={setChosen}
+          items={(["action", "recent", "progress"] as const).map((id) => ({ id, label: lists[id].tab, count: lists[id].documents.length || null }))}
+        />
+        <DocumentQueueList key={active} documents={list.documents} empty={list.empty} panelLabel={list.title} />
+      </section>
+    );
+  }
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12, marginBottom: 16 }}>
-      <DocumentQueueCard
-        title="Recent documents"
-        icon={<History size={14} />}
-        documents={queues.recent}
-        empty="No recent document activity."
-      />
-      <DocumentQueueCard
-        title="Action required"
-        icon={<MessageSquare size={14} />}
-        documents={queues.actionRequired}
-        empty="No document actions waiting."
-      />
-      <DocumentQueueCard
-        title="Work in progress"
-        icon={<ClipboardCheck size={14} />}
-        documents={queues.workInProgress}
-        empty="Nothing awaiting review."
-      />
-    </div>
+    <>
+      <h2 className="card__title" style={{ marginBottom: 8 }}>Quick access</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12, marginBottom: 16 }}>
+        {(["recent", "action", "progress"] as const).map((id) => (
+          <DocumentQueueCard key={id} title={lists[id].title} icon={lists[id].icon} documents={lists[id].documents} empty={lists[id].empty} />
+        ))}
+      </div>
+      <div className="hr" style={{ marginBottom: 16 }} />
+    </>
   );
 }
 
@@ -546,40 +603,46 @@ function DocumentQueueCard({
 }: {
   title: string;
   icon: ReactNode;
-  documents: any[];
+  documents: QueueDocument[];
   empty: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? documents : documents.slice(0, 3);
   return (
     <div className="card document-queue-card">
       <div className="card__head">
         <h2 className="card__title">{icon} {title}</h2>
         {documents.length > 0 && <Badge>{documents.length}</Badge>}
       </div>
-      <div className="card__body col" style={{ gap: 8 }}>
-        {shown.map((doc) => (
-          <Link key={doc._id} to={`/app/documents/${doc._id}`} className="col document-queue-link">
-            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-              <strong className="document-queue-link__title">{doc.title}</strong>
-              {doc.reviewStatus && doc.reviewStatus !== "none" && <Badge tone={documentReviewStatusTone(doc.reviewStatus)}>{documentReviewStatusLabel(doc.reviewStatus)}</Badge>}
-            </div>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-              {doc.lastOpenedAtISO ? `Opened ${formatDateTime(doc.lastOpenedAtISO)}` : `Added ${formatDate(doc.createdAtISO)}`} · {documentCategoryLabel(doc.category)}
-            </div>
-            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-              {doc.openCommentCount > 0 && <Badge tone="warn">{pluralize(doc.openCommentCount, "comment")}</Badge>}
-              {doc.openTaskCount > 0 && <Badge tone="warn">{pluralize(doc.openTaskCount, "task")}</Badge>}
-              {doc.linkedToMeetingPackage && <Badge tone="info">Meeting packet</Badge>}
-              {doc.signatureCount > 0 && <Badge tone="success">{doc.signatureCount} signed</Badge>}
-            </div>
-          </Link>
-        ))}
-        {documents.length > shown.length && (
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setExpanded(true)}>Show {documents.length - shown.length} more</button>
-        )}
-        {documents.length === 0 && <div className="muted">{empty}</div>}
-      </div>
+      <DocumentQueueList documents={documents} empty={empty} />
+    </div>
+  );
+}
+
+function DocumentQueueList({ documents, empty, panelLabel }: { documents: QueueDocument[]; empty: string; panelLabel?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? documents : documents.slice(0, 3);
+  return (
+    <div className="card__body col document-queue-list" style={{ gap: 8 }} role={panelLabel ? "tabpanel" : undefined} aria-label={panelLabel}>
+      {shown.map((doc) => (
+        <Link key={doc._id} to={`/app/documents/${doc._id}`} className="col document-queue-link">
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            <strong className="document-queue-link__title">{doc.title}</strong>
+            {doc.reviewStatus && doc.reviewStatus !== "none" && <Badge tone={documentReviewStatusTone(doc.reviewStatus)}>{documentReviewStatusLabel(doc.reviewStatus)}</Badge>}
+          </div>
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            {doc.lastOpenedAtISO ? `Opened ${formatDateTime(doc.lastOpenedAtISO)}` : `Added ${formatDate(doc.createdAtISO)}`} · {documentCategoryLabel(doc.category)}
+          </div>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {doc.openCommentCount > 0 && <Badge tone="warn">{pluralize(doc.openCommentCount, "comment")}</Badge>}
+            {doc.openTaskCount > 0 && <Badge tone="warn">{pluralize(doc.openTaskCount, "task")}</Badge>}
+            {doc.linkedToMeetingPackage && <Badge tone="info">Meeting packet</Badge>}
+            {doc.signatureCount > 0 && <Badge tone="success">{doc.signatureCount} signed</Badge>}
+          </div>
+        </Link>
+      ))}
+      {documents.length > shown.length && (
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setExpanded(true)}>Show {documents.length - shown.length} more</button>
+      )}
+      {documents.length === 0 && <div className="muted">{empty}</div>}
     </div>
   );
 }

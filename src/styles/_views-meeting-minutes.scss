@@ -1286,3 +1286,69 @@
     background: token('bg-subtle');
   }
 }
+
+// On-device minutes draft in progress: "Drafting part 2 of 4…" and Cancel.
+.device-draft-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  min-width: 0;
+  color: token("text-secondary");
+  font-size: token("fs-sm");
+}
+
+// Records & evidence: one closed fold for evidence, history and person
+// links (MeetingRecordsFold). The cards inside sit flat, divided by rules.
+.meeting-records-fold {
+  margin-top: token("s-4");
+}
+.meeting-records-fold > summary {
+  list-style: none;
+  gap: token("s-2");
+  &::-webkit-details-marker {
+    display: none;
+  }
+}
+.meeting-records-fold:not([open]) > summary {
+  border-bottom: 0;
+}
+.meeting-records-fold__chevron {
+  flex: none;
+  color: token("text-tertiary");
+  transition: transform token("anim-normal") token("anim-ease");
+}
+.meeting-records-fold[open] .meeting-records-fold__chevron {
+  transform: rotate(90deg);
+}
+.meeting-records-fold__body > .card {
+  margin-top: 0 !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.meeting-records-fold__body > .card + .card {
+  border-top: 1px solid token("border");
+}
+.meeting-records-fold__body > .card > .card__head {
+  border-bottom: 0;
+}
+// "Decisions and evidence · None recorded · Add evidence" on one row.
+.meeting-evidence-add > .card__head,
+.meeting-history-add > .card__head {
+  flex-wrap: wrap;
+  row-gap: token("s-1");
+}
+@media (prefers-reduced-motion: reduce) {
+  .meeting-records-fold__chevron {
+    transition: none;
+  }
+}
+// Flattened cards: the head already pads above the body.
+.meeting-records-fold__body > .card > .card__body {
+  padding-top: 0;
+}
+.meeting-records-fold__body > .card > .card__head > .btn-action:last-child {
+  margin-left: auto;
+}

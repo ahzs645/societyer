@@ -51,10 +51,20 @@ type Props = {
    * `aria-label`, `title` or visible text.
    */
   sheetTitle?: string;
+  /** Told when the menu opens or closes, however it was dismissed. */
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function Menu({ trigger, sections, minWidth, align = "left", label, sheetTitle }: Props) {
+export function Menu({ trigger, sections, minWidth, align = "left", label, sheetTitle, onOpenChange }: Props) {
   const [open, setOpen] = useState(false);
+  const openChange = useRef(onOpenChange);
+  openChange.current = onOpenChange;
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current === open) return;
+    wasOpen.current = open;
+    openChange.current?.(open);
+  }, [open]);
   const triggerRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; triggerWidth: number } | null>(null);

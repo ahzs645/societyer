@@ -40,7 +40,8 @@ import {
 import { WaveCacheExplorer } from "../features/financials/components/WaveCacheExplorer";
 import { OperatingSubscriptionsCard, ProviderCard } from "../features/financials/components/FinancialDashboardCards";
 import { StatTile } from "../components/StatTile";
-import { InvestedReservesTile } from "../features/businessRegisters/InvestedReserves";
+import { InvestedReservesTile, useInvestedReserves } from "../features/businessRegisters/InvestedReserves";
+import { MobileFold } from "../components/MobileFold";
 import { SortableTh } from "../components/SortableTh";
 import { useSortableRows } from "../hooks/useSortableRows";
 import { YearOverYearFinancialsCard } from "../features/financials/components/YearOverYearFinancialsCard";
@@ -69,6 +70,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 import { FinancialInsightsLazy } from "../features/financials/insights/lazy";
+import type { FinanceMoreMetrics } from "../features/financials/insights/FinancialInsights";
 import { TransactionLinkFilters } from "../features/financials/insights/TransactionLinkFilters";
 import { useIsMobile } from "../lib/useIsMobile";
 import { BudgetGridDrawer } from "../features/financials/components/BudgetGridDrawer";
@@ -321,10 +323,43 @@ export function FinancialsPage() {
   const ledgerAssetCents = (trialBalance ?? [])
     .filter((row: any) => ["Asset", "Bank", "Credit"].includes(row.account?.accountType))
     .reduce((sum: number, row: any) => sum + row.balanceCents, 0);
+  const investedReserves = useInvestedReserves(society?._id);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   const todayISO = organizationTodayISO(society);
+
+  // Overview summary figures. Desktop shows them in one card; phones put them
+  // in the trends' "More metrics" fold, where the bank balance is already a
+  // headline tile.
+  const ledgerNetCents = ledgerRevenueCents - ledgerExpenseCents;
+  const ledgerTiles = (trialBalance ?? []).length > 0 ? [
+    <StatTile key="ledger-revenue" label="Ledger revenue" value={<Money variant="hero" trimWholeCents cents={ledgerRevenueCents} />} />,
+    <StatTile key="ledger-expenses" label="Ledger expenses" value={<Money variant="hero" trimWholeCents cents={ledgerExpenseCents} />} />,
+    <StatTile key="ledger-net" label="Ledger net" value={<Money variant="hero" trimWholeCents cents={ledgerNetCents} />} tone={ledgerNetCents < 0 ? "danger" : "neutral"} />,
+    // Ledger assets only earn a tile when they differ from the bank balance beside them.
+    ...(activeConnection && hub && hub.totalBalance === ledgerAssetCents
+      ? []
+      : [<StatTile key="ledger-assets" label="Ledger assets" value={<Money variant="hero" trimWholeCents cents={ledgerAssetCents} />} />]),
+  ] : [];
+  const bankBalanceTile = activeConnection && hub
+    ? <StatTile label="Bank balance" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance} />} />
+    : null;
+  const bankTiles = activeConnection && hub ? [
+    <StatTile key="unrestricted" label="Unrestricted" value={<Money variant="hero" trimWholeCents cents={hub.unrestricted} />} tone={hub.unrestricted < 0 ? "danger" : "neutral"} />,
+    <StatTile key="restricted" label="Restricted funds" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance - hub.unrestricted} />} />,
+  ] : [];
+  const lastSynced = activeConnection?.lastSyncAtISO ? `Last synced ${formatDateTime(activeConnection.lastSyncAtISO)}` : null;
+  const hasInvestedReserves = Boolean(investedReserves && investedReserves.activeCount > 0);
+  const mobileMoreMetrics: FinanceMoreMetrics | undefined = isMobile
+    ? {
+        tiles: <>{ledgerTiles}{bankTiles}<InvestedReservesTile societyId={society._id} /></>,
+        count: ledgerTiles.length + bankTiles.length + (hasInvestedReserves ? 1 : 0),
+        note: lastSynced ? `Bank figures: ${lastSynced.charAt(0).toLowerCase()}${lastSynced.slice(1)}.` : undefined,
+      }
+    : undefined;
+  const budgetPlannedCents = budgetRows.reduce((sum: number, b: any) => sum + (b.plannedCents ?? 0), 0);
+  const budgetActualCents = budgetRows.reduce((sum: number, b: any) => sum + (b.actualCents ?? 0), 0);
 
   const openFinancialYear = (fiscalYear: string) => {
     navigate(`/app/financials/fy/${encodeURIComponent(fiscalYear)}`);
@@ -542,39 +577,23 @@ export function FinancialsPage() {
 
       {tab === "wave" && waveHealth && <WaveHealthPanel result={waveHealth} />}
 
-      {tab === "overview" && ((trialBalance ?? []).length > 0 || (activeConnection && hub)) && (
+      {/* Phones show these figures in the trends' "More metrics" fold instead (bank balance as a headline tile). */}
+      {tab === "overview" && !isMobile && (ledgerTiles.length > 0 || bankTiles.length > 0) && (
         <div className="card financials-summary-card" style={{ marginBottom: 16 }}>
           <div className="card__head">
-            <h2 className="card__title">{(trialBalance ?? []).length > 0 ? "Internal ledger summary" : "Bank summary"}</h2>
-            {activeConnection?.lastSyncAtISO && (
-              <span className="card__subtitle">Last synced {formatDateTime(activeConnection.lastSyncAtISO)}</span>
-            )}
+            <h2 className="card__title">{ledgerTiles.length > 0 ? "Internal ledger summary" : "Bank summary"}</h2>
+            {lastSynced && <span className="card__subtitle">{lastSynced}</span>}
           </div>
           <div className="stat-grid financials-summary-card__stats">
-            {(trialBalance ?? []).length > 0 && (
-              <>
-                <StatTile label="Ledger revenue" value={<Money variant="hero" trimWholeCents cents={ledgerRevenueCents} />} />
-                <StatTile label="Ledger expenses" value={<Money variant="hero" trimWholeCents cents={ledgerExpenseCents} />} />
-                <StatTile label="Ledger net" value={<Money variant="hero" trimWholeCents cents={ledgerRevenueCents - ledgerExpenseCents} />} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "neutral"} />
-                {/* Ledger assets only earn a tile when they differ from the bank balance beside them. */}
-                {!(activeConnection && hub && hub.totalBalance === ledgerAssetCents) && (
-                  <StatTile label="Ledger assets" value={<Money variant="hero" trimWholeCents cents={ledgerAssetCents} />} />
-                )}
-              </>
-            )}
-            {activeConnection && hub && (
-              <>
-                <StatTile label="Bank balance" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance} />} />
-                <StatTile label="Unrestricted" value={<Money variant="hero" trimWholeCents cents={hub.unrestricted} />} tone={hub.unrestricted < 0 ? "danger" : "neutral"} />
-                <StatTile label="Restricted funds" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance - hub.unrestricted} />} />
-              </>
-            )}
+            {ledgerTiles}
+            {bankBalanceTile}
+            {bankTiles}
             <InvestedReservesTile societyId={society._id} />
           </div>
         </div>
       )}
 
-      {tab === "overview" && <FinancialInsightsLazy society={society} />}
+      {tab === "overview" && <FinancialInsightsLazy society={society} moreMetrics={mobileMoreMetrics} hideBudgetChart={isMobile && Boolean(activeConnection)} />}
 
       {tab === "wave" && activeConnection && (
         <WaveCacheExplorer
@@ -676,184 +695,191 @@ export function FinancialsPage() {
       )}
 
       {tab === "overview" && activeConnection && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card__head">
-            <h2 className="card__title">Budget vs actuals — FY {budgetFiscalYear}</h2>
-            <span className="card__subtitle">Plan a category, actuals come from synced transactions.</span>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <button className="btn-action" onClick={() => setBudgetGridOpen(true)}>
-                <Table2 size={12} /> Edit as grid
-              </button>
-              <button
-                className="btn-action"
-                onClick={() => { setBudgetErrors({}); setBudgetForm({ category: "", planned: "" }); }} disabled={!canWrite}
-              >
-                <PlusCircle size={12} /> Add budget line
-              </button>
-            </div>
-          </div>
-          <div className="finance-table-wrap">
-          <table className="table finance-table">
-            <thead>
-              <tr>
-                <SortableTh column="category" sort={budgetSort.sort} onSort={budgetSort.toggle}>Category</SortableTh>
-                <SortableTh column="planned" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Planned</SortableTh>
-                <SortableTh column="actual" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Actual</SortableTh>
-                <SortableTh
-                  column="variance"
-                  sort={budgetSort.sort}
-                  onSort={budgetSort.toggle}
-                  className="num"
-                  extra={<InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>}
+        <MobileFold
+          title={`Budget vs actuals — FY ${budgetFiscalYear}`}
+          summary={budgetRows.length === 0
+            ? "No budget lines yet"
+            : `${formatMoney(Math.round(budgetActualCents / 100) * 100, { trimWholeCents: true })} of ${formatMoney(Math.round(budgetPlannedCents / 100) * 100, { trimWholeCents: true })} planned · ${budgetRows.length} ${budgetRows.length === 1 ? "line" : "lines"}`}
+        >
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card__head">
+              <h2 className="card__title">Budget vs actuals — FY {budgetFiscalYear}</h2>
+              <span className="card__subtitle">Plan a category, actuals come from synced transactions.</span>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button className="btn-action" onClick={() => setBudgetGridOpen(true)}>
+                  <Table2 size={12} /> Edit as grid
+                </button>
+                <button
+                  className="btn-action"
+                  onClick={() => { setBudgetErrors({}); setBudgetForm({ category: "", planned: "" }); }} disabled={!canWrite}
                 >
-                  Variance
-                </SortableTh>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {budgetSort.rows.map((b: any) => {
-                const kind = inferBudgetKind(b, { accounts: accounts ?? [], transactions: transactions ?? [] });
-                return (
-                  <tr key={b._id}>
-                    <td>
-                      {b.category}
-                      {kind === "revenue" && <span className="finance-table__sub"> · revenue</span>}
-                    </td>
-                    <td className="num"><Money cents={b.plannedCents} /></td>
-                    <td className="num"><Money cents={b.actualCents} /></td>
-                    <td className="num">
-                      <VarianceCell variance={budgetVariance(b.plannedCents, b.actualCents, kind)} />
-                    </td>
-                    <td className="num">
-                      <Menu
-                        align="right"
-                        trigger={
-                          <button
-                            type="button"
-                            className="btn btn--ghost btn--sm btn--icon"
-                            aria-label={`Actions for budget ${b.category}`}
-                            title="More actions"
-                            disabled={!canWrite}
-                          >
-                            <MoreHorizontal size={14} />
-                          </button>
-                        }
-                        sections={[
-                          {
-                            id: "budget-actions",
-                            items: [
-                              {
-                                id: "edit",
-                                label: "Edit planned amount",
-                                icon: <Pencil size={14} />,
-                                onSelect: () => { setBudgetErrors({}); setBudgetForm({ id: b._id, category: b.category, planned: String((b.plannedCents ?? 0) / 100) }); },
-                              },
-                              {
-                                id: "delete",
-                                label: "Delete budget line",
-                                icon: <Trash2 size={14} />,
-                                destructive: true,
-                                onSelect: async () => {
-                                  const approved = await confirm({
-                                    title: "Delete budget line?",
-                                    message: `The FY ${budgetFiscalYear} "${b.category}" budget of ${formatMoney(b.plannedCents)} will be removed. Actual transactions are not affected.`,
-                                    confirmLabel: "Delete budget line",
-                                    tone: "danger",
-                                  });
-                                  if (!approved) return;
-                                  try {
-                                    await removeBudget({ id: b._id });
-                                    toast.success("Budget line deleted", b.category);
-                                  } catch (error: any) {
-                                    toast.error("Could not delete budget line", error?.message);
-                                  }
+                  <PlusCircle size={12} /> Add budget line
+                </button>
+              </div>
+            </div>
+            <div className="finance-table-wrap">
+            <table className="table finance-table">
+              <thead>
+                <tr>
+                  <SortableTh column="category" sort={budgetSort.sort} onSort={budgetSort.toggle}>Category</SortableTh>
+                  <SortableTh column="planned" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Planned</SortableTh>
+                  <SortableTh column="actual" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Actual</SortableTh>
+                  <SortableTh
+                    column="variance"
+                    sort={budgetSort.sort}
+                    onSort={budgetSort.toggle}
+                    className="num"
+                    extra={<InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>}
+                  >
+                    Variance
+                  </SortableTh>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {budgetSort.rows.map((b: any) => {
+                  const kind = inferBudgetKind(b, { accounts: accounts ?? [], transactions: transactions ?? [] });
+                  return (
+                    <tr key={b._id}>
+                      <td>
+                        {b.category}
+                        {kind === "revenue" && <span className="finance-table__sub"> · revenue</span>}
+                      </td>
+                      <td className="num"><Money cents={b.plannedCents} /></td>
+                      <td className="num"><Money cents={b.actualCents} /></td>
+                      <td className="num">
+                        <VarianceCell variance={budgetVariance(b.plannedCents, b.actualCents, kind)} />
+                      </td>
+                      <td className="num">
+                        <Menu
+                          align="right"
+                          trigger={
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm btn--icon"
+                              aria-label={`Actions for budget ${b.category}`}
+                              title="More actions"
+                              disabled={!canWrite}
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          }
+                          sections={[
+                            {
+                              id: "budget-actions",
+                              items: [
+                                {
+                                  id: "edit",
+                                  label: "Edit planned amount",
+                                  icon: <Pencil size={14} />,
+                                  onSelect: () => { setBudgetErrors({}); setBudgetForm({ id: b._id, category: b.category, planned: String((b.plannedCents ?? 0) / 100) }); },
                                 },
-                              },
-                            ],
-                          },
-                        ]}
-                      />
+                                {
+                                  id: "delete",
+                                  label: "Delete budget line",
+                                  icon: <Trash2 size={14} />,
+                                  destructive: true,
+                                  onSelect: async () => {
+                                    const approved = await confirm({
+                                      title: "Delete budget line?",
+                                      message: `The FY ${budgetFiscalYear} "${b.category}" budget of ${formatMoney(b.plannedCents)} will be removed. Actual transactions are not affected.`,
+                                      confirmLabel: "Delete budget line",
+                                      tone: "danger",
+                                    });
+                                    if (!approved) return;
+                                    try {
+                                      await removeBudget({ id: b._id });
+                                      toast.success("Budget line deleted", b.category);
+                                    } catch (error: any) {
+                                      toast.error("Could not delete budget line", error?.message);
+                                    }
+                                  },
+                                },
+                              ],
+                            },
+                          ]}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+                {budgetRows.length === 0 && (
+                  <tr className="finance-empty-row">
+                    <td colSpan={5} className="muted">
+                      No budget lines yet. Add a category to start tracking variance.
                     </td>
                   </tr>
-                );
-              })}
-              {budgetRows.length === 0 && (
-                <tr className="finance-empty-row">
-                  <td colSpan={5} className="muted">
-                    No budget lines yet. Add a category to start tracking variance.
-                  </td>
-                </tr>
+                )}
+              </tbody>
+              {budgetRows.length > 1 && (
+                <tfoot>
+                  <tr>
+                    <th scope="row">Total</th>
+                    <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.plannedCents ?? 0), 0)} /></td>
+                    <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.actualCents ?? 0), 0)} /></td>
+                    <td />
+                    <td />
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {budgetRows.length > 1 && (
-              <tfoot>
-                <tr>
-                  <th scope="row">Total</th>
-                  <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.plannedCents ?? 0), 0)} /></td>
-                  <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.actualCents ?? 0), 0)} /></td>
-                  <td />
-                  <td />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-          </div>
-
-          {budgetForm && (
-            <div className="card__body" style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <Field label="Category" required error={budgetErrors.category}>
-                <input
-                  className="input"
-                  value={budgetForm.category}
-                  disabled={Boolean(budgetForm.id)}
-                  onChange={(e) => setBudgetForm({ ...budgetForm, category: e.target.value })}
-                  placeholder="e.g. Program supplies"
-                />
-              </Field>
-              <Field label="Planned (CAD)" required error={budgetErrors.plannedCents}>
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={budgetForm.planned}
-                  onChange={(e) => setBudgetForm({ ...budgetForm, planned: e.target.value })}
-                  placeholder="12000"
-                />
-              </Field>
-              <button
-                className="btn btn--accent"
-                onClick={async () => {
-                  const plannedCents = budgetForm.planned.trim() === "" ? Number.NaN : Math.round(Number(budgetForm.planned) * 100);
-                  const payload = { fiscalYear: budgetFiscalYear, category: budgetForm.category.trim(), plannedCents };
-                  const errors = validateBudgetLineInput(payload, hub?.budgetRows ?? [], budgetForm.id);
-                  setBudgetErrors(errors);
-                  if (hasErrors(errors)) return;
-                  try {
-                    await upsertBudget({ id: budgetForm.id as any, societyId: society._id, ...payload });
-                    setBudgetForm(null);
-                    toast.success(budgetForm.id ? "Budget updated" : "Budget saved");
-                  } catch (error: any) {
-                    toast.error("Could not save budget line", error?.data?.message ?? error?.message);
-                  }
-                }}
-              >
-                Save
-              </button>
-              <button className="btn" onClick={() => setBudgetForm(null)}>
-                Cancel
-              </button>
+            </table>
             </div>
-          )}
-          <BudgetGridDrawer
-            open={budgetGridOpen}
-            onClose={() => setBudgetGridOpen(false)}
-            societyId={society._id}
-            fiscalYear={budgetFiscalYear}
-            canWrite={canWrite}
-          />
-        </div>
+
+            {budgetForm && (
+              <div className="card__body" style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <Field label="Category" required error={budgetErrors.category}>
+                  <input
+                    className="input"
+                    value={budgetForm.category}
+                    disabled={Boolean(budgetForm.id)}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, category: e.target.value })}
+                    placeholder="e.g. Program supplies"
+                  />
+                </Field>
+                <Field label="Planned (CAD)" required error={budgetErrors.plannedCents}>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={budgetForm.planned}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, planned: e.target.value })}
+                    placeholder="12000"
+                  />
+                </Field>
+                <button
+                  className="btn btn--accent"
+                  onClick={async () => {
+                    const plannedCents = budgetForm.planned.trim() === "" ? Number.NaN : Math.round(Number(budgetForm.planned) * 100);
+                    const payload = { fiscalYear: budgetFiscalYear, category: budgetForm.category.trim(), plannedCents };
+                    const errors = validateBudgetLineInput(payload, hub?.budgetRows ?? [], budgetForm.id);
+                    setBudgetErrors(errors);
+                    if (hasErrors(errors)) return;
+                    try {
+                      await upsertBudget({ id: budgetForm.id as any, societyId: society._id, ...payload });
+                      setBudgetForm(null);
+                      toast.success(budgetForm.id ? "Budget updated" : "Budget saved");
+                    } catch (error: any) {
+                      toast.error("Could not save budget line", error?.data?.message ?? error?.message);
+                    }
+                  }}
+                >
+                  Save
+                </button>
+                <button className="btn" onClick={() => setBudgetForm(null)}>
+                  Cancel
+                </button>
+              </div>
+            )}
+            <BudgetGridDrawer
+              open={budgetGridOpen}
+              onClose={() => setBudgetGridOpen(false)}
+              societyId={society._id}
+              fiscalYear={budgetFiscalYear}
+              canWrite={canWrite}
+            />
+          </div>
+        </MobileFold>
       )}
 
       {tab === "transactions" && activeConnection && transactions && transactions.length > 0 && (
@@ -974,7 +1000,14 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} loading={items === undefined} onOpenFinancialYear={openFinancialYear} />}
+      {tab === "overview" && (
+        <MobileFold
+          title="Year-over-year"
+          summary={items === undefined ? undefined : sorted.length === 0 ? "No financial statements recorded" : `${sorted.length} ${sorted.length === 1 ? "fiscal year" : "fiscal years"} · latest FY ${sorted[0].fiscalYear}`}
+        >
+          <YearOverYearFinancialsCard rows={sorted} loading={items === undefined} onOpenFinancialYear={openFinancialYear} />
+        </MobileFold>
+      )}
 
       {tab === "overview" && latest && latest.remunerationDisclosures.length > 0 && appliesBcSocietyRules(society) && (
         <>

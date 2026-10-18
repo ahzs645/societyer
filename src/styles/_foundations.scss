@@ -24,7 +24,8 @@
 .money--hero {
   letter-spacing: -0.02em;
   .money__cents {
-    font-size: 0.62em;
+    /* Never under 12px: on a 15px phone stat value 0.62em was 9.3px. */
+    font-size: max(0.62em, #{token('fs-tiny')});
     vertical-align: 0.42em;
     margin-left: 1px;
     color: token('text-tertiary');

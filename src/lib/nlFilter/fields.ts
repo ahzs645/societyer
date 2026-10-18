@@ -114,11 +114,14 @@ export function directionField(fields: NlField[]): { field: NlField; in?: string
 }
 
 const NAME_FIELD = /^(name|full ?name|display ?name|title|first ?name|last ?name|legal ?name|surname|given ?name)$/i;
+const NAME_PART = /^(first ?name|last ?name|surname|given ?name)$/i;
 
 /** Columns "named Patel" searches: the record's name column, or first + last name. */
 export function nameFields(fields: NlField[]): NlField[] {
   const text = fields.filter((field) => field.type === FIELD_TYPES.TEXT || field.type === FIELD_TYPES.FULL_NAME);
-  const identifier = text.find((field) => field.isLabelIdentifier && NAME_FIELD.test(splitIdentifier(field.name)));
+  // A first-name identifier (members, directors) is half the name: "named
+  // Patel" still searches first + last below.
+  const identifier = text.find((field) => field.isLabelIdentifier && NAME_FIELD.test(splitIdentifier(field.name)) && !NAME_PART.test(splitIdentifier(field.name)));
   if (identifier) return [identifier];
   const full = text.find((field) => /^(full ?name|name|display ?name|legal ?name)$/i.test(splitIdentifier(field.name)) || /^(full name|name)$/i.test(field.label));
   if (full) return [full];

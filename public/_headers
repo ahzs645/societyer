@@ -1,0 +1,10 @@
+# Cloudflare Pages response headers. The app's CSP is a meta tag (index.html),
+# which can't set frame-ancestors, so pages that take a decision forbid
+# framing here (clickjacking). The consent page also refuses to render its
+# buttons inside a frame. strict-origin, not no-referrer: the consent page's
+# completion POST must carry its Origin (no-referrer makes browsers send
+# "Origin: null"), and only the origin, never the request link, leaves the page.
+/oauth/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin

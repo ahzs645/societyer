@@ -61,7 +61,8 @@ assert.equal((await adapter([json({}, 410)]).delta()).resetRequired, true);
 requests = [];
 const large = new Uint8Array(4 * 1024 ** 2 + 1);
 const chunks: Response[] = [json({ uploadUrl: "https://files.example.test/upload?secret=session" })];
-for (let end = 320 * 1024; end < large.byteLength; end += 320 * 1024) chunks.push(json({ nextExpectedRanges: [`${end}-`] }, 202));
+// SharePoint returned a bounded range in the real tenant; Graph also supports open ends.
+for (let end = 320 * 1024; end < large.byteLength; end += 320 * 1024) chunks.push(json({ nextExpectedRanges: [`${end}-${end % (640 * 1024) ? large.byteLength - 1 : ""}`] }, 202));
 chunks.push(json(metadata(large.byteLength), 201));
 const largeItem = await adapter(chunks).upload("test.pdf", large);
 assert.equal(largeItem.sizeBytes, large.byteLength);
@@ -70,4 +71,9 @@ assert.ok(!JSON.stringify(largeItem).includes("session"));
 requests = [];
 await assert.rejects(adapter([json({ uploadUrl: "https://files.example.test/upload?secret=session" }), json({ nextExpectedRanges: ["wrong-range"] }, 202), new Response(null, { status: 204 })]).upload("test.pdf", large), (error: Error) => !error.message.includes("secret") && !error.message.includes(token));
 assert.equal(requests.at(-1)?.init?.method, "DELETE");
+for (const nextExpectedRanges of [["327681-"], ["327680-1"], [`327680-${large.byteLength}`], ["327680-", "655360-"]]) {
+  requests = [];
+  await assert.rejects(adapter([json({ uploadUrl: "https://files.example.test/upload?secret=session" }), json({ nextExpectedRanges }, 202), new Response(null, { status: 204 })]).upload("test.pdf", large), /resumable upload failed/);
+  assert.equal(requests.at(-1)?.init?.method, "DELETE");
+}
 console.log("OK SharePoint adapter: resource boundaries, stable versions, conflicts, bounded proxy, throttling, delta reset, secret separation and chunked upload");

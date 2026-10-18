@@ -4,11 +4,13 @@ import { SetupRing } from "../../components/SetupPill";
 import { Tooltip } from "../../components/Tooltip";
 import { ORGANIZATION_SETUP_PATH, type OrganizationSetupProgress } from "../../../shared/organizationSetup/types";
 import { setupPercent, setupSummaryTitle, setupViewStepLink } from "../../lib/organizationSetupLinks";
+import { useRegisterSetupSummary } from "../../hooks/useSetupProgress";
 
 /**
  * Dashboard "setup" module: one compact row with the progress ring, how much
  * is done, the next step and a way into the setup view. The checklist itself
- * lives on `/app/organization-setup`; this only points there.
+ * lives on `/app/organization-setup`; this only points there. While it is on
+ * screen the shell's setup pill stays hidden, so progress shows once.
  */
 export function SetupSummaryCard({
   progress,
@@ -19,6 +21,7 @@ export function SetupSummaryCard({
   organizationName?: string;
   onHide: () => void;
 }) {
+  useRegisterSetupSummary();
   const { done, total } = progress.counts;
   const percent = setupPercent(progress);
   const phase = progress.phases.find((candidate) => candidate.key === progress.currentPhase);

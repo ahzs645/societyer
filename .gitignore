@@ -5,6 +5,7 @@ release/
 .env
 .env.local
 .env.*.local
+.wrangler/
 .DS_Store
 *.log
 *.tsbuildinfo

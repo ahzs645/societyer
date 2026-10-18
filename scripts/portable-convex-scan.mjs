@@ -13,6 +13,10 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   // Operator credentials and deployment identity policy stay on the host.
   "apiPlatform:bootstrapUserIdentity",
   "apiPlatform:migrateUserToClerk",
+  // AI connector tokens serve the hosted /mcp endpoint, which the local runtimes don't have.
+  "agentConnectors:overview",
+  "agentConnectors:setEnabled",
+  "agentConnectors:revokeToken",
 ]);
 // These are deliberate local demo implementations, not hosted delegations.
 // Require the exact registry handler and a surviving Convex counterpart so
@@ -45,6 +49,7 @@ export function scanModule(source, module) {
   const file = ts.createSourceFile(`${module}.ts`, source, ts.ScriptTarget.Latest, true);
   if (file.parseDiagnostics.length) throw new Error(`${module}: cannot scan invalid TypeScript: ${ts.flattenDiagnosticMessageText(file.parseDiagnostics[0].messageText, "\n")}`);
   const bindings = new Map();
+  const componentFactories = new Set();
   const shared = new Map();
   const namespaces = new Map();
   for (const statement of file.statements) {
@@ -62,6 +67,9 @@ export function scanModule(source, module) {
       if (spec.isTypeOnly) continue;
       const imported = (spec.propertyName ?? spec.name).text;
       bindings.set(spec.name.text, imported);
+      // Better Auth exports its component client alongside registered functions.
+      // Recognize the package import, never a lookalike local factory.
+      if (path === "@convex-dev/better-auth" && imported === "createClient") componentFactories.add(spec.name.text);
       if (match) shared.set(spec.name.text, { fn: imported, sharedModule: match[1] });
     }
   }
@@ -88,6 +96,7 @@ export function scanModule(source, module) {
       const init = unwrap(declaration.initializer);
       if (!init || !ts.isCallExpression(init)) continue;
       const builder = unwrap(init.expression);
+      if (ts.isIdentifier(builder) && componentFactories.has(builder.text)) continue;
       let kind;
       if (ts.isCallExpression(builder) && WRAPPERS.has(identifier(builder.expression))) {
         kind = WRAPPERS.get(identifier(builder.expression));

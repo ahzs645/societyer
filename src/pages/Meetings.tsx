@@ -12,6 +12,7 @@ import { useSociety } from "../hooks/useSociety";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, EmptyState, Field } from "../components/ui";
+import { meetingRecordKind } from "../../shared/meetingRecordKind";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -20,7 +21,10 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTablePhoneCard,
+  recordText,
   useObjectRecordTableData,
+  type RecordTableCardRenderer,
 } from "@/platform/record-engine";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
@@ -33,6 +37,8 @@ import { Select } from "../components/Select";
 import { normalizedMeetingTitle, suggestedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
 import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, OVERLAP_WINDOW_MS, statusForNewMeeting } from "../features/meetings/lib/noticeWindow";
 import {
+  MEETING_CONFLICT_NOTE_ID,
+  MeetingConflictFooterNote,
   MeetingFormFields,
   makeMeetingDraft,
   numberOrUndefined,
@@ -42,7 +48,7 @@ import {
 import { EditMeetingDrawer } from "../features/meetings/components/EditMeetingDrawer";
 import { MergeMeetingDialog } from "../features/meetings/components/MergeMeetingDialog";
 import { useDirtyCloseGuard } from "../features/meetings/lib/useDirtyCloseGuard";
-import { formatMeetingDate, meetingDatePrecision } from "../../shared/meetingDates";
+import { formatMeetingDate, meetingDatePrecision, type MeetingDateLike } from "../../shared/meetingDates";
 import { bodyPatchForValue, bodyValueForMeeting, meetingBodyLabel, meetingBodyOptions } from "../../shared/meetingBodyPicker";
 import { duplicateMeetingGroups, preferredMeetingToKeep } from "../../shared/meetingMerge";
 import type { Doc } from "../../convex/_generated/dataModel";
@@ -126,9 +132,8 @@ export function MeetingsPage() {
   const noticeMinDays = data.noticeMinDays;
   const noticeMaxDays = data.noticeMaxDays;
   const effectiveNoticeMinDays = data.effectiveNoticeMinDays;
-  const hasUnacknowledgedConflict = !!form &&
-    meetingScheduleConflicts(meetings, form.scheduledAt, null).length > 0 &&
-    !form.conflictAcknowledged;
+  const conflictCount = form ? meetingScheduleConflicts(meetings, form.scheduledAt, null).length : 0;
+  const hasUnacknowledgedConflict = !!form && conflictCount > 0 && !form.conflictAcknowledged;
   const formDirty = !!form && JSON.stringify(form) !== formInitial;
   const closeCreate = useDirtyCloseGuard(formDirty, () => setOpen(false), "meeting");
 
@@ -159,7 +164,7 @@ export function MeetingsPage() {
         presentCount: summary?.presentCount ?? 0,
         datePrecision: meetingDatePrecision(meeting),
         duplicateCount: duplicateCount.get(String(meeting._id)) ?? 0,
-        minutesMissing: (meeting.status === "Held" || meeting.status === "HeldMinutesMissing") && !summary?.started,
+        minutesMissing: (meeting.status === "Held" || meeting.status === "HeldMinutesMissing") && !summary?.started && meetingRecordKind(meeting) === "minutes",
         _summary: summary,
         _searchText: [meeting.title, meeting.sourceTitle, meeting.location, meetingBodyLabel(meeting, committeeRows), formatMeetingDate(meeting, { withTime: false }), String(meeting.scheduledAt ?? "").slice(0, 10), summary?.peopleText].filter(Boolean).join(" "),
       };
@@ -321,7 +326,7 @@ export function MeetingsPage() {
       return;
     }
     const past = isPastMeeting(form.scheduledAt);
-    const { conflictAcknowledged: _conflictAcknowledged, committeeId, ...payload } = form;
+    const { conflictAcknowledged: _conflictAcknowledged, recordKindPicked: _recordKindPicked, committeeId, ...payload } = form;
     const meetingId = await create({
       societyId: society._id,
       ...payload,
@@ -515,11 +520,19 @@ export function MeetingsPage() {
                 if (field.name === "status") return <Badge tone={meetingStatusTone(record.status)}>{meetingStatusLabel(record.status)}</Badge>;
                 if (field.name === "minutes") {
                   const summary = record._summary;
+                  // The record kind wins: a notes meeting made from a template has a
+                  // minutes stub with agenda sections, but it keeps notes, not minutes.
+                  // Notes-only and no-write-up meetings never "need minutes".
+                  const kind = meetingRecordKind(record);
+                  if (kind === "notes") return <Badge tone="neutral">Notes</Badge>;
+                  if (kind === "meeting") return <span className="muted">No write-up</span>;
                   if (summary?.approvedAt) return <Badge tone="success">Approved</Badge>;
                   if (summary?.started) return <Badge tone="info">Draft</Badge>;
                   if (record.status === "Held" || record.status === "HeldMinutesMissing") return <Badge tone="warn">{record.status === "HeldMinutesMissing" ? "Minutes missing" : "Needs minutes"}</Badge>;
                   return <span className="muted">—</span>;
                 }
+                // Only formal minutes record motions.
+                if (field.name === "motionCount" && meetingRecordKind(record) !== "minutes") return <span className="muted">—</span>;
                 if (field.name === "sourceReviewStatus") {
                   const status = String(record.sourceReviewStatus ?? "not_applicable");
                   return <Badge tone={status === "source_reviewed" ? "success" : status === "imported_needs_review" ? "warn" : status === "rejected" ? "danger" : "neutral"}>{SOURCE_REVIEW_LABELS[status] ?? status}</Badge>;
@@ -530,6 +543,7 @@ export function MeetingsPage() {
                 return undefined;
               }}
               rowMenuSections={meetingMenuSections}
+              renderPhoneCard={meetingPhoneCard}
             />
             <RecordTableBulkBar
               actions={canManage ? [
@@ -602,7 +616,21 @@ export function MeetingsPage() {
 
       <Drawer
         open={open} onClose={() => { void closeCreate(); }} title={meetingCreateLabels(form?.scheduledAt ?? "").title}
-        footer={<><button className="btn" type="button" onClick={() => { void closeCreate(); }}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={!canManage || hasUnacknowledgedConflict}>{meetingCreateLabels(form?.scheduledAt ?? "").action}</button></>}
+        footer={
+          <>
+            <MeetingConflictFooterNote count={hasUnacknowledgedConflict ? conflictCount : 0} />
+            <button className="btn" type="button" onClick={() => { void closeCreate(); }}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              type="button"
+              onClick={save}
+              disabled={!canManage || hasUnacknowledgedConflict}
+              aria-describedby={hasUnacknowledgedConflict ? MEETING_CONFLICT_NOTE_ID : undefined}
+            >
+              {meetingCreateLabels(form?.scheduledAt ?? "").action}
+            </button>
+          </>
+        }
       >
         {form && (
           <MeetingFormFields
@@ -660,6 +688,20 @@ export function MeetingsPage() {
     </div>
   );
 }
+
+/** Phones: title, status, and date · body (Board, AGM, a committee); the card opens the meeting. */
+const meetingPhoneCard: RecordTableCardRenderer = (record, { open, selecting }) => {
+  const status = recordText(record.status);
+  return (
+    <RecordTablePhoneCard
+      title={recordText(record.title) || "Untitled meeting"}
+      badge={status ? <Badge tone={meetingStatusTone(status)}>{meetingStatusLabel(status)}</Badge> : null}
+      meta={[formatMeetingDate(record as MeetingDateLike), recordText(record.body) || recordText(record.type)]}
+      onOpen={open}
+      selecting={selecting}
+    />
+  );
+};
 
 function meetingStatusTone(status: string): ToneVariant {
   return sharedMeetingStatusTone(status) as ToneVariant;

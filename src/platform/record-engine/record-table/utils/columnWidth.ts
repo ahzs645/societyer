@@ -8,5 +8,7 @@ import type { CSSProperties } from "react";
  */
 export function columnWidthStyle(size: number): CSSProperties {
   const width = `calc(${size}px * var(--rt-stretch, 1))`;
-  return { width, minWidth: width };
+  // `--rt-col-size` lets phone CSS bound a cell's content to the column, so
+  // a shrunken column is not held open by its text (see `data-phone-fit`).
+  return { width, minWidth: width, "--rt-col-size": `${size}px` } as CSSProperties;
 }

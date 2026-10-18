@@ -119,13 +119,22 @@ test.describe("record table controls", () => {
     const members = new MembersPage(page);
     await members.gotoDemo();
 
-    await page.locator(".record-table__header-menu-trigger").first().click();
-
+    // First name is the members identifier: it stays pinned and visible.
+    const triggers = page.locator(".record-table__header-menu-trigger");
+    await triggers.first().click();
     await expect(page.getByRole("button", { name: "Sort ascending" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sort descending" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Apply filter" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Move right" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Hide field" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Move right" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Identifier field" })).toBeDisabled();
+    await page.keyboard.press("Escape");
+
+    // Any other column moves and hides.
+    await triggers.nth(1).click();
+    await expect(page.getByRole("button", { name: "Sort ascending" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Apply filter" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Move right" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Hide field" })).toBeEnabled();
   });
 
   test("'Save as' stays hidden on a pristine view and appears only once the view is dirty", async ({ page }) => {

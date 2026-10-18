@@ -1,8 +1,8 @@
-// Email adapter — Resend in live mode, no-op (logged) in demo.
+// Live delivery through the selected provider; simulation must be explicit.
 import { providers } from "./env";
 
 export type SentEmail = {
-  provider: "resend" | "demo";
+  provider: "resend" | "microsoft365" | "demo";
   accepted: boolean;
   id: string;
   to: string;
@@ -39,7 +39,41 @@ export async function sendEmail(args: {
     };
   }
 
-  if (p.id === "demo") throw new Error("Email delivery requires RESEND_API_KEY and RESEND_FROM_EMAIL (or RESEND_FROM). Simulation is available only in an explicit demo workspace.");
+  if (!p.live) throw new Error("Email delivery requires a configured provider: RESEND_API_KEY and RESEND_FROM_EMAIL, or Microsoft 365 mail tenant, client, secret and sender settings. Simulation is available only in an explicit demo workspace.");
+
+  if (p.id === "microsoft365") {
+    // Dedicated credentials: never inherit the SharePoint app's permissions.
+    const tenant = process.env.MICROSOFT_MAIL_TENANT_ID!;
+    const client = process.env.MICROSOFT_MAIL_CLIENT_ID!;
+    const secret = process.env.MICROSOFT_MAIL_CLIENT_SECRET!;
+    const sender = process.env.MICROSOFT_MAIL_SENDER!;
+    const tokenResponse = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+      method: "POST", redirect: "error", signal: AbortSignal.timeout(15_000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: client, client_secret: secret, grant_type: "client_credentials", scope: "https://graph.microsoft.com/.default" }),
+    });
+    if (!tokenResponse.ok) throw new Error(`Microsoft mail authentication failed with status ${tokenResponse.status}.`);
+    const token = await tokenResponse.json().catch(() => ({}));
+    if (typeof token.access_token !== "string" || !token.access_token.trim() || token.token_type?.toLowerCase() !== "bearer") {
+      throw new Error("Microsoft mail authentication returned an invalid token response.");
+    }
+    const requestId = crypto.randomUUID();
+    const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
+      method: "POST", redirect: "error", signal: AbortSignal.timeout(15_000),
+      headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json", "client-request-id": requestId },
+      body: JSON.stringify({
+        message: {
+          subject: args.subject,
+          body: { contentType: args.html !== undefined ? "HTML" : "Text", content: args.html ?? args.text ?? "" },
+          toRecipients: [{ emailAddress: { address: args.to } }],
+        },
+        saveToSentItems: true,
+      }),
+    });
+    // Graph returns 202 with no message ID. This is acceptance, not proof of delivery.
+    if (response.status !== 202) throw new Error(`Microsoft mail request failed with status ${response.status}.`);
+    return { provider: "microsoft365", accepted: true, id: `microsoft365:${requestId}`, to: args.to, subject: args.subject, bodyPreview, sentAtISO };
+  }
 
   const apiKey = (globalThis as any)?.process?.env?.RESEND_API_KEY;
   const from =
@@ -56,6 +90,7 @@ export async function sendEmail(args: {
 
   const response = await fetch(endpoint, {
     method: "POST",
+    redirect: "error",
     signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${apiKey}`,

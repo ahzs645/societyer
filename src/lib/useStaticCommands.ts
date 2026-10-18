@@ -16,6 +16,7 @@ import type { ComponentType } from "react";
 import { api } from "./convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
+import { isDemoMode } from "./demoMode";
 import { maintenanceErrorMessage, seedDemoSociety } from "./maintenanceApi";
 import type { ModuleKey } from "./modules";
 import { organizationVocabulary } from "./organizationVocabulary";
@@ -36,6 +37,9 @@ export function useStaticCommands(): StaticCommand[] {
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   // "AGM" is society vocabulary; a corporation holds an annual meeting.
   const meetingLabel = society ? organizationVocabulary(society).annualMeeting : "AGM";
+
+  // Seeding is a demo/developer tool: keep it out of real workspaces.
+  const showSeedCommands = import.meta.env.DEV || isDemoMode();
 
   return useMemo<StaticCommand[]>(
     () => [
@@ -149,37 +153,41 @@ export function useStaticCommands(): StaticCommand[] {
         module: "recordsInspection",
         run: () => navigate("/app/inspections?intent=start-response"),
       },
-      {
-        id: "action-seed-demo",
-        label: "Seed demo society",
-        icon: Sparkles,
-        run: async () => {
-          try {
-            const result = await seedDemoSociety();
-            setStoredSocietyId(result.societyId);
-            toast.success("Demo society seeded");
-          } catch (error) {
-            toast.error(maintenanceErrorMessage(error));
-          }
-        },
-      },
-      ...(society
+      ...(showSeedCommands
         ? [
             {
-              id: "action-seed-shared-views",
-              label: "Seed governance shared views",
-              icon: Settings,
+              id: "action-seed-demo",
+              label: "Seed demo society",
+              icon: Sparkles,
               run: async () => {
-                const result = await seedSharedViews({ societyId: society._id });
-                toast.success(
-                  "Shared views seeded",
-                  `${result.created.length} created, ${result.skipped.length} skipped`,
-                );
+                try {
+                  const result = await seedDemoSociety();
+                  setStoredSocietyId(result.societyId);
+                  toast.success("Demo society seeded");
+                } catch (error) {
+                  toast.error(maintenanceErrorMessage(error));
+                }
               },
-            } as StaticCommand,
+            },
+            ...(society
+              ? [
+                  {
+                    id: "action-seed-shared-views",
+                    label: "Seed governance shared views",
+                    icon: Settings,
+                    run: async () => {
+                      const result = await seedSharedViews({ societyId: society._id });
+                      toast.success(
+                        "Shared views seeded",
+                        `${result.created.length} created, ${result.skipped.length} skipped`,
+                      );
+                    },
+                  } as StaticCommand,
+                ]
+              : []),
           ]
         : []),
     ],
-    [meetingLabel, navigate, seedSharedViews, society, toast],
+    [meetingLabel, navigate, seedSharedViews, showSeedCommands, society, toast],
   );
 }

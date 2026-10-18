@@ -332,22 +332,8 @@
 .meeting-package-drawer__summary::-webkit-details-marker {
   display: none;
 }
-details.meeting-package-drawer > .meeting-package-drawer__summary::after {
-  content: "";
-  flex: 0 0 8px;
-  width: 8px;
-  height: 8px;
-  border-right: 1.5px solid token('text-tertiary');
-  border-bottom: 1.5px solid token('text-tertiary');
-  transform: rotate(45deg);
-  transition: transform token('motion-move-fast') token('ease-move');
-  margin-left: auto;
-  margin-right: 4px;
-}
-details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
-  transform: rotate(-135deg);
-  margin-top: 4px;
-}
+// The chevron is the shared disclosure one (_disclosure.scss): it turns over
+// in place, so it stays in line with the badge when the drawer opens.
 .meeting-package-drawer.is-empty .meeting-package-drawer__summary {
   cursor: default;
 }
@@ -360,6 +346,9 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
 }
 .meeting-package-drawer__body {
   display: grid;
+  // One column that may shrink: an editor or table inside is sized to the
+  // card (and scrolls within itself), not the card to it.
+  grid-template-columns: minmax(0, 1fr);
   gap: token('s-2');
   padding: 0 token('s-3') token('s-3');
   min-width: 0;

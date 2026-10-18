@@ -18,6 +18,7 @@ import {
   classifyProceduralMotion,
 } from "../proceduralMotions";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { factsForMinutes, motionRowsForReader } from "./minutesPrivacy";
 import { assertMotionVotes, touchesMotionVoteFields } from "../motionValidation";
 
 async function validateMotionForeignKeys(
@@ -126,28 +127,33 @@ async function patchMotion(ctx: PortableMutationCtx, motionId: any, patch: Recor
 // because mirror rows carry `minutesId` but not `sourceMinutesId`, so they never
 // landed in the `alreadyConverted` dedupe set. See Phase 4A in
 // docs/motions-migration-finish-scope.md.
+// Every read below passes through motionRowsForReader: motions recorded in an
+// in-camera section are redacted for readers without in-camera access.
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  return ctx.db
+  const rows = await ctx.db
     .query("motions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  return motionRowsForReader(ctx, societyId, rows);
 }
 
 export async function listForMinutesPortable(ctx: PortableQueryCtx, { minutesId }: { minutesId: string }) {
-  await requireOwnedRow(ctx, "minutes", minutesId);
-  return ctx.db
+  const minutes = await requireOwnedRow(ctx, "minutes", minutesId);
+  const rows = await ctx.db
     .query("motions")
     .withIndex("by_minutes", (q) => q.eq("minutesId", minutesId))
     .collect();
+  return motionRowsForReader(ctx, String(minutes.societyId), rows, factsForMinutes(minutes));
 }
 
 export async function listForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  await requireOwnedRow(ctx, "meetings", meetingId);
-  return ctx.db
+  const meeting = await requireOwnedRow(ctx, "meetings", meetingId);
+  const rows = await ctx.db
     .query("motions")
     .withIndex("by_meeting", (q) => q.eq("primaryMeetingId", meetingId))
     .collect();
+  return motionRowsForReader(ctx, String(meeting.societyId), rows);
 }
 
 // Backlog list = motions parked before/around a meeting. Folds in the old
@@ -159,7 +165,7 @@ export async function backlogPortable(ctx: PortableQueryCtx, { societyId }: { so
     .query("motions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  return rows.filter((r: any) => BACKLOG_STATUSES.has(r.status));
+  return motionRowsForReader(ctx, societyId, rows.filter((r: any) => BACKLOG_STATUSES.has(r.status)));
 }
 
 // ----- mutations ------------------------------------------------------------

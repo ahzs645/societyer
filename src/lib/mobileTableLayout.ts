@@ -42,9 +42,21 @@ export const DEFAULT_FREEZE_FIRST_COLUMN_ABOVE = 6;
 // exports/column pickers keep using the uncapped list.
 export const MOBILE_MAX_VISIBLE_COLUMNS = 3;
 
-export function limitColumnsForPhone<T>(columns: T[], isMobile: boolean): T[] {
+// `isIdentifier` marks the column that opens the record: it always survives
+// the cap (first), and the remaining slots go to the leading other columns in
+// view order.
+export function limitColumnsForPhone<T>(
+  columns: T[],
+  isMobile: boolean,
+  isIdentifier?: (column: T) => boolean,
+): T[] {
   if (!isMobile || columns.length <= MOBILE_MAX_VISIBLE_COLUMNS) return columns;
-  return columns.slice(0, MOBILE_MAX_VISIBLE_COLUMNS);
+  const identifier = isIdentifier ? columns.find(isIdentifier) : undefined;
+  if (!identifier) return columns.slice(0, MOBILE_MAX_VISIBLE_COLUMNS);
+  return [
+    identifier,
+    ...columns.filter((column) => column !== identifier).slice(0, MOBILE_MAX_VISIBLE_COLUMNS - 1),
+  ];
 }
 
 export function getMobileTableLayout({

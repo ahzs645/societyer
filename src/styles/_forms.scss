@@ -40,6 +40,15 @@
   @include text-title-section;
   margin: 0;
 }
+// Touch: the close button is a full 40px target, not the 32px touch icon size.
+@media (pointer: coarse) {
+  .drawer__head .btn.btn--icon.drawer__close {
+    width: token('control-h-lg');
+    min-width: token('control-h-lg');
+    height: token('control-h-lg');
+    min-height: token('control-h-lg');
+  }
+}
 .drawer__body {
   padding: token('s-4');
   overflow: auto;
@@ -181,6 +190,17 @@
   object-fit: contain;
   justify-self: start;
 }
+/* Signature images are dark ink on transparent or white (the pad always
+   exports dark ink; uploads are usually scans), which all but vanishes on a
+   dark surface. Show them on paper, as they'd print, rather than inverting:
+   an inverted white-background JPG becomes a black box. */
+.dark img.signature-list-row__img,
+.dark .signature-profile-preview__img {
+  padding: 2px 6px;
+  border-radius: token('r-sm');
+  background: #ffffff;
+}
+.dark .signature-upload-preview { background: #ffffff; }
 /* Typed signatures have no image — render the name in the same cursive style as
    the saved-profile preview so a "basic" typed sign-off still looks signed. */
 .signature-list-row__typed {
@@ -250,6 +270,11 @@
   gap: 8px;
   margin-top: 4px;
   font-size: token('fs-xs');
+}
+.signature-pad__actions {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
 }
 
 /* Form */
@@ -591,6 +616,14 @@ select.select:hover:not(:disabled) {
  * which are meaningless on touch — hide it on phones. */
 @media (max-width: 760px) {
   .kbar__footer { display: none; }
+  /* Rows drop the generic "Action" / "Navigate" tag and keyboard shortcuts
+   * (they crowd the label at 360px), and the hover-revealed pin, which has
+   * no hover to reveal it on a phone. Specific hints (search result kind,
+   * "Apply filter") stay. */
+  .kbar__hint--generic,
+  .kbar__hint--keys,
+  .kbar__pin { display: none; }
+  .kbar__row .kbar__item { padding-right: 10px; }
 }
 
 /* Demo banner */
@@ -603,6 +636,13 @@ select.select:hover:not(:disabled) {
   font-size: token('fs-sm');
   color: token('text-secondary');
   min-width: 0;
+}
+// Dark theme: accent-soft (blue-3) read as a loud navy strip across every
+// page. blue-2 keeps the demo hint while sitting near the page surface; the
+// blue-11 role text stays well above 4.5:1 on it.
+.dark .demo-banner {
+  background: token('blue-2');
+  border-bottom-color: token('border');
 }
 .demo-banner > svg {
   flex: 0 0 auto;

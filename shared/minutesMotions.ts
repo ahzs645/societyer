@@ -112,6 +112,7 @@ export function motionRowToEmbedded(row: any): any {
     sourceLocator: row.sourceLocator,
     sourceOutcomeText: row.sourceOutcomeText,
     outcomeOverrideNote: row.outcomeOverrideNote,
+    transcriptRef: row.transcriptRef,
   };
   for (const key of Object.keys(out)) if (out[key] === undefined) delete out[key];
   return out;

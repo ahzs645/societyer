@@ -22,7 +22,8 @@ import {
   requireRolePortable,
   requireSocietyMembership,
 } from "./access";
-import { hasPermission, requirePermissionPortable } from "./permissions";
+import { hasPermission, listPermissionsForRole, requirePermissionPortable } from "./permissions";
+import { AGENT_SURFACES, findAgentTool, type AgentSurface, type AgentToolAdapter } from "../agentTools";
 
 export async function requireAiRunAccess(ctx: PortableQueryCtx, runId: string) {
   const candidate = await ctx.db.get(runId, "aiAgentRuns");
@@ -445,10 +446,24 @@ export async function approveToolDraftPortable(
     });
     result = { status: "executed", taskId };
   }
+  // A registry write an AI connector proposed (decision A4): run it now, as
+  // the approver, through the same portable functions and their policy.
+  let output: unknown;
+  const tool = draft.toolName === "draft_task" ? undefined : findAgentTool(draft.toolName);
+  if (tool && tool.kind !== "read") {
+    output = await tool.execute(draft.payload?.input, approvalAdapter(ctx, {
+      societyId: args.societyId,
+      userId: actorUserId,
+      role: String(user?.role ?? ""),
+      surface: draftSurface(draft.payload?.surface),
+      calls: tool.calls.map((call) => call.name),
+    }));
+    result = { status: "executed" };
+  }
   await ctx.db.patch(args.id, {
     status: result.status,
     updatedAtISO: now,
-    payload: { ...(draft.payload ?? {}), approval: { approvedByUserId: actorUserId, approvedAtISO: now, result } },
+    payload: { ...(draft.payload ?? {}), approval: { approvedByUserId: actorUserId, approvedAtISO: now, result: output === undefined ? result : { ...result, output } } },
   });
   await insertAgentAudit(ctx, {
     societyId: args.societyId,
@@ -461,6 +476,31 @@ export async function approveToolDraftPortable(
     actorUserId,
   });
   return result;
+}
+
+function draftSurface(value: unknown): AgentSurface {
+  return AGENT_SURFACES.find((surface) => surface === value) ?? "remote";
+}
+
+/** Runs only the portable functions the tool declares, as the approving person. */
+function approvalAdapter(
+  ctx: PortableMutationCtx,
+  { societyId, userId, role, surface, calls }: { societyId: string; userId?: string; role: string; surface: AgentSurface; calls: readonly string[] },
+): AgentToolAdapter {
+  const declared = (name: string) => {
+    if (!calls.includes(name)) throw new Error(`${name} isn't part of this AI draft.`);
+  };
+  return {
+    context: { surface, workspace: { id: societyId }, principal: { userId, role, permissions: listPermissionsForRole(role) }, now: () => new Date() },
+    query: async <T>(name: string, args: Record<string, unknown>) => {
+      declared(name);
+      return ctx.runQuery<T>(name, args);
+    },
+    mutation: async <T>(name: string, args: Record<string, unknown>) => {
+      declared(name);
+      return ctx.runMutation<T>(name, args);
+    },
+  };
 }
 
 export async function rejectToolDraftPortable(

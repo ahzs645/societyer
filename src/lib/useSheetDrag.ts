@@ -45,6 +45,19 @@ function scrolledAncestor(target: Element | null, sheet: HTMLElement) {
 }
 
 /**
+ * A second, taller resting height for a sheet (iOS's medium and large
+ * detents). The sheet's CSS gives both heights: its collapsed `height`, and
+ * a `max-height` that the expanded state also uses as its height.
+ */
+export type SheetExpandDetent = {
+  /** True while the sheet rests at its full height. */
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  /** Where an upward drag may start (grabber, header); see `handle`. */
+  handle: string;
+};
+
+/**
  * Swipe-down-to-dismiss for a bottom sheet (touch only). A drag starts from
  * anywhere on the sheet as long as the content under the finger is scrolled
  * to the top; the sheet follows the finger, the backdrop (the sheet's
@@ -59,13 +72,26 @@ function scrolledAncestor(target: Element | null, sheet: HTMLElement) {
  * touch target; touches on the sheet element itself — its grabber
  * pseudo-element — also count). Use it for tall form sheets, where a swipe
  * in the body should only ever scroll.
+ *
+ * `expand` adds a full-height detent: an upward drag from `expand.handle`
+ * grows the collapsed sheet to its `max-height`, and a downward drag on the
+ * expanded sheet settles it back to the collapsed height (or, past half its
+ * height, dismisses it). Content still scrolls normally in both states.
  */
 export function useSheetDrag(
   sheetRef: RefObject<HTMLElement | null>,
-  { enabled, onDismiss, handle }: { enabled: boolean; onDismiss: () => void; handle?: string },
+  { enabled, onDismiss, handle, expand }: {
+    enabled: boolean;
+    onDismiss: () => void;
+    handle?: string;
+    expand?: SheetExpandDetent;
+  },
 ) {
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
+  const expandRef = useRef(expand);
+  expandRef.current = expand;
+  const expandHandle = expand?.handle;
 
   useEffect(() => {
     const sheet = sheetRef.current;
@@ -80,6 +106,16 @@ export function useSheetDrag(
     let dragging = false;
     let blocked = false;
     let closing = false;
+    // "pull" moves the sheet down (dismiss, or collapse when expanded);
+    // "grow" raises a collapsed sheet's top edge toward full height.
+    let mode: "pull" | "grow" = "pull";
+    let onExpandHandle = false;
+    let startHeight = 0;
+    let maxHeight = 0;
+
+    const settle = (fn: () => void) => window.setTimeout(() => {
+      if (!dragging && !closing) fn();
+    }, 280);
 
     const backdrop = () => {
       const prev = sheet.previousElementSibling;
@@ -115,6 +151,8 @@ export function useSheetDrag(
       velocity = 0;
       tracking = true;
       dragging = false;
+      mode = "pull";
+      onExpandHandle = Boolean(expandHandle) && (target === sheet || Boolean(target?.closest(expandHandle!)));
       const offHandle = Boolean(handle) && target !== sheet && !target?.closest(handle!);
       blocked = offHandle
         || Boolean(target?.closest(NON_DRAG_TARGETS))
@@ -131,12 +169,19 @@ export function useSheetDrag(
           tracking = false;
           return;
         }
-        // Upward movement is a normal content scroll.
+        // Upward movement is a normal content scroll, unless it starts on the
+        // expand handle of a collapsed sheet.
         if (dy < -DRAG_SLOP) {
-          tracking = false;
+          if (!onExpandHandle || !expandRef.current || expandRef.current.expanded) {
+            tracking = false;
+            return;
+          }
+          mode = "grow";
+          startHeight = sheet.offsetHeight;
+          maxHeight = parseFloat(getComputedStyle(sheet).maxHeight) || window.innerHeight;
+        } else if (dy < DRAG_SLOP) {
           return;
         }
-        if (dy < DRAG_SLOP) return;
         dragging = true;
         sheet.style.transition = "none";
         sheet.classList.add("is-sheet-dragging");
@@ -146,6 +191,11 @@ export function useSheetDrag(
       velocity = (touch.clientY - lastY) / dt;
       lastY = touch.clientY;
       lastT = event.timeStamp;
+      if (mode === "grow") {
+        // The CSS max-height caps the growth at full height.
+        sheet.style.height = `${startHeight + Math.max(0, -dy - DRAG_SLOP)}px`;
+        return;
+      }
       const offset = Math.max(0, dy - DRAG_SLOP);
       sheet.style.transform = `translate3d(0, ${offset}px, 0)`;
       const bd = backdrop();
@@ -171,7 +221,35 @@ export function useSheetDrag(
       sheet.addEventListener("click", swallowClick, { capture: true, once: true });
       window.setTimeout(() => sheet.removeEventListener("click", swallowClick, { capture: true }), 350);
 
+      const reduce = prefersReducedMotion();
+      const detent = expandRef.current;
+      if (mode === "grow") {
+        const room = Math.max(1, maxHeight - startHeight);
+        const grown = sheet.offsetHeight - startHeight;
+        const commit = grown > room * 0.3 || (velocity < -DISMISS_VELOCITY && grown > 16);
+        sheet.style.transition = reduce ? "" : `height 260ms ${SHEET_EASING}`;
+        sheet.style.height = `${commit ? maxHeight : startHeight}px`;
+        if (commit) detent?.onExpandedChange(true);
+        // Hand the height back to the stylesheet once the spring settles.
+        settle(() => {
+          sheet.style.transition = "";
+          sheet.style.height = "";
+        });
+        return;
+      }
+
       const offset = Math.max(0, lastY - startY - DRAG_SLOP);
+      if (detent?.expanded && offset <= sheet.offsetHeight * 0.5) {
+        // Expanded: a short pull springs back, a longer one (or a flick)
+        // settles at the collapsed height; only a long pull dismisses.
+        const collapse = offset > 48 || (velocity > DISMISS_VELOCITY && offset > 24);
+        reset(true);
+        if (collapse) {
+          if (!reduce) sheet.style.transition = `transform 260ms ${SHEET_EASING}, height 260ms ${SHEET_EASING}`;
+          detent.onExpandedChange(false);
+        }
+        return;
+      }
       const commit = offset > Math.min(DISMISS_DISTANCE, sheet.offsetHeight * 0.35)
         || (velocity > DISMISS_VELOCITY && offset > 24);
       if (!commit) {
@@ -179,7 +257,7 @@ export function useSheetDrag(
         return;
       }
       closing = true;
-      if (prefersReducedMotion()) {
+      if (reduce) {
         dismissRef.current();
         return;
       }
@@ -196,6 +274,7 @@ export function useSheetDrag(
     const onTouchCancel = () => {
       if (dragging) {
         sheet.classList.remove("is-sheet-dragging");
+        sheet.style.height = "";
         reset(true);
       }
       dragging = false;
@@ -214,13 +293,14 @@ export function useSheetDrag(
       sheet.classList.remove("is-sheet-dragging");
       sheet.style.transition = "";
       sheet.style.transform = "";
+      sheet.style.height = "";
       const bd = backdrop();
       if (bd) {
         bd.style.transition = "";
         bd.style.opacity = "";
       }
     };
-  }, [enabled, sheetRef, handle]);
+  }, [enabled, sheetRef, handle, expandHandle]);
 }
 
 /** Tracks a media query (SSR-safe, follows resizes / rotation). */

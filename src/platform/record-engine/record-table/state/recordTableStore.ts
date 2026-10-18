@@ -211,6 +211,10 @@ export type RecordTableState = {
   requestFilterEditor: (filterIndex?: number) => void;
   clearFilterEditorRequest: () => void;
 
+  /* phone "View options" sheet — the sort chip asks the toolbar to open it */
+  viewOptionsRequest: number;
+  requestViewOptions: () => void;
+
   /* record open in the preview panel (drives row highlight + condensing) */
   panelRecordId: string | null;
   setPanelRecordId: (recordId: string | null) => void;
@@ -275,6 +279,7 @@ export function createRecordTableStore(opts: {
     collapsedGroupKeys: new Set(),
     rangeAnchor: null,
     filterEditorRequest: null,
+    viewOptionsRequest: 0,
     panelRecordId: null,
     flashRecordIds: new Set(),
     dateContext: { today: todayDateOnly() },
@@ -421,6 +426,7 @@ export function createRecordTableStore(opts: {
     requestFilterEditor: (filterIndex) =>
       set((state) => ({ filterEditorRequest: { filterIndex, nonce: (state.filterEditorRequest?.nonce ?? 0) + 1 } })),
     clearFilterEditorRequest: () => set({ filterEditorRequest: null }),
+    requestViewOptions: () => set((state) => ({ viewOptionsRequest: state.viewOptionsRequest + 1 })),
     setPanelRecordId: (panelRecordId) => set({ panelRecordId }),
     setFlashRecordIds: (flashRecordIds) => set({ flashRecordIds }),
     setDateContext: (dateContext) =>

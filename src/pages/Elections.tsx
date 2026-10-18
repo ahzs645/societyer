@@ -298,7 +298,7 @@ export function ElectionsPage() {
                               } catch (error) { toast.error(error instanceof Error ? error.message : "Could not open this election."); }
                             }}
                           >
-                            <Users size={12} /> Snapshot + open
+                            <Users size={12} /> Lock voter list and open
                           </button>
                         )}
                         {election.status === "Open" && (

@@ -4,7 +4,7 @@ import { openRowMenu } from "./helpers/rowActions";
 
 async function openNavigation(page: Page) {
   const mobileMore = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
-  if (await mobileMore.isVisible() && !await page.getByRole("dialog", { name: "navigation", exact: true }).isVisible()) {
+  if (await mobileMore.isVisible() && !await page.locator("aside.sidebar[role='dialog']").isVisible()) {
     await mobileMore.click();
   }
 }

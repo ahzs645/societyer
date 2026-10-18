@@ -16,7 +16,7 @@ import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { BookOpen, Download, Plus, Trash2 } from "lucide-react";
+import { BookOpen, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { humanizeKey } from "../../shared/documentProvenance";
@@ -37,6 +37,8 @@ import {
   type MinuteBookExportInput,
 } from "../features/meetings/lib/minuteBookExport";
 import { StatTile } from "../components/StatTile";
+import { MobileFold } from "../components/MobileFold";
+import { useIsMobile } from "../lib/useIsMobile";
 
 /**
  * Tracks whether a horizontally-scrollable container is scrolled away from
@@ -254,8 +256,14 @@ export function MinuteBookPage() {
       </div>
 
       <RecordBundlesCard rows={recordBundles} partial={partial} />
-      <LegalRecordsRequirements organization={society} />
+      <MobileFold title="Required records and retention" summary="What to keep, who may see it, and for how long">
+        <LegalRecordsRequirements organization={society} />
+      </MobileFold>
 
+      <MobileFold
+        title={partial ? "Accessible evidence checks" : "Configured evidence checks"}
+        summary={openCheckCount ? `${openCheckCount} of ${checks.length} need attention` : partial ? "Access limited" : `All ${checks.length} clear`}
+      >
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">{partial ? "Accessible evidence checks" : "Configured evidence checks"}</h2>
@@ -277,6 +285,7 @@ export function MinuteBookPage() {
           </div>
         </div>
       </div>
+      </MobileFold>
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="minute book record" />
@@ -362,12 +371,17 @@ export function MinuteBookPage() {
 
       <div className="spacer-4" />
 
-      <div className="grid two">
+      <MobileFold
+        title="Linked records"
+        summary={`${safeCount(detail, "documents")} documents · ${safeCount(detail, "meetings")} meetings · ${safeCount(detail, "filings")} filings · ${safeCount(detail, "policies") + safeCount(detail, "workflowPackages")} policies and packages`}
+      >
+      <div className="grid two minute-book-linked">
         <LinkedList restricted={detail?.restrictedResources?.includes("documents")} title="Canonical documents" rows={safeRows(detail, "documents")} getTitle={(row: any) => row.title} getMeta={(row: any) => row.category} />
         <LinkedList restricted={detail?.restrictedResources?.includes("meetings")} title="Meetings and minutes" rows={safeRows(detail, "meetings")} getTitle={(row: any) => row.title} getMeta={(row: any) => `${row.type === "AGM" ? organizationVocabulary(society).annualMeetingTitle : row.type} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`} />
         <LinkedList restricted={detail?.restrictedResources?.includes("filings")} title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => humanize(row.kind)} getMeta={(row: any) => `${humanize(row.status)} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
         <LinkedList restricted={detail?.restrictedResources?.some((resource: string) => ["documents", "tasks"].includes(resource))} title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => humanize(row.status ?? row.eventType)} />
       </div>
+      </MobileFold>
 
       <Drawer
         open={open}
@@ -409,6 +423,7 @@ export function MinuteBookPage() {
 function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }) {
   const scroll = useScrollEdges<HTMLDivElement>();
   const annualMeetingTitle = organizationVocabulary(useSociety()).annualMeetingTitle;
+  const isMobile = useIsMobile();
   const gapCount = rows.reduce((count, row) => count + actionableGaps(row.gaps).length, 0);
   const visibleRows = rows
     .slice()
@@ -425,6 +440,14 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
         <h2 className="card__title">Connected records</h2>
         <Badge tone={gapCount ? "warn" : partial ? "neutral" : "success"}>{gapCount ? `${gapCount} visible gaps` : partial ? "Access limited" : `${rows.length} records`}</Badge>
       </div>
+      {isMobile ? (
+        // Phones: one tap target per record (the whole row) instead of four
+        // small evidence links; the record's own page lists the evidence.
+        <ul className="minute-book-bundle-list">
+          {visibleRows.map((row) => <BundleRow key={row.key} row={row} partial={partial} annualMeetingTitle={annualMeetingTitle} />)}
+          {rows.length === 0 && <li className="minute-book-bundle-list__empty muted">No connected record bundles yet.</li>}
+        </ul>
+      ) : (
       <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
         <table className="table table--stack-mobile minute-book-bundles">
           <thead>
@@ -457,8 +480,43 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
           </tbody>
         </table>
       </div>
+      )}
       {rows.length > 40 && <div className="card__body muted">Showing the first 40 connected records.</div>}
     </div>
+  );
+}
+
+function BundleRow({ row, partial, annualMeetingTitle }: { row: any; partial?: boolean; annualMeetingTitle: string }) {
+  const gaps = actionableGaps(row.gaps);
+  const links: any[] = row.links ?? [];
+  const kinds = Array.from(new Set(links.map((link) => String(link.kind ?? "")).filter(Boolean)));
+  const body = (
+    <>
+      <span className="minute-book-bundle-row__main">
+        <span className="minute-book-bundle-row__title">
+          <strong>{bundleTitle(row)}</strong>
+          <Badge tone={toneForStatus(row.status)}>{sentenceCase(humanize(row.status)) || "-"}</Badge>
+        </span>
+        <span className="minute-book-bundle-row__meta">
+          {bundleChips(row, annualMeetingTitle).map((chip) => chip.label).join(" · ")}
+        </span>
+        <span className="minute-book-bundle-row__meta">
+          {kinds.length ? `Linked: ${kinds.join(", ")}` : partial ? "No accessible linked evidence" : "No linked evidence"}
+        </span>
+        {gaps.length > 0 && (
+          <span className="minute-book-bundle-row__gaps">
+            {gaps.slice(0, 2).map((gap) => <Badge key={gap.key} tone={gap.severity === "danger" ? "danger" : "warn"}>{gap.label}</Badge>)}
+            {gaps.length > 2 && <Badge tone="warn">+{gaps.length - 2}</Badge>}
+          </span>
+        )}
+      </span>
+      {row.href && <ChevronRight size={16} className="minute-book-bundle-row__chevron" aria-hidden="true" />}
+    </>
+  );
+  return (
+    <li>
+      {row.href ? <Link className="minute-book-bundle-row" to={row.href}>{body}</Link> : <div className="minute-book-bundle-row">{body}</div>}
+    </li>
   );
 }
 

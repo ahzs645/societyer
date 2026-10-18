@@ -10,6 +10,8 @@ import type { PortableQueryCtx } from "../portable/ctx";
 import { requireSocietyMembership } from "./access";
 import { actionItemStatus } from "../actionItemStatus";
 import { minutesPresentCount } from "../meetingAttendanceGrid";
+import { inCameraFacts } from "../minutesPrivacy";
+import { canReadInCameraPortable } from "./minutesPrivacy";
 
 export type MinutesSummary = {
   _id: string;
@@ -36,6 +38,8 @@ export type MinutesSummary = {
   peopleText: string;
   /** Action observations (small; needed by the carry-forward picker). */
   actionObservations?: any[];
+  /** The minutes record an in-camera session (`shared/minutesPrivacy.ts`). */
+  hasInCamera?: boolean;
 };
 
 function actionItemsOf(minutes: any): any[] {
@@ -91,6 +95,7 @@ export function summarizeMinutes(minutes: any): MinutesSummary {
       minutes.recorderName,
     ].filter(Boolean).join(" · ").slice(0, 4000),
     ...(Array.isArray(minutes.actionObservations) && minutes.actionObservations.length ? { actionObservations: minutes.actionObservations } : {}),
+    ...(inCameraFacts(minutes).hasInCamera ? { hasInCamera: true } : {}),
   };
 }
 
@@ -100,10 +105,18 @@ export async function listSummariesPortable(ctx: PortableQueryCtx, { societyId }
   // row change (persisted per build) and never keeps every minutes record with
   // its source text in memory just to count a few fields; Convex derives it on
   // read. Bump the key when summarizeMinutes changes.
-  return ctx.db
+  const summaries = await ctx.db
     .query("minutes")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collectProjected("minutes.summary/v1", (row: any) => withoutUndefined(summarizeMinutes(row)));
+    .collectProjected("minutes.summary/v2", (row: any) => withoutUndefined(summarizeMinutes(row)));
+  // Carrying an action forward needs minutes:write, which also grants in-camera
+  // access; everyone else doesn't get in-camera minutes' action observations.
+  if (!summaries.some((summary) => summary.hasInCamera && summary.actionObservations) || await canReadInCameraPortable(ctx, societyId)) return summaries;
+  return summaries.map((summary) => {
+    if (!summary.hasInCamera || !summary.actionObservations) return summary;
+    const { actionObservations: _withheld, ...rest } = summary;
+    return rest;
+  });
 }
 
 /** Persisted projections are JSON, so drop undefined keys to keep every runtime's result identical. */

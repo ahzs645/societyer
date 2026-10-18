@@ -6,6 +6,7 @@ import { screenAttendanceName } from "../../../../shared/attendanceNames";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 import type { QuorumCheckpoint } from "../../../../shared/evidenceReview";
 import type { ActionObservation, ImportedSourceVersion } from "../../../../shared/meetingHistory";
+import { redactInCameraAgendaTitles, redactInCameraMinutes } from "../../../../shared/minutesPrivacy";
 // Meeting-minutes domain renderer. Takes structured minutes data + a chosen
 // style (Standard / Formal AGM / Executive Agenda / Numbered Agenda / Action
 // Table / Board Public) and produces an HTML body string that the generic
@@ -255,6 +256,12 @@ export type MinutesRenderArgs = {
     actionObservations?: ActionObservation[] | null;
     importedSourceVersions?: ImportedSourceVersion[] | null;
     draftTranscript?: string | null;
+    /**
+     * The transcript appendix for a public copy: already cut for readers
+     * without in-camera access (`transcriptTextWithoutInCamera`), or null when
+     * it must be withheld. A public copy never uses `draftTranscript`.
+     */
+    audienceTranscript?: string | null;
   };
   styleId?: MinutesExportStyleId;
   options?: MinutesExportOptions;
@@ -324,6 +331,22 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   const options = { ...DEFAULT_MINUTES_EXPORT_OPTIONS, ...(args.options ?? {}) };
 
   options.publicCopy = options.publicCopy || options.publicOnly;
+  // A public copy never carries in-camera content, whoever exports it: not the
+  // minutes' in-camera sections, not the titles of in-camera agenda items, and
+  // only the parts of the transcript recorded outside marked in-camera ranges.
+  if (options.publicCopy) {
+    const original = args.minutes;
+    const agendaTitles = (titles: string[]) => redactInCameraAgendaTitles(titles.map((title) => ({ title })), original).map((entry) => entry.title);
+    args = {
+      ...args,
+      meeting: {
+        ...args.meeting,
+        ...(args.meeting.agendaItems ? { agendaItems: agendaTitles(args.meeting.agendaItems) } : {}),
+        ...(args.meeting.agendaItemTree ? { agendaItemTree: redactInCameraAgendaTitles(args.meeting.agendaItemTree, original) } : {}),
+      },
+      minutes: { ...redactInCameraMinutes(original), draftTranscript: original.audienceTranscript ?? null },
+    };
+  }
   const sourceRecord = resolveSourceMeetingRecord(args.minutes);
   if (sourceRecord && options.sourceFidelity && !options.publicCopy && (styleId !== "board-public" || options.privateCopy)) {
     return renderDocumentHeader(args.society) + renderSourceFidelityMinutes(args, sourceRecord, styleId, options);
@@ -571,11 +594,7 @@ function renderStandardMinutes({
     ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
 
-    ${options.includeTranscript && minutes.draftTranscript ? `
-      <h2>Transcript</h2>
-      <p class="muted">Raw transcript retained with these minutes.</p>
-      <p style="font-family: Consolas, 'Courier New', monospace; font-size: 9.5pt; white-space: pre-wrap;">${eh(minutes.draftTranscript)}</p>
-    ` : ""}
+    ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
 
 
   `;
@@ -1733,11 +1752,40 @@ function renderSignatureBlock(
   `;
 }
 
+// "Mina Patel: text", optionally after a "[0:42]" / "00:01:05" timestamp. The
+// name part is short and has no sentence punctuation, so "Note: the vote…" style
+// prose still matches but a sentence that merely contains a colon does not.
+const TRANSCRIPT_SPEAKER_LINE =
+  /^((?:\[\d{1,2}(?::\d{2}){1,2}(?:\.\d+)?\]|\d{1,2}(?::\d{2}){1,2}(?:\.\d+)?)\s+)?([^:.!?\[\]]{1,60}?):[ \t]+(\S.*)$/;
+
+/**
+ * The stored transcript is newline-separated `Name: text` lines. Each line
+ * becomes its own paragraph with the speaker name in bold, so Word, PDF and the
+ * preview keep the turn structure instead of collapsing it into one paragraph.
+ */
+export function renderTranscriptLinesHtml(transcript: string): string {
+  const lines: string[] = [];
+  for (const raw of transcript.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const match = TRANSCRIPT_SPEAKER_LINE.exec(line);
+    const speaker = match?.[2]?.trim();
+    const body =
+      match && speaker && speaker.split(/\s+/).length <= 6
+        ? `${match[1] ? `${escapeHtml(match[1].trim())} ` : ""}<strong>${escapeHtml(speaker)}:</strong> ${escapeHtml(match[3])}`
+        : escapeHtml(line);
+    lines.push(`<p class="minutes-transcript-line" style="margin: 0 0 4pt;">${body}</p>`);
+  }
+  return lines.join("\n");
+}
+
 function renderTranscript(transcript: string) {
   return `
     <h2>Transcript</h2>
     <p class="muted">Raw transcript retained with these minutes.</p>
-    <p style="font-family: Consolas, 'Courier New', monospace; font-size: 9.5pt; white-space: pre-wrap;">${escapeHtml(transcript)}</p>
+    <div class="minutes-transcript">
+${renderTranscriptLinesHtml(transcript)}
+    </div>
   `;
 }
 

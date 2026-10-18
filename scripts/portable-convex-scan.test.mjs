@@ -73,3 +73,16 @@ test("unknown exported builders and mismatched authorization wrappers fail close
   assert.throws(() => scanModule(`export const unknown = newBuilder({});`, "example"), /unrecognized exported function builder/);
   assert.throws(() => scanModule(imports + `export const mismatch = authorized('example:mismatch', mutation)({});`, "example"), /wrapper\/builder mismatch/);
 });
+
+test("Better Auth component clients are not registered functions", () => {
+  const functions = scanModule(imports + `
+    import { createClient as makeAuthClient } from '@convex-dev/better-auth';
+    export const authComponent = makeAuthClient(components.betterAuth);
+    export const visible = q({handler: () => null});
+  `, "hostedAuth");
+  assert.deepEqual(functions.map(fn => fn.export), ["visible"]);
+  assert.throws(() => scanModule(`
+    import { createClient } from './lookalike';
+    export const unknown = createClient({});
+  `, "hostedAuth"), /unrecognized exported function builder/);
+});

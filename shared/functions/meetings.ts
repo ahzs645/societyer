@@ -16,8 +16,11 @@ import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBase
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
-import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
+import { createPortable as createMinutesPortable, resolveMinutesMotions, syncMotionsForMinutes, updatePortable as updateMinutesPortable } from "./minutes";
+import { requirePermissionPortable } from "./permissions";
+import { meetingForReader } from "./minutesPrivacy";
 import { todayDateOnly } from "../dateOnly";
+import { discussionSeededWithNotes, isMeetingRecordKind, meetingRecordKind, MEETING_WORKING_NOTES_MAX_LENGTH, type MeetingRecordKind } from "../meetingRecordKind";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
 
@@ -149,7 +152,13 @@ function timestampOrNegativeInfinity(value?: string) {
 /** A13/A18 field checks shared by create and update. */
 export const MEETING_DATE_PRECISIONS = ["date", "datetime"] as const;
 export const MEETING_HOST_BODIES = ["own", "external"] as const;
-function assertMeetingExtension(fields: { scheduledAtPrecision?: string; hostBody?: string; externalOrganization?: string; timeZone?: string }) {
+function assertMeetingExtension(fields: { scheduledAtPrecision?: string; hostBody?: string; externalOrganization?: string; timeZone?: string; recordKind?: string; workingNotes?: string }) {
+  if (fields.recordKind !== undefined && !isMeetingRecordKind(fields.recordKind)) {
+    throw new Error("A meeting keeps just the meeting, notes, or minutes.");
+  }
+  if (fields.workingNotes !== undefined && fields.workingNotes.length > MEETING_WORKING_NOTES_MAX_LENGTH) {
+    throw new Error("Meeting notes are too long. Move long material into a document or the transcript.");
+  }
   if (fields.scheduledAtPrecision !== undefined && !(MEETING_DATE_PRECISIONS as readonly string[]).includes(fields.scheduledAtPrecision)) {
     throw new Error("Meeting date precision must be date or datetime.");
   }
@@ -403,11 +412,14 @@ export async function listPortable(
     .query("meetings")
     .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
     .order("desc")
+    // Working notes can be long and no list view reads them; the detail page loads them via `get`.
+    .omitFields("workingNotes")
     .collect();
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return requireOwnedRow(ctx, "meetings", id);
+  // A formal-minutes meeting's working notes follow the in-camera rule (decision A3).
+  return meetingForReader(ctx, await requireOwnedRow(ctx, "meetings", id));
 }
 
 export async function createPortable(
@@ -451,6 +463,8 @@ export async function createPortable(
     externalOrganization?: string;
     sourceTitle?: string;
     special?: boolean;
+    recordKind?: MeetingRecordKind;
+    workingNotes?: string;
   },
 ) {
   assertMeetingExtension(args);
@@ -489,6 +503,10 @@ export async function createPortable(
     throw new Error("Meeting template belongs to a different society.");
   }
   const templateItems = template ? normalizeTemplateItems(template.items) : [];
+  // Only formal minutes get motions. Notes and no-write-up meetings keep the
+  // template's agenda topics (they group materials) and its snapshot; "Turn
+  // notes into minutes" adds the motions from that snapshot later.
+  const keepsMinutes = meetingRecordKind(args) === "minutes";
   // Resolved even without a template: the agendaJson path ("Schedule next
   // meeting") can also seed an adoption motion, and both need the previous
   // same-category meeting's minutes id.
@@ -498,7 +516,7 @@ export async function createPortable(
     args.scheduledAt,
     args.type,
   );
-  const templateMotions = template
+  const templateMotions = template && keepsMinutes
     ? await buildTemplateMotions(ctx, templateItems, templateContext, args.societyId, previousMinutesId)
     : [];
   const templateSnapshotJson = template
@@ -624,7 +642,7 @@ export async function createPortable(
   const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
   // Motions are materialized into the table (Phase 4C — not stored on the minutes
   // row); reads resolve from motionIds.
-  const scaffoldedMotions = templateMotions.length ? templateMotions : agendaJsonMotions;
+  const scaffoldedMotions = !keepsMinutes ? [] : templateMotions.length ? templateMotions : agendaJsonMotions;
   const minutesId = await ctx.db.insert("minutes", {
     societyId: args.societyId,
     meetingId,
@@ -862,6 +880,8 @@ export async function updatePortable(
       externalOrganization?: string;
       sourceTitle?: string;
       special?: boolean;
+      recordKind?: MeetingRecordKind;
+      workingNotes?: string;
     };
   },
 ) {
@@ -902,6 +922,96 @@ export async function updatePortable(
         await ctx.db.patch(row._id, { heldAt: rest.scheduledAt });
       }
     }
+  }
+}
+
+/**
+ * "Turn notes into minutes": the meeting now keeps formal minutes, and its
+ * working notes seed the minutes discussion so nothing typed is lost. Creates
+ * the minutes draft when there is none, the same empty skeleton the meeting
+ * page bootstraps. Approved minutes are never touched. No AI runs here.
+ */
+export async function startMinutesFromNotesPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const meeting = await requireOwnedRow(ctx, "meetings", id);
+  const societyId = String(meeting.societyId);
+  await requirePermissionPortable(ctx, societyId, "minutes:write");
+  const notes = String(meeting.workingNotes ?? "").trim();
+  const minutesRows = await ctx.db
+    .query("minutes")
+    .withIndex("by_meeting", (q) => q.eq("meetingId", id))
+    .collect();
+  // The meeting page shows the first minutes row; seed that one.
+  const existing = minutesRows[0];
+  // Recurring motions skipped when the meeting was created as notes: only for
+  // a draft that has none yet (never approved or adopted minutes).
+  const motionsToSeed =
+    existing?.approvedAt || Array.isArray(existing?.motionSnapshots) || (await resolveMinutesMotions(ctx, existing)).length
+      ? []
+      : await deferredScaffoldMotions(ctx, meeting);
+  let minutesId: string;
+  let seeded = false;
+  if (!existing) {
+    const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
+    minutesId = String(await createMinutesPortable(ctx, {
+      societyId,
+      meetingId: id,
+      heldAt: meeting.scheduledAt,
+      attendees,
+      absent: [],
+      quorumMet: false,
+      quorumStatus: "not_recorded",
+      discussion: notes,
+      sections: [],
+      motions: [],
+      decisions: [],
+      actionItems: [],
+    }));
+    seeded = notes.length > 0;
+  } else {
+    minutesId = String(existing._id);
+    const discussion = existing.approvedAt ? null : discussionSeededWithNotes(existing.discussion, notes);
+    if (discussion !== null) {
+      await updateMinutesPortable(ctx, { id: minutesId, patch: { discussion } });
+      seeded = true;
+    }
+  }
+  if (motionsToSeed.length) {
+    await syncMotionsForMinutes(ctx, { societyId, minutesId, meetingId: id, motions: motionsToSeed });
+  }
+  await ctx.db.patch(id, { recordKind: "minutes" });
+  return { minutesId, seeded, approved: Boolean(existing?.approvedAt), motionsSeeded: motionsToSeed.length };
+}
+
+/**
+ * The motions a notes or no-write-up meeting skipped at creation, built the
+ * same way creation builds them for formal minutes: from the template snapshot
+ * (`templateSnapshotJson`), or, for a meeting made without a template, from its
+ * agenda items that carry motion text ("Schedule next meeting").
+ */
+async function deferredScaffoldMotions(ctx: PortableMutationCtx, meeting: any): Promise<any[]> {
+  let items = normalizeTemplateItems(templateSnapshotItems(meeting.templateSnapshotJson));
+  if (!items.length) {
+    const agenda = await ctx.db
+      .query("agendas")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meeting._id))
+      .first();
+    const agendaItems = agenda
+      ? await ctx.db.query("agendaItems").withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id)).collect()
+      : [];
+    items = normalizeTemplateItems([...agendaItems].sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0)));
+  }
+  if (!items.some((item) => item.motionTemplateId || item.motionText)) return [];
+  const { context, previousMinutesId } = await buildTemplateContext(ctx, meeting.societyId, meeting.scheduledAt, meeting.type);
+  return buildTemplateMotions(ctx, items, context, String(meeting.societyId), previousMinutesId);
+}
+
+function templateSnapshotItems(json: unknown): any[] {
+  if (typeof json !== "string" || !json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed?.items) ? parsed.items : [];
+  } catch {
+    return [];
   }
 }
 

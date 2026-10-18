@@ -667,3 +667,26 @@
     margin-left: 0;
   }
 }
+
+/* Documents quick access on phones: one card with a tab per queue (Action
+ * required, Recent, In progress) instead of three stacked cards. */
+@media (max-width: 760px) {
+  .document-queues-tabs {
+    margin-bottom: token('s-4');
+    > .tabs {
+      margin: 0;
+      padding: 0 token('s-4');
+      scroll-padding-inline: token('s-4');
+    }
+    // Full 44px tabs: the strip is the card's only header.
+    > .tabs .tab {
+      height: token('tap-target');
+    }
+    .document-queue-list {
+      padding-top: token('s-1');
+    }
+    .document-queue-link:last-of-type {
+      border-bottom: 0;
+    }
+  }
+}

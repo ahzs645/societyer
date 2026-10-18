@@ -46,6 +46,9 @@ export const documentTables = {
     .index("by_meeting", ["meetingId"])
     .index("by_library_section", ["societyId", "librarySection"])
     .index("by_last_opened", ["societyId", "lastOpenedAtISO"])
+    // Copies and versions of a document, so in-camera material's copies are found too (minutesPrivacy).
+    .index("by_duplicate_of", ["duplicateOfDocumentId"])
+    .index("by_supersedes", ["supersedesDocumentId"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["societyId"] }),
 
   meetingMaterials: defineTable({

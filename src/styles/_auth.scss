@@ -1,0 +1,438 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Auth pages: sign in, create account, password reset, invitations
+// (src/auth/AuthShell.tsx). Desktop: a centred ~400px card on a calm
+// canvas. Phones: full-bleed, no card chrome, 44px controls with 16px text.
+// ============================================================
+
+$auth-card-w: 400px;
+$auth-control-h: token('tap-target'); // 44px on phones
+$auth-control-h-desktop: token('control-h-lg'); // 40px
+
+.auth {
+  @include flex-column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+  background:
+    radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, token('accent-quaternary') 70%, transparent), transparent 70%),
+    token('bg-secondary');
+  color: token('text-primary');
+}
+
+.auth__main {
+  @include flex-column;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: token('s-5');
+  padding: token('s-12') token('s-4') token('s-6');
+}
+
+// ---------- Brand + instance ----------
+.auth__brand {
+  @include flex-column;
+  align-items: center;
+  gap: token('s-2');
+}
+.auth__wordmark {
+  @include inline-flex-center;
+  gap: token('s-2');
+  @include text-title-section;
+  color: token('text-primary');
+}
+.auth__mark {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+}
+.auth__mark-tile { fill: token('bg-inverse'); }
+.auth__mark-glyph { fill: token('text-inverse'); }
+.auth__instance {
+  @include inline-flex-center;
+  gap: token('s-1');
+  max-width: 100%;
+  padding: 2px token('s-2');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-pill');
+  background: token('bg-panel');
+  color: token('text-secondary');
+  @include text-tiny;
+  font-weight: token('fw-medium');
+  overflow-wrap: anywhere;
+
+  svg { flex: 0 0 auto; color: token('text-tertiary'); }
+}
+
+// ---------- Card ----------
+.auth__card {
+  @include surface-card;
+  width: 100%;
+  max-width: $auth-card-w;
+  padding: token('s-8');
+  text-align: left;
+}
+.auth__card--plain {
+  max-width: none;
+  width: auto;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+
+  .auth__header { text-align: center; }
+}
+.auth__header {
+  margin-bottom: token('s-6');
+}
+.auth__title {
+  margin: 0;
+  @include text-title-main;
+  color: token('text-primary');
+
+  // Focused by script on each state change (tabIndex -1) so screen readers
+  // read it; it isn't a control, so no ring.
+  &:focus { outline: none; }
+}
+// "Check your email" and similar result states.
+.auth__icon {
+  @include flex-center-center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: token('s-4');
+  border-radius: token('r-pill');
+  background: token('accent-quaternary');
+  color: token('accent');
+}
+.dark .auth__icon { color: token('blue-11'); }
+.auth__email {
+  color: token('text-primary');
+  font-weight: token('fw-medium');
+  overflow-wrap: anywhere;
+}
+.auth__lede {
+  margin: token('s-2') 0 0;
+  @include text-body-secondary;
+  color: token('text-secondary');
+}
+
+// ---------- Form ----------
+.auth__form { margin: 0; }
+.auth__fieldset {
+  @include flex-column;
+  gap: token('s-4');
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.auth-field {
+  margin-bottom: 0;
+}
+.auth-field__label-row {
+  @include flex-between;
+  gap: token('s-2');
+  min-height: 20px;
+}
+.auth-field__hint {
+  margin: 0;
+}
+
+.auth .auth-input {
+  width: 100%;
+  height: $auth-control-h-desktop;
+  padding: 0 token('s-3');
+  font-size: token('fs-md');
+}
+.auth .auth-input::placeholder { color: token('text-placeholder'); }
+// Fields are only disabled for the moment a request is in flight: dim them
+// rather than switching to the dashed read-only look.
+.auth .auth-input:disabled {
+  border-style: solid;
+  background: token('bg-base');
+  opacity: 0.7;
+}
+
+// ---------- Password show/hide ----------
+.auth-password {
+  position: relative;
+}
+.auth .auth-password__input {
+  padding-right: $auth-control-h;
+}
+.auth-password__toggle {
+  @include flex-center-center;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: $auth-control-h;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0 token('r-md') token('r-md') 0;
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+  transition: color token('motion-fade-fast') token('ease-fade');
+
+  &:hover:not(:disabled) { color: token('text-primary'); }
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: -4px;
+  }
+  &[aria-pressed="true"] { color: token('text-secondary'); }
+  &:disabled { cursor: not-allowed; opacity: token('opacity-disabled'); }
+}
+
+// ---------- Buttons ----------
+.auth__submit {
+  position: relative;
+  width: 100%;
+  height: $auth-control-h-desktop;
+  justify-content: center;
+  font-size: token('fs-md');
+}
+a.auth__submit { text-decoration: none; }
+.auth__submit-label {
+  @include inline-flex-center;
+  gap: token('s-2');
+}
+.auth__submit-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -8px 0 0 -8px;
+  color: currentColor;
+}
+// Busy: the label keeps the button's width while the spinner shows.
+.auth__submit.is-busy {
+  cursor: progress;
+
+  .auth__submit-label { visibility: hidden; }
+  &:disabled { opacity: 1; }
+}
+.auth__sso-logo { flex: 0 0 auto; }
+
+.auth__divider {
+  @include flex-center;
+  gap: token('s-3');
+  color: token('text-tertiary');
+  @include text-tiny;
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1 1 0;
+    height: 1px;
+    background: token('border-alpha');
+  }
+}
+
+// Text-style action: mode switches, "Forgot password?".
+.auth__link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: token('accent');
+  font: inherit;
+  font-weight: token('fw-medium');
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: token('r-xs');
+
+  &:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 2px; }
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+  }
+  &:disabled { color: token('text-tertiary'); cursor: not-allowed; }
+}
+// Dark: blue-9 is too dim on slate-1 for small text.
+.dark .auth__link:not(:disabled) { color: token('blue-11'); }
+.auth__link--quiet {
+  @include text-label;
+  white-space: nowrap;
+}
+
+// ---------- Messages ----------
+.auth__notice {
+  margin: 0 0 token('s-4');
+}
+.auth__fieldset .auth__notice,
+.auth__state .auth__notice { margin: 0; }
+.auth__error-text { margin: 0; }
+.auth__error-actions {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-1') token('s-2');
+  margin: token('s-2') 0 0;
+}
+.auth__hint {
+  margin: 0;
+  @include text-body-secondary;
+  color: token('text-secondary');
+}
+// Holds the "We sent another link" line; empty until a resend. Kept in the
+// accessibility tree (not display: none) so the live region announces.
+.auth__resent {
+  margin: 0;
+  @include text-label;
+  color: token('text-secondary');
+
+  &:empty {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+.auth__error:focus { outline: none; }
+.auth__error:focus-visible {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: token('focus-ring-offset');
+}
+.auth__message {
+  margin: 0;
+  @include text-body;
+  color: token('text-primary');
+}
+.auth__pending {
+  @include flex-center;
+  gap: token('s-3');
+  margin: 0;
+  @include text-body-secondary;
+  color: token('text-secondary');
+}
+.auth__state {
+  @include flex-column;
+  gap: token('s-4');
+}
+.auth__actions {
+  display: grid;
+  gap: token('s-2');
+}
+
+// Development-only mail notice: dashed, small, clearly not product UI.
+.auth__dev {
+  @include flex-center;
+  align-items: baseline;
+  gap: token('s-2');
+  margin: token('s-5') 0 0;
+  padding: token('s-2') token('s-3');
+  border: 1px dashed token('border-alpha-strong');
+  border-radius: token('r-md');
+  color: token('text-secondary');
+  @include text-tiny;
+
+  a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+}
+.auth__dev-tag {
+  flex: 0 0 auto;
+  padding: 0 token('s-1');
+  border-radius: token('r-xs');
+  background: token('warn-soft');
+  color: token('warn');
+  font-family: token('font-mono');
+  font-size: token('fs-xxs');
+  font-weight: token('fw-semibold');
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+// ---------- Below the card + footer ----------
+// Clerk mode: Clerk's widget brings its own card (AuthShell variant
+// "plain"); the sign-in / sign-up switch sits under it as an .auth__after line.
+.auth__clerk {
+  display: grid;
+  justify-items: center;
+  gap: token('s-4');
+  min-width: 0;
+
+  > .auth__after { margin: 0; }
+}
+.auth__after {
+  max-width: $auth-card-w;
+  text-align: center;
+  @include text-body-secondary;
+  color: token('text-secondary');
+
+  p { margin: 0; }
+}
+.auth__footer {
+  @include flex-column;
+  align-items: center;
+  gap: token('s-1');
+  padding: token('s-4') token('s-4') token('s-6');
+  text-align: center;
+  @include text-tiny;
+  color: token('text-tertiary');
+}
+.auth__help { margin: 0; }
+.auth__help-link {
+  color: token('text-secondary');
+  font-weight: token('fw-medium');
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  border-radius: token('r-xs');
+
+  &:hover { color: token('text-primary'); }
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+  }
+}
+.auth__footer-link {
+  color: token('text-secondary');
+  text-decoration: none;
+
+  &:hover { color: token('text-primary'); text-decoration: underline; text-underline-offset: 2px; }
+}
+
+// iOS Safari zooms into fields under 16px; match _mobile-input-zoom's breakpoint.
+@media (max-width: 768px) {
+  .auth .auth-input {
+    font-size: token('fs-input-touch');
+  }
+}
+
+// ---------- Phones ----------
+@media (max-width: 560px) {
+  .auth {
+    background: token('bg-panel');
+  }
+  .auth__main {
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: token('s-6');
+    padding: token('s-8') token('s-5') token('s-4');
+  }
+  .auth__brand {
+    align-items: flex-start;
+  }
+  .auth__card {
+    max-width: none;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .auth .auth-input,
+  .auth__submit {
+    height: $auth-control-h;
+  }
+  .auth__after {
+    max-width: none;
+  }
+  // The text link sits in a 20px label row; give it a 44px hit area.
+  .auth__link--quiet {
+    position: relative;
+    @include tap-area;
+  }
+}

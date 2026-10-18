@@ -119,7 +119,7 @@ export function DesktopDiagnosticsPanel() {
     if (!bridge) return;
     let active = true;
     Promise.all(
-      SECRET_FIELDS.map(async (field) => [field.key, Boolean(await bridge.getSecret(field.key))] as const),
+      SECRET_FIELDS.map(async (field) => [field.key, await bridge.hasSecret(field.key)] as const),
     )
       .then((entries) => {
         if (!active) return;

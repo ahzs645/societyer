@@ -405,7 +405,7 @@ export function WorkflowDetailPage() {
                 }}
               />
               </fieldset>
-              <details className="workflow-sidepanel__section workflow-technical">
+              <details className="disclosure workflow-sidepanel__section workflow-technical">
                 <summary>Technical details</summary>
                 <div className="field__label">Step key</div>
                 <div className="mono">{selectedNode.key}</div>

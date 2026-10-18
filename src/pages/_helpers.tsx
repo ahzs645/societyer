@@ -10,6 +10,7 @@ import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/ro
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { getRuntimeMode } from "../lib/runtimeMode";
 import { useTranslation } from "react-i18next";
+import { useScrollOverflow } from "../hooks/useScrollOverflow";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
@@ -100,8 +101,11 @@ const RELATED_DOCUMENT_VIEWS = [
 
 export function RelatedDocumentViews({ current }: { current: (typeof RELATED_DOCUMENT_VIEWS)[number]["to"] }) {
   const links = RELATED_DOCUMENT_VIEWS.filter((view) => view.to !== current);
+  // Phones scroll the row sideways; data-overflow fades whichever edge is cut.
+  const rowRef = useRef<HTMLDivElement>(null);
+  const overflow = useScrollOverflow(rowRef, [links.length]);
   return (
-    <div className="row muted related-views" style={{ gap: 6, alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
+    <div ref={rowRef} data-overflow={overflow} className="row muted related-views" style={{ gap: 6, alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
       <span>Related:</span>
       {links.map((view) => (
         <Link key={view.to} to={view.to} className="chip chip--sm">

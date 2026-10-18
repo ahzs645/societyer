@@ -137,6 +137,7 @@
 
 @use "incorporation-setup"; // guided setup jurisdiction + governing Act questions
 @use "expense-policy"; // Claim policy, receipts, duplicate hints, reminders, rule change control
+@use "file-drop"; // shared FileDropZone: drag states, marching border, paste, progress
 
 // Transactions surface: detail panel, receipt drop zone, payee names.
 @use "transaction-panel";
@@ -153,6 +154,14 @@
 @use "setup-destinations";
 @use "governing-documents"; // profile governing documents: rows, "Choose a document" picker
 @use "pathway-pipeline"; // saved incorporation pathway: workspace defaults, solo self-review
+@use "auth"; // sign in, create account, password reset, invitations (AuthShell)
+@use "mobile-fold"; // MobileFold: phone sections folded behind a title + summary line
+@use "disclosure"; // shared <details> expand/collapse row: chevron, 44px on touch
+@use "sidebar-account"; // compact account identity and theme controls
+@use "signature-panel"; // SignaturePanel: one-row empty state that opens the sign form
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
+@use "meeting-transcript";
+@use "meeting-record-kind";
+@use "ai-connectors"; // Settings → AI connectors: tokens for the remote MCP endpoint
 @use "foundations";

@@ -49,6 +49,11 @@
 /* Buttons */
 .btn {
   @include inline-flex-center;
+  // A button stretched by its container (a drawer footer, a phone action
+  // row) keeps its label in the middle. `safe` keeps an overflowing label's
+  // start (its icon) in view; browsers without it use the plain value.
+  justify-content: center;
+  justify-content: safe center;
   gap: 6px;
   height: token('control-h-md');
   padding: 0 12px;
@@ -65,9 +70,12 @@
   white-space: nowrap;
 
   // Secondary hover: a translucent wash over the button's own fill, so the
-  // same rule works on the canvas, a card or a modal.
-  &:hover {
-    background-image: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha'));
+  // same rule works on the canvas, a card or a modal. Hover-capable pointers
+  // only: touch browsers keep :hover after a tap, leaving buttons tinted.
+  @media (hover: hover) {
+    &:hover {
+      background-image: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha'));
+    }
   }
   &:active {
     background-image: linear-gradient(token('bg-active-alpha'), token('bg-active-alpha'));
@@ -93,9 +101,14 @@
 .btn--primary .muted {
   color: token('font-color-inverted-secondary');
 }
-.btn--primary:hover {
-  /* Nudge toward the text color instead of hardcoding near-black — the old
-   * #1a1a1a flipped the (light) primary button to black on hover in dark mode. */
+@media (hover: hover) {
+  .btn--primary:hover {
+    /* Nudge toward the text color instead of hardcoding near-black — the old
+     * #1a1a1a flipped the (light) primary button to black on hover in dark mode. */
+    background: color-mix(in oklab, token('bg-inverse') 85%, token('text-inverse'));
+  }
+}
+.btn--primary:active:not(:disabled) {
   background: color-mix(in oklab, token('bg-inverse') 85%, token('text-inverse'));
 }
 .btn--primary:disabled:hover {
@@ -110,7 +123,13 @@
 .btn--accent .muted {
   color: rgba(255, 255, 255, 0.9);
 }
-.btn--accent:hover {
+@media (hover: hover) {
+  .btn--accent:hover {
+    background: token('accent-hover');
+    border-color: token('accent-hover');
+  }
+}
+.btn--accent:active:not(:disabled) {
   background: token('accent-hover');
   border-color: token('accent-hover');
 }
@@ -124,9 +143,11 @@
   border-color: transparent;
   color: token('text-secondary');
 }
-.btn--ghost:hover {
-  background: token('bg-hover-alpha');
-  color: token('text-primary');
+@media (hover: hover) {
+  .btn--ghost:hover {
+    background: token('bg-hover-alpha');
+    color: token('text-primary');
+  }
 }
 .btn--ghost:active {
   background: token('bg-active-alpha');
@@ -196,6 +217,8 @@
 }
 .btn--sm.btn--icon { width: token('control-h-sm'); }
 .btn--lg.btn--icon { width: token('control-h-lg'); }
+// A `.btn` used as a list row (icon, then text, from the leading edge).
+.btn--align-start { justify-content: flex-start; }
 
 /* Touch devices: buttons are 36px (icon buttons 32px) with an invisible
  * 44px hit area — see _control-density.scss. */

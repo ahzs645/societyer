@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useIsMobile } from "../../../../lib/useIsMobile";
+import { limitColumnsForPhone } from "../../../../lib/mobileTableLayout";
 import { FIELD_TYPES, type RecordField } from "../../types";
 import { useRecordTableState } from "../state/recordTableStore";
 
@@ -22,9 +23,23 @@ export function isCollapsibleWhenPanelOpen(column: RecordField, visibleIndex: nu
   return visibleIndex >= CONDENSED_KEEP_LEADING;
 }
 
+/**
+ * The field that opens the record: the object's label identifier when the view
+ * shows it, otherwise the first visible column (a view that splits a name into
+ * first/last columns would else have no way into the record from the table).
+ */
+export function resolveIdentifierFieldName(columns: RecordField[], labelIdentifierFieldName?: string) {
+  if (labelIdentifierFieldName && columns.some((column) => column.field.name === labelIdentifierFieldName)) {
+    return labelIdentifierFieldName;
+  }
+  return columns[0]?.field.name;
+}
+
 export type RecordTableColumns = {
-  /** Columns the body renders (the visible ones, in order). */
+  /** Columns the body renders (the visible ones, in order; capped on phones). */
   columns: RecordField[];
+  /** Field name of the column that opens the record (see resolveIdentifierFieldName). */
+  identifierFieldName: string | undefined;
   /** viewFieldIds folded to zero width while the panel is open. */
   collapsed: ReadonlySet<string>;
   /** Column indexes keyboard navigation and range copy may land on. */
@@ -41,17 +56,21 @@ export function useRecordTableColumns(labelIdentifierFieldName?: string): Record
   const isMobile = useIsMobile();
 
   return useMemo(() => {
-    const columns = allColumns.filter((column) => column.isVisible);
+    const shown = allColumns.filter((column) => column.isVisible);
+    const identifierFieldName = resolveIdentifierFieldName(shown, labelIdentifierFieldName);
+    // Phones render the identifier plus a couple of columns; the rest stay in
+    // the record drawer and the view's column settings (which read the store).
+    const columns = limitColumnsForPhone(shown, isMobile, (column) => column.field.name === identifierFieldName);
     const collapsed = new Set<string>();
     // Condensing only helps a wide table sitting beside the panel.
     if (panelOpen && !isMobile && columns.length > CONDENSED_KEEP_LEADING + 1) {
       columns.forEach((column, index) => {
-        if (isCollapsibleWhenPanelOpen(column, index, column.field.name === labelIdentifierFieldName)) {
+        if (isCollapsibleWhenPanelOpen(column, index, column.field.name === identifierFieldName)) {
           collapsed.add(column.viewFieldId);
         }
       });
     }
     const navigable = columns.map((_, index) => index).filter((index) => !collapsed.has(columns[index].viewFieldId));
-    return { columns, collapsed, navigable };
+    return { columns, identifierFieldName, collapsed, navigable };
   }, [allColumns, isMobile, labelIdentifierFieldName, panelOpen]);
 }

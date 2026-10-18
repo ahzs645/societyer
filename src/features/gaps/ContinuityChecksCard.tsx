@@ -8,7 +8,8 @@ import { interfaceRouteReadPermission } from "../../../shared/interfaceRouteAcce
 import { InfoPopover } from "../../components/InfoPopover";
 import { pluralizeCounts } from "../../lib/pluralizeCounts";
 
-type Check = { id: string; level: "ok" | "warn" | "err" | "info"; title: string; text: string; to: string; citation?: string };
+export type ContinuityCheck = { id: string; level: "ok" | "warn" | "err" | "info"; title: string; text: string; to: string; citation?: string };
+type Check = ContinuityCheck;
 
 /**
  * Dashboard card: record-continuity checks (AGM held this year, annual report

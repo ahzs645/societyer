@@ -126,3 +126,215 @@
   gap: 2px;
 }
 .dashboard-customize__reset { margin-right: auto; }
+
+// ---------- Phones: one "Needs attention" list, the rest folded ----------
+// src/features/dashboard/DashboardPhoneLayout.tsx and NeedsAttentionCard.tsx.
+.dashboard-disclosures {
+  @include flex-column;
+  gap: token('s-3');
+  min-width: 0;
+}
+.dashboard-disclosures > .dashboard-disclosure { margin-bottom: 0; }
+// Full-bleed phone cards (see _surfaces.scss): the folds read as one list,
+// one hairline between neighbours.
+@media (max-width: 560px) {
+  .dashboard-disclosures { gap: 0; }
+  .app-shell.is-mobile .page .dashboard-disclosures > .dashboard-disclosure.card + .dashboard-disclosure.card {
+    box-shadow: 0 1px 0 token('border-alpha');
+  }
+}
+// `.card > summary` (the collapsible-card head) would otherwise set its bold
+// type and wider padding on the fold's summary line.
+.dashboard-disclosure > .mobile-fold__summary {
+  padding: token('s-3') token('s-4');
+  font-size: inherit;
+  font-weight: inherit;
+}
+// Inside a fold the card's title is hidden (the summary says it), but its
+// "View all" link stays: a short right-aligned row instead of an empty band.
+.dashboard-disclosure > .mobile-fold__body > .card > .card__head:has(a.card__subtitle) {
+  justify-content: flex-end;
+  padding-block: token('s-2');
+  border-bottom: 0;
+  > a.card__subtitle { display: inline-flex; }
+}
+// A module that renders nothing here (no expiring agreements, no bank data)
+// takes its disclosure with it.
+.dashboard-disclosure:has(> .mobile-fold__body:empty) { display: none; }
+
+.needs-attention__count {
+  @include inline-flex-center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: token('warn-soft');
+  color: token('warn');
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  font-variant-numeric: tabular-nums;
+  &.is-urgent {
+    background: token('danger-soft');
+    color: token('danger');
+  }
+}
+.needs-attention__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.attention-item {
+  display: grid;
+  // The ⓘ column is always there, empty on rows without one, so every
+  // row's chevron lines up.
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  min-width: 0;
+  & + & { border-top: 1px solid token('border'); }
+}
+// The whole row is one link to where the item gets fixed.
+.attention-item__main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: token('s-3');
+  min-width: 0;
+  min-height: 56px;
+  padding: token('s-2') token('s-3') token('s-2') token('s-4');
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color token('motion-fade-fast') token('ease-fade');
+}
+a.attention-item__main:hover,
+a.attention-item__main:active { background: token('bg-hover-alpha'); }
+a.attention-item__main:focus-visible {
+  outline: 2px solid token('accent');
+  outline-offset: -2px;
+}
+.attention-item__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: token('r-md');
+  background: token('warn-soft');
+  color: token('warn');
+}
+.attention-item--err .attention-item__icon {
+  background: token('danger-soft');
+  color: token('danger');
+}
+.attention-item__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.attention-item__detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+// One line where it fits; a short statement ("1 director is missing consent
+// evidence") may take a second line rather than lose its point to an ellipsis.
+.attention-item__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  font-weight: token('fw-medium');
+  line-height: 1.3;
+}
+.attention-item__detail {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.35;
+}
+// Long guidance (the BC PIPA paragraph): two lines, then "More".
+.attention-item__detail--prose {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  &.is-expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+}
+.attention-item__chevron {
+  color: token('text-tertiary');
+}
+// The ⓘ (legal source, evidence, other actions): a 24px glyph with the
+// shared 44px touch hit area, in its own column so it never sits in the link.
+.attention-item__info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  align-self: stretch;
+}
+.attention-item__more {
+  position: relative;
+  grid-column: 1 / -1;
+  justify-self: start;
+  // Lines up with the row's text column (padding + icon + gap).
+  margin: calc(-1 * #{token('s-2')}) 0 token('s-2') calc(#{token('s-4')} + 28px + #{token('s-3')});
+  padding: 0;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: token('accent');
+  font: inherit;
+  font-size: token('fs-sm');
+  font-weight: token('fw-semibold');
+  cursor: pointer;
+  @include tap-area;
+}
+.needs-attention__foot {
+  border-top: 1px solid token('border');
+}
+.needs-attention__toggle {
+  display: block;
+  width: 100%;
+  min-height: token('tap-target');
+  padding: 0 token('s-4');
+  border: 0;
+  background: transparent;
+  color: token('accent');
+  font: inherit;
+  font-size: token('fs-sm');
+  font-weight: token('fw-semibold');
+  text-align: center;
+  cursor: pointer;
+  &:active { background: token('bg-hover-alpha'); }
+}
+.needs-attention__note {
+  margin: 0;
+  padding: token('s-3') token('s-4');
+  font-size: token('fs-sm');
+  .needs-attention__toggle + & { padding-top: 0; }
+}
+.attention-pop {
+  display: grid;
+  gap: token('s-3');
+  p { margin: 0; }
+}
+.attention-pop__label {
+  margin: 0 0 token('s-1');
+  @include text-eyebrow;
+}
+.attention-pop__list {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: token('s-1');
+}
+.attention-pop__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}

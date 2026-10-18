@@ -5,7 +5,9 @@ import { query, mutation, action } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { detailedAttendanceValidator, minutesActionItemValidator, motionExtensionFields, nextMeetingValidator } from "./validators/meetingModel";
 import { api } from "./_generated/api";
-import { summarizeMinutes } from "./providers/llm";
+import { resolveMinutesEndpoint, summarizeMinutes } from "./providers/llm";
+import { draftToMinutesArgs } from "../shared/ai/draftToMinutesArgs";
+import { minutesDraftBlocker } from "../shared/minutesDraftInput";
 import {
   transposeSourcePortable,
   transposeSourcesPortable,
@@ -102,6 +104,8 @@ const sessionSegment = v.object({
   startedAt: v.optional(v.string()),
   endedAt: v.optional(v.string()),
   notes: v.optional(v.string()),
+  recordingStartSec: v.optional(v.number()),
+  recordingEndSec: v.optional(v.number()),
 });
 
 const appendix = v.object({
@@ -382,46 +386,17 @@ export const generateDraft = authorizedAction("minutes:generateDraft", action)({
   handler: async (ctx, { meetingId, transcript }) => {
     const meeting = await ctx.runQuery(api.meetings.get, { id: meetingId });
     if (!meeting) throw new Error("Meeting not found");
+    if (!transcript.trim()) throw new Error("Add a transcript first.");
+    // Refuse before calling the model; upsertFromDraft repeats this check atomically.
+    const draftBlocker = minutesDraftBlocker(await ctx.runQuery(api.minutes.getByMeeting, { meetingId }));
+    if (draftBlocker) throw new Error(draftBlocker);
 
-    const draft = await summarizeMinutes({
-      transcript,
-      meetingTitle: meeting.title,
-      meetingType: meeting.type,
-    });
+    const draft = await summarizeMinutes(
+      { transcript, meetingTitle: meeting.title, meetingType: meeting.type },
+      await resolveMinutesEndpoint(ctx, meeting.societyId),
+    );
 
-    return await ctx.runMutation(api.minutes.upsertFromDraft, {
-      societyId: meeting.societyId,
-      meetingId,
-      heldAt: meeting.scheduledAt,
-      chairName: draft.chairName,
-      secretaryName: draft.secretaryName,
-      recorderName: draft.recorderName,
-      calledToOrderAt: draft.calledToOrderAt,
-      adjournedAt: draft.adjournedAt,
-      remoteParticipation: draft.remoteParticipation,
-      detailedAttendance: draft.detailedAttendance,
-      attendees: draft.attendees.length ? draft.attendees : meeting.attendeeIds,
-      absent: draft.absent,
-      // Unknown quorum requirement means quorum is NOT established — every
-      // other creation path treats it that way (see meetings createPortable).
-      quorumStatus: meeting.quorumRequired == null ? "not_recorded" : draft.attendees.length >= meeting.quorumRequired ? "confirmed" : "not_met",
-      quorumMet:
-        meeting.quorumRequired == null
-          ? false
-          : draft.attendees.length >= meeting.quorumRequired,
-      discussion: draft.discussion,
-      sections: draft.sections,
-      motions: draft.motions,
-      decisions: draft.decisions,
-      actionItems: draft.actionItems,
-      nextMeetingAt: draft.nextMeetingAt,
-      nextMeetingLocation: draft.nextMeetingLocation,
-      nextMeetingNotes: draft.nextMeetingNotes,
-      sessionSegments: draft.sessionSegments,
-      appendices: draft.appendices,
-      agmDetails: draft.agmDetails,
-      draftTranscript: transcript,
-    });
+    return await ctx.runMutation(api.minutes.upsertFromDraft, draftToMinutesArgs(meeting, draft, transcript));
   },
 });
 

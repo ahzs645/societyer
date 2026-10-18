@@ -23,10 +23,10 @@ test("election creation hands off to a complete editable draft and freezes its b
   await expect(page.getByRole("radio", { name: "Online", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   expect(await page.locator(".page").last().evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  await page.getByRole("button", { name: "Snapshot + open", exact: true }).click();
+  await page.getByRole("button", { name: "Lock voter list and open", exact: true }).click();
   await expect(page.getByRole("button", { name: "Close election", exact: true })).toBeVisible();
   await expect(page.getByLabel("New ballot question", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Snapshot + open", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Lock voter list and open", exact: true })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Integrated governance election", exact: true })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Candidate A", exact: true })).toBeVisible();

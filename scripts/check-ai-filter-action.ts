@@ -24,7 +24,8 @@ const test = convexTest(schema, {
 });
 
 const issuer = "https://ai-filter.test";
-const PROVIDER_URL = "https://ai-filter.fixture.test/v1";
+// A public HTTPS host: the outbound URL policy refuses .test/.local and private addresses.
+const PROVIDER_URL = "https://ai-filter.fixture.example.com/v1";
 const SECRET_ROW_TEXT = "Zebediah Quuxworth";
 const now = new Date().toISOString();
 
@@ -96,6 +97,10 @@ try {
   process.env.OPENAI_API_KEY = "synthetic-test-key";
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.SOCIETYER_AI_MODEL;
+  // The workspace provider uses its own saved key; the deployment key is never
+  // sent to a workspace-chosen address.
+  const secretVaultItemId = await actor("Owner").mutation((api as any).secrets.create, { societyId: fixture.societyId, name: "Filter AI key", service: "OpenAI-compatible", credentialType: "api_key", secretValue: "synthetic-workspace-key", custodianPersonName: "Owner" });
+  await test.run(async (ctx) => ctx.db.patch(fixture.settingId, { secretVaultItemId }));
 
   await check("valid reply: schema-only request, validated filter, no chat thread", async () => {
     captured.length = 0;
@@ -222,10 +227,13 @@ try {
     assert.deepEqual(await suggest("Owner"), { ok: false, error: "no_provider", message: "No AI provider is set up for this workspace." });
     await test.run(async (ctx) => ctx.db.patch(fixture.settingId, { status: "active", scope: "personal" }));
     assert.equal((await suggest("Owner")).error, "no_provider", "a personal key is not the workspace provider");
-    await test.run(async (ctx) => ctx.db.patch(fixture.settingId, { scope: "workspace" }));
+    const saved = await test.run(async (ctx) => (await ctx.db.get(fixture.settingId))?.secretVaultItemId);
+    await test.run(async (ctx) => ctx.db.patch(fixture.settingId, { scope: "workspace", secretVaultItemId: undefined }));
+    assert.equal((await suggest("Owner")).error, "no_provider", "a workspace address without its own key never gets the deployment key");
     delete process.env.OPENAI_API_KEY;
     assert.equal((await suggest("Owner")).error, "no_provider", "a workspace setting with no key anywhere is not usable");
     process.env.OPENAI_API_KEY = "synthetic-test-key";
+    await test.run(async (ctx) => ctx.db.patch(fixture.settingId, { secretVaultItemId: saved }));
     assert.equal(captured.length, 0);
   });
 

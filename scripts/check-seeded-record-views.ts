@@ -27,6 +27,12 @@ for (const object of RECORD_TABLE_OBJECTS) {
       if (!fields.has(column.fieldName)) problems.push(`${where}: column "${column.fieldName}" is not defined`);
     }
   }
+  // The identifier opens the record from the table; a name the object lacks
+  // left members and directors with no identifier column at all.
+  if (!fields.has(object.labelIdentifierFieldName)) problems.push(`${object.nameSingular}: identifier "${object.labelIdentifierFieldName}" is not defined`);
+  else if (!object.defaultView.columns.some((column) => column.fieldName === object.labelIdentifierFieldName)) {
+    problems.push(`${object.nameSingular}: identifier "${object.labelIdentifierFieldName}" is not a column of its default view`);
+  }
   if (object.nameSingular !== "meeting") {
     for (const view of object.extraViews ?? []) {
       assert.ok(!(RETIRED_SEEDED_VIEW_NAMES as readonly string[]).includes(view.name), `${object.nameSingular} still seeds the meeting-only view "${view.name}"`);
@@ -79,7 +85,12 @@ const fixture = await t.run(async (ctx) => {
   const meetingViews = (await ctx.db.query("views").withIndex("by_object", (q) => q.eq("objectMetadataId", meetingObject)).collect())
     .filter((view) => (RETIRED_SEEDED_VIEW_NAMES as readonly string[]).includes(view.name))
     .map((view) => view._id);
-  return { stale, personal, filtered, meetingViews };
+  // Workspaces seeded before the fix name a field members and directors never
+  // had; a custom identifier on a real field belongs to the workspace.
+  await ctx.db.patch(memberObject, { labelIdentifierFieldName: "fullName" });
+  const directorObject = await objectId("director");
+  await ctx.db.patch(directorObject, { labelIdentifierFieldName: "email" });
+  return { stale, personal, filtered, meetingViews, memberObject, directorObject };
 });
 assert.equal(fixture.meetingViews.length, RETIRED_SEEDED_VIEW_NAMES.length, "meetings keep their review queues");
 
@@ -93,6 +104,8 @@ await t.run(async (ctx) => {
   assert.ok(await ctx.db.get(fixture.personal), "a person's view with the same name stays");
   assert.ok(await ctx.db.get(fixture.filtered), "a copy someone gave a filter stays");
   for (const viewId of fixture.meetingViews) assert.ok(await ctx.db.get(viewId), "meeting review queues stay");
+  assert.equal((await ctx.db.get(fixture.memberObject))?.labelIdentifierFieldName, "firstName", "a reseed repairs an identifier that names no field");
+  assert.equal((await ctx.db.get(fixture.directorObject))?.labelIdentifierFieldName, "email", "an identifier on a real field is kept");
 });
 
 // Idempotent: a further reseed changes nothing.
@@ -117,4 +130,4 @@ for (const object of RECORD_TABLE_OBJECTS) {
   if (object.nameSingular === "meeting") continue;
   assert.equal(viewCounts[object.nameSingular], expected, `${object.nameSingular} has its default and seeded views once each after reseeding`);
 }
-console.log(`Seeded record views ok: ${RECORD_TABLE_OBJECTS.length} objects reference only defined fields; ${fixture.stale.length} stale meeting-review copies retired, personal, filtered and meeting views kept.`);
+console.log(`Seeded record views ok: ${RECORD_TABLE_OBJECTS.length} objects reference only defined fields and identifiers; ${fixture.stale.length} stale meeting-review copies retired, personal, filtered and meeting views kept.`);

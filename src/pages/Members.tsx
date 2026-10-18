@@ -36,7 +36,11 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableBulkBar,
+  RecordTablePhoneCard,
+  recordPersonName,
+  recordText,
   useObjectRecordTableData,
+  type RecordTableCardRenderer,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
@@ -57,6 +61,9 @@ export function MembersPage() {
   const toast = useToast();
   const undoable = useUndoableAction();
   const [selected, setSelected] = useState<any>(null);
+  // A new record's "Required before saving" note waits until a field has
+  // been left or Save was pressed, so an empty form doesn't open in red.
+  const [problemsRevealed, setProblemsRevealed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [bulkRows, setBulkRows] = useState<any[] | null>(null);
   const [mergeRows, setMergeRows] = useState<any[] | null>(null);
@@ -142,6 +149,7 @@ export function MembersPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    setProblemsRevealed(false);
     setSelected({
       firstName: "", lastName: "", email: "",
       aliases: [],
@@ -152,9 +160,11 @@ export function MembersPage() {
   };
 
   const selectedProblems = selected ? memberProblems(selected) : [];
+  const showSelectedProblems = selectedProblems.length > 0 && (Boolean(selected?._id) || problemsRevealed);
   const save = async () => {
     if (!selected || !canManage) return;
     if (selectedProblems.length) {
+      setProblemsRevealed(true);
       toast.error("Member not saved", selectedProblems[0]);
       return;
     }
@@ -244,6 +254,7 @@ export function MembersPage() {
             ) : undefined}
             selectable={canManage}
             loading={metadataLoading || members === undefined}
+            renderPhoneCard={memberPhoneCard}
           />
 
           <RecordTableBulkBar
@@ -341,13 +352,13 @@ export function MembersPage() {
               </Link>
             )}
             <button className="btn" onClick={() => setDrawerOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage || selectedProblems.length > 0}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || showSelectedProblems}>Save</button>
           </>
         }
       >
         {selected && (
-          <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-            {selectedProblems.length > 0 && (
+          <fieldset disabled={!canManage} onBlur={() => setProblemsRevealed(true)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {showSelectedProblems && (
               <InspectorNote tone="danger" title="Required before saving">{selectedProblems.join(" ")}</InspectorNote>
             )}
             <div className="row" style={{ gap: 12 }}>
@@ -425,3 +436,17 @@ function membersSubtitle(society: any): string {
   }
   return "Register of members for this organization. Confirm membership requirements against its governing documents.";
 }
+
+/** Phones: name, status, and class · joined date; the card opens the member. */
+const memberPhoneCard: RecordTableCardRenderer = (record, { open, field, selecting }) => {
+  const joinedAt = recordText(record.joinedAt);
+  return (
+    <RecordTablePhoneCard
+      title={recordPersonName(record) ?? "Unnamed member"}
+      badge={field("status")}
+      meta={[recordText(record.membershipClass), joinedAt ? `Joined ${formatDate(joinedAt)}` : ""]}
+      onOpen={open}
+      selecting={selecting}
+    />
+  );
+};

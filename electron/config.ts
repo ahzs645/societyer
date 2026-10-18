@@ -3,6 +3,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { normalizeHostedConfiguration, type HostedDesktopConfiguration } from "./desktopModePolicy.js";
+import { sanitizeLocalAiConfig } from "./localAiProxy.js";
+import type { DesktopLocalAiConfig } from "../src/lib/desktopBridge";
 
 export type DesktopConfig = {
   desktopMode?: "local" | "online";
@@ -20,6 +22,8 @@ export type DesktopConfig = {
     updatedAtISO: string;
   }>;
   activeServiceProfileId?: string;
+  /** On-device AI server settings (never the key, which lives in safeStorage). */
+  localAi?: DesktopLocalAiConfig;
 };
 
 function configPath() {
@@ -42,6 +46,7 @@ export async function readDesktopConfig(): Promise<DesktopConfig> {
       services: parseServices(parsed.services),
       serviceProfiles: parseServiceProfiles(parsed.serviceProfiles),
       activeServiceProfileId: typeof parsed.activeServiceProfileId === "string" ? parsed.activeServiceProfileId : undefined,
+      localAi: parsed.localAi ? sanitizeLocalAiConfig(parsed.localAi) : undefined,
     };
   } catch {
     return {};

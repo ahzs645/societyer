@@ -331,7 +331,7 @@ export function AgendaBuilderPage() {
                   <button
                     key={a._id}
                     onClick={() => setSelectedAgendaId(a._id)}
-                    className="btn agenda-builder__agenda-button"
+                    className="btn btn--align-start agenda-builder__agenda-button"
                     style={{
                       background: active ? "var(--bg-subtle)" : undefined,
                     }}

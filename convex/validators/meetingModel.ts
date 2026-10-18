@@ -16,6 +16,13 @@ export const actionItemStatusValidator = v.union(
   v.literal("on_hold"), v.literal("completed"), v.literal("cancelled"),
 );
 
+/** Where in the meeting recording a minutes item was said, in seconds. Set by
+ *  `transcripts:linkMinutesItem`; drives the scrubber markers and ▶ chips. */
+export const transcriptRefValidator = v.object({
+  startSec: v.number(),
+  endSec: v.number(),
+});
+
 /** A minutes action item. `done` is kept for compatibility and is derived from
  *  `status` (completed ⇒ done) whenever a status is present. */
 export const minutesActionItemValidator = v.object({
@@ -31,6 +38,8 @@ export const minutesActionItemValidator = v.object({
   sourceStatus: v.optional(v.string()),
   // Native task created from (or linked to) this action item.
   taskId: v.optional(v.id("tasks")),
+  // The transcript time range this action was assigned at.
+  transcriptRef: v.optional(transcriptRefValidator),
 });
 
 export const detailedAttendanceValidator = v.object({
@@ -81,6 +90,8 @@ export const motionExtensionFields = {
   // G-04: why a recorded outcome stands despite the counted tally
   // (consensus first, chair ruling, ...). Required for such an override.
   outcomeOverrideNote: v.optional(v.string()),
+  // The transcript time range where the motion was moved or decided.
+  transcriptRef: v.optional(transcriptRefValidator),
 };
 
 /** A9: agenda item fields. */
@@ -104,6 +115,9 @@ export const nextMeetingValidator = v.object({
 });
 
 /** A13 + A18 + provenance fields on meetings. */
+/** shared/meetingRecordKind.ts MEETING_RECORD_KINDS. */
+export const meetingRecordKindValidator = v.union(v.literal("meeting"), v.literal("notes"), v.literal("minutes"));
+
 export const meetingExtensionFields = {
   // "date" when only the calendar day is known (scheduledAt is then a noon-UTC
   // placeholder, never a real time); "datetime" when the time is known.
@@ -118,6 +132,11 @@ export const meetingExtensionFields = {
   sourceTitle: v.optional(v.string()),
   // B8: a special (not regular) meeting of the board or a committee.
   special: v.optional(v.boolean()),
+  // What the meeting keeps (shared/meetingRecordKind.ts). Absent = "minutes".
+  recordKind: v.optional(meetingRecordKindValidator),
+  // The secretary's informal notes (the Notes tab). Separate from `notes`,
+  // which holds preparation notes and import provenance remarks.
+  workingNotes: v.optional(v.string()),
 };
 
 /** A3: one quorum rule. */

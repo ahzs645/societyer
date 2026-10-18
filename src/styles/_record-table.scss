@@ -457,6 +457,17 @@ select.record-table__menu-select,
   cursor: pointer;
 }
 
+/* Phones: the view's sort leads the pills (the toolbar folds Sort away). */
+.record-table__chip--sort {
+  background: token('bg-subtle');
+  color: token('text-secondary');
+
+  .record-table__chip-label > svg {
+    margin-right: 4px;
+    vertical-align: -2px;
+  }
+}
+
 .record-table__chip-remove {
   background: transparent;
   border: none;
@@ -2678,6 +2689,44 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
     .record-table > tbody > tr:not(.record-table__action-row) > td:first-child {
       overflow: visible;
+    }
+  }
+}
+
+/* Phone fit: RecordTable caps the phone table to the identifier plus a couple
+ * of columns and shrinks `--rt-stretch` so they share the frame
+ * (`data-phone-fit`). The identifier follows its share instead of the 46vw
+ * frozen width (still frozen; the scrolled-sideways letter card above wins),
+ * and each cell's content is bounded to its column (`--rt-col-size`), since
+ * an auto-layout column can't be narrower than its widest content. */
+@media (max-width: 760px) {
+  [data-phone-fit] :is(.record-table__scroll, .record-table__virtuoso) .record-table {
+    > thead > tr > th:first-child,
+    > tbody > tr:not(.record-table__group-row, .record-table__action-row) > td:first-child,
+    > tfoot > tr > td:first-child {
+      width: calc(var(--rt-col-size, 46vw) * var(--rt-stretch, 1)) !important;
+    }
+
+    > tbody > tr > td.record-table__cell > :is(.record-table__cell-content, .record-table__identifier-button) {
+      max-width: calc(var(--rt-col-size, 46vw) * var(--rt-stretch, 1) - 16px);
+    }
+
+    /* The content ellipsizes itself; the cell's own ellipsis would add a
+     * stray second one beside a bounded identifier button. */
+    > tbody > tr > td.record-table__cell {
+      text-overflow: clip;
+    }
+
+    > thead > tr > th.record-table__header-cell .record-table__header-cell-button {
+      max-width: calc(var(--rt-col-size, 46vw) * var(--rt-stretch, 1) - 46px);
+    }
+
+    > thead > tr > th.record-table__header-cell .record-table__header-cell-label {
+      max-width: none;
+    }
+
+    > tfoot > tr > td .record-table__aggregate {
+      max-width: calc(var(--rt-col-size, 46vw) * var(--rt-stretch, 1) - 16px);
     }
   }
 }

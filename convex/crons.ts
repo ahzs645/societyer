@@ -11,6 +11,17 @@ crons.daily(
   {},
 );
 
+// AI connector OAuth state: ended requests, token rows and sessions past their
+// retention window, old deployment events, and registered clients nobody
+// connected (convex/mcpOAuth.ts). Hourly, and each run chains more rounds
+// while its batches come back full, so token rotation can't outpace it.
+crons.hourly(
+  "purge stale AI connector OAuth state",
+  { minuteUTC: 45 },
+  internal.mcpOAuth.purgeStale,
+  {},
+);
+
 // Daily 7am UTC (midnight Pacific-ish) — scan for deadlines/filings due within
 // the next 14 days and drop notifications into the in-app center.
 crons.daily(

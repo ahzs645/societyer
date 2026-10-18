@@ -5,6 +5,7 @@ import { action, internalMutation, mutation, query, type ActionCtx } from "./_ge
 import type { Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
 import { sendEmail } from "./providers/email";
+import { providers } from "./providers/env";
 import { sendSms } from "./providers/sms";
 import {
   listTemplatesPortable,
@@ -963,7 +964,7 @@ async function sendCampaignInternal(
         channel: campaignChannel,
         subject,
         bodyText,
-        provider: "resend",
+        provider: providers.email().id,
         status: "failed",
         errorMessage: error?.message ?? "Email send failed.",
       });
@@ -980,7 +981,7 @@ async function sendCampaignInternal(
           directorId: recipient.directorId,
           auditorAppointmentId: recipient.auditorAppointmentId,
           channel: campaignChannel,
-          provider: "resend",
+          provider: providers.email().id,
           subject,
           errorMessage: error?.message ?? "Email send failed.",
           status: "failed",

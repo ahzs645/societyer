@@ -1,4 +1,14 @@
-import { expect, type Locator } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
+
+/**
+ * A register's records: table rows, or on phones the cards a register that
+ * opens records draws instead (`.record-cards__item`). A card keeps the
+ * page's row actions (rendered hidden) behind its "Row actions for <record>"
+ * button, so the helpers below work on either.
+ */
+export function recordRows(page: Page) {
+  return page.locator(".record-table__row, .record-cards__item");
+}
 
 /**
  * A record table row's actions come in two layouts. While the table fits its
@@ -7,7 +17,8 @@ import { expect, type Locator } from "@playwright/test";
  * folds all of them behind one pinned "Row actions for <record>" button
  * (icon buttons named after their record drop the name there: "Edit Board
  * template" reads "Edit", and a page's own kebab reads "More actions…").
- * These helpers reach an action in either layout.
+ * Phone cards always use the pinned button. These helpers reach an action
+ * in any of these layouts.
  */
 export function pinnedRowActions(row: Locator) {
   return row.getByRole("button", { name: /^Row actions for / });

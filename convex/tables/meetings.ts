@@ -240,6 +240,9 @@ export const meetingTables = {
           startedAt: v.optional(v.string()),
           endedAt: v.optional(v.string()),
           notes: v.optional(v.string()),
+          // A2: where an in-camera session sits in the recording, in seconds.
+          recordingStartSec: v.optional(v.number()),
+          recordingEndSec: v.optional(v.number()),
         }),
       ),
     ),

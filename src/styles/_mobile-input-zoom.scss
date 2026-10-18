@@ -1,9 +1,48 @@
 @use "tokens" as *;
 
 /* iOS Safari auto-zooms editable controls whose computed text size is below
- * 16px. Keep the compact desktop controls, but use 16px on mobile focusable
- * text fields so typing does not change the page zoom. */
-@media (max-width: 768px) {
+ * 16px. Keep the compact desktop controls, but use 16px on phones and touch
+ * screens for text fields so typing does not change the page zoom. */
+$text-controls: 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]), textarea, select';
+
+/* Page styles that set 12-15px on a text control and outrank the base rule
+ * below (a class plus the element, or loaded after this file). Found by
+ * scanning the compiled CSS for font sizes under 16px on rules that reach an
+ * input, textarea or select; add a selector here when a new one appears.
+ * Listed rather than forced with !important so larger text fields (titles)
+ * keep their size. */
+$small-text-control-rules: (
+  ".global-ai-composer__box textarea",
+  ".global-ai-thread__rename",
+  ".transcript-workspace .transcript-rate",
+  ".transcript-player__controls .transcript-rate",
+  ".transcript-assignment select",
+  ".transcript-review__controls .transcript-same-as",
+  ".transcript-workspace :is(input, select, textarea)",
+  ".transcript-speaker-drawer :is(input, select, textarea)",
+  ".vote-stepper--compact .vote-stepper__input",
+  ".calendar__time-select",
+  ".calendar__typed-input",
+  ".meeting-minutes-transcript-focus__editor",
+  ".meeting-notes-editor",
+  ".nl-filter__input",
+  ".org-card__manager .input",
+  ".shortcut-help__search input",
+  ".sidebar__nav-filter input",
+  ".value-chips__input",
+  ".auth .auth-input",
+  ".motion-draft__name-input",
+  ".motion__name-input",
+  ".task-checklist__text",
+  ".record-table__menu-select",
+  ".record-view-sheet .record-table__menu-select",
+  ".record-table__search-input",
+  ".record-table__filter-input",
+  ".input--sm",
+  ".mono"
+);
+
+@media (max-width: 768px), (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
   textarea,
   select,
@@ -19,6 +58,11 @@
   .input--compact,
   .textarea--mono,
   .milkdown .ProseMirror {
+    font-size: token('fs-input-touch');
+  }
+  /* `:root` plus the control filter outranks each listed rule, and the
+   * filter keeps it to text controls (`.mono` is also used on plain text). */
+  :root :is(#{$small-text-control-rules}):is(#{$text-controls}) {
     font-size: token('fs-input-touch');
   }
   /* Compact inline controls (tag adders) set a 24-28px height inline; give

@@ -304,19 +304,21 @@ async function assertPrivacyScope(page: Page, workspace: Workspace) {
     // BC PIPA s. 3(1) applies to every organization (including not-for-profits)
     // unless federal law governs, so a BC-home workspace presumes it and labels
     // the presumption for confirmation. No other provincial law is listed.
-    await expect(assessment.locator("summary").filter({ hasText: /^BC PIPA Presumed: confirm facts$/ })).toHaveCount(1);
+    await expect(assessment.locator("summary").filter({ hasText: /^BC PIPA Assumed: confirm$/ })).toHaveCount(1);
     await expect(assessment.locator("summary").filter({ hasText: /^(?:Alberta PIPA|Québec private-sector privacy law) / })).toHaveCount(0);
     await expect(assessment).toContainText("federal work, undertaking or business");
     await expect(page.locator(".sidebar").getByRole("link", { name: "Privacy (PIPA)", exact: true })).toBeVisible();
-    await expect(page.locator("#main-content h1")).toHaveText("Privacy (BC PIPA — presumed: confirm facts)");
+    await expect(page.locator("#main-content h1")).toHaveText("Privacy");
+    await expect(page.locator(".privacy-status-line")).toContainText("BC PIPA applies (assumed)");
   } else {
     // Possible laws belong inside the scope assessment, never in operative nav
     // or policy claims based solely on incorporation.
-    await expect(assessment).toContainText("applicability needs assessment");
+    await expect(assessment).toContainText("Which privacy law applies isn't assessed yet");
     await expect(assessment.locator("summary").filter({ hasText: /^(?:BC|Alberta) PIPA Conditional$/ })).toHaveCount(2);
     await expect(assessment.locator("details[open]")).toHaveCount(0);
     await expect(page.locator(".sidebar")).not.toContainText(/\bPIPA\b/);
-    await expect(page.locator("#main-content h1")).toHaveText("Privacy — applicability needs assessment");
+    await expect(page.locator("#main-content h1")).toHaveText("Privacy");
+    await expect(page.locator(".privacy-status-line")).toContainText("Which privacy law applies isn't assessed yet");
   }
   if (!workspace.society) {
     await expect(page.locator("#main-content")).not.toContainText("Members may inspect the member register");

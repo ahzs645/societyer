@@ -15,7 +15,9 @@
 import type { PortableQueryCtx } from "../portable/ctx";
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { requireSocietyMembership } from "./access";
+import { exportRowsForReader } from "./minutesPrivacy";
 import { createDownloadUrl } from "../storage/signedUrl";
+import { sharePointDownloadBrokerUrl } from "../storage/sharePointBrokerUrl";
 import { visibleDirectoryRows } from "./peopleDirectory";
 
 const EXPORT_VERSION = 2;
@@ -392,6 +394,10 @@ async function attachmentDownloadUrl(resolve: () => Promise<string | null | unde
 }
 
 async function downloadUrlForVersion(row: any) {
+  if (row.storageProvider === "sharepoint") {
+    const origin = (globalThis as any)?.process?.env?.CONVEX_SITE_URL;
+    return origin ? sharePointDownloadBrokerUrl(origin, row._id) : null;
+  }
   if (row.storageProvider === "generated-inline") return row.storageKey;
   if (row.storageProvider === "local") {
     const base =
@@ -552,6 +558,7 @@ async function paginateForSociety(
     visibleRows = visibleRows.filter((_, index) => allows(parents[index]));
   }
   if (["generatedLegalDocuments", "legalPrecedentRuns", "legalSigners", "sourceEvidence", "minuteBookItems"].includes(table)) visibleRows = await filterDocumentLinkedRows(ctx, societyId, visibleRows, table);
+  visibleRows = await exportRowsForReader(ctx, societyId, table, visibleRows);
   return { ...page, page: visibleRows.map((row: Record<string, any>) => sanitizeRow(row, options)) };
 }
 

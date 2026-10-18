@@ -212,6 +212,15 @@ export const policyTables = {
     completionNote: v.optional(v.string()),
     // Steps ticked off inside the task (see shared/taskChecklist.ts).
     checklist: v.optional(v.array(v.object({ id: v.string(), title: v.string(), done: v.boolean() }))),
+    // Made from a minutes action item: the section it came from (index and
+    // title, read from the minutes on the server), judged against the current
+    // minutes on every read, and `inCamera: true` when that section was in
+    // camera at the time (a hint for when the minutes are gone). Readers
+    // without in-camera access see such a task as "In-camera action"
+    // (shared/minutesPrivacy.ts `isInCameraTask`).
+    minutesSectionIndex: v.optional(v.number()),
+    minutesSectionTitle: v.optional(v.string()),
+    inCamera: v.optional(v.boolean()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"])

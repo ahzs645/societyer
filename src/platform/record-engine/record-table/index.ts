@@ -13,6 +13,9 @@ export { RecordTableBulkBar } from "./components/RecordTableBulkBar";
 export type { BulkAction } from "./components/RecordTableBulkBar";
 export { RecordTableEmpty } from "./components/RecordTableEmpty";
 export { ObjectRecordTable } from "./components/ObjectRecordTable";
+export { RecordTablePhoneCard } from "./components/RecordTablePhoneCard";
+export type { RecordTableCardHelpers, RecordTableCardRecord, RecordTableCardRenderer } from "./components/RecordTableCardList";
+export { recordPersonName, recordText, recordTitleText } from "./utils/recordTitle";
 
 export { useObjectRecordTableData } from "./hooks/useHydratedView";
 export { useFilteredRecords } from "./hooks/useFilteredRecords";

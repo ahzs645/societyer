@@ -1,7 +1,8 @@
 /**
  * PORTABLE FUNCTIONS: the AI chat domain
  * (listThreads / messagesForThread / getThread /
- *  createThread / archiveThread / renameThread / deleteThread).
+ *  createThread / archiveThread / renameThread / deleteThread /
+ *  appendDeviceMessage).
  *
  * Thread + message CRUD over the `aiChatThreads` and `aiMessages` tables via
  * `ctx.db`. Each handler runs unchanged on hosted Convex, the local Dexie
@@ -13,6 +14,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { hasPermission, requirePermissionPortable } from "./permissions";
 import { composeAiMessage } from "../aiAttachments";
+import { parseDeviceToolRecords } from "../ai/deviceToolRecords";
 
 /** Registered only by the explicit demo client, never by the hosted API. */
 export async function simulateDemoChatPortable(ctx: PortableMutationCtx, args: { societyId: string; threadId?: string; content: string; attachments?: unknown; browsingContext?: unknown }) {
@@ -152,4 +154,58 @@ export async function deleteThreadPortable(
   }
   await ctx.db.delete(threadId);
   return threadId;
+}
+
+export const DEVICE_MESSAGE_MAX_CHARS = 200_000;
+
+/**
+ * Saves one turn of an on-device assistant conversation (local and desktop
+ * runtimes). The page streams the reply from the device's model, then records
+ * the question and the answer here; the model is never called from inside a
+ * mutation. Only the thread's own author can write to it, and the row is
+ * marked as an on-device reply.
+ */
+export async function appendDeviceMessagePortable(
+  ctx: PortableMutationCtx,
+  args: {
+    societyId: string;
+    threadId: string;
+    role: "user" | "assistant";
+    content: string;
+    status?: "complete" | "error";
+    modelId?: string;
+    /** What the on-device assistant looked up or proposed for this reply (shared/ai/deviceToolRecords.ts). */
+    toolCalls?: unknown;
+  },
+) {
+  if (args.role !== "user" && args.role !== "assistant") throw new Error("Only questions and answers can be saved.");
+  const content = String(args.content ?? "");
+  if (!content.trim()) throw new Error("The message is empty.");
+  if (content.length > DEVICE_MESSAGE_MAX_CHARS) throw new Error("The message is too long to save.");
+  const toolCalls = args.toolCalls === undefined ? [] : parseDeviceToolRecords(args.toolCalls);
+  if (args.toolCalls !== undefined && (!Array.isArray(args.toolCalls) || toolCalls.length !== args.toolCalls.length)) {
+    throw new Error("The assistant's tool records could not be saved.");
+  }
+  if (toolCalls.length && args.role !== "assistant") throw new Error("Only an answer can carry tool records.");
+  await requirePermissionPortable(ctx, args.societyId, "tasks:write");
+  const thread = await requireAiThreadAccess(ctx, args.threadId);
+  if (thread.societyId !== args.societyId) throw new Error("AI chat is not available in this workspace.");
+  const createdByUserId = await principalUserId(ctx, args.societyId);
+  const now = new Date().toISOString();
+  const messageId = await ctx.db.insert("aiMessages", {
+    societyId: args.societyId,
+    threadId: args.threadId,
+    role: args.role,
+    content,
+    status: args.status === "error" ? "error" : "complete",
+    modelId: args.modelId?.trim().slice(0, 300) || undefined,
+    parts: { provider: "on_device" },
+    ...(toolCalls.length ? { toolCalls } : {}),
+    createdByUserId,
+    createdAtISO: now,
+  });
+  const patch: Record<string, unknown> = { updatedAtISO: now, lastMessageAtISO: now };
+  if (args.role === "user") patch.title = content.trim().replace(/\s+/g, " ").slice(0, 72) || "AI chat";
+  await ctx.db.patch(args.threadId, patch);
+  return messageId;
 }

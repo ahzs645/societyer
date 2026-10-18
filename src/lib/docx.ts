@@ -466,7 +466,7 @@ function docxBlockFromNode(node: ChildNode, rels: DocxRels): string {
       return docxParagraphFromRuns(docxInlineRuns(node, rels), undefined, { left: 720 });
     case "pre":
       return docxParagraphFromRuns(
-        docxRun(node.textContent ?? "", '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="18"/>'),
+        docxTextRuns(node.textContent ?? "", '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="18"/>', "pre"),
         undefined,
         { left: 200 },
       );
@@ -539,13 +539,40 @@ function buildImageRun(image: DocxImage, dims: { width: number; height: number }
   </w:drawing></w:r>`;
 }
 
-function docxInlineRuns(node: ChildNode, rels: DocxRels, props = ""): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    const text = collapseWhitespace(node.textContent ?? "");
-    return text ? docxRun(text, props) : "";
+// How a text node's whitespace maps to Word, following CSS `white-space`:
+// "collapse" (normal), "pre" (pre / pre-wrap: keep spaces and newlines) and
+// "pre-line" (collapse spaces, keep newlines). Newlines become <w:br/>.
+type WhiteSpaceMode = "collapse" | "pre" | "pre-line";
+
+function whiteSpaceModeFor(node: HTMLElement, inherited: WhiteSpaceMode): WhiteSpaceMode {
+  if (node.tagName.toLowerCase() === "pre") return "pre";
+  const style = node.getAttribute("style");
+  const declared = style ? parseInlineStyle(style)["white-space"]?.toLowerCase() : undefined;
+  if (declared === "pre" || declared === "pre-wrap" || declared === "break-spaces") return "pre";
+  if (declared === "pre-line") return "pre-line";
+  if (declared === "normal" || declared === "nowrap") return "collapse";
+  return inherited;
+}
+
+function docxTextRuns(text: string, props: string, mode: WhiteSpaceMode): string {
+  if (mode === "collapse") {
+    const collapsed = collapseWhitespace(text);
+    return collapsed ? docxRun(collapsed, props) : "";
   }
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const value = mode === "pre-line" ? collapseWhitespace(line) : line;
+      return value ? docxRun(value, props) : "";
+    })
+    .join(`<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ""}<w:br/></w:r>`);
+}
+
+function docxInlineRuns(node: ChildNode, rels: DocxRels, props = "", whiteSpace: WhiteSpaceMode = "collapse"): string {
+  if (node.nodeType === Node.TEXT_NODE) return docxTextRuns(node.textContent ?? "", props, whiteSpace);
   if (!(node instanceof HTMLElement)) return "";
   const tag = node.tagName.toLowerCase();
+  const childWhiteSpace = whiteSpaceModeFor(node, whiteSpace);
 
   if (tag === "br") return "<w:r><w:br/></w:r>";
 
@@ -561,7 +588,7 @@ function docxInlineRuns(node: ChildNode, rels: DocxRels, props = ""): string {
       const relId = relForHyperlink(rels, href);
       const linkProps = `${props}<w:rStyle w:val="Hyperlink"/>`;
       const innerRuns = Array.from(node.childNodes)
-        .map((child) => docxInlineRuns(child, rels, linkProps))
+        .map((child) => docxInlineRuns(child, rels, linkProps, childWhiteSpace))
         .join("");
       return `<w:hyperlink r:id="${relId}" w:history="1">${innerRuns}</w:hyperlink>`;
     }
@@ -569,7 +596,7 @@ function docxInlineRuns(node: ChildNode, rels: DocxRels, props = ""): string {
 
   const nextProps = `${props}${inlineTagProps(tag)}${inlineStyleProps(node)}`;
   return Array.from(node.childNodes)
-    .map((child) => docxInlineRuns(child, rels, nextProps))
+    .map((child) => docxInlineRuns(child, rels, nextProps, childWhiteSpace))
     .join("");
 }
 

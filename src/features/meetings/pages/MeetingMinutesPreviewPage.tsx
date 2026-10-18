@@ -19,6 +19,7 @@ import { exportWordDocx } from "../../../lib/docx";
 import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { renderMinutesHtml } from "../lib/minutesRenderer";
 import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../../../shared/minutesMotions";
+import { TRANSCRIPT_READ_PERMISSION, transcriptTextWithoutInCamera } from "../../../../shared/minutesPrivacy";
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot, personLinkCandidates } from "../components/MeetingDetailSupport";
 import { motionPersonDisplayName } from "../../../components/MotionEditor";
@@ -60,6 +61,8 @@ export function MeetingMinutesPreviewPage() {
   const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && meetingId ? { meetingId } : "skip");
   const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, loaded && can("meetings:read") && meetingId ? { meetingId } : "skip");
   const committees = useQuery(api.committees.list, society && loaded && can("committees:read") ? { societyId: society._id } : "skip") as any[] | undefined;
+  // A public copy's transcript appendix is cut at marked in-camera ranges (decision A2); only minute-takers can read the transcript (A1).
+  const transcriptRecord = useQuery(api.transcripts.getByMeeting, loaded && can("meetings:read") && can(TRANSCRIPT_READ_PERMISSION) && meetingId ? { meetingId } : "skip");
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [storedSourceFidelity, setStoredSourceFidelity] = useState(() => readStoredExportBool("sourceFidelity", true));
   const [sourceFidelityChoice, setSourceFidelityChoice] = useState<boolean | undefined>(undefined);
@@ -207,6 +210,7 @@ export function MeetingMinutesPreviewPage() {
       actionObservations: publicCopy ? null : minutes.actionObservations ?? null,
       importedSourceVersions: publicCopy ? null : minutes.importedSourceVersions ?? null,
       draftTranscript: publicCopy ? null : minutes.draftTranscript ?? null,
+      audienceTranscript: publicCopy && transcriptRecord ? transcriptTextWithoutInCamera(transcriptRecord, minutes) : null,
     },
     styleId: minutesExportStyle,
     options: {

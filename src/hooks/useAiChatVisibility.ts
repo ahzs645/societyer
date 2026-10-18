@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { readPreferenceFlag, writePreferenceFlag } from "../lib/uiPreferenceFlag";
 
 const STORAGE_KEY = "societyer.aiChat.hidden";
 const CHANGE_EVENT = "societyer:ai-chat-changed";
 
 function readStored(): boolean {
-  if (isStaticDemoRuntime()) return false;
-  try {
-    return localStorage.getItem(STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return readPreferenceFlag(STORAGE_KEY);
 }
 
 export function useAiChatVisibility() {
@@ -30,13 +25,7 @@ export function useAiChatVisibility() {
   }, []);
 
   const setHidden = useCallback((next: boolean) => {
-    if (!isStaticDemoRuntime()) {
-      try {
-        localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
-      } catch {
-        // ignore quota / disabled-storage failures
-      }
-    }
+    writePreferenceFlag(STORAGE_KEY, next);
     setHiddenState(next);
     window.dispatchEvent(new Event(CHANGE_EVENT));
   }, []);

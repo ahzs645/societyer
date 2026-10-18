@@ -5,12 +5,13 @@ import { requirePermissionPortable, type Permission } from "./permissions";
 import { uploadPermission } from "./uploadPolicy";
 import { isAllowedOption } from "../orgHubOptions";
 import { assertWorkspaceCreator } from "./society";
+import { TRANSCRIPT_READ_SCOPE } from "../minutesPrivacy";
 
 const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm", "organizationSetup"],
   members: ["members", "memberHistory", "memberGovernance", "personHistory", "peopleDirectory", "roleHolderHistory", "registerHistory", "orgChartAssignments"],
   directors: ["directors"], employees: ["employees", "remuneration"], committees: ["committees"],
-  meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts"],
+  meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts", "meetingSources", "meetingSourceSpeech"],
   minutes: ["minutes", "minuteBook", "minutesReview"], agendas: ["agendas"], motions: ["motions", "motionBacklog", "motionTemplates", "writtenResolutions", "memberProposals"],
   proxies: ["proxies"], conflicts: ["conflicts"], attestations: ["attestations", "pipaTraining"], auditors: ["auditors"], courtOrders: ["courtOrders"],
   filings: ["filings", "annualFilings", "filingExports", "filingBot"],
@@ -60,6 +61,12 @@ const HANDLER_POLICIES = new Set([
   "elections:castBallot", "elections:submitNomination",
   // Saves the signed-in person's own switches only; the handler checks membership and tasks:read.
   "notifications:setMyPref",
+  // AI connector tokens (hosted only). Any active member mints and revokes their own tokens
+  // within their role; the opt-in needs Owner or Admin. The handlers check all of it.
+  "agentConnectors:overview", "agentConnectors:setEnabled", "agentConnectors:mintToken", "agentConnectors:revokeToken",
+  // OAuth consent for AI connectors (hosted only): the handlers check the signed-in person's
+  // membership, the workspace opt-in and that the chosen scopes are within their role.
+  "mcpOAuth:consentDetails", "mcpOAuth:approve", "mcpOAuth:deny",
   "files:getUrl", "users:ensureCurrentMembership", "users:recordLogin", "users:get", "users:getByAuthSubject", "users:getByEmail",
   "invitations:accept", "invitations:getByToken", "permissions:myPermissions", "permissions:check", "permissions:listAll",
   "society:createWorkspace", "society:create", "society:list", "society:listMine", "society:current", "firm:list", "firm:organizations",
@@ -95,6 +102,7 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "financialHub:importBrowserWaveTransactions": ["businessId"],
   "aiSettings:upsert": ["modelId"],
   "aiChat:createThread": ["modelId"],
+  "aiChat:appendDeviceMessage": ["modelId"],
   "aiChatActions:sendChatMessage": ["modelId"],
   "intakeActions:extractFile": ["modelId"],
   "intakeActions:extractRun": ["modelId"],
@@ -119,6 +127,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (domain === "seed" || domain.endsWith("Backfill") || domain === "seedRecordTableMetadata") return null;
   const resource = RESOURCES[domain];
   if (!resource) throw new Error(`Unclassified application action: ${name}.`);
+  // Raw meeting sources are working material for meeting editors, including reads.
+  if (domain === "meetingSources" || domain === "meetingSourceSpeech") return "meetings:write";
   if (["society:updateModules", "society:updateComplianceSettings", "society:updateInventorySettings", "society:updateNotificationSettings"].includes(name)) return "settings:write";
   if (name === "society:updateIntegrationSettings" || name === "society:reset") return "settings:manage";
   if (resource === "audit") return kind === "query" ? "audit:read" : "settings:write";
@@ -146,6 +156,11 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   // finance writer).
   if (name === "expenseReports:decidePolicyChange" || name === "expenseReports:remindApprovers") return "financials:read";
   if (resource === "exports") return kind === "query" && action === "list" ? "exports:read" : "exports:download";
+  // A working transcript is for the people who keep the minutes (decision A1).
+  // This gate is the scope a service principal needs (minutes:read); the
+  // handler (requireTranscriptReaderPortable) also requires meetings:read and a
+  // role holding minutes:write. Edits keep meetings:write below.
+  if (domain === "transcripts" && kind === "query") return TRANSCRIPT_READ_SCOPE;
   return `${resource}:${kind === "query" ? "read" : "write"}` as Permission;
 }
 

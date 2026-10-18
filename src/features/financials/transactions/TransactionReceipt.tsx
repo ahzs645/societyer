@@ -1,13 +1,14 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { FileText, Paperclip, UploadCloud, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "@/hooks/usePermissions";
+import { FileDropZone } from "../../../components/FileDropZone";
 import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
-import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
+import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
 import { RECEIPT_ATTENTION_THRESHOLD_CENTS } from "../../../../shared/transactionAttention";
 import { formatMoney } from "../../../lib/money";
 
@@ -51,11 +52,9 @@ export function TransactionReceipt({
   const completeUpload = useAction(api.documentVersions.completeUpload);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const attached = useQuery(api.documents.get, txn.receiptDocumentId ? { id: txn.receiptDocumentId as any } : "skip") as { _id: string; title?: string; fileName?: string } | null | undefined;
   const library = useQuery(api.documents.listSummaries, picking ? { societyId: societyId as any } : "skip") as Array<{ _id: string; title?: string; category?: string; createdAtISO?: string }> | undefined;
-  const storage = isNativeFileStorageEnabled();
+  const storage = isDocumentVersionStorageEnabled();
 
   const upload = async (file: File) => {
     if (!canUpload || busy) return;
@@ -89,13 +88,6 @@ export function TransactionReceipt({
     }
   };
 
-  const onDrop = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    setDragging(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file) void upload(file);
-  };
-
   if (txn.receiptDocumentId) {
     const name = attached?.title || attached?.fileName || (attached === null ? "Document not found" : "Loading…");
     return (
@@ -126,37 +118,26 @@ export function TransactionReceipt({
   return (
     <div className="txn-receipt">
       {canUpload && storage ? (
-        <label
-          className={`txn-receipt__drop${dragging ? " is-dragging" : ""}${busy ? " is-busy" : ""}`}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-        >
-          <UploadCloud size={18} aria-hidden="true" />
-          <span className="txn-receipt__drop-title">{busy ? "Attaching…" : "Drop a receipt here, or choose a file"}</span>
-          <span className="txn-receipt__drop-hint">
-            {txn.receiptStatus === "attached"
+        // Paste works while the zone has focus (tap or Tab to it, then paste a
+        // screenshot); the hidden input keeps the same accept list as before.
+        <FileDropZone
+          ariaLabel="Receipt upload"
+          icon={<UploadCloud size={16} />}
+          title="Drop a receipt here"
+          touchTitle="Add a receipt photo or PDF"
+          chooseLabel="Choose a file"
+          busy={busy}
+          busyLabel="Attaching…"
+          accept="image/*,application/pdf"
+          hint={
+            txn.receiptStatus === "attached"
               ? "Marked as received in the bank feed. Add the file to keep it with this transaction."
               : needed
                 ? `Payments over ${formatMoney(RECEIPT_ATTENTION_THRESHOLD_CENTS, { trimWholeCents: true })} need a receipt.`
-                : "Saved to Documents as a receipt."}
-          </span>
-          <input
-            ref={inputRef}
-            type="file"
-            className="sr-only"
-            accept="image/*,application/pdf"
-            disabled={busy}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) void upload(file);
-            }}
-          />
-        </label>
+                : "Saved to Documents as a receipt."
+          }
+          onFiles={(files) => upload(files[0])}
+        />
       ) : (
         <p className="txn-receipt__meta">
           {canWrite ? "Uploading is off on this deployment. Link a document that is already in Documents." : "No receipt attached."}

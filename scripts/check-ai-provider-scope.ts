@@ -37,7 +37,9 @@ try {
     for (const role of ["Owner", "Admin"]) {
       const result = await actor(role).action(api.aiSettingsActions.validateProviderKey, args);
       assert.equal(result.ok, false); assert.equal(result.status, 401);
-      assert.equal(result.message, "Fixture provider rejected synthetic key");
+      // Provider bodies can echo request details: only a status-based message is returned.
+      assert.equal(result.message, "The AI provider rejected the API key.");
+      assert.doesNotMatch(JSON.stringify(result), /Fixture provider rejected synthetic key/);
     }
     const allowedCalls = providerCalls;
     for (const subject of ["Director", "Member", "Viewer", "foreign"]) {

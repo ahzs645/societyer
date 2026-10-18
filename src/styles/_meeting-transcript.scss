@@ -1,0 +1,1397 @@
+@use "tokens" as *;
+
+.transcript-workspace {
+  --transcript-player-height: 128px;
+  container-type: inline-size;
+  container-name: transcript;
+  min-width: 0;
+  color: token("text-primary");
+  .card {
+    min-width: 0;
+  }
+  button,
+  input,
+  select,
+  textarea,
+  summary {
+    font-size: token("fs-sm");
+  }
+  button {
+    white-space: normal;
+  }
+}
+.transcript-workspace,
+.transcript-speaker-drawer {
+  input,
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+    color: token("text-primary");
+    background: token("bg-panel");
+    border: 1px solid token("border");
+    border-radius: token("r-xs");
+    padding: token("s-2");
+    font-size: token("fs-sm");
+  }
+}
+.transcript-workspace,
+.transcript-speaker-drawer,
+.transcript-selection-toolbar,
+.transcript-shortcuts {
+  :is(button, input, select, textarea, summary, [role="slider"]):focus-visible {
+    outline: token("focus-ring-width") solid token("focus-ring-color");
+    outline-offset: token("focus-ring-offset");
+  }
+}
+.transcript-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2") token("s-3");
+  margin-bottom: token("s-3");
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: token("s-2");
+    font-size: token("fs-lg");
+    margin: 0;
+  }
+}
+.transcript-toolbar__title,
+.transcript-toolbar__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token("s-2");
+  min-width: 0;
+}
+.transcript-toolbar__title {
+  margin-right: auto;
+}
+.transcript-toolbar__actions .btn {
+  gap: token("s-2");
+}
+.transcript-label-short {
+  display: none;
+}
+.transcript-source {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: token("s-2");
+  margin: 0;
+  color: token("text-secondary");
+  font-size: token("fs-xs");
+  overflow-wrap: anywhere;
+  > span:first-child {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex-shrink: 0;
+    background: token("success");
+    border-radius: token("r-pill");
+  }
+}
+.transcript-muted {
+  color: token("text-secondary");
+  font-size: token("fs-xs");
+  overflow-wrap: anywhere;
+  font-weight: 400;
+}
+.transcript-error {
+  color: token("danger");
+  overflow-wrap: anywhere;
+}
+.transcript-status {
+  position: fixed;
+  bottom: token("s-12");
+  left: 50%;
+  transform: translateX(-50%);
+  // Above an open Review speakers drawer, so its Undo stays reachable.
+  z-index: token("z-toast");
+  display: flex;
+  align-items: center;
+  gap: token("s-3");
+  // Centred with left: 50%, so size to content rather than to the remaining half.
+  width: max-content;
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: token("s-2") token("s-3");
+  background: token("bg-floating");
+  color: token("text-floating");
+  border-radius: token("r-card");
+  box-shadow: token("elevation-2");
+  font-size: token("fs-sm");
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+// Tablets and phones: while a drawer or bottom sheet is open, the toast drops to the
+// top of the visible area (below the notch and clear of the on-screen keyboard, as
+// the app toast stack does), so it never covers the sheet's actions or footer. It
+// stops short of the drawer's close button on the right.
+@media (max-width: 768px) {
+  body:has(.drawer, .app-shell.is-mobile .inspector-host.is-open) .transcript-status {
+    top: max(
+      calc(env(safe-area-inset-top, 0px) + #{token("s-2")}),
+      calc(100% - var(--keyboard-inset, 0px) - var(--visible-height, 100%) + #{token("s-2")})
+    );
+    bottom: auto;
+    left: token("s-3");
+    right: calc(#{token("s-3")} + #{token("control-h-lg")} + #{token("s-2")});
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+}
+.transcript-status__action {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 token("s-2");
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: token("r-sm");
+  font-size: token("fs-sm");
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  &:hover {
+    background: token("bg-hover-alpha");
+  }
+  &:focus-visible {
+    outline: token("focus-ring-width") solid token("focus-ring-color");
+    outline-offset: token("focus-ring-offset");
+  }
+}
+.transcript-time {
+  font-variant-numeric: tabular-nums;
+  color: token("text-tertiary");
+  white-space: nowrap;
+}
+.transcript-player {
+  position: sticky;
+  // The meeting page is its own scroll container, so pin to its top edge.
+  top: 0;
+  z-index: 5;
+  background: token("bg-panel");
+  padding: token("s-3");
+  margin-block: token("s-3");
+}
+// Once pinned, mask the scroll container's top padding so text never shows above
+// the player. useStuck measures the strip (--transcript-player-mask). A pseudo-element
+// rather than a box-shadow, because phone card rules replace card shadows.
+.transcript-player.is-stuck {
+  box-shadow: token("elevation-2");
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--transcript-player-mask, #{token("s-6")});
+    background: token("bg-base");
+  }
+}
+.transcript-video {
+  margin-bottom: token("s-2");
+  video {
+    display: block;
+    width: 100%;
+    max-height: 12rem;
+    background: token("bg-muted");
+  }
+}
+.transcript-player__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token("s-2");
+}
+.transcript-play {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  color: token("accent-on-accent");
+  background: token("accent");
+  border: 0;
+  border-radius: token("r-pill");
+  cursor: pointer;
+  &:disabled {
+    opacity: token("opacity-disabled");
+    cursor: default;
+  }
+  &:hover:enabled {
+    background: token("accent-hover");
+  }
+}
+.transcript-player__time {
+  font-size: token("fs-xs");
+  color: token("text-secondary");
+  strong {
+    color: token("text-primary");
+    font-weight: 600;
+  }
+}
+.transcript-player__skip {
+  display: contents;
+  > button {
+    background: transparent;
+    border-color: transparent;
+    color: token("text-secondary");
+  }
+  > button:first-child {
+    order: 0;
+  }
+  > button:last-child {
+    order: 2;
+  }
+}
+.transcript-player__controls > .transcript-play {
+  order: 1;
+}
+.transcript-player__controls > .transcript-player__time {
+  order: 3;
+  margin-right: auto;
+}
+.transcript-player__controls > .transcript-rate {
+  order: 4;
+}
+.transcript-shortcuts-trigger {
+  order: 5;
+  background: transparent;
+  border-color: transparent;
+  color: token("text-secondary");
+}
+.transcript-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: token("s-1");
+  width: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+.transcript-workspace .transcript-rate {
+  border-radius: token("r-pill");
+  padding: token("s-1") token("s-2");
+  width: auto;
+  font-size: token("fs-xs");
+}
+.transcript-scrubber {
+  position: relative;
+  margin-top: token("s-3");
+  cursor: pointer;
+  touch-action: none;
+  border-radius: token("r-xs");
+  canvas {
+    display: block;
+    width: 100%;
+    height: 56px;
+  }
+}
+.transcript-waveform {
+  position: relative;
+}
+.transcript-waveform__played {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.transcript-speaker-lane {
+  position: relative;
+  height: 8px;
+  margin-top: token("s-1");
+  overflow: hidden;
+  background: token("bg-muted");
+  border-radius: token("r-pill");
+  span {
+    position: absolute;
+    height: 100%;
+    background: currentColor;
+    min-width: 1px;
+    border-radius: token("r-xs");
+  }
+}
+.transcript-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: token("accent");
+  pointer-events: none;
+  &::before {
+    content: "";
+    position: absolute;
+    width: 0.5rem;
+    height: 0.5rem;
+    top: -0.25rem;
+    left: -0.1875rem;
+    border-radius: token("r-pill");
+    background: token("accent");
+    box-shadow: 0 0 0 2px token("bg-panel");
+  }
+}
+.transcript-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  align-items: start;
+  gap: token("s-3");
+}
+.transcript-speaker-chips {
+  display: none;
+}
+.transcript-speakers__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  margin-bottom: token("s-2");
+  .transcript-speakers & h3 {
+    flex: 1 1 auto;
+    margin: 0;
+  }
+}
+.transcript-speakers {
+  grid-column: 2;
+  grid-row: 1;
+  position: sticky;
+  // The player height is measured so an expanded video cannot overlap the panel.
+  top: calc(#{token("s-3")} + var(--transcript-player-height, 128px));
+  max-height: calc(100dvh - #{token("topbar-h")} - #{token("s-6")} - var(--transcript-player-height, 128px));
+  overflow: auto;
+  padding: token("s-3");
+  h3 {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: token("s-1");
+    margin: 0 0 token("s-2");
+    font-size: token("fs-sm");
+  }
+}
+.transcript-speaker {
+  padding-block: token("s-3");
+  border-top: 1px solid token("border");
+  overflow-wrap: anywhere;
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+.transcript-speaker__head {
+  display: flex;
+  align-items: center;
+  gap: token("s-1");
+  justify-content: space-between;
+  min-width: 0;
+  > .btn-action {
+    color: token("text-tertiary");
+  }
+}
+.transcript-speaker-name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token("s-2");
+  min-width: 0;
+  font-weight: 600;
+  font-size: token("fs-sm");
+  .transcript-swatch {
+    align-self: center;
+  }
+}
+// The colour class tints only the swatch; names stay in body text colour.
+.transcript-speaker-name > :not(.transcript-swatch):not(.transcript-speaker-name__hint),
+.transcript-speaker-name__label {
+  color: token("text-primary");
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+button.transcript-speaker-name {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+// Unnamed diarization labels stay quiet in the transcript; the speaker panel carries the call to action.
+.transcript-speaker-name.is-unnamed {
+  > span.transcript-speaker-name__label {
+    color: token("text-secondary");
+    font-weight: 500;
+  }
+}
+.transcript-speaker-name__hint {
+  white-space: nowrap;
+  color: token("warn");
+  font-size: token("fs-xs");
+  font-weight: 500;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+button.transcript-speaker-name:hover .transcript-speaker-name__hint,
+button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
+  text-decoration-style: solid;
+}
+.transcript-speaker__meta {
+  margin: token("s-1") 0 token("s-2");
+  color: token("text-tertiary");
+  font-size: token("fs-xs");
+  font-variant-numeric: tabular-nums;
+}
+.transcript-talk-bar {
+  height: 4px;
+  background: token("bg-muted");
+  border-radius: token("r-pill");
+  overflow: hidden;
+  margin-bottom: token("s-2");
+  span {
+    display: block;
+    height: 100%;
+    background: currentColor;
+  }
+}
+.transcript-speaker__quote {
+  margin: token("s-2") 0;
+  color: token("text-secondary");
+  font-size: token("fs-xs");
+  line-height: 1.5;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+.transcript-assignment {
+  display: grid;
+  gap: token("s-2");
+  color: token("text-primary");
+  select {
+    width: 100%;
+    text-overflow: ellipsis;
+    font-size: token("fs-xs");
+  }
+  &.is-unnamed > select {
+    color: token("warn");
+    background: token("warn-soft");
+    border-color: token("warn");
+  }
+  form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: token("s-2");
+    input {
+      flex: 1 1 8rem;
+    }
+  }
+}
+.transcript-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: token("s-2");
+  background: token("bg-panel");
+  border: 1px solid token("border");
+  border-radius: token("r-pill");
+  padding: token("s-1") token("s-2");
+  font-size: token("fs-xs");
+  > :last-child {
+    color: token("text-primary");
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &.is-unnamed {
+    background: token("warn-soft");
+    border-color: token("warn");
+    > :last-child {
+      color: token("warn");
+    }
+  }
+}
+.transcript-swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: token("r-pill");
+  background: currentColor;
+}
+@for $i from 1 through 8 {
+  .transcript-color-#{$i} {
+    color: token("dv-cat-#{$i}");
+  }
+}
+.transcript-document {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  padding-bottom: token("s-4");
+}
+.transcript-search {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token("s-1");
+  padding: token("s-2") token("s-3");
+  border-bottom: 1px solid token("border");
+  input {
+    flex: 1 1 5rem;
+    width: 0;
+    border-color: transparent;
+    background: transparent;
+  }
+  > span {
+    color: token("text-secondary");
+    font-size: token("fs-xs");
+    font-variant-numeric: tabular-nums;
+  }
+}
+.transcript-turn {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: token("s-2");
+  padding: token("s-4") token("s-4") 0;
+  header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: token("s-2");
+    margin-bottom: token("s-1");
+  }
+}
+.transcript-turn__gutter .transcript-time,
+.transcript-turn__inline-time .transcript-time {
+  background: transparent;
+  border: 0;
+  padding: token("s-1") 0;
+  text-align: left;
+  font-size: token("fs-xs");
+  cursor: pointer;
+  &:hover,
+  &:focus-visible {
+    color: token("accent");
+  }
+}
+.transcript-turn__main {
+  min-width: 0;
+}
+.transcript-turn__inline-time {
+  display: none;
+}
+.transcript-segment-row {
+  position: relative;
+  margin-block: token("s-1");
+  padding-right: 2rem;
+  max-width: 68ch;
+  line-height: 1.75;
+  font-size: token("fs-md");
+  overflow-wrap: anywhere;
+}
+.transcript-segment {
+  cursor: pointer;
+  border-radius: token("r-xs");
+  scroll-margin-block: calc(var(--transcript-player-height, 128px) + #{token("s-4")}) 5rem;
+}
+.transcript-segment.is-active,
+.transcript-segment.is-linked-range,
+.transcript-segment .is-linked-range {
+  background: token("accent-soft");
+  box-shadow:
+    -0.3rem 0 0 token("accent-soft"),
+    0.3rem 0 0 token("accent-soft");
+  box-decoration-break: clone;
+}
+.transcript-segment.is-linked-range,
+.transcript-segment .is-linked-range {
+  background: token("accent-soft");
+  border-radius: token("r-xs");
+  text-decoration: underline;
+  text-decoration-color: token("accent");
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.transcript-segment .is-active-word {
+  background: token("accent");
+  color: token("accent-on-accent");
+  border-radius: token("r-xs");
+  box-shadow: 0 0 0 2px token("accent");
+}
+.transcript-segment mark {
+  color: token("text-primary");
+  background: token("warn-soft");
+  text-decoration: underline;
+  text-decoration-color: token("warn");
+  text-decoration-thickness: 2px;
+  border-radius: token("r-xs");
+}
+.transcript-segment mark.is-current-match {
+  outline: token("focus-ring-width") solid token("warn");
+}
+.transcript-segment-tools {
+  position: absolute;
+  right: 0;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity token("motion-fade-fast") token("ease-fade");
+  color: token("text-tertiary");
+}
+.transcript-segment-row:hover .transcript-segment-tools,
+.transcript-segment-row:focus-within .transcript-segment-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+// A quiet icon, not a boxed button: on touch screens one sits beside every line.
+.transcript-segment-tools .btn-action {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: token("text-tertiary");
+  &:hover,
+  &[aria-expanded="true"] {
+    background: token("bg-hover-alpha");
+    color: token("text-primary");
+  }
+}
+.transcript-inline-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token("s-2");
+  margin-block: token("s-2");
+  label {
+    width: 100%;
+  }
+  textarea {
+    display: block;
+    width: 100%;
+    min-height: 7rem;
+    line-height: 1.7;
+  }
+}
+.transcript-resume {
+  position: sticky;
+  bottom: token("s-4");
+  margin-inline: auto;
+  display: flex;
+  border-radius: token("r-pill");
+  background: token("bg-panel");
+  box-shadow: token("elevation-2");
+}
+.transcript-shortcuts {
+  z-index: token("z-popover");
+  width: 22rem;
+  padding: token("s-3");
+  border: 1px solid token("border");
+  border-radius: token("r-card");
+  background: token("bg-panel");
+  box-shadow: token("elevation-2");
+  color: token("text-secondary");
+  font-size: token("fs-sm");
+  line-height: 1.6;
+}
+.transcript-empty,
+.transcript-plain {
+  padding: token("s-4");
+}
+.transcript-plain {
+  display: grid;
+  gap: token("s-3");
+  > p {
+    margin: 0;
+  }
+}
+.transcript-plain__note a {
+  color: token("accent");
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.transcript-plain > div {
+  white-space: pre-wrap;
+  max-width: 68ch;
+  font-size: token("fs-md");
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.transcript-merge {
+  display: grid;
+  gap: token("s-2");
+  margin-block: token("s-3");
+  color: token("text-secondary");
+  font-size: token("fs-sm");
+}
+.transcript-attendees {
+  display: grid;
+  gap: token("s-2");
+  margin-block: token("s-3");
+  > button {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: token("s-1");
+    text-align: left;
+    // .btn-action has a fixed control height; attendee options hold two lines.
+    height: auto;
+    min-height: 44px;
+    padding-block: token("s-2");
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  > button[aria-pressed="true"] {
+    border-color: token("accent");
+    box-shadow: 0 0 0 1px token("accent");
+  }
+  small {
+    color: token("text-secondary");
+  }
+}
+.transcript-sample {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token("s-2");
+}
+.transcript-selection-toolbar {
+  position: fixed;
+  z-index: token("z-popover");
+  display: flex;
+  gap: token("s-1");
+  padding: token("s-1");
+  max-width: calc(100vw - 1rem);
+  color: token("text-floating");
+  background: token("bg-floating");
+  border-radius: token("r-card");
+  box-shadow: token("elevation-2");
+  button {
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: token("r-xs");
+    padding: token("s-2");
+    min-height: 40px;
+    cursor: pointer;
+    font-size: token("fs-xs");
+    &:hover {
+      background: token("bg-hover-alpha");
+    }
+  }
+}
+
+// --- transcript ↔ minutes links ---
+// Scrubber markers, inline citations and the minutes-side "▶ 14:22" chip.
+.transcript-markers {
+  position: relative;
+  height: token("s-5");
+  margin-top: token("s-1");
+  &.has-two-rows {
+    height: calc(2 * #{token("s-5")});
+  }
+}
+.transcript-workspace .transcript-marker {
+  position: absolute;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  height: token("s-4");
+  min-height: 0;
+  min-width: 0;
+  padding: 0 token("s-2");
+  font-size: token("fs-xxs");
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  border: 0;
+  border-radius: token("r-pill");
+  cursor: pointer;
+  &.is-second-row {
+    top: token("s-5");
+  }
+}
+.transcript-markers.is-dots .transcript-marker {
+  top: token("s-1");
+  width: token("s-3");
+  height: token("s-3");
+  padding: 0;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 2px token("bg-panel");
+}
+.transcript-marker,
+.transcript-cite {
+  &.is-motion {
+    color: token("accent");
+    background: token("accent-soft");
+  }
+  &.is-action {
+    color: token("warn");
+    background: token("warn-soft");
+  }
+  &:hover {
+    box-shadow: inset 0 0 0 1px currentColor;
+  }
+}
+.transcript-markers.is-dots .transcript-marker {
+  &.is-motion {
+    background: token("accent");
+  }
+  &.is-action {
+    background: token("warn");
+  }
+}
+.transcript-workspace .transcript-cite {
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  min-width: 0;
+  margin-left: token("s-1");
+  padding: 0 token("s-2");
+  font-size: token("fs-xxs");
+  font-weight: 600;
+  line-height: 1.6;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+  border: 0;
+  border-radius: token("r-pill");
+  cursor: pointer;
+}
+.transcript-time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: token("s-1");
+  margin-left: token("s-1");
+  padding: 0 token("s-2");
+  font-size: token("fs-xxs");
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+  color: token("accent");
+  background: token("accent-soft");
+  border-radius: token("r-pill");
+  text-decoration: none;
+  &:hover {
+    background: token("accent-soft-strong");
+  }
+  &:focus-visible {
+    outline: token("focus-ring-width") solid token("focus-ring-color");
+    outline-offset: token("focus-ring-offset");
+  }
+}
+// Touch: 40px hit areas around the small drawn pills; one marker row.
+@media (pointer: coarse) {
+  .transcript-markers {
+    height: token("s-10");
+  }
+  .transcript-workspace .transcript-marker {
+    top: token("s-3");
+  }
+  .transcript-markers.is-dots .transcript-marker {
+    top: token("s-4");
+  }
+  .transcript-workspace .transcript-cite,
+  .transcript-time-chip {
+    position: relative;
+  }
+  .transcript-workspace .transcript-marker::after,
+  .transcript-workspace .transcript-cite::after,
+  .transcript-time-chip::after {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * #{token("s-3")}) calc(-1 * #{token("s-1")});
+  }
+  .transcript-markers.is-dots .transcript-marker::after {
+    inset: calc(-1 * #{token("s-4")}) calc(-1 * #{token("s-4")});
+  }
+}
+
+// Combined speakers: raw labels nested under the speaker they resolve to.
+.transcript-merged {
+  display: grid;
+  gap: token("s-1");
+  margin: 0 0 token("s-2");
+  padding: 0 0 0 token("s-3");
+  list-style: none;
+  border-left: 2px solid token("border");
+  font-size: token("fs-xs");
+  color: token("text-secondary");
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: token("s-1") token("s-2");
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  strong {
+    color: token("text-primary");
+    font-weight: 500;
+  }
+}
+.transcript-workspace .transcript-merged__undo,
+.transcript-speaker-drawer .transcript-merged__undo {
+  height: auto;
+  min-height: 28px;
+  padding-inline: token("s-2");
+  font-size: token("fs-xs");
+}
+.transcript-combine {
+  display: grid;
+  gap: token("s-2");
+  min-width: 0;
+  margin: token("s-3") 0 0;
+  padding: 0;
+  border: 0;
+  legend {
+    padding: 0;
+    margin-bottom: token("s-1");
+    font-size: token("fs-sm");
+    font-weight: 600;
+  }
+  p {
+    margin: 0;
+  }
+  > .btn-action {
+    justify-self: start;
+    height: auto;
+    min-height: token("control-h-sm");
+    white-space: normal;
+  }
+}
+.transcript-combine__option {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: token("s-2");
+  min-height: 32px;
+  padding: token("s-1") token("s-2");
+  border: 1px solid token("border");
+  border-radius: token("r-md");
+  font-size: token("fs-sm");
+  cursor: pointer;
+  &:has(input:checked) {
+    border-color: token("accent");
+    background: token("accent-soft");
+  }
+  .transcript-swatch {
+    display: block;
+  }
+}
+// The whole row is the hit area, so the checkbox keeps its native size.
+.transcript-speaker-drawer .transcript-combine__option input[type="checkbox"],
+.transcript-workspace .transcript-combine__option input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: token("accent");
+}
+.transcript-combine__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  small {
+    color: token("text-secondary");
+  }
+}
+.transcript-chip--review {
+  color: token("text-secondary");
+  cursor: pointer;
+}
+.transcript-speaker-chips > .transcript-chip--review > :last-child {
+  color: token("text-secondary");
+}
+
+// Review speakers: one list in the speaker drawer frame (side panel, or a sheet on phones).
+.transcript-review__intro {
+  margin: 0 0 token("s-3");
+  color: token("text-secondary");
+  font-size: token("fs-sm");
+  line-height: 1.5;
+}
+.transcript-review__suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  margin-bottom: token("s-3");
+  padding: token("s-2") token("s-3");
+  background: token("bg-subtle");
+  border: 1px solid token("border");
+  border-radius: token("r-md");
+  font-size: token("fs-sm");
+}
+.transcript-review__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.transcript-review__row {
+  display: grid;
+  gap: token("s-2");
+  min-width: 0;
+  padding-block: token("s-3");
+  border-top: 1px solid token("border");
+  border-radius: token("r-xs");
+  &:focus-visible {
+    outline: token("focus-ring-width") solid token("focus-ring-color");
+    outline-offset: token("focus-ring-offset");
+  }
+  .transcript-speaker__quote {
+    margin: 0;
+  }
+  .transcript-merged {
+    margin: 0;
+  }
+}
+.transcript-review__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: token("s-1") token("s-2");
+  min-width: 0;
+}
+.transcript-review__meta {
+  color: token("text-tertiary");
+  font-size: token("fs-xs");
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.transcript-review__play {
+  justify-self: start;
+}
+// One calm list: unnamed rows are counted in the intro instead of washed in warning colour.
+.transcript-review .transcript-assignment.is-unnamed > select {
+  color: token("text-primary");
+  background: token("bg-panel");
+  border-color: token("border");
+}
+.transcript-review__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: token("s-2");
+  min-width: 0;
+  .transcript-same-as {
+    width: 100%;
+    font-size: token("fs-xs");
+    text-overflow: ellipsis;
+  }
+}
+.transcript-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-1") token("s-2");
+  padding: token("s-1") token("s-1") token("s-1") token("s-2");
+  background: token("accent-soft");
+  border-radius: token("r-md");
+  font-size: token("fs-xs");
+  overflow-wrap: anywhere;
+}
+.transcript-suggestion__tag {
+  font-weight: 600;
+}
+.transcript-review__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: token("s-2");
+  width: 100%;
+}
+
+@container transcript (min-width: 1100px) {
+  .transcript-columns {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+@container transcript (max-width: 759.98px) {
+  .transcript-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: token("s-2");
+  }
+  .transcript-speakers {
+    display: none;
+  }
+  .transcript-speaker-chips {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    gap: token("s-2");
+    padding-block: token("s-1") token("s-2");
+    min-width: 0;
+    overflow-x: auto;
+    > button {
+      flex-shrink: 0;
+      max-width: 15rem;
+    }
+  }
+  .transcript-document {
+    grid-row: 2;
+  }
+  .transcript-turn {
+    grid-template-columns: minmax(0, 1fr);
+    padding: token("s-3") token("s-3") 0;
+  }
+  .transcript-turn__gutter {
+    display: none;
+  }
+  .transcript-turn__inline-time {
+    display: inline;
+  }
+  .transcript-toolbar__actions {
+    width: 100%;
+  }
+  .transcript-label-full {
+    display: none;
+  }
+  .transcript-label-short {
+    display: inline;
+  }
+  .transcript-player {
+    padding: token("s-2");
+  }
+}
+// Phones: one compact control row so the pinned player stays short.
+@container transcript (max-width: 419.98px) {
+  .transcript-player__controls {
+    flex-wrap: nowrap;
+    gap: token("s-1");
+  }
+  .transcript-player__controls > .transcript-player__time {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .transcript-rate {
+    padding-inline: token("s-2");
+  }
+  .transcript-shortcuts-trigger {
+    display: none;
+  }
+  .transcript-scrubber canvas {
+    height: 40px;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .transcript-segment-tools {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+@media (pointer: coarse) {
+  .transcript-workspace,
+  .transcript-speaker-drawer {
+    :is(button, select, input, summary) {
+      min-height: 40px;
+    }
+    button {
+      min-width: 40px;
+    }
+  }
+  .transcript-combine__option {
+    min-height: 44px;
+  }
+  .transcript-workspace .transcript-merged__undo,
+  .transcript-speaker-drawer .transcript-merged__undo,
+  .transcript-combine > .btn-action {
+    min-height: 40px;
+  }
+  .transcript-status__action {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  // Readable on touch, and 16px keeps iOS from zooming when the picker opens.
+  .transcript-workspace .transcript-rate {
+    font-size: 16px;
+  }
+  .transcript-segment-row {
+    min-height: 40px;
+    padding-right: 2.75rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transcript-workspace *,
+  .transcript-speaker-drawer * {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
+  }
+}
+
+// Draft-minutes availability note and attached (SharePoint) recordings.
+.transcript-toolbar__note {
+  flex: 1 0 100%;
+  margin: 0;
+}
+.transcript-attached {
+  flex: 1 0 100%;
+  display: grid;
+  gap: token("s-2");
+  min-width: 0;
+  padding: token("s-3");
+  background: token("bg-subtle");
+  border: 1px solid token("border");
+  border-radius: token("r-md");
+  p {
+    margin: 0;
+  }
+}
+.transcript-attached__list {
+  display: grid;
+  gap: token("s-2");
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.transcript-attached__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2") token("s-3");
+  min-width: 0;
+  padding-top: token("s-2");
+  border-top: 1px solid token("border");
+  &:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+.transcript-attached__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: token("s-1") token("s-2");
+  min-width: 0;
+  strong {
+    overflow-wrap: anywhere;
+  }
+}
+.transcript-attached__warning {
+  flex: 1 0 100%;
+  color: token("warn");
+  font-size: token("fs-xs");
+}
+.transcript-attached__progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  min-width: 0;
+  progress {
+    width: min(16rem, 100%);
+    accent-color: token("accent");
+  }
+}
+
+// "Transcribe on this device": progress, Cancel and errors under the toolbar.
+.transcript-local-stt {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2") token("s-3");
+  min-width: 0;
+  padding: token("s-3");
+  background: token("bg-subtle");
+  border: 1px solid token("border");
+  border-radius: token("r-md");
+  progress {
+    width: min(12rem, 100%);
+    accent-color: token("accent");
+  }
+}
+.transcript-local-stt--error {
+  border-color: token("warn");
+}
+.transcript-local-stt__text {
+  display: grid;
+  flex: 1 1 16rem;
+  gap: token("s-1");
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+// Speaker assignment sheet: group labels ("Attended", "Committee", "Directors")
+// once the candidate list is long.
+.transcript-attendees__group-label {
+  margin-top: token("s-1");
+  font-size: token("fs-xs");
+  font-weight: token("fw-semibold");
+  color: token("text-tertiary");
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+// In-camera sessions marked in the recording (decision A2). Editors only see
+// these: a quiet hatched band on the scrubber and a labelled divider where the
+// session starts and ends in the transcript.
+.transcript-incamera-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  pointer-events: none;
+  border-inline: 1px solid token("border-strong");
+  background: repeating-linear-gradient(
+    135deg,
+    token("border-strong") 0 1px,
+    transparent 1px 6px
+  );
+  opacity: 0.7;
+}
+.transcript-incamera-note {
+  margin: token("s-2") 0 0;
+  font-size: token("fs-xs");
+}
+.transcript-incamera-divider {
+  display: flex;
+  align-items: center;
+  gap: token("s-2");
+  margin: token("s-4") token("s-4") 0;
+  color: token("text-secondary");
+  font-size: token("fs-xs");
+  font-weight: token("fw-medium");
+  &::before,
+  &::after {
+    content: "";
+    flex: 1 1 auto;
+    min-width: token("s-4");
+    border-top: 1px dashed token("border-strong");
+  }
+  &::before {
+    flex: 0 0 token("s-6");
+  }
+  &.is-end {
+    color: token("text-tertiary");
+    font-weight: token("fw-regular");
+  }
+}
+.transcript-incamera-divider__label {
+  display: inline-flex;
+  align-items: center;
+  gap: token("s-1");
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.transcript-incamera-divider__action {
+  order: 3;
+  padding: 0 token("s-1");
+  border: 0;
+  background: transparent;
+  color: token("text-secondary");
+  font-size: token("fs-xs");
+  text-decoration: underline;
+  cursor: pointer;
+  &:hover,
+  &:focus-visible {
+    color: token("accent");
+  }
+}
+.transcript-turn.is-in-camera .transcript-turn__main {
+  box-shadow: inset 2px 0 0 token("border-strong");
+  padding-left: token("s-3");
+}

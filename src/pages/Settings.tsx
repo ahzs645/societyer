@@ -15,9 +15,12 @@ import { ResetTipsButton } from "../components/Spotlight";
 import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
 import { WorkspaceStorageCard } from "../components/WorkspaceStorageCard";
 import { DocumentStorageSettingsCard } from "../components/DocumentStorageSettingsCard";
+import { OnDeviceAiSettingsCard } from "../components/OnDeviceAiSettingsCard";
 import { IdentitySessionSettingsCard } from "../components/IdentitySessionSettingsCard";
+import { AiConnectorsCard } from "../features/aiConnectors/AiConnectorsCard";
 import { resolveAppRuntime } from "../lib/appRuntime";
-import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
+import { MobileFold } from "../components/MobileFold";
 import { readFileDataUrl } from "../lib/readFileDataUrl";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
@@ -244,7 +247,7 @@ export function SettingsPage() {
     const messages = {
       light: { title: "Remove logo?", body: "The letter avatar will be shown instead until you upload a new logo." },
       dark: { title: "Remove dark-mode logo?", body: "The light-mode logo will be used in dark mode until you upload a new variant." },
-      letterhead: { title: "Remove letterhead?", body: "Exports will fall back to your light-mode logo plus the organization name." },
+      letterhead: { title: "Remove letterhead?", body: "Exports will have no letterhead until you upload a new one." },
     } as const;
     const ok = await confirm({
       title: messages[variant].title,
@@ -330,7 +333,7 @@ export function SettingsPage() {
         <div className="card__head">
           <h2 className="card__title">{t("settings.logoTitle", "Organization logo")}</h2>
           <span className="card__subtitle">
-            {t("settings.logoSubtitle", "Shown in the sidebar and on exported documents.")}
+            {t("settings.logoSubtitle", "Shown in the sidebar. Exported documents use the letterhead below.")}
           </span>
         </div>
         <div className="card__body col" style={{ gap: 16 }}>
@@ -498,8 +501,8 @@ export function SettingsPage() {
                 {society.letterheadUrl ? (
                   <img src={society.letterheadUrl} alt="" className="organization-logo-preview__img" />
                 ) : (
-                  <span className="organization-logo-preview__placeholder">
-                    {(society.name ?? "S").toUpperCase()}
+                  <span className="organization-logo-preview__placeholder organization-logo-preview__placeholder--letterhead">
+                    No letterhead
                   </span>
                 )}
               </div>
@@ -535,8 +538,8 @@ export function SettingsPage() {
                     </button>
                   )}
                 </div>
-                <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  Leave empty for unbranded exports.
+                <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: 0 }}>
+                  Shown at the top of exported documents. Leave empty for unbranded exports.
                 </p>
               </div>
             </div>
@@ -608,6 +611,21 @@ export function SettingsPage() {
           />
         </div>
       </div>
+
+      {/* Device-only settings for the local and desktop runtimes (disabled in the demo). */}
+      {/* Phones fold it: its 1,800px of model, speech-to-text and assistant settings
+          is the longest card on the page and is turned off in the demo. */}
+      {isLocalDataRuntime() && (
+        <MobileFold
+          title={t("onDeviceAi.title", "On-device AI")}
+          summary={isStaticDemoRuntime() ? t("onDeviceAi.statusDemo", "Not available in the demo") : "Model server, speech-to-text and assistant access"}
+          defaultOpen={searchParams.get("section") === "on-device-ai"}
+        >
+          <OnDeviceAiSettingsCard />
+        </MobileFold>
+      )}
+      {/* Tokens for the hosted MCP endpoint; the local runtimes have no endpoint. */}
+      {!isLocalDataRuntime() && society && <AiConnectorsCard societyId={society._id} />}
       </>
       )}
 

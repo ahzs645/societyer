@@ -183,6 +183,20 @@ async function runPipeline(mode: "clerk" | "better-auth" | "convex") {
   const impostor = t.withIdentity({ subject: `${mode}-alice`, issuer: "https://impostor.example", email: "alice@example.org", emailVerified: true });
   await assert.rejects(() => impostor.query(api.society.getById, { id: societyId }), /not found|Authentication required|Access denied/, label("foreign issuer rejected"));
 
+  if (mode === "convex") {
+    process.env.SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS = "ddcnorth.com";
+    try {
+      // Existing workspace membership and share links cannot bypass the instance policy.
+      await assert.rejects(() => bob.query(api.society.getById, { id: societyId }), /not found|Authentication required|Access denied/);
+      const allowed = person(`${mode}-bob`, "bob@ddcnorth.com", "Bob", true);
+      assert.ok(await allowed.query(api.society.getById, { id: societyId }));
+      const unverified = person(`${mode}-bob`, "bob@ddcnorth.com", "Bob", false);
+      await assert.rejects(() => unverified.query(api.society.getById, { id: societyId }), /not found|Authentication required|Access denied/);
+    } finally {
+      delete process.env.SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS;
+    }
+  }
+
   console.log(`  ${mode}: sign-up, Owner creation, re-login, existing/new invitees, share links, revocation/expiry, role gates, disable, issuer isolation`);
 }
 

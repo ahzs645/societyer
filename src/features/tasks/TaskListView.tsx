@@ -249,7 +249,7 @@ function TaskRow({
       <span className="task-row__meta">
         <span className="task-row__link">{link && <TaskLinkChip link={link} />}</span>
         <span className="task-row__priority"><TaskPriorityMenu task={task} actions={actions} tabIndex={-1} /></span>
-        <span className="task-row__due"><TaskDueMenu task={task} actions={actions} emptyLabel={actions.canManage ? "Set date" : ""} tabIndex={-1} /></span>
+        <span className="task-row__due"><TaskDueMenu task={task} actions={actions} emptyLabel={actions.canManage ? "Due date" : ""} tabIndex={-1} /></span>
       </span>
       <span className="task-row__owner"><TaskAvatar name={owner} /></span>
       <span className="task-row__more"><TaskMoreMenu task={task} actions={actions} tabIndex={-1} /></span>

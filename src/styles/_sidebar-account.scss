@@ -1,0 +1,43 @@
+// Keep the hosted account details and theme controls inside the sidebar width.
+// The local/demo user picker keeps its single-row layout; rail rules stay separate.
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+// UserPicker's authenticated wrapper has inline card styling. Let its heading
+// and actions participate in the footer grid instead of squeezing a nested card.
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > div:not(.sidebar-theme-toggle) {
+  display: contents !important;
+}
+
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > div:not(.sidebar-theme-toggle) > .row:first-child {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > div:not(.sidebar-theme-toggle) > .row:first-child > span:last-child {
+  flex-shrink: 0;
+}
+
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > div:not(.sidebar-theme-toggle) > .muted {
+  display: none;
+}
+
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > div:not(.sidebar-theme-toggle) > .row:last-child {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > .sidebar-theme-toggle {
+  grid-column: 2;
+  justify-self: end;
+  align-self: end;
+}
+
+.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > .user-picker {
+  width: 100%;
+  min-width: 0;
+}
