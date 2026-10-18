@@ -46,6 +46,8 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
   const appendText = useMutation(api.meetingSources.appendText);
   const selectTranscript = useMutation(api.meetingSources.useTranscript);
   const transcribe = useAction(api.meetingSourceSpeech.start);
+  const queueWhisperX = useMutation(api.meetingTranscription.enqueue);
+  const zoer = useQuery(api.meetingTranscription.settings, canDraft ? { societyId } : "skip");
   const speech = useQuery(api.meetingSources.speechCapabilities, { meetingId }) as { configured: boolean } | undefined;
   // Timed files (.vtt/.srt/.json, or the one inside a ZIP) can also become the timed working transcript.
   const [timedOffer, setTimedOffer] = useState<TimedOffer | null>(null);
@@ -85,7 +87,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
         setMessage("Original attached. Transcript imported; review it below before using it for minutes.");
         const parsed = await timed;
         if (parsed) setTimedOffer({ ...parsed, sourceName: file.name });
-      } else setMessage(speech?.configured ? "Recording attached and verified. Choose Transcribe to create its transcript." : "Recording attached and verified. Speech processing is not configured yet; you can upload an existing transcript.");
+      } else setMessage(zoer?.enabled ? "Recording attached and verified. Choose Queue transcription or open the Transcript tab." : speech?.configured ? "Recording attached and verified. Choose Transcribe to create its transcript." : "Recording attached and verified. Speech processing is not configured yet; you can upload an existing transcript.");
     } catch (e) {
       if (abort.signal.aborted) setMessage("Paused. Choose the same file to resume. If a chunk was in flight, wait 90 seconds first.");
       else setError(e instanceof Error ? e.message : "Upload failed.");
@@ -140,7 +142,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
     <div className="card__head"><h3>Meeting source files</h3></div>
     <div className="card__body">
       <p>Attach transcripts, audio, video or Whisper ZIP exports up to 500 MB per file. Originals stay in private Microsoft storage. Only meeting editors can access these working files.</p>
-      {speech && !speech.configured && <p>Automatic audio/video transcription needs a speech processor and provider key. Recording uploads and existing transcript imports are available.</p>}
+      {speech && !speech.configured && <p>Queue audio/video recordings from the Transcript tab using a connected Zoer WhisperX processor. Uploads and transcript imports work independently.</p>}
       <input {...drop.inputProps} />
       <button className="btn" type="button" disabled={busy} onClick={drop.open}>Choose file / resume upload</button>{" "}
       {busy && <button className="btn" type="button" onClick={() => controller.current?.abort()}>Pause</button>}
@@ -154,10 +156,11 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
       <ul>{sources.map(source => <li key={source.id} style={{ marginBlock: "0.75rem" }}>
         <strong>{source.fileName}</strong> · {(source.size / 1_000_000).toFixed(1)} MB · {source.status}
         {source.status === "ready" && <>{" "}<button className="btn btn--sm" type="button" onClick={() => setFilePreview(source)}>Preview file</button>{" "}<button className="btn btn--sm" type="button" onClick={() => void download(source)}>Download original</button></>}
-        {source.status === "ready" && source.kind === "recording" && !source.textComplete && <>{" "}<button className="btn btn--sm" type="button" disabled={busy || !speech?.configured || source.jobStatus === "processing"} onClick={async () => {
+        {source.status === "ready" && source.kind === "recording" && !source.textComplete && <>{" "}<button className="btn btn--sm" type="button" disabled={busy || (!speech?.configured && !zoer?.enabled) || !canDraft || source.jobStatus === "processing"} onClick={async () => {
+          if (zoer?.enabled) { try { await queueWhisperX({ sourceId: source.id }); setSearchParams(prev => { const next = new URLSearchParams(prev); next.set("tab", "transcript"); return next; }); } catch (e) { setError(e instanceof Error ? e.message : "Could not queue recording."); } return; }
           if (!(await confirm({ title: "Transcribe recording?", message: "Transcribe this recording using the configured speech provider? Its usage charges apply.", confirmLabel: "Start transcription", tone: "warn" }))) return;
           try { await transcribe({ sourceId: source.id }); await refresh(); setMessage("Speech processing started. You can leave this meeting while it runs."); } catch (e) { setError(e instanceof Error ? e.message : "Speech processing could not start."); }
-        }}>{source.jobStatus === "processing" ? "Transcribing…" : "Transcribe"}</button></>}
+        }}>{zoer?.enabled ? "Queue transcription" : source.jobStatus === "processing" ? "Transcribing…" : "Transcribe"}</button></>}
         {source.jobError && <p role="status">{source.jobError}</p>}
         {source.textComplete && <>{" "}<button className="btn btn--sm" type="button" onClick={() => { setPreview(source); setPage(0); }}>Read transcript</button></>}
         {canDraft && source.textComplete && (source.textBytes ?? 0) <= MEETING_TRANSCRIPT_MAX_BYTES && <>{" "}<button className="btn btn--sm" type="button" disabled={busy} onClick={async () => {

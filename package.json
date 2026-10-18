@@ -364,7 +364,8 @@
     "test:microsoft-email": "tsx scripts/check-microsoft-email.ts",
     "dev:ddcnorth": "vite --host 127.0.0.1 --port 5173 --strictPort --mode ddcnorth-development",
     "dev:mail": "tsx scripts/dev-auth-outbox.ts",
-    "test:development-mail": "tsx scripts/check-development-mail.ts"
+    "test:development-mail": "tsx scripts/check-development-mail.ts",
+    "test:whisperx": "tsx scripts/check-whisperx-queue.ts && tsx scripts/check-whisperx-transfer.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

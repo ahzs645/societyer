@@ -1,3 +1,4 @@
+import { transcriptionRequest } from "./transcription";
 import { MEETING_SOURCE_CHUNK_BYTES, nextUploadOffset, validateTransferUrl } from "../../shared/storage/meetingSourceProtocol";
 import { readBoundedSharePointUpload } from "../../shared/storage/sharePointDeployment";
 
@@ -14,6 +15,7 @@ export default {
     headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
     headers.set("Access-Control-Expose-Headers", "Content-Disposition, Content-Length");
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
+    if (new URL(request.url).pathname === "/meeting-transcription") return transcriptionRequest(request, env);
     const authorization = request.headers.get("authorization");
     if (!authorization?.startsWith("Bearer ")) return new Response("Sign in again.", { status: 401, headers });
     const path = new URL(request.url).pathname;

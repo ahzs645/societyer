@@ -1,3 +1,4 @@
+import { meetingTranscriptionTables } from "./tables/meetingTranscription";
 import { privacyAssessmentValidators } from "./lib/privacyValidators";
 import {personHistoryTables} from './tables/personHistory';
 import { reviewEvidenceTables } from "./tables/reviewEvidence";
@@ -54,6 +55,7 @@ import { mcpOAuthTables } from "./tables/mcpOAuth";
 import { procurementTables } from "./tables/procurement";
 
 export default defineSchema({
+  ...meetingTranscriptionTables,
   ...procurementTables,
   developmentAuthEmails: defineTable({
     to: v.string(), subject: v.string(), text: v.string(),

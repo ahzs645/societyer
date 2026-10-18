@@ -30,7 +30,10 @@ import { registerMcpRoutes } from "./mcpHttp";
 import { registerMcpOAuthRoutes } from "./mcpOAuthHttp";
 import { developmentMailConfigured } from "../shared/developmentMailConfiguration";
 
+import { registerMeetingTranscriptionRoutes } from "./meetingTranscriptionHttp";
+
 const http = httpRouter();
+registerMeetingTranscriptionRoutes(http);
 registerSharePointRoutes(http);
 registerProcurementReviewRoutes(http);
 registerMeetingSourceRoutes(http);

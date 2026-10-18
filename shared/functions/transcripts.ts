@@ -52,6 +52,7 @@ async function upsertTranscriptRow(
     .collect();
   if (existing[0]) {
     await ctx.db.patch(existing[0]._id, {
+      pagedJobId: undefined, contentRevision: `${Date.now()}:${Math.random()}`, segmentCount: undefined, pageCount: undefined,
       provider: args.provider,
       durationSeconds: args.durationSeconds,
       language: args.language,
@@ -392,6 +393,7 @@ export async function assignSpeakerPortable(
   };
   const next = [...speakers.filter((speaker) => speaker.label !== args.label), assignment];
   if (next.length > 1000) throw new Error("Use at most 1,000 speaker assignments.");
+  if (row.pagedJobId) { await ctx.db.patch(row._id, { speakers: next, contentRevision: `${Date.now()}:${Math.random()}` }); return { wordsDropped: false }; }
   const segments: TranscriptSegmentRow[] = row.segments;
   const bounded = boundedTranscript({
     ...row,
@@ -400,6 +402,7 @@ export async function assignSpeakerPortable(
     text: transcriptText(segments, next),
   });
   await ctx.db.patch(row._id, {
+    contentRevision: `${Date.now()}:${Math.random()}`,
     speakers: next,
     segments: bounded.segments,
     text: bounded.text,
@@ -431,6 +434,7 @@ export async function updateSegmentPortable(
   const speakers: TranscriptSpeaker[] = row.speakers ?? [];
   const bounded = boundedTranscript({ ...row, segments, text: transcriptText(segments, speakers) });
   await ctx.db.patch(row._id, {
+    contentRevision: `${Date.now()}:${Math.random()}`,
     segments: bounded.segments,
     text: bounded.text,
     wordsDropped: bounded.wordsDropped,
@@ -446,9 +450,11 @@ async function saveSpeakerMap(
   meetingId: string,
   speakers: TranscriptSpeaker[],
 ) {
+  if (row.pagedJobId) { await ctx.db.patch(row._id, { speakers, contentRevision: `${Date.now()}:${Math.random()}` }); return { wordsDropped: false }; }
   const segments: TranscriptSegmentRow[] = row.segments;
   const bounded = boundedTranscript({ ...row, segments, speakers, text: transcriptText(segments, speakers) });
   await ctx.db.patch(row._id, {
+    contentRevision: `${Date.now()}:${Math.random()}`,
     segments: bounded.segments,
     speakers,
     text: bounded.text,
@@ -471,7 +477,7 @@ export async function mergeSpeakersPortable(
   const row = await workingTranscript(ctx, args.societyId, args.meetingId);
   if (!row) throw new Error("Import a transcript first.");
   const segments: TranscriptSegmentRow[] = row.segments;
-  const labels = new Set(segments.map((segment) => segment.speaker));
+  const labels = new Set(row.pagedJobId ? (row.speakers ?? []).map((speaker: TranscriptSpeaker) => speaker.label) : segments.map((segment) => segment.speaker));
   const sources = [...new Set(Array.isArray(args.from) ? args.from : [args.from])];
   if (
     !sources.length ||
@@ -512,7 +518,7 @@ export async function unmergeSpeakerPortable(
   if (!entry?.mergedInto) throw new Error("That speaker is not combined with another.");
   const { mergedInto: _mergedInto, ...standalone } = entry;
   const speakers = current.flatMap((speaker) =>
-    speaker.label !== args.label ? [speaker] : standalone.name || standalone.personId ? [standalone] : [],
+    speaker.label !== args.label ? [speaker] : row.pagedJobId || standalone.name || standalone.personId ? [standalone] : [],
   );
   return await saveSpeakerMap(ctx, row, args.meetingId, speakers);
 }
@@ -560,7 +566,7 @@ export async function importTimedPortable(
     createdAtISO: existing?.createdAtISO ?? new Date().toISOString(),
     wordsDropped: false,
   });
-  if (existing) await ctx.db.patch(existing._id, { ...row, storageKey: undefined, language: undefined });
+  if (existing) await ctx.db.patch(existing._id, { ...row, storageKey: undefined, language: undefined, pagedJobId: undefined, contentRevision: `${Date.now()}:${Math.random()}`, segmentCount: undefined, pageCount: undefined });
   else await ctx.db.insert("transcripts", row);
   await syncMinutesDraftTranscript(ctx, args.meetingId, row.text);
   return { wordsDropped: row.wordsDropped };

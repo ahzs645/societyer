@@ -1,3 +1,4 @@
+import { transcriptText } from "../../shared/transcriptModel";
 import { TranscriptWorkspace } from "../features/meetings/transcript/TranscriptWorkspace";
 import { motionTranscriptChip } from "../features/meetings/transcript/TranscriptTimeChip";
 import { motionDisplayName, motionNumbers, motionTallySummary } from "../lib/motionDisplay";
@@ -26,7 +27,7 @@ import { TRANSCRIPT_READ_PERMISSION, TRANSCRIPT_WITHHELD_IN_CAMERA, transcriptTe
 import { TranscriptAccessNotice, type TranscriptAccess } from "../features/meetings/components/TranscriptAccessNotice";
 import { bylawBaselineForOrganization, quorumRequiresLegalRegisterFor } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useQuery, useConvex } from "convex/react";
 import { useRecordQuery } from "../hooks/useRecordQuery";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
@@ -146,10 +147,10 @@ function notesWordCount(notes: string | undefined): string {
 }
 
 /** The Overview's transcript line. Without transcript access it says who may read one (decision A1). */
-function transcriptLengthLabel(transcript: { durationSeconds?: number; segments?: unknown[]; withheld?: string } | null | undefined, canRead = true): string {
+function transcriptLengthLabel(transcript: { durationSeconds?: number; segments?: unknown[]; segmentCount?: number; withheld?: string } | null | undefined, canRead = true): string {
   if (!canRead) return "Minute-takers only";
   if (transcript?.withheld) return "Restricted";
-  if (!transcript?.segments?.length) return "None";
+  if (!transcript?.segments?.length && !transcript?.segmentCount) return "None";
   const minutes = Math.round((transcript.durationSeconds ?? 0) / 60);
   return minutes >= 1 ? `${minutes} min` : "<1 min";
 }
@@ -176,6 +177,7 @@ function phoneTabOrder(items: MeetingTabItem[], isPhone: boolean, activeTab: Mee
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const convexClient = useConvex();
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const { loaded: permissionsLoaded, can } = usePermissions();
@@ -449,12 +451,29 @@ export function MeetingDetailPage() {
     }
     const draftRaw = String(minutes?.draftTranscript ?? "");
     // The transcript row's text carries assigned speaker names ("Jane Doe: …").
-    const sourceTranscript = minutesDraftTranscript({
+    let sourceTranscript = minutesDraftTranscript({
       explicitText: (overrideText ?? "").trim() || transcript,
       transcriptRow: transcriptRecord,
       draftTranscript: draftRaw,
       draftIsImportMetadata: isImportTranscriptMetadata(parseDocumentMetadata(draftRaw)),
     });
+    if (transcriptRecord?.pagedJobId && !(overrideText ?? transcript).trim()) {
+      setBusy(true);
+      try {
+        const parts: string[] = []; let bytes = 0;
+        for (let page = 0; page < (transcriptRecord.pageCount ?? 0); page++) {
+          const result = await convexClient.query(api.meetingTranscription.page, { jobId: transcriptRecord.pagedJobId, page });
+          const text = transcriptText(result.segments, transcriptRecord.speakers ?? []);
+          bytes += new TextEncoder().encode(text).length;
+          if (bytes > 600_000) throw new Error("This transcript exceeds the 600 KB minutes-drafting input limit. Review or export the full transcript; it will not be truncated.");
+          parts.push(text);
+        }
+        const current = await convexClient.query(api.transcripts.getByMeeting, { meetingId: meeting._id });
+        if (current?.contentRevision !== transcriptRecord.contentRevision) throw new Error("The transcript changed while preparing the draft. Try again with the latest version.");
+        sourceTranscript = parts.join("\n");
+      } catch (e) { toast.error(e instanceof Error ? e.message : "Could not load the complete transcript."); return false; }
+      finally { setBusy(false); }
+    }
     if (!sourceTranscript) {
       toast.error("Add a transcript first.");
       return false;
@@ -687,7 +706,7 @@ export function MeetingDetailPage() {
   const importNote = minutesDraftIsImportMetadata ? importTranscriptNote(minutesDraftMetadata, sourceExternalIdsForMinutes(minutes)) : null;
   const recordSteps = meetingRecordSteps({
     kind: recordKind,
-    hasTranscript: transcriptOnFile.trim().length > 0 || (transcriptRecord?.segments?.length ?? 0) > 0,
+    hasTranscript: transcriptOnFile.trim().length > 0 || (transcriptRecord?.segments?.length ?? transcriptRecord?.segmentCount ?? 0) > 0 || Boolean(transcriptRecord?.segmentCount),
     hasNotes: String(meeting.workingNotes ?? "").trim().length > 0,
     minutesStarted: hasStartedMinutesDraft(minutes),
     minutesApproved: Boolean(minutes?.approvedAt),
@@ -697,7 +716,7 @@ export function MeetingDetailPage() {
   // Transcript tab too; it is edited where it is kept, under Sources.
   const transcriptKeptWithMinutes = transcriptRecord === null && transcriptOnFile.trim().length > 0;
   const workspaceTranscript = transcriptKeptWithMinutes ? { text: transcriptOnFile } : transcriptRecord;
-  const transcriptProvider = transcriptOnFile
+  const transcriptProvider = transcriptOnFile || transcriptRecord?.pagedJobId
     ? transcriptRecord?.provider ?? (savedDraftTranscript ? "manual" : null)
     : null;
   // A board meeting of a BC company with recorded articles counts directors in
@@ -2566,7 +2585,7 @@ export function MeetingDetailPage() {
           />
         )}
         {activeTab === "transcript" && !transcriptAccess && <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} />}
-        {(activeTab === "overview" || activeTab === "minutes") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} />}
+        {(activeTab === "overview" || activeTab === "minutes" || activeTab === "sources") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} />}
         {activeTab === "overview" && recordKind === "meeting" && (
           <MeetingRecordKindPrompt
             meetingId={meeting._id}
