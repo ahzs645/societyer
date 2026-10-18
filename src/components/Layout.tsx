@@ -188,6 +188,7 @@ import { useAnchorReveal } from "../hooks/useAnchorReveal";
 import { useNavAreaShell, useSwitchNavArea } from "../hooks/useNavArea";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { BottomNavIndicator } from "./BottomNavIndicator";
+import { PendingInvitations } from "./PendingInvitations";
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
@@ -1822,6 +1823,8 @@ export function Layout() {
                     onClick={() => {
                       setStoredSocietyId(s._id);
                       setWorkspaceOpen(false);
+                      // The record URL belongs to the workspace being left.
+                      navigate("/app");
                     }}
                     style={{
                       width: "100%",
@@ -2011,6 +2014,7 @@ export function Layout() {
               <div className="workbench__body">
                 <div className="workbench__content" ref={workbenchContentRef}>
                   <Suspense fallback={<WorkbenchPageLoader />}>
+                    <PendingInvitations compact />
                     <RouteAccessGate><Outlet /></RouteAccessGate>
                   </Suspense>
                   <GroupBySpotlight />

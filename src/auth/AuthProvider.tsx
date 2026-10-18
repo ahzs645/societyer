@@ -439,6 +439,8 @@ function MembershipProviderReady({
       isConvexAuthenticated: convexAuthStatus === "authenticated",
       refreshMembership: (preferredSocietyId) => {
         preferredSocietyIdRef.current = preferredSocietyId ?? null;
+        setMemberships(null);
+        setMembershipStatus(null);
         setMembershipRefresh((value) => value + 1);
       },
       retryAuthentication: () => {

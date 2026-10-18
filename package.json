@@ -55,6 +55,7 @@
     "test:api-contract": "tsx scripts/check-api-contract.ts",
     "test:static-parity": "tsx scripts/check-static-convex-parity.ts",
     "test:css-vars": "tsx scripts/check-css-vars.ts",
+    "test:invitation-onboarding": "tsx scripts/check-invitation-onboarding.ts",
     "test:identity-binding": "tsx scripts/check-identity-binding.ts",
     "test:workspace-access": "tsx scripts/check-workspace-access.ts && tsx scripts/check-module-access.ts",
     "test:incorporation-preparation": "tsx scripts/check-incorporation-preparation.ts",

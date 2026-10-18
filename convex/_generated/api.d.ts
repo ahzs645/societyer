@@ -27,6 +27,7 @@ import type * as apiPlatform from "../apiPlatform.js";
 import type * as assets from "../assets.js";
 import type * as attestations from "../attestations.js";
 import type * as auditors from "../auditors.js";
+import type * as authEmails from "../authEmails.js";
 import type * as authThrottle from "../authThrottle.js";
 import type * as authorization from "../authorization.js";
 import type * as bankAccounts from "../bankAccounts.js";
@@ -316,6 +317,7 @@ declare const fullApi: ApiFromModules<{
   assets: typeof assets;
   attestations: typeof attestations;
   auditors: typeof auditors;
+  authEmails: typeof authEmails;
   authThrottle: typeof authThrottle;
   authorization: typeof authorization;
   bankAccounts: typeof bankAccounts;

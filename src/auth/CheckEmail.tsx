@@ -17,7 +17,7 @@ const SENT_COPY: Record<SentState["kind"], { title: string; lede: (email: ReactN
   },
   verify: {
     title: "Check your email",
-    lede: (email) => <>We sent a link to {email}. Open it to confirm your account, then sign in.</>,
+    lede: (email) => <>Check {email} for a confirmation link, then sign in. If you already confirmed an account with this address, sign in with your existing password.</>,
   },
   unverified: {
     title: "Confirm your email first",

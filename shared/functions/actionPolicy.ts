@@ -70,7 +70,7 @@ const HANDLER_POLICIES = new Set([
   // membership, the workspace opt-in and that the chosen scopes are within their role.
   "mcpOAuth:consentDetails", "mcpOAuth:approve", "mcpOAuth:deny",
   "files:getUrl", "users:ensureCurrentMembership", "users:recordLogin", "users:get", "users:getByAuthSubject", "users:getByEmail",
-  "invitations:accept", "invitations:getByToken", "permissions:myPermissions", "permissions:check", "permissions:listAll",
+  "invitations:accept", "invitations:getByToken", "invitations:pendingForAccount", "invitations:acceptForAccount", "invitations:resend", "permissions:myPermissions", "permissions:check", "permissions:listAll",
   "society:createWorkspace", "society:create", "society:list", "society:listMine", "society:current", "firm:list", "firm:organizations",
   "http:workspaceCreationAccess", "http:currentPrincipalMemberships", "http:me", "http:gatewayApiPrincipal", "http:gatewayWorkflowBinding", "http:gatewayGeneratedDocumentAccess",
 ]);

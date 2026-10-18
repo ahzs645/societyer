@@ -23,11 +23,12 @@ import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../s
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 // Share links admit whoever opens them, so they can't grant Owner or Admin.
 const LINK_ROLES = ["Director", "Member", "Viewer"];
-type InviteForm = { kind: "email" | "link"; email: string; label: string; role: string; expiresInDays: number };
+type InviteForm = { targetUserId?: string; kind: "email" | "link"; email: string; label: string; role: string; expiresInDays: number };
 const NEW_INVITE: InviteForm = { kind: "email", email: "", label: "", role: "Member", expiresInDays: 7 };
 
 export function UsersPage() {
   const society = useSociety();
+  const [, setInviteParams] = useSearchParams();
   const auth = useAuth();
   const { role: myRole, permissions, can, loaded: permissionsLoaded } = usePermissions();
   const canViewRoster = permissionsLoaded && can("users:read");
@@ -69,7 +70,7 @@ export function UsersPage() {
           canManageUsers ? (
             <button
               className="btn-action btn-action--primary"
-              onClick={() =>
+              onClick={() => auth.mode !== "none" ? setInviteParams({ intent: "invite" }) :
                 setDraft({
                   email: "",
                   displayName: "",
@@ -78,7 +79,7 @@ export function UsersPage() {
                 })
               }
             >
-              <Plus size={12} /> Add user
+              <Plus size={12} /> {auth.mode !== "none" ? "Invite user" : "Add user"}
             </button>
           ) : undefined
         }
@@ -135,6 +136,7 @@ export function UsersPage() {
               const mayManage = canManageUsers && (myRole === "Owner" || !["Owner", "Admin"].includes(u.role));
               const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
               const status = u.status ?? "Active";
+              const displayStatus = auth.mode !== "none" && !u.authSubject && status === "Active" ? "Not joined" : status;
               const removeUser = async () => {
                 const ok = await confirm({
                   title: "Remove user access?",
@@ -152,6 +154,7 @@ export function UsersPage() {
               };
               const rowActions: MenuItem[] = [
                 canManageUsers && { id: "access", label: "View module access", icon: <ShieldCheck size={14} />, onSelect: () => setSelectedUserId(u._id) },
+                mayManage && auth.mode !== "none" && !u.authSubject && !u.authIssuer && !["Disabled", "Suspended"].includes(status) && { id: "invite", label: "Invite to join", icon: <PlusCircle size={14} />, onSelect: () => setInviteParams({ intent: "invite", inviteEmail: u.email, inviteRole: u.role, inviteUserId: u._id }) },
                 mayManage && { id: "edit", label: "Edit user", icon: <Pencil size={14} />, onSelect: () => setDraft(u) },
                 mayManage && status !== "Disabled" && { id: "disable", label: "Security disable", icon: <ShieldOff size={14} />, onSelect: () => setIncident({ id: u._id, name: u.displayName, reason: "" }) },
                 {
@@ -172,6 +175,7 @@ export function UsersPage() {
                     <span className="users-table__identity">
                       <strong>{u.displayName}</strong>
                       <span className="users-table__email">{u.email}</span>
+                      {auth.mode !== "none" && !u.authSubject && <span className="muted">No linked sign-in</span>}
                     </span>
                     {status !== "Active" && (
                       <span className="users-table__narrow-status"><Badge tone={status === "Invited" ? "warn" : "neutral"}>{status}</Badge></span>
@@ -203,8 +207,8 @@ export function UsersPage() {
                   />
                 </td>
                 <td className="users-table__wide">
-                  <Badge tone={status === "Active" ? "success" : status === "Invited" ? "warn" : "neutral"}>
-                    {status}
+                  <Badge tone={displayStatus === "Active" ? "success" : ["Invited", "Not joined"].includes(displayStatus) ? "warn" : "neutral"}>
+                    {displayStatus}
                   </Badge>
                 </td>
                 <td className="users-table__wide">{u.lastLoginAtISO ? formatDate(u.lastLoginAtISO) : "—"}</td>
@@ -249,6 +253,10 @@ export function UsersPage() {
         </table>}
       </div>
 
+      {canManageUsers && (
+        <InvitationsPanel societyId={society._id} assignableRoles={assignableRoles} />
+      )}
+
       {canManageUsers && users && users.length > 0 && (
         <WorkspaceAccessViewer
           users={users}
@@ -257,10 +265,6 @@ export function UsersPage() {
           moduleSource={society}
           entityKind={organizationKind(society as any)}
         />
-      )}
-
-      {canManageUsers && (
-        <InvitationsPanel societyId={society._id} assignableRoles={assignableRoles} />
       )}
 
       <Drawer open={!!incident} onClose={() => setIncident(null)} title="Security disable access" footer={<>
@@ -389,14 +393,17 @@ function InvitationsPanel({
   societyId: any;
   assignableRoles: string[];
 }) {
+  const hosted = useAuth().mode !== "none";
   const invitations = useQuery(api.invitations.list, { societyId });
   const create = useMutation(api.invitations.create);
   const revokeInvite = useMutation(api.invitations.revoke);
+  const resendInvite = useMutation(api.invitations.resend);
   const toast = useToast();
   const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
   const [form, setForm] = useState<InviteForm | null>(null);
   const [issuedTokens, setIssuedTokens] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState<string | null>(null);
 
   // ?intent=invite (from the "Invite teammate" command palette action) opens
   // the invite form.
@@ -408,25 +415,29 @@ function InvitationsPanel({
     }
     if (inviteIntentHandled.current) return;
     inviteIntentHandled.current = true;
-    setForm(NEW_INVITE);
+    setForm({ ...NEW_INVITE, email: searchParams.get("inviteEmail") ?? "", role: assignableRoles.includes(searchParams.get("inviteRole") ?? "") ? searchParams.get("inviteRole")! : "Member", targetUserId: searchParams.get("inviteUserId") ?? undefined });
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("intent");
+      next.delete("inviteEmail"); next.delete("inviteRole"); next.delete("inviteUserId");
       return next;
     }, { replace: true });
   }, [searchParams, setSearchParams]);
 
   const invite = async () => {
-    if (!form || (form.kind === "email" && !form.email.trim())) return;
+    if (!form || sending || (form.kind === "email" && !form.email.trim())) return;
+    setSending("new");
     try {
     const issued = await create(form.kind === "link"
       ? { societyId, kind: "link", role: form.role, expiresInDays: form.expiresInDays, ...(form.label.trim() ? { label: form.label.trim() } : {}) }
-      : { societyId, email: form.email.trim(), role: form.role, expiresInDays: form.expiresInDays });
+      : { societyId, email: form.email.trim(), role: form.role, expiresInDays: form.expiresInDays, ...(form.targetUserId ? { targetUserId: form.targetUserId } : {}) });
     setIssuedTokens((previous) => ({ ...previous, [issued.id]: issued.token }));
     setForm(null);
     // The secret is only available now; copy it while the click still counts as a user gesture.
-    await copyInvitationLink(issued.token, "Invitation created and link copied — send it to the person you're inviting");
+    if (form.kind === "link" || !hosted) await copyInvitationLink(issued.token, "Invitation link copied — send it to the person you're inviting");
+    else toast.success("Invitation queued for email", "The invitation appears in their account after they verify their email. No workspace creation is needed.");
     } catch (error) { toast.error("Could not create invitation", error instanceof Error ? error.message : String(error)); }
+    finally { setSending(null); }
   };
 
   const pending = (invitations ?? []).filter(
@@ -449,7 +460,7 @@ function InvitationsPanel({
       <div className="card__head">
         <h2 className="card__title">Invitations</h2>
         <span className="card__subtitle">
-          Email invitations require that verified email; share links admit whoever opens them and can't grant Owner or Admin. All invitations expire and work once. Links are available only when created.
+          {hosted ? "Email invitations are emailed even if the person has no account yet. They verify that email and join this workspace directly." : "Copy invitation links and send them to the person you're inviting."} Share links must be sent yourself and can't grant Owner or Admin.
         </span>
         <button
           className="btn-action btn-action--primary"
@@ -466,6 +477,7 @@ function InvitationsPanel({
             <th>Role</th>
             <th>Status</th>
             <th>Created</th>
+            <th>Email</th>
             <th />
           </tr>
         </thead>
@@ -492,7 +504,14 @@ function InvitationsPanel({
                   </Badge>
                 </td>
                 <td className="muted">{formatDate(inv.createdAtISO)}<div className="muted">{inv.expiresAtISO ? `Expires ${formatDate(inv.expiresAtISO)}` : "Reissue required"}</div></td>
+                <td>{inv.kind === "link" ? "Send link yourself" : inv.emailStatus === "accepted" ? (inv.emailProvider === "demo" ? "Simulated (demo)" : "Accepted by mail provider") : inv.emailStatus === "queued" ? "Queued" : inv.emailStatus === "failed" ? <span title={inv.emailError}>Email failed — resend</span> : "Not emailed yet"}</td>
                 <td className="table__actions">
+                  {inv.kind !== "link" && !inv.acceptedAtISO && !inv.revokedAtISO && <button className="btn btn--sm" disabled={sending !== null || inv.emailStatus === "queued"} onClick={async () => {
+                    setSending(inv._id);
+                    try { const issued = await resendInvite({ id: inv._id }); setIssuedTokens(previous => ({ ...previous, [issued.id]: issued.token })); toast.success("Invitation queued again", "A new email link replaces the previous one."); }
+                    catch (cause) { toast.error("Could not resend invitation", cause instanceof Error ? cause.message : String(cause)); }
+                    finally { setSending(null); }
+                  }}>{sending === inv._id ? "Sending…" : "Resend email"}</button>}
                   {status === "pending" && (
                     <>
                       <button
@@ -530,7 +549,7 @@ function InvitationsPanel({
           })}
           {pending.length === 0 && (invitations ?? []).length === 0 && (
             <tr>
-              <td colSpan={5} className="muted" style={{ textAlign: "center", padding: 16 }}>
+              <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 16 }}>
                 No invitations yet.
               </td>
             </tr>
@@ -545,8 +564,8 @@ function InvitationsPanel({
         footer={
           <>
             <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={invite} disabled={!form || (form.kind === "email" && !form.email.trim())}>
-              Create invitation
+            <button className="btn btn--accent" onClick={invite} disabled={sending !== null || !form || (form.kind === "email" && !form.email.trim())}>
+              {sending === "new" ? "Creating…" : form?.kind === "link" ? "Create share link" : "Send invitation"}
             </button>
           </>
         }
@@ -573,7 +592,7 @@ function InvitationsPanel({
                   className="input"
                   type="email"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => setForm({ ...form, email: e.target.value, targetUserId: undefined })}
                 />
               </Field>
             ) : (
@@ -599,6 +618,7 @@ function InvitationsPanel({
             <Field label="Role">
               <Select
                 value={form.role}
+                disabled={!!form.targetUserId}
                 onChange={(v) => setForm({ ...form, role: v })}
                 options={assignableRoles.filter((r) => form.kind === "email" || LINK_ROLES.includes(r)).map((r) => ({ value: r, label: r }))}
               />

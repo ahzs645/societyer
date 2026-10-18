@@ -431,6 +431,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invitations:create", handler: invitationsFns.createPortable }),
   definePortableMutation({ name: "invitations:revoke", handler: invitationsFns.revokePortable }),
   definePortableMutation({ name: "invitations:accept", handler: invitationsFns.acceptPortable }),
+  definePortableQuery({ name: "invitations:pendingForAccount", handler: invitationsFns.pendingForAccountPortable }),
+  definePortableMutation({ name: "invitations:acceptForAccount", handler: invitationsFns.acceptForAccountPortable }),
+  definePortableMutation({ name: "invitations:resend", handler: invitationsFns.resendPortable }),
 
   // significantIndividualSteps
   definePortableQuery({ name: "significantIndividualSteps:list", handler: significantIndividualStepsFns.listPortable }),

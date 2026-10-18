@@ -12,13 +12,12 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth/minimal";
 import { generateRandomString } from "better-auth/crypto";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, createEmailVerificationToken } from "better-auth/api";
 import { components, internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
-import { sendEmail } from "./providers/email";
 import { hostedSessionConfiguration, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
 import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage } from "../shared/authEmailPolicy";
 import { emailProviderConfiguration } from "../shared/emailConfiguration";
@@ -44,7 +43,8 @@ async function sendAuthLink(ctx: GenericCtx<DataModel>, to: string, subject: str
     await ctx.runMutation(internal.developmentMail.capture, { to, subject, text, tag });
     return;
   }
-  await sendEmail({
+  if (!("runMutation" in ctx)) throw new Error("Auth email requires an action context.");
+  await ctx.runMutation(internal.authEmails.enqueue, {
     to, subject, tag,
     text,
     html: `<p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(url)}">${escapeHtml(subject)}</a></p><p>If you did not ask for this, you can ignore this email.</p>`,
@@ -149,6 +149,20 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       // sign in. Invitations always require a verified email.
       requireEmailVerification: emailConfigured || domains.length > 0,
       ...(emailConfigured ? {
+        // Duplicate signup deliberately returns generic success. Resend a link
+        // for an existing unverified account instead of silently doing nothing.
+        onExistingUserSignUp: async ({ user }, request) => {
+          if (user.emailVerified) return;
+          let callbackURL = `${siteUrls[0]}/login?verified=1`;
+          try {
+            const body = await request?.json();
+            const candidate = new URL(body?.callbackURL);
+            if (siteUrls.some(site => new URL(site).origin === candidate.origin)) callbackURL = candidate.href;
+          } catch { /* The primary app sign-in is the safe fallback. */ }
+          const token = await createEmailVerificationToken(secret!, user.email, undefined, 60 * 60);
+          const url = `${process.env.CONVEX_SITE_URL}/api/auth/verify-email?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent(callbackURL)}`;
+          await sendAuthLink(ctx, user.email, "Verify your Societyer email", "Confirm this email address to finish creating your Societyer account.", url, "auth-verify-email");
+        },
         sendResetPassword: async ({ user, url }) =>
           sendAuthLink(ctx, user.email, "Reset your Societyer password", "Use this link to choose a new password. It expires in one hour.", url, "auth-reset-password"),
       } : {}),

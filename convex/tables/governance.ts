@@ -139,8 +139,15 @@ export const governanceTables = {
     kind: v.optional(v.union(v.literal("email"), v.literal("link"))),
     // Who a share link is meant for, shown to administrators only.
     label: v.optional(v.string()),
+    targetUserId: v.optional(v.id("users")),
+    emailRequestedAtMs: v.optional(v.number()),
+    emailStatus: v.optional(v.union(v.literal("queued"), v.literal("accepted"), v.literal("failed"))),
+    emailAcceptedAtISO: v.optional(v.string()),
+    emailError: v.optional(v.string()),
+    emailProvider: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
+    .index("by_email", ["email"])
     .index("by_token", ["token"])
     .index("by_token_hash", ["tokenHash"]),
 

@@ -55,6 +55,12 @@ import { mcpOAuthTables } from "./tables/mcpOAuth";
 import { procurementTables } from "./tables/procurement";
 
 export default defineSchema({
+  authEmailOutbox: defineTable({
+    to: v.string(), subject: v.string(), text: v.optional(v.string()), html: v.optional(v.string()), tag: v.string(),
+    status: v.union(v.literal("queued"), v.literal("sending"), v.literal("accepted"), v.literal("failed")),
+    attempts: v.number(), sendingAtMs: v.optional(v.number()), createdAtMs: v.number(), expiresAtMs: v.number(), error: v.optional(v.string()),
+    provider: v.optional(v.string()), acceptedAtMs: v.optional(v.number()),
+  }).index("by_recipient_createdAtMs", ["to", "createdAtMs"]),
   ...meetingTranscriptionTables,
   ...procurementTables,
   developmentAuthEmails: defineTable({
