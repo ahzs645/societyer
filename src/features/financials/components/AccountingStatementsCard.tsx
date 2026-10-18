@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { DatePicker } from "@/components/DatePicker";
@@ -115,7 +116,7 @@ export function AccountingStatementsCard({ societyId }: { societyId: Id<"societi
   };
   const downloadDisabled = !canExport || !report || !accounts || !budgets || (!report.statements.length && !programs.length);
   return <section className="card" aria-label="Financial statements">
-    <div className="card__head"><h2 className="card__title">Financial statements</h2><InfoPopover label="About financial statements"><p>Balance sheet as at the end date and income statement for the selected period, from posted journals. The prior-year columns repeat the same dates one year earlier (statutory comparatives). Select any amount to see the journal lines behind it. Import and reconcile source records before comparing with historical statements. Currencies are reported separately.</p></InfoPopover><div className="accounting-statements__download" role="group" aria-label="Download statements"><button className="btn-action" onClick={() => void downloadExcel()} disabled={downloadDisabled || exporting} aria-label="Download statements Excel"><FileSpreadsheet size={12} aria-hidden="true" /> Excel</button><button className="btn-action" onClick={download} disabled={downloadDisabled} aria-label="Download statements CSV"><Download size={12} aria-hidden="true" /> CSV</button></div></div>
+    <div className="card__head"><h2 className="card__title">Financial statements</h2><InfoPopover label="About financial statements"><p>Balance sheet as at the end date and income statement for the selected period, from posted journals. The prior-year columns repeat the same dates one year earlier (statutory comparatives). Select any amount to see the journal lines behind it. Import and reconcile source records before comparing with historical statements. Currencies are reported separately.</p></InfoPopover><Link className="btn-action books-card-link" to="/app/financials/reports/balance-sheet">Monthly reports</Link><div className="accounting-statements__download" role="group" aria-label="Download statements"><button className="btn-action" onClick={() => void downloadExcel()} disabled={downloadDisabled || exporting} aria-label="Download statements Excel"><FileSpreadsheet size={12} aria-hidden="true" /> Excel</button><button className="btn-action" onClick={download} disabled={downloadDisabled} aria-label="Download statements CSV"><Download size={12} aria-hidden="true" /> CSV</button></div></div>
     <div className="card__body col accounting-statements__body">
     <div className="financials-control-row"><Field label="Report from"><DatePicker value={from} onChange={setFrom} /></Field><Field label="Report to"><DatePicker value={to} onChange={setTo} /></Field></div>
     <div className="finance-report-toolbar">
