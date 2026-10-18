@@ -5,3 +5,116 @@
 // Books settings (/app/financials/books-settings) and the written
 // insights on the Financials overview.
 // ============================================================
+
+// ---------- Books settings ----------
+.books-settings__card {
+  max-width: 640px;
+}
+.books-settings__label {
+  display: flex;
+  align-items: center;
+  gap: token('s-1');
+  .field__label {
+    margin: 0;
+  }
+}
+.books-settings__close-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  > :first-child {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+}
+.books-settings__readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+  margin: 0;
+  font-size: token('fs-sm');
+  color: token('text-primary');
+}
+.books-settings__locked {
+  opacity: token('opacity-disabled');
+  pointer-events: none;
+}
+.books-settings__divider {
+  width: 100%;
+  margin: token('s-1') 0;
+  border: 0;
+  border-top: 1px solid token('border');
+}
+.books-settings__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+
+// Accounting workbench: a card's link to the full books page ("All journal entries").
+.books-card-link {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+// ---------- Financials overview: "Compare to" and written insights ----------
+.insights__compare {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  min-width: 0;
+}
+.insights__compare-label {
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+}
+
+.narrative-insights {
+  margin: 0;
+}
+.narrative-insights__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.narrative-insights__item {
+  display: grid;
+  gap: token('s-1');
+  padding: token('s-3') token('s-4');
+  & + & {
+    border-top: 1px solid token('border');
+  }
+}
+.narrative-insights__label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-1') token('s-2');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  color: token('text-secondary');
+}
+.narrative-insights__context {
+  font-weight: token('fw-regular');
+  color: token('text-tertiary');
+  font-variant-numeric: tabular-nums;
+}
+.narrative-insights__sentence {
+  margin: 0;
+  font-size: token('fs-sm');
+  color: token('text-primary');
+  max-width: 72ch;
+}
+@media (min-width: 1200px) {
+  .narrative-insights__list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .narrative-insights__item + .narrative-insights__item {
+    border-top: 0;
+    border-left: 1px solid token('border');
+  }
+}
