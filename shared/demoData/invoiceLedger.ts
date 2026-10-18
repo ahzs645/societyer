@@ -163,10 +163,8 @@ export function invoiceLedgerDemoRows(input: DemoInvoiceLedgerInput) {
     const accrual = accrualPostingLines(invoice, revenueFor, { receivableAccountId: input.accounts.receivable, taxPayableAccountId: input.accounts.taxPayable });
     const label = invoiceLabel(invoice);
     const journalEntryId = post("accrual", key, accrualKey(invoice._id), invoice.issueDate, `Invoice ${label}`, accrual, invoice.counterpartyId);
-    let paidBefore = 0;
+    const recognised: typeof accrual = [];
     const payments = invoice.payments.map((payment) => {
-      const paidBeforeCents = paidBefore;
-      paidBefore += payment.amountCents;
       if (isBeforeBooksStart(payment.date, input.booksStart)) return payment;
       const txn = payment.financialTransactionId ? txnById.get(payment.financialTransactionId) : undefined;
       const depositAccountId = txn ? String(txn.accountId) : input.accounts.undeposited;
@@ -180,7 +178,8 @@ export function invoiceLedgerDemoRows(input: DemoInvoiceLedgerInput) {
         paymentPostingLines({ amountCents: payment.amountCents, financialTransactionId: txn?._id, reference: payment.reference }, { depositAccountId, receivableAccountId: input.accounts.receivable }, `Payment: ${label}`),
         invoice.counterpartyId,
       );
-      const cashLines = cashBasisPostingLines(accrual, { totalCents: totals.totalCents, paidBeforeCents, paymentCents: payment.amountCents, receivableAccountId: input.accounts.receivable }, `Revenue received: ${label}`);
+      const cashLines = cashBasisPostingLines(accrual, { paymentCents: payment.amountCents, receivableAccountId: input.accounts.receivable, recognised }, `Revenue received: ${label}`);
+      recognised.push(...cashLines);
       const cashBasisEntryId = cashLines.length
         ? post("cashBasis", `${paymentKey}_cash`, cashBasisKey(invoice._id, payment.key), payment.date, `Cash basis: ${label} paid`, cashLines, invoice.counterpartyId)
         : undefined;

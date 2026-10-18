@@ -18,7 +18,7 @@ import { assertPeriodOpen, postedJournalForTransaction, TRANSACTION_BACKFILL_SOU
 import { assertBooksOpen, booksSettingsRow } from "./booksLock";
 import { validateBalancedJournalLines } from "../accountingCore";
 import { openingBalanceDate } from "../accountingBackfill";
-import { computeInvoiceTotals, paidCents as sumPaid, type InvoiceDiscount, type InvoiceLine, type InvoicePayment } from "../invoicing";
+import { computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine, type InvoicePayment } from "../invoicing";
 import {
   INVOICE_POSTINGS,
   INVOICE_POSTING_SOURCES,
@@ -34,7 +34,7 @@ import {
   paymentEntryKey,
   paymentPostingLines,
   resolveLineRevenue,
-  sameLedgerLines,
+  sameLedgerNet,
   type BooksStart,
   type CatalogMappingRef,
   type InvoiceGlMapping,
@@ -447,7 +447,7 @@ function revenueResolver(invoice: StoredInvoice, lctx: InvoiceLedgerContext) {
 async function accountsForAccrual(ctx: PortableMutationCtx, invoice: StoredInvoice, lctx: InvoiceLedgerContext) {
   const mapped = (id: string | null | undefined) => (id && lctx.accountIds.has(id) ? id : undefined);
   const receivableAccountId = mapped(lctx.mapping.receivableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "receivable"))._id;
-  const taxed = computeInvoiceTotals(invoice.lines ?? [], invoice.discount).taxCents !== 0;
+  const taxed = computeInvoiceTotals(invoice.lines ?? [], invoice.discount).taxes.some((tax) => tax.cents !== 0);
   const taxPayableAccountId = taxed ? mapped(lctx.mapping.taxPayableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "taxPayable"))._id : undefined;
   return { receivableAccountId, taxPayableAccountId };
 }
@@ -476,7 +476,8 @@ export async function syncAccrual(ctx: PortableMutationCtx, invoice: StoredInvoi
   const memo = `Invoice ${invoiceLabel(invoice)}`;
   if (current) {
     const stored = await entryLines(ctx, current._id);
-    if (current.date === invoice.issueDate && sameLedgerLines(stored, lines)) return { entryId: current._id, changed: false };
+    // Compared net per account, so an entry posted before lines were netted still counts as the same.
+    if (current.date === invoice.issueDate && sameLedgerNet(stored, lines)) return { entryId: current._id, changed: false };
     if ((invoice.payments ?? []).some((payment) => payment.cashBasisEntryId)) {
       throw new Error(`${invoice.number} has payments recognised in the books. Remove them before changing amounts, items or the issue date.`);
     }
@@ -576,11 +577,14 @@ export async function postPayment(
     counterpartyId: invoice.counterpartyId,
     createdByUserId,
   });
-  // Earlier payments (in the order recorded) cover the first share of the invoice.
-  const index = (invoice.payments ?? []).findIndex((row) => row.key === payment.key);
-  const paidBeforeCents = sumPaid((invoice.payments ?? []).slice(0, index < 0 ? (invoice.payments ?? []).length : index));
-  const totalCents = accrualLines.filter((line) => line.side === "debit").reduce((sum, line) => sum + line.amountCents, 0);
-  const cashLines = cashBasisPostingLines(accrualLines, { totalCents, paidBeforeCents, paymentCents: payment.amountCents, receivableAccountId }, `Revenue received: ${invoiceLabel(invoice)}`);
+  // Each payment recognises a share of what the invoice's other live cash-basis entries haven't.
+  const recognised: LedgerLineRow[] = [];
+  for (const other of invoice.payments ?? []) {
+    if (other.key === payment.key) continue;
+    const entry = await postedEntry(ctx, invoice.societyId, other.cashBasisEntryId);
+    if (entry) recognised.push(...(await entryLines(ctx, entry._id)));
+  }
+  const cashLines = cashBasisPostingLines(accrualLines, { paymentCents: payment.amountCents, receivableAccountId, recognised }, `Revenue received: ${invoiceLabel(invoice)}`);
   const cashBasisEntryId = cashLines.length
     ? await postLedgerEntry(ctx, {
       societyId: invoice.societyId,

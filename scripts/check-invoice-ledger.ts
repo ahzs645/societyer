@@ -21,6 +21,7 @@ import {
   mirrorLines,
   paymentPostingLines,
   resolveLineRevenue,
+  unrecognisedInvoiceRevenue,
   type InvoiceLedgerLine,
   type NeedsActionInput,
 } from "../shared/invoiceLedger";
@@ -60,20 +61,73 @@ const net = (lines: ReadonlyArray<{ accountId: string; side: string; amountCents
   assert.deepEqual(payment.map((row) => [row.accountId, row.side, row.amountCents, row.financialTransactionId]), [["bank", "debit", 20000, "txn_1"], ["ar", "credit", 20000, "txn_1"]]);
 
   // Cash basis: partial payments recognise the paid share; together they equal the accrual's credits.
-  const first = cashBasisPostingLines(lines, { totalCents: 37350, paidBeforeCents: 0, paymentCents: 12345, receivableAccountId: "ar" });
-  const second = cashBasisPostingLines(lines, { totalCents: 37350, paidBeforeCents: 12345, paymentCents: 25005, receivableAccountId: "ar" });
+  const first = cashBasisPostingLines(lines, { paymentCents: 12345, receivableAccountId: "ar" });
+  const second = cashBasisPostingLines(lines, { paymentCents: 25005, receivableAccountId: "ar", recognised: first });
   assert.ok(ledgerBalance(first).balanced && ledgerBalance(second).balanced);
   assert.equal(first[0].amountCents, 12345, "the receivable is debited for exactly the payment");
   const recognised = net([...first, ...second].filter((row) => row.side === "credit"));
   assert.deepEqual([...recognised.entries()].sort(), [["gst", -1350], ["rev_program", -9000], ["rev_rental", -27000]], "once paid, cash-basis revenue and tax equal the accrual");
   assert.equal(first.find((row) => row.accountId === "rev_rental")?.tagIds?.[0], "tag_event", "tags follow onto the cash-basis line");
-  assert.deepEqual(cashBasisPostingLines(lines, { totalCents: 37350, paidBeforeCents: 37350, paymentCents: 500, receivableAccountId: "ar" }), [], "an overpayment recognises no revenue");
+  assert.deepEqual(cashBasisPostingLines(lines, { paymentCents: 500, receivableAccountId: "ar", recognised: [...first, ...second] }), [], "an overpayment recognises no revenue");
   // Under accrual reports the cash-basis entry drops out, and vice versa.
   assert.equal(journalBasisOf({ source: INVOICE_POSTINGS.accrual.source }), "accrual-only");
   assert.equal(journalBasisOf({ source: INVOICE_POSTINGS.accrualReversal.source }), "accrual-only");
   assert.equal(journalBasisOf({ source: INVOICE_POSTINGS.cashBasis.source }), "cash-only");
   assert.equal(journalBasisOf({ source: INVOICE_POSTINGS.payment.source }), "both");
   for (const posting of Object.values(INVOICE_POSTINGS)) assert.equal(journalBasisOf({ source: posting.source }), posting.basis, `${posting.source} falls back to its basis`);
+}
+
+// ---- cash basis over what's still unrecognised: never past the payment or the accrual
+{
+  const gst = { taxRatePercent: 5, taxLabel: "GST" };
+  const invoice = { number: "INV-0002", billToName: "Rounding Co", lines: [line("A", 1, 20000, gst), line("B", 1, 12500, gst), line("C", 1, 100, gst)] };
+  const accounts: Record<string, string> = { A: "rev_a", B: "rev_b", C: "rev_c" };
+  const accrual = accrualPostingLines(invoice, (row) => accounts[row.item], { receivableAccountId: "ar", taxPayableAccountId: "gst" });
+  assert.equal(accrual[0].amountCents, 34230, "$326 plus $16.30 GST");
+  const recognised: InvoiceLedgerLine[] = [];
+  const entries: InvoiceLedgerLine[][] = [];
+  for (const paymentCents of [32300, 100, 1830]) {
+    const posting = cashBasisPostingLines(accrual, { paymentCents, receivableAccountId: "ar", recognised });
+    assert.ok(ledgerBalance(posting).balanced, "each recognition balances");
+    assert.equal(posting[0].amountCents, paymentCents, "Dr AR is exactly the payment, never more");
+    entries.push(posting);
+    recognised.push(...posting);
+  }
+  const accrualNet = net(accrual.slice(1));
+  const recognisedNet = net(recognised.filter((row) => row.accountId !== "ar"));
+  assert.deepEqual([...recognisedNet.entries()].sort(), [...accrualNet.entries()].sort(), "paid in full, every line is recognised exactly once");
+  // Removing the $1 payment puts exactly its share back, and paying it again takes that remainder.
+  const others = [...entries[0], ...entries[2]];
+  const remaining = unrecognisedInvoiceRevenue(accrual, others, "ar");
+  const middle = net(entries[1].filter((row) => row.accountId !== "ar"));
+  for (const bucket of remaining) assert.equal(bucket.remainingCents, 0 - (middle.get(bucket.accountId) ?? 0), `${bucket.accountId} gets the removed payment's share back`);
+  const again = cashBasisPostingLines(accrual, { paymentCents: 100, receivableAccountId: "ar", recognised: others });
+  assert.deepEqual(net(again.slice(1)), middle, "the repaid share takes the exact remainder");
+}
+
+// ---- negative lines net per account: revenue and tax both come down, and the cash basis recognises them
+{
+  const gst = { taxRatePercent: 5, taxLabel: "GST" };
+  const invoice = {
+    number: "INV-0003",
+    billToName: "Credit Co",
+    lines: [line("Hall", 1, 30000, { ...gst, tagIds: ["tag_event"] }), line("Hall refund", 1, -5000, { ...gst, tagIds: ["tag_event"] }), line("Workshop", 1, 4000), line("Goodwill credit", 1, -2000, gst)],
+  };
+  const accounts: Record<string, string> = { Hall: "rev_rental", "Hall refund": "rev_rental", Workshop: "rev_program", "Goodwill credit": "rev_credits" };
+  const accrual = accrualPostingLines(invoice, (row) => accounts[row.item], { receivableAccountId: "ar", taxPayableAccountId: "gst" });
+  assert.deepEqual(
+    accrual.map((row) => [row.accountId, row.side, row.amountCents]),
+    [["ar", "debit", 28150], ["rev_rental", "credit", 25000], ["rev_program", "credit", 4000], ["rev_credits", "debit", 2000], ["gst", "credit", 1150]],
+    "the refund nets against its revenue, a net credit posts as a debit, and GST is on the net",
+  );
+  assert.ok(ledgerBalance(accrual).balanced);
+  const onlyNegativeTaxed = accrualPostingLines({ number: "INV-0004", billToName: "X", lines: [line("Room", 1, 10000), line("Discount", 1, -1000, gst)] }, () => "rev", { receivableAccountId: "ar", taxPayableAccountId: "gst" });
+  assert.deepEqual(onlyNegativeTaxed.map((row) => [row.accountId, row.side, row.amountCents]), [["ar", "debit", 8950], ["rev", "credit", 9000], ["gst", "debit", 50]], "a negative line's tax alone posts as a debit, not a negative credit");
+  const first = cashBasisPostingLines(accrual, { paymentCents: 10000, receivableAccountId: "ar" });
+  const rest = cashBasisPostingLines(accrual, { paymentCents: 18150, receivableAccountId: "ar", recognised: first });
+  assert.ok(ledgerBalance(first).balanced && ledgerBalance(rest).balanced);
+  assert.ok(first.some((row) => row.accountId === "rev_credits" && row.side === "debit"), "the cash basis recognises the debit line too");
+  assert.deepEqual([...net([...first, ...rest].filter((row) => row.accountId !== "ar")).entries()].sort(), [...net(accrual.slice(1)).entries()].sort(), "paid in full, the cash basis equals the netted accrual, GST included");
 }
 
 // ---- mapping resolution: item, then category, then default; gone accounts are skipped
@@ -341,6 +395,16 @@ const roomInvoice = await inv.upsertPortable(ctx, { societyId: S, partyKind: "cu
 await inv.markSentPortable(ctx, { societyId: S, ids: [roomInvoice] });
 lines = await linesOf((await invoiceRow(roomInvoice)).journalEntryId);
 assert.equal(lines[1].accountId, DUES, "the item's own account wins over its category");
+
+// A negative line (imported data; the editor takes none) nets against revenue and GST, sends, and is recognised on payment.
+const creditInvoice = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Credit Line Co", issueDate: today, terms: "net_15", lines: [{ item: "Room", quantity: 1, unitPriceCents: 10000 }] });
+await db.patch(creditInvoice, { lines: [{ key: "l1", item: "Room", quantity: 1, unitPriceCents: 10000 }, { key: "l2", item: "Goodwill credit", quantity: 1, unitPriceCents: -1000, taxRatePercent: 5, taxLabel: "GST" }] });
+assert.equal((await inv.markSentPortable(ctx, { societyId: S, ids: [creditInvoice] })).posted, 1, "a negative taxed line no longer makes sending throw");
+const creditAccrual = await linesOf((await invoiceRow(creditInvoice)).journalEntryId);
+assert.deepEqual(creditAccrual.map((item) => [item.accountId, item.side, item.amountCents]), [[AR, "debit", 8950], [PROGRAM, "credit", 9000], [GST, "debit", 50]], "revenue and GST both net; the net tax credit posts as a debit");
+await inv.recordPaymentPortable(ctx, { id: creditInvoice, date: today, amountCents: 8950, method: "cash" });
+const creditCash = await linesOf((await invoiceRow(creditInvoice)).payments[0].cashBasisEntryId!);
+assert.deepEqual(creditCash.map((item) => [item.accountId, item.side, item.amountCents]), [[AR, "debit", 8950], [PROGRAM, "credit", 9000], [GST, "debit", 50]], "the cash basis recognises the netted revenue and tax");
 
 // Everything posted still balances, and receivables still match the invoices.
 const postedIds = new Set((await entries()).filter((entry) => entry.status === "posted").map((entry) => entry._id));

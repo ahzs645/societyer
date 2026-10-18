@@ -136,11 +136,19 @@ export function invoiceLabel(invoice: Pick<InvoiceForPosting, "number" | "billTo
   return `${invoice.number} · ${invoice.billToName}`;
 }
 
+/** Lines on one account with the same tags post as one line; this is their key. */
+function ledgerLineKey(line: { accountId: string; tagIds?: readonly string[] }): string {
+  return `${line.accountId}|${JSON.stringify([...(line.tagIds ?? [])].map(String).sort())}`;
+}
+
 /**
- * The accrual: Dr receivable for the total; Cr each line's revenue account
- * for its amount less its share of the discount (zero lines left out), with
- * the line's tags; Cr tax payable once per tax. `revenueFor` returns the
- * account for each line (by index), or null when it has none, which throws.
+ * The accrual: Dr receivable for the total; then the revenue and tax, netted
+ * per account (and tags) so a negative line (a credit or refund) offsets the
+ * revenue it reverses and a negative line's tax offsets the tax collected.
+ * Each line's amount is less its share of the discount; zero lines are left
+ * out. A net credit posts as a credit, a net debit (more given back than
+ * charged on that account) as a debit. `revenueFor` returns the account for
+ * each line (by index), or null when it has none, which throws.
  */
 export function accrualPostingLines(
   invoice: InvoiceForPosting,
@@ -150,24 +158,36 @@ export function accrualPostingLines(
   const totals = computeInvoiceTotals(invoice.lines, invoice.discount);
   if (!(totals.totalCents > 0)) throw new Error("Only invoices with a total above zero go into the books.");
   const shares = allocateProportionally(totals.discountCents, totals.lineAmounts);
-  const credits: InvoiceLedgerLine[] = [];
+  const nets = new Map<string, { accountId: string; tagIds?: string[]; descriptions: string[]; signedCents: number }>();
+  const add = (accountId: string, signedCents: number, description: string, tagIds?: readonly string[]) => {
+    const key = ledgerLineKey({ accountId, tagIds });
+    const row = nets.get(key) ?? { accountId, ...(tagIds?.length ? { tagIds: [...tagIds] } : {}), descriptions: [], signedCents: 0 };
+    row.signedCents += signedCents;
+    if (description && !row.descriptions.includes(description)) row.descriptions.push(description);
+    nets.set(key, row);
+  };
   invoice.lines.forEach((line, index) => {
     const amountCents = totals.lineAmounts[index] - shares[index];
     if (amountCents === 0) return;
     const accountId = revenueFor(line, index);
     if (!accountId) throw new Error(`Line ${index + 1} (${line.item}) has no revenue account. Map it under Edit GL account mapping.`);
-    credits.push({
-      accountId,
-      side: amountCents > 0 ? "credit" : "debit",
-      amountCents: Math.abs(amountCents),
-      description: line.item,
-      ...(line.tagIds?.length ? { tagIds: [...line.tagIds] } : {}),
-    });
+    add(accountId, amountCents, line.item, line.tagIds);
   });
   for (const tax of totals.taxes) {
     if (!tax.cents) continue;
     if (!accounts.taxPayableAccountId) throw new Error("Choose the account sales tax is collected to under Edit GL account mapping.");
-    credits.push({ accountId: accounts.taxPayableAccountId, side: "credit", amountCents: tax.cents, description: `${tax.label} ${tax.ratePercent}% collected` });
+    add(accounts.taxPayableAccountId, tax.cents, `${tax.label} ${tax.ratePercent}% collected`);
+  }
+  const credits: InvoiceLedgerLine[] = [];
+  for (const row of nets.values()) {
+    if (row.signedCents === 0) continue;
+    credits.push({
+      accountId: row.accountId,
+      side: row.signedCents > 0 ? "credit" : "debit",
+      amountCents: Math.abs(row.signedCents),
+      description: row.descriptions.join(", "),
+      ...(row.tagIds?.length ? { tagIds: row.tagIds } : {}),
+    });
   }
   return [{ accountId: accounts.receivableAccountId, side: "debit", amountCents: totals.totalCents, description: `Accounts receivable: ${invoiceLabel(invoice)}` }, ...credits];
 }
@@ -187,34 +207,94 @@ export function paymentPostingLines(
   ];
 }
 
+type CashBasisSourceLine = { accountId: string; side: string; amountCents: number; description?: string; tagIds?: readonly string[] };
+
 /**
- * The cash-basis recognition of one payment: the accrual's credit lines
- * (revenue and tax), each taken pro rata to the payment, credited again,
- * and the receivable debited for their sum. Shares are cumulative over the
- * invoice (`paidBeforeCents` is what earlier payments covered), so once the
- * invoice is paid the recognitions add up to the accrual exactly. Anything
- * paid beyond the total is not revenue and is left out. Empty when nothing
- * is left to recognise.
+ * What is still unrecognised on each of the accrual's revenue and tax lines
+ * (by account and tags, credit positive): the accrual less every earlier
+ * cash-basis recognition (`recognised`, the lines of the invoice's other
+ * live cash-basis entries). Receivable lines are left out.
+ */
+export function unrecognisedInvoiceRevenue(
+  accrualLines: ReadonlyArray<CashBasisSourceLine>,
+  recognised: ReadonlyArray<CashBasisSourceLine>,
+  receivableAccountId: string,
+) {
+  const buckets = new Map<string, { accountId: string; description?: string; tagIds?: string[]; remainingCents: number }>();
+  const signed = (line: CashBasisSourceLine) => (line.side === "credit" ? line.amountCents : -line.amountCents);
+  for (const line of accrualLines) {
+    if (String(line.accountId) === String(receivableAccountId)) continue;
+    const key = ledgerLineKey(line);
+    const bucket = buckets.get(key) ?? { accountId: String(line.accountId), description: line.description, ...(line.tagIds?.length ? { tagIds: [...line.tagIds].map(String) } : {}), remainingCents: 0 };
+    bucket.remainingCents += signed(line);
+    buckets.set(key, bucket);
+  }
+  for (const line of recognised) {
+    if (String(line.accountId) === String(receivableAccountId)) continue;
+    const bucket = buckets.get(ledgerLineKey(line));
+    if (bucket) bucket.remainingCents -= signed(line);
+  }
+  return [...buckets.values()];
+}
+
+/**
+ * The cash-basis recognition of one payment: Dr Accounts receivable for the
+ * payment, and the accrual's revenue and tax recognised in proportion to
+ * what is still unrecognised on each (credits for revenue and tax, debits
+ * for a line that nets to a debit). Each share is capped at its line's
+ * remainder, so recognition never runs past the accrual, and a payment that
+ * clears the balance takes every remainder exactly. Earlier recognitions
+ * come from the invoice's other live cash-basis entries (`recognised`), so
+ * removing a payment (voiding its entry) puts its share back. Anything paid
+ * beyond the total is not revenue and is left out. Empty when nothing is
+ * left to recognise.
  */
 export function cashBasisPostingLines(
-  accrualCredits: ReadonlyArray<{ accountId: string; side: string; amountCents: number; description?: string; tagIds?: string[] }>,
-  input: { totalCents: number; paidBeforeCents: number; paymentCents: number; receivableAccountId: string },
+  accrualLines: ReadonlyArray<CashBasisSourceLine>,
+  input: { paymentCents: number; receivableAccountId: string; recognised?: ReadonlyArray<CashBasisSourceLine> },
   label = "Revenue received",
 ): InvoiceLedgerLine[] {
-  const credits = accrualCredits.filter((line) => line.side === "credit");
-  const weights = credits.map((line) => line.amountCents);
-  const cumulative = (paid: number) => allocateProportionally(Math.max(0, Math.min(input.totalCents, paid)), weights);
-  const before = cumulative(input.paidBeforeCents);
-  const after = cumulative(input.paidBeforeCents + input.paymentCents);
+  const buckets = unrecognisedInvoiceRevenue(accrualLines, input.recognised ?? [], input.receivableAccountId);
+  const positives = buckets.filter((bucket) => bucket.remainingCents > 0);
+  const negatives = buckets.filter((bucket) => bucket.remainingCents < 0);
+  const positiveCents = positives.reduce((sum, bucket) => sum + bucket.remainingCents, 0);
+  const negativeCents = negatives.reduce((sum, bucket) => sum - bucket.remainingCents, 0);
+  const remainingCents = positiveCents - negativeCents;
+  const paymentCents = Math.min(Math.round(input.paymentCents), remainingCents);
+  if (!(paymentCents > 0)) return [];
+  // Recognise the same fraction of the debit lines; the credits cover the payment plus that.
+  const debitShareCents = paymentCents === remainingCents ? negativeCents : Math.min(negativeCents, Math.round((paymentCents * negativeCents) / remainingCents));
+  const creditShareCents = paymentCents + debitShareCents;
+  const creditShares = allocateProportionally(creditShareCents, positives.map((bucket) => bucket.remainingCents));
+  const debitShares = allocateProportionally(debitShareCents, negatives.map((bucket) => -bucket.remainingCents));
   const lines: InvoiceLedgerLine[] = [];
-  credits.forEach((line, index) => {
-    const share = after[index] - before[index];
-    if (share <= 0) return;
-    lines.push({ accountId: line.accountId, side: "credit", amountCents: share, description: line.description, ...(line.tagIds?.length ? { tagIds: [...line.tagIds] } : {}) });
-  });
-  const recognised = lines.reduce((sum, line) => sum + line.amountCents, 0);
-  if (!recognised) return [];
-  return [{ accountId: input.receivableAccountId, side: "debit", amountCents: recognised, description: label }, ...lines];
+  const push = (bucket: (typeof buckets)[number], side: "debit" | "credit", amountCents: number) => {
+    if (amountCents <= 0) return;
+    lines.push({ accountId: bucket.accountId, side, amountCents, description: bucket.description, ...(bucket.tagIds?.length ? { tagIds: [...bucket.tagIds] } : {}) });
+  };
+  for (const bucket of buckets) {
+    const positive = positives.indexOf(bucket);
+    if (positive >= 0) push(bucket, "credit", creditShares[positive]);
+    const negative = negatives.indexOf(bucket);
+    if (negative >= 0) push(bucket, "debit", debitShares[negative]);
+  }
+  return [{ accountId: input.receivableAccountId, side: "debit", amountCents: paymentCents, description: label }, ...lines];
+}
+
+/** The net of each account and tag set (debits positive): two line sets that post the same. */
+export function sameLedgerNet(a: ReadonlyArray<ComparableLine>, b: ReadonlyArray<ComparableLine>): boolean {
+  const net = (lines: ReadonlyArray<ComparableLine>) => {
+    const byKey = new Map<string, number>();
+    for (const line of lines) {
+      const key = ledgerLineKey({ accountId: String(line.accountId), tagIds: line.tagIds });
+      byKey.set(key, (byKey.get(key) ?? 0) + (line.side === "debit" ? line.amountCents : -line.amountCents));
+    }
+    return byKey;
+  };
+  const left = net(a);
+  const right = net(b);
+  const keys = new Set([...left.keys(), ...right.keys()]);
+  return [...keys].every((key) => (left.get(key) ?? 0) === (right.get(key) ?? 0));
 }
 
 /** The mirror of an entry's lines (debits become credits), for a reversal. */
