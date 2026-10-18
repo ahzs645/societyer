@@ -67,7 +67,7 @@ export type NavTreeConfigEntry =
 
 /**
  * Workspace areas for the sidebar's area switcher. "Finance" holds the books
- * (financials, accounting, reconciliation, rules, approvals, invoices,
+ * (financials, accounting, reconciliation, rules, approvals, invoices, bills,
  * grants, receipts and so on); "Governance" holds everything else. "All"
  * shows both and is the default, so nothing is hidden until someone chooses.
  * The names suit societies and corporations alike.
@@ -251,6 +251,7 @@ export const NAV_TREE: readonly NavTreeConfigEntry[] = [
       { to: "/app/financials", label: "Overview", end: true },
       "/app/treasurer",
       "/app/invoices",
+      "/app/bills",
       "/app/payroll",
       "/app/corporate-cards",
       "/app/investments",

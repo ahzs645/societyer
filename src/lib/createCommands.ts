@@ -51,6 +51,13 @@ export function useCreateCommands(): CreateCommand[] {
           run: () => navigate("/app/invoices?builder=new"),
         },
         {
+          id: "create-bill",
+          label: "New bill",
+          icon: ReceiptText,
+          keywords: ["vendor bill", "accounts payable", "pay a vendor", "create bill"],
+          run: () => navigate("/app/bills?edit=new"),
+        },
+        {
           id: "create-journal-entry",
           label: "New journal entry",
           icon: GitCompareArrows,

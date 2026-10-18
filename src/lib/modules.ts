@@ -18,6 +18,7 @@ export const MODULE_DEFAULTS = {
   donationReceipts: true,
   membershipBilling: true,
   employees: true,
+  bills: true,
   payroll: true,
   cards: true,
   investments: true,
@@ -197,6 +198,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Finance",
     description: "Employee records for organizations with payroll or staff.",
     includes: ["Employees"],
+  },
+  {
+    key: "bills",
+    label: "Bills and vendors",
+    category: "Finance",
+    description: "Vendor bills with approval under the expense approval rules, Accounts payable postings, payments matched to the bank feed and a vendor register.",
+    includes: ["Bills"],
   },
   {
     key: "payroll",

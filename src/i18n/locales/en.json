@@ -167,6 +167,7 @@
     "articlesHistory": "Articles history",
     "approvals": "Approvals",
     "invoices": "Invoices",
+    "bills": "Bills",
     "payroll": "Payroll",
     "creditCards": "Credit cards",
     "investments": "Investments",
@@ -428,6 +429,10 @@
     "employees": {
       "label": "Employee register",
       "description": "Employee records for societies with payroll or staff."
+    },
+    "bills": {
+      "label": "Bills and vendors",
+      "description": "Vendor bills with approval under the expense approval rules, Accounts payable postings, payments matched to the bank feed and a vendor register."
     },
     "payroll": {
       "label": "Payroll register",

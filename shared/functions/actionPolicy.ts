@@ -53,6 +53,7 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   waveCacheResources: "waveCache",
   payRuns: "payroll", payrollRemittances: "payroll", payrollSlips: "payroll", recordsOfEmployment: "payroll",
   cardStatements: "corporateCards", investmentHoldings: "investments",
+  billVendors: "bills",
 };
 const HANDLER_POLICIES = new Set([
   "offlineMeetings:applyCommand", "offlineMeetings:prepareFileUpload", "offlineMeetings:commitFile",

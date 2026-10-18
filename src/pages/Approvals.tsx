@@ -21,8 +21,9 @@ import { ClaimDetailDrawer } from "../features/financials/approvals/ClaimDetailD
 import { ClaimPolicyCard } from "../features/financials/approvals/ClaimPolicyCard";
 import { useClaimShareActions } from "../features/financials/approvals/ClaimChecks";
 import type { ApprovalQueue, QueueRow, QueueTab } from "../features/financials/approvals/types";
+import { BillApprovalsPanel, useBillsAwaitingApproval } from "../features/bills/BillApprovalsPanel";
 
-const TAB_IDS: QueueTab[] = ["awaiting", "approved", "paid", "closed", "drafts", "rules", "policy"];
+const TAB_IDS: QueueTab[] = ["awaiting", "bills", "approved", "paid", "closed", "drafts", "rules", "policy"];
 
 function rowsForTab(rows: QueueRow[], tab: QueueTab): QueueRow[] {
   switch (tab) {
@@ -35,7 +36,7 @@ function rowsForTab(rows: QueueRow[], tab: QueueTab): QueueRow[] {
   }
 }
 
-const EMPTY_COPY: Record<Exclude<QueueTab, "rules" | "policy">, { title: string; description: string }> = {
+const EMPTY_COPY: Record<Exclude<QueueTab, "bills" | "rules" | "policy">, { title: string; description: string }> = {
   awaiting: { title: "Nothing waiting for approval", description: "Submitted expense claims appear here until they have the approvals your rules require." },
   approved: { title: "Nothing to pay", description: "Approved claims wait here until someone records the payment." },
   paid: { title: "No paid claims yet", description: "Reimbursed claims are kept here with their payment reference." },
@@ -53,6 +54,7 @@ export function ApprovalsPage() {
   const { canWrite } = useFinancePermissions();
   const queue = useQuery(api.expenseReports.approvalQueue, society ? { societyId: society._id } : "skip") as ApprovalQueue | undefined;
   const bulkApprove = useMutation(api.expenseReports.bulkApprove);
+  const billApprovals = useBillsAwaitingApproval(society?._id);
   const decide = useMutation(api.expenseReports.decide);
   const confirm = useConfirm();
   const toast = useToast();
@@ -171,7 +173,7 @@ export function ApprovalsPage() {
         title="Approvals"
         icon={<ClipboardCheck size={16} />}
         iconColor="green"
-        subtitle="Review, approve and pay expense claims."
+        subtitle="Review, approve and pay expense claims and vendor bills."
         info={
           <p>
             Approval rules decide how many people must approve a claim of a given size and who may approve it.
@@ -193,6 +195,7 @@ export function ApprovalsPage() {
         ariaLabel="Approval queues"
         items={[
           { id: "awaiting", label: "Awaiting approval", count: counts?.awaiting ?? null },
+          { id: "bills", label: "Bills", count: billApprovals.workspace ? billApprovals.rows.length : null },
           { id: "approved", label: "Approved, to pay", count: counts?.approved ?? null },
           { id: "paid", label: "Paid", count: counts?.paid ?? null },
           { id: "closed", label: "Declined & recalled", count: counts?.closed ?? null },
@@ -204,6 +207,10 @@ export function ApprovalsPage() {
 
       {queue === undefined ? (
         <div className="card"><div className="card__body"><div className="record-table__loading">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="record-table__loading-row" />)}</div></div></div>
+      ) : tab === "bills" ? (
+        <div className="card approvals-card">
+          <BillApprovalsPanel rows={billApprovals.rows} loading={billApprovals.workspace === undefined} />
+        </div>
       ) : tab === "policy" ? (
         <div className="approvals-settings">
           <ClaimPolicyCard queue={queue} societyId={society._id} />

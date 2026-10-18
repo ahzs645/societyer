@@ -134,6 +134,7 @@
 @use "sankey";
 
 @use "business-registers"; // Payroll, Credit cards and Investments registers
+@use "bills"; // Bills and Vendors (payables)
 
 @use "incorporation-setup"; // guided setup jurisdiction + governing Act questions
 @use "expense-policy"; // Claim policy, receipts, duplicate hints, reminders, rule change control
