@@ -298,6 +298,27 @@ await assert.rejects(() => exp.setStatusPortable(avery, { id: "static_expense_wo
 await exp.setStatusPortable(mina, { id: "static_expense_workshop_supplies", status: "Approved" });
 assert.equal((await db.get("static_expense_workshop_supplies")).status, "Approved");
 await assert.rejects(() => exp.setStatusPortable(mina, { id: "static_expense_kitchen_deposit", status: "Paid" }), /approved/);
+// Paying a claim posts on the organization's local date, and a closed fiscal period refuses it before anything changes.
+{
+  const claimId = "static_expense_workshop_supplies";
+  const before = await db.get(claimId);
+  const expenseAccount = seed.financialAccounts.find((a: any) => a.societyId === S && a.accountType === "Expense")._id;
+  const { resolutionCalendarDate, resolutionTimeZone } = await import("../shared/writtenResolutionEvidence");
+  const localToday = resolutionCalendarDate(new Date().toISOString(), resolutionTimeZone(await db.get(S))) ?? todayDateOnly();
+  const period = (await db.query("accountingFiscalPeriods").collect()).find((row: any) => row.societyId === S && row.startDate <= localToday && row.endDate >= localToday);
+  assert.ok(period, "a fiscal period covers today");
+  await db.patch(period._id, { status: "closed" });
+  await assert.rejects(() => exp.setStatusPortable(mina, { id: claimId, status: "Paid", expenseAccountId: expenseAccount, bankAccountId: cashId }), /Fiscal period .* is closed/, "a claim can't post into a closed period");
+  assert.equal((await db.get(claimId)).status, "Approved", "and stays approved");
+  await db.patch(period._id, { status: "open" });
+  await exp.setStatusPortable(mina, { id: claimId, status: "Paid", expenseAccountId: expenseAccount, bankAccountId: cashId });
+  const paid = await db.get(claimId);
+  const entry = await db.get(paid.journalEntryId);
+  assert.deepEqual([entry.date, entry.fiscalPeriodId], [localToday, period._id], "the reimbursement is dated the organization's today, in its period");
+  for (const line of (await db.query("journalLines").collect()).filter((row: any) => row.journalEntryId === entry._id)) await db.delete(line._id);
+  await db.delete(entry._id);
+  await db.patch(claimId, Object.fromEntries(Object.keys(paid).filter((key) => !key.startsWith("_")).map((key) => [key, before[key]])));
+}
 await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_kitchen_deposit", decision: "decline" }), /reason/);
 await assert.rejects(() => exp.upsertPortable(mina, { id: "static_expense_office_chair", societyId: S, claimantName: "Mina Patel", title: "Chair", category: "Supplies", amountCents: 18900, currency: "CAD", incurredAtISO: "2026-04-16", status: "Approved" }), /approvals queue/);
 const bulk = await exp.bulkApprovePortable(mina, { societyId: S, ids: ["static_expense_kitchen_deposit", "static_expense_printer_toner"] });

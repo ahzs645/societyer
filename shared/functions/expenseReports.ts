@@ -25,6 +25,8 @@ import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } 
 import { hasPermission, requirePermissionPortable } from "./permissions";
 import { todayDateOnly } from "../dateOnly";
 import { assertBooksOpen } from "./booksLock";
+import { assertPeriodOpen } from "./accounting";
+import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import { prefAllows, type NotificationPrefRow } from "../notificationCatalog";
 import {
   APPROVER_ACCESS_MODES,
@@ -309,10 +311,15 @@ export async function setStatusPortable(
       ) {
         const amount = Math.abs(report.amountCents ?? 0);
         if (amount > 0) {
-          await assertBooksOpen(ctx, societyId, [nowISO.slice(0, 10)], "posted");
+          // Dated the organization's local today (not the UTC date), in open books and an open period.
+          const organization = await ctx.db.get(societyId, "societies");
+          const postingDate = resolutionCalendarDate(nowISO, resolutionTimeZone(organization as Parameters<typeof resolutionTimeZone>[0])) ?? nowISO.slice(0, 10);
+          await assertBooksOpen(ctx, societyId, [postingDate], "posted");
+          const period = (await assertPeriodOpen(ctx, { societyId, date: postingDate })) as { _id: string; fiscalYear?: string } | null;
           const entryId = await ctx.db.insert("journalEntries", {
             societyId: report.societyId,
-            date: nowISO.slice(0, 10),
+            ...(period ? { fiscalPeriodId: period._id, fiscalYear: period.fiscalYear } : {}),
+            date: postingDate,
             memo: `Reimbursement: ${report.title} (${report.claimantName})`,
             source: "expenseReport",
             status: "posted",
