@@ -58,10 +58,17 @@ await owner.mutation(api.meetingTranscription.apply, { jobId, replace: false });
 let transcript = await t.run(ctx => ctx.db.query("transcripts").withIndex("by_meeting", q => q.eq("meetingId", ids.meetingId)).first());
 assert.equal(transcript!.pagedJobId, jobId); assert.equal(transcript!.segmentCount, 1200); assert.equal(transcript!.segments.length, 0);
 assert.equal((await t.run(ctx => ctx.db.get(ids.minutesId)))!.draftTranscript, "Keep approved minutes");
-const edit = { jobId, page: 17, revision: 0, index: 0, text: "Edited complete segment" };
+await owner.mutation(api.transcripts.assignSpeaker, { societyId: ids.societyId, meetingId: ids.meetingId, label: "SPEAKER_00", name: "Synthetic narrator" });
+const named = await t.run(ctx => ctx.db.get(transcript!._id)); assert.equal(named!.pagedJobId, jobId); assert.equal(named!.speakers![0].name, "Synthetic narrator"); assert.equal(named!.segments.length, 0);
+assert.equal((await t.run(ctx => ctx.db.get(ids.minutesId)))!.draftTranscript, "Keep approved minutes");
+const edit = { jobId, page: 17, revision: 0, index: 0, text: "Edited complete segment", speaker: "SPEAKER_01" };
 await owner.mutation(api.meetingTranscription.editSegment, edit);
 await assert.rejects(() => owner.mutation(api.meetingTranscription.editSegment, edit), "Concurrent edits must not silently overwrite");
 assert.equal((await owner.query(api.meetingTranscription.page, { jobId, page: 17 })).segments[0].words, undefined);
+await owner.mutation(api.transcripts.mergeSpeakers, { societyId: ids.societyId, meetingId: ids.meetingId, from: ["SPEAKER_00"], to: "SPEAKER_01" });
+let mapped = await t.run(ctx => ctx.db.get(transcript!._id)); assert.equal(mapped!.speakers!.find(s => s.label === "SPEAKER_00")!.mergedInto, "SPEAKER_01");
+await owner.mutation(api.transcripts.unmergeSpeaker, { societyId: ids.societyId, meetingId: ids.meetingId, label: "SPEAKER_00" });
+mapped = await t.run(ctx => ctx.db.get(transcript!._id)); assert.equal(mapped!.speakers!.find(s => s.label === "SPEAKER_00")!.mergedInto, undefined); assert.equal(mapped!.pagedJobId, jobId);
 // A legacy timed import must detach a paged transcript and invalidate an open replacement dialog.
 const reviewed = await t.run(ctx => ctx.db.query("transcripts").withIndex("by_meeting", q => q.eq("meetingId", ids.meetingId)).first());
 const replacementJob = await owner.mutation(api.meetingTranscription.enqueue, { sourceId: ids.sourceId });
