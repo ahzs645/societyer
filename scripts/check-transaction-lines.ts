@@ -4,8 +4,9 @@
 // line item (re-posting an edit replaces the entry's lines instead of posting
 // twice), one tag per group, bulk tag assignment with Undo, the books close
 // date on every re-posting path (single edits refuse, bulk edits, tags and
-// Undo skip and count), the tag / method / review filters and money summary
-// of the transactions tab, and the export's formula guard.
+// Undo skip and count), lines a bill or invoice payment holds (no split,
+// recode, re-match or unmatch), the tag / method / review filters and money
+// summary of the transactions tab, and the export's formula guard.
 import assert from "node:assert/strict";
 import { tables } from "../src/lib/staticConvexFixtures";
 import { MemoryDb } from "../shared/portable/memoryDb";
@@ -15,6 +16,7 @@ import * as hub from "../shared/functions/financialHub";
 import * as accounting from "../shared/functions/accounting";
 import * as linesFns from "../shared/functions/transactionLines";
 import * as tagsFns from "../shared/functions/financeTags";
+import * as recon from "../shared/functions/reconciliation";
 import {
   isSplitTransaction,
   moneyFlowSummary,
@@ -166,6 +168,23 @@ const folding = await linesFns.savePortable(owner, { id: target._id, lines: [{ i
 assert.equal(folding.split, false);
 assert.equal((await journalLines()).length, 2, "back to one line: the bank line and one offset");
 assert.equal((await get(target._id)).lines, undefined);
+
+// ---- a line a bill or invoice payment holds: not split, recoded, re-matched or unmatched here
+{
+  const billLine = await get("static_tx_bill_hydro_march");
+  const invoiceLine = await get("static_tx_invoice_hannah");
+  const [a, b] = splitEvenlyCents(billLine.amountCents, 2);
+  await assert.rejects(linesFns.savePortable(owner, { id: billLine._id, lines: [{ id: "a", amountCents: a, category: "Utilities" }, { id: "b", amountCents: b, category: "Office & technology" }] }), /linked to a bill payment\. Remove the payment on the bill to split it/);
+  await assert.rejects(linesFns.savePortable(owner, { id: billLine._id, lines: [{ id: "a", amountCents: billLine.amountCents, category: "Utilities" }] }), /Remove the payment on the bill to change its category/);
+  await linesFns.savePortable(owner, { id: invoiceLine._id, lines: [{ id: "a", amountCents: invoiceLine.amountCents, category: invoiceLine.category, accountingAccountId: invoiceLine.accountingAccountId, memo: "Paid at the door" }] });
+  assert.equal((await get(invoiceLine._id)).accountingAccountId, "static_financial_ar", "a memo on the held line is fine; its coding stays");
+  await assert.rejects(recon.unmatchPortable(owner, { txnId: billLine._id }), /Remove the payment on the bill to unmatch it/);
+  await assert.rejects(recon.matchPortable(owner, { txnId: invoiceLine._id, matchedKind: "manual", matchedId: "manual" }), /linked to an invoice payment\. Remove the payment on the invoice/);
+  await assert.rejects(recon.markManualPortable(owner, { txnId: billLine._id, note: "Fee" }), /Remove the payment on the bill/);
+  assert.deepEqual([(await get(billLine._id)).matchedKind, (await get(invoiceLine._id)).matchedKind], ["bill", "invoice"], "both links are untouched");
+  const free = seed.financialTransactions.find((row) => !row.matchedKind && row.amountCents < 0)!;
+  await assert.rejects(recon.matchPortable(owner, { txnId: free._id, matchedKind: "bill", matchedId: "static_bill_x" }), /recording the payment on the bill/, "reconciliation can't fake a bill payment link");
+}
 
 // ---- bulk tag assignment and Undo
 const plain = seed.financialTransactions.filter((row) => !row.lines && !row.tagIds && row.category).slice(0, 2).map((row) => String(row._id));

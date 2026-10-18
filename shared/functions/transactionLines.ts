@@ -25,6 +25,7 @@ import {
   type TransactionLine,
 } from "../transactionLines";
 import { tagGroupLookup } from "../financeTags";
+import { paymentLinkRefusal } from "../reconciliationPeriods";
 import {
   assertTransactionBooksOpen,
   createTransactionBooksLock,
@@ -92,6 +93,9 @@ export async function savePortable(
   const before = transactionLines(lineTransactionOf(row));
   const stored = storedLineFields(cleaned);
   const recoded = codingKey(before) !== codingKey(transactionLines({ amountCents: Number(row.amountCents) || 0, ...stored }));
+  // A payment holds this line as one amount in Accounts payable or receivable; tags and memos may still change.
+  const refusal = stored.lines ? paymentLinkRefusal(row.matchedKind, "split it") : recoded ? paymentLinkRefusal(row.matchedKind, "change its category") : null;
+  if (refusal) throw new Error(refusal);
   const previous = [{ id: String(row._id), values: snapshotBulkFields(row) }];
   await ctx.db.patch(id, {
     lines: stored.lines,
