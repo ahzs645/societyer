@@ -33,6 +33,7 @@ import {
 import { applyDemoLinesAndTags, demoFinanceTagGroups, demoFinanceTags } from "../demoData/booksTags";
 import { invoiceDemoRows, type DemoInvoiceMember, type DemoInvoiceMemberKey } from "../demoData/invoicing";
 import { billDemoRows } from "../demoData/bills";
+import { demoBankAccountProfiles, demoPettyCashAccount, demoReceiptInbox, demoSpendBudgetClaims, demoSpendBudgets } from "../demoData/banking";
 import { businessRegisterDemoRows } from "../demoData/businessRegisters";
 import { syncRegisterDeadlines } from "./businessRegisters";
 import { CORPORATION_DEMO_KEYS, CORPORATION_DEMO_TABLE_ORDER, buildCorporationDemo, insertCorporationDemo } from "../demoData/corporations";
@@ -1441,6 +1442,7 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       members,
       plans: { regular: regularPlanId, student: studentPlanId },
       billAccounts: { payable: payablesAccountId, facilities: facilitiesExpenseAccountId, venue: subAccountIds.venue, utilities: subAccountIds.utilities, program: programSuppliesAccountId },
+      financeCommitteeId,
     });
     // The books: opening balances, fiscal periods and a journal entry per
     // categorised bank line (after the rules above have categorised them).
@@ -2224,6 +2226,7 @@ type SeedFinanceDemoArgs = {
   members: Record<DemoInvoiceMemberKey, DemoInvoiceMember>;
   plans: { regular: string; student: string };
   billAccounts: { payable: string; facilities: string; venue: string; utilities: string; program: string };
+  financeCommitteeId: string;
 };
 
 /**
@@ -2426,6 +2429,17 @@ async function seedFinanceDemo(ctx: PortableMutationCtx, args: SeedFinanceDemoAr
   const deposits = invoicing.financialTransactions.reduce((sum, row) => sum + row.amountCents, 0);
   const billPayments = billing.financialTransactions.reduce((sum, row) => sum + Number(row.amountCents), 0);
   await ctx.db.patch(args.cashAccountId, { balanceCents: args.accountBalances[args.cashAccountId] + deposits + billPayments });
+
+  // Banking (shared/demoData/banking.ts): account details and petty cash, a
+  // receipt inbox picked from the feed, spend budgets and their claims.
+  const banking = { ...refs, connectionId: args.connectionId, financeCommitteeId: args.financeCommitteeId, today: todayDateOnly() };
+  const inbox = demoReceiptInbox(banking, args.feedTransactions as Array<Record<string, unknown> & { _id: string; accountId: string; date: string; amountCents: number }>);
+  await writer.insert("financialAccounts", [demoPettyCashAccount(banking)]);
+  await writer.insert("bankAccountProfiles", demoBankAccountProfiles(banking));
+  await writer.insert("documents", inbox.documents);
+  await writer.insert("receiptInboxItems", inbox.items);
+  await writer.insert("spendBudgets", demoSpendBudgets(banking));
+  await writer.insert("expenseReports", demoSpendBudgetClaims(banking));
 }
 
 export async function resetPortable(ctx: PortableMutationCtx): Promise<{ ok: boolean }> {
@@ -2510,6 +2524,10 @@ async function wipe(ctx: PortableMutationCtx) {
     "journalEntries",
     "accountingFiscalPeriods",
     "fundRestrictions",
+    // Banking (seedFinanceDemo)
+    "bankAccountProfiles",
+    "receiptInboxItems",
+    "spendBudgets",
     // Seeded since the wipe list was written; without them a re-run duplicated them.
     "programStatements",
     "grantTransactions",

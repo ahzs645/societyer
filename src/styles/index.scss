@@ -142,6 +142,7 @@
 
 @use "incorporation-setup"; // guided setup jurisdiction + governing Act questions
 @use "expense-policy"; // Claim policy, receipts, duplicate hints, reminders, rule change control
+@use "banking"; // Accounts page, reconciliation by month, receipt inbox, spend budgets, mileage claims
 @use "file-drop"; // shared FileDropZone: drag states, marching border, paste, progress
 
 // Transactions surface: detail panel, receipt drop zone, payee names.

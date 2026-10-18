@@ -26,6 +26,7 @@ import { InfoPopover } from "../components/InfoPopover";
 import { budgetVariance, formatMoney } from "../lib/money";
 import { TreasurerPnlReport } from "../features/financials/components/TreasurerPnlReport";
 import { ClaimEditorDrawer } from "../features/financials/approvals/ClaimEditorDrawer";
+import { mileageSummary } from "../../shared/expensePolicy";
 import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/VarianceCell";
 import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { useSortableRows } from "../hooks/useSortableRows";
@@ -260,6 +261,12 @@ function expenseDraftFromRow(row: any) {
     receiptDocumentId: row.receiptDocumentId ?? "",
     paymentReference: row.paymentReference ?? "",
     notes: row.notes ?? "",
+    claimType: row.claimType === "mileage" ? "mileage" : "expense",
+    distanceKm: row.mileage ? String(row.mileage.distanceKm) : "",
+    fromLocation: row.mileage?.fromLocation ?? "",
+    toLocation: row.mileage?.toLocation ?? "",
+    tripDescription: row.mileage?.tripDescription ?? "",
+    spendBudgetId: row.spendBudgetId ?? "",
   };
 }
 
@@ -582,7 +589,7 @@ export function TreasurerPage() {
                   <td>
                     <strong>{report.title}</strong>
                     <div className="muted" style={{ fontSize: 11 }}>
-                      {report.category} · incurred {formatDate(report.incurredAtISO)}
+                      {report.claimType === "mileage" ? mileageSummary(report.mileage) : report.category} · incurred {formatDate(report.incurredAtISO)}
                     </div>
                   </td>
                   <td>{report.claimantName}</td>
@@ -592,7 +599,7 @@ export function TreasurerPage() {
                     {report.receiptDocument ? (
                       <Link to={`/app/documents/${report.receiptDocument._id}`}>{report.receiptDocument.title}</Link>
                     ) : (
-                      <span className="muted">No receipt</span>
+                      <span className="muted">{report.claimType === "mileage" ? "Not needed" : "No receipt"}</span>
                     )}
                   </td>
                   <td>

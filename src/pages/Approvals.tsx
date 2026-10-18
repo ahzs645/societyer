@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useSearchParams } from "react-router-dom";
-import { BellRing, Check, ClipboardCheck, Landmark, Link2, MoreHorizontal } from "lucide-react";
+import { BellRing, Check, ClipboardCheck, Download, Landmark, Link2, MoreHorizontal } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
@@ -22,6 +22,8 @@ import { ClaimPolicyCard } from "../features/financials/approvals/ClaimPolicyCar
 import { useClaimShareActions } from "../features/financials/approvals/ClaimChecks";
 import type { ApprovalQueue, QueueRow, QueueTab } from "../features/financials/approvals/types";
 import { BillApprovalsPanel, useBillsAwaitingApproval } from "../features/bills/BillApprovalsPanel";
+import { exportClaimsCsv } from "../features/financials/approvals/claimExport";
+import { mileageSummary } from "../../shared/expensePolicy";
 
 const TAB_IDS: QueueTab[] = ["awaiting", "bills", "approved", "paid", "closed", "drafts", "rules", "policy"];
 
@@ -182,9 +184,14 @@ export function ApprovalsPage() {
           </p>
         }
         actions={
-          <Link className="btn-action" to="/app/treasurer">
-            <Landmark size={12} aria-hidden="true" /> Treasurer dashboard
-          </Link>
+          <>
+            <button type="button" className="btn-action" disabled={!queue?.rows.length} onClick={() => queue && toast.success("Claims exported", exportClaimsCsv(queue.rows))}>
+              <Download size={12} aria-hidden="true" /> Export all
+            </button>
+            <Link className="btn-action" to="/app/treasurer">
+              <Landmark size={12} aria-hidden="true" /> Treasurer dashboard
+            </Link>
+          </>
         }
       />
 
@@ -305,11 +312,15 @@ export function ApprovalsPage() {
                       <button type="button" className="approvals-table__title" onClick={(event) => { event.stopPropagation(); setOpenId(row._id); }}>
                         {row.title}
                       </button>
-                      <span className="muted approvals-table__category">{row.category}</span>
-                      {(row.policyException || (row.status === "Submitted" && row.policyIssues.length > 0) || row.possibleDuplicate) && (
+                      <span className="muted approvals-table__category">
+                        {row.claimType === "mileage" ? mileageSummary(row.mileage) : row.category}
+                        {row.spendBudget ? ` · ${row.spendBudget.name}` : ""}
+                      </span>
+                      {(row.policyException || (row.status === "Submitted" && row.policyIssues.length > 0) || row.possibleDuplicate || row.spendBudget?.exceeds) && (
                         <span className="approvals-table__flags">
                           {row.policyException ? <Badge tone="warn">Policy exception</Badge> : row.status === "Submitted" && row.policyIssues.length > 0 ? <Badge tone="warn">Misses policy</Badge> : null}
                           {row.possibleDuplicate && <Badge tone="orange">Possible duplicate</Badge>}
+                          {row.spendBudget?.exceeds && !["Paid", "Rejected", "Recalled"].includes(row.status) && <Badge tone="warn">Over budget</Badge>}
                         </span>
                       )}
                     </td>

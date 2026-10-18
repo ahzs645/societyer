@@ -89,6 +89,9 @@ const financeTagsFns = lazyHandlers(() => import("./financeTags"), "financeTags"
 const invoicesFns = lazyHandlers(() => import("./invoices"), "invoices");
 const billsFns = lazyHandlers(() => import("./bills"), "bills");
 const businessRegistersFns = lazyHandlers(() => import("./businessRegisters"), "businessRegisters");
+const bankAccountsFns = lazyHandlers(() => import("./bankAccounts"), "bankAccounts");
+const receiptInboxFns = lazyHandlers(() => import("./receiptInbox"), "receiptInbox");
+const spendBudgetsFns = lazyHandlers(() => import("./spendBudgets"), "spendBudgets");
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
 import * as policiesFns from "./policies";
@@ -618,6 +621,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "reconciliation:completePeriod", handler: reconciliationFns.completePeriodPortable }),
   definePortableMutation({ name: "reconciliation:reopenPeriod", handler: reconciliationFns.reopenPeriodPortable }),
   definePortableMutation({ name: "reconciliation:removePeriod", handler: reconciliationFns.removePeriodPortable }),
+  definePortableQuery({ name: "reconciliation:accountMonths", handler: reconciliationFns.accountMonthsPortable }),
+  definePortableMutation({ name: "reconciliation:autoReconcilePeriod", handler: reconciliationFns.autoReconcilePeriodPortable }),
   // transactionRules
   definePortableQuery({ name: "transactionRules:workspace", handler: transactionRulesFns.workspacePortable }),
   definePortableMutation({ name: "transactionRules:upsert", handler: transactionRulesFns.upsertPortable }),
@@ -637,6 +642,26 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "financeTags:upsertTag", handler: financeTagsFns.upsertTagPortable }),
   definePortableMutation({ name: "financeTags:setGroupArchived", handler: financeTagsFns.setGroupArchivedPortable }),
   definePortableMutation({ name: "financeTags:setTagArchived", handler: financeTagsFns.setTagArchivedPortable }),
+  // bankAccounts (the Accounts page)
+  definePortableQuery({ name: "bankAccounts:overview", handler: bankAccountsFns.overviewPortable }),
+  definePortableMutation({ name: "bankAccounts:createManualAccount", handler: bankAccountsFns.createManualAccountPortable }),
+  definePortableMutation({ name: "bankAccounts:updateAccount", handler: bankAccountsFns.updateAccountPortable }),
+  definePortableMutation({ name: "bankAccounts:linkLedgerAccount", handler: bankAccountsFns.linkLedgerAccountPortable }),
+  definePortableMutation({ name: "bankAccounts:setArchived", handler: bankAccountsFns.setArchivedPortable }),
+  // receiptInbox
+  definePortableQuery({ name: "receiptInbox:list", handler: receiptInboxFns.listPortable }),
+  definePortableMutation({ name: "receiptInbox:add", handler: receiptInboxFns.addPortable }),
+  definePortableMutation({ name: "receiptInbox:update", handler: receiptInboxFns.updatePortable }),
+  definePortableMutation({ name: "receiptInbox:confirmMatch", handler: receiptInboxFns.confirmMatchPortable }),
+  definePortableMutation({ name: "receiptInbox:unmatch", handler: receiptInboxFns.unmatchPortable }),
+  definePortableMutation({ name: "receiptInbox:setDiscarded", handler: receiptInboxFns.setDiscardedPortable }),
+  definePortableMutation({ name: "receiptInbox:matchAllHighConfidence", handler: receiptInboxFns.matchAllHighConfidencePortable }),
+  // spendBudgets
+  definePortableQuery({ name: "spendBudgets:list", handler: spendBudgetsFns.listPortable }),
+  definePortableQuery({ name: "spendBudgets:optionsForClaim", handler: spendBudgetsFns.optionsForClaimPortable }),
+  definePortableMutation({ name: "spendBudgets:upsert", handler: spendBudgetsFns.upsertPortable }),
+  definePortableMutation({ name: "spendBudgets:setArchived", handler: spendBudgetsFns.setArchivedPortable }),
+  definePortableMutation({ name: "spendBudgets:remove", handler: spendBudgetsFns.removePortable }),
   // invoices
   definePortableQuery({ name: "invoices:workspace", handler: invoicesFns.workspacePortable }),
   definePortableMutation({ name: "invoices:upsert", handler: invoicesFns.upsertPortable }),

@@ -17,6 +17,9 @@ import {
 } from "../../../../shared/expensePolicy";
 import { DuplicateNotice, ExceptionRequest } from "./ClaimChecks";
 import { ReceiptDropZone } from "./ReceiptDropZone";
+import { Segmented } from "../../../components/primitives";
+import { mileageAmountCents, type ClaimType } from "../../../../shared/expensePolicy";
+import { ClaimBudgetField, ClaimMileageFields, parseDistance } from "./ClaimMileageAndBudget";
 
 export type ClaimEditorDraft = {
   id?: string;
@@ -32,6 +35,13 @@ export type ClaimEditorDraft = {
   receiptDocumentId: string;
   paymentReference: string;
   notes: string;
+  /** Mileage claims are priced at the policy's rate per kilometre. */
+  claimType?: ClaimType;
+  distanceKm?: string;
+  fromLocation?: string;
+  toLocation?: string;
+  tripDescription?: string;
+  spendBudgetId?: string;
 };
 
 /**
@@ -83,13 +93,16 @@ export function ClaimEditorDrawer({
     onChange({ ...draft, ...patch });
   };
 
-  const amountCents = dollarInputToCents(draft?.amountDollars) ?? 0;
+  const isMileage = draft?.claimType === "mileage";
+  const mileageRate = queue?.claimPolicy?.mileageRateCentsPerKm as number | null | undefined;
+  const distance = parseDistance(draft?.distanceKm);
+  const amountCents = isMileage ? (distance && mileageRate ? mileageAmountCents(distance, mileageRate) : 0) : dollarInputToCents(draft?.amountDollars) ?? 0;
   const storedStatus = draft?.id ? (claims ?? []).find((claim: any) => claim._id === draft.id)?.status : undefined;
   const submitting = Boolean(draft && draft.status === "Submitted" && storedStatus !== "Submitted");
   const policy = queue?.claimPolicy;
   const issues = useMemo(
     () => (draft && submitting && policy
-      ? evaluateClaimPolicy(policy, { amountCents, receiptDocumentId: draft.receiptDocumentId || null, notes: draft.notes, incurredAtISO: draft.incurredAtISO }, todayDateOnly())
+      ? evaluateClaimPolicy(policy, { claimType: draft.claimType, amountCents, receiptDocumentId: draft.receiptDocumentId || null, notes: draft.notes, incurredAtISO: draft.incurredAtISO }, todayDateOnly())
       : []),
     [draft, submitting, policy, amountCents],
   );
@@ -132,6 +145,11 @@ export function ClaimEditorDrawer({
         paymentReference: draft.paymentReference || undefined,
         notes: draft.notes || undefined,
         policyExceptionReason: submitting && exceptionReason.trim() ? exceptionReason.trim() : undefined,
+        claimType: isMileage ? "mileage" : undefined,
+        mileage: isMileage
+          ? { distanceKm: distance ?? 0, fromLocation: draft.fromLocation || undefined, toLocation: draft.toLocation || undefined, tripDescription: draft.tripDescription || undefined }
+          : undefined,
+        spendBudgetId: draft.spendBudgetId || undefined,
       });
       toast.success(
         submitting ? "Claim submitted for approval" : "Expense report saved",
@@ -162,6 +180,13 @@ export function ClaimEditorDrawer({
     >
       {draft && (
         <div className="claim-editor__body">
+          <Field label="Claim type">
+            <Segmented<ClaimType>
+              value={draft.claimType ?? "expense"}
+              onChange={(claimType) => set(claimType === "mileage" && !draft.title ? { claimType, category: categories.includes("Travel") ? "Travel" : draft.category, title: "Mileage" } : { claimType })}
+              items={[{ id: "expense", label: "Expense" }, { id: "mileage", label: "Mileage" }]}
+            />
+          </Field>
           <Field label="Claim title">
             <input className="input" value={draft.title} onChange={(e) => set({ title: e.target.value })} />
           </Field>
@@ -188,22 +213,44 @@ export function ClaimEditorDrawer({
               <Select value={draft.status} onChange={(status) => set({ status })} options={statuses.map((value) => ({ value, label: value }))} />
             </Field>
           </div>
-          <div className="claim-editor__grid">
-            <Field label="Amount">
-              <input className="input" type="number" min="0" step="0.01" value={draft.amountDollars} onChange={(e) => set({ amountDollars: e.target.value })} />
-            </Field>
-            <Field label="Incurred date">
-              <DatePicker value={draft.incurredAtISO} onChange={(incurredAtISO) => set({ incurredAtISO })} />
-            </Field>
-          </div>
-          <Field label="Receipt document" hint="Link a document you already have, or upload the receipt below.">
+          {isMileage ? (
+            <>
+              <Field label="Trip date">
+                <DatePicker value={draft.incurredAtISO} onChange={(incurredAtISO) => set({ incurredAtISO })} />
+              </Field>
+              <ClaimMileageFields
+                value={{ distanceKm: draft.distanceKm ?? "", fromLocation: draft.fromLocation ?? "", toLocation: draft.toLocation ?? "", tripDescription: draft.tripDescription ?? "" }}
+                rateCentsPerKm={mileageRate}
+                onChange={set}
+              />
+            </>
+          ) : (
+            <div className="claim-editor__grid">
+              <Field label="Amount">
+                <input className="input" type="number" min="0" step="0.01" value={draft.amountDollars} onChange={(e) => set({ amountDollars: e.target.value })} />
+              </Field>
+              <Field label="Incurred date">
+                <DatePicker value={draft.incurredAtISO} onChange={(incurredAtISO) => set({ incurredAtISO })} />
+              </Field>
+            </div>
+          )}
+          <ClaimBudgetField
+            societyId={societyId}
+            claimantUserId={draft.claimantUserId || undefined}
+            incurredAtISO={draft.incurredAtISO}
+            amountCents={amountCents}
+            claimId={draft.id}
+            value={draft.spendBudgetId ?? ""}
+            onChange={(spendBudgetId) => set({ spendBudgetId })}
+          />
+          <Field label="Receipt document" hint={isMileage ? "Optional: mileage claims don't need a receipt." : "Link a document you already have, or upload the receipt below."}>
             <Select
               value={draft.receiptDocumentId ?? ""}
               onChange={(receiptDocumentId) => set({ receiptDocumentId })}
               options={[{ value: "", label: "No receipt linked" }, ...(documents ?? []).map((document: any) => ({ value: document._id, label: document.title }))]}
             />
           </Field>
-          {!draft.receiptDocumentId && (
+          {!draft.receiptDocumentId && !isMileage && (
             <ReceiptDropZone
               societyId={societyId}
               claimTitle={draft.title}
