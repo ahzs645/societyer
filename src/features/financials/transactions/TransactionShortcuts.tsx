@@ -5,6 +5,7 @@ import { openShortcutHelp } from "../../../components/ShortcutHelp";
 import { isTypingTarget, TRANSACTIONS_SHORTCUT_SECTION, type ShortcutSection } from "../../../lib/shortcutsRegistry";
 import { useRecordTableStoreHandle } from "../../../platform/record-engine/record-table/state/recordTableStore";
 import { RECORD_TABLE_GRID_SHORTCUTS } from "../../../platform/record-engine/record-table/utils/gridShortcuts";
+import { keyBelongsElsewhere } from "./transactionHotkeyTarget";
 
 /** The shortcuts the transactions tab really has (its own, the table's and the panel's). */
 export const TRANSACTION_SHORTCUT_SECTIONS: ShortcutSection[] = [
@@ -96,8 +97,10 @@ export function TransactionHotkeys({
     // Capture phase: runs before the app-wide `?` help and before a focused
     // grid cell turns the letter into an edit.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey) return;
-      if (isTypingTarget(event.target)) return;
+      if (event.defaultPrevented || event.repeat || event.altKey || event.metaKey || event.ctrlKey) return;
+      // Other dialogs (the rule editor, every other drawer) and open menus
+      // keep their keys; only the transaction panel counts as the tab.
+      if (isTypingTarget(event.target) || keyBelongsElsewhere(event.target)) return;
       if (event.key === "?") {
         event.preventDefault();
         event.stopPropagation();
@@ -105,7 +108,6 @@ export function TransactionHotkeys({
         return;
       }
       if (event.shiftKey) return;
-      if (event.target instanceof Element && event.target.closest('[role="dialog"]:not(.record-side-panel):not(.inspector-panel), [role="menu"], [role="listbox"]')) return;
       const key = event.key.toLowerCase();
       if (key !== "r" && key !== "u") return;
       const selected = [...handle.get().selectedRecordIds];

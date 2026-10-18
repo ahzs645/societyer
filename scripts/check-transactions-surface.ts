@@ -23,6 +23,8 @@ import {
 } from "../shared/transactionAttention";
 import { draftFromSelection, selectionPayees } from "../src/features/financials/transactions/selectionRuleDraft";
 import { categoryAccountOptions, transactionRowLock } from "../src/features/financials/transactions/transactionInlineEditRules";
+import { keyBelongsElsewhere, POPUP_SELECTOR, TRANSACTION_PANEL_SELECTOR } from "../src/features/financials/transactions/transactionHotkeyTarget";
+import { parseMoneyInput } from "../src/lib/money";
 
 const seed: Record<string, any[]> = {};
 for (const [k, v] of Object.entries(tables as Record<string, any[]>)) seed[k] = JSON.parse(JSON.stringify(v));
@@ -156,4 +158,47 @@ assert.ok(!many!.conditions.some((c) => c.field === "direction"), "mixed directi
   assert.ok(options.every((option) => option.keywords?.length), "typing an account's name or code finds it");
 }
 
-console.log("transactions surface checks passed: receipt attach, bulk edit + undo, payee names, attention, selection rules");
+// ---- where R / U / ? act: only the transaction panel among dialogs, never an open popup
+{
+  // A stand-in for DOM elements: each matches the selectors it lists, and
+  // `closest` walks up its parents like Element.closest.
+  type FakeNode = { matches: string[]; parent: FakeNode | null; closest(selector: string): FakeNode | null };
+  const node = (matches: string[], parent: FakeNode | null = null): FakeNode => ({
+    matches,
+    parent,
+    closest(selector) {
+      const wanted = selector.split(",").map((part) => part.trim());
+      for (let at: FakeNode | null = this; at; at = at.parent) if (at.matches.some((match) => wanted.includes(match))) return at;
+      return null;
+    },
+  });
+  const popupParts = POPUP_SELECTOR.split(",").map((part) => part.trim());
+  const body = node([]);
+  const grid = node([], body);
+  const txnPanel = node(['[role="dialog"]', TRANSACTION_PANEL_SELECTOR], body);
+  const panelButton = node([], txnPanel);
+  const ruleDrawer = node(['[role="dialog"]', ".inspector-panel"], body);
+  const ruleField = node([], ruleDrawer);
+  const renameDialog = node(['[role="dialog"]'], txnPanel);
+  const menu = node([popupParts[0]], body);
+  const menuItem = node([], menu);
+  const listboxOption = node([], node([popupParts[1]], body));
+  const openTrigger = node([popupParts[3]], txnPanel);
+  assert.equal(keyBelongsElsewhere(grid), false, "the table's grid keeps R / U");
+  assert.equal(keyBelongsElsewhere(panelButton), false, "the transaction panel keeps R / U");
+  assert.equal(keyBelongsElsewhere(null), false, "nothing focused keeps R / U");
+  assert.equal(keyBelongsElsewhere(ruleField), true, "another drawer (the rule editor) does not");
+  assert.equal(keyBelongsElsewhere(renameDialog), true, "a dialog opened from the panel does not");
+  assert.equal(keyBelongsElsewhere(menuItem), true, "an open menu does not");
+  assert.equal(keyBelongsElsewhere(listboxOption), true, "an open listbox does not");
+  assert.equal(keyBelongsElsewhere(openTrigger), true, "a trigger whose popup is open does not");
+}
+
+// ---- split line amounts parse like every other amount input
+assert.equal(parseMoneyInput("(12.00)"), -1200, "accounting negatives");
+assert.equal(parseMoneyInput("−5"), -500, "a typographic minus");
+assert.equal(parseMoneyInput("CAD 5"), 500, "a currency code");
+assert.equal(parseMoneyInput("$1,250.50"), 125050);
+assert.equal(parseMoneyInput("-"), undefined, "a lone minus is not an amount");
+
+console.log("transactions surface checks passed: receipt attach, bulk edit + undo, payee names, attention, selection rules, hotkey targets");
