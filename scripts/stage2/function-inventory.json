@@ -76,9 +76,79 @@
     ]
   },
   {
+    "key": "convex:accounting:booksReport",
+    "surface": "convex",
+    "name": "accounting:booksReport",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accounting:booksReportLines",
+    "surface": "convex",
+    "name": "accounting:booksReportLines",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountIds",
+        "table": "financialAccounts",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accounting:booksSettings",
+    "surface": "convex",
+    "name": "accounting:booksSettings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:accounting:chartAccounts",
     "surface": "convex",
     "name": "accounting:chartAccounts",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accounting:chartOfAccountsRegister",
+    "surface": "convex",
+    "name": "accounting:chartOfAccountsRegister",
     "kind": "query",
     "access": "authenticated",
     "source": "convex/accounting.ts",
@@ -256,6 +326,28 @@
     ]
   },
   {
+    "key": "convex:accounting:generalLedgerReport",
+    "surface": "convex",
+    "name": "accounting:generalLedgerReport",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:accounting:journalEntries",
     "surface": "convex",
     "name": "accounting:journalEntries",
@@ -282,6 +374,22 @@
       {
         "path": "id",
         "table": "journalEntries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accounting:journalEntryRegister",
+    "surface": "convex",
+    "name": "accounting:journalEntryRegister",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -540,6 +648,28 @@
     ]
   },
   {
+    "key": "convex:accounting:updateBooksSettings",
+    "surface": "convex",
+    "name": "accounting:updateBooksSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:accounting:upsertAccountMapping",
     "surface": "convex",
     "name": "accounting:upsertAccountMapping",
@@ -564,6 +694,40 @@
         "table": "financialAccounts",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:accounting:upsertChartAccount",
+    "surface": "convex",
+    "name": "accounting:upsertChartAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "parentAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",
@@ -712,6 +876,28 @@
         "table": "documents",
         "array": true,
         "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:accounting:voidJournalEntry",
+    "surface": "convex",
+    "name": "accounting:voidJournalEntry",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "journalEntries",
+        "array": false,
+        "optional": false
       },
       {
         "path": "actingUserId",
@@ -1002,6 +1188,106 @@
       {
         "path": "itemId",
         "table": "agendaItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:authorizeRequest",
+    "surface": "convex",
+    "name": "agentConnectors:authorizeRequest",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:mintToken",
+    "surface": "convex",
+    "name": "agentConnectors:mintToken",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:overview",
+    "surface": "convex",
+    "name": "agentConnectors:overview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:recordGrant",
+    "surface": "convex",
+    "name": "agentConnectors:recordGrant",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:recordToolCall",
+    "surface": "convex",
+    "name": "agentConnectors:recordToolCall",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "grantId",
+        "table": "agentGrants",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:revokeToken",
+    "surface": "convex",
+    "name": "agentConnectors:revokeToken",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "grantId",
+        "table": "agentGrants",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:runReadTool",
+    "surface": "convex",
+    "name": "agentConnectors:runReadTool",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:setEnabled",
+    "surface": "convex",
+    "name": "agentConnectors:setEnabled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -1889,6 +2175,28 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:aiChat:appendDeviceMessage",
+    "surface": "convex",
+    "name": "aiChat:appendDeviceMessage",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/aiChat.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "threadId",
+        "table": "aiChatThreads",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -6135,6 +6443,40 @@
     ]
   },
   {
+    "key": "convex:developmentMail:capture",
+    "surface": "convex",
+    "name": "developmentMail:capture",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/developmentMail.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:developmentMail:expire",
+    "surface": "convex",
+    "name": "developmentMail:expire",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/developmentMail.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "developmentAuthEmails",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:developmentMail:inbox",
+    "surface": "convex",
+    "name": "developmentMail:inbox",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/developmentMail.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:directors:create",
     "surface": "convex",
     "name": "directors:create",
@@ -7258,6 +7600,22 @@
     ]
   },
   {
+    "key": "convex:documentVersions:uploadStatus",
+    "surface": "convex",
+    "name": "documentVersions:uploadStatus",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/documentVersions.ts",
+    "idArguments": [
+      {
+        "path": "uploadHandleId",
+        "table": "documentUploadHandles",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:elections:addQuestion",
     "surface": "convex",
     "name": "elections:addQuestion",
@@ -7650,6 +8008,15 @@
         "optional": true
       }
     ]
+  },
+  {
+    "key": "convex:emailQualification:sendTest",
+    "surface": "convex",
+    "name": "emailQualification:sendTest",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/emailQualification.ts",
+    "idArguments": []
   },
   {
     "key": "convex:employees:create",
@@ -8854,6 +9221,128 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:financeTags:setGroupArchived",
+    "surface": "convex",
+    "name": "financeTags:setGroupArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/financeTags.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:financeTags:setTagArchived",
+    "surface": "convex",
+    "name": "financeTags:setTagArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/financeTags.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTags",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:financeTags:upsertGroup",
+    "surface": "convex",
+    "name": "financeTags:upsertGroup",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/financeTags.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:financeTags:upsertTag",
+    "surface": "convex",
+    "name": "financeTags:upsertTag",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/financeTags.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTags",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "groupId",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:financeTags:workspace",
+    "surface": "convex",
+    "name": "financeTags:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/financeTags.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -12740,6 +13229,34 @@
     ]
   },
   {
+    "key": "convex:invoices:linkDeposit",
+    "surface": "convex",
+    "name": "invoices:linkDeposit",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:markSent",
     "surface": "convex",
     "name": "invoices:markSent",
@@ -12762,6 +13279,50 @@
     ]
   },
   {
+    "key": "convex:invoices:postExisting",
+    "surface": "convex",
+    "name": "invoices:postExisting",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:postingPreview",
+    "surface": "convex",
+    "name": "invoices:postingPreview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:recordPayment",
     "surface": "convex",
     "name": "invoices:recordPayment",
@@ -12778,6 +13339,12 @@
       {
         "path": "financialTransactionId",
         "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
         "array": false,
         "optional": true
       }
@@ -12860,6 +13427,46 @@
         "table": "invoices",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:saveAccountMapping",
+    "surface": "convex",
+    "name": "invoices:saveAccountMapping",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "receivableAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "taxPayableAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "defaultRevenueAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -14196,6 +14803,196 @@
     ]
   },
   {
+    "key": "convex:mcpOAuth:approve",
+    "surface": "convex",
+    "name": "mcpOAuth:approve",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:authorizeAccessToken",
+    "surface": "convex",
+    "name": "mcpOAuth:authorizeAccessToken",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:completeDecision",
+    "surface": "convex",
+    "name": "mcpOAuth:completeDecision",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:consentContext",
+    "surface": "convex",
+    "name": "mcpOAuth:consentContext",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:consentDetails",
+    "surface": "convex",
+    "name": "mcpOAuth:consentDetails",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:createRequest",
+    "surface": "convex",
+    "name": "mcpOAuth:createRequest",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:deny",
+    "surface": "convex",
+    "name": "mcpOAuth:deny",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:exchangeCode",
+    "surface": "convex",
+    "name": "mcpOAuth:exchangeCode",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:forgetClientMetadata",
+    "surface": "convex",
+    "name": "mcpOAuth:forgetClientMetadata",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:getClient",
+    "surface": "convex",
+    "name": "mcpOAuth:getClient",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:purgeStale",
+    "surface": "convex",
+    "name": "mcpOAuth:purgeStale",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:recordApproval",
+    "surface": "convex",
+    "name": "mcpOAuth:recordApproval",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:recordDenial",
+    "surface": "convex",
+    "name": "mcpOAuth:recordDenial",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:recordEvent",
+    "surface": "convex",
+    "name": "mcpOAuth:recordEvent",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:refreshTokens",
+    "surface": "convex",
+    "name": "mcpOAuth:refreshTokens",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:registerClient",
+    "surface": "convex",
+    "name": "mcpOAuth:registerClient",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:revokeToken",
+    "surface": "convex",
+    "name": "mcpOAuth:revokeToken",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:saveClientMetadata",
+    "surface": "convex",
+    "name": "mcpOAuth:saveClientMetadata",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:meetingMaterials:attach",
     "surface": "convex",
     "name": "meetingMaterials:attach",
@@ -14564,6 +15361,22 @@
     ]
   },
   {
+    "key": "convex:meetings:startMinutesFromNotes",
+    "surface": "convex",
+    "name": "meetings:startMinutesFromNotes",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:meetings:update",
     "surface": "convex",
     "name": "meetings:update",
@@ -14612,6 +15425,223 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSourceQualification:verifyConnection",
+    "surface": "convex",
+    "name": "meetingSourceQualification:verifyConnection",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/meetingSourceQualification.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:meetingSources:allocate",
+    "surface": "convex",
+    "name": "meetingSources:allocate",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:appendText",
+    "surface": "convex",
+    "name": "meetingSources:appendText",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:beginSpeech",
+    "surface": "convex",
+    "name": "meetingSources:beginSpeech",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:change",
+    "surface": "convex",
+    "name": "meetingSources:change",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:inspect",
+    "surface": "convex",
+    "name": "meetingSources:inspect",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:list",
+    "surface": "convex",
+    "name": "meetingSources:list",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:speechCapabilities",
+    "surface": "convex",
+    "name": "meetingSources:speechCapabilities",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:speechJob",
+    "surface": "convex",
+    "name": "meetingSources:speechJob",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:speechProgress",
+    "surface": "convex",
+    "name": "meetingSources:speechProgress",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:textPage",
+    "surface": "convex",
+    "name": "meetingSources:textPage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:useTranscript",
+    "surface": "convex",
+    "name": "meetingSources:useTranscript",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSourceSpeech:poll",
+    "surface": "convex",
+    "name": "meetingSourceSpeech:poll",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/meetingSourceSpeech.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSourceSpeech:start",
+    "surface": "convex",
+    "name": "meetingSourceSpeech:start",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/meetingSourceSpeech.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -20330,6 +21360,12 @@
         "table": "secretVaultItems",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -21935,6 +22971,84 @@
     ]
   },
   {
+    "key": "convex:transactionLines:assignTag",
+    "surface": "convex",
+    "name": "transactionLines:assignTag",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionLines.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "financialTransactions",
+        "array": true,
+        "optional": false
+      },
+      {
+        "path": "tagId",
+        "table": "financeTags",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "groupId",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionLines:journal",
+    "surface": "convex",
+    "name": "transactionLines:journal",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/transactionLines.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionLines:save",
+    "surface": "convex",
+    "name": "transactionLines:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionLines.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:transactionRules:applyToUncategorized",
     "surface": "convex",
     "name": "transactionRules:applyToUncategorized",
@@ -22109,6 +23223,34 @@
     ]
   },
   {
+    "key": "convex:transcripts:assignSpeaker",
+    "surface": "convex",
+    "name": "transcripts:assignSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:transcripts:createJob",
     "surface": "convex",
     "name": "transcripts:createJob",
@@ -22147,6 +23289,28 @@
     ]
   },
   {
+    "key": "convex:transcripts:importTimed",
+    "surface": "convex",
+    "name": "transcripts:importTimed",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:transcripts:importVtt",
     "surface": "convex",
     "name": "transcripts:importVtt",
@@ -22176,6 +23340,78 @@
     "access": "authenticated",
     "source": "convex/transcripts.ts",
     "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:linkMinutesItem",
+    "surface": "convex",
+    "name": "transcripts:linkMinutesItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "motionId",
+        "table": "motions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:markInCameraRange",
+    "surface": "convex",
+    "name": "transcripts:markInCameraRange",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:mergeSpeakers",
+    "surface": "convex",
+    "name": "transcripts:mergeSpeakers",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
       {
         "path": "meetingId",
         "table": "meetings",
@@ -22257,6 +23493,28 @@
     ]
   },
   {
+    "key": "convex:transcripts:unmergeSpeaker",
+    "surface": "convex",
+    "name": "transcripts:unmergeSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:transcripts:updateJob",
     "surface": "convex",
     "name": "transcripts:updateJob",
@@ -22275,6 +23533,28 @@
         "table": "transcripts",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:updateSegment",
+    "surface": "convex",
+    "name": "transcripts:updateSegment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -24466,9 +25746,79 @@
     ]
   },
   {
+    "key": "portable:accounting:booksReport",
+    "surface": "portable",
+    "name": "accounting:booksReport",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:accounting:booksReportLines",
+    "surface": "portable",
+    "name": "accounting:booksReportLines",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountIds",
+        "table": "financialAccounts",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:accounting:booksSettings",
+    "surface": "portable",
+    "name": "accounting:booksSettings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:accounting:chartAccounts",
     "surface": "portable",
     "name": "accounting:chartAccounts",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:accounting:chartOfAccountsRegister",
+    "surface": "portable",
+    "name": "accounting:chartOfAccountsRegister",
     "kind": "query",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
@@ -24646,6 +25996,28 @@
     ]
   },
   {
+    "key": "portable:accounting:generalLedgerReport",
+    "surface": "portable",
+    "name": "accounting:generalLedgerReport",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:accounting:journalEntries",
     "surface": "portable",
     "name": "accounting:journalEntries",
@@ -24672,6 +26044,22 @@
       {
         "path": "id",
         "table": "journalEntries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:accounting:journalEntryRegister",
+    "surface": "portable",
+    "name": "accounting:journalEntryRegister",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -24930,6 +26318,28 @@
     ]
   },
   {
+    "key": "portable:accounting:updateBooksSettings",
+    "surface": "portable",
+    "name": "accounting:updateBooksSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:accounting:upsertAccountMapping",
     "surface": "portable",
     "name": "accounting:upsertAccountMapping",
@@ -24954,6 +26364,40 @@
         "table": "financialAccounts",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:accounting:upsertChartAccount",
+    "surface": "portable",
+    "name": "accounting:upsertChartAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "parentAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",
@@ -25102,6 +26546,28 @@
         "table": "documents",
         "array": true,
         "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:accounting:voidJournalEntry",
+    "surface": "portable",
+    "name": "accounting:voidJournalEntry",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "journalEntries",
+        "array": false,
+        "optional": false
       },
       {
         "path": "actingUserId",
@@ -26085,6 +27551,28 @@
         "table": "aiSkills",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:aiChat:appendDeviceMessage",
+    "surface": "portable",
+    "name": "aiChat:appendDeviceMessage",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "threadId",
+        "table": "aiChatThreads",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -32008,6 +33496,128 @@
     ]
   },
   {
+    "key": "portable:financeTags:setGroupArchived",
+    "surface": "portable",
+    "name": "financeTags:setGroupArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:financeTags:setTagArchived",
+    "surface": "portable",
+    "name": "financeTags:setTagArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTags",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:financeTags:upsertGroup",
+    "surface": "portable",
+    "name": "financeTags:upsertGroup",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:financeTags:upsertTag",
+    "surface": "portable",
+    "name": "financeTags:upsertTag",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financeTags",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "groupId",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:financeTags:workspace",
+    "surface": "portable",
+    "name": "financeTags:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:financialHub:accounts",
     "surface": "portable",
     "name": "financialHub:accounts",
@@ -35610,6 +37220,34 @@
     ]
   },
   {
+    "key": "portable:invoices:linkDeposit",
+    "surface": "portable",
+    "name": "invoices:linkDeposit",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:markSent",
     "surface": "portable",
     "name": "invoices:markSent",
@@ -35632,6 +37270,50 @@
     ]
   },
   {
+    "key": "portable:invoices:postExisting",
+    "surface": "portable",
+    "name": "invoices:postExisting",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:postingPreview",
+    "surface": "portable",
+    "name": "invoices:postingPreview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:recordPayment",
     "surface": "portable",
     "name": "invoices:recordPayment",
@@ -35648,6 +37330,12 @@
       {
         "path": "financialTransactionId",
         "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
         "array": false,
         "optional": true
       }
@@ -35730,6 +37418,46 @@
         "table": "invoices",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:saveAccountMapping",
+    "surface": "portable",
+    "name": "invoices:saveAccountMapping",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "receivableAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "taxPayableAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "defaultRevenueAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -37430,6 +39158,22 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:meetings:startMinutesFromNotes",
+    "surface": "portable",
+    "name": "meetings:startMinutesFromNotes",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -43763,6 +45507,84 @@
     ]
   },
   {
+    "key": "portable:transactionLines:assignTag",
+    "surface": "portable",
+    "name": "transactionLines:assignTag",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "financialTransactions",
+        "array": true,
+        "optional": false
+      },
+      {
+        "path": "tagId",
+        "table": "financeTags",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "groupId",
+        "table": "financeTagGroups",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionLines:journal",
+    "surface": "portable",
+    "name": "transactionLines:journal",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionLines:save",
+    "surface": "portable",
+    "name": "transactionLines:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:transactionRules:applyToUncategorized",
     "surface": "portable",
     "name": "transactionRules:applyToUncategorized",
@@ -43915,6 +45737,34 @@
     ]
   },
   {
+    "key": "portable:transcripts:assignSpeaker",
+    "surface": "portable",
+    "name": "transcripts:assignSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:transcripts:createJob",
     "surface": "portable",
     "name": "transcripts:createJob",
@@ -43953,6 +45803,28 @@
     ]
   },
   {
+    "key": "portable:transcripts:importTimed",
+    "surface": "portable",
+    "name": "transcripts:importTimed",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:transcripts:importVtt",
     "surface": "portable",
     "name": "transcripts:importVtt",
@@ -43982,6 +45854,78 @@
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:linkMinutesItem",
+    "surface": "portable",
+    "name": "transcripts:linkMinutesItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "motionId",
+        "table": "motions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:markInCameraRange",
+    "surface": "portable",
+    "name": "transcripts:markInCameraRange",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:mergeSpeakers",
+    "surface": "portable",
+    "name": "transcripts:mergeSpeakers",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
       {
         "path": "meetingId",
         "table": "meetings",
@@ -44035,6 +45979,28 @@
     ]
   },
   {
+    "key": "portable:transcripts:unmergeSpeaker",
+    "surface": "portable",
+    "name": "transcripts:unmergeSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:transcripts:updateJob",
     "surface": "portable",
     "name": "transcripts:updateJob",
@@ -44053,6 +46019,28 @@
         "table": "transcripts",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:updateSegment",
+    "surface": "portable",
+    "name": "transcripts:updateSegment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -45553,6 +47541,1684 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:authorizeRequest",
+    "surface": "convex",
+    "name": "agentConnectors:authorizeRequest",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:mintToken",
+    "surface": "convex",
+    "name": "agentConnectors:mintToken",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:overview",
+    "surface": "convex",
+    "name": "agentConnectors:overview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:recordGrant",
+    "surface": "convex",
+    "name": "agentConnectors:recordGrant",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:recordToolCall",
+    "surface": "convex",
+    "name": "agentConnectors:recordToolCall",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "grantId",
+        "table": "agentGrants",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:revokeToken",
+    "surface": "convex",
+    "name": "agentConnectors:revokeToken",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "grantId",
+        "table": "agentGrants",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agentConnectors:runReadTool",
+    "surface": "convex",
+    "name": "agentConnectors:runReadTool",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:agentConnectors:setEnabled",
+    "surface": "convex",
+    "name": "agentConnectors:setEnabled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agentConnectors.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:aiChat:appendDeviceMessage",
+    "surface": "convex",
+    "name": "aiChat:appendDeviceMessage",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/aiChat.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "threadId",
+        "table": "aiChatThreads",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bankAccounts:createManualAccount",
+    "surface": "convex",
+    "name": "bankAccounts:createManualAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bankAccounts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bankAccounts:linkLedgerAccount",
+    "surface": "convex",
+    "name": "bankAccounts:linkLedgerAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bankAccounts.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ledgerAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:bankAccounts:overview",
+    "surface": "convex",
+    "name": "bankAccounts:overview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/bankAccounts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bankAccounts:setArchived",
+    "surface": "convex",
+    "name": "bankAccounts:setArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bankAccounts.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bankAccounts:updateAccount",
+    "surface": "convex",
+    "name": "bankAccounts:updateAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bankAccounts.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:developmentMail:capture",
+    "surface": "convex",
+    "name": "developmentMail:capture",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/developmentMail.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:developmentMail:expire",
+    "surface": "convex",
+    "name": "developmentMail:expire",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/developmentMail.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "developmentAuthEmails",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:developmentMail:inbox",
+    "surface": "convex",
+    "name": "developmentMail:inbox",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/developmentMail.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:documentVersions:uploadStatus",
+    "surface": "convex",
+    "name": "documentVersions:uploadStatus",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/documentVersions.ts",
+    "idArguments": [
+      {
+        "path": "uploadHandleId",
+        "table": "documentUploadHandles",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:emailQualification:sendTest",
+    "surface": "convex",
+    "name": "emailQualification:sendTest",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/emailQualification.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:approve",
+    "surface": "convex",
+    "name": "mcpOAuth:approve",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:authorizeAccessToken",
+    "surface": "convex",
+    "name": "mcpOAuth:authorizeAccessToken",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:completeDecision",
+    "surface": "convex",
+    "name": "mcpOAuth:completeDecision",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:consentContext",
+    "surface": "convex",
+    "name": "mcpOAuth:consentContext",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:consentDetails",
+    "surface": "convex",
+    "name": "mcpOAuth:consentDetails",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:createRequest",
+    "surface": "convex",
+    "name": "mcpOAuth:createRequest",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:deny",
+    "surface": "convex",
+    "name": "mcpOAuth:deny",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:exchangeCode",
+    "surface": "convex",
+    "name": "mcpOAuth:exchangeCode",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:forgetClientMetadata",
+    "surface": "convex",
+    "name": "mcpOAuth:forgetClientMetadata",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:getClient",
+    "surface": "convex",
+    "name": "mcpOAuth:getClient",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:purgeStale",
+    "surface": "convex",
+    "name": "mcpOAuth:purgeStale",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:recordApproval",
+    "surface": "convex",
+    "name": "mcpOAuth:recordApproval",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:recordDenial",
+    "surface": "convex",
+    "name": "mcpOAuth:recordDenial",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:mcpOAuth:recordEvent",
+    "surface": "convex",
+    "name": "mcpOAuth:recordEvent",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:refreshTokens",
+    "surface": "convex",
+    "name": "mcpOAuth:refreshTokens",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:registerClient",
+    "surface": "convex",
+    "name": "mcpOAuth:registerClient",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:revokeToken",
+    "surface": "convex",
+    "name": "mcpOAuth:revokeToken",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:mcpOAuth:saveClientMetadata",
+    "surface": "convex",
+    "name": "mcpOAuth:saveClientMetadata",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/mcpOAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:meetings:startMinutesFromNotes",
+    "surface": "convex",
+    "name": "meetings:startMinutesFromNotes",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSourceQualification:verifyConnection",
+    "surface": "convex",
+    "name": "meetingSourceQualification:verifyConnection",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/meetingSourceQualification.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:meetingSources:allocate",
+    "surface": "convex",
+    "name": "meetingSources:allocate",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:appendText",
+    "surface": "convex",
+    "name": "meetingSources:appendText",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:beginSpeech",
+    "surface": "convex",
+    "name": "meetingSources:beginSpeech",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:change",
+    "surface": "convex",
+    "name": "meetingSources:change",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:inspect",
+    "surface": "convex",
+    "name": "meetingSources:inspect",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:list",
+    "surface": "convex",
+    "name": "meetingSources:list",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:speechCapabilities",
+    "surface": "convex",
+    "name": "meetingSources:speechCapabilities",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:speechJob",
+    "surface": "convex",
+    "name": "meetingSources:speechJob",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:speechProgress",
+    "surface": "convex",
+    "name": "meetingSources:speechProgress",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:textPage",
+    "surface": "convex",
+    "name": "meetingSources:textPage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSources:useTranscript",
+    "surface": "convex",
+    "name": "meetingSources:useTranscript",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingSources.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSourceSpeech:poll",
+    "surface": "convex",
+    "name": "meetingSourceSpeech:poll",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/meetingSourceSpeech.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingSourceSpeech:start",
+    "surface": "convex",
+    "name": "meetingSourceSpeech:start",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/meetingSourceSpeech.ts",
+    "idArguments": [
+      {
+        "path": "sourceId",
+        "table": "meetingSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receiptInbox:add",
+    "surface": "convex",
+    "name": "receiptInbox:add",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receiptInbox.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receiptInbox:confirmMatch",
+    "surface": "convex",
+    "name": "receiptInbox:confirmMatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receiptInbox.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receiptInbox:list",
+    "surface": "convex",
+    "name": "receiptInbox:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/receiptInbox.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receiptInbox:matchAllHighConfidence",
+    "surface": "convex",
+    "name": "receiptInbox:matchAllHighConfidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receiptInbox.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receiptInbox:setDiscarded",
+    "surface": "convex",
+    "name": "receiptInbox:setDiscarded",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receiptInbox.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receiptInbox:unmatch",
+    "surface": "convex",
+    "name": "receiptInbox:unmatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receiptInbox.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receiptInbox:update",
+    "surface": "convex",
+    "name": "receiptInbox:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receiptInbox.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:reconciliation:accountMonths",
+    "surface": "convex",
+    "name": "reconciliation:accountMonths",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:reconciliation:autoReconcilePeriod",
+    "surface": "convex",
+    "name": "reconciliation:autoReconcilePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:spendBudgets:list",
+    "surface": "convex",
+    "name": "spendBudgets:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/spendBudgets.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:spendBudgets:optionsForClaim",
+    "surface": "convex",
+    "name": "spendBudgets:optionsForClaim",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/spendBudgets.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "claimantUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "claimId",
+        "table": "expenseReports",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:spendBudgets:remove",
+    "surface": "convex",
+    "name": "spendBudgets:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/spendBudgets.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "spendBudgets",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:spendBudgets:setArchived",
+    "surface": "convex",
+    "name": "spendBudgets:setArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/spendBudgets.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "spendBudgets",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:spendBudgets:upsert",
+    "surface": "convex",
+    "name": "spendBudgets:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/spendBudgets.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "spendBudgets",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "committeeId",
+        "table": "committees",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "memberUserIds",
+        "table": "users",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:assignSpeaker",
+    "surface": "convex",
+    "name": "transcripts:assignSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:importTimed",
+    "surface": "convex",
+    "name": "transcripts:importTimed",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:linkMinutesItem",
+    "surface": "convex",
+    "name": "transcripts:linkMinutesItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "motionId",
+        "table": "motions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:markInCameraRange",
+    "surface": "convex",
+    "name": "transcripts:markInCameraRange",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:mergeSpeakers",
+    "surface": "convex",
+    "name": "transcripts:mergeSpeakers",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:unmergeSpeaker",
+    "surface": "convex",
+    "name": "transcripts:unmergeSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:updateSegment",
+    "surface": "convex",
+    "name": "transcripts:updateSegment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:aiChat:appendDeviceMessage",
+    "surface": "portable",
+    "name": "aiChat:appendDeviceMessage",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "threadId",
+        "table": "aiChatThreads",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bankAccounts:createManualAccount",
+    "surface": "portable",
+    "name": "bankAccounts:createManualAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bankAccounts:linkLedgerAccount",
+    "surface": "portable",
+    "name": "bankAccounts:linkLedgerAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ledgerAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:bankAccounts:overview",
+    "surface": "portable",
+    "name": "bankAccounts:overview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bankAccounts:setArchived",
+    "surface": "portable",
+    "name": "bankAccounts:setArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bankAccounts:updateAccount",
+    "surface": "portable",
+    "name": "bankAccounts:updateAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetings:startMinutesFromNotes",
+    "surface": "portable",
+    "name": "meetings:startMinutesFromNotes",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receiptInbox:add",
+    "surface": "portable",
+    "name": "receiptInbox:add",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receiptInbox:confirmMatch",
+    "surface": "portable",
+    "name": "receiptInbox:confirmMatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receiptInbox:list",
+    "surface": "portable",
+    "name": "receiptInbox:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receiptInbox:matchAllHighConfidence",
+    "surface": "portable",
+    "name": "receiptInbox:matchAllHighConfidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receiptInbox:setDiscarded",
+    "surface": "portable",
+    "name": "receiptInbox:setDiscarded",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receiptInbox:unmatch",
+    "surface": "portable",
+    "name": "receiptInbox:unmatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receiptInbox:update",
+    "surface": "portable",
+    "name": "receiptInbox:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:reconciliation:accountMonths",
+    "surface": "portable",
+    "name": "reconciliation:accountMonths",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:reconciliation:autoReconcilePeriod",
+    "surface": "portable",
+    "name": "reconciliation:autoReconcilePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:spendBudgets:list",
+    "surface": "portable",
+    "name": "spendBudgets:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:spendBudgets:optionsForClaim",
+    "surface": "portable",
+    "name": "spendBudgets:optionsForClaim",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "claimantUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "claimId",
+        "table": "expenseReports",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:spendBudgets:remove",
+    "surface": "portable",
+    "name": "spendBudgets:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "spendBudgets",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:spendBudgets:setArchived",
+    "surface": "portable",
+    "name": "spendBudgets:setArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "spendBudgets",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:spendBudgets:upsert",
+    "surface": "portable",
+    "name": "spendBudgets:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "spendBudgets",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "committeeId",
+        "table": "committees",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "memberUserIds",
+        "table": "users",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:assignSpeaker",
+    "surface": "portable",
+    "name": "transcripts:assignSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:importTimed",
+    "surface": "portable",
+    "name": "transcripts:importTimed",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:linkMinutesItem",
+    "surface": "portable",
+    "name": "transcripts:linkMinutesItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "motionId",
+        "table": "motions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:markInCameraRange",
+    "surface": "portable",
+    "name": "transcripts:markInCameraRange",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:mergeSpeakers",
+    "surface": "portable",
+    "name": "transcripts:mergeSpeakers",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:unmergeSpeaker",
+    "surface": "portable",
+    "name": "transcripts:unmergeSpeaker",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transcripts:updateSegment",
+    "surface": "portable",
+    "name": "transcripts:updateSegment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
         "array": false,
         "optional": false
       }

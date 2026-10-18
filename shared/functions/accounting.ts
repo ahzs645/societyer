@@ -81,6 +81,8 @@ const SOCIETY_COA_TEMPLATE = [
   { code: "2000", name: "Accounts payable", accountType: "Liability", subtype: "payable", normalBalance: "credit" },
   { code: "2100", name: "Deferred revenue", accountType: "Liability", subtype: "deferred_revenue", normalBalance: "credit" },
   { code: "2200", name: "Restricted funds payable", accountType: "Liability", subtype: "restricted_fund", normalBalance: "credit" },
+  // Sales tax collected on invoices (shared/functions/invoiceLedger.ts creates it on first use otherwise).
+  { code: "2300", name: "GST/HST payable", accountType: "Liability", subtype: "sales_tax_payable", normalBalance: "credit" },
   { code: "3000", name: "Unrestricted net assets", accountType: "Equity", subtype: "net_assets", normalBalance: "credit" },
   { code: "3100", name: "Restricted net assets", accountType: "Equity", subtype: "restricted_net_assets", normalBalance: "credit" },
   { code: "4000", name: "Donations and fundraising", accountType: "Income", subtype: "donations", normalBalance: "credit" },

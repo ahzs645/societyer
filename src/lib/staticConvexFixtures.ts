@@ -33,6 +33,7 @@ import {
   financeWorkflowClaimPolicy,
   financeWorkflowExpenseReports,
   financeWorkflowRules,
+  mergeBankingDemo,
 } from "./staticFinanceWorkflowFixtures";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoData/bankFeed";
@@ -41,7 +42,7 @@ import { DEMO_LEDGER_ACCOUNTS, buildDemoJournal, demoBalancesAt, demoBooksSettin
 import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../../shared/demoData/members";
 import { addDays, demoAsOfDate } from "../../shared/demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel, type DemoOwnerRole } from "../../shared/demoData/work";
-import { mergeInvoiceDemo } from "./staticInvoiceFixtures";
+import { mergeInvoiceDemo, mergeInvoiceLedgerDemo } from "./staticInvoiceFixtures";
 import { mergeBillDemo } from "./staticBillFixtures";
 import { mergeBusinessRegisterDemo } from "./staticBusinessRegisterFixtures";
 
@@ -92,6 +93,8 @@ const GRANT_ACCOUNT_ID = "static_financial_grant";
 const CARD_ACCOUNT_ID = "static_financial_card";
 const ACCOUNT_RECEIVABLE_ID = "static_financial_ar";
 const ACCOUNT_PAYABLE_ID = "static_financial_ap";
+const ACCOUNT_GST_PAYABLE_ID = "static_financial_gst_payable";
+const ACCOUNT_UNDEPOSITED_ID = "static_financial_undeposited";
 const ACCOUNT_NET_ASSETS_ID = "static_financial_net_assets";
 const ACCOUNT_GRANT_REVENUE_ID = "static_financial_grant_revenue";
 const ACCOUNT_DONATION_REVENUE_ID = "static_financial_donation_revenue";
@@ -2392,6 +2395,9 @@ const financialAccounts = [
     normalBalance: "credit",
   },
   { _id: ACCOUNT_RECEIVABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ar", code: "1100", name: "Accounts receivable", currency: "CAD", accountType: "Asset", subtype: "receivable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  // Where invoices post sales tax collected and payments not yet linked to a bank deposit (shared/demoData/invoiceLedger.ts).
+  { _id: ACCOUNT_UNDEPOSITED_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "societyer:1050", code: "1050", name: "Undeposited funds", currency: "CAD", accountType: "Asset", subtype: "undeposited_funds", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  { _id: ACCOUNT_GST_PAYABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "societyer:2300", code: "2300", name: "GST/HST payable", currency: "CAD", accountType: "Liability", subtype: "sales_tax_payable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
   { _id: ACCOUNT_PAYABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ap", code: "2000", name: "Accounts payable", currency: "CAD", accountType: "Liability", subtype: "payable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
   { _id: ACCOUNT_NET_ASSETS_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "net_assets", code: "3000", name: "Unrestricted net assets", currency: "CAD", accountType: "Equity", subtype: "net_assets", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
   { _id: ACCOUNT_GRANT_REVENUE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "grant_revenue", code: "4100", name: "Grant revenue", currency: "CAD", accountType: "Income", subtype: "grants", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
@@ -4364,8 +4370,26 @@ mergeBillDemo(tables, {
   treasurer: { id: USER_TREASURER_ID, name: "Jordan Lee", role: "Director" },
   secretary: { id: USER_SECRETARY_ID, name: "Avery Santos", role: "Admin" },
 });
+// The invoices in the books: the GL account mapping, each sent invoice's accrual and its payments.
+mergeInvoiceLedgerDemo(tables, {
+  societyId: SOCIETY_ID,
+  accounts: {
+    receivable: ACCOUNT_RECEIVABLE_ID,
+    taxPayable: ACCOUNT_GST_PAYABLE_ID,
+    undeposited: ACCOUNT_UNDEPOSITED_ID,
+    dues: LEDGER_ACCOUNT_IDS.dues,
+    programFees: LEDGER_ACCOUNT_IDS.programFees,
+    otherIncome: LEDGER_ACCOUNT_IDS.otherIncome,
+    donations: LEDGER_ACCOUNT_IDS.donations,
+  },
+  booksStart: { openingBalanceDate: DEMO_BOOKS_START, booksStartDate: DEMO_BOOKS_START },
+  treasurer: { id: USER_TREASURER_ID, name: "Jordan Lee" },
+  fiscalPeriodIdFor: (fiscalYear) => (accountingFiscalPeriods.some((period) => period.fiscalYear === fiscalYear) ? fiscalPeriodId(fiscalYear) : undefined),
+});
 // Business registers: pay runs and remittances, T4 slips, the organization Visa statements and two reserve GICs.
 mergeBusinessRegisterDemo(tables, { societyId: SOCIETY_ID, cardAccountId: CARD_ACCOUNT_ID, restrictedFundId: "static_fund_restriction_youth", treasurerName: "Jordan Lee", asOf: DEMO_AS_OF });
+// Banking: account details and petty cash, a receipt inbox, spend budgets and the claims charged to them.
+mergeBankingDemo(tables, { ...FINANCE_WORKFLOW_IDS, financeCommitteeId: "static_committee_finance" });
 
 function director(id: string, firstName: string, lastName: string, position: string, isBCResident: boolean, consentOnFile: boolean, termStart: string) {
   return {

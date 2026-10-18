@@ -29,6 +29,8 @@ export const expensePolicyTables = {
     noteOverCents: v.optional(v.number()),
     maxAgeDays: v.optional(v.number()),
     enforcement: v.string(), // warn | block
+    // The organisation's own mileage reimbursement rate, in cents per km.
+    mileageRateCentsPerKm: v.optional(v.number()),
     updatedByUserId: v.optional(v.id("users")),
     updatedByName: v.optional(v.string()),
     createdAtISO: v.string(),

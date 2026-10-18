@@ -239,7 +239,9 @@ await rules.removePortable(mina, { id: recodeId });
 // Mina = Owner, Avery = Admin (both finance writers); Jordan = Director with
 // read-only finance access; a Viewer is added below.
 let q = await exp.approvalQueuePortable(mina, { societyId: S });
-assert.deepEqual(q.counts, { awaiting: 5, awaitingMe: 4, approved: 1, paid: 1, closed: 2, drafts: 2 });
+// Includes the spend-budget claims (shared/demoData/banking.ts): two submitted,
+// two approved and one paid this cycle; their drafts belong to Jordan and Avery.
+assert.deepEqual(q.counts, { awaiting: 7, awaitingMe: 6, approved: 3, paid: 2, closed: 2, drafts: 2 });
 assert.equal(q.policy.source, "configured");
 assert.deepEqual(
   { value: q.approverAccess.value, isDefault: q.approverAccess.isDefault, canChange: q.approverAccess.canChange },

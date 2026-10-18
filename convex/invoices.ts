@@ -23,6 +23,10 @@ import {
   setSeriesStatusPortable,
   issueFromSeriesPortable,
   saveSettingsPortable,
+  linkDepositPortable,
+  saveAccountMappingPortable,
+  postingPreviewPortable,
+  postExistingPortable,
 } from "../shared/functions/invoices";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { invoiceDiscountValidator } from "./tables/invoices";
@@ -37,6 +41,7 @@ const clientLineValidator = v.object({
   unitPriceCents: v.number(),
   taxRatePercent: v.optional(v.number()),
   taxLabel: v.optional(v.string()),
+  tagIds: v.optional(v.array(v.id("financeTags"))),
 });
 
 const partyArgs = {
@@ -112,6 +117,7 @@ export const recordPayment = authorizedMutation("invoices:recordPayment", mutati
     reference: v.optional(v.string()),
     note: v.optional(v.string()),
     financialTransactionId: v.optional(v.id("financialTransactions")),
+    depositAccountId: v.optional(v.id("financialAccounts")),
   },
   returns: v.any(),
   handler: async (ctx, args) => recordPaymentPortable(await toPortableMutationCtx(ctx), args),
@@ -231,4 +237,42 @@ export const saveSettings = authorizedMutation("invoices:saveSettings", mutation
   },
   returns: v.any(),
   handler: async (ctx, args) => saveSettingsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// The payment is addressed by its key inside the invoice (named `paymentKey`, not an id: it is not a row).
+export const linkDeposit = authorizedMutation("invoices:linkDeposit", mutation)({
+  args: {
+    id: v.id("invoices"),
+    paymentKey: v.string(),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    depositAccountId: v.optional(v.id("financialAccounts")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => linkDepositPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const saveAccountMapping = authorizedMutation("invoices:saveAccountMapping", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    receivableAccountId: v.optional(v.id("financialAccounts")),
+    taxPayableAccountId: v.optional(v.id("financialAccounts")),
+    defaultRevenueAccountId: v.optional(v.id("financialAccounts")),
+    depositAccountId: v.optional(v.id("financialAccounts")),
+    categoryAccounts: v.array(v.object({ category: v.string(), accountId: v.optional(v.id("financialAccounts")) })),
+    itemAccounts: v.optional(v.array(v.object({ catalogItemId: v.id("invoiceCatalogItems"), accountId: v.optional(v.id("financialAccounts")) }))),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveAccountMappingPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const postingPreview = authorizedQuery("invoices:postingPreview", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => postingPreviewPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const postExisting = authorizedMutation("invoices:postExisting", mutation)({
+  args: { societyId: v.id("societies"), ids: v.optional(v.array(v.id("invoices"))), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx, args) => postExistingPortable(await toPortableMutationCtx(ctx), args),
 });

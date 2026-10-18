@@ -4,6 +4,8 @@ import { Money } from "../../components/Money";
 import { Select } from "../../components/Select";
 import { formatMoney, parseMoneyInput } from "../../lib/money";
 import { lineAmountCents, type InvoiceLine } from "../../../shared/invoicing";
+import { TagPicker } from "../financials/transactions/TagPicker";
+import type { FinanceTagsApi } from "../financials/transactions/useFinanceTags";
 import type { CatalogItem } from "./types";
 
 export type LineDraft = InvoiceLine & { qtyInput: string; priceInput: string };
@@ -48,10 +50,13 @@ type Props = {
   readOnly: boolean;
   /** Show the "add your GST/HST number" hint (taxed lines, no number on file). */
   gstHint: boolean;
+  /** Reporting tags; each line's tags go onto its revenue line in the books. */
+  tags?: FinanceTagsApi;
 };
 
-/** Line items: add from the catalog, quantity × price, per-line tax, reorder and remove. */
-export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint }: Props) {
+/** Line items: add from the catalog, quantity × price, per-line tax and tags, reorder and remove. */
+export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, tags }: Props) {
+  const showTags = Boolean(tags?.loaded && (tags.activeGroups.some((group) => group.tags.length > 0) || lines.some((line) => line.tagIds?.length)));
   const updateLine = (key: string, patch: Partial<LineDraft>) => onChange(lines.map((line) => (line.key === key ? { ...line, ...patch } : line)));
   const moveLine = (index: number, delta: number) => {
     const next = [...lines];
@@ -114,6 +119,12 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint }:
                   <span className="field__label">Description</span>
                   <input className="input" value={line.description ?? ""} disabled={readOnly} placeholder="Optional" onChange={(e) => updateLine(line.key, { description: e.target.value })} />
                 </label>
+                {showTags && tags && (
+                  <div className="line-editor__field line-editor__field--tags">
+                    <span className="field__label">Tags</span>
+                    <TagPicker tagIds={line.tagIds} tags={tags} disabled={readOnly} onChange={(next) => updateLine(line.key, { tagIds: next.length ? next : undefined })} />
+                  </div>
+                )}
               </div>
               <div className="line-editor__nums">
                 <label className="line-editor__field line-editor__field--qty">

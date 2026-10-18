@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, Ban, Bell, Download, FileSpreadsheet, FileText, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, Bell, BookCheck, Download, FileSpreadsheet, FileText, Landmark, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { EmptyState } from "../components/ui";
+import { Banner, EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { useIsBottomSheet } from "../lib/useSheetDrag";
 import { StatStrip, StatTile } from "../components/StatTile";
@@ -19,7 +19,9 @@ import { formatDate, pluralize } from "../lib/format";
 import { downloadTableExport, readLastExportFormat, rememberExportFormat, type TableExportFormat } from "../lib/tableExport";
 import { addDays, isOpenStatus, partyKey, type CustomerSummary } from "../../shared/invoicing";
 import { isSociety } from "../../shared/organizationDomain";
-import { InvoiceStatusPill } from "../features/invoicing/InvoiceStatusPill";
+import { InvoiceStatusPill, NeedsActionPill } from "../features/invoicing/InvoiceStatusPill";
+import { InvoiceGlMappingDrawer } from "../features/invoicing/InvoiceGlMappingDrawer";
+import { PostExistingInvoicesModal } from "../features/invoicing/PostExistingInvoicesModal";
 import { InvoiceBuilder } from "../features/invoicing/InvoiceBuilder";
 import { InvoiceDetailDrawer } from "../features/invoicing/InvoiceDetailDrawer";
 import { CatalogPanel } from "../features/invoicing/CatalogPanel";
@@ -31,8 +33,8 @@ import type { BillToValue } from "../features/invoicing/BillToPicker";
 import type { InvoiceRow, InvoiceTab, InvoiceWorkspace } from "../features/invoicing/types";
 import { invoiceExportSheet, invoiceExportTextRows } from "../features/invoicing/invoiceExport";
 
-const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "recurring", "customers", "catalog"];
-const LIST_TABS = new Set<InvoiceTab>(["all", "drafts", "outstanding", "overdue", "paid"]);
+const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "needs_action", "recurring", "customers", "catalog"];
+const LIST_TABS = new Set<InvoiceTab>(["all", "drafts", "outstanding", "overdue", "paid", "needs_action"]);
 type SortKey = "number" | "customer" | "issueDate" | "dueDate" | "total" | "balance";
 
 function rowsForTab(rows: InvoiceRow[], tab: InvoiceTab): InvoiceRow[] {
@@ -41,6 +43,7 @@ function rowsForTab(rows: InvoiceRow[], tab: InvoiceTab): InvoiceRow[] {
     case "outstanding": return rows.filter((row) => isOpenStatus(row.status));
     case "overdue": return rows.filter((row) => row.status === "overdue");
     case "paid": return rows.filter((row) => row.status === "paid");
+    case "needs_action": return rows.filter((row) => row.needsAction.length > 0);
     default: return rows;
   }
 }
@@ -51,6 +54,7 @@ const EMPTY: Record<string, { title: string; description: string }> = {
   outstanding: { title: "Nothing outstanding", description: "Every sent invoice has been paid." },
   overdue: { title: "Nothing overdue", description: "No sent invoice is past its due date." },
   paid: { title: "No paid invoices yet", description: "Invoices move here once their balance is zero." },
+  needs_action: { title: "Nothing needs action", description: "Every sent invoice is in the books and its payments match their deposits." },
 };
 
 /**
@@ -61,7 +65,7 @@ const EMPTY: Record<string, { title: string; description: string }> = {
  */
 export function InvoicesPage() {
   const society = useSociety();
-  const { canWrite, canExport } = useFinancePermissions();
+  const { canWrite, canExport, canManageIntegration } = useFinancePermissions();
   const workspace = useQuery(api.invoices.workspace, society ? { societyId: society._id } : "skip") as InvoiceWorkspace | undefined;
   const markSent = useMutation(api.invoices.markSent);
   const sendReminders = useMutation(api.invoices.sendReminders);
@@ -88,6 +92,8 @@ export function InvoicesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [glMappingOpen, setGlMappingOpen] = useState(false);
+  const [postExistingOpen, setPostExistingOpen] = useState(false);
   const [prefill, setPrefill] = useState<BillToValue | null>(null);
 
   const setParam = (changes: Record<string, string | null>, replace = true) => {
@@ -297,6 +303,7 @@ export function InvoicesPage() {
         outstanding: workspace.invoices.filter((r) => isOpenStatus(r.status)).length,
         overdue: workspace.invoices.filter((r) => r.status === "overdue").length,
         paid: workspace.invoices.filter((r) => r.status === "paid").length,
+        needs_action: workspace.summary.needsActionCount,
         recurring: workspace.series.length,
         customers: workspace.customers.length,
         catalog: workspace.catalog.filter((item) => item.active).length,
@@ -315,6 +322,7 @@ export function InvoicesPage() {
         { id: "outstanding", label: "Outstanding", count: counts?.outstanding ?? null },
         { id: "overdue", label: "Overdue", count: counts?.overdue ?? null },
         { id: "paid", label: "Paid", count: counts?.paid ?? null },
+        { id: "needs_action", label: "Needs action", count: counts?.needs_action ?? null },
         { id: "recurring", label: "Recurring", count: counts?.recurring ?? null },
         { id: "customers", label: "Customers", count: counts?.customers ?? null },
         { id: "catalog", label: "Catalog", count: counts?.catalog ?? null },
@@ -342,6 +350,8 @@ export function InvoicesPage() {
                 ...(societyLike && workspace?.plans.length ? [{ id: "dues", label: "Generate dues invoices", hint: duesCount ? `${duesCount} this month` : undefined, icon: <Users size={14} />, disabled: !canWrite, onSelect: () => setParam({ dues: "1" }) }] : []),
                 { id: "export-xlsx", label: "Export to Excel", icon: <FileSpreadsheet size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(rows.length ? rows : workspace.invoices, tab, "xlsx") },
                 { id: "export-csv", label: "Export to CSV", icon: <Download size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(rows.length ? rows : workspace.invoices, tab, "csv") },
+                { id: "gl-mapping", label: "Edit GL account mapping", icon: <Landmark size={14} />, disabled: !workspace, onSelect: () => setGlMappingOpen(true) },
+                { id: "post-existing", label: "Post existing invoices to the ledger", hint: workspace?.ledger.readyCount ? `${workspace.ledger.readyCount} ready` : undefined, icon: <BookCheck size={14} />, disabled: !workspace, onSelect: () => setPostExistingOpen(true) },
                 { id: "settings", label: "Invoice settings", icon: <Settings2 size={14} />, onSelect: () => setSettingsOpen(true) },
               ]}
             />
@@ -388,6 +398,20 @@ export function InvoicesPage() {
           actionLabel="Show draft invoices"
         />
       </StatStrip>
+
+      {workspace && workspace.ledger.foreignCurrency.count > 0 && (
+        <Banner tone="warn" className="invoice-banner" title={`${pluralize(workspace.ledger.foreignCurrency.count, "invoice")} in ${workspace.ledger.foreignCurrency.currencies.join(", ")} won't sync to the books`}>
+          The books are kept in {workspace.ledger.workspaceCurrency}, so these invoices aren't posted automatically. Record each one with a manual
+          journal entry at the exchange rate you received.{" "}
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setTab("needs_action")}>Show them</button>
+        </Banner>
+      )}
+      {workspace && workspace.ledger.readyCount > 0 && (
+        <Banner tone="info" className="invoice-banner" title={`${pluralize(workspace.ledger.readyCount, "invoice")} not in the books yet`}>
+          Sent invoices from before the books were connected, or recorded while their accounts weren't mapped, can be posted now.{" "}
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setPostExistingOpen(true)}>Post existing invoices</button>
+        </Banner>
+      )}
 
       {isPhone ? (
         <div className="invoice-tabs-row">
@@ -546,7 +570,12 @@ export function InvoicesPage() {
                     <td data-label="Balance due" className="num">
                       {row.status === "void" || row.status === "paid" ? <span className="muted">—</span> : <Money cents={row.balanceCents} currency={row.currency} />}
                     </td>
-                    <td data-label="Status"><InvoiceStatusPill status={row.status} daysOverdue={row.daysOverdue} partial={row.paidCents > 0} /></td>
+                    <td data-label="Status">
+                      <span className="invoice-status-cell">
+                        <InvoiceStatusPill status={row.status} daysOverdue={row.daysOverdue} partial={row.paidCents > 0} />
+                        <NeedsActionPill flags={row.needsAction} />
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -565,6 +594,8 @@ export function InvoicesPage() {
           onClose={() => setParam({ invoice: null })}
           onEdit={(id) => openBuilder(id)}
           onOpenSeries={(seriesId) => { setFocusSeriesId(seriesId); setParam({ invoice: null, tab: "recurring" }); }}
+          onEditMapping={() => setGlMappingOpen(true)}
+          canPost={canManageIntegration}
         />
       )}
       {duesOpen && workspace && (
@@ -575,6 +606,19 @@ export function InvoicesPage() {
           societyId={society._id}
           monthLabel={monthLabel}
           onOpenInvoice={(id) => setParam({ dues: null, invoice: id })}
+        />
+      )}
+      {glMappingOpen && workspace && (
+        <InvoiceGlMappingDrawer open onClose={() => setGlMappingOpen(false)} workspace={workspace} societyId={society._id} canWrite={canWrite} />
+      )}
+      {postExistingOpen && (
+        <PostExistingInvoicesModal
+          open
+          onClose={() => setPostExistingOpen(false)}
+          societyId={society._id}
+          canPost={canManageIntegration}
+          onOpenInvoice={(id) => setParam({ invoice: id })}
+          onEditMapping={() => setGlMappingOpen(true)}
         />
       )}
       {settingsOpen && workspace && (

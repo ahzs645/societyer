@@ -15,6 +15,9 @@ import {
   type DemoInvoiceMemberKey,
 } from "../../shared/demoData/invoicing";
 
+import { invoiceLedgerDemoRows, type DemoInvoiceLedgerAccounts } from "../../shared/demoData/invoiceLedger";
+import type { BooksStart } from "../../shared/invoiceLedger";
+
 export { invoiceDemoAnchor };
 
 type Ids = {
@@ -89,4 +92,49 @@ export function mergeInvoiceDemo(tables: Record<string, any[]>, ids: Ids) {
   if (cash) {
     cash.balanceCents = (cash.balanceCents ?? 0) + (data.financialTransactions as any[]).reduce((sum, row) => sum + row.amountCents, 0);
   }
+}
+
+type LedgerIds = {
+  societyId: string;
+  accounts: DemoInvoiceLedgerAccounts;
+  booksStart: BooksStart;
+  treasurer: { id: string; name: string };
+  fiscalPeriodIdFor: (fiscalYear: string) => string | undefined;
+};
+
+type Tables = Record<string, Array<Record<string, unknown> & { _id: string }>>;
+
+/**
+ * Put the invoicing demo in the books (shared/demoData/invoiceLedger.ts): the
+ * GL account mapping on the settings, the entries the sent invoices and their
+ * payments posted, and the linked deposits matched to their invoices. Runs
+ * after mergeInvoiceDemo, on the rows it added.
+ */
+export function mergeInvoiceLedgerDemo(tables: Tables, ids: LedgerIds) {
+  const deposits = (tables.financialTransactions ?? []).filter((row) => String(row.externalId ?? "").startsWith("csv-invoice-"));
+  const data = invoiceLedgerDemoRows({
+    societyId: ids.societyId,
+    accounts: ids.accounts,
+    invoices: tables.invoices ?? [],
+    catalog: tables.invoiceCatalogItems ?? [],
+    transactions: deposits,
+    booksStart: ids.booksStart,
+    treasurer: ids.treasurer,
+    idFor: (kind, key) => (kind === "journalEntry" ? `static_journal_${key}` : `static_jline_${key}`),
+    fiscalPeriodIdFor: ids.fiscalPeriodIdFor,
+  });
+  // In place: other fixture modules hold these arrays.
+  const replace = (key: string, rows: Array<Record<string, unknown> & { _id: string }>) => {
+    const byId = new Map(rows.map((row) => [row._id, row]));
+    const table = tables[key] ?? (tables[key] = []);
+    table.forEach((row, index) => {
+      const next = byId.get(row._id);
+      if (next) table[index] = next;
+    });
+  };
+  replace("invoices", data.invoices);
+  replace("financialTransactions", data.transactions);
+  (tables.journalEntries ?? (tables.journalEntries = [])).push(...data.journalEntries);
+  (tables.journalLines ?? (tables.journalLines = [])).push(...data.journalLines);
+  for (const row of tables.invoiceSettings ?? []) Object.assign(row, data.mapping);
 }

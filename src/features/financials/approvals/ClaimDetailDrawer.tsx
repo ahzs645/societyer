@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { BellRing, Check, CircleDollarSign, Link2, Send, Undo2, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { Badge, Drawer, Field } from "../../../components/ui";
+import { Badge, Banner, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
 import { Money } from "../../../components/Money";
 import { usePrompt } from "../../../components/Modal";
@@ -19,6 +19,8 @@ import {
   claimSubmissionDecision,
   evaluateClaimPolicy,
   findLikelyDuplicate,
+  formatDistanceKm,
+  formatMileageRate,
   type ExpenseClaimPolicy,
 } from "../../../../shared/expensePolicy";
 import { todayDateOnly } from "../../../../shared/dateOnly";
@@ -90,7 +92,7 @@ export function ClaimDetailDrawer({
   const submittable = Boolean(row && SUBMITTABLE.has(row.status));
   const submitIssues = useMemo(
     () => (row && submittable && policy
-      ? evaluateClaimPolicy(policy, { amountCents: row.amountCents, receiptDocumentId: row.receiptDocument?._id, notes: row.notes, incurredAtISO: row.incurredAtISO }, todayDateOnly())
+      ? evaluateClaimPolicy(policy, { claimType: row.claimType, amountCents: row.amountCents, receiptDocumentId: row.receiptDocument?._id, notes: row.notes, incurredAtISO: row.incurredAtISO }, todayDateOnly())
       : []),
     [row, submittable, policy],
   );
@@ -221,15 +223,30 @@ export function ClaimDetailDrawer({
       <dl className="claim-drawer__facts">
         <div><dt>Requester</dt><dd>{row.claimantName}{row.isMine ? " (you)" : ""}</dd></div>
         <div><dt>Category</dt><dd>{row.category}</dd></div>
-        <div><dt>Incurred</dt><dd>{formatDate(row.incurredAtISO)}</dd></div>
+        <div><dt>{row.claimType === "mileage" ? "Trip date" : "Incurred"}</dt><dd>{formatDate(row.incurredAtISO)}</dd></div>
+        {row.mileage && (
+          <>
+            <div><dt>Distance</dt><dd>{formatDistanceKm(row.mileage.distanceKm)} × {formatMileageRate(row.mileage.rateCentsPerKm)}</dd></div>
+            {(row.mileage.fromLocation || row.mileage.toLocation) && <div><dt>Route</dt><dd>{[row.mileage.fromLocation, row.mileage.toLocation].filter(Boolean).join(" → ")}</dd></div>}
+            {row.mileage.tripDescription && <div><dt>Trip</dt><dd>{row.mileage.tripDescription}</dd></div>}
+          </>
+        )}
+        {row.spendBudget && (
+          <div><dt>Spend budget</dt><dd><Link to="/app/spend-budgets">{row.spendBudget.name}</Link></dd></div>
+        )}
         {row.submittedAtISO && <div><dt>Submitted</dt><dd>{formatDate(row.submittedAtISO)}</dd></div>}
         <div>
           <dt>Receipt</dt>
-          <dd>{row.receiptDocument ? <Link to={`/app/documents/${row.receiptDocument._id}`}>{row.receiptDocument.title}</Link> : <span className="muted">No receipt attached</span>}</dd>
+          <dd>{row.receiptDocument ? <Link to={`/app/documents/${row.receiptDocument._id}`}>{row.receiptDocument.title}</Link> : <span className="muted">{row.claimType === "mileage" ? "Not needed for mileage" : "No receipt attached"}</span>}</dd>
         </div>
         {row.paymentReference && <div><dt>Payment reference</dt><dd>{row.paymentReference}</dd></div>}
       </dl>
-      {!row.receiptDocument && row.status !== "Paid" && canWrite && (
+      {row.spendBudget?.exceeds && ["Draft", "Submitted", "Approved"].includes(row.status) && (
+        <Banner tone="warn" title="Over the spend budget">
+          This claim takes {row.spendBudget.name} over its {formatMoney(row.spendBudget.limitCents)} limit by {formatMoney(-row.spendBudget.remainingAfterCents)} for {formatDate(row.spendBudget.window.start, "MMM d")} – {formatDate(row.spendBudget.window.end)}.
+        </Banner>
+      )}
+      {!row.receiptDocument && row.status !== "Paid" && canWrite && row.claimType !== "mileage" && (
         <ReceiptDropZone societyId={societyId} claimTitle={row.title} onUploaded={(documentId) => onReceipt(documentId)} />
       )}
       {row.notes && <p className="claim-drawer__notes">{row.notes}</p>}

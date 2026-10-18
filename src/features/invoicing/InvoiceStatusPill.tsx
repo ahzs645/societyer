@@ -27,3 +27,20 @@ export function InvoiceStatusPill({ status, daysOverdue, partial }: { status: In
     </span>
   );
 }
+
+/**
+ * Secondary status for invoices that don't reconcile cleanly with the books
+ * (Mercury's "Paid – Needs action"): shown beside the status pill, with the
+ * reasons as its title.
+ */
+export function NeedsActionPill({ flags }: { flags: ReadonlyArray<{ title: string }> }) {
+  if (!flags.length) return null;
+  const titles = flags.map((flag) => flag.title);
+  return (
+    <span className="invoice-pill invoice-pill--needs-action" title={titles.join(" · ")}>
+      <AlertTriangle size={12} aria-hidden="true" />
+      Needs action
+      <span className="sr-only">: {titles.join(", ")}</span>
+    </span>
+  );
+}
