@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { AccountingBasis, ReportFrequency } from "../../../../shared/booksReports";
 import { todayDateOnly } from "../../../../shared/dateOnly";
-import { DIMENSION_PARAMS, isBasis, isFrequency, readFilterState, type DimensionKind, type ReportFilterState } from "./reportFilters";
+import { DIMENSION_PARAMS, dimensionParamValue, isBasis, isFrequency, readFilterState, type DimensionKind, type ReportFilterState } from "./reportFilters";
 import { isRangePreset, presetRange, type DateRange, type RangePreset } from "./reportPeriods";
 
 export type ReportFamily = "statement" | "ledger";
@@ -28,7 +28,8 @@ export type ReportStateActions = {
   setFrequency: (frequency: ReportFrequency) => void;
   setBasis: (basis: AccountingBasis) => void;
   setFund: (fund: string) => void;
-  setDimension: (kind: DimensionKind, value: string | null) => void;
+  /** One value (program) or several (tags); null or [] clears the dimension. */
+  setDimension: (kind: DimensionKind, value: string | readonly string[] | null) => void;
   /** Back to all funds and no dimension filters, in one URL update. */
   clearFilters: () => void;
   setCurrency: (currency: string | null) => void;
@@ -93,7 +94,7 @@ export function useReportState(family: ReportFamily, fiscalStartMonth: number, d
       setFrequency: (frequency) => update({ freq: frequency === "month" ? null : frequency }),
       setBasis: (basis) => update({ basis: basis === defaultBasis ? null : basis }),
       setFund: (fund) => update({ fund: fund === "all" ? null : fund }),
-      setDimension: (kind, value) => update({ [DIMENSION_PARAMS[kind]]: value }),
+      setDimension: (kind, value) => update({ [DIMENSION_PARAMS[kind]]: dimensionParamValue(kind, typeof value === "string" ? [value] : value) }),
       clearFilters: () => {
         const patch: Record<string, null> = { fund: null };
         for (const param of Object.values(DIMENSION_PARAMS)) patch[param] = null;

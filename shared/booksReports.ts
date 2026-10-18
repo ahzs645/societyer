@@ -900,6 +900,7 @@ export type ReportLine = {
   programCode?: string;
   fundRestrictionId?: string;
   financialTransactionId?: string;
+  tagIds?: string[];
   entry: { _id: string; date: string; memo: string; entryNumber?: string; status: string; source?: string };
   account: { _id: string; code?: string; name: string; accountType: string; currency?: string; normalBalance?: string } | null;
 };
@@ -916,6 +917,7 @@ function reportLine(row: Posted): ReportLine {
     programCode: row.line.programCode ?? undefined,
     fundRestrictionId: row.line.fundRestrictionId ? String(row.line.fundRestrictionId) : undefined,
     financialTransactionId: row.line.financialTransactionId ? String(row.line.financialTransactionId) : undefined,
+    tagIds: row.line.tagIds?.length ? row.line.tagIds.map(String) : undefined,
     entry: { _id: String(row.entry._id), date: row.entry.date, memo: row.entry.memo ?? "", entryNumber: row.entry.entryNumber ?? undefined, status: row.entry.status, source: row.entry.source ?? undefined },
     account: { _id: String(row.account._id), code: row.account.code ?? undefined, name: row.account.name, accountType: row.account.accountType, currency: row.account.currency ?? undefined, normalBalance: row.account.normalBalance ?? undefined },
   };
@@ -966,6 +968,8 @@ export type GeneralLedgerRow = {
   fundRestrictionId?: string;
   programCode?: string;
   financialTransactionId?: string;
+  /** Finance tags on the line (one per tag group). */
+  tagIds?: string[];
 };
 
 export type GeneralLedgerReport = {
@@ -1089,6 +1093,7 @@ export function buildGeneralLedgerReport(input: LedgerSetInput & {
       fundRestrictionId: row.line.fundRestrictionId ? String(row.line.fundRestrictionId) : undefined,
       programCode: row.line.programCode ?? undefined,
       financialTransactionId: row.line.financialTransactionId ? String(row.line.financialTransactionId) : undefined,
+      tagIds: row.line.tagIds?.length ? row.line.tagIds.map(String) : undefined,
     });
   }
   return {

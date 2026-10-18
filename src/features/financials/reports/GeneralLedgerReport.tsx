@@ -90,8 +90,11 @@ export function GeneralLedgerReport({
   state: ReportState;
   actions: ReportStateActions;
 }) {
-  const filter = useMemo(() => toReportFilter(state.filter), [state.filter]);
-  const filterText = useMemo(() => describeFilter(state.filter, context.fundNames), [state.filter, context.fundNames]);
+  const filter = useMemo(() => toReportFilter(state.filter, context.tags.groupOf), [state.filter, context.tags]);
+  const filterText = useMemo(
+    () => describeFilter(state.filter, context.fundNames, { tagName: context.tags.tagName, groupName: (id) => context.tags.group(context.tags.groupOf(id) ?? "")?.name }),
+    [state.filter, context.fundNames, context.tags],
+  );
   const problem = rangeProblem(state.range);
   // An account id from another society or a deleted account would fail the query.
   const accountId = state.accountId && accounts.some((account) => String(account._id) === state.accountId) ? state.accountId : null;
@@ -137,6 +140,7 @@ export function GeneralLedgerReport({
         defaultBasis={state.defaultBasis}
         filter={state.filter}
         funds={context.funds}
+        tags={context.tags}
         programs={programs}
         currencies={currencies}
         currency={currency}
@@ -164,7 +168,7 @@ export function GeneralLedgerReport({
             </span>
             {context.canExport && <LedgerExportMenu fileName={`General ledger ${state.range.from} to ${state.range.to}`} report={report} title={titleLines} />}
           </div>
-          {report ? <GeneralLedgerTable report={report} caption={`General ledger, ${scope}, ${rangeText}`} /> : <SkeletonRows rows={8} columns={7} />}
+          {report ? <GeneralLedgerTable report={report} caption={`General ledger, ${scope}, ${rangeText}`} tags={context.tags} /> : <SkeletonRows rows={8} columns={7} />}
         </>
       )}
     </section>

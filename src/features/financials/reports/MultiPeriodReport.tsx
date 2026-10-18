@@ -86,8 +86,11 @@ export function MultiPeriodReport({
   const kind = STATEMENT_KINDS[slug];
   const title = REPORT_TITLES[slug];
   const [drill, setDrill] = useState<DrillTarget | null>(null);
-  const filter = useMemo(() => toReportFilter(state.filter), [state.filter]);
-  const filterText = useMemo(() => describeFilter(state.filter, context.fundNames), [state.filter, context.fundNames]);
+  const filter = useMemo(() => toReportFilter(state.filter, context.tags.groupOf), [state.filter, context.tags]);
+  const filterText = useMemo(
+    () => describeFilter(state.filter, context.fundNames, { tagName: context.tags.tagName, groupName: (id) => context.tags.group(context.tags.groupOf(id) ?? "")?.name }),
+    [state.filter, context.fundNames, context.tags],
+  );
   const problem = useMemo(
     () => statementRangeProblem(state.range, state.frequency, state.today, settings.fiscalStartMonth),
     [settings.fiscalStartMonth, state.frequency, state.range, state.today],
@@ -164,6 +167,7 @@ export function MultiPeriodReport({
         defaultBasis={state.defaultBasis}
         filter={state.filter}
         funds={context.funds}
+        tags={context.tags}
         programs={options.programs}
         currencies={options.currencies}
         currency={currency}
@@ -192,7 +196,7 @@ export function MultiPeriodReport({
           ))}
           {filtered && (
             <p className="books-report__note">
-              Filtered to {filterText ?? "a subset of lines"}. A single fund's or program's lines need not balance on their own.
+              Filtered to {filterText ?? "a subset of lines"}. A single fund's, program's or tag's lines need not balance on their own.
             </p>
           )}
           <ReportChartStrip kind={kind} report={report} />

@@ -2277,7 +2277,7 @@ async function seedDemoLedger(ctx: PortableMutationCtx, args: {
   const journal = buildDemoJournal({
     transactions: args.feedTransactions
       .filter((row) => feedKeyByAccount.has(String(row.accountId)))
-      .map((row) => ({ transactionId: String(row._id), account: feedKeyByAccount.get(String(row.accountId)) as DemoFeedAccountKey, date: String(row.date), description: String(row.description), amountCents: Number(row.amountCents), category: row.category ? String(row.category) : undefined, status: row.status ? String(row.status) : undefined })),
+      .map((row) => ({ transactionId: String(row._id), account: feedKeyByAccount.get(String(row.accountId)) as DemoFeedAccountKey, date: String(row.date), description: String(row.description), amountCents: Number(row.amountCents), category: row.category ? String(row.category) : undefined, status: row.status ? String(row.status) : undefined, tagIds: Array.isArray(row.tagIds) ? row.tagIds.map(String) : undefined, lines: Array.isArray(row.lines) ? row.lines : undefined })),
     openingDate: booksStart,
     openingBalances: demoBalancesAt(args.feed, "2025-12-31"),
     asOf: args.asOf,
@@ -2311,6 +2311,7 @@ async function seedDemoLedger(ctx: PortableMutationCtx, args: {
         ...(line.programCode ? { programCode: line.programCode } : {}),
         ...(line.restrictedFund ? { fundRestrictionId: args.fundRestrictionId } : {}),
         ...(line.transactionId ? { financialTransactionId: line.transactionId } : {}),
+        ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
         createdAtISO: at,
         updatedAtISO: at,
       });

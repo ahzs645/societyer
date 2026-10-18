@@ -2,8 +2,10 @@
 // shared/booksReports.ts (period bucketing including the running MTD/QTD/YTD
 // column, account-hierarchy subtotals, cash vs accrual basis, cash flow,
 // dimension filters, the general ledger), the runway and insight sentences in
-// shared/financeNarrative.ts, and the books close date refusing every journal
-// write path. Runs on a MemoryDb; no live backend.
+// shared/financeNarrative.ts, the books close date refusing every journal
+// write path, and the reports' tag filter (URL state, one dimension per tag
+// group, tagged demo bank and bill lines found by it). Runs on a MemoryDb; no
+// live backend.
 
 import assert from "node:assert/strict";
 import { MemoryDb, PortableRuntime, definePortableMutation, definePortableQuery, makeCapabilities } from "../shared/portable/index";
@@ -19,6 +21,7 @@ import {
   entryCountsForBasis,
   fiscalYearStartMonth,
   journalBasisOf,
+  lineMatchesFilter,
   reportDrillLines,
   TOTAL_COLUMN,
   type BooksAccount,
@@ -38,7 +41,9 @@ import {
   voidJournalEntryPortable,
   booksReportPortable,
   booksSettingsPortable,
+  generalLedgerReportPortable,
 } from "../shared/functions/accounting";
+import { describeFilter, dimensionParamValue, readFilterState, toReportFilter } from "../src/features/financials/reports/reportFilters";
 import { portableTestPrincipal, seedPortableTestMembership } from "./portable-test-fixture";
 
 let passed = 0;
@@ -413,6 +418,69 @@ await checkAsync("the report query honours the books basis and the dimension fil
   const cash = await read((ctx) => booksReportPortable(ctx, { societyId: ids.societyId, report: "operations", from: "2026-01-01", to: "2026-06-30", frequency: "quarter", asOf: "2026-10-18" }));
   assert.equal(cash.basis, "cash");
   await assert.rejects(read((ctx) => booksReportPortable(ctx, { societyId: ids.societyId, report: "operations", from: "2026-01-01", to: "2026-06-30", frequency: "week", asOf: "2026-10-18" })), /monthly, quarterly or yearly/);
+});
+
+check("the tag filter: URL values, one dimension per tag group, and its summary", () => {
+  const state = readFilterState(new URLSearchParams("tag=t-youth,t-garden,t-harbour,t-youth&program=YOUTH&fund=unrestricted"));
+  assert.deepEqual(state.dimensions.tag, ["t-youth", "t-garden", "t-harbour"], "comma-separated, de-duplicated");
+  assert.deepEqual(state.dimensions.programCode, ["YOUTH"]);
+  assert.equal(dimensionParamValue("tag", ["t-youth", "t-garden"]), "t-youth,t-garden");
+  assert.equal(dimensionParamValue("tag", []), null, "no tags clears the parameter");
+  assert.equal(dimensionParamValue("programCode", ["A", "B"]), "A", "programs stay single");
+  const groupOf = (id: string) => ({ "t-youth": "program", "t-garden": "program", "t-harbour": "grant" } as Record<string, string>)[id];
+  assert.deepEqual(toReportFilter(state, groupOf), {
+    fund: "unrestricted",
+    dimensions: [{ kind: "programCode", values: ["YOUTH"] }, { kind: "tag", values: ["t-youth", "t-garden"] }, { kind: "tag", values: ["t-harbour"] }],
+  }, "any tag within a group, every group chosen");
+  assert.deepEqual(toReportFilter({ fund: "all", dimensions: { tag: ["t-youth", "t-harbour"] } }), { dimensions: [{ kind: "tag", values: ["t-youth", "t-harbour"] }] }, "without groups, one tag dimension");
+  const names: Record<string, string> = { "t-youth": "Youth mentoring", "t-garden": "Community garden", "t-harbour": "Harbour Foundation 2026" };
+  const groups: Record<string, string> = { program: "Program", grant: "Grant" };
+  assert.equal(
+    describeFilter({ fund: "all", dimensions: { tag: ["t-youth", "t-garden", "t-harbour"] } }, new Map(), { tagName: (id) => names[id], groupName: (id) => groups[groupOf(id) ?? ""] }),
+    "Program: Youth mentoring, Community garden · Grant: Harbour Foundation 2026",
+  );
+  const lines = [
+    { _id: "l1", journalEntryId: "e", accountId: "a", amountCents: 1, side: "debit", tagIds: ["t-youth", "t-harbour"] },
+    { _id: "l2", journalEntryId: "e", accountId: "a", amountCents: 1, side: "debit", tagIds: ["t-garden"] },
+    { _id: "l3", journalEntryId: "e", accountId: "a", amountCents: 1, side: "debit", tagIds: ["t-harbour"] },
+  ] as BooksLine[];
+  const filter = toReportFilter(state, groupOf)!;
+  const tagOnly = { dimensions: filter.dimensions!.filter((dimension) => dimension.kind === "tag") };
+  assert.deepEqual(lines.filter((line) => lineMatchesFilter(line, tagOnly)).map((line) => line._id), ["l1"], "a line needs a chosen program tag and the chosen grant tag");
+});
+
+await checkAsync("tagged demo journal lines (bank feed and bills) show up when the reports filter by tag", async () => {
+  const { tables } = await import("../src/lib/staticConvexFixtures");
+  const seed: Record<string, Array<Record<string, unknown> & { _id: string }>> = {};
+  for (const [table, rows] of Object.entries(tables as Record<string, Array<Record<string, unknown> & { _id: string }>>)) seed[table] = JSON.parse(JSON.stringify(rows));
+  seed.users = seed.users.map((user) => ({ ...user, status: "Active", authIssuer: "https://issuer.test", authSubject: `sub-${user._id}` }));
+  const demoDb = new MemoryDb({ seed });
+  const S = String(seed.users[0].societyId);
+  const demo = {
+    db: demoDb,
+    principal: { kind: "user", runtime: "test", assurance: "trusted-workspace", subject: `sub-${seed.users[0]._id}`, issuer: "https://issuer.test", userId: seed.users[0]._id, societyId: S },
+    capabilities: makeCapabilities({}),
+    runQuery: async () => { throw new Error("nested"); },
+  } as unknown as PortableQueryCtx;
+  const youth = "static_tag_youth_mentoring";
+  const harbour = "static_tag_harbour_2026";
+  const ledger = (basis: "accrual" | "cash", dimensions: Array<{ kind: string; values: string[] }>) =>
+    generalLedgerReportPortable(demo, { societyId: S, from: "2000-01-01", to: "2999-12-31", basis, filter: { dimensions }, limit: 10_000 });
+  const accrual = await ledger("accrual", [{ kind: "tag", values: [youth] }]);
+  assert.ok(accrual.rows.length > 0, "the demo has youth-mentoring lines");
+  assert.ok(accrual.rows.every((row) => row.tagIds?.includes(youth)), "only tagged lines pass, and they say so");
+  assert.ok(accrual.rows.some((row) => row.financialTransactionId && row.source !== "bill"), "posted bank lines carry their tags");
+  assert.ok(accrual.rows.some((row) => row.source === "bill"), "the bill approvals carry their lines' tags");
+  assert.ok(!accrual.rows.some((row) => row.source === "bill_cash_basis"), "accrual basis leaves out cash-only entries");
+  const cash = await ledger("cash", [{ kind: "tag", values: [youth] }]);
+  assert.ok(cash.rows.some((row) => row.source === "bill_cash_basis"), "cash basis shows the paid share of a tagged bill line");
+  assert.ok(!cash.rows.some((row) => row.source === "bill"), "and never the accrual");
+  const both = await ledger("accrual", [{ kind: "tag", values: [youth] }, { kind: "tag", values: [harbour] }]);
+  assert.ok(both.rows.length > 0 && both.rows.length < accrual.rows.length, "a second tag group narrows the lines");
+  assert.ok(both.rows.every((row) => row.tagIds?.includes(youth) && row.tagIds?.includes(harbour)));
+  const gala = await read(() => booksReportPortable(demo, { societyId: S, report: "operations", from: "2024-04-01", to: "2028-03-31", frequency: "year", basis: "accrual", filter: { dimensions: [{ kind: "tag", values: ["static_tag_fall_gala"] }] }, asOf: "2028-03-31" }));
+  assert.equal(gala.filtered, true);
+  assert.ok(gala.postedLineCount > 0 && gala.summary.some((point) => point.values.expenses > 0 || point.values.revenue > 0), "the fall gala tag shows up in the statement of operations");
 });
 
 console.log(`\nbooks reports check passed (${passed} checks).`);

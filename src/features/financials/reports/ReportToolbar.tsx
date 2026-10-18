@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Check, ChevronDown, X } from "lucide-react";
 import { DatePicker } from "../../../components/DatePicker";
 import { InfoPopover } from "../../../components/InfoPopover";
+import { Menu, type MenuSection } from "../../../components/Menu";
 import { Segmented } from "../../../components/primitives";
 import { Select, type SelectOption } from "../../../components/Select";
 import { FundFilterChips, ReportControl } from "../components/FinanceReportControls";
@@ -10,6 +12,7 @@ import { BASIS_LABELS, FREQUENCY_LABELS, type ReportFilterState } from "./report
 import { PRESET_LABELS, type DateRange, type RangePreset } from "./reportPeriods";
 import type { ReportStateActions } from "./useReportState";
 import type { FundOption } from "./types";
+import type { FinanceTagsApi } from "../transactions/useFinanceTags";
 
 const ALL = "__all";
 
@@ -108,6 +111,52 @@ export function ProgramControl({ programs, value, onChange }: { programs: string
   );
 }
 
+/**
+ * Tag filter: tags listed under their group (the workspace's tag groups);
+ * picking one toggles it. Lines match any chosen tag of a group and every
+ * group chosen (see toReportFilter). Archived tags stay pickable once chosen
+ * so a shared link keeps working. Hidden when the workspace has no tags.
+ */
+export function TagControl({ tags, value, onChange }: { tags: FinanceTagsApi; value: string[]; onChange: (next: string[]) => void }) {
+  const chosen = new Set(value);
+  const sections: MenuSection[] = tags.groups
+    .map((group) => ({
+      id: group._id,
+      label: group.name,
+      items: group.tags
+        .filter((tag) => (!tag.archived && !group.archived) || chosen.has(tag._id))
+        .map((tag) => ({
+          id: tag._id,
+          label: tag.archived ? `${tag.name} (archived)` : tag.name,
+          icon: chosen.has(tag._id) ? <Check size={12} aria-hidden="true" /> : <span className={`txn-tags__dot txn-tags__dot--${tags.colorOf(tag._id)}`} aria-hidden="true" />,
+          onSelect: () => onChange(chosen.has(tag._id) ? value.filter((id) => id !== tag._id) : [...value, tag._id]),
+        })),
+    }))
+    .filter((section) => section.items.length > 0);
+  if (!sections.length && !value.length) return null;
+  const names = value.map((id) => tags.tagName(id) ?? "Removed tag");
+  const summary = names.length === 0 ? "All tags" : names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
+  const menuSections: MenuSection[] = value.length
+    ? [{ id: "clear", items: [{ id: "clear", label: "All tags", icon: <X size={12} aria-hidden="true" />, onSelect: () => onChange([]) }] }, ...sections]
+    : sections;
+  return (
+    <div className="books-report-toolbar__group">
+      <span className="finance-report-control__label" id="books-report-tags-label">Tags</span>
+      <Menu
+        label="Tag filter"
+        sheetTitle="Filter by tag"
+        minWidth={220}
+        sections={menuSections}
+        trigger={
+          <button type="button" className="btn btn--sm books-report-toolbar__tags" aria-labelledby="books-report-tags-label books-report-tags-value" title={names.join(", ") || undefined}>
+            <span id="books-report-tags-value">{summary}</span> <ChevronDown size={12} aria-hidden="true" />
+          </button>
+        }
+      />
+    </div>
+  );
+}
+
 /** Currency picker, shown only when the books hold more than one currency. */
 export function CurrencyControl({ currencies, value, onChange }: { currencies: string[]; value: string; onChange: (value: string) => void }) {
   if (currencies.length <= 1) return null;
@@ -118,12 +167,13 @@ export function CurrencyControl({ currencies, value, onChange }: { currencies: s
   );
 }
 
-/** Basis, program, currency and fund filters, shared by every report. */
+/** Basis, program, tag, currency and fund filters, shared by every report. */
 export function ReportFilterControls({
   basis,
   defaultBasis,
   filter,
   funds,
+  tags,
   programs,
   currencies,
   currency,
@@ -134,6 +184,7 @@ export function ReportFilterControls({
   defaultBasis: AccountingBasis;
   filter: ReportFilterState;
   funds: FundOption[];
+  tags: FinanceTagsApi;
   programs: string[];
   currencies: string[];
   currency: string;
@@ -146,6 +197,7 @@ export function ReportFilterControls({
       {children}
       <BasisControl basis={basis} defaultBasis={defaultBasis} onChange={actions.setBasis} />
       <ProgramControl programs={programs} value={filter.dimensions.programCode?.[0] ?? null} onChange={(value) => actions.setDimension("programCode", value)} />
+      <TagControl tags={tags} value={filter.dimensions.tag ?? []} onChange={(value) => actions.setDimension("tag", value)} />
       <CurrencyControl currencies={currencies} value={currency} onChange={actions.setCurrency} />
       <FundFilterChips funds={funds} value={filter.fund} onChange={actions.setFund} />
     </ReportToolbar>

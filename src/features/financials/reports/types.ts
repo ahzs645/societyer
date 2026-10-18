@@ -1,5 +1,6 @@
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { AccountingBasis } from "../../../../shared/booksReports";
+import type { FinanceTagsApi } from "../transactions/useFinanceTags";
 
 /** The parts of `api.accounting.booksSettings` the reports read. */
 export type BooksSettingsView = {
@@ -20,5 +21,7 @@ export type ReportContext = {
   societyName: string;
   funds: FundOption[];
   fundNames: Map<string, string>;
+  /** The workspace's finance tags, for the tag filter and its summary. */
+  tags: FinanceTagsApi;
   canExport: boolean;
 };

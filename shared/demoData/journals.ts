@@ -12,7 +12,10 @@
  *  - Each categorised line posts the bank account against the chart account
  *    its category maps to (DEMO_CATEGORY_ACCOUNTS); restricted-fund lines are
  *    tagged to the youth resilience fund, and program lines carry a program
- *    code, so the fund and program filters have something to show.
+ *    code, so the fund and program filters have something to show. Finance
+ *    tags on a line (shared/demoData/booksTags.ts) travel onto its offset
+ *    line, and a split line posts one offset per line item, as the backfill
+ *    does, so the tag filter finds them.
  *  - Card payments from chequing post once (Dr card, Cr chequing); the card's
  *    "payment received" leg is the same movement and is skipped.
  *  - Pending and uncategorised ("To review") lines stay unposted, which is
@@ -125,6 +128,10 @@ export type DemoLedgerTransaction = {
   amountCents: number;
   category?: string;
   status?: string;
+  /** Finance tags of a single-line transaction. */
+  tagIds?: string[];
+  /** Line items of a split transaction (two or more; amounts signed like the transaction). */
+  lines?: Array<{ amountCents: number; category?: string; memo?: string; tagIds?: string[] }>;
 };
 
 export type DemoJournalLine = {
@@ -137,6 +144,7 @@ export type DemoJournalLine = {
   /** Tag the line to the demo's restricted fund. */
   restrictedFund?: boolean;
   transactionId?: string;
+  tagIds?: string[];
 };
 
 export type DemoJournalEntry = {
@@ -235,6 +243,23 @@ export function buildDemoJournal(input: {
     if (!ledger) continue;
     const restrictedFund = row.account === "restricted" || undefined;
     const programCode = programCodeFor(row, ledger);
+    const tags = (tagIds: string[] | undefined) => (tagIds?.length ? { tagIds: [...tagIds] } : {});
+    // One offset per line item, on the side its own sign calls for (journalLinesForPlanRow).
+    const offsets: DemoJournalLine[] = row.lines && row.lines.length > 1
+      ? row.lines.map((item) => {
+          const itemLedger = demoLedgerAccountFor({ category: item.category ?? row.category, description: row.description }) ?? ledger;
+          return {
+            account: itemLedger,
+            side: item.amountCents >= 0 ? "credit" as const : "debit" as const,
+            amountCents: Math.abs(item.amountCents),
+            description: item.memo || item.category || row.description,
+            programCode: programCodeFor(row, itemLedger),
+            restrictedFund,
+            transactionId: row.transactionId,
+            ...tags(item.tagIds),
+          };
+        })
+      : [{ account: ledger, side: inflow ? "credit" : "debit", amountCents: absolute, description: row.category ?? row.description, programCode, restrictedFund, transactionId: row.transactionId, ...tags(row.tagIds) }];
     entries.push({
       key: row.transactionId,
       date: row.date,
@@ -245,7 +270,7 @@ export function buildDemoJournal(input: {
       transactionId: row.transactionId,
       lines: [
         { account: row.account, side: inflow ? "debit" : "credit", amountCents: absolute, description: row.description, restrictedFund, transactionId: row.transactionId },
-        { account: ledger, side: inflow ? "credit" : "debit", amountCents: absolute, description: row.category ?? row.description, programCode, restrictedFund, transactionId: row.transactionId },
+        ...offsets,
       ],
     });
   }

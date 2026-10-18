@@ -13,6 +13,7 @@ import { GeneralLedgerReport } from "../reports/GeneralLedgerReport";
 import { MultiPeriodReport } from "../reports/MultiPeriodReport";
 import { REPORT_SLUGS, REPORT_TITLES, isReportSlug, type ReportSlug } from "../reports/reportFilters";
 import { useReportState } from "../reports/useReportState";
+import { useFinanceTags } from "../transactions/useFinanceTags";
 import type { BooksSettingsView, ChartAccountOption, FundOption, ReportContext } from "../reports/types";
 
 const REPORT_TABS = REPORT_SLUGS.map((id) => ({ id, label: REPORT_TITLES[id] }));
@@ -39,6 +40,7 @@ function BooksReportsView({ societyId, societyName, slug }: { societyId: Id<"soc
   const settings = useQuery(api.accounting.booksSettings, { societyId }) as BooksSettingsView | undefined;
   const funds = useQuery(api.accounting.fundRestrictions, { societyId }) as FundOption[] | undefined;
   const accounts = useQuery(api.accounting.chartAccounts, slug === "general-ledger" ? { societyId } : "skip") as ChartAccountOption[] | undefined;
+  const tags = useFinanceTags(societyId);
   const loadedSettings = settings ?? FALLBACK_SETTINGS;
   const [state, actions] = useReportState(slug === "general-ledger" ? "ledger" : "statement", loadedSettings.fiscalStartMonth, loadedSettings.accountingBasis);
 
@@ -48,9 +50,10 @@ function BooksReportsView({ societyId, societyName, slug }: { societyId: Id<"soc
       societyName,
       funds: funds ?? [],
       fundNames: new Map((funds ?? []).map((fund) => [String(fund._id), fund.name])),
+      tags,
       canExport,
     }),
-    [canExport, funds, societyId, societyName],
+    [canExport, funds, societyId, societyName, tags],
   );
 
   const switchReport = (next: ReportSlug) => navigate({ pathname: `/app/financials/reports/${next}`, search: location.search });

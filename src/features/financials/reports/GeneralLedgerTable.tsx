@@ -6,6 +6,8 @@ import { Badge } from "../../../components/ui";
 import { formatDate } from "../../../lib/format";
 import type { GeneralLedgerReport, GeneralLedgerRow } from "../../../../shared/booksReports";
 import { accountLabel, contraLabel, lineDescription } from "./generalLedgerExport";
+import { TagChips } from "../transactions/TagPicker";
+import type { FinanceTagsApi } from "../transactions/useFinanceTags";
 
 const entryHref = (entryId: string) => `/app/financials/journal-entries?entry=${encodeURIComponent(entryId)}`;
 const transactionHref = (transactionId: string) => `/app/financials?tab=transactions&transaction=${encodeURIComponent(transactionId)}`;
@@ -15,7 +17,7 @@ function SideAmount({ cents, currency }: { cents: number; currency: string }) {
   return cents ? <Money cents={cents} currency={currency} /> : null;
 }
 
-const LedgerRow = memo(function LedgerRow({ row, currency, withBalance }: { row: GeneralLedgerRow; currency: string; withBalance: boolean }) {
+const LedgerRow = memo(function LedgerRow({ row, currency, withBalance, tags }: { row: GeneralLedgerRow; currency: string; withBalance: boolean; tags: FinanceTagsApi }) {
   const description = lineDescription(row);
   const contra = contraLabel(row);
   const entryName = row.entryNumber ? `entry ${row.entryNumber}` : "journal entry";
@@ -34,6 +36,7 @@ const LedgerRow = memo(function LedgerRow({ row, currency, withBalance }: { row:
       <td className="books-ledger__memo">
         <span className="books-ledger__truncate">{row.memo || description || "—"}</span>
         {row.memo && description && <span className="books-ledger__truncate finance-table__sub">{description}</span>}
+        {row.tagIds?.length ? <TagChips tagIds={row.tagIds} tags={tags} /> : null}
       </td>
       <td className="books-ledger__party">{row.counterparty ?? <span className="muted">—</span>}</td>
       <td className="num"><SideAmount cents={row.debitCents} currency={currency} /></td>
@@ -67,7 +70,7 @@ function BalanceRow({ label, date, cents, currency }: { label: string; date: str
  * memo, counterparty and debit / credit. Filtered to one account it adds the
  * opening balance, a running balance and the closing balance.
  */
-export function GeneralLedgerTable({ report, caption }: { report: GeneralLedgerReport; caption: string }) {
+export function GeneralLedgerTable({ report, caption, tags }: { report: GeneralLedgerReport; caption: string; tags: FinanceTagsApi }) {
   const { account, currency } = report;
   const withBalance = Boolean(account);
   return (
@@ -90,7 +93,7 @@ export function GeneralLedgerTable({ report, caption }: { report: GeneralLedgerR
         <tbody>
           {account && <BalanceRow label="Opening balance" date={report.from} cents={account.openingBalanceCents} currency={currency} />}
           {report.rows.map((row) => (
-            <LedgerRow key={row.lineId} row={row} currency={currency} withBalance={withBalance} />
+            <LedgerRow key={row.lineId} row={row} currency={currency} withBalance={withBalance} tags={tags} />
           ))}
           {report.rows.length === 0 && (
             <tr className="finance-empty-row">

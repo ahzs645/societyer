@@ -31,6 +31,12 @@
   min-width: 0;
 }
 
+// The tag filter's trigger names the chosen tags; long names truncate.
+.books-report-toolbar__tags {
+  max-width: 220px;
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
 // ---------- Notes (filters, warnings, truncation) ----------
 .books-report__note {
   margin: 0;

@@ -2576,7 +2576,7 @@ const LEDGER_ACCOUNT_IDS = Object.fromEntries(DEMO_LEDGER_ACCOUNTS.map((account)
 const demoJournal = buildDemoJournal({
   transactions: financialTransactions
     .filter((row) => !HAND_POSTED_TRANSACTIONS.has(String(row._id)) && FEED_KEY_BY_ACCOUNT[String(row.accountId)])
-    .map((row) => ({ transactionId: String(row._id), account: FEED_KEY_BY_ACCOUNT[String(row.accountId)], date: String(row.date), description: String(row.description), amountCents: Number(row.amountCents), category: row.category ? String(row.category) : undefined, status: String(row.status) })),
+    .map((row) => ({ transactionId: String(row._id), account: FEED_KEY_BY_ACCOUNT[String(row.accountId)], date: String(row.date), description: String(row.description), amountCents: Number(row.amountCents), category: row.category ? String(row.category) : undefined, status: String(row.status), tagIds: Array.isArray(row.tagIds) ? row.tagIds.map(String) : undefined, lines: Array.isArray(row.lines) ? row.lines : undefined })),
   openingDate: DEMO_BOOKS_START,
   // Balances at 2025-12-31: the feed is calibrated so operating and restricted
   // cash match the balances carried in; the card owes December's purchases.
@@ -2620,6 +2620,7 @@ const journalLines = [
     ...(line.programCode ? { programCode: line.programCode } : {}),
     ...(line.restrictedFund ? { fundRestrictionId: "static_fund_restriction_youth" } : {}),
     ...(line.transactionId ? { financialTransactionId: line.transactionId } : {}),
+    ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
     createdAtISO: `${entry.date}T19:00:00.000Z`,
     updatedAtISO: `${entry.date}T19:00:00.000Z`,
   }))),
