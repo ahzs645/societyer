@@ -4,6 +4,8 @@ import { ListTree, Plus } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { ObjectRecordTable, RecordTableEmpty, type RecordTableCellRenderer } from "@/platform/record-engine";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
+import { useCreateIntent } from "../../../hooks/useCreateIntent";
+import { FinanceCreateMenu } from "../components/FinanceCreateMenu";
 import { useSociety } from "../../../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { Money } from "../../../components/Money";
@@ -56,6 +58,7 @@ export function ChartOfAccountsPage() {
   const visible = useMemo(() => (tab === "all" ? records : records.filter((row) => row.section === tab)), [records, tab]);
   const closeDrawer = useCallback(() => setDrawer(null), []);
   const openAccount = useCallback((id: string) => setDrawer({ id }), []);
+  useCreateIntent("new-account", "financials:write", () => setDrawer({ id: null }), rows !== undefined);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -96,9 +99,12 @@ export function ChartOfAccountsPage() {
           </>
         }
         actions={
-          <button type="button" className="btn-action btn-action--primary" disabled={!canWrite || rows === undefined} onClick={() => setDrawer({ id: null })}>
-            <Plus size={12} aria-hidden="true" /> New account
-          </button>
+          <>
+            <FinanceCreateMenu />
+            <button type="button" className="btn-action btn-action--primary" disabled={!canWrite || rows === undefined} onClick={() => setDrawer({ id: null })}>
+              <Plus size={12} aria-hidden="true" /> New account
+            </button>
+          </>
         }
       />
       <BooksNav />

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Archive, ArchiveRestore, MoreHorizontal, Palette, Pencil, Plus, Tags } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
+import { useCreateIntent } from "../../../hooks/useCreateIntent";
 import { useSociety } from "../../../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import { EmptyState, Field } from "../../../components/ui";
@@ -49,6 +50,12 @@ export function TransactionTagsPage() {
   const toast = useToast();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  // The Create menu's "Tag" and "Tag group": a tag starts in the first active group (or a new group when there is none).
+  useCreateIntent("new-tag-group", "financials:write", () => setEditing({ kind: "group" }), tags.loaded);
+  useCreateIntent("new-tag", "financials:write", () => {
+    const group = tags.activeGroups[0];
+    setEditing(group ? { kind: "tag", group } : { kind: "group" });
+  }, tags.loaded);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;

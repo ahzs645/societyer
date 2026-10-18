@@ -9,6 +9,7 @@ import { SkeletonRows } from "../../../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { BooksNav } from "../components/BooksNav";
+import { FinanceCreateMenu } from "../components/FinanceCreateMenu";
 import { GeneralLedgerReport } from "../reports/GeneralLedgerReport";
 import { MultiPeriodReport } from "../reports/MultiPeriodReport";
 import { REPORT_SLUGS, REPORT_TITLES, isReportSlug, type ReportSlug } from "../reports/reportFilters";
@@ -63,6 +64,7 @@ function BooksReportsView({ societyId, societyName, slug }: { societyId: Id<"soc
       <PageHeader
         title="Financial reports"
         subtitle="Balance sheet, statement of operations, cash flow and general ledger by period."
+        actions={<FinanceCreateMenu />}
         info={
           <>
             <p>

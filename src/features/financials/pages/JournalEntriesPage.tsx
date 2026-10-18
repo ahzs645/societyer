@@ -12,6 +12,7 @@ import { Badge } from "../../../components/ui";
 import { Money } from "../../../components/Money";
 import { formatDate } from "../../../lib/format";
 import { BooksNav } from "../components/BooksNav";
+import { FinanceCreateMenu } from "../components/FinanceCreateMenu";
 import { AccountRefList } from "../registers/AccountRefList";
 import { JournalEntryDrawer, STATUS_TONE, type AccountLookup, type JournalEntryDetail } from "../registers/JournalEntryDrawer";
 import { JournalEntryEditor, type GridAccount } from "../registers/JournalEntryEditor";
@@ -144,9 +145,12 @@ export function JournalEntriesPage() {
           </>
         }
         actions={
-          <button type="button" className="btn-action btn-action--primary" disabled={!canWrite || chartAccounts === undefined} onClick={openNew}>
-            <Plus size={12} aria-hidden="true" /> New journal entry
-          </button>
+          <>
+            <FinanceCreateMenu />
+            <button type="button" className="btn-action btn-action--primary" disabled={!canWrite || chartAccounts === undefined} onClick={openNew}>
+              <Plus size={12} aria-hidden="true" /> New journal entry
+            </button>
+          </>
         }
       />
       <BooksNav />

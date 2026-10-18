@@ -7,6 +7,8 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, EmptyState, Field, Flag } from "../components/ui";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { useCreateIntent } from "../hooks/useCreateIntent";
+import { FinanceCreateMenu } from "../features/financials/components/FinanceCreateMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -44,7 +46,7 @@ import { Database, Download, FileUp, Keyboard, Link2, MoreHorizontal, Pencil, Pi
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { Tabs } from "../components/primitives";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { appliesBcSocietyRules } from "../../shared/entityRuleScope";
@@ -498,6 +500,7 @@ export function FinancialsPage() {
         actions={
           activeConnection ? (
             <>
+              <FinanceCreateMenu />
               <span title={`Connected to ${providerLabel(activeConnection.provider)}`}>
                 <Badge tone="success">{providerLabel(activeConnection.provider)}</Badge>
               </span>
@@ -544,6 +547,7 @@ export function FinancialsPage() {
             </>
           ) : (
             <>
+              <FinanceCreateMenu />
               <MoreActionsMenu
                 items={[
                   { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
@@ -1324,6 +1328,12 @@ function BankCsvImportCard({
   const [parsed, setParsed] = useState<ParsedCsvRow[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The finance Create menu's "Import → Bank CSV" lands here.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useCreateIntent("import-csv", "financials:write", () => {
+    cardRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    cardRef.current?.focus({ preventScroll: true });
+  });
 
   const onFile = async (file: File) => {
     setFileName(file.name);
@@ -1366,7 +1376,7 @@ function BankCsvImportCard({
   };
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card" style={{ marginBottom: 16 }} ref={cardRef} tabIndex={-1} aria-label="Import bank / credit-card CSV">
       <div className="card__head">
         <h2 className="card__title">Import bank / credit-card CSV</h2>
         <span className="card__subtitle">

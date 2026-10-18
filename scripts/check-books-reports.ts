@@ -483,4 +483,30 @@ await checkAsync("tagged demo journal lines (bank feed and bills) show up when t
   assert.ok(gala.postedLineCount > 0 && gala.summary.some((point) => point.values.expenses > 0 || point.values.revenue > 0), "the fall gala tag shows up in the statement of operations");
 });
 
+await checkAsync("every Create menu item lands on a routed page that opens its create screen", async () => {
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { FINANCE_CREATE_ITEMS, financeCreateSections } = await import("../src/lib/financeCreateItems");
+  const routes = [...readFileSync("src/main.tsx", "utf8").matchAll(/<Route path="([^"]+)"/g)].map((match) => `/app/${match[1]}`);
+  const sources: string[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) walk(path);
+      else if (/\.tsx?$/.test(name)) sources.push(readFileSync(path, "utf8"));
+    }
+  };
+  walk("src");
+  const source = sources.join("\n");
+  assert.deepEqual(financeCreateSections().map((group) => group.label), ["Create", "Import", "Add"]);
+  for (const item of FINANCE_CREATE_ITEMS) {
+    const url = new URL(item.to, "https://app.test");
+    assert.ok(routes.includes(url.pathname), `${item.label}: ${url.pathname} is a route`);
+    const intent = url.searchParams.get("intent");
+    const handled = (name: string) => source.includes(`useCreateIntent("${name}"`) || new RegExp(`intent[A-Za-z]*\\)?\\s*[!=]==\\s*"${name}"`).test(source);
+    if (intent) assert.ok(handled(intent), `${item.label}: some page handles ?intent=${intent}`);
+  }
+  assert.ok(new Set(FINANCE_CREATE_ITEMS.map((item) => item.id)).size === FINANCE_CREATE_ITEMS.length, "item ids are unique");
+});
+
 console.log(`\nbooks reports check passed (${passed} checks).`);
