@@ -162,6 +162,7 @@ const ROUTE_KEYWORDS: Record<string, string[]> = {
   "/app/exports": ["download", "backup", "csv"],
   "/app/society": ["organization", "org"],
   "/app/financials": ["money", "accounting", "budget"],
+  "/app/financials/tags": ["tag groups", "program", "grant", "event", "dimensions", "class"],
   "/app/financials/year-end": ["year end", "annual report", "actuals", "budget", "gaming grant", "restricted funds", "financial statement"],
   "/app/members": ["people", "contacts", "roster"],
   // Sidebar shows this route as "Membership classes" (society) / "Share

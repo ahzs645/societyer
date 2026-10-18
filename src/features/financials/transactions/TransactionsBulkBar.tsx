@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { CheckCheck, Download, Landmark, Tag, Zap } from "lucide-react";
+import { useMutation } from "convex/react";
+import { CheckCheck, Download, Landmark, RotateCcw, Tag, Tags, Zap } from "lucide-react";
+import { api } from "@/lib/convexApi";
 import { RecordTableBulkBar, useRecordTableStoreHandle } from "@/platform/record-engine";
 import { Modal } from "../../../components/Modal";
 import { Field } from "../../../components/ui";
@@ -10,6 +12,7 @@ import { downloadDelimitedText, exportFileName, toDelimitedText } from "../../..
 import { draftFromSelection, selectionPayees, SELECTION_RULE_MAX_PAYEES } from "./selectionRuleDraft";
 import { useRuleDrawer } from "./RuleDrawerHost";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
+import type { FinanceTagsApi } from "./useFinanceTags";
 
 type BulkRow = {
   _id: string;
@@ -24,14 +27,19 @@ type BulkRow = {
   receiptStatus?: string;
 };
 
-type Pending = { kind: "category" | "fund"; ids: string[] } | null;
+type Pending = { kind: "category" | "fund" | "tag"; ids: string[] } | null;
+
+type TagResult = { updated: number; skipped: number; previous: Array<{ id: string; values: Record<string, unknown> }> };
+
+/** "remove:<groupId>" in the tag picker clears that group's tag. */
+const REMOVE_PREFIX = "remove:";
 
 /**
  * The floating bulk island for the transactions table: set a category, mark
- * reviewed, assign a fund, create a rule from the selection, or export it.
- * Every change shows Undo.
+ * reviewed or unreviewed, assign a fund or a tag, create a rule from the
+ * selection, or export it. Every change shows Undo.
  */
-export function TransactionsBulkBar({ societyId, canWrite, exportName }: { societyId: string; canWrite: boolean; exportName: string }) {
+export function TransactionsBulkBar({ societyId, canWrite, exportName, tags }: { societyId: string; canWrite: boolean; exportName: string; tags: FinanceTagsApi }) {
   const drawer = useRuleDrawer();
   const handle = useRecordTableStoreHandle();
   const runBulk = useTransactionBulkEdit(societyId);
@@ -39,6 +47,9 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
   const [pending, setPending] = useState<Pending>(null);
   const [category, setCategory] = useState("");
   const [fundId, setFundId] = useState("");
+  const [tagChoice, setTagChoice] = useState("");
+  const assignTag = useMutation(api.transactionLines.assignTag);
+  const restore = useMutation(api.financialHub.restoreTransactions);
   const funds = drawer?.workspace?.fundRestrictions ?? [];
   const categories = drawer?.workspace?.categories ?? [];
 
@@ -46,6 +57,36 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
     setPending(null);
     setCategory("");
     setFundId("");
+    setTagChoice("");
+  };
+
+  const runAssignTag = async (ids: string[], choice: string) => {
+    const removing = choice.startsWith(REMOVE_PREFIX);
+    const groupId = removing ? choice.slice(REMOVE_PREFIX.length) : undefined;
+    const tag = removing ? undefined : tags.tag(choice);
+    try {
+      const result = (await assignTag({ societyId, ids, tagId: removing ? null : choice, ...(groupId ? { groupId } : {}) })) as TagResult;
+      if (result.updated === 0) {
+        toast.info("Nothing changed", removing ? "None of the selected transactions had a tag from that group." : `The selected transactions already have ${tag?.name ?? "that tag"}.`);
+        return;
+      }
+      toast.success(
+        removing ? `Removed the ${tags.group(groupId!)?.name ?? "group"} tag from ${pluralize(result.updated, "transaction")}` : `Tagged ${pluralize(result.updated, "transaction")} ${tag?.name ?? ""}`.trim(),
+        {
+          duration: 10_000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void restore({ societyId, rows: result.previous })
+                .then(() => toast.info(`Restored ${pluralize(result.updated, "transaction")}`))
+                .catch((error: unknown) => toast.error("Could not undo", error instanceof Error ? error.message : undefined));
+            },
+          },
+        },
+      );
+    } catch (error) {
+      toast.error("Could not tag the transactions", error instanceof Error ? error.message : undefined);
+    }
   };
   const finish = () => {
     close();
@@ -85,6 +126,23 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
             icon: <CheckCheck size={12} aria-hidden="true" />,
             onRun: (ids: string[]) => runBulk(ids, { reviewed: true }, (count) => `Marked ${pluralize(count, "transaction")} as reviewed`),
           },
+          {
+            id: "bulk-unreviewed",
+            label: "Mark unreviewed",
+            icon: <RotateCcw size={12} aria-hidden="true" />,
+            onRun: (ids: string[]) => runBulk(ids, { reviewed: false }, (count) => `Moved ${pluralize(count, "transaction")} back to To review`),
+          },
+          ...(tags.options.length > 0
+            ? [
+                {
+                  id: "bulk-tag",
+                  label: "Assign tag…",
+                  icon: <Tags size={12} aria-hidden="true" />,
+                  keepSelection: true,
+                  onRun: (ids: string[]) => setPending({ kind: "tag", ids }),
+                },
+              ]
+            : []),
           ...(funds.length > 0
             ? [
                 {
@@ -166,6 +224,43 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
         <datalist id="txn-bulk-category-options">
           {categories.map((option) => <option key={option} value={option} />)}
         </datalist>
+      </Modal>
+      <Modal
+        open={pending?.kind === "tag"}
+        onClose={close}
+        size="sm"
+        title={`Tag ${pluralize(count, "transaction")}`}
+        footer={
+          <>
+            <button type="button" className="btn" onClick={close}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn--accent"
+              disabled={!tagChoice}
+              onClick={() => {
+                const ids = pending?.ids ?? [];
+                const choice = tagChoice;
+                finish();
+                void runAssignTag(ids, choice);
+              }}
+            >
+              {tagChoice.startsWith(REMOVE_PREFIX) ? "Remove tag" : "Assign tag"}
+            </button>
+          </>
+        }
+      >
+        <Field label="Tag" hint="Every line of a split gets the tag. A tag replaces any other tag from its group.">
+          <Select
+            value={tagChoice}
+            onChange={setTagChoice}
+            placeholder="Choose a tag"
+            searchable
+            options={[
+              ...tags.options,
+              ...tags.activeGroups.map((group) => ({ value: `${REMOVE_PREFIX}${group._id}`, label: `Remove the ${group.name} tag`, hint: group.name })),
+            ]}
+          />
+        </Field>
       </Modal>
       <Modal
         open={pending?.kind === "fund"}

@@ -114,6 +114,10 @@ await assert.rejects(hub.updateTransactionPortable(owner, { id: target._id, patc
 const bulk = await hub.bulkUpdateTransactionsPortable(owner, { societyId: S, ids: [target._id], patch: { category: "Bulk", reviewed: true } });
 assert.equal(bulk.splitSkipped, 1, "a bulk category leaves the split alone");
 assert.equal((await get(target._id)).lines.length, 2);
+assert.ok((await get(target._id)).reviewedAtISO, "the same bulk edit still marks it reviewed");
+const unreviewed = await hub.bulkUpdateTransactionsPortable(owner, { societyId: S, ids: [target._id], patch: { reviewed: false } });
+assert.equal(unreviewed.updated, 1);
+assert.equal((await get(target._id)).reviewedAtISO, undefined, "U puts a line back in the To review queue");
 await hub.restoreTransactionsPortable(owner, { societyId: S, rows: bulk.previous });
 
 // ---- posting a split, then re-posting an edit

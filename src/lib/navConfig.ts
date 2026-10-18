@@ -258,6 +258,7 @@ export const NAV_TREE: readonly NavTreeConfigEntry[] = [
       "/app/reconciliation",
       "/app/approvals",
       "/app/transaction-rules",
+      "/app/financials/tags",
       "/app/financials/year-end",
       "/app/finance-imports",
       "/app/grants",

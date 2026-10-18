@@ -597,11 +597,11 @@ export function snapshotBulkFields(row: Record<string, unknown>): Record<string,
 /**
  * Apply one change to several transactions (the bulk island on the
  * transactions table): set a category, assign a fund (null clears it) or mark
- * reviewed. Returns each changed line's previous values so the client can
- * offer Undo through `restoreTransactions`. Lines from another organization
- * are only counted as skipped, never named. A category is not forced onto a
- * split transaction (its lines keep their categories); those are counted in
- * `splitSkipped`.
+ * reviewed (`reviewed: false` puts lines back in the review queue). Returns
+ * each changed line's previous values so the client can offer Undo through
+ * `restoreTransactions`. Lines from another organization are only counted as
+ * skipped, never named. A category is not forced onto a split transaction
+ * (its lines keep their categories); those are counted in `splitSkipped`.
  */
 export async function bulkUpdateTransactionsPortable(
   ctx: PortableMutationCtx,
@@ -624,7 +624,7 @@ export async function bulkUpdateTransactionsPortable(
   if (unique.length > BULK_TRANSACTION_LIMIT) throw new Error(`Edit at most ${BULK_TRANSACTION_LIMIT} transactions at once.`);
   const category = patch.category === undefined ? undefined : String(patch.category).trim();
   if (patch.category !== undefined && !category) throw new Error("Choose a category.");
-  if (category === undefined && patch.fundRestrictionId === undefined && !patch.reviewed) throw new Error("Nothing to change.");
+  if (category === undefined && patch.fundRestrictionId === undefined && patch.reviewed === undefined) throw new Error("Nothing to change.");
   if (patch.fundRestrictionId) await getOwned(ctx, "fundRestrictions", patch.fundRestrictionId, societyId);
   const nowISO = new Date().toISOString();
   const previous: Array<{ id: string; values: Record<string, unknown> }> = [];
@@ -654,6 +654,7 @@ export async function bulkUpdateTransactionsPortable(
       }
     }
     if (patch.reviewed && !row.reviewedAtISO) next.reviewedAtISO = nowISO;
+    if (patch.reviewed === false && row.reviewedAtISO) next.reviewedAtISO = undefined;
     if (Object.keys(next).length === 0) continue;
     await ctx.db.patch(row._id, next);
     previous.push({ id: String(row._id), values });

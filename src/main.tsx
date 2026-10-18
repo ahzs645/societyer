@@ -60,6 +60,7 @@ const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) =>
 const AccountingWorkbenchPage = React.lazy(() => import("./features/financials/pages/AccountingWorkbenchPage").then((m) => ({ default: m.AccountingWorkbenchPage })));
 const FinancialYearDetailPage = React.lazy(() => import("./features/financials/pages/FinancialYearDetailPage").then((m) => ({ default: m.FinancialYearDetailPage })));
 const YearEndReportsPage = React.lazy(() => import("./features/financials/pages/YearEndReportsPage").then((m) => ({ default: m.YearEndReportsPage })));
+const TransactionTagsPage = React.lazy(() => import("./features/financials/pages/TransactionTagsPage").then((m) => ({ default: m.TransactionTagsPage })));
 const WaveAccountDetailPage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveAccountDetailPage })));
 const WaveResourceDetailPage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveResourceDetailPage })));
 const WaveResourceTablePage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveResourceTablePage })));
@@ -472,6 +473,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="financials/accounting" element={<AccountingWorkbenchPage />} />
             <Route path="financials/year-end" element={<YearEndReportsPage />} />
+            <Route path="financials/tags" element={<TransactionTagsPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
             <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
             <Route path="financials/wave/:resourceType/:resourceId" element={<WaveResourceDetailPage />} />

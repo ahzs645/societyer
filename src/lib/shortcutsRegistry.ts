@@ -53,6 +53,17 @@ export const ROUTE_SHORTCUTS: Record<string, Shortcut> = Object.fromEntries(
   Object.values(GO_TO_SHORTCUTS).map(({ to, id }) => [to, SHORTCUTS[id]]),
 );
 
+/** Financials → Transactions (its sheet adds the table and panel keys). */
+export const TRANSACTIONS_SHORTCUT_SECTION: ShortcutSection = {
+  id: "transactions",
+  label: "Transactions",
+  items: [
+    { keys: ["R"], label: "Mark the selected rows, or the open transaction, reviewed (the panel moves to the next one in To review)", keywords: ["review"] },
+    { keys: ["U"], label: "Mark the selected rows, or the open transaction, unreviewed", keywords: ["review"] },
+    { keys: ["?"], label: "Show the transaction shortcuts (on the Transactions tab)" },
+  ],
+};
+
 export const SHORTCUT_SECTIONS: ShortcutSection[] = [
   {
     id: "general",
@@ -165,6 +176,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
       { keys: ["Space"], label: "Select the focused task" },
     ],
   },
+  TRANSACTIONS_SHORTCUT_SECTION,
   {
     id: "menus",
     label: "Dropdowns & menus",

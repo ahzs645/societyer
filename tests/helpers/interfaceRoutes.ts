@@ -432,6 +432,12 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/financials/tags",
+    "path": "/demo/app/financials/tags",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
     "pattern": "/app/financials/fy/:fiscalYear",
     "path": "/demo/app/financials/fy/2025-2026",
     "kind": "app",
