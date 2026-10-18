@@ -57,6 +57,7 @@ const MATCH_LABELS: Record<string, string> = {
   manual: "the bank statement",
   invoice: "an invoice",
   claim: "an expense claim",
+  bill: "a bill payment",
 };
 
 /** The raw payee a rule or a rename should match. */

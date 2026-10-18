@@ -101,7 +101,8 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
 {
   const { client, societyId } = await demoClient();
   const before = await totalAssetsCents(client, societyId);
-  assert.equal(before, 7_698_000, "demo seed starts at total assets $76,980");
+  // $76,980 less the two bill payments the bills demo posted from operating chequing ($412.38 + $500.00).
+  assert.equal(before, 7_698_000 - 91_238, "demo seed starts at total assets $76,067.62");
   const facts = await feedFacts(client, societyId);
   assert.ok(facts.transactions.length >= 400, `the demo bank feed is dense (${facts.transactions.length} rows)`);
   assert.ok(facts.preOpening.length >= 100, "a year of 2025 imports predates the opening balances");

@@ -30,6 +30,7 @@ import {
   type DemoFinancePerson,
 } from "../demoData/financeWorkflows";
 import { invoiceDemoRows, type DemoInvoiceMember, type DemoInvoiceMemberKey } from "../demoData/invoicing";
+import { billDemoRows } from "../demoData/bills";
 import { businessRegisterDemoRows } from "../demoData/businessRegisters";
 import { syncRegisterDeadlines } from "./businessRegisters";
 import { CORPORATION_DEMO_KEYS, CORPORATION_DEMO_TABLE_ORDER, buildCorporationDemo, insertCorporationDemo } from "../demoData/corporations";
@@ -844,9 +845,39 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     normalBalance: "debit",
   });
   // Sub-accounts under facilities, so the chart of accounts shows a hierarchy.
-  for (const { doc } of demoSubAccountRows({ societyId, connectionId: financialConnectionId, facilitiesAccountId: facilitiesExpenseAccountId })) {
-    await ctx.db.insert("financialAccounts", doc);
+  const subAccountIds: Record<string, string> = {};
+  for (const { key, doc } of demoSubAccountRows({ societyId, connectionId: financialConnectionId, facilitiesAccountId: facilitiesExpenseAccountId })) {
+    subAccountIds[key] = await ctx.db.insert("financialAccounts", doc);
   }
+  // Accounts payable and program supplies, which the bills demo posts to.
+  const payablesAccountId = await ctx.db.insert("financialAccounts", {
+    societyId,
+    connectionId: financialConnectionId,
+    externalId: "accounts-payable",
+    code: "2000",
+    name: "Accounts payable",
+    currency: "CAD",
+    accountType: "Liability",
+    subtype: "payable",
+    balanceCents: 0,
+    isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "credit",
+  });
+  const programSuppliesAccountId = await ctx.db.insert("financialAccounts", {
+    societyId,
+    connectionId: financialConnectionId,
+    externalId: "program-supplies",
+    code: "5000",
+    name: "Program supplies",
+    currency: "CAD",
+    accountType: "Expense",
+    subtype: "program",
+    balanceCents: 0,
+    isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "debit",
+  });
   const fundRestrictionId = await ctx.db.insert("fundRestrictions", {
     societyId,
     name: "Youth resilience grant",
@@ -1407,6 +1438,7 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       receiptDocumentId: presentationId,
       members,
       plans: { regular: regularPlanId, student: studentPlanId },
+      billAccounts: { payable: payablesAccountId, facilities: facilitiesExpenseAccountId, venue: subAccountIds.venue, utilities: subAccountIds.utilities, program: programSuppliesAccountId },
     });
   }
 
@@ -2177,6 +2209,7 @@ type SeedFinanceDemoArgs = {
   receiptDocumentId: string;
   members: Record<DemoInvoiceMemberKey, DemoInvoiceMember>;
   plans: { regular: string; student: string };
+  billAccounts: { payable: string; facilities: string; venue: string; utilities: string; program: string };
 };
 
 /**
@@ -2242,10 +2275,45 @@ async function seedFinanceDemo(ctx: PortableMutationCtx, args: SeedFinanceDemoAr
   await writer.insert("invoiceSettings", invoicing.invoiceSettings);
   await writer.insert("memberSubscriptions", invoicing.memberSubscriptions);
   await writer.insert("organizationIdentifiers", invoicing.organizationIdentifiers);
-  // Payment deposits are real bank lines: operating chequing's balance stays
-  // its opening balance plus the sum of its transactions.
+
+  // Bills: vendors, then the bank lines and journal entries the bills point
+  // at, then the bills. A linked bank line names its bill and an entry's key
+  // carries the bill id, so those two are patched in once the bills exist.
+  const billing = billDemoRows({
+    societyId: args.societyId,
+    connectionId: args.connectionId,
+    cashAccountId: args.cashAccountId,
+    accounts: args.billAccounts,
+    fundRestrictionId: args.fundRestrictionId,
+    owner: args.owner,
+    treasurer: args.treasurer,
+    secretary: args.secretary,
+    idFor: seedRef,
+  });
+  const withoutBillRefs = <T extends Record<string, unknown>>(row: T, fields: string[]) =>
+    Object.fromEntries(Object.entries(row).filter(([key]) => !fields.includes(key))) as T;
+  await writer.insert("accountingCounterparties", billing.accountingCounterparties);
+  const billTxnIds = await writer.insert("financialTransactions", billing.financialTransactions.map((row) => withoutBillRefs(row, ["matchedId"])));
+  const billEntryIds = await writer.insert("journalEntries", billing.journalEntries.map((row) => withoutBillRefs(row, ["sourceExternalId"])));
+  await writer.insert("journalLines", billing.journalLines);
+  const billIds = await writer.insert("bills", billing.bills);
+  const realBillId = new Map(billing.bills.map((row, index) => [row._id, billIds[index]]));
+  const swapBillId = (value: string) => {
+    for (const [placeholder, id] of realBillId) value = value.split(placeholder).join(id);
+    return value;
+  };
+  for (const [index, row] of billing.financialTransactions.entries()) {
+    if (typeof row.matchedId === "string") await ctx.db.patch(billTxnIds[index], { matchedId: swapBillId(row.matchedId) });
+  }
+  for (const [index, row] of billing.journalEntries.entries()) {
+    if (typeof row.sourceExternalId === "string") await ctx.db.patch(billEntryIds[index], { sourceExternalId: swapBillId(row.sourceExternalId) });
+  }
+
+  // Payment deposits and bill payments are real bank lines: operating
+  // chequing's balance stays its opening balance plus the sum of its transactions.
   const deposits = invoicing.financialTransactions.reduce((sum, row) => sum + row.amountCents, 0);
-  await ctx.db.patch(args.cashAccountId, { balanceCents: args.accountBalances[args.cashAccountId] + deposits });
+  const billPayments = billing.financialTransactions.reduce((sum, row) => sum + Number(row.amountCents), 0);
+  await ctx.db.patch(args.cashAccountId, { balanceCents: args.accountBalances[args.cashAccountId] + deposits + billPayments });
 }
 
 export async function resetPortable(ctx: PortableMutationCtx): Promise<{ ok: boolean }> {
@@ -2306,7 +2374,10 @@ async function wipe(ctx: PortableMutationCtx) {
     "payRuns",
     "payrollSettings",
     "investmentHoldings",
-    // Finance workflows and invoicing (seedFinanceDemo)
+    // Finance workflows, invoicing and bills (seedFinanceDemo)
+    "bills",
+    "journalLines",
+    "journalEntries",
     "invoices",
     "invoiceSeries",
     "invoiceCatalogItems",

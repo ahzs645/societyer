@@ -98,6 +98,7 @@ export const EXPORTABLE_TABLES = [
   "invoiceCatalogItems",
   "invoiceSeries",
   "invoiceSettings",
+  "bills",
   "payrollSettings",
   "payRuns",
   "payrollRemittances",

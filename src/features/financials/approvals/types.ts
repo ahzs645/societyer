@@ -86,4 +86,4 @@ export type ApprovalQueue = {
   changeControl: { enabled: boolean; canChange: boolean; pending: PendingPolicyChange | null };
 };
 
-export type QueueTab = "awaiting" | "approved" | "paid" | "closed" | "drafts" | "rules" | "policy";
+export type QueueTab = "awaiting" | "bills" | "approved" | "paid" | "closed" | "drafts" | "rules" | "policy";

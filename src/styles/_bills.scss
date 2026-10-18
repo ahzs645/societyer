@@ -1,0 +1,112 @@
+@use "tokens" as *;
+
+/* Bills and Vendors: the payables pages, the bill editor's line grid, the
+ * bill panel's payments and planned payment, and the vendor history. The
+ * drawers reuse the claim drawer's facts, sections and trail, and the
+ * invoice payment form and bill-to picker. */
+
+.bills-page > .stat-grid { margin-bottom: token(s-4); }
+.bills-page > .tabs { margin-bottom: token(s-3); }
+
+.bill-pill { display: inline-flex; white-space: nowrap; }
+.bill-pill .badge { display: inline-flex; align-items: center; gap: 4px; }
+
+.bill-row-actions { display: inline-flex; align-items: center; gap: 2px; }
+
+/* ------------------------------------------------------------ bill editor */
+
+.bill-lines {
+  margin: token(s-3) 0 token(s-4);
+  padding-top: token(s-3);
+  border-top: 1px solid token(border);
+}
+.bill-lines__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: token(s-1) token(s-3); margin-bottom: token(s-2); }
+.bill-lines__head .claim-drawer__section-title { margin: 0; }
+.bill-lines__hint { font-size: token(fs-xs); }
+.bill-lines__grid { display: flex; flex-direction: column; gap: token(s-2); }
+.bill-lines__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr) minmax(96px, 0.7fr) 32px;
+  gap: token(s-2);
+  align-items: center;
+}
+.bill-lines__row--funds { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(96px, 0.7fr) 32px; }
+.bill-lines__row--head {
+  color: token(text-tertiary);
+  font-size: token(fs-xs);
+  font-weight: token(fw-medium);
+  .num { text-align: right; }
+}
+.bill-lines__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token(s-3);
+  margin-top: token(s-2);
+}
+.bill-lines__total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: token(s-2);
+  color: token(text-secondary);
+  font-size: token(fs-sm);
+  .money { color: token(text-primary); font-size: token(fs-lg); font-weight: token(fw-semibold); }
+}
+
+@media (max-width: 640px) {
+  .bill-lines__row,
+  .bill-lines__row--funds { grid-template-columns: minmax(0, 1fr) 32px; }
+  .bill-lines__row > :nth-child(n + 2):not(:last-child) { grid-column: 1; }
+  .bill-lines__row > :last-child { grid-column: 2; grid-row: 1; }
+  .bill-lines__row--head { display: none; }
+}
+
+.bill-document {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-2);
+  margin: 0;
+  font-size: token(fs-sm);
+}
+
+/* -------------------------------------------------------------- bill panel */
+
+.bill-approvals__progress { margin: 0; font-size: token(fs-sm); }
+
+.bill-detail__lines {
+  width: 100%;
+  font-size: token(fs-sm);
+  tfoot td { font-weight: token(fw-semibold); border-top: 1px solid token(border); }
+}
+.bill-detail__posting { margin: token(s-2) 0 0; font-size: token(fs-xs); }
+
+.bill-payments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: token(s-2); }
+.bill-payments__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token(s-3);
+  padding: token(s-2) token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  background: token(bg-panel);
+}
+.bill-payments__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: token(fs-sm); .muted { font-size: token(fs-xs); } }
+.bill-payments__match { display: inline-flex; align-items: center; gap: 4px; color: token(font-color-success); font-size: token(fs-xs); overflow-wrap: anywhere; }
+
+.bill-pay__from { margin: token(s-3) 0 0; font-size: token(fs-sm); }
+
+.bill-schedule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: token(s-3);
+  .field { flex: 0 1 260px; margin-bottom: 0; }
+}
+
+/* ----------------------------------------------------------------- vendors */
+
+.vendor-totals { margin-bottom: token(s-3); }
+.vendor-address { white-space: pre-line; }
+.vendor-history { width: 100%; font-size: token(fs-sm); }

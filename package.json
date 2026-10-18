@@ -184,6 +184,7 @@
     "test:transaction-rules": "tsx scripts/check-transaction-rules.ts && tsx scripts/check-finance-workflows.ts",
     "test:notification-settings": "tsx scripts/check-notification-settings.ts",
     "test:invoices": "tsx scripts/check-invoices.ts",
+    "test:bills": "tsx scripts/check-bills.ts",
     "test:seed-parity": "tsx scripts/check-seed-parity.ts",
     "test:account-hierarchy": "tsx scripts/check-account-hierarchy.ts",
     "test:finance-insights": "tsx scripts/check-finance-insights.ts",

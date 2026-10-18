@@ -15,11 +15,11 @@ const mapped = MODULE_ACCESS_DEFINITIONS.flatMap((row) =>
   ACCESS_ACTIONS.flatMap((action) => row.permissions[action] ?? []));
 assert.deepEqual([...new Set(mapped)].sort(), [...PERMISSIONS].sort());
 // A grant may cover several areas only when the action policy gates them with
-// it: payroll, corporate cards and investments are in the financials resource
-// group. Any other repeat is likely a copy-paste mistake in the projection.
+// it: bills, payroll, corporate cards and investments are in the financials
+// resource group. Any other repeat is likely a copy-paste mistake in the projection.
 const SHARED_GRANTS: Record<string, readonly string[]> = {
-  "financials:read": ["financials", "payroll", "cards", "investments"],
-  "financials:write": ["financials", "payroll", "cards", "investments"],
+  "financials:read": ["financials", "bills", "payroll", "cards", "investments"],
+  "financials:write": ["financials", "bills", "payroll", "cards", "investments"],
 };
 const areasByGrant = new Map<string, string[]>();
 for (const row of MODULE_ACCESS_DEFINITIONS) {

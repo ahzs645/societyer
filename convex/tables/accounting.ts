@@ -59,6 +59,14 @@ export const accountingTables = {
     email: v.optional(v.string()),
     taxIdentifier: v.optional(v.string()),
     notes: v.optional(v.string()),
+    // Vendor details used by bills (all optional, so existing rows stay valid).
+    contactName: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    defaultAccountId: v.optional(v.id("financialAccounts")),
+    defaultTerms: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()),
+    paymentDetails: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

@@ -360,6 +360,8 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/approvals": { icon: ClipboardCheck, group: "finance", label: "Approvals" },
   "/app/transaction-rules": { icon: Zap, group: "finance", label: "Transaction rules" },
   "/app/invoices": { icon: ReceiptText, group: "finance", label: "Invoices" },
+  "/app/bills": { icon: ReceiptText, group: "finance", label: "Bills", module: "bills" },
+  "/app/bills/vendors": { icon: Building2, group: "finance", label: "Vendors", module: "bills" },
   "/app/payroll": { icon: Wallet, group: "finance", label: "Payroll", module: "payroll" },
   "/app/corporate-cards": { icon: CreditCard, group: "finance", label: "Credit cards", module: "cards" },
   "/app/investments": { icon: TrendingUp, group: "finance", label: "Investments", module: "investments" },

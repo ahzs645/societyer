@@ -3514,6 +3514,302 @@
     "idArguments": []
   },
   {
+    "key": "convex:bills:attachDocument",
+    "surface": "convex",
+    "name": "bills:attachDocument",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:bulkApprove",
+    "surface": "convex",
+    "name": "bills:bulkApprove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "bills",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:cancel",
+    "surface": "convex",
+    "name": "bills:cancel",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "bills",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:decide",
+    "surface": "convex",
+    "name": "bills:decide",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:markPaid",
+    "surface": "convex",
+    "name": "bills:markPaid",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "bills",
+        "array": true,
+        "optional": false
+      },
+      {
+        "path": "cashAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:recall",
+    "surface": "convex",
+    "name": "bills:recall",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:recordPayment",
+    "surface": "convex",
+    "name": "bills:recordPayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "cashAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:remove",
+    "surface": "convex",
+    "name": "bills:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:removePayment",
+    "surface": "convex",
+    "name": "bills:removePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:setSchedule",
+    "surface": "convex",
+    "name": "bills:setSchedule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:submit",
+    "surface": "convex",
+    "name": "bills:submit",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:upsert",
+    "surface": "convex",
+    "name": "bills:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "vendorId",
+        "table": "accountingCounterparties",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:upsertVendor",
+    "surface": "convex",
+    "name": "bills:upsertVendor",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "accountingCounterparties",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "defaultAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:workspace",
+    "surface": "convex",
+    "name": "bills:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:bylawAmendments:createDraft",
     "surface": "convex",
     "name": "bylawAmendments:createDraft",
@@ -26887,6 +27183,302 @@
         "table": "documents",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:attachDocument",
+    "surface": "portable",
+    "name": "bills:attachDocument",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:bulkApprove",
+    "surface": "portable",
+    "name": "bills:bulkApprove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "bills",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:cancel",
+    "surface": "portable",
+    "name": "bills:cancel",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "bills",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:decide",
+    "surface": "portable",
+    "name": "bills:decide",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:markPaid",
+    "surface": "portable",
+    "name": "bills:markPaid",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "bills",
+        "array": true,
+        "optional": false
+      },
+      {
+        "path": "cashAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:recall",
+    "surface": "portable",
+    "name": "bills:recall",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:recordPayment",
+    "surface": "portable",
+    "name": "bills:recordPayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "cashAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:remove",
+    "surface": "portable",
+    "name": "bills:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:removePayment",
+    "surface": "portable",
+    "name": "bills:removePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:setSchedule",
+    "surface": "portable",
+    "name": "bills:setSchedule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:submit",
+    "surface": "portable",
+    "name": "bills:submit",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:upsert",
+    "surface": "portable",
+    "name": "bills:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "vendorId",
+        "table": "accountingCounterparties",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:upsertVendor",
+    "surface": "portable",
+    "name": "bills:upsertVendor",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "accountingCounterparties",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "defaultAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:workspace",
+    "surface": "portable",
+    "name": "bills:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },

@@ -167,6 +167,7 @@
     "articlesHistory": "Historique des statuts",
     "approvals": "Approbations",
     "invoices": "Factures",
+    "bills": "Factures fournisseurs",
     "payroll": "Paie",
     "creditCards": "Cartes de crédit",
     "investments": "Placements",
@@ -428,6 +429,10 @@
     "employees": {
       "label": "Registre des employés",
       "description": "Dossiers des employés pour les sociétés qui ont une paie ou du personnel."
+    },
+    "bills": {
+      "label": "Factures fournisseurs et fournisseurs",
+      "description": "Factures fournisseurs approuvées selon les règles d'approbation des dépenses, écritures aux comptes fournisseurs, paiements rapprochés du flux bancaire et registre des fournisseurs."
     },
     "payroll": {
       "label": "Registre de paie",

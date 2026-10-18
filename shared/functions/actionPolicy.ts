@@ -18,7 +18,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", "continuity"],
   commitments: ["commitments", "goals"],
   agreements: ["agreements"],
-  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "payeeAliases", "invoices", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd", "payroll", "corporateCards", "investments"],
+  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "payeeAliases", "invoices", "bills", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd", "payroll", "corporateCards", "investments"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents", "aiFilterActions"],
@@ -53,6 +53,7 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   waveCacheResources: "waveCache",
   payRuns: "payroll", payrollRemittances: "payroll", payrollSlips: "payroll", recordsOfEmployment: "payroll",
   cardStatements: "corporateCards", investmentHoldings: "investments",
+  billVendors: "bills",
 };
 const HANDLER_POLICIES = new Set([
   "offlineMeetings:applyCommand", "offlineMeetings:prepareFileUpload", "offlineMeetings:commitFile",
@@ -150,6 +151,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   // never approve. setStatus keeps financials:write; saveApproverAccess
   // falls through to financials:write below.
   if (name === "expenseReports:decide" || name === "expenseReports:bulkApprove") return "financials:read";
+  // Bills follow the same approval rules and approver-access setting.
+  if (name === "bills:decide" || name === "bills:bulkApprove") return "financials:read";
   // A second owner/admin/director decides approval-rule changes (the handler
   // checks the role and that it isn't the proposer); requesters may remind
   // approvers about their own claims (the handler allows the requester or a

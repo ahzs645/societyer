@@ -294,7 +294,7 @@ type ApprovalRuleRow = ApprovalRule & { _id: string; societyId: string; order: n
 
 const TRAIL_LIMIT = 50;
 
-async function actorFor(ctx: PortableQueryCtx, societyId: string) {
+export async function actorFor(ctx: PortableQueryCtx, societyId: string) {
   const user: any = await requireSocietyMembership(ctx, societyId);
   const row: any = typeof user?._id === "string" && !String(user._id).startsWith("local-workspace-owner:")
     ? await ctx.db.get(user._id, "users").catch(() => null)
@@ -323,7 +323,7 @@ function withTrail(report: any, entry: ReturnType<typeof trailEntry>) {
 
 /** The effective approval rules: configured rows, else rules derived from the
  * recorded signing-authority tiers, else the built-in defaults. */
-async function loadApprovalPolicy(ctx: PortableQueryCtx, societyId: string) {
+export async function loadApprovalPolicy(ctx: PortableQueryCtx, societyId: string) {
   const [configured, authorities, settings] = await Promise.all([
     ctx.db.query<ApprovalRuleRow>("expenseApprovalRules").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("signingAuthorities").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -413,11 +413,11 @@ async function holdsFinanceWrite(ctx: PortableQueryCtx, societyId: string): Prom
   }
 }
 
-async function approverAccessFor(ctx: PortableQueryCtx, societyId: string, approverAccess: ApproverAccess): Promise<ApproverAccessContext> {
+export async function approverAccessFor(ctx: PortableQueryCtx, societyId: string, approverAccess: ApproverAccess): Promise<ApproverAccessContext> {
   return { approverAccess, hasFinanceWrite: await holdsFinanceWrite(ctx, societyId) };
 }
 
-function ruleFor(rules: readonly ApprovalRule[], amountCents: number): ApprovalRule {
+export function ruleFor(rules: readonly ApprovalRule[], amountCents: number): ApprovalRule {
   return ruleForAmount(rules, amountCents) ?? DEFAULT_APPROVAL_RULES[0];
 }
 

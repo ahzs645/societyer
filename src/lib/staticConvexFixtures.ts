@@ -39,6 +39,7 @@ import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../..
 import { addDays, demoAsOfDate } from "../../shared/demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel, type DemoOwnerRole } from "../../shared/demoData/work";
 import { mergeInvoiceDemo } from "./staticInvoiceFixtures";
+import { mergeBillDemo } from "./staticBillFixtures";
 import { mergeBusinessRegisterDemo } from "./staticBusinessRegisterFixtures";
 
 const SOCIETY_ID = STATIC_DEMO_SOCIETY_ID;
@@ -4278,6 +4279,17 @@ const tables: Record<string, any[]> = {
 };
 // Invoicing demo: catalog, customers, invoices in every state, a recurring series and linked bank lines.
 mergeInvoiceDemo(tables, { societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, cashAccountId: CASH_ACCOUNT_ID, ownerName: "Mina Patel", treasurerName: "Jordan Lee" });
+// Bills: four vendors, a bill in every status, their journal entries and the bank lines paying them.
+mergeBillDemo(tables, {
+  societyId: SOCIETY_ID,
+  connectionId: FINANCIAL_CONNECTION_ID,
+  cashAccountId: CASH_ACCOUNT_ID,
+  accounts: { payable: ACCOUNT_PAYABLE_ID, facilities: ACCOUNT_FACILITIES_EXPENSE_ID, venue: "static_financial_facilities_venue", utilities: "static_financial_facilities_utilities", program: ACCOUNT_PROGRAM_EXPENSE_ID },
+  fundRestrictionId: "static_fund_restriction_youth",
+  owner: { id: USER_OWNER_ID, name: "Mina Patel", role: "Owner" },
+  treasurer: { id: USER_TREASURER_ID, name: "Jordan Lee", role: "Director" },
+  secretary: { id: USER_SECRETARY_ID, name: "Avery Santos", role: "Admin" },
+});
 // Business registers: pay runs and remittances, T4 slips, the organization Visa statements and two reserve GICs.
 mergeBusinessRegisterDemo(tables, { societyId: SOCIETY_ID, cardAccountId: CARD_ACCOUNT_ID, restrictedFundId: "static_fund_restriction_youth", treasurerName: "Jordan Lee", asOf: DEMO_AS_OF });
 
