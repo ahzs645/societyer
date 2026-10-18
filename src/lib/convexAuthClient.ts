@@ -15,7 +15,7 @@ export const authClient = createAuthClient({
 export type BetterAuthSession = typeof authClient.$Infer.Session;
 
 /** Convex token minted by the deployment's own signer for the current session. */
-export async function fetchConvexToken(): Promise<string | null> {
+export async function fetchConvexToken(_forceRefresh?: boolean): Promise<string | null> {
   const result = await authClient.convex.token({ fetchOptions: { throw: false } });
   return result.data?.token ?? null;
 }

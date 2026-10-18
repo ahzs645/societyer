@@ -6,7 +6,7 @@ import { getAuthMode } from "./authMode";
  */
 export type SessionAuthModule = {
   authClient: Pick<typeof import("./authClient").authClient, "useSession" | "signIn" | "signUp" | "signOut" | "requestPasswordReset" | "resetPassword" | "sendVerificationEmail">;
-  fetchConvexToken: () => Promise<string | null>;
+  fetchConvexToken: (forceRefresh?: boolean) => Promise<string | null>;
 };
 
 /**

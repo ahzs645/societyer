@@ -1,5 +1,7 @@
 # Operating procurement review
 
+> Hosted architecture update, October 18: catalog records now live in Convex and load in small pages; files remain in SharePoint. See [the metadata publishing and migration runbook](procurement-convex-catalog.md). Snapshot download/plugin-bundle instructions below apply to the legacy snapshot/demo reader.
+
 Use this guide for new operators and future releases. The dated
 [setup and verification record](procurement-review-setup.md) contains the DDC
 North resource IDs, credential expiry dates, deployed versions and test results.
@@ -226,8 +228,9 @@ covers local and existing Kubernetes-backed data. Run `--dry-run` first to
 validate the source and upload plan; it deliberately makes no API calls and
 does **not** qualify credentials. Remove `--dry-run` for the real publish.
 
-Wait for a zero exit code and `wrote manifest.json`. Then click **Refresh** in
-Societyer and check the published time and record counts. The publisher keeps
+Wait for a zero exit code and `wrote manifest.json`. For the hosted site, next
+run the [verified metadata export, Convex import and activation](procurement-convex-catalog.md#publishing-a-future-data-update). SharePoint publication alone no longer updates hosted records.
+For the snapshot/demo reader, click **Refresh** and check the published time and record counts. The publisher keeps
 the current and previous catalog snapshot; content-addressed document blobs are
 reused within a target folder. It never changes the live collector catalog.
 No schedule was installed in the DDC North rollout.

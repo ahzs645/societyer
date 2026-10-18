@@ -48,7 +48,10 @@ import { expensePolicyTables } from "./tables/expensePolicies";
 import { agentConnectorTables } from "./tables/agentConnectors";
 import { mcpOAuthTables } from "./tables/mcpOAuth";
 
+import { procurementTables } from "./tables/procurement";
+
 export default defineSchema({
+  ...procurementTables,
   developmentAuthEmails: defineTable({
     to: v.string(), subject: v.string(), text: v.string(),
     tag: v.union(v.literal("auth-verify-email"), v.literal("auth-reset-password")),

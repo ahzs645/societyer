@@ -65,6 +65,7 @@
     "test:procurement-review": "tsx scripts/check-procurement-review.ts && tsx scripts/sync-procurement-review.ts --check && tsx scripts/build-procurement-review-demo.ts --check",
     "procurement-review:sync": "tsx scripts/sync-procurement-review.ts",
     "procurement-review:demo": "tsx scripts/build-procurement-review-demo.ts",
+    "test:procurement-convex": "tsx scripts/check-procurement-convex.ts",
     "test:auth-token": "tsx scripts/check-auth-token.ts",
     "test:auth-email-policy": "tsx scripts/check-auth-email-policy.ts",
     "test:microsoft-sso": "tsx scripts/check-microsoft-sso.ts",

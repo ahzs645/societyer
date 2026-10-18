@@ -13,6 +13,7 @@ For corporations it keeps the securities ledger and certificates, share-class ri
 The optional hosted Procurement review module reads Zoer snapshots from a
 private SharePoint site, with one folder per workspace and a separate read-only
 application connection. See the [operator and release guide](docs/procurement-review-operations.md)
+- [Hosted procurement catalog: Convex paging, metadata imports, and rollback](docs/procurement-convex-catalog.md).
 for tenant setup, updating the live plugin, publishing fresh data and rollback;
 the [DDC North setup record](docs/procurement-review-setup.md) records the actual
 resources and qualified checks.

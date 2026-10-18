@@ -26,6 +26,7 @@ import {
 
 export type AuthSession = {
   user: { id: string; name: string; email: string };
+  session?: { id: string };
 };
 
 const ClerkAuthProvider = lazy(() => import("./ClerkAuthProvider"));
@@ -190,7 +191,9 @@ function BetterAuthProviderReady({
   const { authClient, fetchConvexToken } = authModule;
   const sessionResult = authClient.useSession();
   const session = sessionResult.data ?? null;
-  const getToken = useCallback(() => fetchConvexToken(), [fetchConvexToken]);
+  const sessionKey = session ? `${session.user.id}:${session.session?.id ?? ""}` : null;
+  // Refreshes replace the session object without changing the signed-in identity.
+  const getToken = useCallback((forceRefresh?: boolean) => fetchConvexToken(forceRefresh), [fetchConvexToken, sessionKey]);
   const signOut = useCallback(async () => { await authClient.signOut(); }, [authClient]);
   return (
     <AuthenticatedProviderReady
@@ -243,7 +246,7 @@ export function AuthenticatedProviderReady(props: AuthenticatedProviderProps) {
     }
   }, [getToken, tokenRetry]);
   const providerAuth = useMemo(() => ({
-    isLoading: sessionPending,
+    isLoading: sessionPending && !session,
     isAuthenticated: Boolean(session),
     fetchAccessToken,
   }), [sessionPending, session, fetchAccessToken]);
@@ -287,6 +290,7 @@ function MembershipProviderReady({
   const signingOutRef = useRef(false);
   const preferredSocietyIdRef = useRef<Id<"societies"> | null>(null);
 
+  const sessionKey = session ? `${session.user.id}:${session.session?.id ?? ""}` : null;
   const sessionSignedOut = !session && !sessionPending && !sessionError;
   const sessionFailure = sessionError
     ? authFailure(sessionError, "Your session could not be checked.")
@@ -332,10 +336,16 @@ function MembershipProviderReady({
     setMemberships(null);
     setMembershipStatus(null);
     setMembershipFailure(null);
+    const timeout = setTimeout(() => {
+      if (!active) return;
+      active = false;
+      setMembershipFailure({ kind: "network", message: "Your workspace access could not be checked. Check your connection and retry.", retryable: true });
+    }, 30_000);
     convex
       .query(api.http.currentPrincipalMemberships, {})
       .then((lookup: MembershipLookup) => {
         if (!active) return;
+        clearTimeout(timeout);
         const resolvedStatus =
           lookup.status === "needs-invitation" && hadMembershipRef.current
             ? "membership-revoked"
@@ -365,6 +375,7 @@ function MembershipProviderReady({
       })
       .catch((error: unknown) => {
         if (!active) return;
+        clearTimeout(timeout);
         console.error("[societyer-auth] failed to resolve principal memberships", error);
         setMembershipSocietyIds(null);
         setPrincipalUsers(null);
@@ -376,10 +387,11 @@ function MembershipProviderReady({
 
     return () => {
       active = false;
+      clearTimeout(timeout);
     };
-  }, [convex, convexAuth.isAuthenticated, membershipRefresh, session, sessionSignedOut]);
+  }, [convex, convexAuth.isAuthenticated, membershipRefresh, sessionKey, sessionSignedOut]);
 
-  const sessionStatus: SessionStatus = sessionPending
+  const sessionStatus: SessionStatus = sessionPending && !session
     ? "loading"
     : sessionFailure
       ? "error"

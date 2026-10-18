@@ -1,240 +1,145 @@
-import { useCallback, useState, type ReactNode } from "react";
-import { format, isThisYear, isToday, isYesterday } from "date-fns";
-import { RefreshCw, Settings2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { useSearchParams } from "react-router-dom";
+import { ArrowLeft, Download, Settings2 } from "lucide-react";
+import { api } from "../../../lib/convexApi";
 import { PageHeader, PageLoading } from "../../../pages/_helpers";
-import { Progress } from "../../../components/primitives";
-import { useToast } from "../../../components/Toast";
-import { Tooltip } from "../../../components/Tooltip";
-import { pluralize } from "../../../lib/format";
-import { useIsMobile } from "../../../lib/useIsMobile";
 import { useSociety } from "../../../hooks/useSociety";
 import { usePermissions } from "../../../hooks/usePermissions";
-import type { SnapshotManifest } from "../../../../shared/procurementReview/manifest";
+import { isStaticDemoRuntime } from "../../../lib/staticRuntime";
 import { FolderSetupCard } from "../components/FolderSetupCard";
-import { ReviewWorkspace, sourceLabel } from "../components/ReviewWorkspace";
-import { fetchSnapshotManifest, type SnapshotProgress } from "../lib/snapshot";
-import { useProcurementSnapshot, type SnapshotFailure } from "../lib/useProcurementSnapshot";
-import { useReviewArtifact } from "../lib/useReviewArtifact";
-
-const STAGE_LABELS: Record<SnapshotProgress["stage"], string> = {
-  manifest: "Reading the snapshot manifest",
-  download: "Downloading the catalog",
-  decompress: "Checking and unpacking the catalog",
-  open: "Opening the catalog",
-};
-
-const FAILURE_TITLES: Record<SnapshotFailure, string> = {
-  integrity: "The snapshot failed its integrity check",
-  format: "This snapshot can't be read",
-  access: "The snapshot folder couldn't be read",
-  open: "The snapshot couldn't be opened",
-};
-
-const FAILURE_HELP: Record<SnapshotFailure, string> = {
-  integrity: "Nothing from it was opened or kept. If Zoer is publishing right now, refresh in a minute; otherwise republish from Zoer.",
-  format: "It was published by a Zoer whose snapshot format this Societyer doesn't know. Update one of them so they match, then republish.",
-  access: "Check the folder path, that the deployment's SharePoint app can read that folder, and that you're still signed in.",
-  open: "Refresh to try again. If it keeps failing, republish from Zoer.",
-};
-
-function formatBytes(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-/** "opportunity" → "opportunities", "notice_change" → "notice changes", "address" → "addresses". */
-function pluralKind(singular: string): string {
-  if (/[^aeiou]y$/i.test(singular)) return `${singular.slice(0, -1)}ies`;
-  if (/(s|x|z|ch|sh)$/i.test(singular)) return `${singular}es`;
-  return `${singular}s`;
-}
-
-/** "today, 8:00 AM", "yesterday, 8:00 AM", "Oct 18, 8:00 AM", or "Oct 18, 2025" in another year. */
-function publishedWhen(published: Date): string {
-  if (isToday(published)) return `today, ${format(published, "h:mm a")}`;
-  if (isYesterday(published)) return `yesterday, ${format(published, "h:mm a")}`;
-  return format(published, isThisYear(published) ? "MMM d, h:mm a" : "MMM d, yyyy");
-}
-
-/** "41 opportunities · 15 awards · published today, 8:00 AM", from the manifest's record counts. */
-function SnapshotSummary({ manifest }: { manifest: SnapshotManifest }) {
-  const counts = Object.entries(manifest.counts).sort(([, left], [, right]) => right - left);
-  const shown = counts.slice(0, 3).map(([kind, count]) => {
-    const singular = kind.replace(/_/g, " ");
-    return pluralize(count, singular, pluralKind(singular));
-  });
-  if (counts.length > 3) shown.push(pluralize(counts.length - 3, "more kind"));
-  const published = new Date(manifest.publishedAt);
-  const full = published.toLocaleString(undefined, { dateStyle: "full", timeStyle: "long" });
-  return (
-    <>
-      {shown.map((part) => `${part} · `).join("")}
-      <span title={`Snapshot published ${full}`}>published {publishedWhen(published)}</span>
-    </>
-  );
-}
-
-function StateCard({ title, children, tone }: { title: string; children: ReactNode; tone?: "warning" | "danger" }) {
-  return (
-    <div className="card procurement-review__state" role={tone ? "alert" : undefined}>
-      <div className="card__head"><h2 className="card__title">{title}</h2></div>
-      <div className="card__body col">{children}</div>
-    </div>
-  );
-}
-
-function LoadingCard({ progress }: { progress: SnapshotProgress }) {
-  const percent = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
-  const sized = progress.stage === "download" && progress.total > 1;
-  return (
-    <StateCard title="Loading the published snapshot">
-      <div className="procurement-review__progress" aria-live="polite">
-        <div className="procurement-review__progress-label">
-          <span>{STAGE_LABELS[progress.stage]}…</span>
-          {sized && <span>{formatBytes(progress.done)} of {formatBytes(progress.total)}</span>}
-        </div>
-        <div role="progressbar" aria-label={STAGE_LABELS[progress.stage]} aria-valuemin={0} aria-valuemax={100} aria-valuenow={sized ? percent : undefined}>
-          <Progress value={sized ? percent : progress.done >= progress.total ? 100 : 15} />
-        </div>
-        <p className="muted">Each part is checked against the published checksums before it opens. A verified snapshot is kept on this device, so the next visit is quicker.</p>
-      </div>
-    </StateCard>
-  );
-}
+import { SnapshotReviewPage } from "./SnapshotReviewPage";
+import { createBlobReader } from "../lib/blobs";
+import { snapshotFilePaths } from "../../../../shared/procurementReview/manifest";
+import { concatBytes, sha256Hex } from "../lib/digest";
 
 export function ProcurementReviewPage() {
+  return isStaticDemoRuntime() ? <SnapshotReviewPage /> : <HostedProcurementReview />;
+}
+
+type RecordSummary = { recordKey: string; kind: string; title: string; organization: string; date: string; status: string };
+type Page<T> = { page: T[]; isDone: boolean; continueCursor: string };
+type Catalog = { generation: string; publishedAt: string; counts: Record<string, number> };
+function label(kind: string) { return kind.replaceAll("-", " ").replaceAll("_", " "); }
+function safeUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return;
+  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : undefined; } catch { return; }
+}
+
+function HostedProcurementReview() {
   const society = useSociety();
-  const { can, loaded: permissionsLoaded } = usePermissions();
-  const toast = useToast();
-  const phone = useIsMobile();
-  const canConfigure = can("settings:write");
+  const { can, loaded } = usePermissions();
+  const [settings, setSettings] = useState(false);
   const folder = society?.integrationSettings?.procurementReviewFolder ?? "";
-  const [reloadKey, setReloadKey] = useState(0);
-  const [editingFolder, setEditingFolder] = useState(false);
-  const [mountError, setMountError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const artifact = useReviewArtifact(Boolean(folder));
-  const snapshot = useProcurementSnapshot(society?._id, artifact.status === "not-installed" ? "" : folder, reloadKey);
-  const onMountError = useCallback((message: string) => setMountError(message), []);
+  const catalog = useQuery(api.procurementReview.catalog, society && loaded && folder ? { societyId: society._id } : "skip") as Catalog | null | undefined;
+  if (!society || !loaded) return <PageLoading variant="detail" />;
+  return <div className="page procurement-review">
+    <PageHeader title="Procurement review" subtitle={catalog ? `Published ${new Date(catalog.publishedAt).toLocaleString()} · Read only` : "Bid opportunities and awards published by Zoer."}
+      actions={can("settings:write") && <button className="btn btn--ghost btn--icon" aria-label="Procurement folder settings" onClick={() => setSettings(true)}><Settings2 size={16} /></button>} />
+    {!folder || settings ? <FolderSetupCard societyId={society._id} folder={folder} canConfigure={can("settings:write")} onSaved={() => setSettings(false)} onCancel={folder ? () => setSettings(false) : undefined} />
+      : catalog === undefined ? <p role="status">Loading procurement…</p>
+      : catalog === null ? <div className="card"><div className="card__body"><h2>The catalog is being prepared</h2><p>Procurement records have not been imported for this workspace's folder yet. You can return here once the import is complete.</p></div></div>
+      : <CatalogBrowser key={`${society._id}:${catalog.generation}`} societyId={society._id} catalog={catalog} />}
+  </div>;
+}
 
-  const refresh = async () => {
-    if (snapshot.status !== "ready") {
-      setMountError(null);
-      setReloadKey((key) => key + 1);
-      return;
-    }
-    setRefreshing(true);
-    try {
-      const latest = await fetchSnapshotManifest(snapshot.read);
-      if (latest?.snapshotId === snapshot.manifest.snapshotId) {
-        toast.success("Already up to date", sourceLabel(snapshot.manifest));
-      } else {
-        setMountError(null);
-        setReloadKey((key) => key + 1);
-      }
-    } catch (error) {
-      toast.error("Couldn't check for a newer snapshot", error instanceof Error ? error.message : undefined);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  if (!society || !permissionsLoaded) return <PageLoading variant="detail" />;
-
-  const subtitle = snapshot.status === "ready"
-    ? <SnapshotSummary manifest={snapshot.manifest} />
-    : "A read-only copy of the bid opportunities Zoer publishes for this workspace.";
-  const refreshLabel = refreshing ? "Checking…" : "Refresh";
-  // Refresh is the one everyday action; the folder is an admin setting, so it
-  // sits behind an icon. Phones keep both as icons on the title's row.
-  const actions = folder && (canConfigure || artifact.status !== "not-installed") ? (
-    <>
-      {canConfigure && !editingFolder && (
-        <Tooltip content="Snapshot folder">
-          <button type="button" className="btn btn--ghost btn--icon" aria-label="Snapshot folder settings" onClick={() => setEditingFolder(true)}>
-            <Settings2 size={14} aria-hidden="true" />
-          </button>
-        </Tooltip>
-      )}
-      {artifact.status !== "not-installed" && (
-        phone ? (
-          <Tooltip content={refreshLabel}>
-            <button type="button" className="btn btn--icon" aria-label={refreshing ? "Checking for a newer snapshot" : "Refresh snapshot"} disabled={refreshing || snapshot.status === "loading"} onClick={() => void refresh()}>
-              <RefreshCw size={14} aria-hidden="true" />
-            </button>
-          </Tooltip>
-        ) : (
-          <button type="button" className="btn" disabled={refreshing || snapshot.status === "loading"} onClick={() => void refresh()}>
-            <RefreshCw size={14} aria-hidden="true" /> {refreshLabel}
-          </button>
-        )
-      )}
-    </>
-  ) : undefined;
-
-  let body: ReactNode;
-  if (!folder || editingFolder) {
-    body = (
-      <FolderSetupCard
-        societyId={society._id}
-        folder={folder}
-        canConfigure={canConfigure}
-        onSaved={() => { setEditingFolder(false); setReloadKey((key) => key + 1); }}
-        onCancel={folder ? () => setEditingFolder(false) : undefined}
-      />
-    );
-  } else if (artifact.status === "not-installed" || artifact.status === "unavailable") {
-    body = (
-      <StateCard title="The review plugin bundle isn't installed" tone="warning">
-        <p className="muted">
-          {artifact.status === "unavailable" ? artifact.message : "This build of Societyer doesn't include the Zoer procurement review plugin."}
-        </p>
-        <p className="procurement-review__details">
-          An operator builds it in the Zoer plugin checkout (bun run societyer:build), installs it here with
-          tsx scripts/sync-procurement-review.ts, and redeploys the app. The snapshot folder is already set: {folder}
-        </p>
-      </StateCard>
-    );
-  } else if (snapshot.status === "unpublished") {
-    body = (
-      <StateCard title="Nothing has been published yet">
-        <p className="muted">There's no snapshot in this workspace's folder. The Zoer publisher must run at least once to put one there; this page shows it as soon as it does.</p>
-        <p className="procurement-review__details">Folder: {folder}</p>
-      </StateCard>
-    );
-  } else if (snapshot.status === "failed") {
-    body = (
-      <StateCard title={FAILURE_TITLES[snapshot.failure]} tone="danger">
-        <p>{snapshot.message}</p>
-        <p className="muted">{FAILURE_HELP[snapshot.failure]}</p>
-        <p className="procurement-review__details">Folder: {folder}</p>
-      </StateCard>
-    );
-  } else if (mountError) {
-    body = (
-      <StateCard title="The review plugin couldn't start" tone="danger">
-        <p>{mountError}</p>
-        <p className="muted">Refresh to try again. If it keeps failing, the installed plugin bundle may not match this snapshot's plugin version.</p>
-      </StateCard>
-    );
-  } else if (snapshot.status === "ready" && artifact.status === "ready") {
-    body = (
-      <ReviewWorkspace
-        key={snapshot.manifest.snapshotId}
-        artifact={artifact.loaded}
-        manifest={snapshot.manifest}
-        catalog={snapshot.catalog}
-        read={snapshot.read}
-        onMountError={onMountError}
-      />
-    );
-  } else {
-    body = <LoadingCard progress={snapshot.status === "loading" ? snapshot.progress : { stage: "open", done: 0, total: 1 }} />;
-  }
-
-  return (
-    <div className="page procurement-review">
-      <PageHeader title="Procurement review" subtitle={subtitle} actions={actions} />
-      {body}
+function CatalogBrowser({ societyId, catalog }: { societyId: string; catalog: Catalog }) {
+  const [params, setParams] = useSearchParams();
+  const kind = params.get("kind") || "opportunity";
+  const recordKey = params.get("record");
+  const [input, setInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  useEffect(() => { const timer = setTimeout(() => setSearch(input.trim()), 250); return () => clearTimeout(timer); }, [input]);
+  const choose = (key: string | null) => setParams(current => { const next = new URLSearchParams(current); key ? next.set("record", key) : next.delete("record"); return next; });
+  return recordKey ? <RecordDetail societyId={societyId} generation={catalog.generation} recordKey={recordKey} onBack={() => choose(null)} /> : <>
+    <div className="procurement-catalog__filters">
+      <label className="field"><span>Catalog</span><select className="input" value={kind} onChange={event => { setStatus(""); setParams({ kind: event.target.value }); }}>
+        {Object.keys(catalog.counts).sort((a, b) => (a === "opportunity" ? -1 : b === "opportunity" ? 1 : a.localeCompare(b))).map(value => <option value={value} key={value}>{label(value)} ({catalog.counts[value].toLocaleString()})</option>)}
+      </select></label>
+      <label className="field"><span>Search</span><input className="input" type="search" value={input} maxLength={200} placeholder="Title, organization, keyword…" onChange={event => setInput(event.target.value)} /></label>
+      {kind === "opportunity" && <label className="field"><span>Status</span><select className="input" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{["Open", "Closed", "Awarded", "Cancelled"].map(value => <option key={value}>{value}</option>)}</select></label>}
     </div>
-  );
+    <RecordPage key={`${kind}:${search}:${status}`} societyId={societyId} generation={catalog.generation} kind={kind} search={search} status={status} onSelect={choose} />
+  </>;
+}
+
+function RecordPage(props: { societyId: string; generation: string; kind: string; search: string; status: string; onSelect: (key: string) => void }) {
+  const { onSelect, ...args } = props;
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const page = useQuery(api.procurementReview.records, { ...args, paginationOpts: { numItems: 25, cursor: cursors[cursors.length - 1] } }) as Page<RecordSummary> | undefined;
+  if (!page) return <p role="status">Loading records…</p>;
+  return <section aria-label="Procurement records">
+    {!page.page.length && <p className="muted">No records match these filters.</p>}
+    <div className="procurement-catalog__list">{page.page.map(row => <button key={row.recordKey} className="procurement-catalog__record" onClick={() => onSelect(row.recordKey)}>
+      <strong>{row.title}</strong><span>{row.organization}</span><span className="muted">{[row.status, row.date].filter(Boolean).join(" · ")}</span>
+    </button>)}</div>
+    <div className="procurement-catalog__pager"><button className="btn" disabled={cursors.length === 1} onClick={() => setCursors(values => values.slice(0, -1))}>Previous</button><span>Page {cursors.length}</span><button className="btn" disabled={page.isDone} onClick={() => setCursors(values => [...values, page.continueCursor])}>Next</button></div>
+  </section>;
+}
+
+type StoredDocument = { documentKey: string; name: string; mediaType: string; sha256: string; bytes: number; parts: number; available: boolean };
+function RecordDetail({ societyId, generation, recordKey, onBack }: { societyId: string; generation: string; recordKey: string; onBack: () => void }) {
+  const args = { societyId, generation, recordKey };
+  const record = useQuery(api.procurementReview.record, args) as { summary: RecordSummary; dataJson: string } | null | undefined;
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const download = async (document: StoredDocument) => {
+    if (busy) return;
+    setBusy(document.documentKey); setError(null);
+    try {
+      const read = createBlobReader(societyId);
+      const chunks: Uint8Array[] = [];
+      for (const path of snapshotFilePaths(document.sha256, document)) {
+        const bytes = await read(path);
+        if (!bytes) throw new Error("The published file is missing. Please ask the publisher to republish it.");
+        chunks.push(bytes);
+      }
+      const bytes = concatBytes(chunks);
+      if (bytes.length !== document.bytes || await sha256Hex(bytes) !== document.sha256) throw new Error("The file failed its integrity check.");
+      const url = URL.createObjectURL(new Blob([bytes], { type: document.mediaType }));
+      const anchor = window.document.createElement("a"); anchor.href = url; anchor.download = document.name; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "The file couldn't be downloaded."); }
+    finally { setBusy(null); }
+  };
+  const data = record ? JSON.parse(record.dataJson) : null;
+  const source = safeUrl(data?.detailUrl ?? data?.sourceUrl);
+  return <div className="col">
+    <button className="btn" style={{ alignSelf: "start" }} onClick={onBack}><ArrowLeft size={16} /> Back to catalog</button>
+    {record === undefined ? <p role="status">Loading notice…</p> : !record ? <p>This record is no longer available in this published catalog.</p> : <>
+      <div className="card"><div className="card__body col"><h2>{record.summary.title}</h2><p>{record.summary.organization} · {record.summary.status} {record.summary.date}</p>
+        {source && <a href={source} target="_blank" rel="noopener noreferrer">View original notice</a>}
+        {data.descriptionText && <p className="procurement-catalog__description">{String(data.descriptionText)}</p>}
+        {Array.isArray(data.detailFields) ? <dl className="procurement-catalog__fields">{data.detailFields.map((field: any, index: number) => <div key={index}><dt>{String(field.label)}</dt><dd>{String(field.value ?? "")}</dd></div>)}</dl> : <dl className="procurement-catalog__fields">{Object.entries(data).filter(([key, value]) => !key.startsWith("_") && ["string", "number", "boolean"].includes(typeof value) && !["searchText", "descriptionText"].includes(key)).map(([key, value]) => <div key={key}><dt>{label(key)}</dt><dd>{String(value)}</dd></div>)}</dl>}
+        <details><summary>Source record</summary><pre className="procurement-catalog__json">{JSON.stringify(data, null, 2)}</pre></details>
+      </div></div>
+      <div className="card"><div className="card__body col"><h2>Documents</h2>{error && <p className="notice notice--danger" role="alert">{error}</p>}
+        <DocumentPage {...args} busy={busy} download={download} />
+      </div></div>
+      <Evidence {...args} />
+    </>}
+  </div>;
+}
+
+function DocumentPage({ busy, download, ...args }: { societyId: string; generation: string; recordKey: string; busy: string | null; download: (row: StoredDocument) => void }) {
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const documents = useQuery(api.procurementReview.documents, { ...args, paginationOpts: { numItems: 10, cursor: cursors[cursors.length - 1] } }) as Page<StoredDocument> | undefined;
+  return !documents ? <p role="status">Loading document names…</p> : <>
+    {!documents.page.length && <p className="muted">No stored documents for this record.</p>}
+    {documents.page.map(document => <div className="procurement-catalog__document" key={document.documentKey}><span>{document.name}</span><button className="btn" disabled={!document.available || busy !== null} onClick={() => download(document)}><Download size={14} />{busy === document.documentKey ? "Downloading…" : document.available ? `Download (${(document.bytes / 1024 / 1024).toFixed(1)} MB)` : "Not published"}</button></div>)}
+    {(cursors.length > 1 || !documents.isDone) && <div className="procurement-catalog__pager"><button className="btn" disabled={cursors.length === 1} onClick={() => setCursors(values => values.slice(0, -1))}>Previous documents</button><button className="btn" disabled={documents.isDone} onClick={() => setCursors(values => [...values, documents.continueCursor])}>More documents</button></div>}
+  </>;
+}
+
+function Evidence(args: { societyId: string; generation: string; recordKey: string }) {
+  const [source, setSource] = useState("");
+  const sources = ["reviews", "procurement_stage_runs", "procurement_requirements", "procurement_facts", "procurement_assessments", "procurement_decisions", "procurement_tasks", "procurement_changes", "procurement_matches", "procurement_judgements"];
+  return <div className="card"><div className="card__body col"><h2>Published reviews and evidence</h2><label className="field"><span>Section</span><select className="input" value={source} onChange={event => setSource(event.target.value)}><option value="">Choose a section…</option>{sources.map(value => <option key={value} value={value}>{label(value.replace("procurement_", ""))}</option>)}</select></label>{source && <EvidencePage key={`${args.recordKey}:${source}`} {...args} source={source} />}</div></div>;
+}
+function EvidencePage(args: { societyId: string; generation: string; recordKey: string; source: string }) {
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const result = useQuery(api.procurementReview.evidence, { ...args, paginationOpts: { numItems: 5, cursor: cursors[cursors.length - 1] } }) as Page<{ dataJson: string }> | undefined;
+  if (!result) return <p role="status">Loading section…</p>;
+  return <>{!result.page.length && <p className="muted">Nothing published in this section.</p>}{result.page.map((row, index) => <pre className="procurement-catalog__json" key={index}>{JSON.stringify(JSON.parse(row.dataJson), null, 2)}</pre>)}{(cursors.length > 1 || !result.isDone) && <div className="procurement-catalog__pager"><button className="btn" disabled={cursors.length === 1} onClick={() => setCursors(values => values.slice(0, -1))}>Previous</button><button className="btn" disabled={result.isDone} onClick={() => setCursors(values => [...values, result.continueCursor])}>Next</button></div>}</>;
 }

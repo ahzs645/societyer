@@ -1,5 +1,7 @@
 # Procurement review: Zoer → SharePoint → Societyer
 
+> Hosted architecture update, October 18: catalog records now live in Convex and load in small pages; files remain in SharePoint. See [the metadata publishing and migration runbook](procurement-convex-catalog.md). Snapshot download/plugin-bundle instructions below apply to the legacy snapshot/demo reader.
+
 For repeatable setup, workspace onboarding, live plugin updates, data refreshes,
 credential rotation and rollback, start with the
 [operations guide](procurement-review-operations.md). This file retains the
