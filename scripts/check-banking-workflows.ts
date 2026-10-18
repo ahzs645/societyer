@@ -255,13 +255,16 @@ assert.deepEqual([months.months[2].kind, months.months[2].label], ["reconciled",
 await assert.rejects(recon.autoReconcilePeriodPortable(mina, { id: months.detail!.period!._id }), /already closed/);
 assert.equal(months.months[1].kind, "difference", "February still reads out of balance");
 
-// Add account: a manual account is its own ledger account under the next free code.
+// Add account: a manual account is its own ledger account under the next free code
+// (1050 when free; the invoices demo may already hold it for Undeposited funds).
+const codesBefore = (await db.query("financialAccounts").collect()).filter((row) => row.societyId === S && row.code).map((row) => String(row.code));
+const expectedCode = nextLedgerCode(codesBefore, "payments");
 const created = await accounts.createManualAccountPortable(mina, { societyId: S, name: "Stripe balance", kind: "payments", openingBalanceCents: 12_500, openingDate: "2026-04-01", lastFour: "9001" });
-assert.equal(created.code, "1050");
+assert.equal(created.code, expectedCode);
 await assert.rejects(accounts.createManualAccountPortable(mina, { societyId: S, name: "stripe balance", kind: "bank", openingBalanceCents: 0, openingDate: "2026-04-01" }), /already exists/);
 let overview = await accounts.overviewPortable(mina, { societyId: S });
 const stripe = overview.rows.find((row) => row._id === created.accountId)!;
-assert.deepEqual([stripe.source, stripe.kind, stripe.balanceCents, stripe.ledgerAccount?.label, stripe.status], ["manual", "payments", 12_500, "1050 · Stripe balance", "not_connected"]);
+assert.deepEqual([stripe.source, stripe.kind, stripe.balanceCents, stripe.ledgerAccount?.label, stripe.status], ["manual", "payments", 12_500, `${expectedCode} · Stripe balance`, "not_connected"]);
 assert.equal(overview.counts.payments, 1);
 assert.equal(overview.counts.manual, 2, "petty cash and the new account");
 const periodsAfter = await recon.periodsPortable(mina, { societyId: S });

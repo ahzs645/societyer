@@ -2,7 +2,7 @@
  * The server seed (shared/functions/seed.ts, `npm run convex:seed`) tells the
  * same finance story as the in-browser demo: transaction rules with provenance
  * on the feed, reconciliation periods, expense approval rules and claims, and
- * the invoicing and bills demos. It also seeds the three corporation personas of the demo
+ * the invoicing and bills demos (invoices in the books included). It also seeds the three corporation personas of the demo
  * banner (shared/demoData/corporations.ts), which the in-browser demo creates
  * when a persona is chosen. Both come from shared/demoData generators; this gate
  * runs the real `seed:run` mutation on convex-test (schema-validated, no user
@@ -127,6 +127,9 @@ const subsets: Record<string, { static: (row: any) => boolean; server: (row: any
   "accountingCounterparties (vendors)": { static: (row) => String(row._id).startsWith("static_vendor_"), server: (row) => row.kind === "vendor" },
   "financialTransactions (bill payments)": { static: (row) => String(row.externalId).startsWith("csv-bill-"), server: (row) => String(row.externalId).startsWith("csv-bill-") },
   "journalEntries (bills)": { static: (row) => String(row.source).startsWith("bill"), server: (row) => String(row.source).startsWith("bill") },
+  // The invoicing demo in the books (shared/demoData/invoiceLedger.ts).
+  "journalEntries (invoices)": { static: (row) => String(row.source).startsWith("invoice"), server: (row) => String(row.source).startsWith("invoice") },
+  "financialTransactions (matched to invoices)": { static: (row) => row.matchedKind === "invoice", server: (row) => row.matchedKind === "invoice" },
   organizationIdentifiers: { static: (row) => row.kind === "gst", server: () => true },
   fundRestrictions: { static: () => true, server: () => true },
   // The demo books (shared/demoData/journals.ts).
@@ -177,7 +180,8 @@ const refFields: Record<string, Array<[string, string]>> = {
   expenseApprovalRules: [["approverUserIds[]", "users"]],
   expenseClaimPolicy: [["updatedByUserId", "users"]],
   expenseReports: [["claimantUserId", "users"], ["approverUserId", "users"], ["declinedByUserId", "users"], ["receiptDocumentId", "documents"], ["approvals[].userId", "users"], ["approvalTrail[].actorUserId", "users"], ["policyException.byUserId", "users"], ["spendBudgetId", "spendBudgets"]],
-  invoices: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["seriesId", "invoiceSeries"], ["lines[].catalogItemId", "invoiceCatalogItems"], ["payments[].financialTransactionId", "financialTransactions"]],
+  invoices: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["seriesId", "invoiceSeries"], ["lines[].catalogItemId", "invoiceCatalogItems"], ["payments[].financialTransactionId", "financialTransactions"], ["journalEntryId", "journalEntries"], ["payments[].journalEntryId", "journalEntries"], ["payments[].cashBasisEntryId", "journalEntries"], ["payments[].depositAccountId", "financialAccounts"], ["payments[].transactionBefore.accountingAccountId", "financialAccounts"]],
+  invoiceSettings: [["receivableAccountId", "financialAccounts"], ["taxPayableAccountId", "financialAccounts"], ["defaultRevenueAccountId", "financialAccounts"], ["depositAccountId", "financialAccounts"], ["categoryAccounts[].accountId", "financialAccounts"]],
   invoiceSeries: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["lines[].catalogItemId", "invoiceCatalogItems"]],
   bills: [["vendorId", "accountingCounterparties"], ["lines[].accountId", "financialAccounts"], ["lines[].fundRestrictionId", "fundRestrictions"], ["payments[].financialTransactionId", "financialTransactions"], ["payments[].cashAccountId", "financialAccounts"], ["payments[].journalEntryId", "journalEntries"], ["journalEntryId", "journalEntries"], ["submittedByUserId", "users"], ["createdByUserId", "users"], ["approvals[].userId", "users"]],
   journalLines: [["journalEntryId", "journalEntries"], ["accountId", "financialAccounts"], ["counterpartyId", "accountingCounterparties"], ["financialTransactionId", "financialTransactions"], ["fundRestrictionId", "fundRestrictions"]],
@@ -330,7 +334,22 @@ for (const invoice of server.invoices) {
   for (const payment of invoice.payments.filter((p: any) => p.financialTransactionId)) {
     const txn = server.financialTransactions.find((row: any) => row._id === payment.financialTransactionId);
     assert.equal(txn.amountCents, payment.amountCents, `${invoice.number}: the linked deposit is the payment amount`);
+    assert.deepEqual([txn.matchedKind, txn.matchedId], ["invoice", invoice._id], `${invoice.number}: the linked deposit points back at the invoice`);
   }
+}
+// The books side: each invoice posted (or held back) the same way, with the same flags and the same accounts.
+type ChartRow = { _id: string; code?: string };
+const ledgerSummary = (ws: Awaited<ReturnType<typeof inv.workspacePortable>>, chart: ReadonlyArray<ChartRow>) => {
+  const codeOf = (id: string | null | undefined) => chart.find((row) => row._id === id)?.code;
+  const mapping = [ws.settings.receivableAccountId, ws.settings.taxPayableAccountId, ws.settings.defaultRevenueAccountId, ws.settings.depositAccountId].map(codeOf).join(",");
+  return ws.invoices
+    .map((row) => `${row.number}:${row.ledger.state}:${row.needsAction.map((flag) => flag.code).join("+")}`)
+    .concat([`mapping:${mapping}`])
+    .sort();
+};
+assert.deepEqual(ledgerSummary(invB, server.financialAccounts as ChartRow[]), ledgerSummary(invA, staticDump.financialAccounts as ChartRow[]), "invoice postings, needs-action flags and the GL account mapping match");
+for (const entry of (server.journalEntries as Array<{ source?: string; sourceExternalId?: string }>).filter((row) => String(row.source).startsWith("invoice"))) {
+  assert.ok(String(entry.sourceExternalId).startsWith("invoice:") && !String(entry.sourceExternalId).includes("seed-ref"), "invoice entry keys carry real invoice ids");
 }
 
 /* ------------------------------------------------- bills */

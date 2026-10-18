@@ -113,7 +113,17 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
   const facts = await feedFacts(client, societyId);
   // The demo ledger (shared/demoData/journals.ts) carries the $62,400 of cash
   // in the 2026-01-01 opening balances plus every bank line already posted.
-  assert.equal(before, 6_240_000 + facts.assetNet(facts.transactions.filter((row) => facts.posted.has(String(row._id)))), "demo seed starts at the opening balances plus the posted bank lines");
+  // The invoicing demo is in the books too (shared/demoData/invoiceLedger.ts):
+  // what posted invoices still owe sits in Accounts receivable, and payments
+  // not linked to a bank deposit sit in Undeposited funds.
+  type InvoicePayment = { journalEntryId?: string; financialTransactionId?: string; amountCents: number };
+  type InvoiceFacts = { invoices: Array<{ journalEntryId?: string; lifecycle: string; balanceCents: number; payments: InvoicePayment[] }> };
+  const invoices = (await client.query("invoices:workspace", { societyId })) as InvoiceFacts;
+  const postedInvoices = invoices.invoices.filter((row) => row.journalEntryId && row.lifecycle === "sent");
+  const receivable = postedInvoices.reduce((sum, row) => sum + row.balanceCents, 0);
+  const undeposited = postedInvoices.flatMap((row) => row.payments).filter((payment) => payment.journalEntryId && !payment.financialTransactionId).reduce((sum, payment) => sum + payment.amountCents, 0);
+  assert.ok(receivable > 0 && undeposited > 0, "the invoicing demo leaves receivables and undeposited payments in the books");
+  assert.equal(before, 6_240_000 + facts.assetNet(facts.transactions.filter((row) => facts.posted.has(String(row._id)))) + receivable + undeposited, "demo seed starts at the opening balances plus the posted bank lines and the invoices' receivables");
   assert.ok(facts.transactions.length >= 400, `the demo bank feed is dense (${facts.transactions.length} rows)`);
   assert.ok(facts.preOpening.length >= 100, "a year of 2025 imports predates the opening balances");
   assert.ok(facts.postOpening.length > 0 && facts.postOpeningUnmapped.length > 0, "2026 imports include unmapped categories");

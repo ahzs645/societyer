@@ -12,10 +12,57 @@
  * date against the organisation's local today (shared/invoicing.ts).
  * Reminders and "mark sent with an email" create Outbox drafts
  * (pendingEmails); nothing is sent from here.
+ *
+ * The books (shared/invoiceLedger.ts, shared/functions/invoiceLedger.ts):
+ * marking an invoice sent posts its accrual (Dr Accounts receivable / Cr
+ * revenue per the GL account mapping / Cr tax payable); each payment posts Dr
+ * the deposit account / Cr receivable plus its cash-basis recognition; voiding
+ * posts the reversal; removing a payment or reverting to unpaid voids the
+ * payment's entries. A payment linked to a bank deposit marks it matched
+ * (`matchedKind: "invoice"`) and categorised to Accounts receivable as a
+ * single line. Invoices the books can't take (another currency, an unmapped
+ * line, issued before the books start) are still sent and show "Needs
+ * action"; "Post existing invoices" (postingPreview / postExisting) posts the
+ * rest idempotently.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
+import { getOwned, principalUserId, requireOwnedRow, requireRolePortable, requireSocietyMembership } from "./access";
+import { flagChangedPeriods } from "./reconciliation";
+import { assertPeriodOpen } from "./accounting";
+import { assertBooksOpen } from "./booksLock";
+import {
+  accrualBlockers,
+  claimableDepositEntries,
+  dateBlock,
+  ensureLedgerAccount,
+  findLedgerAccount,
+  loadInvoiceLedgerContext,
+  mappingOf,
+  paymentBlock,
+  postPayment,
+  postedInvoiceEntries,
+  restoreDepositEntry,
+  reverseAccrual,
+  syncAccrual,
+  unmappedItems,
+  unpostPayment,
+  withPosting,
+  type InvoiceLedgerContext,
+  type LedgerAccount,
+  type StoredInvoice,
+  type StoredInvoicePayment,
+  type TransactionSnapshot,
+} from "./invoiceLedger";
+import { tagGroupLookup } from "../financeTags";
+import {
+  DUES_REVENUE_CATEGORY,
+  booksStartLabel,
+  foreignCurrencySummary,
+  invoiceNeedsAction,
+  normalizeRevenueCategory,
+  type NeedsActionFlag,
+} from "../invoiceLedger";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import {
   INVOICE_TERMS,
@@ -88,6 +135,7 @@ function settingsView(row: Row | null, invoices: Row[]) {
     paymentInstructions: row?.paymentInstructions,
     defaultMemo: row?.defaultMemo,
     replyToEmail: row?.replyToEmail,
+    ...mappingOf(row),
   };
 }
 
@@ -122,8 +170,29 @@ function cleanLines(lines: any[]): InvoiceLine[] {
       line.taxRatePercent = Math.round(rate * 1000) / 1000;
       line.taxLabel = cleanText(raw?.taxLabel, 20) ?? "Tax";
     }
+    const tagIds: string[] = Array.isArray(raw?.tagIds) ? [...new Set<string>(raw.tagIds.map(String))].slice(0, 10) : [];
+    if (tagIds.length) line.tagIds = tagIds;
     return line;
   });
+}
+
+/** Tags on lines must be this workspace's, not archived, at most one per tag group. */
+async function assertTagRefs(ctx: PortableQueryCtx, societyId: string, lines: InvoiceLine[]) {
+  if (!lines.some((line) => line.tagIds?.length)) return;
+  const tags = await ctx.db.query("financeTags").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  const byId = new Map(tags.map((tag) => [String(tag._id), tag]));
+  const groupOf = tagGroupLookup(tags.map((tag) => ({ _id: String(tag._id), groupId: String(tag.groupId) })));
+  for (const [index, line] of lines.entries()) {
+    const groups = new Set<string>();
+    for (const tagId of line.tagIds ?? []) {
+      const tag = byId.get(tagId);
+      if (!tag) throw new Error(`Line ${index + 1} has a tag that no longer exists.`);
+      if (tag.archivedAtISO) throw new Error(`Line ${index + 1}: ${tag.name} is archived. Restore it on the Tags page to use it again.`);
+      const group = groupOf(tagId)!;
+      if (groups.has(group)) throw new Error(`Line ${index + 1} has two tags from the same group; choose one.`);
+      groups.add(group);
+    }
+  }
 }
 
 function cleanDiscount(discount: any): InvoiceDiscount | undefined {
@@ -169,6 +238,7 @@ async function assertCatalogRefs(ctx: PortableQueryCtx, societyId: string, lines
   for (const id of new Set(lines.map((line) => line.catalogItemId).filter(Boolean) as string[])) {
     await getOwned(ctx, "invoiceCatalogItems", id, societyId);
   }
+  await assertTagRefs(ctx, societyId, lines);
 }
 
 function event(kind: string, label: string, actor?: string, amountCents?: number) {
@@ -204,11 +274,105 @@ function decorate(row: Row, today: string, seriesById: Map<string, Row>, txnById
   };
 }
 
+const MATCHABLE_KINDS = new Set([undefined, "", "manual", "invoice"]);
+const MONEY_ACCOUNT_TYPES = new Set(["Bank", "Credit"]);
+const CASH_SUBTYPES = new Set(["cash", "restricted_cash", "undeposited_funds"]);
+
+function accountLabel(account: Pick<LedgerAccount, "code" | "name"> | undefined) {
+  return account ? `${account.code ? `${account.code} ` : ""}${account.name}` : undefined;
+}
+
+export type InvoiceLedgerState = {
+  /** none: drafts, void and zero invoices; ready: something can be posted; blocked: the invoice can't go in. */
+  state: "none" | "posted" | "ready" | "blocked";
+  entryId?: string;
+  reasons: string[];
+  paymentsToPost: number;
+};
+
+function asStored(row: Row): StoredInvoice {
+  return row as StoredInvoice;
+}
+
+/** Where the invoice stands in the books, from the posted invoice entries. */
+function invoiceLedgerState(row: Row, lctx: InvoiceLedgerContext, postedIds: ReadonlySet<string>): InvoiceLedgerState {
+  const invoice = asStored(row);
+  const posted = (id: string | undefined) => Boolean(id && postedIds.has(id));
+  const accrualPosted = posted(invoice.journalEntryId);
+  if (invoice.status !== "sent" || computeInvoiceTotals(invoice.lines ?? [], invoice.discount).totalCents <= 0) {
+    return { state: accrualPosted && !invoice.reversalJournalEntryId ? "posted" : "none", entryId: accrualPosted ? invoice.journalEntryId : undefined, reasons: [], paymentsToPost: 0 };
+  }
+  const payments = invoice.payments ?? [];
+  if (!accrualPosted) {
+    const reasons = accrualBlockers(invoice, lctx);
+    const block = dateBlock(lctx, invoice.issueDate);
+    if (block) reasons.push(block);
+    const paymentsToPost = reasons.length ? 0 : payments.filter((payment) => !paymentBlock(payment, lctx)).length;
+    return { state: reasons.length ? "blocked" : "ready", reasons, paymentsToPost };
+  }
+  const pending = payments.filter((payment) => !posted(payment.journalEntryId));
+  const reasons = pending.map((payment) => paymentBlock(payment, lctx)).filter((reason): reason is string => Boolean(reason));
+  const paymentsToPost = pending.length - reasons.length;
+  return { state: paymentsToPost ? "ready" : "posted", entryId: invoice.journalEntryId, reasons, paymentsToPost };
+}
+
+function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<string, Row>): NeedsActionFlag[] {
+  const invoice = asStored(row);
+  const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount);
+  return invoiceNeedsAction(
+    {
+      lifecycle: invoice.status,
+      totalCents: totals.totalCents,
+      paidCents: sumPaid(invoice.payments),
+      currency: invoice.currency,
+      issueDate: invoice.issueDate,
+      payments: (invoice.payments ?? []).map((payment) => ({
+        key: payment.key,
+        date: payment.date,
+        amountCents: payment.amountCents,
+        financialTransactionId: payment.financialTransactionId,
+        transactionAmountCents: payment.financialTransactionId ? (txnById.has(payment.financialTransactionId) ? Number(txnById.get(payment.financialTransactionId)!.amountCents) : null) : undefined,
+      })),
+      unmappedItems: unmappedItems(invoice, lctx),
+    },
+    { workspaceCurrency: lctx.workspaceCurrency, booksStart: lctx.booksStart },
+  );
+}
+
+/** The GL account mapping drawer: the mapping, the accounts to choose from and what is used when unset. */
+function ledgerView(lctx: InvoiceLedgerContext, catalog: Row[]) {
+  const options = (filter: (account: LedgerAccount) => boolean) =>
+    lctx.accounts.filter(filter).map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType })).sort((a, b) => a.label.localeCompare(b.label));
+  const fallback = (account: LedgerAccount | undefined) => (account ? { _id: account._id, label: accountLabel(account)! } : null);
+  const categories = [...new Map(
+    [...catalog.map((item) => String(item.category ?? "").trim()).filter(Boolean), DUES_REVENUE_CATEGORY, ...(lctx.mapping.categoryAccounts ?? []).map((row) => row.category)]
+      .map((category) => [normalizeRevenueCategory(category), category] as const),
+  ).values()].sort((a, b) => a.localeCompare(b));
+  return {
+    workspaceCurrency: lctx.workspaceCurrency,
+    booksStart: { ...lctx.booksStart, label: booksStartLabel(lctx.booksStart) },
+    mapping: lctx.mapping,
+    categories,
+    accounts: {
+      revenue: options((account) => account.accountType === "Income"),
+      receivable: options((account) => account.accountType === "Asset" && !CASH_SUBTYPES.has(String(account.subtype))),
+      taxPayable: options((account) => account.accountType === "Liability"),
+      deposit: options((account) => MONEY_ACCOUNT_TYPES.has(account.accountType) || (account.accountType === "Asset" && CASH_SUBTYPES.has(String(account.subtype)))),
+    },
+    // What posting uses when a slot is unset ("created on first use" when null).
+    defaults: {
+      receivable: fallback(findLedgerAccount("receivable", lctx.accounts)),
+      taxPayable: fallback(findLedgerAccount("taxPayable", lctx.accounts)),
+      deposit: fallback(findLedgerAccount("undeposited", lctx.accounts)),
+    },
+  };
+}
+
 /** Everything the Invoices page needs in one read. */
 export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
   const today = await organizationToday(ctx, societyId);
-  const [organization, invoices, settings, catalog, series, members, counterparties, transactions, subscriptions, plans, feePeriods, identifiers] = await Promise.all([
+  const [organization, invoices, settings, catalog, series, members, counterparties, transactions, subscriptions, plans, feePeriods, identifiers, lctx, postedEntries] = await Promise.all([
     ctx.db.get(societyId, "societies"),
     loadInvoices(ctx, societyId),
     loadSettings(ctx, societyId),
@@ -221,11 +385,17 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     ctx.db.query("subscriptionPlans").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("membershipFeePeriods").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("organizationIdentifiers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    loadInvoiceLedgerContext(ctx, societyId),
+    postedInvoiceEntries(ctx, societyId),
   ]);
   const seriesById = new Map((series as Row[]).map((row) => [row._id, row]));
   const txnById = new Map((transactions as Row[]).map((row) => [row._id, row]));
+  const postedIds = new Set([...postedEntries.values()].map((entry) => entry._id));
   const decorated = invoices
-    .map((row) => decorate(row, today, seriesById, txnById))
+    .map((row) => Object.assign(decorate(row, today, seriesById, txnById), {
+      needsAction: needsActionFor(row, lctx, txnById),
+      ledger: invoiceLedgerState(row, lctx, postedIds),
+    }))
     .sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.sequence - a.sequence);
 
   const linked = new Map<string, { invoiceId: string; number: string }>();
@@ -244,14 +414,19 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       description: txn.description,
       counterparty: txn.counterparty,
       category: txn.category,
+      accountId: txn.accountId,
+      accountLabel: accountLabel(lctx.accountsById.get(String(txn.accountId))),
+      // Matched to something other than an invoice (a grant, a filing…): not offered.
+      matchedElsewhere: !MATCHABLE_KINDS.has(txn.matchedKind),
       linkedInvoiceId: linked.get(txn._id)?.invoiceId,
       linkedInvoiceNumber: linked.get(txn._id)?.number,
     }))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
   const paidSince = addDays(today, -30);
-  const summary = { outstandingCents: 0, outstandingCount: 0, overdueCents: 0, overdueCount: 0, paidLast30Cents: 0, paidLast30Count: 0, draftCents: 0, draftCount: 0 };
+  const summary = { outstandingCents: 0, outstandingCount: 0, overdueCents: 0, overdueCount: 0, paidLast30Cents: 0, paidLast30Count: 0, draftCents: 0, draftCount: 0, needsActionCount: 0 };
   for (const invoice of decorated) {
+    if (invoice.needsAction.length) summary.needsActionCount += 1;
     if (isOpenStatus(invoice.status)) {
       summary.outstandingCents += invoice.balanceCents;
       summary.outstandingCount += 1;
@@ -272,7 +447,6 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       }
     }
   }
-
   const activePlans = (plans as Row[]).filter((plan) => plan.active !== false);
   const duesCandidates = buildDuesCandidates(today, subscriptions as Row[], activePlans, feePeriods as Row[], members as Row[], decorated);
   const gst = (identifiers as Row[]).find((row) => row.kind === "gst" && row.status !== "inactive")
@@ -325,6 +499,12 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     plans: activePlans.map((plan) => ({ _id: plan._id, name: plan.name, priceCents: plan.priceCents, interval: plan.interval, membershipClass: plan.membershipClass, currency: plan.currency })),
     duesCandidates,
     summary,
+    ledger: {
+      ...ledgerView(lctx, catalog as Row[]),
+      foreignCurrency: foreignCurrencySummary(decorated.map((invoice) => ({ lifecycle: invoice.lifecycle, currency: invoice.currency })), lctx.workspaceCurrency),
+      readyCount: decorated.filter((invoice) => invoice.ledger.state === "ready").length,
+      blockedCount: decorated.filter((invoice) => invoice.ledger.state === "blocked").length,
+    },
   };
 }
 
@@ -428,7 +608,14 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: InvoiceArgs
     if (existing.status === "void") throw new Error("A void invoice can't be edited. Restore it first.");
     const paid = sumPaid(existing.payments);
     if (fields.totalCents < paid) throw new Error("The new total is less than what has already been paid.");
-    await ctx.db.patch(args.id, { ...fields, paidCents: paid, updatedAtISO: at });
+    // A posted invoice keeps its accrual in step (refused in a closed period, or once payments are recognised).
+    let timeline = existing.timeline ?? [];
+    if (existing.status === "sent" && existing.journalEntryId) {
+      const lctx = await loadInvoiceLedgerContext(ctx, args.societyId);
+      const outcome = await syncAccrual(ctx, asStored({ ...existing, ...fields }), lctx, await actingUser(ctx, args.societyId));
+      if (outcome.changed) timeline = [...timeline, event("posted", "Entry in the books updated after an edit", actor)];
+    }
+    await ctx.db.patch(args.id, { ...fields, paidCents: paid, timeline, updatedAtISO: at });
     return args.id;
   }
   const { sequence, number } = await allocateNumber(ctx, args.societyId);
@@ -487,48 +674,180 @@ async function draftOutboxEmail(ctx: PortableMutationCtx, invoice: Row, kind: "i
   });
 }
 
-/** Mark drafts as sent (optionally drafting an Outbox email for each). */
+async function actingUser(ctx: PortableQueryCtx, societyId: string): Promise<string | undefined> {
+  return principalUserId(ctx, societyId).catch(() => undefined);
+}
+
+function money(cents: number) {
+  return `$${(cents / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Refuse up front when a posting date is in closed books or a closed period (so nothing is half-written). */
+async function assertPostableDates(ctx: PortableQueryCtx, societyId: string, dates: string[]) {
+  await assertBooksOpen(ctx, societyId, dates, "posted");
+  for (const date of dates) await assertPeriodOpen(ctx, { societyId, date });
+}
+
+async function receivableAccount(ctx: PortableMutationCtx, societyId: string, lctx: InvoiceLedgerContext): Promise<LedgerAccount> {
+  const mapped = lctx.mapping.receivableAccountId ? lctx.accountsById.get(lctx.mapping.receivableAccountId) : undefined;
+  return mapped ?? ensureLedgerAccount(ctx, societyId, "receivable");
+}
+
+const SNAPSHOT_FIELDS = ["category", "accountingAccountId", "categorizedBy", "ruleId", "reconciledAtISO", "reconciledByName", "matchedKind", "matchedId", "reconciliationNote"] as const;
+
+function snapshotOf(txn: Row): TransactionSnapshot {
+  const snapshot: TransactionSnapshot = {};
+  for (const field of SNAPSHOT_FIELDS) {
+    const value = txn[field];
+    if (typeof value === "string" && value) snapshot[field] = value;
+  }
+  if (Array.isArray(txn.lines) && txn.lines.length) snapshot.lines = txn.lines;
+  return snapshot;
+}
+
+/**
+ * Mark a deposit matched to the invoice and categorised to Accounts
+ * receivable as a single line (a split is folded; its lines are kept in the
+ * snapshot and come back on unlink). Tags stay as they were.
+ */
+async function matchDeposit(ctx: PortableMutationCtx, invoice: Row, txn: Row, lctx: InvoiceLedgerContext, actor?: string): Promise<TransactionSnapshot> {
+  const receivable = await receivableAccount(ctx, invoice.societyId, lctx);
+  const snapshot = snapshotOf(txn);
+  await ctx.db.patch(txn._id, {
+    category: receivable.name,
+    accountingAccountId: receivable._id,
+    categorizedBy: "manual",
+    ruleId: undefined,
+    ruleApplication: undefined,
+    lines: undefined,
+    reconciledAtISO: txn.reconciledAtISO ?? nowISO(),
+    reconciledByName: txn.reconciledByName ?? actor,
+    matchedKind: "invoice",
+    matchedId: invoice._id,
+    reconciliationNote: `Payment for invoice ${invoice.number}`,
+  });
+  await flagChangedPeriods(ctx, txn.accountId, txn.date);
+  return snapshot;
+}
+
+/** Put a linked deposit back as it was before the link, and its own backfill entry with it. */
+async function releaseDeposit(ctx: PortableMutationCtx, invoice: Row, payment: StoredInvoicePayment) {
+  if (payment.financialTransactionId) {
+    const txn = (await ctx.db.get(payment.financialTransactionId, "financialTransactions")) as Row | null;
+    if (txn && txn.societyId === invoice.societyId && txn.matchedKind === "invoice" && txn.matchedId === invoice._id) {
+      const before = payment.transactionBefore ?? {};
+      await ctx.db.patch(txn._id, {
+        category: before.category,
+        accountingAccountId: before.accountingAccountId,
+        categorizedBy: before.categorizedBy,
+        ruleId: before.ruleId,
+        reconciledAtISO: before.reconciledAtISO,
+        reconciledByName: before.reconciledByName,
+        matchedKind: before.matchedKind,
+        matchedId: before.matchedId,
+        reconciliationNote: before.reconciliationNote,
+        lines: before.lines,
+      });
+      await flagChangedPeriods(ctx, txn.accountId, txn.date);
+    }
+  }
+  await restoreDepositEntry(ctx, invoice.societyId, payment.voidedTransactionEntryId);
+}
+
+/** Take a payment out of the books and unlink its deposit (refused in a closed period or closed books). */
+async function unwindPayment(ctx: PortableMutationCtx, invoice: Row, payment: StoredInvoicePayment) {
+  await unpostPayment(ctx, invoice.societyId, payment);
+  await releaseDeposit(ctx, invoice, payment);
+}
+
+function postedLabel(totalCents: number) {
+  return `Posted to the books: ${money(totalCents)} to Accounts receivable`;
+}
+
+/** Mark drafts as sent (optionally drafting an Outbox email for each); each posts its accrual when the books can take it. */
 export async function markSentPortable(ctx: PortableMutationCtx, { societyId, ids, draftEmail }: { societyId: string; ids: string[]; draftEmail?: boolean }) {
   const rows = await ownedInvoices(ctx, societyId, ids);
   const actor = await actorName(ctx, societyId);
+  const userId = await actingUser(ctx, societyId);
+  const lctx = await loadInvoiceLedgerContext(ctx, societyId);
   let sent = 0;
   let emailed = 0;
   let skipped = 0;
+  let posted = 0;
   for (const row of rows) {
     if (row.status !== "draft") { skipped += 1; continue; }
+    // Post first: a closed period refuses the send before anything changes.
+    const outcome = await syncAccrual(ctx, asStored({ ...row, status: "sent" }), lctx, userId);
     const at = nowISO();
-    await ctx.db.patch(row._id, { status: "sent", sentAtISO: at, updatedAtISO: at, timeline: [...(row.timeline ?? []), event("sent", draftEmail && row.billToEmail ? "Marked as sent · email drafted in Outbox" : "Marked as sent", actor)] });
+    const events = [event("sent", draftEmail && row.billToEmail ? "Marked as sent · email drafted in Outbox" : "Marked as sent", actor)];
+    if (outcome.entryId) events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount).totalCents), actor));
+    await ctx.db.patch(row._id, { status: "sent", sentAtISO: at, updatedAtISO: at, ...(outcome.entryId ? { journalEntryId: outcome.entryId } : {}), timeline: [...(row.timeline ?? []), ...events] });
     sent += 1;
+    if (outcome.entryId) posted += 1;
     if (draftEmail && row.billToEmail) {
       await draftOutboxEmail(ctx, row, "invoice", row.totalCents - sumPaid(row.payments));
       emailed += 1;
     }
   }
-  return { sent, emailed, skipped };
+  return { sent, emailed, skipped, posted };
 }
 
+/** Void invoices without payments; a posted invoice gets a reversing entry (dated today, so closed books refuse it). */
 export async function voidInvoicesPortable(ctx: PortableMutationCtx, { societyId, ids, reason }: { societyId: string; ids: string[]; reason?: string }) {
   const rows = await ownedInvoices(ctx, societyId, ids);
   const actor = await actorName(ctx, societyId);
+  const userId = await actingUser(ctx, societyId);
+  const today = await organizationToday(ctx, societyId);
   let voided = 0;
   let skippedPaid = 0;
   let skipped = 0;
+  let reversed = 0;
   for (const row of rows) {
     if (row.status === "void") { skipped += 1; continue; }
     if (sumPaid(row.payments) > 0) { skippedPaid += 1; continue; }
     const at = nowISO();
     const why = cleanText(reason, 300);
-    await ctx.db.patch(row._id, { status: "void", voidedAtISO: at, voidReason: why, updatedAtISO: at, timeline: [...(row.timeline ?? []), event("voided", why ? `Voided: ${why}` : "Voided", actor)] });
+    const events = [event("voided", why ? `Voided: ${why}` : "Voided", actor)];
+    const reversalId = await reverseAccrual(ctx, asStored(row), today > row.issueDate ? today : row.issueDate, userId);
+    if (reversalId) {
+      events.push(event("reversed", "Reversing entry posted", actor, computeInvoiceTotals(row.lines ?? [], row.discount).totalCents));
+      reversed += 1;
+    }
+    await ctx.db.patch(row._id, { status: "void", voidedAtISO: at, voidReason: why, ...(reversalId ? { reversalJournalEntryId: reversalId } : {}), updatedAtISO: at, timeline: [...(row.timeline ?? []), ...events] });
     voided += 1;
   }
-  return { voided, skippedPaid, skipped };
+  return { voided, skippedPaid, skipped, reversed };
 }
 
+/** Restore a void invoice; a sent one that had been reversed is posted again (a new round of keys). */
 export async function restoreVoidedPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
   if (row.status !== "void") return id;
   const actor = await actorName(ctx, row.societyId);
-  await ctx.db.patch(id, { status: row.sentAtISO ? "sent" : "draft", voidedAtISO: undefined, voidReason: undefined, updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("restored", "Restored from void", actor)] });
+  const status = row.sentAtISO ? "sent" : "draft";
+  const reposting = Boolean(row.reversalJournalEntryId);
+  const next: Row = reposting
+    ? { ...row, status, journalEntryId: undefined, reversalJournalEntryId: undefined, ledgerRound: (Number(row.ledgerRound) || 1) + 1 }
+    : { ...row, status };
+  const events = [event("restored", "Restored from void", actor)];
+  let journalEntryId = next.journalEntryId;
+  if (status === "sent" && (reposting || !journalEntryId)) {
+    const outcome = await syncAccrual(ctx, asStored(next), await loadInvoiceLedgerContext(ctx, row.societyId), await actingUser(ctx, row.societyId));
+    if (outcome.entryId) {
+      journalEntryId = outcome.entryId;
+      events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount).totalCents), actor));
+    }
+  }
+  await ctx.db.patch(id, {
+    status,
+    voidedAtISO: undefined,
+    voidReason: undefined,
+    journalEntryId,
+    reversalJournalEntryId: next.reversalJournalEntryId,
+    ...(reposting ? { ledgerRound: next.ledgerRound } : {}),
+    updatedAtISO: nowISO(),
+    timeline: [...(row.timeline ?? []), ...events],
+  });
   return id;
 }
 
@@ -575,9 +894,32 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   await ctx.db.delete(id);
 }
 
+/** A money-in bank line this invoice may link: this workspace's, not linked to another payment, not matched elsewhere. */
+async function linkableDeposit(ctx: PortableQueryCtx, invoice: Row, transactionId: string): Promise<Row> {
+  const txn = await getOwned<Row>(ctx, "financialTransactions", transactionId, invoice.societyId);
+  if (!(Number(txn.amountCents) > 0)) throw new Error("Only money-in bank transactions can be linked to a payment.");
+  const invoices = await loadInvoices(ctx, invoice.societyId);
+  const alreadyLinked = invoices.some((other) => (other.payments ?? []).some((payment: StoredInvoicePayment) => payment.financialTransactionId === transactionId));
+  if (alreadyLinked) throw new Error("That bank transaction is already linked to an invoice payment.");
+  if (!MATCHABLE_KINDS.has(txn.matchedKind)) throw new Error(`That bank transaction is already matched to a ${txn.matchedKind} record.`);
+  // A deposit another kind of entry already posted can't be taken over (refused before anything is written).
+  for (const entry of await claimableDepositEntries(ctx, transactionId)) {
+    await assertBooksOpen(ctx, invoice.societyId, [entry.date], "voided");
+    await assertPeriodOpen(ctx, { societyId: invoice.societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
+  }
+  return txn;
+}
+
+async function assertDepositAccount(ctx: PortableQueryCtx, societyId: string, accountId: string) {
+  const account = await getOwned<LedgerAccount>(ctx, "financialAccounts", accountId, societyId);
+  if (!MONEY_ACCOUNT_TYPES.has(account.accountType) && !(account.accountType === "Asset" && CASH_SUBTYPES.has(String(account.subtype)))) {
+    throw new Error(`${account.name} isn't a bank, cash or undeposited funds account.`);
+  }
+}
+
 export async function recordPaymentPortable(
   ctx: PortableMutationCtx,
-  args: { id: string; date: string; amountCents: number; method: string; reference?: string; note?: string; financialTransactionId?: string },
+  args: { id: string; date: string; amountCents: number; method: string; reference?: string; note?: string; financialTransactionId?: string; depositAccountId?: string },
 ) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", args.id);
   if (row.status === "void") throw new Error("A void invoice can't take payments.");
@@ -587,32 +929,46 @@ export async function recordPaymentPortable(
   const total = computeInvoiceTotals(row.lines ?? [], row.discount).totalCents;
   const balance = total - sumPaid(row.payments);
   if (amountCents > balance) throw new Error(`That's more than the ${(balance / 100).toFixed(2)} balance.`);
-  if (args.financialTransactionId) {
-    const txn = await getOwned<Row>(ctx, "financialTransactions", args.financialTransactionId, row.societyId);
-    if (!(Number(txn.amountCents) > 0)) throw new Error("Only money-in bank transactions can be linked to a payment.");
-    const invoices = await loadInvoices(ctx, row.societyId);
-    const alreadyLinked = invoices.some((invoice) => (invoice.payments ?? []).some((payment: any) => payment.financialTransactionId === args.financialTransactionId));
-    if (alreadyLinked) throw new Error("That bank transaction is already linked to an invoice payment.");
-  }
+  const txn = args.financialTransactionId ? await linkableDeposit(ctx, row, args.financialTransactionId) : null;
+  if (args.depositAccountId && !txn) await assertDepositAccount(ctx, row.societyId, args.depositAccountId);
   const actor = await actorName(ctx, row.societyId);
+  const userId = await actingUser(ctx, row.societyId);
   const method = (PAYMENT_METHODS as readonly string[]).includes(args.method) ? args.method : "other";
-  const payment: Record<string, any> = { key: randomKey("pay"), date: args.date, amountCents, method, recordedAtISO: nowISO() };
+  let payment: StoredInvoicePayment = { key: randomKey("pay"), date: args.date, amountCents, method, recordedAtISO: nowISO() };
   const reference = cleanText(args.reference, 100);
   const note = cleanText(args.note, 500);
   if (reference) payment.reference = reference;
   if (note) payment.note = note;
-  if (args.financialTransactionId) payment.financialTransactionId = args.financialTransactionId;
+  if (txn) payment.financialTransactionId = txn._id;
+  else if (args.depositAccountId) payment.depositAccountId = args.depositAccountId;
   if (actor) payment.recordedByName = actor;
   const payments = [...(row.payments ?? []), payment];
   const remaining = total - sumPaid(payments);
   const at = nowISO();
   const timeline = [...(row.timeline ?? [])];
   if (row.status === "draft") timeline.push(event("sent", "Marked as sent", actor));
-  timeline.push(event("payment", remaining <= 0 ? "Paid in full" : "Partial payment recorded", actor, amountCents));
+  timeline.push(event("payment", `${remaining <= 0 ? "Paid in full" : "Partial payment recorded"}${txn ? " · linked to the bank deposit" : ""}`, actor, amountCents));
+
+  // The books: refuse a closed period before writing anything, then post the
+  // accrual (a draft is sent by its first payment) and the payment.
+  const lctx = await loadInvoiceLedgerContext(ctx, row.societyId);
+  let next: Row = { ...row, status: "sent", payments };
+  const postable = !accrualBlockers(asStored(next), lctx).length;
+  if (postable && !paymentBlock(payment, lctx)) await assertPostableDates(ctx, row.societyId, row.status === "draft" ? [row.issueDate, args.date] : [args.date]);
+  if (row.status === "draft") {
+    const outcome = await syncAccrual(ctx, asStored(next), lctx, userId);
+    if (outcome.entryId) {
+      next = { ...next, journalEntryId: outcome.entryId };
+      timeline.push(event("posted", postedLabel(total), actor));
+    }
+  }
+  if (txn) payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
+  payment = withPosting(payment, await postPayment(ctx, asStored({ ...next, payments: [...(row.payments ?? []), payment] }), payment, lctx, userId));
   await ctx.db.patch(row._id, {
     status: "sent",
     sentAtISO: row.sentAtISO ?? at,
-    payments,
+    ...(next.journalEntryId ? { journalEntryId: next.journalEntryId } : {}),
+    payments: [...(row.payments ?? []), payment],
     paidCents: sumPaid(payments),
     totalCents: total,
     updatedAtISO: at,
@@ -622,21 +978,68 @@ export async function recordPaymentPortable(
 }
 
 // The payment is addressed by its key inside the invoice (named `paymentKey`, not an id: it is not a row).
+/** Remove a payment recorded in error: its entries are voided and a linked deposit goes back as it was. */
 export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paymentKey }: { id: string; paymentKey: string }) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
-  const payment = (row.payments ?? []).find((entry: any) => entry.key === paymentKey);
+  const payment = (row.payments ?? []).find((entry: StoredInvoicePayment) => entry.key === paymentKey) as StoredInvoicePayment | undefined;
   if (!payment) throw new Error("That payment is no longer on this invoice.");
-  const payments = (row.payments ?? []).filter((entry: any) => entry.key !== paymentKey);
+  await unwindPayment(ctx, row, payment);
+  const payments = (row.payments ?? []).filter((entry: StoredInvoicePayment) => entry.key !== paymentKey);
   const actor = await actorName(ctx, row.societyId);
-  await ctx.db.patch(id, { payments, paidCents: sumPaid(payments), updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("payment_removed", "Payment removed", actor, payment.amountCents)] });
+  await ctx.db.patch(id, { payments, paidCents: sumPaid(payments), updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("payment_removed", payment.financialTransactionId ? "Payment removed and bank deposit unlinked" : "Payment removed", actor, payment.amountCents)] });
 }
 
+/** Remove every payment: their entries are voided and linked deposits go back as they were. */
 export async function revertToUnpaidPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
   if (!(row.payments ?? []).length) return id;
+  for (const payment of row.payments as StoredInvoicePayment[]) await unwindPayment(ctx, row, payment);
   const actor = await actorName(ctx, row.societyId);
   await ctx.db.patch(id, { payments: [], paidCents: 0, updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("reverted", "Reverted to unpaid", actor, sumPaid(row.payments))] });
   return id;
+}
+
+/**
+ * Link a recorded payment to its bank deposit, move it to another deposit,
+ * or (no `financialTransactionId`) unlink it. The payment's entries are
+ * posted again against the new deposit account.
+ */
+export async function linkDepositPortable(
+  ctx: PortableMutationCtx,
+  { id, paymentKey, financialTransactionId, depositAccountId }: { id: string; paymentKey: string; financialTransactionId?: string; depositAccountId?: string },
+) {
+  const row = await requireOwnedRow<Row>(ctx, "invoices", id);
+  const index = (row.payments ?? []).findIndex((entry: StoredInvoicePayment) => entry.key === paymentKey);
+  if (index < 0) throw new Error("That payment is no longer on this invoice.");
+  const current = row.payments[index] as StoredInvoicePayment;
+  if (financialTransactionId && current.financialTransactionId === financialTransactionId) return paymentKey;
+  const txn = financialTransactionId ? await linkableDeposit(ctx, row, financialTransactionId) : null;
+  if (depositAccountId && !txn) await assertDepositAccount(ctx, row.societyId, depositAccountId);
+  const lctx = await loadInvoiceLedgerContext(ctx, row.societyId);
+  if (current.journalEntryId && !paymentBlock(current, lctx)) await assertPostableDates(ctx, row.societyId, [current.date]);
+  const actor = await actorName(ctx, row.societyId);
+  await unwindPayment(ctx, row, current);
+  const {
+    financialTransactionId: _txn,
+    transactionBefore: _before,
+    voidedTransactionEntryId: _voided,
+    journalEntryId: _entry,
+    cashBasisEntryId: _cash,
+    depositAccountId: _deposit,
+    ...base
+  } = current;
+  let payment: StoredInvoicePayment = { ...base, ...(txn ? { financialTransactionId: txn._id } : depositAccountId ? { depositAccountId } : {}) };
+  if (txn) payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
+  const payments = [...row.payments];
+  payments[index] = payment;
+  payment = withPosting(payment, await postPayment(ctx, asStored({ ...row, payments }), payment, lctx, await actingUser(ctx, row.societyId)));
+  payments[index] = payment;
+  await ctx.db.patch(id, {
+    payments,
+    updatedAtISO: nowISO(),
+    timeline: [...(row.timeline ?? []), event("deposit", txn ? `Payment linked to the bank deposit of ${txn.date}` : current.financialTransactionId ? "Bank deposit unlinked" : "Deposit account changed", actor, payment.amountCents)],
+  });
+  return paymentKey;
 }
 
 /** Draft a reminder email in the Outbox for each open invoice with an email address. */
@@ -976,4 +1379,156 @@ export async function saveSettingsPortable(
     return settings._id;
   }
   return ctx.db.insert("invoiceSettings", { societyId: args.societyId, ...fields });
+}
+
+/* ------------------------------------------------------------ the books */
+
+type MappingArgs = {
+  societyId: string;
+  receivableAccountId?: string;
+  taxPayableAccountId?: string;
+  defaultRevenueAccountId?: string;
+  depositAccountId?: string;
+  categoryAccounts: Array<{ category: string; accountId?: string }>;
+  itemAccounts?: Array<{ catalogItemId: string; accountId?: string }>;
+};
+
+async function requireAccountOfKind(ctx: PortableQueryCtx, societyId: string, accountId: string, kind: "revenue" | "receivable" | "taxPayable" | "deposit") {
+  const account = await getOwned<LedgerAccount>(ctx, "financialAccounts", accountId, societyId);
+  const cash = MONEY_ACCOUNT_TYPES.has(account.accountType) || (account.accountType === "Asset" && CASH_SUBTYPES.has(String(account.subtype)));
+  const ok = {
+    revenue: account.accountType === "Income" || (account.accountType === "Liability" && account.subtype === "deferred_revenue"),
+    receivable: account.accountType === "Asset" && !cash,
+    taxPayable: account.accountType === "Liability",
+    deposit: cash,
+  }[kind];
+  const expected = { revenue: "an income (or deferred revenue) account", receivable: "an asset account that isn't cash", taxPayable: "a liability account", deposit: "a bank, cash or undeposited funds account" }[kind];
+  if (!ok) throw new Error(`${account.name} can't be used here; choose ${expected}.`);
+}
+
+/**
+ * Save the GL account mapping: revenue per catalog item (stored on the item)
+ * and per category, the default revenue account, and the receivable, tax
+ * payable and deposit accounts. Unset receivable, tax and deposit accounts
+ * fall back to the chart's Accounts receivable, GST/HST payable and
+ * Undeposited funds (created on first use). Existing postings don't move.
+ */
+export async function saveAccountMappingPortable(ctx: PortableMutationCtx, args: MappingArgs) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const { societyId } = args;
+  if (args.receivableAccountId) await requireAccountOfKind(ctx, societyId, args.receivableAccountId, "receivable");
+  if (args.taxPayableAccountId) await requireAccountOfKind(ctx, societyId, args.taxPayableAccountId, "taxPayable");
+  if (args.defaultRevenueAccountId) await requireAccountOfKind(ctx, societyId, args.defaultRevenueAccountId, "revenue");
+  if (args.depositAccountId) await requireAccountOfKind(ctx, societyId, args.depositAccountId, "deposit");
+  const categories = new Map<string, { category: string; accountId: string }>();
+  for (const row of (args.categoryAccounts ?? []).slice(0, 200)) {
+    const category = cleanText(row.category, 100);
+    if (!category || !row.accountId) continue;
+    await requireAccountOfKind(ctx, societyId, row.accountId, "revenue");
+    categories.set(normalizeRevenueCategory(category), { category, accountId: row.accountId });
+  }
+  const items = (args.itemAccounts ?? []).slice(0, 500);
+  for (const row of items) {
+    await getOwned(ctx, "invoiceCatalogItems", row.catalogItemId, societyId);
+    if (row.accountId) await requireAccountOfKind(ctx, societyId, row.accountId, "revenue");
+  }
+  for (const row of items) await ctx.db.patch(row.catalogItemId, { accountingAccountId: row.accountId || undefined, updatedAtISO: nowISO() });
+  const fields = {
+    receivableAccountId: args.receivableAccountId || undefined,
+    taxPayableAccountId: args.taxPayableAccountId || undefined,
+    defaultRevenueAccountId: args.defaultRevenueAccountId || undefined,
+    depositAccountId: args.depositAccountId || undefined,
+    categoryAccounts: [...categories.values()].sort((a, b) => a.category.localeCompare(b.category)),
+    updatedAtISO: nowISO(),
+  };
+  const settings = await loadSettings(ctx, societyId);
+  if (settings) {
+    await ctx.db.patch(settings._id, fields);
+    return settings._id;
+  }
+  const invoices = await loadInvoices(ctx, societyId);
+  return ctx.db.insert("invoiceSettings", { societyId, prefix: normalizeInvoicePrefix(undefined), nextNumber: nextInvoiceSequence(invoices, undefined), defaultTerms: DEFAULT_TERMS, ...fields });
+}
+
+/** What "Post existing invoices" would post, and what keeps the rest out. Nothing is written. */
+export async function postingPreviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const [invoices, lctx, postedEntries] = await Promise.all([loadInvoices(ctx, societyId), loadInvoiceLedgerContext(ctx, societyId), postedInvoiceEntries(ctx, societyId)]);
+  const postedIds = new Set([...postedEntries.values()].map((entry) => entry._id));
+  const preview = { invoiceCount: 0, invoiceCents: 0, paymentCount: 0, paymentCents: 0, postedCount: 0, blocked: [] as Array<{ invoiceId: string; number: string; billToName: string; totalCents: number; reasons: string[] }> };
+  for (const row of invoices.sort((a, b) => a.sequence - b.sequence)) {
+    const state = invoiceLedgerState(row, lctx, postedIds);
+    const totalCents = computeInvoiceTotals(row.lines ?? [], row.discount).totalCents;
+    if (state.state === "posted" || (state.state === "ready" && state.entryId)) preview.postedCount += 1;
+    if (state.state === "ready") {
+      if (!state.entryId) {
+        preview.invoiceCount += 1;
+        preview.invoiceCents += totalCents;
+      }
+      const pending = (row.payments ?? []).filter((payment: StoredInvoicePayment) => !(payment.journalEntryId && postedIds.has(payment.journalEntryId)) && !paymentBlock(payment, lctx));
+      preview.paymentCount += pending.length;
+      preview.paymentCents += sumPaid(pending);
+    }
+    if (state.reasons.length) preview.blocked.push({ invoiceId: row._id, number: row.number, billToName: row.billToName, totalCents, reasons: state.reasons });
+  }
+  return { ...preview, workspaceCurrency: lctx.workspaceCurrency, booksStart: booksStartLabel(lctx.booksStart) };
+}
+
+/**
+ * "Post existing invoices to the ledger": posts every sent invoice's accrual
+ * and its payments that aren't in the books yet (or only `ids`). Idempotent:
+ * anything already posted is left alone, so running it twice posts nothing
+ * new. Invoices that can't go in are counted, never guessed at; one that
+ * fails (a closed period, a deposit posted elsewhere) is reported and the
+ * rest carry on.
+ */
+export async function postExistingPortable(ctx: PortableMutationCtx, { societyId, ids, actingUserId }: { societyId: string; ids?: string[]; actingUserId?: string }) {
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  const userId = await actingUser(ctx, societyId);
+  const actor = await actorName(ctx, societyId);
+  const only = ids?.length ? new Set(ids) : null;
+  const lctx = await loadInvoiceLedgerContext(ctx, societyId);
+  const postedIds = new Set([...(await postedInvoiceEntries(ctx, societyId)).values()].map((entry) => entry._id));
+  const invoices = (await loadInvoices(ctx, societyId)).sort((a, b) => a.sequence - b.sequence);
+  if (only) for (const id of only) if (!invoices.some((row) => row._id === id)) throw new Error("invoices not found.");
+  const result = { postedInvoices: 0, postedCents: 0, postedPayments: 0, blocked: 0, failed: [] as Array<{ invoiceId: string; number: string; error: string }> };
+  for (const row of invoices) {
+    if (only && !only.has(row._id)) continue;
+    const state = invoiceLedgerState(row, lctx, postedIds);
+    if (state.state === "blocked") result.blocked += 1;
+    if (state.state !== "ready") continue;
+    try {
+      let current: Row = row;
+      const events: Array<ReturnType<typeof event>> = [];
+      if (!state.entryId) {
+        const outcome = await syncAccrual(ctx, asStored(row), lctx, userId);
+        if (!outcome.entryId) continue;
+        current = { ...row, journalEntryId: outcome.entryId };
+        await ctx.db.patch(row._id, { journalEntryId: outcome.entryId });
+        const total = computeInvoiceTotals(row.lines ?? [], row.discount).totalCents;
+        events.push(event("posted", postedLabel(total), actor));
+        result.postedInvoices += 1;
+        result.postedCents += total;
+      }
+      const payments = [...(current.payments ?? [])] as StoredInvoicePayment[];
+      for (const [index, original] of payments.entries()) {
+        if ((original.journalEntryId && postedIds.has(original.journalEntryId)) || paymentBlock(original, lctx)) continue;
+        let payment = original;
+        if (payment.financialTransactionId) {
+          const txn = (await ctx.db.get(payment.financialTransactionId, "financialTransactions")) as Row | null;
+          if (txn && txn.societyId === societyId && !(txn.matchedKind === "invoice" && txn.matchedId === row._id) && MATCHABLE_KINDS.has(txn.matchedKind)) {
+            payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
+          }
+        }
+        const posting = await postPayment(ctx, asStored({ ...current, payments }), payment, lctx, userId);
+        payments[index] = withPosting(payment, posting);
+        await ctx.db.patch(row._id, { payments });
+        if (posting.journalEntryId) result.postedPayments += 1;
+      }
+      if (events.length) await ctx.db.patch(row._id, { timeline: [...(row.timeline ?? []), ...events], updatedAtISO: nowISO() });
+    } catch (error) {
+      result.failed.push({ invoiceId: row._id, number: row.number, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return result;
 }

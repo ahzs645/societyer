@@ -1,4 +1,5 @@
 import type { CustomerSummary, InvoiceLine, InvoicePayment, InvoiceStatus, InvoiceTotals } from "../../../shared/invoicing";
+import type { BooksStart, CategoryAccount, NeedsActionFlag } from "../../../shared/invoiceLedger";
 
 export type InvoicePaymentView = InvoicePayment & {
   recordedByName?: string;
@@ -44,6 +45,18 @@ export type InvoiceRow = {
   lastReminderAtISO?: string;
   voidedAtISO?: string;
   voidReason?: string;
+  journalEntryId?: string;
+  reversalJournalEntryId?: string;
+  /** Derived on read: why the invoice doesn't reconcile cleanly with the books. */
+  needsAction: NeedsActionFlag[];
+  ledger: InvoiceLedgerState;
+};
+
+export type InvoiceLedgerState = {
+  state: "none" | "posted" | "ready" | "blocked";
+  entryId?: string;
+  reasons: string[];
+  paymentsToPost: number;
 };
 
 export type CatalogItem = {
@@ -96,6 +109,10 @@ export type MoneyInTransaction = {
   description?: string;
   counterparty?: string;
   category?: string;
+  accountId?: string;
+  accountLabel?: string;
+  /** Matched to something other than an invoice; not offered for linking. */
+  matchedElsewhere?: boolean;
   linkedInvoiceId?: string;
   linkedInvoiceNumber?: string;
 };
@@ -122,6 +139,36 @@ export type InvoiceSettings = {
   paymentInstructions?: string;
   defaultMemo?: string;
   replyToEmail?: string;
+  receivableAccountId?: string;
+  taxPayableAccountId?: string;
+  defaultRevenueAccountId?: string;
+  depositAccountId?: string;
+  categoryAccounts?: CategoryAccount[];
+};
+
+export type LedgerAccountOption = { _id: string; label: string; accountType: string };
+
+/** The books side of the workspace: mapping, choosable accounts and what blocks posting. */
+export type InvoiceLedgerView = {
+  workspaceCurrency: string;
+  booksStart: BooksStart & { label: string | null };
+  categories: string[];
+  accounts: { revenue: LedgerAccountOption[]; receivable: LedgerAccountOption[]; taxPayable: LedgerAccountOption[]; deposit: LedgerAccountOption[] };
+  defaults: { receivable: { _id: string; label: string } | null; taxPayable: { _id: string; label: string } | null; deposit: { _id: string; label: string } | null };
+  foreignCurrency: { count: number; currencies: string[] };
+  readyCount: number;
+  blockedCount: number;
+};
+
+export type InvoicePostingPreview = {
+  invoiceCount: number;
+  invoiceCents: number;
+  paymentCount: number;
+  paymentCents: number;
+  postedCount: number;
+  blocked: Array<{ invoiceId: string; number: string; billToName: string; totalCents: number; reasons: string[] }>;
+  workspaceCurrency: string;
+  booksStart: string | null;
 };
 
 export type InvoiceOrganization = {
@@ -156,7 +203,9 @@ export type InvoiceWorkspace = {
     paidLast30Count: number;
     draftCents: number;
     draftCount: number;
+    needsActionCount: number;
   };
+  ledger: InvoiceLedgerView;
 };
 
-export type InvoiceTab = "all" | "drafts" | "outstanding" | "overdue" | "paid" | "recurring" | "customers" | "catalog";
+export type InvoiceTab = "all" | "drafts" | "outstanding" | "overdue" | "paid" | "needs_action" | "recurring" | "customers" | "catalog";

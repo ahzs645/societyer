@@ -71,6 +71,8 @@ export type InvoiceLine = {
   taxRatePercent?: number;
   /** Shown on the invoice next to the tax, e.g. "GST" or "HST". */
   taxLabel?: string;
+  /** Reporting tags (at most one per tag group), copied onto the revenue line in the books. */
+  tagIds?: string[];
 };
 
 export type InvoiceDiscount = { kind: "percent" | "amount"; value: number };
@@ -84,6 +86,12 @@ export type InvoicePayment = {
   financialTransactionId?: string;
   note?: string;
   recordedAtISO?: string;
+  /** Where the payment was deposited in the books (the linked bank line's account otherwise). */
+  depositAccountId?: string;
+  /** Dr deposit / Cr receivable (basis "both"). */
+  journalEntryId?: string;
+  /** The cash-basis recognition of the paid share (basis "cash-only"). */
+  cashBasisEntryId?: string;
 };
 
 export type InvoiceTotals = {

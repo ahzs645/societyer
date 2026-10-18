@@ -684,6 +684,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invoices:setSeriesStatus", handler: invoicesFns.setSeriesStatusPortable }),
   definePortableMutation({ name: "invoices:issueFromSeries", handler: invoicesFns.issueFromSeriesPortable }),
   definePortableMutation({ name: "invoices:saveSettings", handler: invoicesFns.saveSettingsPortable }),
+  definePortableMutation({ name: "invoices:linkDeposit", handler: invoicesFns.linkDepositPortable }),
+  definePortableMutation({ name: "invoices:saveAccountMapping", handler: invoicesFns.saveAccountMappingPortable }),
+  definePortableQuery({ name: "invoices:postingPreview", handler: invoicesFns.postingPreviewPortable }),
+  definePortableMutation({ name: "invoices:postExisting", handler: invoicesFns.postExistingPortable }),
 
   // bills
   definePortableQuery({ name: "bills:workspace", handler: billsFns.workspacePortable }),
