@@ -78,6 +78,7 @@
     "test:connector-tenancy": "tsx scripts/check-connector-tenancy.ts",
     "test:accounting-core": "tsx scripts/check-accounting-core.ts",
     "test:accounting-csv-injection": "tsx scripts/check-accounting-csv-injection.ts",
+    "test:books-reports": "tsx scripts/check-books-reports.ts",
     "test:treasury-budget-variance": "tsx scripts/check-treasury-budget-variance.ts",
     "test:corporation-equity": "tsx scripts/check-corporation-equity-ledger.ts && tsx scripts/check-static-corporation-people-register.ts",
     "test:corporation-packets": "tsx scripts/check-corporation-document-packets.ts",

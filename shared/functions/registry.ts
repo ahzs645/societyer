@@ -978,6 +978,15 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "accounting:postOpeningBalances", handler: accountingFns.postOpeningBalancesPortable }),
   definePortableMutation({ name: "accounting:createReconciliationRun", handler: accountingFns.createReconciliationRunPortable }),
   definePortableMutation({ name: "accounting:setReconciliationRunStatus", handler: accountingFns.setReconciliationRunStatusPortable }),
+  definePortableQuery({ name: "accounting:booksSettings", handler: accountingFns.booksSettingsPortable }),
+  definePortableMutation({ name: "accounting:updateBooksSettings", handler: accountingFns.updateBooksSettingsPortable }),
+  definePortableQuery({ name: "accounting:booksReport", handler: accountingFns.booksReportPortable }),
+  definePortableQuery({ name: "accounting:booksReportLines", handler: accountingFns.booksReportLinesPortable }),
+  definePortableQuery({ name: "accounting:generalLedgerReport", handler: accountingFns.generalLedgerReportPortable }),
+  definePortableQuery({ name: "accounting:journalEntryRegister", handler: accountingFns.journalEntryRegisterPortable }),
+  definePortableQuery({ name: "accounting:chartOfAccountsRegister", handler: accountingFns.chartOfAccountsRegisterPortable }),
+  definePortableMutation({ name: "accounting:upsertChartAccount", handler: accountingFns.upsertChartAccountPortable }),
+  definePortableMutation({ name: "accounting:voidJournalEntry", handler: accountingFns.voidJournalEntryPortable }),
 
   // assets
   definePortableQuery({ name: "assets:get", handler: assetsFns.getPortable }),

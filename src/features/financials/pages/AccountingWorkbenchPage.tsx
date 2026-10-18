@@ -10,10 +10,12 @@ import { MoreActionsMenu } from "../../../components/MoreActionsMenu";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Download, FileSpreadsheet, GitCompareArrows, Landmark, Lock, PlusCircle, Scale, Split, Unlock } from "lucide-react";
 import { api } from "@/lib/convexApi";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useSociety } from "../../../hooks/useSociety";
 import { useCurrentUserId } from "../../../hooks/useCurrentUser";
 import { useToast } from "../../../components/Toast";
-import { Badge, Drawer, Field } from "../../../components/ui";
+import { Badge, Banner, Drawer, Field } from "../../../components/ui";
+import { InfoPopover } from "../../../components/InfoPopover";
 import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
@@ -24,6 +26,8 @@ import { StatTile } from "../../../components/StatTile";
 import { TrialBalanceReport } from "../components/TrialBalanceReport";
 import { ChartOfAccountsCard } from "../components/ChartOfAccountsCard";
 import { BackfillReviewDrawer } from "../components/BackfillReviewDrawer";
+import { BooksNav } from "../components/BooksNav";
+import { CloseDateExplainer, booksErrorMessage, useBooksSettings } from "../settings/booksSettings";
 import { JournalLinesGrid, useJournalLinesGrid } from "../components/JournalLinesGrid";
 import { useConfirm } from "../../../components/Modal";
 import { GridDrawer, useBeforeUnloadGuard } from "../../../components/EditableGrid";
@@ -39,7 +43,10 @@ import { downloadXlsx } from "@/lib/xlsx";
 import { readLastExportFormat, rememberExportFormat } from "@/lib/tableExport";
 import { accountingExportSheet, accountingWorkbook, baseFileName, type AccountingExportKind } from "../lib/accountingXlsx";
 
-type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | "backfill" | null;
+type DrawerKind = "period" | "closePeriod" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | "backfill" | null;
+
+/** The fiscal period being closed, and whether to lock the books through its end too. */
+type ClosingPeriod = { id: string; periodLabel: string; endDate: string; lockBooks: boolean };
 
 const EXPORT_KINDS = [
   ["chart_of_accounts", "Chart of accounts"],
@@ -208,9 +215,12 @@ export function AccountingWorkbenchPage() {
   });
   const [counterpartyForm, setCounterpartyForm] = useState({ name: "", kind: "vendor", email: "", taxIdentifier: "" });
   const [fundForm, setFundForm] = useState({ name: "", purpose: "", status: "active", startDate: "", endDate: "" });
+  const [closingPeriod, setClosingPeriod] = useState<ClosingPeriod | null>(null);
 
   const accounts = useQuery(api.accounting.chartAccounts, society ? { societyId: society._id } : "skip");
   const periods = useQuery(api.accounting.fiscalPeriods, society ? { societyId: society._id } : "skip");
+  const booksSettings = useBooksSettings(society?._id);
+  const closeDate = booksSettings?.closeDate ?? null;
   const journalEntries = useQuery(api.accounting.journalEntries, society ? { societyId: society._id, limit: 25 } : "skip");
   const trialBalance = useQuery(api.accounting.trialBalance, society ? { societyId: society._id } : "skip");
   const restrictedBalances = useQuery(api.accounting.restrictedFundBalances, society ? { societyId: society._id } : "skip");
@@ -262,16 +272,38 @@ export function AccountingWorkbenchPage() {
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
+  /** The close date only moves forward, and never past today. */
+  const canLockThrough = (endDate: string) => endDate <= today() && (!closeDate || endDate > closeDate);
+  const journalLockedReason = closeDate && journalForm.date && journalForm.date <= closeDate
+    ? `The books are closed through ${formatDate(closeDate)}. Choose a later date, or ask an admin to move the close date in Books settings.`
+    : null;
+
   const run = async (fn: () => Promise<void>, success?: string) => {
     setBusy(true);
     try {
       await fn();
       if (success) toast.success(success);
-    } catch (error: any) {
-      toast.error(error?.message ?? "Accounting action failed");
+    } catch (error) {
+      // Close-date refusals (posting or reopening inside the lock) carry their own explanation.
+      toast.error("Accounting action failed", booksErrorMessage(error));
     } finally {
       setBusy(false);
     }
+  };
+
+  const startClosePeriod = (period: { _id: string; periodLabel: string; endDate: string }) => {
+    setClosingPeriod({ id: String(period._id), periodLabel: period.periodLabel, endDate: period.endDate, lockBooks: false });
+    setDrawer("closePeriod");
+  };
+
+  const saveClosePeriod = () => {
+    if (!closingPeriod) return;
+    const lockBooks = closingPeriod.lockBooks && canLockThrough(closingPeriod.endDate);
+    return run(async () => {
+      await closePeriod({ id: closingPeriod.id as Id<"accountingFiscalPeriods">, lockBooks });
+      setDrawer(null);
+      setClosingPeriod(null);
+    }, lockBooks ? `${closingPeriod.periodLabel} closed and books locked through ${formatDate(closingPeriod.endDate)}` : `${closingPeriod.periodLabel} closed`);
   };
 
   const savePeriod = () => {
@@ -548,6 +580,7 @@ export function AccountingWorkbenchPage() {
           </>
         }
       />
+      <BooksNav />
 
       <div className="stat-grid">
         <StatTile label="Chart accounts" value={accounts?.length ?? 0} />
@@ -562,9 +595,14 @@ export function AccountingWorkbenchPage() {
       <FinancialVersionCard societyId={society._id} />
 
       <div className="accounting-grid">
-        <section className="card">
+        <section className="card" id="fiscal-periods">
           <div className="card__head">
             <h2 className="card__title">Fiscal periods</h2>
+            <InfoPopover label="Closing a period and the books close date">
+              <CloseDateExplainer short>
+                <p>Set or move the close date in <Link to="/app/financials/books-settings">Books settings</Link>.</p>
+              </CloseDateExplainer>
+            </InfoPopover>
             <span className="card__subtitle">Close periods before year-end exports.</span>
           </div>
           <div className="accounting-list">
@@ -575,9 +613,14 @@ export function AccountingWorkbenchPage() {
                   <div className="muted">{formatDate(period.startDate)} to {formatDate(period.endDate)}</div>
                 </div>
                 <div className="accounting-row__actions">
+                  {closeDate && period.startDate <= closeDate && (
+                    <span title={`The books are closed through ${formatDate(closeDate)}`}>
+                      <Badge tone="neutral"><Lock size={10} aria-hidden="true" /> {period.endDate <= closeDate ? "Locked" : `Locked to ${formatDate(closeDate)}`}</Badge>
+                    </span>
+                  )}
                   <Badge tone={period.status === "open" ? "success" : "warn"}>{period.status === "open" ? "Open" : period.status === "closed" ? "Closed" : period.status}</Badge>
                   {period.status === "open" ? (
-                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await closePeriod({ id: period._id }); }, "Period closed")} disabled={!canWrite}><Lock size={12} /> Close</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => startClosePeriod(period)} disabled={!canWrite || busy}><Lock size={12} /> Close</button>
                   ) : (
                     <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await reopenPeriod({ id: period._id }); }, "Period reopened")} disabled={!canWrite}><Unlock size={12} /> Reopen</button>
                   )}
@@ -625,6 +668,7 @@ export function AccountingWorkbenchPage() {
         <div className="card__head">
           <h2 className="card__title">Trial balance</h2>
           <span className="card__subtitle">Posted journal-line totals by chart account. Select an amount to see the entries behind it.</span>
+          <Link className="btn-action books-card-link" to="/app/financials/reports/operations">Monthly reports</Link>
         </div>
         <div className="card__body">
           <TrialBalanceReport societyId={society._id} />
@@ -635,6 +679,7 @@ export function AccountingWorkbenchPage() {
         <div className="card__head">
           <h2 className="card__title">Journal entries</h2>
           <span className="card__subtitle">Recent posted and draft ledger entries.</span>
+          <Link className="btn-action books-card-link" to="/app/financials/journal-entries">All journal entries</Link>
         </div>
         <div className="accounting-journal-list">
           {(journalEntries ?? []).map((entry: any) => (
@@ -742,6 +787,38 @@ export function AccountingWorkbenchPage() {
         </div>
       </Drawer>
 
+      <Drawer
+        open={drawer === "closePeriod" && closingPeriod != null}
+        onClose={() => setDrawer(null)}
+        title={closingPeriod ? `Close ${closingPeriod.periodLabel}` : "Close fiscal period"}
+        footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || busy} onClick={saveClosePeriod}>{closingPeriod?.lockBooks && canLockThrough(closingPeriod.endDate) ? "Close and lock" : "Close period"}</button></>}
+      >
+        {closingPeriod && (
+          <div className="col">
+            <p className="muted">
+              Closing is a soft close: the period stops taking ordinary entries, but directors can still post an approved closed-period adjustment into it.
+            </p>
+            {canLockThrough(closingPeriod.endDate) ? (
+              <label className="checkbox">
+                <input type="checkbox" checked={closingPeriod.lockBooks} onChange={(e) => setClosingPeriod({ ...closingPeriod, lockBooks: e.target.checked })} />{" "}
+                Also lock the books through {formatDate(closingPeriod.endDate)}
+              </label>
+            ) : (
+              <p className="muted">
+                {closeDate && closingPeriod.endDate <= closeDate
+                  ? `The books are already locked through ${formatDate(closeDate)}, which covers this period.`
+                  : `The books can be locked through ${formatDate(closingPeriod.endDate)} once that date has passed.`}
+              </p>
+            )}
+            {closingPeriod.lockBooks && canLockThrough(closingPeriod.endDate) && (
+              <Banner tone="warn">
+                Entries dated on or before {formatDate(closingPeriod.endDate)} can't be posted, edited or voided, adjustments included, until an admin moves the close date in Books settings.
+              </Banner>
+            )}
+          </div>
+        )}
+      </Drawer>
+
       <Drawer open={drawer === "period"} onClose={() => setDrawer(null)} title="Create fiscal period" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={savePeriod}>Create</button></>}>
         <FormGrid>
           <Field label="Fiscal year" required error={formErrors.fiscalYear}><input className="input" value={periodForm.fiscalYear} onChange={(e) => setPeriodForm({ ...periodForm, fiscalYear: e.target.value })} /></Field>
@@ -765,8 +842,9 @@ export function AccountingWorkbenchPage() {
         open={drawer === "journal"}
         onClose={() => void closeLinesDrawer(journalGrid)}
         title="Post journal entry"
-        footer={<LinesDrawerFooter blockedReason={journalGrid.changeset.dirty ? journalGrid.blockedReason : null} onCancel={() => void closeLinesDrawer(journalGrid)} onPost={saveJournal} disabled={!canWrite || busy || Boolean(journalGrid.blockedReason)} />}
+        footer={<LinesDrawerFooter blockedReason={journalLockedReason ?? (journalGrid.changeset.dirty ? journalGrid.blockedReason : null)} onCancel={() => void closeLinesDrawer(journalGrid)} onPost={saveJournal} disabled={!canWrite || busy || Boolean(journalGrid.blockedReason) || Boolean(journalLockedReason)} />}
       >
+        {journalLockedReason && <Banner tone="warn" title="This date is inside the books close date">{journalLockedReason}</Banner>}
         <FormGrid>
           <Field label="Date"><DatePicker value={journalForm.date} onChange={(value) => setJournalForm({ ...journalForm, date: value })} /></Field>
           <Field label="Fiscal year"><input className="input" value={journalForm.fiscalYear} onChange={(e) => setJournalForm({ ...journalForm, fiscalYear: e.target.value })} /></Field>

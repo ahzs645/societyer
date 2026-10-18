@@ -30,6 +30,9 @@ import * as dividendFns from "../shared/functions/dividends";
 import * as resolutionFns from "../shared/functions/writtenResolutions";
 import * as certificateFns from "../shared/functions/shareCertificates";
 import * as settingsFns from "../shared/functions/corporationSettings";
+import * as accountingFns from "../shared/functions/accounting";
+import { todayDateOnly } from "../shared/dateOnly";
+import { demoAsOfDate } from "../shared/demoData/prng";
 
 const TOKEN = "seed-parity-token";
 process.env.SOCIETYER_MAINTENANCE_TOKEN = TOKEN;
@@ -119,6 +122,9 @@ const subsets: Record<string, { static: (row: any) => boolean; server: (row: any
   "journalEntries (bills)": { static: (row) => String(row.source).startsWith("bill"), server: (row) => String(row.source).startsWith("bill") },
   organizationIdentifiers: { static: (row) => row.kind === "gst", server: () => true },
   fundRestrictions: { static: () => true, server: () => true },
+  // The demo books (shared/demoData/journals.ts).
+  accountingFiscalPeriods: { static: () => true, server: () => true },
+  booksSettings: { static: () => true, server: () => true },
   memberSubscriptions: { static: (row) => String(row._id).startsWith("static_member_subscription_renewal_"), server: isRenewal },
   "financialTransactions (invoice deposits)": { static: (row) => String(row.externalId).startsWith("csv-invoice-"), server: (row) => String(row.externalId).startsWith("csv-invoice-") },
   "financialTransactions (rule provenance)": { static: (row) => row.categorizedBy === "rule", server: (row) => row.categorizedBy === "rule" },
@@ -166,6 +172,8 @@ const refFields: Record<string, Array<[string, string]>> = {
   memberSubscriptions: [["planId", "subscriptionPlans"], ["memberId", "members"]],
   fundRestrictions: [["linkedFinancialAccountId", "financialAccounts"]],
   financialAccounts: [["parentAccountId", "financialAccounts"]],
+  journalEntries: [["fiscalPeriodId", "accountingFiscalPeriods"], ["createdByUserId", "users"]],
+  journalLines: [["journalEntryId", "journalEntries"], ["accountId", "financialAccounts"], ["financialTransactionId", "financialTransactions"], ["fundRestrictionId", "fundRestrictions"]],
   payRuns: [["transactionId", "financialTransactions"], ["lines[].employeeId", "employees"]],
   payrollRemittances: [["transactionId", "financialTransactions"]],
   payrollSlips: [["employeeId", "employees"]],
@@ -206,6 +214,11 @@ assert.ok(checkedRefs > 200, "references were actually checked");
 
 const SEED_OPENING: Record<string, number> = { "operating-chequing": 3490000, "restricted-fund": 1200000, "organization-visa": 0, facilities: 0, "facilities-venue": 0, "facilities-utilities": 0, "accounts-payable": 0, "program-supplies": 0 };
 for (const account of server.financialAccounts) {
+  // Chart accounts the demo ledger posts to carry no bank transactions.
+  if (String(account.externalId).startsWith("societyer:")) {
+    assert.equal(account.balanceCents, 0, `${account.name}: a chart account has no bank balance`);
+    continue;
+  }
   const sum = server.financialTransactions.filter((row: any) => row.accountId === account._id).reduce((total: number, row: any) => total + row.amountCents, 0);
   assert.ok(account.externalId in SEED_OPENING, `known seed account ${account.externalId}`);
   assert.equal(account.balanceCents, SEED_OPENING[account.externalId] + sum, `${account.name}: balance = opening balance + sum of its transactions`);
@@ -327,6 +340,25 @@ assert.deepEqual(cardSummary(cardsB), cardSummary(cardsA), "card statements reco
 assert.deepEqual(cardsB.summary, cardsA.summary, "card summary matches");
 const [holdingsA, holdingsB] = await Promise.all([registers.investmentsWorkspacePortable(A.ctx, { societyId: A.societyId }), registers.investmentsWorkspacePortable(B.ctx, { societyId: B.societyId })]);
 assert.deepEqual(holdingsB.reserves, holdingsA.reserves, "invested reserves match");
+
+/* ------------------------------------------------- books */
+
+// Both demos post the same story to the journal: opening balances on
+// 2026-01-01, then every categorised bank line, so the books reports have
+// monthly activity, the balance sheet balances and cash flow adds up.
+const booksAsOf = demoAsOfDate("2026-04-21", todayDateOnly());
+const booksSummary: Array<{ demo: string; entries: number; months: number; programs: string }> = [];
+for (const [demo, side, dump] of [["in-browser demo", A, staticDump], ["server seed", B, server]] as const) {
+  const range = { societyId: side.societyId, from: "2026-01-01", to: booksAsOf, frequency: "month", asOf: booksAsOf };
+  const [operations, balanceSheet, cashFlow] = await Promise.all(["operations", "balance_sheet", "cash_flow"].map((report) => accountingFns.booksReportPortable(side.ctx, { ...range, report })));
+  assert.deepEqual(balanceSheet.warnings, [], `${demo}: the balance sheet balances`);
+  assert.deepEqual(cashFlow.warnings, [], `${demo}: cash flow activities add up to the change in cash`);
+  const completed = operations.summary.filter((point) => point.end < booksAsOf.slice(0, 7) + "-01");
+  assert.ok(completed.length >= 3 && completed.every((point) => point.values.revenue > 0 && point.values.expenses > 0), `${demo}: every completed month since the opening balances has posted revenue and expenses`);
+  assert.equal(dump.journalEntries.filter((entry: { source?: string }) => entry.source === "opening_balance").length, 1, `${demo}: one opening-balance entry`);
+  booksSummary.push({ demo, entries: dump.journalEntries.length, months: operations.periods.length, programs: operations.dimensionValues.programCode.join(", ") });
+}
+assert.equal(booksSummary[0].programs, booksSummary[1].programs, "the same program codes tag both ledgers");
 /* ------------------------------------------------- corporation demos */
 
 const corporationRows: Array<{ workspace: string; tables: number; rows: number }> = [];
@@ -366,4 +398,5 @@ for (const key of CORPORATION_DEMO_KEYS) {
 console.table(countRows);
 console.table(Object.entries(reconB).map(([period, row]: [string, any]) => ({ period, status: row.status, difference: (row.differenceCents / 100).toFixed(2), static: (reconA[period].differenceCents / 100).toFixed(2), open: row.unclearedCount })));
 console.table(corporationRows);
+console.table(booksSummary);
 console.log(`Seed parity checks passed: ${checkedRefs} references resolve; rules, periods, claims, ${server.invoices.length} invoices and ${server.bills.length} bills match the in-browser demo, and the ${CORPORATION_DEMO_KEYS.length} corporation demos match their in-browser workspaces.`);

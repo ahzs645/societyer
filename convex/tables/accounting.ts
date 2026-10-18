@@ -133,6 +133,10 @@ export const accountingTables = {
     // although dated on or before the opening-balance entry) or
     // "unmapped_suspense" (offset posted to the suspense account).
     reviewFlags: v.optional(v.array(v.string())),
+    // Which accounting basis the entry belongs to: "both" (default when
+    // absent), "accrual-only" (invoice / bill accruals) or "cash-only" (their
+    // recognition on payment). See shared/booksReports.ts.
+    basis: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
@@ -141,6 +145,20 @@ export const accountingTables = {
     .index("by_society_status", ["societyId", "status"])
     .index("by_society_source", ["societyId", "source"])
     .index("by_connection", ["connectionId"]),
+
+  // Books details: when the books start, the accounting basis reports use,
+  // and the close (lock) date on or before which no journal entry can be
+  // posted, edited or voided. One row per society.
+  booksSettings: defineTable({
+    societyId: v.id("societies"),
+    booksStartDate: v.optional(v.string()),
+    accountingBasis: v.optional(v.string()), // accrual | cash
+    closeDate: v.optional(v.string()),
+    closeDateSetAtISO: v.optional(v.string()),
+    closeDateSetByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  }).index("by_society", ["societyId"]),
 
   journalLines: defineTable({
     societyId: v.id("societies"),

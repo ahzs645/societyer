@@ -54,6 +54,7 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   payRuns: "payroll", payrollRemittances: "payroll", payrollSlips: "payroll", recordsOfEmployment: "payroll",
   cardStatements: "corporateCards", investmentHoldings: "investments",
   billVendors: "bills",
+  journalEntries: "accounting", financialAccounts: "accounting",
 };
 const HANDLER_POLICIES = new Set([
   "offlineMeetings:applyCommand", "offlineMeetings:prepareFileUpload", "offlineMeetings:commitFile",

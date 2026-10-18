@@ -128,6 +128,10 @@
 
 @use "ai-tables"; // Copy / CSV / Excel on tables in assistant answers
 @use "chart-of-accounts"; // Accounting workbench: chart of accounts tree
+@use "books"; // Books pages: shared sub-nav
+@use "books-reports"; // Financial reports: period toolbar, chart strip, general ledger
+@use "books-registers"; // Journal entries and chart of accounts registers
+@use "books-settings"; // Books settings and the overview's written insights
 @use "insights-flows"; // Financials overview: top payees / categories, operating reserve
 
 // Sankey chart and the cash-flow card on the Financials overview.

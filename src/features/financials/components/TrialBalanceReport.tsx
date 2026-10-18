@@ -40,7 +40,7 @@ export function ledgerLineToDrilldownItem(line: LedgerLine, fundNames: Map<strin
     tags,
     debitCents: line.side === "debit" ? line.amountCents : undefined,
     creditCents: line.side === "credit" ? line.amountCents : undefined,
-    ledgerHref: `/app/financials/accounting?entry=${encodeURIComponent(String(line.journalEntryId))}`,
+    ledgerHref: `/app/financials/journal-entries?entry=${encodeURIComponent(String(line.journalEntryId))}`,
     transactionHref: line.financialTransactionId
       ? `/app/financials?tab=transactions&transaction=${encodeURIComponent(String(line.financialTransactionId))}`
       : undefined,

@@ -10,14 +10,14 @@ type Tile = { key: TileKey; label: string; value: number | null; prev: number | 
 
 const plural = (n: number, noun: string) => `${n.toLocaleString("en-CA")} ${noun}${n === 1 ? "" : "s"}`;
 
-function delta(current: number, previous: number, direction: Direction): StatTileTrend {
+function delta(current: number, previous: number, direction: Direction, label: string): StatTileTrend {
   const diff = current - previous;
-  if (diff === 0) return { value: "No change", label: "vs previous period" };
+  if (diff === 0) return { value: "No change", label };
   return {
     value: formatMoney(diff, { trimWholeCents: true, signDisplay: "always" }),
     direction: diff > 0 ? "up" : "down",
     favourable: direction === "up-good" ? diff > 0 : diff < 0,
-    label: "vs previous period",
+    label,
   };
 }
 
@@ -38,6 +38,7 @@ export function FinanceRangeStats({
   closingBalance,
   previousClosing,
   currentBalance,
+  compareLabel = "vs previous period",
   headline = false,
   more,
   children,
@@ -50,6 +51,8 @@ export function FinanceRangeStats({
   previousClosing: number | null;
   /** Today's bank and card balance (the same figure as the page's "Bank balance"). */
   currentBalance: number;
+  /** Trend caption, e.g. "vs same period last year". */
+  compareLabel?: string;
   headline?: boolean;
   /** Headline layout: renders the overflow tiles (e.g. into a "More metrics" fold). */
   more?: (tiles: ReactNode, count: number) => ReactNode;
@@ -75,7 +78,7 @@ export function FinanceRangeStats({
       key={tile.key}
       label={tile.label}
       value={tile.value == null ? "—" : <Money variant="hero" trimWholeCents cents={tile.value} signDisplay={tile.key === "net" ? "exceptZero" : "auto"} />}
-      trend={tile.prev != null && tile.value != null ? delta(tile.value, tile.prev, tile.direction) : undefined}
+      trend={tile.prev != null && tile.value != null ? delta(tile.value, tile.prev, tile.direction, compareLabel) : undefined}
       sub={tile.sub}
       info={tile.info}
     />

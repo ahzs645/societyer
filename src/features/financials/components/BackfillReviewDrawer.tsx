@@ -91,6 +91,7 @@ export function BackfillReviewDrawer({
         result.postedToSuspense ? `${result.postedToSuspense} to suspense for review` : null,
         result.flaggedBeforeOpening ? `${result.flaggedBeforeOpening} flagged as before opening balances` : null,
         result.skippedBeforeOpening ? `${result.skippedBeforeOpening} before opening balances skipped` : null,
+        result.skippedLocked ? `${result.skippedLocked} skipped: dated on or before the books close date (${formatDate(result.closeDate)})` : null,
         result.mappingsSaved ? `${plural(result.mappingsSaved, "category mapping")} saved` : null,
       ].filter(Boolean);
       toast.success(`Posted ${plural(result.posted, "transaction")}`, parts.join(" · ") || undefined);

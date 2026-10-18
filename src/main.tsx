@@ -59,6 +59,10 @@ const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => (
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
 const AccountingWorkbenchPage = React.lazy(() => import("./features/financials/pages/AccountingWorkbenchPage").then((m) => ({ default: m.AccountingWorkbenchPage })));
 const FinancialYearDetailPage = React.lazy(() => import("./features/financials/pages/FinancialYearDetailPage").then((m) => ({ default: m.FinancialYearDetailPage })));
+const BooksReportsPage = React.lazy(() => import("./features/financials/pages/BooksReportsPage").then((m) => ({ default: m.BooksReportsPage })));
+const JournalEntriesPage = React.lazy(() => import("./features/financials/pages/JournalEntriesPage").then((m) => ({ default: m.JournalEntriesPage })));
+const ChartOfAccountsPage = React.lazy(() => import("./features/financials/pages/ChartOfAccountsPage").then((m) => ({ default: m.ChartOfAccountsPage })));
+const BooksSettingsPage = React.lazy(() => import("./features/financials/pages/BooksSettingsPage").then((m) => ({ default: m.BooksSettingsPage })));
 const YearEndReportsPage = React.lazy(() => import("./features/financials/pages/YearEndReportsPage").then((m) => ({ default: m.YearEndReportsPage })));
 const TransactionTagsPage = React.lazy(() => import("./features/financials/pages/TransactionTagsPage").then((m) => ({ default: m.TransactionTagsPage })));
 const WaveAccountDetailPage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveAccountDetailPage })));
@@ -474,6 +478,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="financials/accounting" element={<AccountingWorkbenchPage />} />
+            <Route path="financials/reports" element={<Navigate to="/app/financials/reports/balance-sheet" replace />} />
+            <Route path="financials/reports/:report" element={<BooksReportsPage />} />
+            <Route path="financials/journal-entries" element={<JournalEntriesPage />} />
+            <Route path="financials/chart-of-accounts" element={<ChartOfAccountsPage />} />
+            <Route path="financials/books-settings" element={<BooksSettingsPage />} />
             <Route path="financials/year-end" element={<YearEndReportsPage />} />
             <Route path="financials/tags" element={<TransactionTagsPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />

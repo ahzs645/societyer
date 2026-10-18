@@ -33,6 +33,33 @@ import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requir
 import { validateBalancedJournalLines } from "../accountingCore";
 import { accountParentError } from "../accountHierarchy";
 import { requirePermissionPortable } from "./permissions";
+import { assertBooksOpen, booksAccountingBasis, booksCloseDate, booksSettingsRow } from "./booksLock";
+import {
+  ACCOUNTING_BASES,
+  BOOKS_REPORT_KINDS,
+  REPORT_FREQUENCIES,
+  buildBooksReport,
+  buildChartRegister,
+  buildGeneralLedgerReport,
+  buildJournalRegister,
+  buildReportPeriods,
+  closedBooksError,
+  defaultReportCurrency,
+  fiscalYearStartMonth,
+  isIsoDate,
+  isJournalBasis,
+  reportDrillLines,
+  validateLineFilter,
+  type AccountingBasis,
+  type BooksAccount,
+  type BooksEntry,
+  type BooksLine,
+  type BooksReportKind,
+  type ReportFrequency,
+  type ReportLineFilter,
+} from "../booksReports";
+import { accountSection, type HierarchyAccount } from "../accountHierarchy";
+import { todayDateOnly } from "../dateOnly";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"] as const;
 const NORMAL_BALANCES = ["debit", "credit"] as const;
@@ -557,19 +584,34 @@ export async function upsertFiscalPeriodPortable(
   return await ctx.db.insert("accountingFiscalPeriods", { ...payload, createdAtISO: now, updatedAtISO: now });
 }
 
+/**
+ * Close a fiscal period. With `lockBooks`, the books close date also moves to
+ * the period end (never backwards), turning the soft period close, which still
+ * accepts approved adjustments, into a hard lock.
+ */
 export async function closeFiscalPeriodPortable(
   ctx: PortableMutationCtx,
-  { id, actingUserId }: { id: string; actingUserId?: string },
+  { id, lockBooks, actingUserId }: { id: string; lockBooks?: boolean; actingUserId?: string },
 ) {
   const period = await requireOwnedRow(ctx, "accountingFiscalPeriods", id);
   const societyId = String(period.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  const now = new Date().toISOString();
+  const userId = await principalUserId(ctx, societyId);
   await ctx.db.patch(id, {
     status: "closed",
-    closedAtISO: new Date().toISOString(),
-    closedByUserId: await principalUserId(ctx, societyId),
-    updatedAtISO: new Date().toISOString(),
+    closedAtISO: now,
+    closedByUserId: userId,
+    updatedAtISO: now,
   });
+  if (lockBooks) {
+    const settings = await booksSettingsRow(ctx, societyId);
+    if (!settings?.closeDate || settings.closeDate < period.endDate) {
+      const patch = { closeDate: period.endDate, closeDateSetAtISO: now, closeDateSetByUserId: userId ?? undefined, updatedAtISO: now };
+      if (settings) await ctx.db.patch(settings._id, patch);
+      else await ctx.db.insert("booksSettings", { societyId, ...patch, createdAtISO: now });
+    }
+  }
   return id;
 }
 
@@ -580,6 +622,10 @@ export async function reopenFiscalPeriodPortable(
   const period = await requireOwnedRow(ctx, "accountingFiscalPeriods", id);
   const societyId = String(period.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  const closeDate = await booksCloseDate(ctx, societyId);
+  if (closeDate && period.startDate <= closeDate) {
+    throw new Error(`The books are closed through ${closeDate}, which covers ${period.periodLabel}. Move the close date in Books settings before reopening it.`);
+  }
   await ctx.db.patch(id, {
     status: "open",
     closedAtISO: undefined,
@@ -729,6 +775,8 @@ export async function upsertJournalEntryPortable(
     fiscalYear?: string;
     sourceDocumentIds?: string[];
     rawJson?: string;
+    /** "both" (default), "accrual-only" or "cash-only"; see shared/booksReports.ts. */
+    basis?: string;
     allowClosedPeriodAdjustment?: boolean;
     lines: Array<{
       id?: string;
@@ -768,7 +816,11 @@ export async function upsertJournalEntryPortable(
     ]),
   ]);
   requireOption(args.status, JOURNAL_STATUSES, "Journal entry status");
+  if (args.basis !== undefined && !isJournalBasis(args.basis)) throw new Error("Journal entry basis must be one of: both, accrual-only, cash-only.");
   validateJournalLines(args.lines);
+  // Editing moves an entry from its old date too, so both dates must be open.
+  const existing = args.id ? await ctx.db.get(args.id, "journalEntries") : null;
+  await assertBooksOpen(ctx, args.societyId, [args.date, existing?.date], existing ? "posted or edited" : "posted");
   await assertPeriodOpen(ctx, {
     societyId: args.societyId,
     fiscalPeriodId: args.fiscalPeriodId,
@@ -849,6 +901,7 @@ export async function postTransactionCandidatePortable(
   }
   const amountCents = candidate.amountCents ?? signedAmountFromDebitCredit(candidate.debitCents, candidate.creditCents);
   if (!amountCents) throw new Error("Transaction candidate needs an amount before it can be posted.");
+  await assertBooksOpen(ctx, societyId, [candidate.transactionDate], "posted");
   await assertPeriodOpen(ctx, {
     societyId,
     fiscalPeriodId: args.fiscalPeriodId,
@@ -966,6 +1019,7 @@ export async function postTransactionCandidateAllocationPortable(
   const absoluteCents = Math.abs(amountCents);
   const allocationTotal = args.allocations.reduce((sum: number, row: any) => sum + row.amountCents, 0);
   if (allocationTotal !== absoluteCents) throw new Error("Allocation total must equal the candidate amount.");
+  await assertBooksOpen(ctx, societyId, [candidate.transactionDate], "posted");
   await assertPeriodOpen(ctx, {
     societyId,
     fiscalPeriodId: args.fiscalPeriodId,
@@ -1163,7 +1217,12 @@ export async function backfillFinancialTransactionsToJournalPortable(
   const createdByUserId = await principalUserId(ctx, societyId);
   const { plan, transactions, accounts } = await loadBackfillPlan(ctx, societyId, options);
   const transactionsById = new Map(transactions.map((row: any) => [String(row._id), row]));
-  const toPost = plan.rows.filter((row) => row.status === "post").slice(0, limit ?? 200);
+  // Transactions dated on or before the books close date are never posted.
+  const closeDate = await booksCloseDate(ctx, societyId);
+  const isLocked = (row: { transactionId: string }) => Boolean(closeDate && closedBooksError(closeDate, [transactionsById.get(row.transactionId)?.date]));
+  const ready = plan.rows.filter((row) => row.status === "post");
+  const skippedLocked = ready.filter(isLocked).length;
+  const toPost = ready.filter((row) => !isLocked(row)).slice(0, limit ?? 200);
   let suspenseAccountId = plan.suspenseAccountId;
   if (!suspenseAccountId && toPost.some((row) => row.offsetSource === "suspense")) {
     suspenseAccountId = await ensureSuspenseAccount(ctx, societyId, accounts);
@@ -1250,6 +1309,8 @@ export async function backfillFinancialTransactionsToJournalPortable(
     suspenseAccountId,
     openingBalanceDate: plan.openingBalanceDate,
     mappingsSaved,
+    skippedLocked,
+    closeDate,
   };
 }
 
@@ -1287,6 +1348,7 @@ export async function postOpeningBalancesPortable(
     ]),
   ]);
   validateJournalLines(args.lines);
+  await assertBooksOpen(ctx, args.societyId, [args.date], "posted");
   await assertPeriodOpen(ctx, { societyId: args.societyId, fiscalPeriodId: args.fiscalPeriodId, date: args.date });
   const existing = await ctx.db
     .query("journalEntries")
@@ -1617,4 +1679,312 @@ export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId
     });
     return "reposted";
   };
+}
+
+/* ------------------------------------------------------------------------
+ * Books: multi-period reports, the general ledger and journal registers, the
+ * chart-of-accounts register and editor, voiding, and Books settings (start
+ * date, accounting basis, close date). The computation lives in
+ * shared/booksReports.ts; these handlers load the society's books and gate
+ * access.
+ * --------------------------------------------------------------------- */
+
+type ReportFilterArg = { fund?: string; dimensions?: Array<{ kind: string; values: string[] }> };
+
+async function loadBooks(ctx: PortableQueryCtx, societyId: string) {
+  const [accounts, entries, lines] = await Promise.all([
+    ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("journalEntries").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+  ]);
+  return { accounts: accounts as BooksAccount[], entries: entries as BooksEntry[], lines: lines as BooksLine[] };
+}
+
+function requireBasis(value: string | undefined, fallback: AccountingBasis): AccountingBasis {
+  if (value === undefined) return fallback;
+  if (!(ACCOUNTING_BASES as readonly string[]).includes(value)) throw new Error("Accounting basis must be cash or accrual.");
+  return value as AccountingBasis;
+}
+
+function requireDate(value: string | undefined | null, label: string) {
+  if (value == null || value === "") return undefined;
+  if (!isIsoDate(value)) throw new Error(`${label} must be a valid date (YYYY-MM-DD).`);
+  return value;
+}
+
+function lineFilter(filter: ReportFilterArg | undefined): ReportLineFilter | undefined {
+  if (!filter) return undefined;
+  validateLineFilter(filter);
+  return filter;
+}
+
+/** Books settings with defaults, plus the facts the settings page explains (fiscal year, last closed period). */
+export async function booksSettingsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const [settings, society, periods, entries] = await Promise.all([
+    booksSettingsRow(ctx, societyId),
+    ctx.db.get(societyId),
+    ctx.db.query("accountingFiscalPeriods").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
+  ]);
+  const setBy = settings?.closeDateSetByUserId ? await ctx.db.get(settings.closeDateSetByUserId, "users") : null;
+  const closedPeriods = periods.filter((period) => period.status === "closed").sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
+  const firstEntryDate = entries.reduce<string | null>((min, entry) => (min == null || entry.date < min ? entry.date : min), null);
+  const fiscalYearEnd = typeof society?.fiscalYearEnd === "string" ? society.fiscalYearEnd : null;
+  return {
+    _id: settings?._id ?? null,
+    configured: Boolean(settings),
+    booksStartDate: settings?.booksStartDate ?? null,
+    accountingBasis: settings?.accountingBasis === "cash" ? "cash" : "accrual",
+    closeDate: settings?.closeDate ?? null,
+    closeDateSetAtISO: settings?.closeDateSetAtISO ?? null,
+    closeDateSetByName: setBy ? String(setBy.displayName ?? setBy.email ?? "") || null : null,
+    fiscalYearEnd,
+    fiscalStartMonth: fiscalYearStartMonth(fiscalYearEnd),
+    firstEntryDate,
+    lastClosedPeriod: closedPeriods[0] ? { _id: closedPeriods[0]._id, periodLabel: closedPeriods[0].periodLabel, startDate: closedPeriods[0].startDate, endDate: closedPeriods[0].endDate } : null,
+    closedPeriodCount: closedPeriods.length,
+  };
+}
+
+/**
+ * Save Books settings. Directors set the start date and basis; moving the close
+ * date (the hard lock) needs an admin. `null` clears a date.
+ */
+export async function updateBooksSettingsPortable(
+  ctx: PortableMutationCtx,
+  args: { societyId: string; booksStartDate?: string | null; accountingBasis?: string; closeDate?: string | null; actingUserId?: string },
+) {
+  await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
+  const settings = await booksSettingsRow(ctx, args.societyId);
+  const now = new Date().toISOString();
+  const patch: Record<string, string | undefined> = { updatedAtISO: now };
+  if (args.booksStartDate !== undefined) patch.booksStartDate = requireDate(args.booksStartDate, "Books start date");
+  if (args.accountingBasis !== undefined) patch.accountingBasis = requireBasis(args.accountingBasis, "accrual");
+  if (args.closeDate !== undefined && (args.closeDate ?? undefined) !== (settings?.closeDate ?? undefined)) {
+    await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Admin" });
+    const closeDate = requireDate(args.closeDate, "Close date");
+    if (closeDate && closeDate > todayDateOnly()) throw new Error("The close date can't be in the future. Lock the books once a period has ended.");
+    patch.closeDate = closeDate;
+    patch.closeDateSetAtISO = now;
+    patch.closeDateSetByUserId = (await principalUserId(ctx, args.societyId)) ?? undefined;
+  }
+  if (settings) {
+    await ctx.db.patch(settings._id, patch);
+    return settings._id;
+  }
+  return await ctx.db.insert("booksSettings", { societyId: args.societyId, ...patch, createdAtISO: now });
+}
+
+/**
+ * One multi-period report (balance sheet, statement of operations or cash
+ * flow). Basis defaults to Books settings; `filter` narrows lines by fund and
+ * by dimensions (programCode now, tag ids once lines carry them).
+ */
+export async function booksReportPortable(
+  ctx: PortableQueryCtx,
+  args: { societyId: string; report: string; from: string; to: string; frequency: string; basis?: string; currency?: string; filter?: ReportFilterArg; asOf?: string },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (!(BOOKS_REPORT_KINDS as readonly string[]).includes(args.report)) throw new Error("Unsupported report.");
+  if (!(REPORT_FREQUENCIES as readonly string[]).includes(args.frequency)) throw new Error("Choose monthly, quarterly or yearly columns.");
+  const [books, society, defaultBasis] = await Promise.all([loadBooks(ctx, args.societyId), ctx.db.get(args.societyId), booksAccountingBasis(ctx, args.societyId)]);
+  const periods = buildReportPeriods({
+    from: args.from,
+    to: args.to,
+    frequency: args.frequency as ReportFrequency,
+    today: requireDate(args.asOf, "Report date") ?? todayDateOnly(),
+    fiscalStartMonth: fiscalYearStartMonth(typeof society?.fiscalYearEnd === "string" ? society.fiscalYearEnd : null),
+  });
+  return buildBooksReport(args.report as BooksReportKind, {
+    ...books,
+    periods,
+    basis: requireBasis(args.basis, defaultBasis),
+    currency: args.currency,
+    filter: lineFilter(args.filter),
+  });
+}
+
+/** The journal lines behind one report amount, on the report's basis and filter. */
+export async function booksReportLinesPortable(
+  ctx: PortableQueryCtx,
+  args: { societyId: string; accountIds: string[]; scope: string; from?: string; to: string; basis?: string; currency?: string; filter?: ReportFilterArg },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (!["balance", "period", "cash"].includes(args.scope)) throw new Error("Unsupported drilldown.");
+  const [books, defaultBasis] = await Promise.all([loadBooks(ctx, args.societyId), booksAccountingBasis(ctx, args.societyId)]);
+  const owned = new Set(books.accounts.map((account) => String(account._id)));
+  if (args.accountIds.some((id) => !owned.has(String(id)))) throw new Error("Record not found.");
+  return reportDrillLines({
+    ...books,
+    basis: requireBasis(args.basis, defaultBasis),
+    currency: args.currency,
+    filter: lineFilter(args.filter),
+    accountIds: args.accountIds,
+    scope: args.scope as "balance" | "period" | "cash",
+    start: requireDate(args.from, "From date") ?? null,
+    end: requireDate(args.to, "To date") as string,
+  });
+}
+
+/**
+ * General ledger for a date range with contra accounts and counterparties;
+ * filtered to one account it adds the opening balance and a running balance.
+ */
+export async function generalLedgerReportPortable(
+  ctx: PortableQueryCtx,
+  args: { societyId: string; from: string; to: string; accountId?: string; basis?: string; currency?: string; filter?: ReportFilterArg; limit?: number },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.accountId) await getOwned(ctx, "financialAccounts", args.accountId, args.societyId);
+  const [books, defaultBasis, counterparties, transactions] = await Promise.all([
+    loadBooks(ctx, args.societyId),
+    booksAccountingBasis(ctx, args.societyId),
+    ctx.db.query("accountingCounterparties").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
+    ctx.db.query("financialTransactions").withIndex("by_society_date", (q) => q.eq("societyId", args.societyId)).collect(),
+  ]);
+  return buildGeneralLedgerReport({
+    ...books,
+    basis: requireBasis(args.basis, defaultBasis),
+    currency: args.currency ?? defaultReportCurrency(books.accounts, books.lines),
+    filter: lineFilter(args.filter),
+    from: args.from,
+    to: args.to,
+    accountId: args.accountId,
+    counterpartyNames: new Map(counterparties.map((row) => [String(row._id), String(row.name)])),
+    transactionCounterparties: new Map(transactions.filter((row) => row.counterparty).map((row) => [String(row._id), String(row.counterparty)])),
+    limit: args.limit,
+  });
+}
+
+/** Every journal entry with its debit and credit accounts and total, newest first. */
+export async function journalEntryRegisterPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const [books, closeDate] = await Promise.all([loadBooks(ctx, societyId), booksCloseDate(ctx, societyId)]);
+  return { closeDate, rows: buildJournalRegister({ ...books, closeDate }) };
+}
+
+/** The chart of accounts with normal balance, opening balance and posted balance per account. */
+export async function chartOfAccountsRegisterPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const books = await loadBooks(ctx, societyId);
+  return buildChartRegister(books).sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")) || a.name.localeCompare(b.name));
+}
+
+const CHART_ACCOUNT_TYPES = ["Asset", "Bank", "Liability", "Credit", "Equity", "Income", "Expense"] as const;
+
+/**
+ * Add or edit a chart account. Codes are unique per society. An account with
+ * posted lines keeps its statement section (moving it would silently move
+ * those amounts); reclassify with a journal entry instead.
+ */
+export async function upsertChartAccountPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    id?: string;
+    societyId: string;
+    code?: string;
+    name: string;
+    accountType: string;
+    subtype?: string;
+    normalBalance?: string;
+    currency?: string;
+    parentAccountId?: string;
+    actingUserId?: string;
+  },
+) {
+  await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
+  const existing = args.id ? await getOwned(ctx, "financialAccounts", args.id, args.societyId) : null;
+  if (args.parentAccountId) await getOwned(ctx, "financialAccounts", args.parentAccountId, args.societyId);
+  requireOption(args.accountType, CHART_ACCOUNT_TYPES, "Account type");
+  if (args.normalBalance) requireOption(args.normalBalance, NORMAL_BALANCES, "Normal balance");
+  const name = args.name.trim();
+  const code = args.code?.trim() || undefined;
+  if (!name) throw new Error("Give the account a name.");
+  if (code && !/^[A-Za-z0-9.\-]{1,12}$/.test(code)) throw new Error("Use up to 12 letters, digits, dots or dashes for the code.");
+  const accounts = await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  if (code && accounts.some((account) => account.code === code && String(account._id) !== String(args.id ?? ""))) {
+    throw new Error(`Account code ${code} is already used.`);
+  }
+  const currency = args.currency?.trim().toUpperCase() || existing?.currency || accounts.find((account) => account.currency)?.currency || "CAD";
+  if (existing && accountSection(existing.accountType) !== accountSection(args.accountType)) {
+    const posted = await ctx.db.query("journalLines").withIndex("by_account", (q) => q.eq("accountId", args.id)).first();
+    if (posted) throw new Error("This account has journal lines, so it stays in its statement section. Create a new account and move the balance with a journal entry.");
+  }
+  if (existing && existing.currency !== currency) {
+    const posted = await ctx.db.query("journalLines").withIndex("by_account", (q) => q.eq("accountId", args.id)).first();
+    if (posted) throw new Error("This account has journal lines, so its currency can't change.");
+  }
+  const normalBalance = args.normalBalance ?? (["Liability", "Credit", "Equity", "Income"].includes(args.accountType) ? "credit" : "debit");
+  const candidate = { _id: String(args.id ?? "__new"), code, name, accountType: args.accountType, currency, parentAccountId: args.parentAccountId ?? null };
+  const chart: HierarchyAccount[] = [
+    ...accounts
+      .filter((account) => String(account._id) !== String(args.id ?? ""))
+      .map((account) => ({ _id: String(account._id), code: account.code, name: String(account.name), accountType: String(account.accountType), currency: account.currency, parentAccountId: account.parentAccountId ? String(account.parentAccountId) : null })),
+    candidate,
+  ];
+  const parentError = args.parentAccountId ? accountParentError(chart, candidate._id, String(args.parentAccountId)) : null;
+  if (parentError) throw new Error(parentError);
+  const fields = {
+    code,
+    name,
+    accountType: args.accountType,
+    subtype: args.subtype?.trim() || undefined,
+    normalBalance,
+    currency,
+    parentAccountId: args.parentAccountId || undefined,
+  };
+  if (existing) {
+    await ctx.db.patch(String(existing._id), fields);
+    return String(existing._id);
+  }
+  const connections = await ctx.db.query("financialConnections").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  const connectionId =
+    connections.find((row) => row.provider === SOCIETYER_CONNECTION_PROVIDER)?._id ??
+    (await ctx.db.insert("financialConnections", {
+      societyId: args.societyId,
+      provider: SOCIETYER_CONNECTION_PROVIDER,
+      status: "connected",
+      accountLabel: "Societyer internal ledger",
+      syncMode: "internal",
+      connectedAtISO: new Date().toISOString(),
+      demo: false,
+    }));
+  return await ctx.db.insert("financialAccounts", {
+    societyId: args.societyId,
+    connectionId,
+    externalId: `societyer:${code ?? `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`}`,
+    ...fields,
+    balanceCents: 0,
+    isRestricted: false,
+    sourceSystem: SOCIETYER_CONNECTION_PROVIDER,
+  });
+}
+
+/**
+ * Void a journal entry: it stays on record with its lines but leaves every
+ * report. Entries posted from bank transactions, claims or other sources are
+ * voided where they came from, and nothing dated on or before the close date
+ * can be voided.
+ */
+export async function voidJournalEntryPortable(
+  ctx: PortableMutationCtx,
+  { id, reason, actingUserId }: { id: string; reason?: string; actingUserId?: string },
+) {
+  const entry = await requireOwnedRow(ctx, "journalEntries", id);
+  const societyId = String(entry.societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  if (entry.status === "void") return id;
+  if (!["manual", "adjustment"].includes(String(entry.source))) {
+    throw new Error("Only manual journal entries can be voided here. Undo an imported or posted-from-source entry where it came from.");
+  }
+  await assertBooksOpen(ctx, societyId, [entry.date], "voided");
+  const now = new Date().toISOString();
+  await ctx.db.patch(id, {
+    status: "void",
+    voidedAtISO: now,
+    memo: reason?.trim() ? `${entry.memo} (void: ${reason.trim()})` : entry.memo,
+    updatedAtISO: now,
+  });
+  return id;
 }

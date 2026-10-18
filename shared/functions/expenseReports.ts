@@ -20,6 +20,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { hasPermission, requirePermissionPortable } from "./permissions";
 import { todayDateOnly } from "../dateOnly";
+import { assertBooksOpen } from "./booksLock";
 import { prefAllows, type NotificationPrefRow } from "../notificationCatalog";
 import {
   APPROVER_ACCESS_MODES,
@@ -260,6 +261,7 @@ export async function setStatusPortable(
       ) {
         const amount = Math.abs(report.amountCents ?? 0);
         if (amount > 0) {
+          await assertBooksOpen(ctx, societyId, [nowISO.slice(0, 10)], "posted");
           const entryId = await ctx.db.insert("journalEntries", {
             societyId: report.societyId,
             date: nowISO.slice(0, 10),

@@ -263,12 +263,13 @@ assert.equal(row.balanceCents, 0);
 await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: open._id, date: today, amountCents: 1, method: "cheque", cashAccountId: CASH }), /already paid/);
 
 // closed fiscal period: approving or paying into it is refused with the period's name
-await db.patch("static_accounting_period_2026", { status: "closed" });
+const currentPeriod = (await db.query("accountingFiscalPeriods").collect()).find((period) => period.societyId === S && period.startDate <= today && period.endDate >= today)!;
+await db.patch(currentPeriod._id, { status: "closed" });
 const scheduled = ws.bills.find((row) => row.status === "scheduled")!;
-await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: scheduled._id, date: today, amountCents: 1000, method: "cheque", cashAccountId: CASH }), /Fiscal period FY 2026 is closed/);
-await assert.rejects(() => bills.cancelPortable(ctx, { societyId: S, ids: [scheduled._id] }), /Fiscal period FY 2026 is closed/, "the reversal can't land in a closed period either");
+await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: scheduled._id, date: today, amountCents: 1000, method: "cheque", cashAccountId: CASH }), new RegExp(`Fiscal period ${currentPeriod.periodLabel ?? currentPeriod.fiscalYear} is closed`));
+await assert.rejects(() => bills.cancelPortable(ctx, { societyId: S, ids: [scheduled._id] }), new RegExp(`Fiscal period ${currentPeriod.periodLabel ?? currentPeriod.fiscalYear} is closed`), "the reversal can't land in a closed period either");
 assert.equal((await get(scheduled._id)).status, "scheduled", "nothing changed");
-await db.patch("static_accounting_period_2026", { status: "open" });
+await db.patch(currentPeriod._id, { status: "open" });
 
 // cancel: an approved bill gets a reversing entry, a paid one is skipped
 const apBeforeCancel = await creditBalance(AP);

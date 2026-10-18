@@ -2,7 +2,7 @@
  * Gate: "Backfill imports" never misstates the books silently.
  *
  * Reproduces the audit finding on the demo seed (opening balances posted on
- * 2026-01-01, total assets $76,980): the old backfill posted every imported
+ * 2026-01-01; total assets were $76,980 when it was found): the old backfill posted every imported
  * transaction, including those dated in 2025 (already reflected in the opening
  * balances), which moved total assets ($76,980 -> $78,535 on the original
  * fourteen-row seed). It also sent every unmapped row to the first
@@ -98,6 +98,7 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
   const postOpeningUnmapped = postOpening.filter((row) => unmappedLines(row).length > 0);
   return {
     transactions,
+    posted,
     preOpening,
     postOpening,
     postOpeningUnmapped,
@@ -109,9 +110,10 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
 {
   const { client, societyId } = await demoClient();
   const before = await totalAssetsCents(client, societyId);
-  // $76,980 less the two bill payments the bills demo posted from operating chequing ($412.38 + $500.00).
-  assert.equal(before, 7_698_000 - 91_238, "demo seed starts at total assets $76,067.62");
   const facts = await feedFacts(client, societyId);
+  // The demo ledger (shared/demoData/journals.ts) carries the $62,400 of cash
+  // in the 2026-01-01 opening balances plus every bank line already posted.
+  assert.equal(before, 6_240_000 + facts.assetNet(facts.transactions.filter((row) => facts.posted.has(String(row._id)))), "demo seed starts at the opening balances plus the posted bank lines");
   assert.ok(facts.transactions.length >= 400, `the demo bank feed is dense (${facts.transactions.length} rows)`);
   assert.ok(facts.preOpening.length >= 100, "a year of 2025 imports predates the opening balances");
   assert.ok(facts.postOpening.length > 0 && facts.postOpeningUnmapped.length > 0, "2026 imports include unmapped categories");

@@ -18,6 +18,7 @@ import {
   type FlowRow,
   type TimeRow,
 } from "../../../components/charts";
+import { comparisonRange, shiftYears, type CompareMode } from "../../../../shared/financeNarrative";
 
 export type FinanceTxn = { _id?: string; date: string; amountCents: number; accountId?: string; category?: string; counterparty?: string; description?: string };
 export type FinanceAccount = { _id: string; accountType?: string };
@@ -77,6 +78,28 @@ export function previousRange(range: DateRange): DateRange {
   return { start: addDays(range.start, -length), end: addDays(range.start, -1) };
 }
 
+/** The overview's "Compare to" choice: off, the previous period, or the same period last year. */
+export type CompareChoice = "off" | CompareMode;
+
+export const COMPARE_CHOICES: Array<{ id: CompareChoice; label: string; title: string }> = [
+  { id: "off", label: "Off", title: "No comparison" },
+  { id: "previous", label: "Previous period", title: "The equally long period just before" },
+  { id: "lastYear", label: "Same period last year", title: "The same dates one year earlier" },
+];
+
+/** Series, column and tile label for a comparison. */
+export function compareLabel(mode: CompareMode): string {
+  return mode === "lastYear" ? "Same period last year" : "Previous period";
+}
+
+/**
+ * The window `range` is compared with: `previousRange` for "previous", or
+ * the same dates a year earlier (Feb 29 clamps to Feb 28).
+ */
+export function compareRange(range: DateRange, mode: CompareMode): DateRange {
+  return mode === "lastYear" ? comparisonRange(range, mode) : previousRange(range);
+}
+
 /** Pick a default window: 12 months when it has activity, otherwise all history. */
 export function defaultPreset(txns: FinanceTxn[], today: string): RangePreset {
   const start = presetRange("12M", today, {}).start;
@@ -132,24 +155,27 @@ export function balanceLookup(txns: FinanceTxn[], currentBalance: number) {
 
 /**
  * Daily (or weekly, for multi-year windows) closing balances across `range`,
- * with an optional comparison series shifted from the previous period.
+ * with an optional comparison series: the previous period (`true` or
+ * "previous") or the same dates a year earlier ("lastYear").
  */
-export function balanceRows(txns: FinanceTxn[], currentBalance: number, range: DateRange, compare: boolean): TimeRow[] {
+export function balanceRows(txns: FinanceTxn[], currentBalance: number, range: DateRange, compare: boolean | CompareMode): TimeRow[] {
   const balanceAt = balanceLookup(txns, currentBalance);
   const span = daysBetween(range.start, range.end);
   const step = span > 800 ? 7 : 1;
   const offset = span + 1;
+  const mode: CompareMode | null = compare === true ? "previous" : compare === false ? null : compare;
+  const priorDate = (date: string) => (mode === "lastYear" ? shiftYears(date, -1) : addDays(date, -offset));
   const rows: TimeRow[] = [];
   for (let d = 0; d <= span; d += step) {
     const date = addDays(range.start, d);
     const row: TimeRow = { date, balance: balanceAt(date) };
-    if (compare) row.previous = balanceAt(addDays(date, -offset));
+    if (mode) row.previous = balanceAt(priorDate(date));
     rows.push(row);
   }
   const last = rows[rows.length - 1];
   if (last && last.date !== range.end) {
     const row: TimeRow = { date: range.end, balance: balanceAt(range.end) };
-    if (compare) row.previous = balanceAt(addDays(range.end, -offset));
+    if (mode) row.previous = balanceAt(priorDate(range.end));
     rows.push(row);
   }
   return rows;

@@ -18,6 +18,7 @@
  * Pure TypeScript: no Convex, DOM or Node imports.
  */
 import { approvalPostingLines, billTotalCents, paymentPostingLines, type BillLine, type PostingLine } from "../bills";
+import { demoFiscalYearLabel } from "./journals";
 import { addDays } from "../invoicing";
 import { invoiceDemoAnchor } from "./invoicing";
 
@@ -215,7 +216,7 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
   const journalLines: Row[] = [];
   const post = (key: string, date: string, memo: string, source: string, sourceExternalId: string, lines: PostingLine[], vendor: string, createdBy: DemoBillPerson) => {
     const id = entryId(key);
-    journalEntries.push({ _id: id, societyId: refs.societyId, date, memo, source, sourceExternalId, status: "posted", fiscalYear: date.slice(0, 4), createdByUserId: createdBy.id, postedAtISO: at(date, 18), createdAtISO: at(date, 18), updatedAtISO: at(date, 18) });
+    journalEntries.push({ _id: id, societyId: refs.societyId, date, memo, source, sourceExternalId, status: "posted", fiscalYear: demoFiscalYearLabel(date), createdByUserId: createdBy.id, postedAtISO: at(date, 18), createdAtISO: at(date, 18), updatedAtISO: at(date, 18) });
     lines.forEach((posting, index) => {
       journalLines.push({
         _id: refs.idFor("journalLine", `${key}_${index + 1}`),

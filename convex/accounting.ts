@@ -31,6 +31,15 @@ import {
   postOpeningBalancesPortable,
   createReconciliationRunPortable,
   setReconciliationRunStatusPortable,
+  booksSettingsPortable,
+  updateBooksSettingsPortable,
+  booksReportPortable,
+  booksReportLinesPortable,
+  generalLedgerReportPortable,
+  journalEntryRegisterPortable,
+  chartOfAccountsRegisterPortable,
+  upsertChartAccountPortable,
+  voidJournalEntryPortable,
 } from "../shared/functions/accounting";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -143,7 +152,7 @@ export const upsertFiscalPeriod = authorizedMutation("accounting:upsertFiscalPer
 });
 
 export const closeFiscalPeriod = authorizedMutation("accounting:closeFiscalPeriod", mutation)({
-  args: { id: v.id("accountingFiscalPeriods"), actingUserId: v.optional(v.id("users")) },
+  args: { id: v.id("accountingFiscalPeriods"), lockBooks: v.optional(v.boolean()), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => closeFiscalPeriodPortable(await toPortableMutationCtx(ctx), args),
 });
@@ -235,6 +244,7 @@ export const upsertJournalEntry = authorizedMutation("accounting:upsertJournalEn
     fiscalYear: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     rawJson: v.optional(v.string()),
+    basis: v.optional(v.string()),
     allowClosedPeriodAdjustment: v.optional(v.boolean()),
     lines: v.array(
       v.object({
@@ -374,4 +384,110 @@ export const setReconciliationRunStatus = authorizedMutation("accounting:setReco
   args: { id: v.id("reconciliationRuns"), status: v.string(), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => setReconciliationRunStatusPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Fund (all | unrestricted | a fund restriction id) plus generic dimensions:
+// { kind: "programCode" | "counterparty" | "tag", values } (shared/booksReports.ts).
+const reportFilter = v.optional(v.object({
+  fund: v.optional(v.string()),
+  dimensions: v.optional(v.array(v.object({ kind: v.string(), values: v.array(v.string()) }))),
+}));
+
+export const booksSettings = authorizedQuery("accounting:booksSettings", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => booksSettingsPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const updateBooksSettings = authorizedMutation("accounting:updateBooksSettings", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    booksStartDate: v.optional(v.union(v.string(), v.null())),
+    accountingBasis: v.optional(v.string()),
+    closeDate: v.optional(v.union(v.string(), v.null())),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => updateBooksSettingsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const booksReport = authorizedQuery("accounting:booksReport", query)({
+  args: {
+    societyId: v.id("societies"),
+    report: v.string(),
+    from: v.string(),
+    to: v.string(),
+    frequency: v.string(),
+    basis: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    filter: reportFilter,
+    asOf: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => booksReportPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const booksReportLines = authorizedQuery("accounting:booksReportLines", query)({
+  args: {
+    societyId: v.id("societies"),
+    accountIds: v.array(v.id("financialAccounts")),
+    scope: v.string(),
+    from: v.optional(v.string()),
+    to: v.string(),
+    basis: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    filter: reportFilter,
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => booksReportLinesPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const generalLedgerReport = authorizedQuery("accounting:generalLedgerReport", query)({
+  args: {
+    societyId: v.id("societies"),
+    from: v.string(),
+    to: v.string(),
+    accountId: v.optional(v.id("financialAccounts")),
+    basis: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    filter: reportFilter,
+    limit: v.optional(v.number()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => generalLedgerReportPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const journalEntryRegister = authorizedQuery("accounting:journalEntryRegister", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => journalEntryRegisterPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const chartOfAccountsRegister = authorizedQuery("accounting:chartOfAccountsRegister", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => chartOfAccountsRegisterPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const upsertChartAccount = authorizedMutation("accounting:upsertChartAccount", mutation)({
+  args: {
+    id: v.optional(v.id("financialAccounts")),
+    societyId: v.id("societies"),
+    code: v.optional(v.string()),
+    name: v.string(),
+    accountType: v.string(),
+    subtype: v.optional(v.string()),
+    normalBalance: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    parentAccountId: v.optional(v.id("financialAccounts")),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => upsertChartAccountPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const voidJournalEntry = authorizedMutation("accounting:voidJournalEntry", mutation)({
+  args: { id: v.id("journalEntries"), reason: v.optional(v.string()), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx, args) => voidJournalEntryPortable(await toPortableMutationCtx(ctx), args),
 });
