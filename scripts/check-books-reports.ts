@@ -515,6 +515,14 @@ await checkAsync("tagged demo journal lines (bank feed and bills) show up when t
   const gala = await read(() => booksReportPortable(demo, { societyId: S, report: "operations", from: "2024-04-01", to: "2028-03-31", frequency: "year", basis: "accrual", filter: { dimensions: [{ kind: "tag", values: ["static_tag_fall_gala"] }] }, asOf: "2028-03-31" }));
   assert.equal(gala.filtered, true);
   assert.ok(gala.postedLineCount > 0 && gala.summary.some((point) => point.values.expenses > 0 || point.values.revenue > 0), "the fall gala tag shows up in the statement of operations");
+  // The reports, ledger and registers are finance reads: the application policy needs financials:read, as for the trial balance.
+  const { requireFunctionAction } = await import("../shared/functions/actionPolicy");
+  const memberId = await demoDb.insert("users", { societyId: S, displayName: "Morgan Member", email: "morgan@riverside.example", role: "Member", status: "Active", authIssuer: "https://issuer.test", authSubject: "sub-gate-member" });
+  const member = { ...demo, principal: { ...demo.principal, subject: "sub-gate-member", userId: memberId } } as PortableQueryCtx;
+  for (const name of ["accounting:trialBalance", "accounting:booksReport", "accounting:generalLedgerReport", "accounting:journalEntryRegister", "accounting:chartOfAccountsRegister"]) {
+    await assert.rejects(() => requireFunctionAction(member, name, "query", { societyId: S }), /financials:read/, `${name} needs finance read access`);
+    await requireFunctionAction(demo, name, "query", { societyId: S });
+  }
 });
 
 await checkAsync("every Create menu item lands on a routed page that opens its create screen", async () => {
