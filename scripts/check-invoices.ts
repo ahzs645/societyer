@@ -175,7 +175,7 @@ assert.equal(row.payments[0].transaction._id, "static_tx_invoice_yoga", "payment
 assert.equal(ws.transactions.find((t: any) => t._id === "static_tx_invoice_yoga").linkedInvoiceNumber, row.number, "bank line links back to the invoice");
 // void is refused while payments exist; revert, then void and restore
 let result: any = await inv.voidInvoicesPortable(ctx, { societyId: S, ids: [row._id] });
-assert.deepEqual(result, { voided: 0, skippedPaid: 1, skipped: 0 });
+assert.deepEqual(result, { voided: 0, skippedPaid: 1, skipped: 0, reversed: 0 });
 await inv.revertToUnpaidPortable(ctx, { id: row._id });
 result = await inv.voidInvoicesPortable(ctx, { societyId: S, ids: [row._id], reason: "Issued twice" });
 assert.equal(result.voided, 1);
@@ -194,7 +194,7 @@ assert.equal(created.number, "RCS-0026");
 assert.equal(created.totalCents, 47250);
 const outboxBefore = (await db.query("pendingEmails").collect()).length;
 result = await inv.markSentPortable(ctx, { societyId: S, ids: [id], draftEmail: true });
-assert.deepEqual(result, { sent: 1, emailed: 1, skipped: 0 });
+assert.deepEqual(result, { sent: 1, emailed: 1, skipped: 0, posted: 1 });
 assert.equal((await db.query("pendingEmails").collect()).length, outboxBefore + 1);
 const dup = await inv.duplicatePortable(ctx, { id });
 assert.equal((await db.get(dup)).number, "RCS-0027");
