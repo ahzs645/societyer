@@ -27,3 +27,9 @@ Dialogs bound in-memory rendering to 25 MiB, both from known metadata before fet
 PDFs use the shared `PdfPreview` canvas/text-layer renderer, also used by intake source review. It renders one page at a time, fits phone widths, provides page/zoom controls and selectable text, bounds canvas memory, and cancels pending rendering when closed. It does not depend on browser PDF plugins.
 
 The existing document workbench keeps its saved-original / latest-version / legacy-link resolution order through the extracted shared pane. This refactor does not change document access, permissions, file storage or version history.
+
+## Verification
+
+Run `npm run test:file-preview` for signature rejection, verified file reads, size/checksum failure, missing-file and cancellation checks. The local-only `/scripts/fixtures/file-preview.html` page exercises the shared dialog with a synthetic two-page PDF and mislabeled HTML; verify page controls, zoom, close/reopen, and the safe unsupported-file fallback. No tenant connection is used by this fixture.
+
+The live DDC North procurement preview was tested with the actual two-page SharePoint PDF for notice `233770`, at phone width. Both pages, page text, fit-to-width and zoom rendered inside the interface. The original 56,534-byte download was separately checked against its published SHA-256. The seven-day production session was confirmed renewed, and reload/login-route checks stayed inside the app.
