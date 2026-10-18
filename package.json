@@ -180,7 +180,7 @@
     "backup:runtime": "./scripts/backup-runtime-data.sh",
     "backup:runtime:k8s": "./scripts/backup-runtime-data-from-k8s.sh",
     "test:bank-csv": "tsx scripts/check-bank-csv.ts",
-    "test:transaction-rules": "tsx scripts/check-transaction-rules.ts && tsx scripts/check-finance-workflows.ts",
+    "test:transaction-rules": "tsx scripts/check-transaction-rules.ts && tsx scripts/check-finance-workflows.ts && tsx scripts/check-banking-workflows.ts",
     "test:notification-settings": "tsx scripts/check-notification-settings.ts",
     "test:invoices": "tsx scripts/check-invoices.ts",
     "test:seed-parity": "tsx scripts/check-seed-parity.ts",

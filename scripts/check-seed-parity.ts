@@ -21,6 +21,10 @@ import * as exp from "../shared/functions/expenseReports";
 import * as inv from "../shared/functions/invoices";
 import * as registers from "../shared/functions/businessRegisters";
 import { demoExpenseReports } from "../shared/demoData/financeWorkflows";
+import { DEMO_PETTY_CASH, demoSpendBudgetClaims } from "../shared/demoData/banking";
+import * as bankAccountFns from "../shared/functions/bankAccounts";
+import * as receiptInboxFns from "../shared/functions/receiptInbox";
+import * as spendBudgetFns from "../shared/functions/spendBudgets";
 import { DEMO_RECONCILIATION_KEYS } from "../shared/demoData/financeWorkflows";
 import { tables as staticTables } from "../src/lib/staticConvexFixtures";
 import { CORPORATION_DEMO_KEYS, CORPORATION_STORIES, buildCorporationDemo, corporationDemoLocalSeed } from "../shared/demoData/corporations";
@@ -91,13 +95,16 @@ assert.equal(B.societyId, S);
 
 /* ------------------------------------------------- table counts */
 
-const claimKeys = new Set(
-  demoExpenseReports({
-    societyId: "", cashAccountId: "", grantAccountId: "", cardAccountId: "",
-    owner: { id: "", name: "", role: "" }, treasurer: { id: "", name: "", role: "" }, secretary: { id: "", name: "", role: "" },
-    idFor: (_kind, key) => `static_expense_${key}`,
-  }).map((row) => row._id),
-);
+const claimRefs = {
+  societyId: "", cashAccountId: "", grantAccountId: "", cardAccountId: "",
+  owner: { id: "", name: "", role: "" }, treasurer: { id: "", name: "", role: "" }, secretary: { id: "", name: "", role: "" },
+  idFor: (kind: string, key: string) => (kind === "expense" ? `static_expense_${key}` : key),
+};
+const claimKeys = new Set([
+  ...demoExpenseReports(claimRefs).map((row) => row._id),
+  // Spend-budget and mileage claims (shared/demoData/banking.ts).
+  ...demoSpendBudgetClaims({ ...claimRefs, connectionId: "", financeCommitteeId: "", today: "2026-01-15" }).map((row) => row._id),
+]);
 // The invoicing story's renewals fall on the 5th, 12th, 19th and 26th of this
 // month; the register's own subscriptions renew on March 31.
 const isRenewal = (row: any) => /-(05|12|19|26)T23:59:59\.000Z$/.test(String(row.currentPeriodEndISO ?? ""));
@@ -124,6 +131,11 @@ const subsets: Record<string, { static: (row: any) => boolean; server: (row: any
   corporateCards: { static: () => true, server: () => true },
   cardStatements: { static: () => true, server: () => true },
   investmentHoldings: { static: () => true, server: () => true },
+  // Banking (shared/demoData/banking.ts).
+  bankAccountProfiles: { static: () => true, server: () => true },
+  receiptInboxItems: { static: () => true, server: () => true },
+  spendBudgets: { static: () => true, server: () => true },
+  "documents (receipt inbox)": { static: (row) => (row.tags ?? []).includes("inbox"), server: (row) => (row.tags ?? []).includes("inbox") },
   "deadlines (from the registers)": { static: (row) => /^(payroll|investments):/.test(String(row.sourceKey ?? "")), server: (row) => /^(payroll|investments):/.test(String(row.sourceKey ?? "")) },
 };
 const tableOf = (label: string) => label.split(" ")[0];
@@ -146,7 +158,7 @@ const refFields: Record<string, Array<[string, string]>> = {
   reconciliationPeriods: [["accountId", "financialAccounts"], ["createdByUserId", "users"], ["completedByUserId", "users"]],
   expenseApprovalRules: [["approverUserIds[]", "users"]],
   expenseClaimPolicy: [["updatedByUserId", "users"]],
-  expenseReports: [["claimantUserId", "users"], ["approverUserId", "users"], ["declinedByUserId", "users"], ["receiptDocumentId", "documents"], ["approvals[].userId", "users"], ["approvalTrail[].actorUserId", "users"], ["policyException.byUserId", "users"]],
+  expenseReports: [["claimantUserId", "users"], ["approverUserId", "users"], ["declinedByUserId", "users"], ["receiptDocumentId", "documents"], ["approvals[].userId", "users"], ["approvalTrail[].actorUserId", "users"], ["policyException.byUserId", "users"], ["spendBudgetId", "spendBudgets"]],
   invoices: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["seriesId", "invoiceSeries"], ["lines[].catalogItemId", "invoiceCatalogItems"], ["payments[].financialTransactionId", "financialTransactions"]],
   invoiceSeries: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["lines[].catalogItemId", "invoiceCatalogItems"]],
   memberSubscriptions: [["planId", "subscriptionPlans"], ["memberId", "members"]],
@@ -158,6 +170,9 @@ const refFields: Record<string, Array<[string, string]>> = {
   corporateCards: [["employeeId", "employees"], ["financialAccountId", "financialAccounts"], ["agreementDocumentId", "documents"]],
   cardStatements: [["cardId", "corporateCards"]],
   investmentHoldings: [["fundRestrictionId", "fundRestrictions"]],
+  bankAccountProfiles: [["accountId", "financialAccounts"], ["ledgerAccountId", "financialAccounts"]],
+  receiptInboxItems: [["documentId", "documents"], ["uploadedByUserId", "users"], ["matchedTransactionId", "financialTransactions"]],
+  spendBudgets: [["committeeId", "committees"], ["memberUserIds[]", "users"], ["createdByUserId", "users"]],
 };
 function valuesAt(row: any, path: string): unknown[] {
   let values: unknown[] = [row];
@@ -190,7 +205,7 @@ assert.ok(checkedRefs > 200, "references were actually checked");
 
 /* ------------------------------------------------- account balances */
 
-const SEED_OPENING: Record<string, number> = { "operating-chequing": 3490000, "restricted-fund": 1200000, "organization-visa": 0, facilities: 0, "facilities-venue": 0, "facilities-utilities": 0 };
+const SEED_OPENING: Record<string, number> = { "operating-chequing": 3490000, "restricted-fund": 1200000, "organization-visa": 0, facilities: 0, "facilities-venue": 0, "facilities-utilities": 0, [DEMO_PETTY_CASH.externalId]: DEMO_PETTY_CASH.openingBalanceCents };
 for (const account of server.financialAccounts) {
   const sum = server.financialTransactions.filter((row: any) => row.accountId === account._id).reduce((total: number, row: any) => total + row.amountCents, 0);
   assert.ok(account.externalId in SEED_OPENING, `known seed account ${account.externalId}`);
@@ -253,6 +268,22 @@ const claimStory = (queue: any) => ({
 assert.deepEqual(claimStory(queueB), claimStory(queueA), "claim policy, exceptions and duplicate hints match");
 assert.equal(claimStory(queueB).exceptions.length, 1, "one claim carries a policy exception");
 assert.deepEqual(claimStory(queueB).duplicates, ["Bus rental for the youth workshop ~ Youth workshop bus rental"], "the repeated bus rental points at the approved one");
+
+/* ------------------------------------------------- banking */
+
+const [accountsA, accountsB] = await Promise.all([bankAccountFns.overviewPortable(A.ctx, { societyId: A.societyId }), bankAccountFns.overviewPortable(B.ctx, { societyId: B.societyId })]);
+// The two demos name and fund their accounts differently; the banking layer on top must match.
+const accountSummary = (ws: Awaited<ReturnType<typeof bankAccountFns.overviewPortable>>) => ws.rows.map((row) => `${row.code}:${row.kind === "credit" ? "credit" : "bank"}:${row.lastFour ?? "-"}:${row.ledgerAccount?.isSelf ?? "-"}:${row.source === "manual" ? `manual ${row.balanceCents}` : "feed"}`);
+assert.deepEqual(accountSummary(accountsB), accountSummary(accountsA), "money accounts, last four, ledger accounts and the manual account match");
+assert.deepEqual(accountsB.counts, accountsA.counts, "Accounts page tab counts match");
+const [inboxA, inboxB] = await Promise.all([receiptInboxFns.listPortable(A.ctx, { societyId: A.societyId }), receiptInboxFns.listPortable(B.ctx, { societyId: B.societyId })]);
+const inboxSummary = (ws: Awaited<ReturnType<typeof receiptInboxFns.listPortable>>) => ws.rows.map((row) => `${row.fileName}:${row.amountCents ?? "-"}:${row.candidates.map((c) => `${c.transaction?.date}/${c.transaction?.amountCents}/${c.confidence}`).join(",")}`).sort();
+assert.deepEqual(inboxSummary(inboxB), inboxSummary(inboxA), "receipt inbox items suggest the same feed lines");
+assert.equal(inboxB.highConfidenceCount, inboxA.highConfidenceCount);
+const [budgetsA, budgetsB] = await Promise.all([spendBudgetFns.listPortable(A.ctx, { societyId: A.societyId }), spendBudgetFns.listPortable(B.ctx, { societyId: B.societyId })]);
+const budgetSummary = (ws: Awaited<ReturnType<typeof spendBudgetFns.listPortable>>) => ws.rows.map((row) => `${row.name}:${row.status}:${row.cycle}:${row.limitCents}:${row.spend.spentCents}:${row.claims.length}`);
+assert.deepEqual(budgetSummary(budgetsB), budgetSummary(budgetsA), "spend budgets, statuses and cycle spend match");
+assert.deepEqual(budgetsB.summary, budgetsA.summary, "spend summary matches");
 
 /* ------------------------------------------------- invoicing */
 
@@ -331,4 +362,4 @@ for (const key of CORPORATION_DEMO_KEYS) {
 console.table(countRows);
 console.table(Object.entries(reconB).map(([period, row]: [string, any]) => ({ period, status: row.status, difference: (row.differenceCents / 100).toFixed(2), static: (reconA[period].differenceCents / 100).toFixed(2), open: row.unclearedCount })));
 console.table(corporationRows);
-console.log(`Seed parity checks passed: ${checkedRefs} references resolve; rules, periods, claims and ${server.invoices.length} invoices match the in-browser demo, and the ${CORPORATION_DEMO_KEYS.length} corporation demos match their in-browser workspaces.`);
+console.log(`Seed parity checks passed: ${checkedRefs} references resolve; rules, periods, claims, accounts, the receipt inbox, spend budgets and ${server.invoices.length} invoices match the in-browser demo, and the ${CORPORATION_DEMO_KEYS.length} corporation demos match their in-browser workspaces.`);

@@ -31,6 +31,7 @@ import {
   financeWorkflowClaimPolicy,
   financeWorkflowExpenseReports,
   financeWorkflowRules,
+  mergeBankingDemo,
 } from "./staticFinanceWorkflowFixtures";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoData/bankFeed";
@@ -4280,6 +4281,8 @@ const tables: Record<string, any[]> = {
 mergeInvoiceDemo(tables, { societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, cashAccountId: CASH_ACCOUNT_ID, ownerName: "Mina Patel", treasurerName: "Jordan Lee" });
 // Business registers: pay runs and remittances, T4 slips, the organization Visa statements and two reserve GICs.
 mergeBusinessRegisterDemo(tables, { societyId: SOCIETY_ID, cardAccountId: CARD_ACCOUNT_ID, restrictedFundId: "static_fund_restriction_youth", treasurerName: "Jordan Lee", asOf: DEMO_AS_OF });
+// Banking: account details and petty cash, a receipt inbox, spend budgets and the claims charged to them.
+mergeBankingDemo(tables, { ...FINANCE_WORKFLOW_IDS, financeCommitteeId: "static_committee_finance" });
 
 function director(id: string, firstName: string, lastName: string, position: string, isBCResident: boolean, consentOnFile: boolean, termStart: string) {
   return {

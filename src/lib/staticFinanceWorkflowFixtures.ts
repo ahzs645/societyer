@@ -17,6 +17,15 @@ import {
   type DemoFinanceRefs,
   type DemoTransactionRule,
 } from "../../shared/demoData/financeWorkflows";
+import {
+  demoBankAccountProfiles,
+  demoPettyCashAccount,
+  demoReceiptInbox,
+  demoSpendBudgetClaims,
+  demoSpendBudgets,
+  type DemoBankingRefs,
+} from "../../shared/demoData/banking";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type Ids = {
   societyId: string;
@@ -40,6 +49,11 @@ const STATIC_ID_PREFIX: Record<DemoFinanceIdKind, string> = {
   approvalRule: "static_approval_rule_",
   expense: "static_expense_",
   claimPolicy: "static_claim_policy_",
+  account: "static_financial_",
+  accountProfile: "static_bank_profile_",
+  receiptDocument: "static_receipt_document_",
+  receiptInbox: "static_receipt_inbox_",
+  spendBudget: "static_spend_budget_",
 };
 
 function staticRefs(ids: Ids): DemoFinanceRefs {
@@ -99,4 +113,26 @@ export function financeWorkflowExpenseReports(ids: Ids) {
 
 export function financeWorkflowClaimPolicy(ids: Ids) {
   return [demoExpenseClaimPolicy(staticRefs(ids))];
+}
+
+type Row = Record<string, unknown>;
+
+/**
+ * Banking demo (shared/demoData/banking.ts): account details and a manual
+ * petty cash account, a receipt inbox picked from the bank feed, spend budgets
+ * and the claims charged to them. Appends to the fixture tables.
+ */
+export function mergeBankingDemo(tables: Record<string, Row[]>, ids: Ids & { financeCommitteeId: string }, today = todayDateOnly()) {
+  const refs: DemoBankingRefs = { ...staticRefs(ids), connectionId: ids.connectionId, financeCommitteeId: ids.financeCommitteeId, today };
+  const feed = (tables.financialTransactions ?? []).filter((row) => String(row._id).startsWith("static_tx_feed_")) as Array<Row & { _id: string; accountId: string; date: string; amountCents: number }>;
+  const inbox = demoReceiptInbox(refs, feed);
+  const append = (table: string, rows: readonly Row[]) => {
+    tables[table] = [...(tables[table] ?? []), ...rows];
+  };
+  append("financialAccounts", [demoPettyCashAccount(refs)]);
+  append("bankAccountProfiles", demoBankAccountProfiles(refs));
+  append("documents", inbox.documents);
+  append("receiptInboxItems", inbox.items);
+  append("spendBudgets", demoSpendBudgets(refs));
+  append("expenseReports", demoSpendBudgetClaims(refs));
 }
