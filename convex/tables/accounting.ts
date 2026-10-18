@@ -152,6 +152,8 @@ export const accountingTables = {
     .index("by_society_date", ["societyId", "date"])
     .index("by_society_status", ["societyId", "status"])
     .index("by_society_source", ["societyId", "source"])
+    // Idempotent posting: one live entry per source and source key (invoices, bills).
+    .index("by_society_source_external", ["societyId", "source", "sourceExternalId"])
     .index("by_connection", ["connectionId"]),
 
   // Books details: when the books start, the accounting basis reports use,

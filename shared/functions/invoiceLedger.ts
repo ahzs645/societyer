@@ -329,9 +329,9 @@ export async function postLedgerEntry(ctx: PortableMutationCtx, args: PostArgs):
   const { source, basis } = INVOICE_POSTINGS[args.kind];
   const existing = await ctx.db
     .query<LedgerEntry>("journalEntries")
-    .withIndex("by_society_source", (q) => q.eq("societyId", args.societyId).eq("source", source))
+    .withIndex("by_society_source_external", (q) => q.eq("societyId", args.societyId).eq("source", source).eq("sourceExternalId", args.key))
     .collect();
-  const already = existing.find((entry) => entry.sourceExternalId === args.key && entry.status === "posted");
+  const already = existing.find((entry) => entry.status === "posted");
   if (already) return already._id;
   validateBalancedJournalLines(args.lines);
   await assertBooksOpen(ctx, args.societyId, [args.date], "posted");

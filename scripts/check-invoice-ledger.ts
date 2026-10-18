@@ -442,6 +442,32 @@ assert.deepEqual(creditCash.map((item) => [item.accountId, item.side, item.amoun
   assert.deepEqual([released.matchedKind, released.categorizedBy, released.ruleApplication], [untouched.matchedKind, "rule", ruleRun], "unlinking restores the rule history, so the rule's Undo still works");
 }
 
+// Idempotent posting looks its key up on the (society, source, sourceExternalId) index, not every entry of the source.
+{
+  const { readFileSync } = await import("node:fs");
+  assert.match(readFileSync(new URL("../convex/tables/accounting.ts", import.meta.url), "utf8"), /\.index\("by_society_source_external", \["societyId", "source", "sourceExternalId"\]\)/, "journalEntries has the source-key index");
+  const ledgerFns = await import("../shared/functions/invoiceLedger");
+  const used: string[] = [];
+  const recording: PortableMutationCtx = {
+    ...ctx,
+    db: new Proxy(db, {
+      get(target, property, receiver) {
+        if (property !== "query") return Reflect.get(target, property, receiver);
+        return (table: string) => {
+          const query = target.query(table);
+          return new Proxy(query, { get(q, key, r) { return key === "withIndex" ? (name: string, range: never) => { used.push(`${table}:${name}`); return q.withIndex(name, range); } : Reflect.get(q, key, r); } });
+        };
+      },
+    }),
+  };
+  const key = `invoice:gate-index-check`;
+  const line = (side: "debit" | "credit") => ({ accountId: side === "debit" ? AR : PROGRAM, side, amountCents: 100 });
+  const first = await ledgerFns.postLedgerEntry(recording, { societyId: S, kind: "accrual", key, date: today, memo: "Index check", lines: [line("debit"), line("credit")] });
+  assert.equal(await ledgerFns.postLedgerEntry(recording, { societyId: S, kind: "accrual", key, date: today, memo: "Index check", lines: [line("debit"), line("credit")] }), first, "posting the same key twice returns the first entry");
+  assert.ok(used.includes("journalEntries:by_society_source_external") && !used.includes("journalEntries:by_society_source"), "the lookup uses the source-key index");
+  await db.patch(first, { status: "void" });
+}
+
 // Everything posted still balances, and receivables still match the invoices.
 const postedIds = new Set((await entries()).filter((entry) => entry.status === "posted").map((entry) => entry._id));
 const postedLines: InvoiceLedgerLine[] = (await allLines()).filter((item) => postedIds.has(item.journalEntryId)).map((item) => ({ accountId: item.accountId, side: item.side === "debit" ? "debit" : "credit", amountCents: item.amountCents }));
