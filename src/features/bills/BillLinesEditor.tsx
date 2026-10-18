@@ -2,14 +2,16 @@ import { Plus, X } from "lucide-react";
 import { Select, type SelectOption } from "../../components/Select";
 import { Money } from "../../components/Money";
 import { parseMoneyInput } from "../../lib/money";
+import { TagPicker } from "../financials/transactions/TagPicker";
+import type { FinanceTagsApi } from "../financials/transactions/useFinanceTags";
 
-/** One editable bill line. New per-line attributes (tags) join here and in the row below. */
-export type LineDraft = { key: string; accountId: string; memo: string; fundRestrictionId: string; amount: string };
+/** One editable bill line. New per-line attributes join here and in the row below. */
+export type LineDraft = { key: string; accountId: string; memo: string; fundRestrictionId: string; amount: string; tagIds: string[] };
 
 let lineCounter = 0;
 export function newLine(accountId = ""): LineDraft {
   lineCounter += 1;
-  return { key: `line_${Date.now().toString(36)}_${lineCounter}`, accountId, memo: "", fundRestrictionId: "", amount: "" };
+  return { key: `line_${Date.now().toString(36)}_${lineCounter}`, accountId, memo: "", fundRestrictionId: "", amount: "", tagIds: [] };
 }
 
 export function lineCents(line: LineDraft): number {
@@ -23,12 +25,15 @@ export function hasBadAmount(lines: readonly LineDraft[]): boolean {
 /**
  * The bill's lines: the account each cost goes to, a memo, the restricted
  * fund (when the workspace has any) and the amount, with the running total.
+ * When the workspace has tags, each line has a tag picker under it (the
+ * transactions panel's picker: one tag per group); the tags post with the line.
  */
 export function BillLinesEditor({
   lines,
   onChange,
   accountOptions,
   fundOptions,
+  tags,
   newLineAccountId,
   disabled,
   showErrors,
@@ -37,6 +42,7 @@ export function BillLinesEditor({
   onChange: (lines: LineDraft[]) => void;
   accountOptions: SelectOption[];
   fundOptions: SelectOption[];
+  tags: FinanceTagsApi;
   /** The account a newly added line starts on (the vendor's default). */
   newLineAccountId: string;
   disabled: boolean;
@@ -47,6 +53,7 @@ export function BillLinesEditor({
   const rowClass = `bill-lines__row${funds ? " bill-lines__row--funds" : ""}`;
   const setLine = (key: string, patch: Partial<LineDraft>) => onChange(lines.map((line) => (line.key === key ? { ...line, ...patch } : line)));
   const total = lines.reduce((sum, line) => sum + lineCents(line), 0);
+  const tagsAvailable = tags.activeGroups.some((group) => group.tags.length > 0);
 
   return (
     <>
@@ -102,7 +109,7 @@ export function BillLinesEditor({
                 aria-invalid={line.amount.trim() !== "" && parseMoneyInput(line.amount) == null ? true : undefined}
               />
             </span>
-            <span role="cell">
+            <span role="cell" className="bill-lines__remove-cell">
               <button
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon"
@@ -113,6 +120,11 @@ export function BillLinesEditor({
                 <X size={14} />
               </button>
             </span>
+            {(tagsAvailable || line.tagIds.length > 0) && (
+              <span role="cell" className="bill-lines__tags" aria-label={`Tags for line ${index + 1}`}>
+                <TagPicker tagIds={line.tagIds} tags={tags} disabled={disabled} onChange={(tagIds) => setLine(line.key, { tagIds })} />
+              </span>
+            )}
           </div>
         ))}
       </div>

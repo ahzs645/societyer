@@ -39,6 +39,7 @@ import { flagChangedPeriods } from "./reconciliation";
 import { validateBalancedJournalLines } from "../accountingCore";
 import type { JournalBasis } from "../booksReports";
 import { approverEligibility, FINANCE_EDIT_REQUIRED_REASON, type ApprovalRule, type ApproverAccessContext } from "../expenseApprovals";
+import { tagGroupLookup } from "../financeTags";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import {
   addDays,
@@ -557,7 +558,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
 
 /* ------------------------------------------------------------------ edits */
 
-type ClientLine = { key?: string; accountId?: string; amountCents: number; memo?: string; fundRestrictionId?: string };
+type ClientLine = { key?: string; accountId?: string; amountCents: number; memo?: string; fundRestrictionId?: string; tagIds?: string[] };
 
 function cleanLines(lines: readonly ClientLine[] | undefined): BillLine[] {
   return (lines ?? []).slice(0, 100).map((raw, index) => {
@@ -569,8 +570,16 @@ function cleanLines(lines: readonly ClientLine[] | undefined): BillLine[] {
     const memo = cleanText(raw.memo, 500);
     if (memo) line.memo = memo;
     if (raw.fundRestrictionId) line.fundRestrictionId = String(raw.fundRestrictionId);
+    const tagIds = [...new Set((raw.tagIds ?? []).map(String).filter(Boolean))];
+    if (tagIds.length) line.tagIds = tagIds;
     return line;
   });
+}
+
+/** Tag id → group id for this organization's tags (another organization's tags are unknown). */
+async function loadTagLookup(ctx: PortableQueryCtx, societyId: string) {
+  const tags = await ctx.db.query("financeTags").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  return tagGroupLookup(tags.map((tag) => ({ _id: String(tag._id), groupId: String(tag.groupId) })));
 }
 
 async function assertLineRefs(ctx: PortableQueryCtx, societyId: string, lines: readonly BillLine[]) {
@@ -617,7 +626,8 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: UpsertArgs)
   const dueDate = dueDateForTerms(args.billDate, terms, args.dueDate);
   if (dueDate < args.billDate) throw new Error("The due date can't be before the bill date.");
   const lines = cleanLines(args.lines);
-  const problem = validateBillLines(lines, { complete: false });
+  const groupOf = lines.some((line) => line.tagIds?.length) ? await loadTagLookup(ctx, args.societyId) : undefined;
+  const problem = validateBillLines(lines, { complete: false, groupOf });
   if (problem) throw new Error(problem);
   await assertLineRefs(ctx, args.societyId, lines);
   if (args.documentId) await requireDocumentAccess(ctx, args.documentId);

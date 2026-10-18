@@ -22,6 +22,7 @@ import {
 import { centsToInput } from "../businessRegisters/formHelpers";
 import { BillDocumentDropZone } from "./BillDocumentDropZone";
 import { BillLinesEditor, hasBadAmount, lineCents, newLine, type LineDraft } from "./BillLinesEditor";
+import { useFinanceTags } from "../financials/transactions/useFinanceTags";
 import { VendorPicker, type PickerVendor } from "./VendorPicker";
 import { errorMessage, type BillRow, type BillsWorkspace } from "./types";
 
@@ -61,7 +62,7 @@ function initialForm(bill: BillRow | null, today: string): FormState {
     documentId: bill.documentId ?? "",
     documentTitle: bill.document?.title ?? "",
     lines: bill.lines.length
-      ? bill.lines.map((line) => ({ key: line.key, accountId: line.accountId ?? "", memo: line.memo ?? "", fundRestrictionId: line.fundRestrictionId ?? "", amount: centsToInput(line.amountCents) }))
+      ? bill.lines.map((line) => ({ key: line.key, accountId: line.accountId ?? "", memo: line.memo ?? "", fundRestrictionId: line.fundRestrictionId ?? "", amount: centsToInput(line.amountCents), tagIds: line.tagIds ?? [] }))
       : [newLine()],
   };
 }
@@ -96,6 +97,7 @@ export function BillDrawer({
   const submit = usePermissionedMutation(api.bills.submit, canWrite);
   const remove = usePermissionedMutation(api.bills.remove, canWrite);
   const upsertVendor = usePermissionedMutation(api.bills.upsertVendor, canWrite);
+  const tags = useFinanceTags(open ? societyId : undefined);
   const [form, setForm] = useState<FormState>(() => initialForm(bill, workspace.today));
   const [createdVendor, setCreatedVendor] = useState<PickerVendor | null>(null);
   const [busy, setBusy] = useState(false);
@@ -123,13 +125,14 @@ export function BillDrawer({
     workspace.bills.map((row) => ({ ...row, lifecycle: row.lifecycle })),
   );
   const payloadLines = form.lines
-    .filter((line) => line.accountId || line.memo.trim() || lineCents(line))
+    .filter((line) => line.accountId || line.memo.trim() || lineCents(line) || line.tagIds.length)
     .map((line) => ({
       key: line.key,
       accountId: (line.accountId || undefined) as Id<"financialAccounts"> | undefined,
       amountCents: lineCents(line),
       memo: line.memo.trim() || undefined,
       fundRestrictionId: (line.fundRestrictionId || undefined) as Id<"fundRestrictions"> | undefined,
+      tagIds: line.tagIds.length ? (line.tagIds as Id<"financeTags">[]) : undefined,
     }));
   const submitProblem = billSubmitProblem({ vendorId: form.vendorId || null, billDate: form.billDate, dueDate, lines: payloadLines });
   const editable = !bill || bill.lifecycle === "draft" || bill.lifecycle === "awaiting_approval";
@@ -300,6 +303,7 @@ export function BillDrawer({
           onChange={(lines: LineDraft[]) => setForm((current) => ({ ...current, lines }))}
           accountOptions={accountOptions}
           fundOptions={fundOptions}
+          tags={tags}
           newLineAccountId={vendors.find((vendor) => vendor._id === form.vendorId)?.defaultAccountId ?? ""}
           disabled={disabled}
           showErrors={tried}

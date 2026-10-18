@@ -269,6 +269,7 @@ assert.equal(await creditBalance(AP), apBefore + 145000, "approval credits Accou
 // posting is idempotent per bill: the same key is never posted twice
 assert.equal((await postedEntries("bill")).filter((entry) => entry.sourceExternalId === `bill:${agm._id}`).length, 1);
 assert.equal((await get(String(row.journalEntryId))).basis, "accrual-only", "the approval entry is accrual-only");
+assert.deepEqual(agmEntry.filter((line) => line.tagIds).map((line) => [line.amountCents, line.tagIds]), [[27000, ["static_tag_fall_gala"]]], "a tagged bill line posts its tags onto the journal line");
 // An approved, unpaid bill: accrual basis shows the expense and the payable; cash basis shows neither.
 {
   const cash = await statements("cash");
@@ -397,6 +398,15 @@ const again = await bills.upsertPortable(ctx, { societyId: S, vendorId, billNumb
 assert.equal(again.duplicateOf?._id, created.id, "same vendor and bill number is flagged");
 await assert.rejects(() => bills.upsertPortable(ctx, { societyId: S, vendorId, billDate: today, lines: [{ accountId: CASH, amountCents: 100 }] }), /bank or card account/);
 await bills.removePortable(ctx, { id: again.id });
+// tags on bill lines: one per group, this organization's tags only (the transaction-line rule)
+await assert.rejects(() => bills.upsertPortable(ctx, { id: created.id, societyId: S, vendorId, billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 21000, tagIds: ["static_tag_youth_mentoring", "static_tag_arts_nights"] }] }), /two tags from the same group/);
+await assert.rejects(() => bills.upsertPortable(ctx, { id: created.id, societyId: S, vendorId, billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 21000, tagIds: ["static_tag_nope"] }] }), /no longer exists/);
+await bills.upsertPortable(ctx, { id: created.id, societyId: S, vendorId, billNumber: "GP-0001", billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 21000, tagIds: ["static_tag_community_garden", "static_tag_city_neighbourhood"] }] });
+assert.deepEqual((await get(created.id)).lines[0].tagIds, ["static_tag_community_garden", "static_tag_city_neighbourhood"], "valid tags are kept on the line");
+{
+  const demoTagged = (await db.query("journalLines").collect()).filter((line) => String(line._id).startsWith("static_jline_") && (line.tagIds ?? []).includes("static_tag_youth_mentoring"));
+  assert.ok(demoTagged.some((line) => String(line.journalEntryId).startsWith("static_journal_bill_")) && demoTagged.some((line) => String(line.journalEntryId).startsWith("static_journal_cash_")), "demo bill postings carry their lines' tags, on the accrual and the cash-only entries");
+}
 await assert.rejects(() => bills.removePortable(ctx, { id: draft._id }), /Only drafts/);
 await assert.rejects(() => bills.upsertPortable(ctx, { id: agm._id, societyId: S, billDate: today, lines: [] }), /Approved bills/);
 

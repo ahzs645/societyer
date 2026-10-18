@@ -133,6 +133,26 @@ export function withoutTagGroup(tagIds: readonly string[] | undefined, groupId: 
   return (tagIds ?? []).filter((id) => groupOf(id) !== groupId);
 }
 
+/**
+ * Problems with one line's tags: a tag `groupOf` doesn't know (removed, or
+ * from another organization) or two tags from one group. Shared by
+ * transaction lines and bill lines (shared/bills.ts).
+ */
+export function lineTagProblems(label: string, tagIds: readonly string[] | undefined, groupOf: (tagId: string) => string | undefined): string[] {
+  const problems: string[] = [];
+  const seen = new Map<string, string>();
+  for (const tagId of tagIds ?? []) {
+    const group = groupOf(tagId);
+    if (!group) {
+      problems.push(`${label} has a tag that no longer exists.`);
+      continue;
+    }
+    if (seen.has(group)) problems.push(`${label} has two tags from the same group; choose one.`);
+    seen.set(group, tagId);
+  }
+  return problems;
+}
+
 export type LineValidationOptions = {
   /** Tag id → group id; unknown tags are reported. */
   groupOf?: (tagId: string) => string | undefined;
@@ -158,18 +178,7 @@ export function validateTransactionLines(
     if (!Number.isSafeInteger(line.amountCents)) errors.push(`${label}: the amount must be whole cents.`);
     else if (lines.length > 1 && line.amountCents === 0) errors.push(`${label} needs an amount.`);
     if ((line.memo ?? "").length > 500) errors.push(`${label}: keep the memo under 500 characters.`);
-    if (options.groupOf) {
-      const seen = new Map<string, string>();
-      for (const tagId of line.tagIds ?? []) {
-        const group = options.groupOf(tagId);
-        if (!group) {
-          errors.push(`${label} has a tag that no longer exists.`);
-          continue;
-        }
-        if (seen.has(group)) errors.push(`${label} has two tags from the same group; choose one.`);
-        seen.set(group, tagId);
-      }
-    }
+    if (options.groupOf) errors.push(...lineTagProblems(label, line.tagIds, options.groupOf));
   });
   if (lines.length > 0 && lines.every((line) => Number.isSafeInteger(line.amountCents))) {
     const remainder = linesRemainderCents(amountCents, lines);

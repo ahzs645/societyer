@@ -31,6 +31,8 @@
   align-items: center;
 }
 .bill-lines__row--funds { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(96px, 0.7fr) 32px; }
+// Tags sit under the line's fields, left of the remove column.
+.bill-lines__tags { grid-column: 1 / -2; min-width: 0; }
 .bill-lines__row--head {
   color: token(text-tertiary);
   font-size: token(fs-xs);
@@ -56,8 +58,8 @@
 @media (max-width: 640px) {
   .bill-lines__row,
   .bill-lines__row--funds { grid-template-columns: minmax(0, 1fr) 32px; }
-  .bill-lines__row > :nth-child(n + 2):not(:last-child) { grid-column: 1; }
-  .bill-lines__row > :last-child { grid-column: 2; grid-row: 1; }
+  .bill-lines__row > :nth-child(n + 2):not(.bill-lines__remove-cell) { grid-column: 1; }
+  .bill-lines__row > .bill-lines__remove-cell { grid-column: 2; grid-row: 1; }
   .bill-lines__row--head { display: none; }
 }
 

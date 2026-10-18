@@ -9,13 +9,15 @@ import { v } from "convex/values";
  * in shared/bills.ts.
  */
 
-// Extend with optional fields (tags, program codes) as bill lines grow.
+// Extend with optional fields (program codes) as bill lines grow.
 export const billLineValidator = v.object({
   key: v.string(),
   accountId: v.optional(v.id("financialAccounts")),
   amountCents: v.number(),
   memo: v.optional(v.string()),
   fundRestrictionId: v.optional(v.id("fundRestrictions")),
+  // Reporting tags, at most one per tag group; posted onto journalLines.tagIds.
+  tagIds: v.optional(v.array(v.id("financeTags"))),
 });
 
 // What linking a bank line changed on it, so removing the payment puts it back.

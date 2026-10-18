@@ -26,6 +26,7 @@ const clientLineValidator = v.object({
   amountCents: v.number(),
   memo: v.optional(v.string()),
   fundRestrictionId: v.optional(v.id("fundRestrictions")),
+  tagIds: v.optional(v.array(v.id("financeTags"))),
 });
 
 export const workspace = authorizedQuery("bills:workspace", query)({

@@ -12,6 +12,10 @@
  * ids) and the server seed (shared/functions/seed.ts, real database ids).
  * Callers choose ids through `refs.idFor` and supply the accounts and people.
  *
+ * Three lines carry finance tags (youth mentoring on the Harbour Foundation
+ * grant, and the fall gala), so the tag filter in the reports finds bill
+ * postings as well as bank lines.
+ *
  * Dates follow the invoicing demo's anchor (the story date moved forward in
  * whole weeks), so overdue stays overdue and "due in the next 7 days" stays
  * true. At the story date every bank line sits after the March statement the
@@ -24,6 +28,7 @@ import type { JournalBasis } from "../booksReports";
 import { demoFiscalYearLabel } from "./journals";
 import { addDays } from "../invoicing";
 import { invoiceDemoAnchor } from "./invoicing";
+import type { DemoTagKey } from "./booksTags";
 
 export type DemoBillIdKind = "vendor" | "bill" | "transaction" | "journalEntry" | "journalLine";
 
@@ -41,6 +46,8 @@ export type DemoBillRefs = {
   secretary: DemoBillPerson;
   /** The `_id` to give a generated row (a fixed id, or a placeholder resolved on insert). */
   idFor: (kind: DemoBillIdKind, key: string) => string;
+  /** The id a demo finance tag is stored under (shared/demoData/booksTags.ts); without it bill lines carry no tags. */
+  tagId?: (key: DemoTagKey) => string;
 };
 
 type Row = Record<string, unknown> & { _id: string };
@@ -77,6 +84,8 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
   }));
 
   const line = (key: string, accountId: string, amountCents: number, memo: string, extra: Partial<BillLine> = {}): BillLine => ({ key, accountId, amountCents, memo, ...extra });
+  // Reporting tags on a line (one per tag group), carried onto the posted journal lines.
+  const tagged = (...keys: DemoTagKey[]): Partial<BillLine> => (refs.tagId ? { tagIds: keys.map(refs.tagId) } : {});
 
   type PaymentSpec = { key: string; date: string; amountCents: number; method: string; reference?: string; txnKey?: string };
   type Spec = {
@@ -120,7 +129,7 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
       terms: "net_30",
       lines: [
         line("line_1", refs.accounts.program, 94000, "Spring newsletter, 1,200 copies"),
-        line("line_2", refs.accounts.program, 24000, "Program flyers for the youth workshops", { fundRestrictionId: refs.fundRestrictionId }),
+        line("line_2", refs.accounts.program, 24000, "Program flyers for the youth workshops", { fundRestrictionId: refs.fundRestrictionId, ...tagged("youth_mentoring", "harbour_2026") }),
       ],
       notes: "Paying in two instalments as agreed with Dana.",
       lifecycle: "approved",
@@ -147,7 +156,7 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
       billNumber: "FR-0417",
       billDate: d(-10),
       terms: "net_30",
-      lines: [line("line_1", refs.accounts.venue, 85000, "Gym rental, youth resilience program, five Saturdays", { fundRestrictionId: refs.fundRestrictionId })],
+      lines: [line("line_1", refs.accounts.venue, 85000, "Gym rental, youth resilience program, five Saturdays", { fundRestrictionId: refs.fundRestrictionId, ...tagged("youth_mentoring", "harbour_2026") })],
       lifecycle: "scheduled",
       submitted: d(-9),
       approvers: [refs.owner],
@@ -174,7 +183,7 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
       terms: "net_30",
       lines: [
         line("line_1", refs.accounts.program, 118000, "AGM booklets, 300 copies, saddle-stitched"),
-        line("line_2", refs.accounts.program, 27000, "Ballot cards and name tags"),
+        line("line_2", refs.accounts.program, 27000, "Ballot cards and name tags", tagged("fall_gala")),
       ],
       notes: "Over $1,000, so it needs two approvals.",
       lifecycle: "awaiting_approval",

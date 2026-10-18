@@ -2401,6 +2401,8 @@ async function seedFinanceDemo(ctx: PortableMutationCtx, args: SeedFinanceDemoAr
     treasurer: args.treasurer,
     secretary: args.secretary,
     idFor: seedRef,
+    // The demo tags were written above with this writer, so their placeholders resolve.
+    tagId: (key) => seedRef("tag", key),
   });
   const withoutBillRefs = <T extends Record<string, unknown>>(row: T, fields: string[]) =>
     Object.fromEntries(Object.entries(row).filter(([key]) => !fields.includes(key))) as T;

@@ -8,6 +8,7 @@
  * demo's ids, accounts and people.
  */
 import { billDemoRows, type DemoBillIdKind, type DemoBillPerson } from "../../shared/demoData/bills";
+import { staticFinanceTagId } from "./staticFinanceWorkflowFixtures";
 
 type Ids = {
   societyId: string;
@@ -29,7 +30,7 @@ const STATIC_ID: Record<DemoBillIdKind, (key: string) => string> = {
 };
 
 export function billDemoData(ids: Ids, nowMs = Date.now()) {
-  return billDemoRows({ ...ids, idFor: (kind, key) => STATIC_ID[kind](key) }, nowMs);
+  return billDemoRows({ ...ids, idFor: (kind, key) => STATIC_ID[kind](key), tagId: staticFinanceTagId }, nowMs);
 }
 
 type Tables = Record<string, Array<Record<string, unknown>>>;

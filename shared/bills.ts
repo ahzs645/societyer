@@ -18,6 +18,7 @@
  * Pure TypeScript: no Convex, DOM or Node imports.
  */
 import { addDays, daysBetween, dueDateForTerms, INVOICE_TERMS, INVOICE_TERMS_LABEL, isCalendarDate } from "./invoicing";
+import { lineTagProblems } from "./transactionLines";
 
 export { addDays, daysBetween, dueDateForTerms, isCalendarDate };
 
@@ -147,14 +148,23 @@ export function isDueSoon(bill: { status: BillStatus; dueDate: string }, today: 
 
 /* ------------------------------------------------------------- validation */
 
-/** Problems with the lines; `complete` also requires an account on every line (submitting, approving). */
-export function validateBillLines(lines: ReadonlyArray<BillLine>, { complete }: { complete: boolean }): string | null {
+/**
+ * Problems with the lines; `complete` also requires an account on every line
+ * (submitting, approving). With `groupOf` (tag id → group id) tags are checked
+ * as on transaction lines: known tags, at most one per group.
+ */
+export function validateBillLines(
+  lines: ReadonlyArray<BillLine>,
+  { complete, groupOf }: { complete: boolean; groupOf?: (tagId: string) => string | undefined },
+): string | null {
   if (lines.length > 100) return "A bill can have at most 100 lines.";
   for (const [index, line] of lines.entries()) {
     const n = index + 1;
     if (!Number.isSafeInteger(line.amountCents)) return `Line ${n}: enter an amount.`;
     if (line.amountCents < 0) return `Line ${n}: amounts can't be negative. Record a vendor credit as its own bill line on the right account.`;
     if (complete && !line.accountId) return `Line ${n}: choose the account this cost goes to.`;
+    const tagProblem = groupOf ? lineTagProblems(`Line ${n}`, line.tagIds, groupOf)[0] : undefined;
+    if (tagProblem) return tagProblem;
   }
   if (complete) {
     if (!lines.length) return "Add at least one line.";

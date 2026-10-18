@@ -16,6 +16,8 @@ import { FINANCE_EDIT_REQUIRED_REASON } from "../../../shared/expenseApprovals";
 import { BillDocumentDropZone } from "./BillDocumentDropZone";
 import { BillPaymentForm } from "./BillPaymentForm";
 import { BillStatusPill } from "./BillStatusPill";
+import { TagChips } from "../financials/transactions/TagPicker";
+import { useFinanceTags } from "../financials/transactions/useFinanceTags";
 import { errorMessage, type BillRow, type BillsWorkspace } from "./types";
 
 const EVENT_DOT: Record<string, string> = {
@@ -64,6 +66,7 @@ export function BillDetailDrawer({
   const removePayment = usePermissionedMutation(api.bills.removePayment, canWrite);
   const cancel = usePermissionedMutation(api.bills.cancel, canWrite);
   const attachDocument = usePermissionedMutation(api.bills.attachDocument, canWrite);
+  const tags = useFinanceTags(bill.lines.some((line) => line.tagIds?.length) ? societyId : undefined);
   const [paying, setPaying] = useState(false);
   const [scheduleDate, setScheduleDate] = useState(bill.scheduledDate ?? "");
   const [busy, setBusy] = useState(false);
@@ -234,7 +237,7 @@ export function BillDetailDrawer({
             {bill.lines.map((line) => (
               <tr key={line.key}>
                 <td>{line.accountLabel ?? <span className="muted">No account</span>}{line.fundRestrictionId && funds.get(line.fundRestrictionId) ? <div className="muted">{funds.get(line.fundRestrictionId)}</div> : null}</td>
-                <td>{line.memo ?? <span className="muted">—</span>}</td>
+                <td>{line.memo ?? <span className="muted">—</span>}{line.tagIds?.length ? <div><TagChips tagIds={line.tagIds} tags={tags} /></div> : null}</td>
                 <td className="num"><Money cents={line.amountCents} currency={bill.currency} /></td>
               </tr>
             ))}

@@ -22,6 +22,7 @@ import {
   demoFinanceTagGroups,
   demoFinanceTags,
   type DemoBooksTagIdKind,
+  type DemoTagKey,
 } from "../../shared/demoData/booksTags";
 
 type Ids = {
@@ -116,6 +117,11 @@ const staticTagRefs = (societyId: string) => ({
   societyId,
   idFor: (kind: DemoBooksTagIdKind, key: string) => `${STATIC_TAG_ID_PREFIX[kind]}${key}`,
 });
+
+/** The fixed id a demo tag is stored under (`static_tag_<key>`). */
+export function staticFinanceTagId(key: DemoTagKey) {
+  return `${STATIC_TAG_ID_PREFIX.tag}${key}`;
+}
 
 /** Tag groups (Program, Grant, Event) and their tags. */
 export function financeTagFixtures(societyId: string) {
