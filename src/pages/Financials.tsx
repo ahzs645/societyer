@@ -38,7 +38,7 @@ import {
   type FilterableTransaction,
   type TransactionFilterState,
 } from "../features/financials/transactions/transactionFilters";
-import { splitLabel, transactionTagIds } from "../../shared/transactionLines";
+import { isSplitTransaction, splitLabel, transactionTagIds } from "../../shared/transactionLines";
 import { Database, Download, FileUp, Keyboard, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
@@ -981,6 +981,7 @@ export function FinancialsPage() {
               <RecordTable
                 selectable={canWrite}
                 loading={tableData.loading || transactions === undefined}
+                inlineEdit={txnSurface.inlineEdit}
                 renderCell={({ record: t, field }) => {
                   if (field.name === "description" && t.payeeRenamed) return <span title={t.description}>{t.payeeName}</span>;
                   if (field.name === "counterparty") return t.payeeRenamed ? <span title={t.counterparty || t.description}>{t.payeeName}</span> : undefined;
@@ -991,12 +992,16 @@ export function FinancialsPage() {
                     return (
                       <span className="category-cell">
                         <CategorizationProvenance txn={t} />
-                        <Badge>{split ?? t.category ?? "uncategorized"}</Badge>
+                        <Badge>{split ?? txnSurface.accountLabels.get(String(t.category)) ?? t.category ?? "uncategorized"}</Badge>
                         <TagChips tagIds={transactionTagIds(t)} tags={financeTags} />
                       </span>
                     );
                   }
                   if (field.name === "amountCents") return <Money cents={t.amountCents} tone={t.amountCents > 0 ? "in" : "auto"} />;
+                  if (field.name === "fundRestrictionId") {
+                    if (isSplitTransaction(t)) return <span className="muted">By line</span>;
+                    return t.fundRestrictionId ? <span>{txnSurface.fundNames.get(String(t.fundRestrictionId)) ?? "Archived fund"}</span> : <span className="muted">Unrestricted</span>;
+                  }
                   if (field.name === "items") {
                     const links = linksByTransactionId.get(t._id) ?? [];
                     const linkedAssetIds = new Set(links.map((link: any) => String(link.assetId ?? "")).filter(Boolean));

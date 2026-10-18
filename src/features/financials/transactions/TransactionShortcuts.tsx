@@ -4,6 +4,7 @@ import { ShortcutHint } from "../../../components/ShortcutHint";
 import { openShortcutHelp } from "../../../components/ShortcutHelp";
 import { isTypingTarget, TRANSACTIONS_SHORTCUT_SECTION, type ShortcutSection } from "../../../lib/shortcutsRegistry";
 import { useRecordTableStoreHandle } from "../../../platform/record-engine/record-table/state/recordTableStore";
+import { RECORD_TABLE_GRID_SHORTCUTS } from "../../../platform/record-engine/record-table/utils/gridShortcuts";
 
 /** The shortcuts the transactions tab really has (its own, the table's and the panel's). */
 export const TRANSACTION_SHORTCUT_SECTIONS: ShortcutSection[] = [
@@ -30,6 +31,8 @@ export const TRANSACTION_SHORTCUT_SECTIONS: ShortcutSection[] = [
       { keys: ["Esc"], label: "Close the panel" },
     ],
   },
+  // Date, description, category, fund and notes edit in place (grid mode).
+  RECORD_TABLE_GRID_SHORTCUTS,
 ];
 
 export function TransactionShortcutsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {

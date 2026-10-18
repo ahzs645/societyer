@@ -1,7 +1,8 @@
 // The transactions surface on the portable engine, seeded with the demo
 // workspace: notes and receipt attach on a transaction, bulk edits with an
 // exact undo, payee rename rules, and the pure helpers behind the "Needs
-// attention" view, the rule prompt and "Create rule from selection".
+// attention" view, the rule prompt, "Create rule from selection" and which
+// rows the table's grid editing locks.
 import assert from "node:assert/strict";
 import { tables } from "../src/lib/staticConvexFixtures";
 import { MemoryDb } from "../shared/portable/memoryDb";
@@ -21,6 +22,7 @@ import {
   RECEIPT_ATTENTION_THRESHOLD_CENTS,
 } from "../shared/transactionAttention";
 import { draftFromSelection, selectionPayees } from "../src/features/financials/transactions/selectionRuleDraft";
+import { categoryAccountOptions, transactionRowLock } from "../src/features/financials/transactions/transactionInlineEditRules";
 
 const seed: Record<string, any[]> = {};
 for (const [k, v] of Object.entries(tables as Record<string, any[]>)) seed[k] = JSON.parse(JSON.stringify(v));
@@ -136,5 +138,22 @@ const payeeCondition: any = many!.conditions.find((c) => c.field === "payee");
 assert.equal(payeeCondition.operator, "in", "several payees become payee is any of");
 assert.deepEqual(payeeCondition.values, ["Ticketbay", "Metro Transit fares"]);
 assert.ok(!many!.conditions.some((c) => c.field === "direction"), "mixed directions drop the direction condition");
+
+// ---- grid editing on the transactions table: locked rows and the ledger-account choices
+{
+  const plain = { date: "2026-05-02", amountCents: -1000 };
+  assert.equal(transactionRowLock(plain, null), null, "an ordinary row edits in place");
+  assert.equal(transactionRowLock(plain, "2026-04-30"), null, "after the close date it still does");
+  assert.match(transactionRowLock({ ...plain, date: "2026-04-30" }, "2026-04-30")!, /closed through 2026-04-30/, "on the close date it is locked");
+  assert.match(transactionRowLock({ ...plain, reconciledAtISO: "2026-05-03T00:00:00.000Z" }, null)!, /Reconciled/);
+  assert.match(transactionRowLock({ ...plain, lines: [{ id: "a", amountCents: -400 }, { id: "b", amountCents: -600 }] }, null)!, /panel/, "a split is edited in the panel");
+  const demoSplit = seed.financialTransactions.find((t: any) => Array.isArray(t.lines) && t.lines.length > 1);
+  assert.ok(demoSplit && transactionRowLock(demoSplit, null), "the demo's split rows are read-only in the grid");
+  const options = categoryAccountOptions(seed.financialAccounts.filter((a: any) => a.societyId === S));
+  assert.ok(options.length > 5, "the chart offers ledger accounts");
+  const bankIds = new Set(seed.financialAccounts.filter((a: any) => a.accountType === "Bank" || a.accountType === "Credit").map((a: any) => a._id));
+  assert.ok(options.every((option) => !bankIds.has(option.value)), "bank and card accounts are not categories");
+  assert.ok(options.every((option) => option.keywords?.length), "typing an account's name or code finds it");
+}
 
 console.log("transactions surface checks passed: receipt attach, bulk edit + undo, payee names, attention, selection rules");

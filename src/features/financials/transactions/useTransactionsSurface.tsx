@@ -10,10 +10,14 @@ import { TransactionDetailPanel, type PanelTransaction } from "./TransactionDeta
 import { attentionReasons, categorizedByValue } from "../../../../shared/transactionAttention";
 import { usePayeeAliases } from "./usePayeeAliases";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
+import { useTransactionInlineEdit } from "./useTransactionInlineEdit";
 import { useToast } from "../../../components/Toast";
 import { isSplitTransaction } from "../../../../shared/transactionLines";
 import type { FinanceTagsApi } from "./useFinanceTags";
 import type { ReviewSegment } from "./transactionFilters";
+
+const EMPTY_ACCOUNTS: never[] = [];
+const EMPTY_FUNDS: never[] = [];
 
 /** `?transactionId=<id>` (the panel's "Copy link") opens that transaction's panel. */
 export const TRANSACTION_DEEP_LINK_PARAM = "transactionId";
@@ -24,7 +28,8 @@ const LEGACY_DEEP_LINK_PARAM = "txn";
  * Everything the Financials transactions tab adds around its record table:
  * payee display names, the "Categorised by" and "Needs attention" values,
  * the in-place rule editor, the "create or update a rule?" prompt after a
- * manual category change, and the transaction detail panel.
+ * manual category change, spreadsheet editing of the table's cells
+ * (useTransactionInlineEdit), and the transaction detail panel.
  */
 export function useTransactionsSurface({
   societyId,
@@ -104,6 +109,15 @@ export function useTransactionsSurface({
     [promptAfterCategorise, toast, transactions, updateTransaction],
   );
 
+  const { inlineEdit, accountLabels } = useTransactionInlineEdit({
+    societyId,
+    canWrite,
+    transactions,
+    accounts: ruleDrawer.api.workspace?.accounts ?? EMPTY_ACCOUNTS,
+    funds: ruleDrawer.api.workspace?.fundRestrictions ?? EMPTY_FUNDS,
+    onCategorised: promptAfterCategorise,
+  });
+
   const fundNames = useMemo(
     () => new Map((ruleDrawer.api.workspace?.fundRestrictions ?? []).map((fund) => [fund._id, fund.name])),
     [ruleDrawer.api.workspace?.fundRestrictions],
@@ -134,5 +148,5 @@ export function useTransactionsSurface({
     [aliases, canWrite, fundNames, handleUpdate, reviewSegment, runBulk, ruleEditorOpen, societyId, tags],
   );
 
-  return { ruleDrawer, aliases, decorate, handleUpdate, renderSidePanel };
+  return { ruleDrawer, aliases, decorate, handleUpdate, renderSidePanel, inlineEdit, accountLabels, fundNames };
 }
