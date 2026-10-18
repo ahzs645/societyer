@@ -19,6 +19,8 @@ import { getOwned, requireRolePortable, requireSocietyMembership } from "./acces
 import { fiscalWindow } from "./treasury";
 import { todayDateOnly } from "../dateOnly";
 import { RULE_TOUCHED_FIELDS, snapshotRuleFields } from "../transactionRules";
+import { categoryAmounts, isSplitTransaction } from "../transactionLines";
+import { createTransactionJournalSync } from "./accounting";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -547,6 +549,9 @@ export async function updateTransactionPortable(
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
   await getOwned(ctx, "financialTransactions", id, String(row.societyId));
   const { receiptDocumentId, memo, ...rest } = patch;
+  if (patch.category !== undefined && patch.category !== row.category && isSplitTransaction({ lines: row.lines })) {
+    throw new Error("This transaction is split into lines. Change the categories on its lines in the transaction panel.");
+  }
   const next: Record<string, unknown> = { ...rest };
   if (memo !== undefined) {
     const trimmed = String(memo).trim();
@@ -568,20 +573,35 @@ export async function updateTransactionPortable(
     ? { categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined }
     : {};
   await ctx.db.patch(id, { ...next, ...provenance });
+  // A posted transaction's journal entry follows a new category, amount or date.
+  if (patch.category !== undefined || patch.amountCents !== undefined || patch.date !== undefined) {
+    await createTransactionJournalSync(ctx, String(row.societyId))(id);
+  }
   return id;
 }
 
 /** Most transactions one bulk edit (or its undo) may touch. */
 export const BULK_TRANSACTION_LIMIT = 500;
 
-const BULK_SNAPSHOT_FIELDS = [...RULE_TOUCHED_FIELDS, "ruleApplication"] as const;
+const BULK_SNAPSHOT_FIELDS = [...RULE_TOUCHED_FIELDS, "ruleApplication", "lines", "tagIds"] as const;
+
+/** A row's values for every field a bulk edit, a line edit or a tag change can touch (for Undo). */
+export function snapshotBulkFields(row: Record<string, unknown>): Record<string, unknown> {
+  const values: Record<string, unknown> = snapshotRuleFields(row);
+  for (const field of ["ruleApplication", "lines", "tagIds"] as const) {
+    if (row[field] !== undefined && row[field] !== null) values[field] = row[field];
+  }
+  return values;
+}
 
 /**
  * Apply one change to several transactions (the bulk island on the
  * transactions table): set a category, assign a fund (null clears it) or mark
  * reviewed. Returns each changed line's previous values so the client can
  * offer Undo through `restoreTransactions`. Lines from another organization
- * are only counted as skipped, never named.
+ * are only counted as skipped, never named. A category is not forced onto a
+ * split transaction (its lines keep their categories); those are counted in
+ * `splitSkipped`.
  */
 export async function bulkUpdateTransactionsPortable(
   ctx: PortableMutationCtx,
@@ -608,28 +628,38 @@ export async function bulkUpdateTransactionsPortable(
   if (patch.fundRestrictionId) await getOwned(ctx, "fundRestrictions", patch.fundRestrictionId, societyId);
   const nowISO = new Date().toISOString();
   const previous: Array<{ id: string; values: Record<string, unknown> }> = [];
+  const sync = createTransactionJournalSync(ctx, societyId);
   let skipped = 0;
+  let splitSkipped = 0;
   for (const id of unique) {
     const row: any = await ctx.db.get(id, "financialTransactions");
     if (!row || String(row.societyId) !== String(societyId)) {
       skipped += 1;
       continue;
     }
-    const values: Record<string, unknown> = snapshotRuleFields(row);
-    if (row.ruleApplication) values.ruleApplication = row.ruleApplication;
+    const values = snapshotBulkFields(row);
     const next: Record<string, unknown> = {};
+    const split = isSplitTransaction(row);
     if (category !== undefined && category !== row.category) {
-      Object.assign(next, { category, categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined });
+      if (split) splitSkipped += 1;
+      else Object.assign(next, { category, categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined });
     }
-    if (patch.fundRestrictionId !== undefined && (patch.fundRestrictionId || undefined) !== row.fundRestrictionId) {
-      next.fundRestrictionId = patch.fundRestrictionId || undefined;
+    if (patch.fundRestrictionId !== undefined) {
+      const fund = patch.fundRestrictionId || undefined;
+      if (split) {
+        const lines = (row.lines as Array<{ fundRestrictionId?: string }>).map((line) => ({ ...line, fundRestrictionId: fund }));
+        if (lines.some((line, index) => line.fundRestrictionId !== row.lines[index].fundRestrictionId)) Object.assign(next, { lines, fundRestrictionId: fund });
+      } else if (fund !== row.fundRestrictionId) {
+        next.fundRestrictionId = fund;
+      }
     }
     if (patch.reviewed && !row.reviewedAtISO) next.reviewedAtISO = nowISO;
     if (Object.keys(next).length === 0) continue;
     await ctx.db.patch(row._id, next);
     previous.push({ id: String(row._id), values });
+    if ("category" in next || "fundRestrictionId" in next) await sync(String(row._id), { onLocked: "skip" });
   }
-  return { updated: previous.length, skipped, previous };
+  return { updated: previous.length, skipped, splitSkipped, previous };
 }
 
 /** Undo a bulk edit: put back the snapshot `bulkUpdateTransactions` returned. */
@@ -650,6 +680,7 @@ export async function restoreTransactionsPortable(
   if (rows.length > BULK_TRANSACTION_LIMIT) throw new Error(`Restore at most ${BULK_TRANSACTION_LIMIT} transactions at once.`);
   let restored = 0;
   let skipped = 0;
+  const sync = createTransactionJournalSync(ctx, societyId);
   for (const entry of rows) {
     const row: any = await ctx.db.get(String(entry.id), "financialTransactions");
     if (!row || String(row.societyId) !== String(societyId)) {
@@ -661,9 +692,19 @@ export async function restoreTransactionsPortable(
     if (values.accountingAccountId) await getOwned(ctx, "financialAccounts", String(values.accountingAccountId), societyId);
     if (values.ruleId && !(await ctx.db.get(String(values.ruleId), "transactionRules"))) delete (values as any).ruleId;
     if (values.ruleId) await getOwned(ctx, "transactionRules", String(values.ruleId), societyId);
+    // Restored lines must still add up and point at this organization's records.
+    const lines = Array.isArray(values.lines) ? (values.lines as Array<Record<string, unknown>>) : [];
+    if (lines.length && lines.reduce((sum, line) => sum + Number(line.amountCents), 0) !== row.amountCents) throw new Error("The saved lines no longer add up to this transaction.");
+    for (const line of lines) {
+      if (line.accountingAccountId) await getOwned(ctx, "financialAccounts", String(line.accountingAccountId), societyId);
+      if (line.fundRestrictionId) await getOwned(ctx, "fundRestrictions", String(line.fundRestrictionId), societyId);
+    }
+    const restoredTags = [...(Array.isArray(values.tagIds) ? values.tagIds : []), ...lines.flatMap((line) => (Array.isArray(line.tagIds) ? line.tagIds : []))];
+    for (const tagId of new Set(restoredTags.map(String))) await getOwned(ctx, "financeTags", tagId, societyId);
     const patch: Record<string, unknown> = {};
     for (const field of BULK_SNAPSHOT_FIELDS) patch[field] = values[field] ?? undefined;
     await ctx.db.patch(row._id, patch);
+    await sync(String(row._id), { onLocked: "skip" });
     restored += 1;
   }
   return { restored, skipped };
@@ -706,8 +747,12 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
   const budgetYear = budgetYears.find((year) => year.start <= today && today <= year.end) ?? budgetYears[0];
   const actualsByCategory: Record<string, number> = {};
   for (const t of transactions) {
-    if (!t.category || !budgetYear || t.date < budgetYear.start || t.date > budgetYear.end) continue;
-    actualsByCategory[t.category] = (actualsByCategory[t.category] ?? 0) + Math.abs(t.amountCents);
+    if (!budgetYear || t.date < budgetYear.start || t.date > budgetYear.end) continue;
+    // A split transaction counts each line toward its own category.
+    for (const { category, amountCents } of categoryAmounts({ amountCents: t.amountCents, category: t.category, lines: t.lines })) {
+      if (!category) continue;
+      actualsByCategory[category] = (actualsByCategory[category] ?? 0) + Math.abs(amountCents);
+    }
   }
 
   const budgetRows = categoryBudgets.filter((b: any) => String(b.fiscalYear) === budgetYear?.label).map((b) => ({

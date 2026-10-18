@@ -42,6 +42,7 @@ import { gapTables } from "./tables/gaps";
 import { intakeTables } from "./tables/intake";
 import { agreementTables } from "./tables/agreements";
 import { financeWorkflowTables } from "./tables/financeWorkflows";
+import { financeTagTables } from "./tables/financeTags";
 import { invoiceTables } from "./tables/invoices";
 import { businessRegisterTables } from "./tables/businessRegisters";
 import { expensePolicyTables } from "./tables/expensePolicies";
@@ -61,6 +62,7 @@ export default defineSchema({
   ...pathwayTables,
   ...intakeTables,
   ...financeWorkflowTables,
+  ...financeTagTables,
   ...invoiceTables,
   ...businessRegisterTables,
   ...expensePolicyTables,

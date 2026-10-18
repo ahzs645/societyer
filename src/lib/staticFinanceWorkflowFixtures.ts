@@ -17,6 +17,12 @@ import {
   type DemoFinanceRefs,
   type DemoTransactionRule,
 } from "../../shared/demoData/financeWorkflows";
+import {
+  applyDemoLinesAndTags,
+  demoFinanceTagGroups,
+  demoFinanceTags,
+  type DemoBooksTagIdKind,
+} from "../../shared/demoData/booksTags";
 
 type Ids = {
   societyId: string;
@@ -99,4 +105,26 @@ export function financeWorkflowExpenseReports(ids: Ids) {
 
 export function financeWorkflowClaimPolicy(ids: Ids) {
   return [demoExpenseClaimPolicy(staticRefs(ids))];
+}
+
+const STATIC_TAG_ID_PREFIX: Record<DemoBooksTagIdKind, string> = {
+  tagGroup: "static_tag_group_",
+  tag: "static_tag_",
+};
+
+const staticTagRefs = (societyId: string) => ({
+  societyId,
+  idFor: (kind: DemoBooksTagIdKind, key: string) => `${STATIC_TAG_ID_PREFIX[kind]}${key}`,
+});
+
+/** Tag groups (Program, Grant, Event) and their tags. */
+export function financeTagFixtures(societyId: string) {
+  const refs = staticTagRefs(societyId);
+  return { financeTagGroups: demoFinanceTagGroups(refs), financeTags: demoFinanceTags(refs) };
+}
+
+/** Layers the split lines, tags and review state onto the feed (after the finance workflows). */
+export function applyLinesAndTagsToFeed(societyId: string, transactions: Txn[]) {
+  const refs = staticTagRefs(societyId);
+  applyDemoLinesAndTags(transactions, (key) => refs.idFor("tag", key));
 }

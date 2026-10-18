@@ -84,6 +84,8 @@ import * as customFieldsFns from "./customFields";
 import * as motionTemplatesFns from "./motionTemplates";
 const reconciliationFns = lazyHandlers(() => import("./reconciliation"), "reconciliation");
 const transactionRulesFns = lazyHandlers(() => import("./transactionRules"), "transactionRules");
+const transactionLinesFns = lazyHandlers(() => import("./transactionLines"), "transactionLines");
+const financeTagsFns = lazyHandlers(() => import("./financeTags"), "financeTags");
 const invoicesFns = lazyHandlers(() => import("./invoices"), "invoices");
 const businessRegistersFns = lazyHandlers(() => import("./businessRegisters"), "businessRegisters");
 import * as signaturesFns from "./signatures";
@@ -624,6 +626,16 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "transactionRules:applyToUncategorized", handler: transactionRulesFns.applyToUncategorizedPortable }),
   definePortableMutation({ name: "transactionRules:undoBatch", handler: transactionRulesFns.undoBatchPortable }),
   definePortableMutation({ name: "transactionRules:removeApplication", handler: transactionRulesFns.removeApplicationPortable }),
+  // transactionLines
+  definePortableMutation({ name: "transactionLines:save", handler: transactionLinesFns.savePortable }),
+  definePortableQuery({ name: "transactionLines:journal", handler: transactionLinesFns.journalPortable }),
+  definePortableMutation({ name: "transactionLines:assignTag", handler: transactionLinesFns.assignTagPortable }),
+  // financeTags
+  definePortableQuery({ name: "financeTags:workspace", handler: financeTagsFns.workspacePortable }),
+  definePortableMutation({ name: "financeTags:upsertGroup", handler: financeTagsFns.upsertGroupPortable }),
+  definePortableMutation({ name: "financeTags:upsertTag", handler: financeTagsFns.upsertTagPortable }),
+  definePortableMutation({ name: "financeTags:setGroupArchived", handler: financeTagsFns.setGroupArchivedPortable }),
+  definePortableMutation({ name: "financeTags:setTagArchived", handler: financeTagsFns.setTagArchivedPortable }),
   // invoices
   definePortableQuery({ name: "invoices:workspace", handler: invoicesFns.workspacePortable }),
   definePortableMutation({ name: "invoices:upsert", handler: invoicesFns.upsertPortable }),

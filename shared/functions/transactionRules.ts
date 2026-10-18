@@ -11,6 +11,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
+import { createTransactionJournalSync } from "./accounting";
 import {
   autoRuleName,
   findApplicableRule,
@@ -133,6 +134,8 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       category: t.category,
       categorizedBy: t.categorizedBy,
       ruleId: t.ruleId ? String(t.ruleId) : undefined,
+      // Split lines only matter as "this is a split": rules pass splits by.
+      ...(Array.isArray(t.lines) && t.lines.length > 1 ? { lines: t.lines.map((line: { id: string }) => ({ id: line.id })) } : {}),
     }))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const uncategorized = transactions.filter((t) => isUncategorized(t));
@@ -270,11 +273,14 @@ export async function applyToUncategorizedPortable(
   const nowISO = new Date().toISOString();
   const batchId = `apply-${nowISO}-${Math.random().toString(36).slice(2, 8)}`;
   const byRule = new Map<string, { ruleId: string; name: string; count: number }>();
+  // A line already posted to suspense moves to the rule's category in the journal too.
+  const sync = createTransactionJournalSync(ctx, societyId);
   let applied = 0;
   for (const txn of txns as any[]) {
     const result = rulePatchForTransaction(named, txn, nowISO, batchId, skip);
     if (!result || (ruleId && result.rule._id !== ruleId)) continue;
     await ctx.db.patch(txn._id, result.patch);
+    await sync(String(txn._id), { onLocked: "skip" });
     applied += 1;
     const entry = byRule.get(result.rule._id) ?? { ruleId: result.rule._id, name: result.rule.name, count: 0 };
     entry.count += 1;
@@ -291,10 +297,12 @@ export async function undoBatchPortable(ctx: PortableMutationCtx, { societyId, b
   const batchId = batch;
   if (!batchId) throw new Error("Nothing to undo.");
   const txns = await loadTransactions(ctx, societyId);
+  const sync = createTransactionJournalSync(ctx, societyId);
   let restored = 0;
   for (const txn of txns as any[]) {
     if (txn.ruleApplication?.batchId !== batchId) continue;
     await ctx.db.patch(txn._id, restoreRuleFieldsPatch(txn.ruleApplication.previous));
+    await sync(String(txn._id), { onLocked: "skip" });
     restored += 1;
   }
   return { restored };
@@ -305,5 +313,6 @@ export async function removeApplicationPortable(ctx: PortableMutationCtx, { txnI
   const txn = await requireOwnedRow<any>(ctx, "financialTransactions", txnId);
   if (txn.categorizedBy !== "rule") throw new Error("This transaction was not categorised by a rule.");
   await ctx.db.patch(txnId, restoreRuleFieldsPatch(txn.ruleApplication?.previous));
+  await createTransactionJournalSync(ctx, String(txn.societyId))(txnId, { onLocked: "skip" });
   return txnId;
 }

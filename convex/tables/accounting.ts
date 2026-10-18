@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { transactionLineValidator } from "./financeTags";
 
 /**
  * Accounting & budgeting tables (financial accounts, fiscal periods, journals,
@@ -147,6 +148,9 @@ export const accountingTables = {
     fundRestrictionId: v.optional(v.id("fundRestrictions")),
     financialTransactionId: v.optional(v.id("financialTransactions")),
     transactionCandidateId: v.optional(v.id("transactionCandidates")),
+    // Reporting tags carried from the bank transaction line it posts (at most
+    // one per tag group); see convex/tables/financeTags.ts.
+    tagIds: v.optional(v.array(v.id("financeTags"))),
     documentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalId: v.optional(v.string()),
     rawJson: v.optional(v.string()),
@@ -159,7 +163,8 @@ export const accountingTables = {
     .index("by_counterparty", ["counterpartyId"])
     .index("by_grant", ["grantId"])
     .index("by_fund_restriction", ["fundRestrictionId"])
-    .index("by_transaction_candidate", ["transactionCandidateId"]),
+    .index("by_transaction_candidate", ["transactionCandidateId"])
+    .index("by_financial_transaction", ["financialTransactionId"]),
 
   financialTransactions: defineTable({
     societyId: v.id("societies"),
@@ -203,6 +208,13 @@ export const accountingTables = {
     // The receipt document attached from the transaction panel; receiptStatus
     // follows it (attached while set, missing once removed).
     receiptDocumentId: v.optional(v.id("documents")),
+    // Line items. Absent (or a single line) means one line that mirrors
+    // category / accountingAccountId / fundRestrictionId above; two or more
+    // lines are a split whose amounts sum to amountCents, and the top-level
+    // fields then summarise the largest line (shared/transactionLines.ts).
+    lines: v.optional(v.array(transactionLineValidator)),
+    // Reporting tags of a single-line transaction (split lines carry their own).
+    tagIds: v.optional(v.array(v.id("financeTags"))),
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])

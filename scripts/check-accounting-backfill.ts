@@ -17,6 +17,7 @@
 import assert from "node:assert/strict";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { planTransactionBackfill, BEFORE_OPENING_FLAG, SUSPENSE_FLAG } from "../shared/accountingBackfill";
+import { transactionLines } from "../shared/transactionLines";
 
 async function demoClient() {
   const client = new StaticConvexClient({ databaseName: `societyer-backfill-${Date.now()}-${Math.random().toString(36).slice(2)}` });
@@ -89,11 +90,18 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
   const preOpening = open.filter((row) => row.date <= OPENING);
   const postOpening = open.filter((row) => row.date > OPENING);
   const assetNet = (rows: any[]) => rows.filter((row) => assetAccountIds.has(String(row.accountId))).reduce((sum, row) => sum + row.amountCents, 0);
+  // Each line item posts its own offset line: a split line coded to a ledger
+  // account needs no mapping, any other unmapped line goes to suspense.
+  const accountIds = new Set(accounts.map((account) => String(account._id)));
+  const unmappedLines = (row: any) =>
+    transactionLines(row).filter((line) => !(line.accountingAccountId && accountIds.has(String(line.accountingAccountId))) && !mappedCategories.has(String(line.category ?? "").trim().toLowerCase()));
+  const postOpeningUnmapped = postOpening.filter((row) => unmappedLines(row).length > 0);
   return {
     transactions,
     preOpening,
     postOpening,
-    postOpeningUnmapped: postOpening.filter((row) => !mappedCategories.has(String(row.category ?? "").trim().toLowerCase())),
+    postOpeningUnmapped,
+    postOpeningUnmappedLines: postOpeningUnmapped.reduce((sum, row) => sum + unmappedLines(row).length, 0),
     assetNet,
   };
 }
@@ -131,7 +139,7 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
   assert.ok(suspense && suspense.subtype === "suspense", "an explicit suspense account is created");
   const ledger: any[] = await client.query("accounting:generalLedger", { societyId });
   assert.ok(!ledger.some((line) => line.accountId === equipment._id), "no line was posted to the old fallback account");
-  assert.equal(ledger.filter((line) => line.accountId === suspense._id).length, facts.postOpeningUnmapped.length);
+  assert.equal(ledger.filter((line) => line.accountId === suspense._id).length, facts.postOpeningUnmappedLines, "one suspense line per unmapped line item");
   const entries: any[] = await client.query("accounting:journalEntries", { societyId, limit: 10_000 });
   assert.equal(entries.filter((entry) => entry.reviewFlags?.includes(SUSPENSE_FLAG)).length, facts.postOpeningUnmapped.length);
 
