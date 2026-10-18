@@ -50,6 +50,9 @@ export function LoginPage() {
       </AuthShell>
     );
   }
+  if (auth.isPending) {
+    return <AuthShell title="Signing you in"><AuthPending>Checking your secure workspace access…</AuthPending></AuthShell>;
+  }
   if (auth.session && redirect && auth.membershipState === "ready") {
     return <Navigate to={safeRedirect} replace />;
   }
@@ -224,7 +227,8 @@ function EmailSignIn({ safeRedirect }: { safeRedirect: string }) {
         showSent("reset");
         return;
       }
-      const callbackURL = verifyCallbackURL();
+      // A successful sign-in returns to the app; verification messages belong only to emailed links.
+      const callbackURL = mode === "sign-in" ? appUrl(safeRedirect) : verifyCallbackURL();
       const result = mode === "sign-in"
         ? await authClient.signIn.email({ email, password, callbackURL })
         : await authClient.signUp.email({ name, email, password, callbackURL });

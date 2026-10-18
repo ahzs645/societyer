@@ -158,24 +158,6 @@ mark.intake-hl, .intake-hl {
 .intake-docx .docx-wrapper { background: transparent !important; padding: 0 !important; }
 .intake-docx section.docx { margin: 0 auto 12px !important; box-shadow: 0 1px 4px var(--gray-a-5); }
 
-.intake-pdf { background: var(--bg-muted); padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.intake-pdf__page { position: relative; box-shadow: 0 1px 4px var(--gray-a-5); background: #fff; }
-.intake-pdf__page canvas { display: block; }
-/* Minimal pdf.js text-layer rules (from pdfjs-dist/web/pdf_viewer.css), scoped to the viewer. */
-.intake-pdf .textLayer {
-  position: absolute; inset: 0; overflow: clip; line-height: 1; text-size-adjust: none; transform-origin: 0 0; z-index: 0;
-  --min-font-size: 1;
-  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
-  --min-font-size-inv: calc(1 / var(--min-font-size));
-}
-.intake-pdf .textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
-.intake-pdf .textLayer > :not(.markedContent), .intake-pdf .textLayer .markedContent span:not(.markedContent) {
-  z-index: 1; --font-height: 0; font-size: calc(var(--text-scale-factor) * var(--font-height));
-  --scale-x: 1; --rotate: 0deg; transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
-}
-.intake-pdf .textLayer .markedContent { display: contents; }
-.intake-pdf .textLayer span.intake-hl { background: rgba(255, 196, 0, 0.45); box-shadow: none; border-radius: 0; }
-.intake-pdf__nav { display: flex; gap: 8px; align-items: center; font-size: var(--fs-xs); }
 
 .intake-diff { padding: 12px 16px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
 .intake-diff ins { background: var(--green-4); text-decoration: none; }

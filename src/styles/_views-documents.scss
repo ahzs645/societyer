@@ -16,20 +16,13 @@
   min-height: 420px;
   max-height: 80vh;
   overflow: auto;
-  padding: token('s-4');
-  border: 1px solid token('border');
+  padding: 0;
+  border: 0;
   border-radius: token('r-sm');
   background: token('bg-app');
   color-scheme: light;
 }
-.document-preview-pane__pdf {
-  width: 100%;
-  height: 74vh;
-  min-height: 420px;
-  border: none;
-  border-radius: token('r-sm');
-  background: token('bg-base');
-}
+.document-preview-pane .pdf-preview { padding: 4px; }
 // Tame docx-preview's default gray wrapper the same way the minutes preview
 // does (see .minutes-docx-preview .docx-wrapper) — our own container already
 // provides the backdrop, keep only the per-page paper it draws.
@@ -755,3 +748,46 @@ button.org-outline__row {
 .org-node__member .org-node__name,
 .org-node__member .org-node__role { display: block; }
 .org-node--root .org-node__name { white-space: normal; }
+
+.pdf-preview { background: var(--bg-muted); padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.pdf-preview__page { position: relative; box-shadow: 0 1px 4px var(--gray-a-5); background: #fff; }
+.pdf-preview__page canvas { display: block; }
+/* Minimal pdf.js text-layer rules (from pdfjs-dist/web/pdf_viewer.css), scoped to the viewer. */
+.pdf-preview .textLayer {
+  position: absolute; inset: 0; overflow: clip; line-height: 1; text-size-adjust: none; transform-origin: 0 0; z-index: 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.pdf-preview .textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.pdf-preview .textLayer > :not(.markedContent), .pdf-preview .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1; --font-height: 0; font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1; --rotate: 0deg; transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pdf-preview .textLayer .markedContent { display: contents; }
+.pdf-preview .textLayer span.intake-hl { background: rgba(255, 196, 0, 0.45); box-shadow: none; border-radius: 0; }
+.pdf-preview__nav { display: flex; gap: 8px; align-items: center; font-size: var(--fs-xs); }
+
+.pdf-preview__viewport { width: 100%; display: flex; overflow-x: auto; }
+.pdf-preview__nav { flex-wrap: wrap; justify-content: center; }
+
+// One reading surface instead of nested modal/card/PDF gutters.
+.modal.file-preview-modal {
+  width: calc(100% - 16px);
+  max-width: 1440px !important;
+  height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  .modal__head, .modal__foot { flex-shrink: 0; }
+  .modal__body { flex: 1 1 auto; min-height: 0; padding: 0; overflow: auto; }
+  .document-preview-pane { min-height: 100%; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 0; }
+  .document-preview-pane__message, .document-preview-pane__text, .document-preview-pane__sheets { padding: 12px; }
+  .pdf-preview { padding: 4px; gap: 8px; min-height: 100%; }
+  .pdf-preview__nav { position: sticky; top: 0; z-index: 2; background: var(--bg-panel); padding: 6px; width: 100%; }
+  .document-preview-pane__image { display: block; max-width: 100%; margin: auto; }
+  .file-preview-media { display: block; width: 100%; max-height: 75dvh; margin: auto; }
+  &.modal--fullscreen { width: 100%; max-width: none !important; height: 100dvh; max-height: 100dvh; }
+}
+@media (max-width: 560px) {
+  .modal.file-preview-modal { width: 100%; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
+  .modal.file-preview-modal.modal--fullscreen { height: 100dvh; max-height: 100dvh; }
+}

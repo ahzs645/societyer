@@ -8,17 +8,19 @@ import { createDeploymentSharePointAdapter, decodeSharePointLocator, encodeShare
 import { verifyUploadBytes } from "../shared/storage/uploadVerification";
 
 /** Pinned CORS origins and JWTs, with no Microsoft tokens or bearer transfer URLs returned to clients. */
-function cors(request: Request): Headers | null {
+export function pinnedSiteCors(request: Request, methods: string): Headers | null {
   const origin = request.headers.get("origin");
   const allowed = (process.env.SITE_URL ?? "").split(",").map(value => value.trim()).filter(Boolean);
   if (origin && !allowed.includes(origin)) return null;
   const headers = new Headers({ "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", Vary: "Origin" });
   if (origin) headers.set("Access-Control-Allow-Origin", origin);
-  headers.set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS");
+  headers.set("Access-Control-Allow-Methods", methods);
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
   headers.set("Access-Control-Expose-Headers", "Content-Disposition");
   return headers;
 }
+
+const cors = (request: Request) => pinnedSiteCors(request, "GET, PUT, OPTIONS");
 
 export function registerSharePointRoutes(http: HttpRouter) {
   for (const path of ["/document-storage/sharepoint/upload", "/document-storage/sharepoint/download"]) {

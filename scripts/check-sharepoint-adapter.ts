@@ -76,4 +76,17 @@ for (const nextExpectedRanges of [["327681-"], ["327680-1"], [`327680-${large.by
   await assert.rejects(adapter([json({ uploadUrl: "https://files.example.test/upload?secret=session" }), json({ nextExpectedRanges }, 202), new Response(null, { status: 204 })]).upload("test.pdf", large), /resumable upload failed/);
   assert.equal(requests.at(-1)?.init?.method, "DELETE");
 }
-console.log("OK SharePoint adapter: resource boundaries, stable versions, conflicts, bounded proxy, throttling, delta reset, secret separation and chunked upload");
+// Reading by path stays on the approved drive root, with the same redirect, size and token rules.
+requests = [];
+const byPath = await adapter([new Response(null, { status: 302, headers: { Location: "https://files.example.test/file?secret=signed-capability" } }), new Response(new Uint8Array([7, 8]))]).downloadByPath("Zoer/bc-bid-monitor/Our Society/manifest.json");
+assert.deepEqual([...(byPath ?? [])], [7, 8]);
+assert.equal(requests[0].url, "https://graph.microsoft.com/v1.0/drives/approved-drive/root:/Zoer/bc-bid-monitor/Our%20Society/manifest.json:/content");
+assert.equal(new Headers(requests[1].init?.headers).get("Authorization"), null);
+assert.equal(await adapter([json({ error: { code: "itemNotFound" } }, 404)]).downloadByPath("Zoer/missing/manifest.json"), null, "A missing file reads as null");
+await assert.rejects(adapter([json({}, 403)]).downloadByPath("Zoer/manifest.json"), /rejected \(403\)/, "Other Graph failures are not mistaken for a missing file");
+for (const path of ["", "Zoer/../secret", "Zoer//manifest.json", "/Zoer/manifest.json", "Zoer/./manifest.json", "Zoer:/x", "Zoer\\x"]) {
+  await assert.rejects(adapter([]).downloadByPath(path), /Invalid SharePoint file path/, `rejects ${JSON.stringify(path)}`);
+}
+await assert.rejects(adapter([new Response(new Uint8Array([1, 2, 3, 4]))], 3).downloadByPath("Zoer/files/big"), /file limit/);
+await assert.rejects(adapter([new Response(null, { status: 302, headers: { Location: "https://foreign.example/private" } })]).downloadByPath("Zoer/manifest.json"), /outside/);
+console.log("OK SharePoint adapter: resource boundaries, stable versions, conflicts, bounded proxy, throttling, delta reset, secret separation, chunked upload and read by path");

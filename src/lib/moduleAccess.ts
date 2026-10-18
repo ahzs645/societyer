@@ -126,6 +126,10 @@ const OPTIONAL_POLICY: Record<ModuleKey, Pick<ModuleAccessDefinition, "permissio
     permissions: {},
     notes: [UNMAPPED_NOTE, "Workflow edits and execution require tasks:write. Each execution step also checks the current initiating membership; external service capabilities have additional requirements."],
   },
+  procurementReview: {
+    permissions: { view: ["documents:read"], manage: ["settings:write"] },
+    notes: ["The published copy is read-only for every role; changes are made in Zoer. Choosing the SharePoint folder requires settings:write, granted to Admin and Owner."],
+  },
 };
 
 /** Every optional module is listed, including modules with no dedicated grant. */

@@ -35,6 +35,10 @@ type ModalProps = {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  className?: string;
+  headerActions?: ReactNode;
+  /** Fill the viewport without relying on browser fullscreen support. */
+  fullscreen?: boolean;
   /** Named width token; defaults to "md" (var(--modal-w-md)). */
   size?: ModalSize;
   /** Escape hatch for custom pixel widths. Prefer `size` when possible. */
@@ -73,6 +77,9 @@ export function Modal({
   dismissOnBackdrop = true,
   resizable,
   resizeKey,
+  className = "",
+  headerActions,
+  fullscreen = false,
 }: ModalProps) {
   const titleId = useStableDomId("modal-title");
   const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
@@ -82,7 +89,7 @@ export function Modal({
   // compact. Any call site can override with the explicit `resizable` prop.
   const wantResizable = resizable ?? size !== "sm";
   const resize = useResizableDialog({
-    enabled: wantResizable,
+    enabled: wantResizable && !fullscreen,
     open,
     storageKey: resizeKey ?? slugifyTitle(title),
     elementRef: dialogRef,
@@ -93,7 +100,7 @@ export function Modal({
   // downward scroll gesture must never throw away what was typed.
   const isSheet = useIsBottomSheet();
   useSheetDrag(dialogRef, {
-    enabled: open && isSheet && dismissOnBackdrop,
+    enabled: open && isSheet && dismissOnBackdrop && !fullscreen,
     onDismiss: onClose,
     handle: ".sheet-grabber, .modal__head",
   });
@@ -115,7 +122,7 @@ export function Modal({
         onClick={() => dismissOnBackdrop && onClose()}
       />
       <div
-        className={`modal${resize.active ? " modal--resizable" : ""}`}
+        className={`modal${resize.active && !fullscreen ? " modal--resizable" : ""}${fullscreen ? " modal--fullscreen" : ""} ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -124,16 +131,17 @@ export function Modal({
         style={{
           maxWidth,
           zIndex: modalZ,
-          ...resize.style,
-          ...(isSheet
+          ...(!fullscreen ? resize.style : {}),
+          ...(!fullscreen && isSheet
             ? keyboardSheetStyle(keyboardFrame)
-            : keyboardDialogStyle(keyboardFrame, { centredByTransform: !resize.active })),
+            : !fullscreen ? keyboardDialogStyle(keyboardFrame, { centredByTransform: !resize.active }) : {}),
         }}
       >
-        {resize.handles}
-        {isSheet && <div className="sheet-grabber" aria-hidden="true" />}
+        {!fullscreen && resize.handles}
+        {isSheet && !fullscreen && <div className="sheet-grabber" aria-hidden="true" />}
         <div className="modal__head">
           <h2 className="modal__title" id={titleId}>{title}</h2>
+          {headerActions}
           <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label={i18n.t("common.close", "Close")}>
             <X />
           </button>

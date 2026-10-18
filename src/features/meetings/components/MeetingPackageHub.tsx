@@ -1,3 +1,4 @@
+import { DocumentPreviewButton } from "../../../components/DocumentFilePreview";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ShieldCheck } from "lucide-react";
@@ -167,6 +168,7 @@ export function MeetingPackageHub({
                           </Link>
                           <span>{materialAccessSummary(material)}</span>
                         </div>
+                        {material.document && status === "available" && <DocumentPreviewButton document={material.document} />}
                         <Badge tone={availabilityTone(status)}>{availabilityLabel(status)}</Badge>
                         {material.syncStatus && <Badge tone={syncTone(material.syncStatus)}>{syncLabel(material.syncStatus)}</Badge>}
                         {material.requiredForMeeting && <Badge tone="warn">Required</Badge>}
@@ -206,6 +208,7 @@ export function MeetingPackageHub({
                           </Link>
                           <span>{materialAccessSummary(material)}</span>
                         </div>
+                        {material.document && status === "available" && <DocumentPreviewButton document={material.document} />}
                         <Badge tone={availabilityTone(status)}>{availabilityLabel(status)}</Badge>
                       </div>
                     );

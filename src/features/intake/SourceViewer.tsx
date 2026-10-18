@@ -1,7 +1,10 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { FilePreviewDialog } from "../../components/FilePreviewDialog";
+import { verifyPreviewBytes } from "../../lib/filePreviewBytes";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
-import { ChevronLeft, ChevronRight, FileText, GitCompare, Lock } from "lucide-react";
+import { FileText, GitCompare, Lock } from "lucide-react";
 import { api } from "@/lib/convexApi";
+import { PdfPreview } from "../../components/PdfPreview";
 import { diffTokens, tokenize, type Chunk } from "../../lib/wordDiff";
 import { getRestoredFile } from "../../lib/workspaceArchiveFiles";
 import type { IntakeBlock } from "../../../shared/intake/blocks";
@@ -43,11 +46,18 @@ async function loadOriginalBlob(file: any): Promise<Blob | undefined> {
 export function SourceViewer({ societyId, file, extract, locator, versions }: { societyId: string; file: any; extract: any; locator?: ViewerLocator; versions: ClusterVersion[] }) {
   const kind = kindOf(file?.name ?? "");
   const [blob, setBlob] = useState<Blob | null | undefined>(undefined);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const loadPreview = useCallback(async (signal: AbortSignal) => {
+    if (!blob) throw new Error("The original is not available on this device.");
+    signal.throwIfAborted();
+    return verifyPreviewBytes(await blob.arrayBuffer(), file?.sha256);
+  }, [blob, file?.sha256]);
   const [mode, setMode] = useState<Mode>("text");
   const [compareFileId, setCompareFileId] = useState<string | undefined>(undefined);
   useEffect(() => {
     let alive = true;
     setBlob(undefined);
+    setPreviewOpen(false);
     void loadOriginalBlob(file).then((value) => {
       if (!alive) return;
       setBlob(value ?? null);
@@ -71,9 +81,11 @@ export function SourceViewer({ societyId, file, extract, locator, versions }: { 
   const canOriginal = Boolean(blob) && (kind === "docx" || kind === "pdf");
   return (
     <div className="intake-pane intake-pane--viewer" aria-label="Source document">
+      {previewOpen && blob && <FilePreviewDialog file={{ id: file?._id ?? file?.sha256 ?? "intake-source", name: file?.name ?? "Source", bytes: blob.size, mimeType: blob.type, sha256: file?.sha256 }} loadBytes={loadPreview} onClose={() => setPreviewOpen(false)} />}
       <div className="intake-pane__head">
         <FileText size={14} aria-hidden />
         <h2 title={file?.path}>{file?.name ?? "Source"}</h2>
+        {blob && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setPreviewOpen(true)}>Expand preview</button>}
         {restricted && <span className="intake-chip intake-chip--conflicting"><Lock size={10} /> restricted</span>}
         <div className="segmented" role="tablist" aria-label="Viewer mode" style={{ marginLeft: "auto" }}>
           <button type="button" role="tab" aria-selected={mode === "original"} className={`segmented__btn${mode === "original" ? " is-active" : ""}`} disabled={!canOriginal} onClick={() => setMode("original")} title={canOriginal ? "Rendered original" : blob === null ? "The original is not stored on this device; showing the extracted text" : "Original rendering is available for DOCX and PDF"}>Original</button>
@@ -145,94 +157,12 @@ function findQuoteInDom(root: HTMLElement | null, quote: string) {
   return Boolean(root?.querySelector("mark.intake-hl")) || (root ? Boolean(findQuote(root.textContent ?? "", quote)) : false);
 }
 
-type PdfDoc = { numPages: number; getPage(n: number): Promise<any>; destroy(): Promise<void> };
-async function loadPdfJs() {
-  // The legacy build: the modern one relies on very recent built-ins (Map.getOrInsertComputed).
-  const [pdfjs, worker] = await Promise.all([import("pdfjs-dist/legacy/build/pdf.mjs"), import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")]);
-  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-  return pdfjs;
-}
-
 function PdfView({ blob, locator, context }: { blob: Blob; locator?: ViewerLocator; context?: string }) {
-  const [doc, setDoc] = useState<PdfDoc | null>(null);
-  const [page, setPage] = useState(1);
-  const [zoom, setZoom] = useState(1);
-  const [error, setError] = useState<string | null>(null);
-  const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let alive = true;
-    let loaded: PdfDoc | null = null;
-    void (async () => {
-      try {
-        const pdfjs = await loadPdfJs();
-        loaded = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise as unknown as PdfDoc;
-        if (alive) setDoc(loaded);
-      } catch (cause) {
-        if (alive) setError(cause instanceof Error ? cause.message : "This PDF could not be rendered.");
-      }
-    })();
-    return () => {
-      alive = false;
-      void loaded?.destroy();
-    };
-  }, [blob]);
-  useEffect(() => {
-    if (locator?.page) setPage(locator.page);
-  }, [locator?.page, locator?.quote]);
-  useEffect(() => {
-    if (!doc || !host.current) return;
-    let alive = true;
-    const target = host.current;
-    void (async () => {
-      const pdfjs = await loadPdfJs();
-      const pdfPage = await doc.getPage(Math.min(Math.max(1, page), doc.numPages));
-      if (!alive) return;
-      const base = pdfPage.getViewport({ scale: 1 });
-      const width = Math.max(320, Math.min(target.clientWidth - 24, 900)) * zoom;
-      const viewport = pdfPage.getViewport({ scale: width / base.width });
-      const ratio = window.devicePixelRatio || 1;
-      const wrapper = document.createElement("div");
-      wrapper.className = "intake-pdf__page";
-      wrapper.style.width = `${viewport.width}px`;
-      wrapper.style.height = `${viewport.height}px`;
-      for (const [name, value] of [["--scale-factor", String(viewport.scale)], ["--user-unit", "1"], ["--total-scale-factor", String(viewport.scale)], ["--scale-round-x", "1px"], ["--scale-round-y", "1px"]]) wrapper.style.setProperty(name, value);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.floor(viewport.width * ratio);
-      canvas.height = Math.floor(viewport.height * ratio);
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
-      wrapper.appendChild(canvas);
-      const textDiv = document.createElement("div");
-      textDiv.className = "textLayer";
-      wrapper.appendChild(textDiv);
-      target.replaceChildren(wrapper);
-      const canvasContext = canvas.getContext("2d")!;
-      await pdfPage.render({ canvasContext, canvas, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined }).promise;
-      const textLayer = new pdfjs.TextLayer({ textContentSource: await pdfPage.getTextContent(), container: textDiv, viewport });
-      await textLayer.render();
-      if (!alive) return;
-      const first = highlightSpans(textLayer.textDivs, textLayer.textContentItemsStr, locator?.quote, context);
-      first?.scrollIntoView({ block: "center", behavior: "smooth" });
-    })().catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
-    return () => { alive = false; };
-  }, [doc, page, zoom, locator?.quote, context]);
-  return (
-    <div className="intake-pdf">
-      {doc && (
-        <div className="intake-pdf__nav">
-          <button type="button" className="btn btn--sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} aria-label="Previous page"><ChevronLeft size={12} /></button>
-          <span>Page {page} of {doc.numPages}</span>
-          <button type="button" className="btn btn--sm" disabled={page >= doc.numPages} onClick={() => setPage((value) => value + 1)} aria-label="Next page"><ChevronRight size={12} /></button>
-          <span aria-hidden>·</span>
-          <button type="button" className="btn btn--sm" disabled={zoom <= 1} onClick={() => setZoom((value) => Math.max(1, value - 0.5))} aria-label="Zoom out">−</button>
-          <span>{zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}</span>
-          <button type="button" className="btn btn--sm" disabled={zoom >= 3} onClick={() => setZoom((value) => Math.min(3, value + 0.5))} aria-label="Zoom in">+</button>
-        </div>
-      )}
-      {error && <p className="muted">Could not render the PDF ({error}). Use the Text view.</p>}
-      <div ref={host} data-testid="intake-pdf" style={{ width: "100%", display: "flex", justifyContent: zoom > 1 ? "flex-start" : "center", overflowX: "auto" }} />
-    </div>
-  );
+  const highlight = useCallback((elements: HTMLElement[], text: string[]) => {
+    const first = highlightSpans(elements, text, locator?.quote, context);
+    first?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [locator?.quote, context]);
+  return <PdfPreview blob={blob} pageNumber={locator?.page} focusKey={locator?.quote} onTextLayerReady={highlight} testId="intake-pdf" />;
 }
 
 function columnLetter(index: number) {

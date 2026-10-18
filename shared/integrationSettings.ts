@@ -1,4 +1,6 @@
 /** Non-secret storage policy and administrator evidence, portable across runtimes. */
+import { validateProcurementReviewFolder } from "./procurementReview/paths";
+
 export const STORAGE_PREFERENCES = ["existing", "local-filesystem", "rustfs", "r2", "sharepoint"] as const;
 export type StoragePreference = typeof STORAGE_PREFERENCES[number];
 export type EvidenceStatus = "unknown" | "recorded" | "revoked";
@@ -17,13 +19,15 @@ export type IntegrationSettings = {
   custodian: "organization" | "operator";
   custodianContact: string;
   offboardingPlan: string;
+  /** Drive-relative SharePoint folder a Zoer publishes this workspace's procurement snapshot to; "" until configured. */
+  procurementReviewFolder?: string;
 };
 
 export function defaultIntegrationSettings(): IntegrationSettings {
   return { preferredProvider: "existing", authorizationMode: "delegated", tenantId: "", siteId: "", libraryId: "",
     consentStatus: "unknown", resourceGrantStatus: "unknown", permissionEvidence: "",
     canadianResidencyRequired: false, storageRegion: "", residencyEvidence: "", custodian: "organization",
-    custodianContact: "", offboardingPlan: "" };
+    custodianContact: "", offboardingPlan: "", procurementReviewFolder: "" };
 }
 
 const TEXT_FIELDS = ["tenantId", "siteId", "libraryId", "permissionEvidence", "storageRegion", "residencyEvidence", "custodianContact", "offboardingPlan"] as const;
@@ -48,6 +52,10 @@ export function validateIntegrationSettings(value: unknown): IntegrationSettings
     if (/\b(?:Bearer\s+[\w.-]{15,}|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+|(?:client_secret|access_token|refresh_token|password|secret_access_key)\s*[:=])/i.test(result[key])) {
       throw new Error("Remove credentials from document storage settings. Store secrets in server secret storage.");
     }
+  }
+  if (input.procurementReviewFolder !== undefined) {
+    if (typeof input.procurementReviewFolder !== "string") throw new Error("Invalid procurement review folder.");
+    result.procurementReviewFolder = input.procurementReviewFolder.trim() ? validateProcurementReviewFolder(input.procurementReviewFolder) : "";
   }
   if (result.preferredProvider === "sharepoint" && (result.consentStatus === "recorded" || result.resourceGrantStatus === "recorded")) {
     if (!result.tenantId || !result.permissionEvidence) throw new Error("Record the tenant and permission evidence reference before recording consent or a resource grant.");

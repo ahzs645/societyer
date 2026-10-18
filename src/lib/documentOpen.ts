@@ -20,12 +20,14 @@ export type OpenableDocument = {
   storageId?: string;
   sha256?: string;
   latestVersionId?: string;
+  /** File-history actions must never substitute the parent document's original. */
+  versionOnly?: boolean;
 };
 
 export async function restoredDocumentFile(doc: Pick<OpenableDocument, "_id" | "latestVersionId" | "sha256">): Promise<Blob | undefined> {
   try {
     if (doc.latestVersionId) {
-      const byVersion = await getRestoredFile({ versionId: doc.latestVersionId });
+      const byVersion = await getRestoredFile({ versionId: doc.latestVersionId }).catch(() => undefined);
       if (byVersion) return byVersion;
     }
     const byDocument = await getRestoredFile({ documentId: doc._id });
@@ -60,7 +62,9 @@ export async function openDocumentFile(
     getLegacyUrl?: (storageId: string) => Promise<string | null | undefined>;
   },
 ): Promise<OpenDocumentResult> {
-  const restored = await restoredDocumentFile(doc);
+  const restored = doc.versionOnly && doc.latestVersionId
+    ? await getRestoredFile({ versionId: doc.latestVersionId }).catch(() => undefined)
+    : await restoredDocumentFile(doc);
   if (restored) {
     triggerBlobDownload(restored, doc.fileName ?? doc.title ?? "document");
     return "restored";
@@ -70,6 +74,7 @@ export async function openDocumentFile(
     if (target?.kind === "url" && target.url?.startsWith("demo://")) return "simulated";
     if (target && (await openDocumentDownloadTarget(target))) return "version";
   }
+  if (doc.versionOnly) return "none";
   if (doc.storageId && deps.getLegacyUrl) {
     const url = await deps.getLegacyUrl(doc.storageId);
     if (url) {

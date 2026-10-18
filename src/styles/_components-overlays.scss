@@ -916,3 +916,18 @@ body.modal-resizing {
     visibility: hidden;
   }
 }
+
+// Opt-in fullscreen dialogs keep the same focus trap, overlay and children.
+.modal.modal--fullscreen {
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none !important;
+  max-height: 100dvh;
+  transform: none;
+  border-radius: 0;
+  animation: none;
+  padding-top: env(safe-area-inset-top);
+  .modal__body { flex: 1 1 auto; min-height: 0; }
+  .modal__head, .modal__foot { flex-shrink: 0; }
+}

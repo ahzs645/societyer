@@ -1,0 +1,62 @@
+{
+  "format": "zoer-plugin-snapshot",
+  "formatVersion": 1,
+  "pluginId": "bc-bid-monitor",
+  "pluginVersion": "0.35.3",
+  "snapshotId": "20261018T150000Z-0257598f0476",
+  "publishedAt": "2026-10-18T15:00:00.000Z",
+  "publisher": {
+    "zoerVersion": "demo",
+    "host": "Societyer demo"
+  },
+  "catalog": {
+    "encoding": "gzip",
+    "sha256": "0257598f0476fc017e3c41d665fad078266898e750a0551a5a6ce23bfda1ec1c",
+    "bytes": 868352,
+    "parts": [
+      {
+        "path": "snapshots/20261018T150000Z-0257598f0476/catalog.part-000",
+        "bytes": 92898,
+        "sha256": "164e20774826ddb1914f4522acb0257f6b5b54362c811296660c472f7a7b34b3"
+      }
+    ]
+  },
+  "files": {
+    "16f6c165a43a5e0f943647872aa5dcaadda9e83c063af1cc157175c0126c5c1a": {
+      "bytes": 628,
+      "parts": 0
+    },
+    "43b3d6417340140642ae931a9cf3061d99bc8289752db234b734301640023cd2": {
+      "bytes": 1039,
+      "parts": 0
+    },
+    "790871b1ae1c3c51c4c983d636a76526b18ee09e9cf77d5082b10f9e79cda79e": {
+      "bytes": 1436,
+      "parts": 0
+    },
+    "938a322c9dc981d3336a2d8e4982f58b21a85b122a57b9641638daa046e70a09": {
+      "bytes": 2430,
+      "parts": 0
+    },
+    "980682d9060ca4a01d86c3454b95bf37742e97e025039d3865ae7230143f6857": {
+      "bytes": 1563,
+      "parts": 0
+    },
+    "9873ab8c9319b163ddb8862e70b8ed86c73a83fbb8ae6721e643baf1c4c0d356": {
+      "bytes": 1572,
+      "parts": 0
+    },
+    "c12fb9e0b2a3df99e4d5206c33cef51ea7187217f2399760e9cb767c233c1c25": {
+      "bytes": 997,
+      "parts": 0
+    },
+    "c4c494fd003be5bc3f1a60698b4021a94398310c8fe6b724cedc82538e592dd2": {
+      "bytes": 1697,
+      "parts": 0
+    }
+  },
+  "counts": {
+    "award": 15,
+    "opportunity": 41
+  }
+}

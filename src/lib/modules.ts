@@ -25,6 +25,8 @@ export const MODULE_DEFAULTS = {
   paperless: true,
   browserConnectors: true,
   workflows: true,
+  // Off until a workspace turns it on: it shows data published from outside Societyer.
+  procurementReview: false,
 } as const;
 
 export type ModuleKey = keyof typeof MODULE_DEFAULTS;
@@ -248,6 +250,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     description: "Templated automations — AGM prep, insurance renewal reminders, annual-report filing.",
     includes: ["Workflows", "Workflow runs", "Scheduled recipes"],
   },
+  {
+    key: "procurementReview",
+    label: "Procurement review",
+    category: "Integrations",
+    description: "A read-only copy of the bid opportunities a Zoer instance publishes to this workspace's SharePoint folder.",
+    includes: ["Procurement review", "Published snapshot viewer", "Bid document previews"],
+  },
 ];
 
 /**
@@ -284,23 +293,51 @@ function getLegacyModuleSettings(source: StoredModuleSource) {
   return source;
 }
 
-export function getDisabledModuleKeys(source?: StoredModuleSource): ModuleKey[] {
-  if (!source) return [];
-  if (Array.isArray(source)) {
-    return source.filter(isModuleKey);
-  }
-  if ("disabledModules" in source) {
-    return (source.disabledModules ?? []).filter(isModuleKey);
-  }
+/**
+ * A workspace stores only the module choices that differ from MODULE_DEFAULTS,
+ * in its `disabledModules` list: a bare key turns a default-on module off, and
+ * `+key` turns a default-off module on. Workspaces that never chose keep every
+ * default, so a new default-off module starts off everywhere without a
+ * migration, and a stale client that drops a `+key` it doesn't know leaves the
+ * module off rather than on.
+ */
+export const MODULE_OPT_IN_PREFIX = "+";
 
-  const legacy = getLegacyModuleSettings(source);
-  if (!legacy) return [];
-
-  return MODULE_KEYS.filter((key) => (legacy as Record<string, unknown>)[key] === false);
+function storedModuleChoices(source: StoredModuleSource): Map<ModuleKey, boolean> {
+  const choices = new Map<ModuleKey, boolean>();
+  if (!source) return choices;
+  const list = Array.isArray(source) ? source : "disabledModules" in source ? source.disabledModules ?? [] : null;
+  if (list) {
+    for (const entry of list) {
+      if (typeof entry !== "string") continue;
+      if (isModuleKey(entry)) {
+        if (MODULE_DEFAULTS[entry]) choices.set(entry, false);
+      } else if (entry.startsWith(MODULE_OPT_IN_PREFIX)) {
+        const key = entry.slice(MODULE_OPT_IN_PREFIX.length);
+        if (isModuleKey(key) && !MODULE_DEFAULTS[key]) choices.set(key, true);
+      }
+    }
+    return choices;
+  }
+  const legacy = getLegacyModuleSettings(source) as Record<string, unknown> | null;
+  for (const key of MODULE_KEYS) {
+    // Legacy objects only ever recorded a change from the default.
+    if (legacy?.[key] === !MODULE_DEFAULTS[key]) choices.set(key, !MODULE_DEFAULTS[key]);
+  }
+  return choices;
 }
 
-export function settingsToDisabledModules(settings: ModuleSettings): ModuleKey[] {
+export function getDisabledModuleKeys(source?: StoredModuleSource): ModuleKey[] {
+  const settings = normalizeModuleSettings(source);
   return MODULE_KEYS.filter((key) => !settings[key]);
+}
+
+/** The stored form of a full set of choices (see MODULE_OPT_IN_PREFIX). */
+export function settingsToDisabledModules(settings: ModuleSettings): string[] {
+  return MODULE_KEYS.flatMap((key) => {
+    if (settings[key] === MODULE_DEFAULTS[key]) return [];
+    return MODULE_DEFAULTS[key] ? [key] : [`${MODULE_OPT_IN_PREFIX}${key}`];
+  });
 }
 
 /**
@@ -325,9 +362,9 @@ export function deploymentUnavailableReason(key: ModuleKey): string | undefined 
 
 /** A workspace's saved module choices; see `isModuleEnabled` for what is actually available. */
 export function normalizeModuleSettings(source?: StoredModuleSource): ModuleSettings {
-  const disabled = new Set(getDisabledModuleKeys(source));
+  const choices = storedModuleChoices(source);
   return MODULE_KEYS.reduce((acc, key) => {
-    acc[key] = !disabled.has(key);
+    acc[key] = choices.get(key) ?? MODULE_DEFAULTS[key];
     return acc;
   }, {} as ModuleSettings);
 }

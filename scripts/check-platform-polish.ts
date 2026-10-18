@@ -102,7 +102,8 @@ assert.match(moduleGate, /\/app\/settings\?tab=modules/, "a disabled module link
 // A module that gates a route also hides its sidebar/palette entry, and the
 // other way round: otherwise a nav item opens a "module is disabled" card.
 const mainSource = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
-const gatedRoutes = new Map([...mainSource.matchAll(/path="([^"]+)"\s*element=\{withModule\("(\w+)"/g)].map((m) => [`/app/${m[1]}`, m[2]]));
+// An embedded plugin's splat route ("procurement-review/*") is its page's route.
+const gatedRoutes = new Map([...mainSource.matchAll(/path="([^"]+)"\s*element=\{withModule\("(\w+)"/g)].map((m) => [`/app/${m[1].replace(/\/\*$/, "")}`, m[2]]));
 assert.ok(gatedRoutes.size > 20, "found the module-gated routes in main.tsx");
 for (const [path, module] of gatedRoutes) {
   const identity = (ROUTE_IDENTITY as Record<string, { module?: string }>)[path];

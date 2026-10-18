@@ -36,6 +36,9 @@ import {
   mergeBankingDemo,
 } from "./staticFinanceWorkflowFixtures";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { defaultIntegrationSettings } from "../../shared/integrationSettings";
+import { DEMO_PROCUREMENT_REVIEW_FOLDER } from "../../shared/procurementReview/demo";
+import { MODULE_OPT_IN_PREFIX } from "./modules";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoData/bankFeed";
 import { demoSubAccountRows } from "../../shared/demoData/chartOfAccounts";
 import { DEMO_LEDGER_ACCOUNTS, buildDemoJournal, demoBalancesAt, demoBooksSettings, demoFiscalPeriods, type DemoLedgerKey } from "../../shared/demoData/journals";
@@ -141,6 +144,9 @@ const society = {
   constitutionDocId: "static_document_constitution",
   bylawsDocId: DOCUMENT_BYLAWS_ID,
   demoMode: true,
+  // Procurement review is off by default; the demo turns it on and reads its bundled snapshot (shared/procurementReview/demo.ts).
+  disabledModules: [`${MODULE_OPT_IN_PREFIX}procurementReview`],
+  integrationSettings: { ...defaultIntegrationSettings(), procurementReviewFolder: DEMO_PROCUREMENT_REVIEW_FOLDER },
   updatedAt: Date.parse("2026-04-16T16:00:00.000Z"),
 };
 

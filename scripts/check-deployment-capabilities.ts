@@ -19,13 +19,13 @@ import { getModuleAccess } from "../src/lib/moduleAccess";
 
 // 1. Which services each deployment shape offers.
 const n8n = { N8N_WEBHOOK_BASE_URL: "https://n8n.example.org/webhook", SOCIETYER_WORKFLOW_CALLBACK_SECRET: "secret" };
-assert.deepEqual(deploymentCapabilities({ AUTH_MODE: "better-auth" }), { gatewayApi: true, browserConnectors: false, n8nWorkflows: false }, "Off unless configured");
+assert.deepEqual(deploymentCapabilities({ AUTH_MODE: "better-auth" }), { gatewayApi: true, browserConnectors: false, n8nWorkflows: false, procurementReview: false }, "Off unless configured");
 assert.equal(deploymentCapabilities({ AUTH_MODE: "clerk", SOCIETYER_BROWSER_CONNECTORS: "1" }).browserConnectors, true);
 assert.equal(deploymentCapabilities({ AUTH_MODE: "clerk", SOCIETYER_BROWSER_CONNECTORS: "true" }).browserConnectors, false, "Only an explicit 1 enables the runner");
 assert.equal(deploymentCapabilities({ AUTH_MODE: "none", ...n8n }).n8nWorkflows, true);
 assert.equal(deploymentCapabilities({ AUTH_MODE: "better-auth", N8N_WEBHOOK_BASE_URL: n8n.N8N_WEBHOOK_BASE_URL }).n8nWorkflows, false, "n8n needs the callback secret too");
 assert.deepEqual(deploymentCapabilities({ AUTH_MODE: "convex", SOCIETYER_BROWSER_CONNECTORS: "1", ...n8n }),
-  { gatewayApi: false, browserConnectors: false, n8nWorkflows: false }, "Convex-hosted sign-in has no gateway, so neither service can work");
+  { gatewayApi: false, browserConnectors: false, n8nWorkflows: false, procurementReview: false }, "Convex-hosted sign-in has no gateway, so neither service can work");
 
 // 2. The UI's module checks hide an unavailable module without rewriting saved choices.
 const workspace = { disabledModules: ["grants"] };
@@ -63,7 +63,7 @@ const owner = native.withIdentity({ issuer, subject: "owner" });
 const n8nRecipes = (catalog: Array<{ provider: string }>) => catalog.filter((entry) => entry.provider === "n8n").length;
 
 for (const key of ["N8N_WEBHOOK_BASE_URL", "SOCIETYER_WORKFLOW_CALLBACK_SECRET", "SOCIETYER_BROWSER_CONNECTORS"]) delete process.env[key];
-assert.deepEqual(await native.query(api.http.deploymentCapabilities, {}), { gatewayApi: true, browserConnectors: false, n8nWorkflows: false }, "Anyone can read what the deployment runs");
+assert.deepEqual(await native.query(api.http.deploymentCapabilities, {}), { gatewayApi: true, browserConnectors: false, n8nWorkflows: false, procurementReview: false }, "Anyone can read what the deployment runs");
 const bare = await owner.query(api.workflows.listCatalog, {});
 assert.equal(n8nRecipes(bare), 0, "n8n recipes aren't offered without n8n");
 assert.ok(bare.length > 0, "Built-in recipes still are");

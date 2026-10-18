@@ -1,3 +1,4 @@
+import { DocumentPreviewButton } from "../../../components/DocumentFilePreview";
 import { usePermissions } from "@/hooks/usePermissions";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { useState } from "react";
@@ -318,7 +319,7 @@ export function SourceDocumentRow({
   // Pulling copies the Paperless file into Convex, which the no-native-storage
   // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
   const canPull = canPullSource && !isLocalDataRuntime() && !!externalId?.match(/^paperless:\d+$/i) && isNativeFileStorageEnabled();
-  const hasActions = !!downloadUrl || (!!document.url && !downloadUrl) || canPull;
+  const hasActions = !!document.latestVersionId || !!document.fileName || !!document.sha256 || !!downloadUrl || (!!document.url && !downloadUrl) || canPull;
 
   const pull = async () => {
     if (!canPull) return;
@@ -357,6 +358,7 @@ export function SourceDocumentRow({
       </div>
       {hasActions && (
         <div className="source-document__actions">
+          <DocumentPreviewButton document={document} />
           {downloadUrl && (
             <a className="btn btn--ghost btn--sm" href={downloadUrl} target="_blank" rel="noreferrer">
               <Download size={12} /> Open

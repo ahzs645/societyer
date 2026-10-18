@@ -8,4 +8,6 @@ export const integrationSettingsValidator = v.object({
   canadianResidencyRequired: v.boolean(), storageRegion: v.string(), residencyEvidence: v.string(),
   custodian: v.union(v.literal("organization"), v.literal("operator")),
   custodianContact: v.string(), offboardingPlan: v.string(),
+  // Optional so workspaces saved before procurement review stay valid.
+  procurementReviewFolder: v.optional(v.string()),
 });

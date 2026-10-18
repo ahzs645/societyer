@@ -1,8 +1,9 @@
+import { DocumentPreviewButton } from "../components/DocumentFilePreview";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
-import { renderAsync } from "docx-preview";
+import { DocumentPreviewPane } from "../components/DocumentPreviewPane";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { setStoredSocietyId, useSocieties, useSociety } from "../hooks/useSociety";
@@ -20,10 +21,8 @@ import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { useRecordQuery } from "../hooks/useRecordQuery";
 import { formatDate, formatDateTime } from "../lib/format";
-import { fetchDocumentDownload } from "../lib/documentDownload";
 import { documentHasFile, formatBytes, openDocumentFile, restoredDocumentFile } from "../lib/documentOpen";
 import { hashBytes } from "../lib/workspaceArchive";
-import { xlsxToSheets, type SheetPreview } from "../lib/xlsxPreview";
 import {
   documentProvenance,
   parseDocumentContent,
@@ -49,10 +48,8 @@ import {
   Download,
   ExternalLink,
   FileText,
-  FileWarning,
   Layers,
   Link2,
-  Loader2,
   Lock,
   MessageSquare,
   PenLine,
@@ -233,6 +230,7 @@ export function DocumentWorkbenchPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Review workbench</h2>
+              {openable && downloadAvailable && <DocumentPreviewButton document={openable} label="Expand preview" />}
               <span className="card__subtitle">
                 {openComments} open comment{openComments === 1 ? "" : "s"} · {(signatures ?? []).length} signature{(signatures ?? []).length === 1 ? "" : "s"}
               </span>
@@ -739,282 +737,6 @@ function humanTable(table: string) {
   return table.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 }
 
-/* ------------------------------- preview pane -------------------------------- */
-
-/**
- * The browser's PDF viewer titles its toolbar with the PDF's Title metadata,
- * falling back to the blob: URL's random id. Give it the file name instead.
- * Best effort: large, encrypted or unreadable PDFs keep their original bytes.
- */
-async function withPdfTitle(bytes: ArrayBuffer, title?: string | null): Promise<ArrayBuffer | Uint8Array> {
-  if (!title || bytes.byteLength > 20 * 1024 * 1024) return bytes;
-  try {
-    const { PDFDocument } = await import("pdf-lib");
-    const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
-    if (pdf.getTitle()) return bytes;
-    pdf.setTitle(title, { showInWindowTitleBar: true });
-    return await pdf.save({ useObjectStreams: false });
-  } catch {
-    return bytes;
-  }
-}
-
-type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "error";
-
-const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-/** PDF readers accept the `%PDF-` header anywhere in the first 1024 bytes. */
-function hasPdfSignature(bytes: ArrayBuffer) {
-  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 1024));
-  for (let i = 0; i + 4 < head.length; i++) {
-    if (head[i] === 0x25 && head[i + 1] === 0x50 && head[i + 2] === 0x44 && head[i + 3] === 0x46 && head[i + 4] === 0x2d) return true;
-  }
-  return false;
-}
-
-/** DOCX/XLSX are ZIP containers: local file header `PK\x03\x04`. */
-function hasZipSignature(bytes: ArrayBuffer) {
-  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 4));
-  return head.length === 4 && head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
-}
-
-/** Legacy Office (.doc, .xls, .ppt, .msg) compound file: D0 CF 11 E0. */
-function hasOleSignature(bytes: ArrayBuffer) {
-  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 4));
-  return head.length === 4 && head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0;
-}
-
-function imageMimeType(bytes: ArrayBuffer) {
-  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 8));
-  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return "image/png";
-  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "image/jpeg";
-  if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46) return "image/gif";
-  return undefined;
-}
-
-function extensionOf(name: string | undefined) {
-  return (name ?? "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
-}
-
-const LEGACY_LABELS: Record<string, string> = {
-  doc: "Word 97–2003 (.doc)",
-  xls: "Excel 97–2003 (.xls)",
-  ppt: "PowerPoint 97–2003 (.ppt)",
-  msg: "Outlook message (.msg)",
-  pages: "Apple Pages",
-};
-
-/**
- * Renders the real file inline where possible: a saved original from a
- * restored backup first, then the latest uploaded version, then a fetched
- * link (finding D-02). PDFs go into a same-origin blob iframe only after the
- * bytes prove to be a PDF (finding D-01); DOCX via docx-preview; XLSX as plain
- * tables; images as <img>; legacy Office files explain why they cannot render
- * and show the text extracted at import instead.
- */
-function DocumentPreviewPane({
-  document,
-  getDownloadTarget,
-  fallbackUrl,
-  hasAnyFile,
-  extractedText,
-  onOpenFile,
-}: {
-  document: { _id: string; fileName?: string; mimeType?: string; sha256?: string; latestVersionId?: string } | null;
-  getDownloadTarget: (args: { versionId: Id<"documentVersions"> }) => Promise<any>;
-  fallbackUrl: string | null;
-  hasAnyFile: boolean;
-  extractedText?: string;
-  onOpenFile: () => void;
-}) {
-  const [status, setStatus] = useState<PreviewStatus>("loading");
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [sheets, setSheets] = useState<SheetPreview[]>([]);
-  const [text, setText] = useState<string>("");
-  const [origin, setOrigin] = useState<"saved" | "version" | "link" | null>(null);
-  const renderRef = useRef<HTMLDivElement>(null);
-  const fileName = document?.fileName;
-  const ext = extensionOf(fileName);
-
-  useEffect(() => {
-    let cancelled = false;
-    let createdBlobUrl: string | null = null;
-    setStatus("loading");
-    setBlobUrl(null);
-    setSheets([]);
-    setText("");
-    setOrigin(null);
-    if (!document || !hasAnyFile) {
-      setStatus(LEGACY_LABELS[ext] ? "legacy" : "unavailable");
-      return;
-    }
-    (async () => {
-      try {
-        let bytes: ArrayBuffer | null = null;
-        let mimeType = document.mimeType;
-        const restored = await restoredDocumentFile(document);
-        if (cancelled) return;
-        if (restored) {
-          bytes = await restored.arrayBuffer();
-          setOrigin("saved");
-        }
-        let url = fallbackUrl;
-        if (!bytes && document.latestVersionId) {
-          const target = await getDownloadTarget({ versionId: document.latestVersionId as Id<"documentVersions"> });
-          if (target?.kind === "url" && target.url) {
-            url = target.url;
-            mimeType = target.mimeType ?? mimeType;
-          }
-        }
-        if (cancelled) return;
-        if (!bytes) {
-          if (!url || url.startsWith("demo://")) {
-            setStatus(LEGACY_LABELS[ext] ? "legacy" : "unavailable");
-            return;
-          }
-          const lower = (fileName ?? "").toLowerCase();
-          const previewable = mimeType?.includes("pdf") || mimeType?.includes("wordprocessingml") || mimeType?.includes("spreadsheetml") || /\.(pdf|docx|xlsx|png|jpe?g|gif|txt|csv|md)$/.test(lower);
-          if (!previewable) {
-            setStatus(LEGACY_LABELS[ext] ? "legacy" : "unsupported");
-            return;
-          }
-          // Fetch and re-host as a same-origin blob: URL rather than framing the
-          // storage URL directly — keeps the CSP's frame-src scoped to
-          // 'self' data: blob: instead of needing to allowlist every storage host.
-          const response = await fetchDocumentDownload(url);
-          if (!response.ok) throw new Error("Couldn't load the file");
-          bytes = await response.arrayBuffer();
-          setOrigin(document.latestVersionId ? "version" : "link");
-        }
-        if (cancelled || !bytes) return;
-        // Never trust the filename or a response's content type: a sharing
-        // link (e.g. a Drive viewer URL) can return an HTML page, and a blob:
-        // URL inherits this origin, so framing it would run that page's
-        // scripts with the app's privileges. Classify by the bytes and re-type
-        // every blob explicitly.
-        if (hasPdfSignature(bytes)) {
-          const titled = await withPdfTitle(bytes, fileName);
-          if (cancelled) return;
-          createdBlobUrl = URL.createObjectURL(new Blob([titled], { type: "application/pdf" }));
-          setBlobUrl(createdBlobUrl);
-          setStatus("pdf");
-          return;
-        }
-        if (hasZipSignature(bytes)) {
-          if (ext === "xlsx" || mimeType?.includes("spreadsheetml")) {
-            const parsed = await xlsxToSheets(bytes);
-            if (cancelled) return;
-            setSheets(parsed);
-            setStatus("xlsx");
-            return;
-          }
-          if (ext === "docx" || mimeType?.includes("wordprocessingml") || !ext) {
-            const container = renderRef.current;
-            if (!container) throw new Error("Preview container missing");
-            container.replaceChildren();
-            await renderAsync(new Blob([bytes], { type: DOCX_MIME_TYPE }), container);
-            if (cancelled) return;
-            setStatus("docx");
-            return;
-          }
-          setStatus("unsupported");
-          return;
-        }
-        if (hasOleSignature(bytes) || LEGACY_LABELS[ext]) {
-          setStatus("legacy");
-          return;
-        }
-        const image = imageMimeType(bytes);
-        if (image) {
-          createdBlobUrl = URL.createObjectURL(new Blob([bytes], { type: image }));
-          setBlobUrl(createdBlobUrl);
-          setStatus("image");
-          return;
-        }
-        if (/^(txt|csv|md|json)$/.test(ext)) {
-          setText(new TextDecoder().decode(bytes.slice(0, 200_000)));
-          setStatus("text");
-          return;
-        }
-        if (/^(pdf|docx|xlsx)$/.test(ext)) {
-          setStatus("not-a-file");
-          return;
-        }
-        setStatus("unsupported");
-      } catch (error) {
-        console.error("Failed to render document preview", error);
-        if (!cancelled) setStatus("error");
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
-    };
-  }, [getDownloadTarget, document?._id, document?.latestVersionId, document?.sha256, fallbackUrl, fileName, hasAnyFile]);
-
-  const extracted = extractedText?.trim();
-  return (
-    <div className="document-preview-pane">
-      {origin === "saved" && status !== "loading" && (
-        <div className="document-preview-pane__origin"><ShieldCheck size={12} /> Showing the saved original</div>
-      )}
-      {status === "loading" && (
-        <div className="minutes-docx-preview__status">
-          <Loader2 size={18} className="minutes-docx-preview__spinner" aria-hidden />
-          <span>Loading preview…</span>
-        </div>
-      )}
-      {status === "pdf" && blobUrl && (
-        <iframe src={blobUrl} title="Document preview" className="document-preview-pane__pdf" />
-      )}
-      {status === "image" && blobUrl && (
-        <img src={blobUrl} alt={fileName ?? "Document image"} className="document-preview-pane__image" />
-      )}
-      {status === "xlsx" && (
-        <div className="document-preview-pane__sheets">
-          {sheets.map((sheet) => (
-            <section key={sheet.name}>
-              <h4>{sheet.name}</h4>
-              {sheet.rows.length > 0 && (
-                <div className="table-wrap">
-                  <table className="table">
-                    <tbody>
-                      {sheet.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {sheet.truncated && <p className="muted">Only the first rows and columns are shown. Open the file for the rest.</p>}
-            </section>
-          ))}
-          {!sheets.length && <p className="muted">This workbook has no readable cells.</p>}
-        </div>
-      )}
-      {status === "text" && <pre className="document-preview-pane__text">{text}</pre>}
-      {(status === "legacy" || status === "unsupported" || status === "not-a-file" || status === "unavailable" || status === "error") && (
-        <div className="document-preview-pane__message">
-          {status === "legacy" && <p><FileWarning size={16} aria-hidden /> {LEGACY_LABELS[ext] ?? "This older Office format"} can't be shown in a browser.{hasAnyFile ? " Use Open file to read the original in its own application." : ""}</p>}
-          {status === "unsupported" && <p>Preview isn't available for this file type — use “Open file” to view or download it.</p>}
-          {status === "not-a-file" && <p>This link didn't return the document file itself (it may be a sharing or viewer page), so it isn't previewed here. Use “Open file” to view it at its source.</p>}
-          {status === "unavailable" && <p>{hasAnyFile ? "No previewable file could be loaded." : "No file is attached to this document — it's a metadata record. Its details are below."}</p>}
-          {status === "error" && <p><FileWarning size={16} aria-hidden /> Couldn't render a preview — “Open file” still works.</p>}
-          {hasAnyFile && status !== "unavailable" && <button className="btn btn--sm" onClick={onOpenFile}><Download size={12} /> Open file</button>}
-          {extracted && (
-            <details className="document-preview-pane__extracted" open>
-              <summary>Text extracted at import ({extracted.length.toLocaleString()} characters)</summary>
-              <pre>{extracted.slice(0, 20_000)}{extracted.length > 20_000 ? "\n…" : ""}</pre>
-            </details>
-          )}
-        </div>
-      )}
-      <div
-        ref={renderRef}
-        className="minutes-docx-preview__render"
-        style={{ display: status === "docx" ? "block" : "none" }}
-      />
-    </div>
-  );
-}
 
 function numberOrUndefined(value: string) {
   const number = Number(value);

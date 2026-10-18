@@ -1,3 +1,4 @@
+import { DocumentPreviewByIdButton } from "../../../components/DocumentFilePreview";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -124,7 +125,7 @@ export function FinancialPresentationCard({
             disabled={!canWrite || documents === undefined}
           />
         </Field>
-        {selectedDocument && <Link to={`/app/documents/${selectedDocument._id}`} className="muted" style={{ fontSize: 12 }}>Open {selectedDocument.title}</Link>}
+        {selectedDocument && <><Link to={`/app/documents/${selectedDocument._id}`} className="muted" style={{ fontSize: 12 }}>Open {selectedDocument.title}</Link><DocumentPreviewByIdButton documentId={selectedDocument._id} /></>}
         {canWrite && (
           <div>
             <button className="btn btn--accent btn--sm" onClick={() => void save()} disabled={!dirty || saving}>

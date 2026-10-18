@@ -9,13 +9,15 @@ import { convexAuthSiteUrl } from "./convexSite";
  */
 export const authClient = createAuthClient({
   baseURL: convexAuthSiteUrl(),
+  // Renew an active persistent session and recheck it after focus/reconnect.
+  sessionOptions: { refetchInterval: 300, refetchOnWindowFocus: true, refetchWhenOffline: false },
   plugins: [convexClient(), crossDomainClient()],
 });
 
 export type BetterAuthSession = typeof authClient.$Infer.Session;
 
 /** Convex token minted by the deployment's own signer for the current session. */
-export async function fetchConvexToken(): Promise<string | null> {
+export async function fetchConvexToken(_forceRefresh?: boolean): Promise<string | null> {
   const result = await authClient.convex.token({ fetchOptions: { throw: false } });
   return result.data?.token ?? null;
 }

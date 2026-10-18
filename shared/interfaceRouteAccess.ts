@@ -82,6 +82,7 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/elections": "elections:read",
   "/app/grants": "grants:read",
   "/app/grants/sources": "grants:read",
+  "/app/procurement-review": "documents:read",
   "/app/documents": "documents:read",
   "/app/document-catalog": "documents:read",
   "/app/library": "documents:read",
@@ -143,6 +144,11 @@ export const INTERFACE_FALLBACK_ROUTES: Readonly<Record<string, "not-found-in-sh
   "/app/*": "not-found-in-shell",
   "*": "not-found-standalone",
 };
+
+/** Splat routes that host an embedded plugin, which owns every sub-path below
+ * them. Each is an app page like any other: its sub-paths resolve to the read
+ * scope of the prefix in INTERFACE_ROUTE_READ_PERMISSIONS. */
+export const INTERFACE_EMBEDDED_ROUTES: readonly string[] = ["/app/procurement-review/*"];
 
 export function interfaceRouteReadPermission(pathname: string): Permission | undefined {
   let decoded = pathname;
