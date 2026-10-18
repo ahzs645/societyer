@@ -323,3 +323,34 @@ JavaScript syntax, and complete dependency references. Live entry assets were
 compared byte-for-byte with the staged release after deployment. Screenshots
 are in `work/signup-test/live-styled-transcript-dialog.png` and
 `work/signup-test/live-footer-fixed.png`.
+
+### Full production release, October 18, 2026
+
+The complete source release `0074bf0e` is now deployed to production Convex
+`industrious-cricket-610` and Cloudflare Pages deployment `4e4cad95` (`main`).
+This normal build supersedes the isolated October 17 UI patch. The meeting
+transfer Worker was also redeployed as version
+`41b2adff-6414-41b7-ab42-fd78ee9cca78`. No containers are required or deployed.
+
+The Convex deployment passed schema validation and added the connector/OAuth
+indexes without deleting existing indexes. Source endpoints now use the shared
+authorization wrappers with `meetings:write`, retaining uploader and minutes
+permission checks inside the handlers. Production authentication still reports
+Microsoft email delivery enabled, signup enabled, and only `ddcnorth.com` allowed;
+development mail remains unavailable on production. Anonymous MCP POSTs and
+anonymous file-transfer requests return HTTP 401. OAuth discovery is available,
+while each workspace still controls its connector opt-in.
+
+Validation before deployment included the production build, backend lint,
+desktop typecheck, 23 targeted regression scripts, and the portable-manifest
+check with six parser tests. Live frontend entry assets were compared with the
+release build. Deployment output is retained locally under the ignored
+`work/release-checks/` directory. Future full releases deploy the backend first,
+then the transfer Worker and frontend:
+
+```sh
+npm run build:ddcnorth
+npx convex deploy --yes --typecheck enable
+npm run deploy:meeting-transfer:ddcnorth
+CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b npx wrangler pages deploy dist --project-name societyer-ddcnorth --branch main
+```

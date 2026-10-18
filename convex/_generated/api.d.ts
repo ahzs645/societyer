@@ -100,6 +100,7 @@ import type * as lib_access_materialAccess from "../lib/access/materialAccess.js
 import type * as lib_accountingCore from "../lib/accountingCore.js";
 import type * as lib_agendaItems from "../lib/agendaItems.js";
 import type * as lib_agentToolRunner from "../lib/agentToolRunner.js";
+import type * as lib_aiEndpointPolicy from "../lib/aiEndpointPolicy.js";
 import type * as lib_authIdentity from "../lib/authIdentity.js";
 import type * as lib_authorizedServer from "../lib/authorizedServer.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
@@ -108,6 +109,7 @@ import type * as lib_dashboardComplianceRules from "../lib/dashboardComplianceRu
 import type * as lib_electionValidators from "../lib/electionValidators.js";
 import type * as lib_integrationSettings from "../lib/integrationSettings.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
+import type * as lib_oauthSessions from "../lib/oauthSessions.js";
 import type * as lib_offlineMeetingFeature from "../lib/offlineMeetingFeature.js";
 import type * as lib_offlineMeetingInvalidation from "../lib/offlineMeetingInvalidation.js";
 import type * as lib_offlineMeetingProjection from "../lib/offlineMeetingProjection.js";
@@ -229,10 +231,10 @@ import type * as tables_intake from "../tables/intake.js";
 import type * as tables_inventory from "../tables/inventory.js";
 import type * as tables_invoices from "../tables/invoices.js";
 import type * as tables_legalDocs from "../tables/legalDocs.js";
+import type * as tables_mcpOAuth from "../tables/mcpOAuth.js";
 import type * as tables_meetingSources from "../tables/meetingSources.js";
 import type * as tables_meetingWorkflow from "../tables/meetingWorkflow.js";
 import type * as tables_meetings from "../tables/meetings.js";
-import type * as tables_mcpOAuth from "../tables/mcpOAuth.js";
 import type * as tables_offlineMeetings from "../tables/offlineMeetings.js";
 import type * as tables_pathways from "../tables/pathways.js";
 import type * as tables_people from "../tables/people.js";
@@ -369,6 +371,7 @@ declare const fullApi: ApiFromModules<{
   "lib/accountingCore": typeof lib_accountingCore;
   "lib/agendaItems": typeof lib_agendaItems;
   "lib/agentToolRunner": typeof lib_agentToolRunner;
+  "lib/aiEndpointPolicy": typeof lib_aiEndpointPolicy;
   "lib/authIdentity": typeof lib_authIdentity;
   "lib/authorizedServer": typeof lib_authorizedServer;
   "lib/bylawRules": typeof lib_bylawRules;
@@ -377,6 +380,7 @@ declare const fullApi: ApiFromModules<{
   "lib/electionValidators": typeof lib_electionValidators;
   "lib/integrationSettings": typeof lib_integrationSettings;
   "lib/moduleSettings": typeof lib_moduleSettings;
+  "lib/oauthSessions": typeof lib_oauthSessions;
   "lib/offlineMeetingFeature": typeof lib_offlineMeetingFeature;
   "lib/offlineMeetingInvalidation": typeof lib_offlineMeetingInvalidation;
   "lib/offlineMeetingProjection": typeof lib_offlineMeetingProjection;
@@ -498,10 +502,10 @@ declare const fullApi: ApiFromModules<{
   "tables/inventory": typeof tables_inventory;
   "tables/invoices": typeof tables_invoices;
   "tables/legalDocs": typeof tables_legalDocs;
+  "tables/mcpOAuth": typeof tables_mcpOAuth;
   "tables/meetingSources": typeof tables_meetingSources;
   "tables/meetingWorkflow": typeof tables_meetingWorkflow;
   "tables/meetings": typeof tables_meetings;
-  "tables/mcpOAuth": typeof tables_mcpOAuth;
   "tables/offlineMeetings": typeof tables_offlineMeetings;
   "tables/pathways": typeof tables_pathways;
   "tables/people": typeof tables_people;
