@@ -38,4 +38,3 @@ export const LEGACY_LABELS: Record<string, string> = {
   msg: "Outlook message (.msg)",
   pages: "Apple Pages",
 };
-

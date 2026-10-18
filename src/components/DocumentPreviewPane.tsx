@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PdfPreview } from "./PdfPreview";
 import { renderAsync } from "docx-preview";
 import { Download, FileWarning, Loader2, ShieldCheck } from "lucide-react";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -9,24 +10,6 @@ import { hasPdfSignature, hasZipSignature, hasOleSignature, imageMimeType, exten
 
 /* ------------------------------- preview pane -------------------------------- */
 
-/**
- * The browser's PDF viewer titles its toolbar with the PDF's Title metadata,
- * falling back to the blob: URL's random id. Give it the file name instead.
- * Best effort: large, encrypted or unreadable PDFs keep their original bytes.
- */
-async function withPdfTitle(bytes: ArrayBuffer, title?: string | null): Promise<ArrayBuffer | Uint8Array> {
-  if (!title || bytes.byteLength > 20 * 1024 * 1024) return bytes;
-  try {
-    const { PDFDocument } = await import("pdf-lib");
-    const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
-    if (pdf.getTitle()) return bytes;
-    pdf.setTitle(title, { showInWindowTitleBar: true });
-    return await pdf.save({ useObjectStreams: false });
-  } catch {
-    return bytes;
-  }
-}
-
 type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "error";
 
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -34,7 +17,7 @@ const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordproces
 /**
  * Renders the real file inline where possible: a saved original from a
  * restored backup first, then the latest uploaded version, then a fetched
- * link (finding D-02). PDFs go into a same-origin blob iframe only after the
+ * link (finding D-02). PDFs use the shared PDF.js viewer only after the
  * bytes prove to be a PDF (finding D-01); DOCX via docx-preview; XLSX as plain
  * tables; images as <img>; legacy Office files explain why they cannot render
  * and show the text extracted at import instead.
@@ -58,6 +41,7 @@ export function DocumentPreviewPane({
   loadBytes?: (signal: AbortSignal) => Promise<ArrayBuffer>;
 }) {
   const [status, setStatus] = useState<PreviewStatus>("loading");
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [sheets, setSheets] = useState<SheetPreview[]>([]);
   const [text, setText] = useState<string>("");
@@ -72,6 +56,7 @@ export function DocumentPreviewPane({
     let createdBlobUrl: string | null = null;
     setStatus("loading");
     setBlobUrl(null);
+    setPdfBlob(null);
     setSheets([]);
     setText("");
     setOrigin(null);
@@ -129,10 +114,7 @@ export function DocumentPreviewPane({
         // scripts with the app's privileges. Classify by the bytes and re-type
         // every blob explicitly.
         if (hasPdfSignature(bytes)) {
-          const titled = await withPdfTitle(bytes, fileName);
-          if (cancelled) return;
-          createdBlobUrl = URL.createObjectURL(new Blob([titled], { type: "application/pdf" }));
-          setBlobUrl(createdBlobUrl);
+          setPdfBlob(new Blob([bytes], { type: "application/pdf" }));
           setStatus("pdf");
           return;
         }
@@ -202,9 +184,7 @@ export function DocumentPreviewPane({
           <span>Loading preview…</span>
         </div>
       )}
-      {status === "pdf" && blobUrl && (
-        <iframe src={blobUrl} title="Document preview" className="document-preview-pane__pdf" />
-      )}
+      {status === "pdf" && pdfBlob && <PdfPreview blob={pdfBlob} />}
       {status === "image" && blobUrl && (
         <img src={blobUrl} alt={fileName ?? "Document image"} className="document-preview-pane__image" />
       )}
@@ -253,4 +233,3 @@ export function DocumentPreviewPane({
     </div>
   );
 }
-

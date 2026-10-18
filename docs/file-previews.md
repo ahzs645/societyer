@@ -24,4 +24,6 @@ Supported formats are PDF, DOCX, XLSX, PNG/JPEG/GIF, and text/CSV/Markdown/JSON.
 
 Dialogs bound in-memory rendering to 25 MiB, both from known metadata before fetching and from loaded bytes before rendering. Larger originals remain downloadable. This prevents a large file preview from recreating the whole-catalog memory problem on phones. Adding range-based previews of very large PDFs would be a separate storage/renderer capability; the dialog's loader boundary can accommodate it later.
 
+PDFs use the shared `PdfPreview` canvas/text-layer renderer, also used by intake source review. It renders one page at a time, fits phone widths, provides page/zoom controls and selectable text, bounds canvas memory, and cancels pending rendering when closed. It does not depend on browser PDF plugins.
+
 The existing document workbench keeps its saved-original / latest-version / legacy-link resolution order through the extracted shared pane. This refactor does not change document access, permissions, file storage or version history.
