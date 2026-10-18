@@ -2,7 +2,7 @@
  * Gate: "Backfill imports" never misstates the books silently.
  *
  * Reproduces the audit finding on the demo seed (opening balances posted on
- * 2026-01-01, total assets $76,980): the old backfill posted every imported
+ * 2026-01-01; total assets were $76,980 when it was found): the old backfill posted every imported
  * transaction, including those dated in 2025 (already reflected in the opening
  * balances), which moved total assets ($76,980 -> $78,535 on the original
  * fourteen-row seed). It also sent every unmapped row to the first

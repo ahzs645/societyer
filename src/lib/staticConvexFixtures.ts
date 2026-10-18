@@ -2578,7 +2578,7 @@ const demoJournal = buildDemoJournal({
   asOf: DEMO_AS_OF,
 });
 const ledgerAccountId = (account: DemoFeedAccountKey | DemoLedgerKey) => (account in FEED_ACCOUNT_IDS ? FEED_ACCOUNT_IDS[account as DemoFeedAccountKey] : LEDGER_ACCOUNT_IDS[account as DemoLedgerKey]);
-const journalEntryId = (key: string) => (key === "opening" ? "static_journal_opening" : `static_journal_feed_${key.replace(/^static_tx_/, "")}`);
+const journalEntryId = (key: string) => (key === "opening" ? "static_journal_opening" : `static_journal_${key.replace(/^static_tx_/, "")}`);
 
 const journalEntries = [
   ...demoJournal.map((entry) => ({
