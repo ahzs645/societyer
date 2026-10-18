@@ -100,7 +100,13 @@ export function useRouteBreadcrumbs(
       crumb.label.toLowerCase() === next.label.toLowerCase()
     );
   });
-  if (currentTitle != null && currentTitle !== false && currentTitle !== "") {
+  const last = deduped[deduped.length - 1];
+  const repeatsLast = typeof currentTitle === "string" && typeof last?.label === "string" && last.label.toLowerCase() === currentTitle.toLowerCase();
+  if (repeatsLast) {
+    // A sub-route titled like its parent (Financial reports › Financial
+    // reports): the parent crumb already names the page.
+    deduped[deduped.length - 1] = { label: currentTitle };
+  } else if (currentTitle != null && currentTitle !== false && currentTitle !== "") {
     deduped.push({ label: currentTitle });
   }
   return deduped;

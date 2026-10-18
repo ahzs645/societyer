@@ -15,7 +15,13 @@ $tag-dot-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pin
   gap: token(s-2);
   margin: token(s-2) 0;
 
-  .select { min-width: 160px; }
+  // The Select trigger fills its container by default; here it sits inline
+  // beside the review toggle.
+  .select-trigger {
+    width: auto;
+    min-width: 150px;
+    max-width: 240px;
+  }
 }
 
 .txn-filter-bar__manage {
@@ -376,6 +382,7 @@ $tag-dot-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pin
 
 @media (max-width: 640px) {
   .txn-filter-bar__manage { margin-left: 0; }
+  .txn-filter-bar .select-trigger { flex: 1 1 140px; max-width: none; }
   .txn-summary__item--count { margin-left: 0; text-align: left; }
   .txn-lines__grid { grid-template-columns: minmax(0, 1fr); }
 }

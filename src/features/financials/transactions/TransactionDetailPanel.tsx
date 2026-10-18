@@ -16,9 +16,9 @@ import { PayeeRenameDialog, type PayeeRenameTarget } from "./PayeeRenameDialog";
 import { TransactionReceipt } from "./TransactionReceipt";
 import {
   ATTENTION_LABELS,
-  CATEGORIZED_BY_LABELS,
   attentionReasons,
   categorizedByValue,
+  type CategorizedByValue,
 } from "../../../../shared/transactionAttention";
 import type { PayeeAliasRow } from "./usePayeeAliases";
 import { useRecordTableRowModel } from "../../../platform/record-engine/record-table/hooks/useRecordTableRowModel";
@@ -64,6 +64,15 @@ export type PanelTransaction = {
   tagIds?: string[];
   spendBudgetId?: string;
   lines?: TransactionLine[];
+};
+
+// "Categorised by …" in the panel reads as a sentence; the table column keeps
+// the short labels (Rule, Suggested, Manual, Imported).
+const CATEGORIZED_BY_PHRASES: Record<CategorizedByValue, string> = {
+  rule: "a rule",
+  suggestion: "a suggestion",
+  manual: "hand",
+  imported: "the import",
 };
 
 const MATCH_LABELS: Record<string, string> = {
@@ -398,7 +407,7 @@ export function TransactionDetailPanel({
             <p className="transaction-panel__meta">
               {method ? (
                 <>
-                  Categorised by <strong>{CATEGORIZED_BY_LABELS[method].toLowerCase()}</strong>
+                  Categorised by <strong>{CATEGORIZED_BY_PHRASES[method]}</strong>
                   {method === "rule" && record.ruleApplication?.ruleName ? <> · {record.ruleApplication.ruleName}</> : null}
                 </>
               ) : (
