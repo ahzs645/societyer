@@ -2,7 +2,7 @@
  * The server seed (shared/functions/seed.ts, `npm run convex:seed`) tells the
  * same finance story as the in-browser demo: transaction rules with provenance
  * on the feed, reconciliation periods, expense approval rules and claims, and
- * the invoicing demo. It also seeds the three corporation personas of the demo
+ * the invoicing and bills demos. It also seeds the three corporation personas of the demo
  * banner (shared/demoData/corporations.ts), which the in-browser demo creates
  * when a persona is chosen. Both come from shared/demoData generators; this gate
  * runs the real `seed:run` mutation on convex-test (schema-validated, no user
@@ -19,6 +19,7 @@ import * as recon from "../shared/functions/reconciliation";
 import * as rules from "../shared/functions/transactionRules";
 import * as exp from "../shared/functions/expenseReports";
 import * as inv from "../shared/functions/invoices";
+import * as billFns from "../shared/functions/bills";
 import * as registers from "../shared/functions/businessRegisters";
 import { demoExpenseReports } from "../shared/demoData/financeWorkflows";
 import { DEMO_RECONCILIATION_KEYS } from "../shared/demoData/financeWorkflows";
@@ -111,7 +112,11 @@ const subsets: Record<string, { static: (row: any) => boolean; server: (row: any
   invoiceCatalogItems: { static: () => true, server: () => true },
   invoiceSeries: { static: () => true, server: () => true },
   invoiceSettings: { static: () => true, server: () => true },
-  accountingCounterparties: { static: (row) => row.kind === "customer", server: () => true },
+  accountingCounterparties: { static: (row) => row.kind === "customer", server: (row) => row.kind === "customer" },
+  bills: { static: () => true, server: () => true },
+  "accountingCounterparties (vendors)": { static: (row) => String(row._id).startsWith("static_vendor_"), server: (row) => row.kind === "vendor" },
+  "financialTransactions (bill payments)": { static: (row) => String(row.externalId).startsWith("csv-bill-"), server: (row) => String(row.externalId).startsWith("csv-bill-") },
+  "journalEntries (bills)": { static: (row) => String(row.source).startsWith("bill"), server: (row) => String(row.source).startsWith("bill") },
   organizationIdentifiers: { static: (row) => row.kind === "gst", server: () => true },
   fundRestrictions: { static: () => true, server: () => true },
   memberSubscriptions: { static: (row) => String(row._id).startsWith("static_member_subscription_renewal_"), server: isRenewal },
@@ -149,6 +154,8 @@ const refFields: Record<string, Array<[string, string]>> = {
   expenseReports: [["claimantUserId", "users"], ["approverUserId", "users"], ["declinedByUserId", "users"], ["receiptDocumentId", "documents"], ["approvals[].userId", "users"], ["approvalTrail[].actorUserId", "users"], ["policyException.byUserId", "users"]],
   invoices: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["seriesId", "invoiceSeries"], ["lines[].catalogItemId", "invoiceCatalogItems"], ["payments[].financialTransactionId", "financialTransactions"]],
   invoiceSeries: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["lines[].catalogItemId", "invoiceCatalogItems"]],
+  bills: [["vendorId", "accountingCounterparties"], ["lines[].accountId", "financialAccounts"], ["lines[].fundRestrictionId", "fundRestrictions"], ["payments[].financialTransactionId", "financialTransactions"], ["payments[].cashAccountId", "financialAccounts"], ["payments[].journalEntryId", "journalEntries"], ["journalEntryId", "journalEntries"], ["submittedByUserId", "users"], ["createdByUserId", "users"], ["approvals[].userId", "users"]],
+  journalLines: [["journalEntryId", "journalEntries"], ["accountId", "financialAccounts"], ["counterpartyId", "accountingCounterparties"], ["financialTransactionId", "financialTransactions"], ["fundRestrictionId", "fundRestrictions"]],
   memberSubscriptions: [["planId", "subscriptionPlans"], ["memberId", "members"]],
   fundRestrictions: [["linkedFinancialAccountId", "financialAccounts"]],
   financialAccounts: [["parentAccountId", "financialAccounts"]],
@@ -190,7 +197,7 @@ assert.ok(checkedRefs > 200, "references were actually checked");
 
 /* ------------------------------------------------- account balances */
 
-const SEED_OPENING: Record<string, number> = { "operating-chequing": 3490000, "restricted-fund": 1200000, "organization-visa": 0, facilities: 0, "facilities-venue": 0, "facilities-utilities": 0 };
+const SEED_OPENING: Record<string, number> = { "operating-chequing": 3490000, "restricted-fund": 1200000, "organization-visa": 0, facilities: 0, "facilities-venue": 0, "facilities-utilities": 0, "accounts-payable": 0, "program-supplies": 0 };
 for (const account of server.financialAccounts) {
   const sum = server.financialTransactions.filter((row: any) => row.accountId === account._id).reduce((total: number, row: any) => total + row.amountCents, 0);
   assert.ok(account.externalId in SEED_OPENING, `known seed account ${account.externalId}`);
@@ -275,6 +282,27 @@ for (const invoice of server.invoices) {
   }
 }
 
+/* ------------------------------------------------- bills */
+
+const [billsA, billsB] = await Promise.all([billFns.workspacePortable(A.ctx, { societyId: A.societyId }), billFns.workspacePortable(B.ctx, { societyId: B.societyId })]);
+const billSummary = (ws: Awaited<ReturnType<typeof billFns.workspacePortable>>) =>
+  ws.bills
+    .map((row) => `${row.vendorName}:${row.billNumber ?? "-"}:${row.status}:${row.billDate}:${row.dueDate}:${row.totalCents}:${row.paidCents}:${row.payments.length}:${row.approvals.length}/${row.requiredApprovals}`)
+    .sort();
+assert.deepEqual(billSummary(billsB), billSummary(billsA), "bills, derived statuses, payments and approvals match");
+assert.deepEqual(billsB.summary, billsA.summary, "payables summary matches");
+assert.equal(new Set(billsB.bills.map((row) => row.status)).size, 8, "the seeded bills cover every status");
+for (const bill of server.bills) {
+  for (const payment of bill.payments.filter((p) => p.financialTransactionId)) {
+    const txn = server.financialTransactions.find((row) => row._id === payment.financialTransactionId);
+    assert.equal(-txn.amountCents, payment.amountCents, `${bill.billNumber}: the linked bank line is the payment amount`);
+    assert.equal(txn.matchedId, bill._id, `${bill.billNumber}: the linked bank line points back at the bill`);
+  }
+}
+for (const entry of server.journalEntries.filter((row) => String(row.source).startsWith("bill"))) {
+  assert.ok(!String(entry.sourceExternalId).includes("seed-ref"), "bill entry keys carry real bill ids");
+}
+
 /* ------------------------------------------------- business registers */
 
 const [payA, payB] = await Promise.all([registers.payrollWorkspacePortable(A.ctx, { societyId: A.societyId }), registers.payrollWorkspacePortable(B.ctx, { societyId: B.societyId })]);
@@ -331,4 +359,4 @@ for (const key of CORPORATION_DEMO_KEYS) {
 console.table(countRows);
 console.table(Object.entries(reconB).map(([period, row]: [string, any]) => ({ period, status: row.status, difference: (row.differenceCents / 100).toFixed(2), static: (reconA[period].differenceCents / 100).toFixed(2), open: row.unclearedCount })));
 console.table(corporationRows);
-console.log(`Seed parity checks passed: ${checkedRefs} references resolve; rules, periods, claims and ${server.invoices.length} invoices match the in-browser demo, and the ${CORPORATION_DEMO_KEYS.length} corporation demos match their in-browser workspaces.`);
+console.log(`Seed parity checks passed: ${checkedRefs} references resolve; rules, periods, claims, ${server.invoices.length} invoices and ${server.bills.length} bills match the in-browser demo, and the ${CORPORATION_DEMO_KEYS.length} corporation demos match their in-browser workspaces.`);
