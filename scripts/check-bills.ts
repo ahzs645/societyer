@@ -5,9 +5,11 @@
 // approval under the expense approval rules, posting on approval (accrual-only)
 // and payment (both bases plus a cash-only entry), cash- and accrual-basis
 // statements that both balance, payments linked to bank lines (matched and
-// categorised to Accounts payable, put back on removal), closed fiscal
-// periods, the books close date, cancel with a reversing entry, vendors and
-// tenancy.
+// categorised to Accounts payable, put back on removal with their rule
+// history; a line Backfill imports posted has that entry voided and restored,
+// never counted twice), editors who can't approve their own edit, closed
+// fiscal periods, the books close date, cancel with a reversing entry, vendors
+// and tenancy.
 import assert from "node:assert/strict";
 import {
   addDays,
