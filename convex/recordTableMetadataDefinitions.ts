@@ -9,6 +9,7 @@
 import { ROUTINE_MOTION_TAGS } from "../shared/proceduralMotions";
 import { DOMAIN_RECORD_TABLE_OBJECTS } from "./recordTableDomainObjects";
 import { BUSINESS_REGISTER_RECORD_TABLE_OBJECTS } from "./recordTableBusinessRegisterObjects";
+import { BOOKS_RECORD_TABLE_OBJECTS } from "./recordTableBooksObjects";
 
 // Field types the registry understands — keep in sync with
 // src/platform/record-engine/types/FieldType.ts
@@ -3660,4 +3661,5 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
   },
   ...DOMAIN_RECORD_TABLE_OBJECTS,
   ...BUSINESS_REGISTER_RECORD_TABLE_OBJECTS,
+  ...BOOKS_RECORD_TABLE_OBJECTS,
 ];
