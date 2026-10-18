@@ -426,6 +426,36 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/financials/reports",
+    "path": "/demo/app/financials/reports",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/reports/:report",
+    "path": "/demo/app/financials/reports/operations",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/journal-entries",
+    "path": "/demo/app/financials/journal-entries",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/chart-of-accounts",
+    "path": "/demo/app/financials/chart-of-accounts",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/books-settings",
+    "path": "/demo/app/financials/books-settings",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
     "pattern": "/app/financials/year-end",
     "path": "/demo/app/financials/year-end",
     "kind": "app",
