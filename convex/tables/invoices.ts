@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { transactionLineValidator } from "./financeTags";
+import { transactionRuleApplicationValidator } from "./accounting";
 
 /**
  * Receivables: invoices for dues, program fees, space rentals and
@@ -32,6 +33,8 @@ export const invoiceLinkedTransactionSnapshotValidator = v.object({
   accountingAccountId: v.optional(v.id("financialAccounts")),
   categorizedBy: v.optional(v.string()),
   ruleId: v.optional(v.id("transactionRules")),
+  // The rule run the link cleared, so the rule's Undo still works after unlinking.
+  ruleApplication: v.optional(transactionRuleApplicationValidator),
   reconciledAtISO: v.optional(v.string()),
   reconciledByName: v.optional(v.string()),
   matchedKind: v.optional(v.string()),

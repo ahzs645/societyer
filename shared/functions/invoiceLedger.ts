@@ -87,6 +87,7 @@ export type TransactionSnapshot = {
   accountingAccountId?: string;
   categorizedBy?: string;
   ruleId?: string;
+  ruleApplication?: { ruleName: string; batchId: string; appliedAtISO: string; previous?: unknown };
   reconciledAtISO?: string;
   reconciledByName?: string;
   matchedKind?: string;

@@ -406,6 +406,34 @@ await inv.recordPaymentPortable(ctx, { id: creditInvoice, date: today, amountCen
 const creditCash = await linesOf((await invoiceRow(creditInvoice)).payments[0].cashBasisEntryId!);
 assert.deepEqual(creditCash.map((item) => [item.accountId, item.side, item.amountCents]), [[AR, "debit", 8950], [PROGRAM, "credit", 9000], [GST, "debit", 50]], "the cash basis recognises the netted revenue and tax");
 
+// "Post existing invoices" checks everything before writing: a deposit whose own entry is in closed books leaves no partial state.
+{
+  const depositId = deposit._id;
+  const imported = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Imported Payer", issueDate: today, terms: "net_15", lines: [{ item: "Room", quantity: 1, unitPriceCents: 4000 }] });
+  await db.patch(imported, { status: "sent", payments: [{ key: "p_imported", date: today, amountCents: 4000, method: "e_transfer", financialTransactionId: depositId }], paidCents: 4000 });
+  const ruleRun = { ruleName: "Grants in", batchId: "batch_ledger_gate", appliedAtISO: "2026-02-01T00:00:00.000Z" };
+  await db.patch(depositId, { categorizedBy: "rule", ruleApplication: ruleRun });
+  const untouched = await get(depositId);
+  assert.ok(String(untouched.date) < today, "the deposit predates today");
+  await db.patch(books._id, { closeDate: String(untouched.date) });
+  const refused = await inv.postExistingPortable(ctx, { societyId: S, ids: [imported] });
+  assert.equal(refused.failed.length, 1, "the invoice is reported as failed");
+  assert.match(refused.failed[0].error, /books are closed through/);
+  assert.equal(refused.postedInvoices, 0, "and its accrual isn't posted on its own");
+  assert.deepEqual(await get(depositId), untouched, "the deposit is left exactly as it was");
+  assert.equal((await get(imported)).journalEntryId, undefined);
+  assert.equal((await entries()).filter((entry) => entry.sourceExternalId === accrualKey(imported)).length, 0, "nothing was posted for it");
+  await db.patch(books._id, { closeDate: undefined });
+  const accepted = await inv.postExistingPortable(ctx, { societyId: S, ids: [imported] });
+  assert.deepEqual([accepted.postedInvoices, accepted.postedPayments, accepted.failed.length], [1, 1, 0], "once the books open it posts the invoice and its payment");
+  const linked = await get(depositId);
+  assert.deepEqual([linked.matchedKind, linked.matchedId, linked.ruleApplication], ["invoice", imported, undefined], "the deposit is matched once its payment is in the books");
+  assert.deepEqual((await get(imported)).payments[0].transactionBefore.ruleApplication, ruleRun, "the rule run the link cleared is kept");
+  await inv.linkDepositPortable(ctx, { id: imported, paymentKey: "p_imported" });
+  const released = await get(depositId);
+  assert.deepEqual([released.matchedKind, released.categorizedBy, released.ruleApplication], [untouched.matchedKind, "rule", ruleRun], "unlinking restores the rule history, so the rule's Undo still works");
+}
+
 // Everything posted still balances, and receivables still match the invoices.
 const postedIds = new Set((await entries()).filter((entry) => entry.status === "posted").map((entry) => entry._id));
 const postedLines: InvoiceLedgerLine[] = (await allLines()).filter((item) => postedIds.has(item.journalEntryId)).map((item) => ({ accountId: item.accountId, side: item.side === "debit" ? "debit" : "credit", amountCents: item.amountCents }));

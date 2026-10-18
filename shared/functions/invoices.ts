@@ -55,12 +55,15 @@ import {
   type TransactionSnapshot,
 } from "./invoiceLedger";
 import { tagGroupLookup } from "../financeTags";
+import { validateBalancedJournalLines } from "../accountingCore";
 import {
   DUES_REVENUE_CATEGORY,
+  accrualPostingLines,
   booksStartLabel,
   foreignCurrencySummary,
   invoiceNeedsAction,
   normalizeRevenueCategory,
+  paymentPostingLines,
   type NeedsActionFlag,
 } from "../invoiceLedger";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
@@ -702,13 +705,15 @@ function snapshotOf(txn: Row): TransactionSnapshot {
     if (typeof value === "string" && value) snapshot[field] = value;
   }
   if (Array.isArray(txn.lines) && txn.lines.length) snapshot.lines = txn.lines;
+  if (txn.ruleApplication && typeof txn.ruleApplication === "object") snapshot.ruleApplication = txn.ruleApplication;
   return snapshot;
 }
 
 /**
  * Mark a deposit matched to the invoice and categorised to Accounts
- * receivable as a single line (a split is folded; its lines are kept in the
- * snapshot and come back on unlink). Tags stay as they were.
+ * receivable as a single line (a split is folded; its lines and any rule
+ * run it cleared are kept in the snapshot and come back on unlink). Tags
+ * stay as they were.
  */
 async function matchDeposit(ctx: PortableMutationCtx, invoice: Row, txn: Row, lctx: InvoiceLedgerContext, actor?: string): Promise<TransactionSnapshot> {
   const receivable = await receivableAccount(ctx, invoice.societyId, lctx);
@@ -741,6 +746,7 @@ async function releaseDeposit(ctx: PortableMutationCtx, invoice: Row, payment: S
         accountingAccountId: before.accountingAccountId,
         categorizedBy: before.categorizedBy,
         ruleId: before.ruleId,
+        ruleApplication: before.ruleApplication,
         reconciledAtISO: before.reconciledAtISO,
         reconciledByName: before.reconciledByName,
         matchedKind: before.matchedKind,
@@ -902,12 +908,36 @@ async function linkableDeposit(ctx: PortableQueryCtx, invoice: Row, transactionI
   const alreadyLinked = invoices.some((other) => (other.payments ?? []).some((payment: StoredInvoicePayment) => payment.financialTransactionId === transactionId));
   if (alreadyLinked) throw new Error("That bank transaction is already linked to an invoice payment.");
   if (!MATCHABLE_KINDS.has(txn.matchedKind)) throw new Error(`That bank transaction is already matched to a ${txn.matchedKind} record.`);
-  // A deposit another kind of entry already posted can't be taken over (refused before anything is written).
-  for (const entry of await claimableDepositEntries(ctx, transactionId)) {
-    await assertBooksOpen(ctx, invoice.societyId, [entry.date], "voided");
-    await assertPeriodOpen(ctx, { societyId: invoice.societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
-  }
+  await assertDepositClaimable(ctx, invoice.societyId, transactionId);
   return txn;
+}
+
+/** A deposit another kind of entry already posted can't be taken over, nor one whose own entry is in closed books (read-only). */
+async function assertDepositClaimable(ctx: PortableQueryCtx, societyId: string, transactionId: string) {
+  for (const entry of await claimableDepositEntries(ctx, transactionId)) {
+    await assertBooksOpen(ctx, societyId, [entry.date], "voided");
+    await assertPeriodOpen(ctx, { societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
+  }
+}
+
+/**
+ * Everything "Post existing invoices" would refuse for one invoice, checked
+ * before it writes anything (closed books or periods, a deposit posted
+ * another way, lines that don't balance), so a failure leaves no partial state.
+ */
+async function assertInvoicePostable(ctx: PortableQueryCtx, row: Row, lctx: InvoiceLedgerContext, postAccrual: boolean, payments: StoredInvoicePayment[]) {
+  if (postAccrual && computeInvoiceTotals(row.lines ?? [], row.discount).totalCents > 0) {
+    await assertPostableDates(ctx, row.societyId, [row.issueDate]);
+    const placeholder = { receivableAccountId: "receivable", taxPayableAccountId: "tax" };
+    validateBalancedJournalLines(accrualPostingLines(asStored(row), () => "revenue", placeholder));
+  }
+  for (const payment of payments) {
+    await assertPostableDates(ctx, row.societyId, [payment.date]);
+    validateBalancedJournalLines(paymentPostingLines(payment, { depositAccountId: "deposit", receivableAccountId: "receivable" }));
+    if (!payment.financialTransactionId) continue;
+    const txn = (await ctx.db.get(payment.financialTransactionId, "financialTransactions")) as Row | null;
+    if (txn && txn.societyId === row.societyId) await assertDepositClaimable(ctx, row.societyId, txn._id);
+  }
 }
 
 async function assertDepositAccount(ctx: PortableQueryCtx, societyId: string, accountId: string) {
@@ -1498,6 +1528,8 @@ export async function postExistingPortable(ctx: PortableMutationCtx, { societyId
     if (state.state === "blocked") result.blocked += 1;
     if (state.state !== "ready") continue;
     try {
+      const pending = ((row.payments ?? []) as StoredInvoicePayment[]).filter((payment) => !((payment.journalEntryId && postedIds.has(payment.journalEntryId)) || paymentBlock(payment, lctx)));
+      await assertInvoicePostable(ctx, row, lctx, !state.entryId, pending);
       let current: Row = row;
       const events: Array<ReturnType<typeof event>> = [];
       if (!state.entryId) {
@@ -1513,14 +1545,13 @@ export async function postExistingPortable(ctx: PortableMutationCtx, { societyId
       const payments = [...(current.payments ?? [])] as StoredInvoicePayment[];
       for (const [index, original] of payments.entries()) {
         if ((original.journalEntryId && postedIds.has(original.journalEntryId)) || paymentBlock(original, lctx)) continue;
+        const txn = original.financialTransactionId ? ((await ctx.db.get(original.financialTransactionId, "financialTransactions")) as Row | null) : null;
+        // Post first: the deposit is only matched (and its snapshot kept) once its payment is in the books.
+        const posting = await postPayment(ctx, asStored({ ...current, payments }), original, lctx, userId);
         let payment = original;
-        if (payment.financialTransactionId) {
-          const txn = (await ctx.db.get(payment.financialTransactionId, "financialTransactions")) as Row | null;
-          if (txn && txn.societyId === societyId && !(txn.matchedKind === "invoice" && txn.matchedId === row._id) && MATCHABLE_KINDS.has(txn.matchedKind)) {
-            payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
-          }
+        if (txn && txn.societyId === societyId && !(txn.matchedKind === "invoice" && txn.matchedId === row._id) && MATCHABLE_KINDS.has(txn.matchedKind)) {
+          payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
         }
-        const posting = await postPayment(ctx, asStored({ ...current, payments }), payment, lctx, userId);
         payments[index] = withPosting(payment, posting);
         await ctx.db.patch(row._id, { payments });
         if (posting.journalEntryId) result.postedPayments += 1;

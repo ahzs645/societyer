@@ -2,6 +2,14 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { transactionLineValidator } from "./financeTags";
 
+/** The rule run that last categorised a bank transaction, and what it replaced (for Undo). */
+export const transactionRuleApplicationValidator = v.object({
+  ruleName: v.string(),
+  batchId: v.string(),
+  appliedAtISO: v.string(),
+  previous: v.optional(v.any()),
+});
+
 /**
  * Accounting & budgeting tables (financial accounts, fiscal periods, journals,
  * transactions, reconciliation, budgets, subscriptions, budget snapshots),
@@ -216,12 +224,7 @@ export const accountingTables = {
     // manual) and, for rules, which rule and what it replaced (for undo).
     categorizedBy: v.optional(v.string()),
     ruleId: v.optional(v.id("transactionRules")),
-    ruleApplication: v.optional(v.object({
-      ruleName: v.string(),
-      batchId: v.string(),
-      appliedAtISO: v.string(),
-      previous: v.optional(v.any()),
-    })),
+    ruleApplication: v.optional(transactionRuleApplicationValidator),
     accountingAccountId: v.optional(v.id("financialAccounts")),
     fundRestrictionId: v.optional(v.id("fundRestrictions")),
     reviewedAtISO: v.optional(v.string()),
