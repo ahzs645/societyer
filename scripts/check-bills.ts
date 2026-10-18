@@ -5,9 +5,11 @@
 // approval under the expense approval rules, posting on approval (accrual-only)
 // and payment (both bases plus a cash-only entry), cash- and accrual-basis
 // statements that both balance, payments linked to bank lines (matched and
-// categorised to Accounts payable, put back on removal), closed fiscal
-// periods, the books close date, cancel with a reversing entry, vendors and
-// tenancy.
+// categorised to Accounts payable, put back on removal with their rule
+// history; a line Backfill imports posted has that entry voided and restored,
+// never counted twice), editors who can't approve their own edit, closed
+// fiscal periods, the books close date, cancel with a reversing entry, vendors
+// and tenancy.
 import assert from "node:assert/strict";
 import {
   addDays,
@@ -258,6 +260,13 @@ assert.ok(agm.canApprove, "the owner can give the second approval");
 // The treasurer submitted it (and, as a director, lacks finance edit access by default).
 await assert.rejects(() => bills.decidePortable(asTreasurer, { id: agm._id, decision: "approve" }), /finance edit access|your own bill/);
 await assert.rejects(() => bills.decidePortable(asSecretary, { id: agm._id, decision: "approve" }), /already approved/, "one vote per person");
+{
+  // The drawer's Approve and Decline follow the server: the secretary already approved, so may only decline.
+  const seen = (await bills.workspacePortable(asSecretary, { societyId: S })).bills.find((bill) => bill._id === agm._id)!;
+  assert.deepEqual([seen.canApprove, seen.canDecline], [false, true], "someone who already approved may still decline");
+  const submitterView = (await bills.workspacePortable(asTreasurer, { societyId: S })).bills.find((bill) => bill._id === agm._id)!;
+  assert.deepEqual([submitterView.canApprove, submitterView.canDecline], [false, false]);
+}
 await assert.rejects(() => bills.decidePortable(ctx, { id: agm._id, decision: "decline", reason: "" }), /reason/);
 let outcome = await bills.decidePortable(ctx, { id: agm._id, decision: "approve" });
 assert.equal(outcome.status, "approved");
@@ -329,6 +338,59 @@ assert.equal(await creditBalance(AP), apBeforePayment, "the payment entry no lon
 assert.equal((await get(cashEntry._id)).status, "void", "removing the payment voids its cash-only entry too");
 assert.equal(await creditBalance(AP, "cash"), 0);
 assert.equal((await billById(overdue._id)).status, "overdue");
+
+// A bank line Backfill imports already posted: the link voids that entry, so
+// the bank is credited and the expense booked once; removing the payment
+// posts it again and gives the line back its rule history.
+{
+  const accounting = await import("../shared/functions/accounting");
+  const ownEntries = async () => (await accounting.postedJournalForTransaction(ctx, suggestion._id)).entries.filter((entry) => entry.source === accounting.TRANSACTION_BACKFILL_SOURCE);
+  // Categorised by a rule to the expense account, then posted: Dr expense / Cr bank.
+  const ruleApplication = { ruleName: "Janitorial", batchId: "batch_1", appliedAtISO: "2026-03-20T00:00:00.000Z", previous: { category: "Uncategorized" } };
+  await db.patch(suggestion._id, { category: "Janitorial", accountingAccountId: "static_financial_facilities_expense", categorizedBy: "rule", ruleId: "static_rule_janitorial", ruleApplication });
+  await accounting.backfillFinancialTransactionsToJournalPortable(ctx, { societyId: S, transactionIds: [suggestion._id], includeBeforeOpening: true });
+  const [backfill] = await ownEntries();
+  assert.ok(backfill, "the bank line is in the books through Backfill imports");
+  const cashBeforeLink = await creditBalance(CASH);
+  const [cashBasisBefore, accrualBefore] = [await statements("cash"), await statements("accrual")];
+
+  // Refused, and nothing changes, while the bank line's entry can't be voided.
+  const settingsId = await db.insert("booksSettings", { societyId: S, closeDate: suggestion.date, createdAtISO: new Date().toISOString(), updatedAtISO: new Date().toISOString() });
+  await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: overdue._id, date: today, amountCents: -suggestion.amountCents, method: "eft", financialTransactionId: suggestion._id }), /would void that entry, which can't change: The books are closed/);
+  await db.delete(settingsId);
+  assert.equal((await get(backfill._id)).status, "posted");
+  assert.equal((await billById(overdue._id)).payments.length, 0, "the refused link records nothing");
+
+  await bills.recordPaymentPortable(ctx, { id: overdue._id, date: suggestion.date, amountCents: -suggestion.amountCents, method: "eft", financialTransactionId: suggestion._id });
+  const linkedPayment = (await billById(overdue._id)).payments[0];
+  assert.equal((await get(backfill._id)).status, "void", "the bank line's own entry is voided by the link");
+  assert.equal(linkedPayment.voidedTransactionEntryId, backfill._id, "and remembered on the payment");
+  assert.equal(await creditBalance(CASH), cashBeforeLink, "the bank is credited once: the payment replaces the backfill entry");
+  {
+    const [cashBasis, accrual] = [await statements("cash"), await statements("accrual")];
+    assert.equal(cashBasis.expenses, cashBasisBefore.expenses, "cash basis books the expense once (the bill's cash-only entry replaces the bank line's)");
+    assert.equal(accrual.expenses, accrualBefore.expenses - 63000, "accrual keeps only the bill's expense");
+    assert.deepEqual([cashBasis.difference, accrual.difference], [0, 0]);
+  }
+
+  await bills.removePaymentPortable(ctx, { id: overdue._id, paymentKey: linkedPayment.key });
+  assert.equal((await get(backfill._id)).status, "posted", "removing the payment posts the bank line's entry again");
+  assert.equal(await creditBalance(CASH), cashBeforeLink);
+  txn = await get(suggestion._id);
+  assert.deepEqual([txn.category, txn.accountingAccountId, txn.categorizedBy, txn.ruleId, txn.ruleApplication], ["Janitorial", "static_financial_facilities_expense", "rule", "static_rule_janitorial", ruleApplication], "the rule history comes back with the line");
+  assert.equal((await statements("cash")).expenses, cashBasisBefore.expenses);
+
+  // A line in the books another way (a manual journal) can't be linked.
+  const manualTxn = await db.insert("financialTransactions", { societyId: S, connectionId: txn.connectionId, accountId: CASH, date: today, description: "Harbour Janitorial (manual)", amountCents: -63000 });
+  const manualEntry = await db.insert("journalEntries", { societyId: S, date: today, memo: "Hand-posted", source: "manual", status: "posted", createdAtISO: today, updatedAtISO: today });
+  await db.insert("journalLines", { societyId: S, journalEntryId: manualEntry, accountId: CASH, amountCents: 63000, side: "credit", financialTransactionId: manualTxn, lineOrder: 0 });
+  await db.insert("journalLines", { societyId: S, journalEntryId: manualEntry, accountId: "static_financial_facilities_expense", amountCents: 63000, side: "debit", lineOrder: 1 });
+  await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: overdue._id, date: today, amountCents: 63000, method: "eft", financialTransactionId: manualTxn }), new RegExp(`already in the books \\(a manual journal dated ${today}\\)`));
+  assert.equal((await billById(overdue._id)).payments.length, 0);
+  for (const line of (await db.query("journalLines").collect()).filter((row) => row.journalEntryId === manualEntry)) await db.delete(line._id);
+  await db.delete(manualEntry);
+  await db.delete(manualTxn);
+}
 
 // partial payments without a bank line need the account it was paid from
 const open = ws.bills.find((row) => row.status === "open" && row.vendorName === "Coastal Hydro")!;
@@ -404,10 +466,35 @@ await assert.rejects(() => bills.upsertPortable(ctx, { id: created.id, societyId
 await bills.upsertPortable(ctx, { id: created.id, societyId: S, vendorId, billNumber: "GP-0001", billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 21000, tagIds: ["static_tag_community_garden", "static_tag_city_neighbourhood"] }] });
 assert.deepEqual((await get(created.id)).lines[0].tagIds, ["static_tag_community_garden", "static_tag_city_neighbourhood"], "valid tags are kept on the line");
 {
+  // A newly added archived tag is refused; a tag the bill already had stays after it's archived.
+  const tagsFns = await import("../shared/functions/financeTags");
+  const save = (tagIds: string[]) => bills.upsertPortable(ctx, { id: created.id, societyId: S, vendorId, billNumber: "GP-0001", billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 21000, tagIds }] });
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_arts_nights", archived: true });
+  await assert.rejects(() => save(["static_tag_arts_nights", "static_tag_city_neighbourhood"]), /This tag is archived/);
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_arts_nights", archived: false });
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_community_garden", archived: true });
+  await save(["static_tag_community_garden", "static_tag_city_neighbourhood"]);
+  assert.deepEqual((await get(created.id)).lines[0].tagIds, ["static_tag_community_garden", "static_tag_city_neighbourhood"], "the archived tag the line already had is kept");
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_community_garden", archived: false });
+}
+{
   const demoTagged = (await db.query("journalLines").collect()).filter((line) => String(line._id).startsWith("static_jline_") && (line.tagIds ?? []).includes("static_tag_youth_mentoring"));
   assert.ok(demoTagged.some((line) => String(line.journalEntryId).startsWith("static_journal_bill_")) && demoTagged.some((line) => String(line.journalEntryId).startsWith("static_journal_cash_")), "demo bill postings carry their lines' tags, on the accrual and the cash-only entries");
 }
 await assert.rejects(() => bills.removePortable(ctx, { id: draft._id }), /Only drafts/);
+// Someone who edits a bill waiting for approval can't then approve it alone (the edit cleared the approvals).
+{
+  const edited = await bills.upsertPortable(ctx, { societyId: S, vendorId, billNumber: "GP-0002", billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 9000 }] });
+  await bills.submitPortable(ctx, { id: edited.id });
+  await bills.upsertPortable(asSecretary, { id: edited.id, societyId: S, vendorId, billNumber: "GP-0002", billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 99000 }] });
+  assert.deepEqual((await get(edited.id)).editedByUserIds, [secretary._id], "the editor is recorded");
+  await assert.rejects(() => bills.decidePortable(asSecretary, { id: edited.id, decision: "approve" }), /edited this bill/);
+  const seen = (await bills.workspacePortable(asSecretary, { societyId: S })).bills.find((bill) => bill._id === edited.id)!;
+  assert.deepEqual([seen.canApprove, seen.canDecline], [false, false], "the drawer hides Approve and Decline from the editor");
+  await bills.recallPortable(ctx, { id: edited.id });
+  assert.equal((await get(edited.id)).editedByUserIds, undefined, "a new approval round starts clean");
+  await bills.cancelPortable(ctx, { societyId: S, ids: [edited.id] });
+}
 await assert.rejects(() => bills.upsertPortable(ctx, { id: agm._id, societyId: S, billDate: today, lines: [] }), /Approved bills/);
 
 // bulk mark paid: approved bills settle, others are skipped

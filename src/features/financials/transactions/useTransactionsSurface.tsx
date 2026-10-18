@@ -11,7 +11,6 @@ import { attentionReasons, categorizedByValue } from "../../../../shared/transac
 import { usePayeeAliases } from "./usePayeeAliases";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
 import { useTransactionInlineEdit } from "./useTransactionInlineEdit";
-import { useToast } from "../../../components/Toast";
 import { isSplitTransaction } from "../../../../shared/transactionLines";
 import type { FinanceTagsApi } from "./useFinanceTags";
 import type { ReviewSegment } from "./transactionFilters";
@@ -45,7 +44,6 @@ export function useTransactionsSurface({
   tags: FinanceTagsApi;
   reviewSegment: ReviewSegment;
 }) {
-  const toast = useToast();
   const ruleDrawer = useRuleDrawerHost(societyId, canWrite);
   const { aliases } = usePayeeAliases(societyId);
   const updateTransaction = useMutation(api.financialHub.updateTransaction);
@@ -99,14 +97,15 @@ export function useTransactionsSurface({
   const handleUpdate = useCallback(
     async ({ recordId, fieldName, value }: { recordId: string; fieldName: string; value: unknown }) => {
       const previous = (transactions ?? []).find((row) => String(row._id) === String(recordId));
+      // Refuse by throwing, so the table rolls the cell back and says why
+      // instead of showing a change that never happened.
       if (fieldName === "category" && previous && isSplitTransaction(previous)) {
-        toast.info("This transaction is split", "Change the categories on its lines in the transaction panel.");
-        return;
+        throw new Error("This transaction is split. Change the categories on its lines in the transaction panel.");
       }
       await updateTransaction({ id: recordId as any, patch: { [fieldName]: value } as any });
       if (fieldName === "category" && previous) promptAfterCategorise(previous, value);
     },
-    [promptAfterCategorise, toast, transactions, updateTransaction],
+    [promptAfterCategorise, transactions, updateTransaction],
   );
 
   const { inlineEdit, accountLabels } = useTransactionInlineEdit({

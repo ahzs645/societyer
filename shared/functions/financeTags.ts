@@ -11,7 +11,7 @@
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
-import { isFinanceTagColor, normalizeTagName, tagNameProblem } from "../financeTags";
+import { isFinanceTagColor, newTagProblem, normalizeTagName, tagGroupLookup, tagNameProblem } from "../financeTags";
 import { transactionTagIds } from "../transactionLines";
 
 type GroupRow = PortableDoc & { societyId: string; name: string; color?: string; sortOrder: number; archivedAtISO?: string };
@@ -23,6 +23,22 @@ async function loadGroups(ctx: PortableQueryCtx, societyId: string) {
 
 async function loadTags(ctx: PortableQueryCtx, societyId: string) {
   return ctx.db.query<TagRow>("financeTags").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+}
+
+/**
+ * This organization's tag rules for a save: tag → group (one tag per group;
+ * another organization's tags are unknown) and the problem with tags newly
+ * added to a record (archived, or in an archived group), given the tags it
+ * already had.
+ */
+export async function tagRulesFor(ctx: PortableQueryCtx, societyId: string) {
+  const [groups, tags] = await Promise.all([loadGroups(ctx, societyId), loadTags(ctx, societyId)]);
+  const refs = tags.map((tag) => ({ _id: String(tag._id), groupId: String(tag.groupId), archivedAtISO: tag.archivedAtISO }));
+  const groupRefs = groups.map((group) => ({ _id: String(group._id), archivedAtISO: group.archivedAtISO }));
+  return {
+    groupOf: tagGroupLookup(refs),
+    newTagProblem: (tagIds: Iterable<string>, keptTagIds: Iterable<string>) => newTagProblem(tagIds, keptTagIds, refs, groupRefs),
+  };
 }
 
 const bySortOrder = (a: { sortOrder: number; name: string }, b: { sortOrder: number; name: string }) =>

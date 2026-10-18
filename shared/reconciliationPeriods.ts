@@ -12,6 +12,20 @@
  * or unmatched, the fingerprint changes and the period reads out of balance.
  */
 
+/**
+ * Why a bank line can't be re-matched, unmatched, split or recoded here: a bill or
+ * invoice payment holds it (`matchedKind` "bill" / "invoice"), and only
+ * removing that payment puts the line back as it was. Null when it's free.
+ */
+export function paymentLinkRefusal(matchedKind: unknown, action: "match it to something else" | "unmatch it" | "split it" | "change its category"): string | null {
+  if (matchedKind !== "bill" && matchedKind !== "invoice") return null;
+  return `This transaction is linked to ${matchedKind === "bill" ? "a bill" : "an invoice"} payment. Remove the payment on the ${matchedKind} to ${action}.`;
+}
+
+export function isPaymentLinkKind(matchedKind: unknown): matchedKind is "bill" | "invoice" {
+  return matchedKind === "bill" || matchedKind === "invoice";
+}
+
 export const PERIOD_STATUSES = ["in_progress", "completed", "auto_reconciled", "out_of_balance"] as const;
 export type PeriodStatus = (typeof PERIOD_STATUSES)[number];
 

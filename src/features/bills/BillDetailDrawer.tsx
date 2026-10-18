@@ -145,9 +145,10 @@ export function BillDetailDrawer({
           <Pencil size={12} aria-hidden="true" /> Edit
         </button>
       )}
-      {awaiting && !bill.isMine && (
+      {/* Who may approve is the server's call (a rule may let the submitter approve, and an editor may not). */}
+      {awaiting && (bill.canApprove || bill.canDecline) && (
         <>
-          <button type="button" className="btn btn--danger" disabled={busy || (!bill.canApprove && !/already approved/.test(bill.cannotApproveReason ?? ""))} onClick={() => void decline()}>
+          <button type="button" className="btn btn--danger" disabled={busy || !bill.canDecline} onClick={() => void decline()}>
             <X size={12} aria-hidden="true" /> Decline
           </button>
           <button type="button" className="btn btn--accent" disabled={busy || !bill.canApprove} title={bill.cannotApproveReason} onClick={() => void approve()}>

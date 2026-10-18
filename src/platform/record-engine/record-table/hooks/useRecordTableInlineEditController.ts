@@ -9,12 +9,12 @@ import type {
   RecordTableInlineEditController,
 } from "../contexts/RecordTableInlineEditContext";
 import { useRecordTableStoreHandle, type CellPosition } from "../state/recordTableStore";
-import { createEditEntry, dropEdit, EMPTY_EDIT_HISTORY, entryWrites, recordEdit, redoEdit, undoEdit, type EditHistoryEntry } from "../utils/editHistory";
+import { createEditEntry, dropEdit, EMPTY_EDIT_HISTORY, entryWrites, narrowEdit, recordEdit, redoEdit, undoEdit, type EditHistoryEntry } from "../utils/editHistory";
 import { planPaste, pasteSummary, toTsv } from "../utils/gridClipboard";
 import { cellsInRect, navigateGrid, selectAllCells, selectionRect } from "../utils/gridNavigation";
 import { checkInlineValue, emptyInlineValue, formatInlineText, parseInlineText, sameInlineValue } from "../utils/inlineEditValues";
 import { recordCellText } from "../utils/recordCellText";
-import { stagedCount, stagedList } from "../utils/stagedEdits";
+import { stagedCount, stagedList, unstageWrites } from "../utils/stagedEdits";
 import { useRecordTableColumns } from "./useRecordTableColumns";
 import { useRecordTableRowModel } from "./useRecordTableRowModel";
 import { SETTLED_EDIT_TTL_MS, useRecordTableUpdate } from "./useRecordTableUpdate";
@@ -73,12 +73,12 @@ function createCommitPath({ config, handle, toast, saveCell, latest, rootRef }: 
     });
   };
 
-  /** Saves (or stages) cell values. Resolves to whether every one was accepted. */
-  const applyWrites = async (writes: Write[]): Promise<boolean> => {
-    if (writes.length === 0) return true;
+  /** Saves (or stages) cell values. Resolves to whether each one was accepted, in order. */
+  const applyWrites = async (writes: Write[]): Promise<boolean[]> => {
+    if (writes.length === 0) return [];
     if (config.batch) {
       handle.get().stageEdits(writes);
-      return true;
+      return writes.map(() => true);
     }
     const onCommit = config.onCommit;
     const results = await Promise.all(
@@ -94,7 +94,7 @@ function createCommitPath({ config, handle, toast, saveCell, latest, rootRef }: 
         ),
       ),
     );
-    return results.every(Boolean);
+    return results.map(Boolean);
   };
 
   const commit = async (writes: InlineCellWrite[], label: string) => {
@@ -123,7 +123,7 @@ function createCommitPath({ config, handle, toast, saveCell, latest, rootRef }: 
     } else {
       announce(`${label}: ${plural(changes.length, "cell")} changed${pending}`);
     }
-    const ok = await applyWrites(
+    const saved = await applyWrites(
       changes.map((change) => ({
         recordId: change.recordId,
         fieldName: change.fieldName,
@@ -132,8 +132,9 @@ function createCommitPath({ config, handle, toast, saveCell, latest, rootRef }: 
         fieldLabel: change.field.label,
       })),
     );
-    if (!ok) handle.get().setEditHistory(dropEdit(handle.get().editHistory, entry.id));
-    return ok;
+    // Undo keeps covering the cells that did save when others failed.
+    if (!saved.every(Boolean)) handle.get().setEditHistory(narrowEdit(handle.get().editHistory, entry.id, saved));
+    return saved.every(Boolean);
   };
 
   /** Shows the first cell an undo/redo touched, when it is on screen. */
@@ -166,8 +167,8 @@ function createCommitPath({ config, handle, toast, saveCell, latest, rootRef }: 
     announce(message);
     toast.info(message, { dedupeKey: "record-table-grid-history" });
     revealEntry(step.entry);
-    void applyWrites(writes).then((ok) => {
-      if (!ok) handle.get().setEditHistory(dropEdit(handle.get().editHistory, step.entry.id));
+    void applyWrites(writes).then((saved) => {
+      if (!saved.every(Boolean)) handle.get().setEditHistory(dropEdit(handle.get().editHistory, step.entry.id));
     });
   };
 
@@ -352,7 +353,8 @@ function createBatch({ config, handle, toast }: GridDeps, { announce }: CommitPa
       handle.get().settlePendingEdit(token, true);
       window.setTimeout(() => handle.get().settlePendingEdit(token, false), SETTLED_EDIT_TTL_MS);
     }
-    handle.get().clearStagedEdits();
+    // Only what was saved: cells staged while the save ran stay pending.
+    handle.set({ stagedEdits: unstageWrites(handle.get().stagedEdits, list) });
     const message = `Saved ${plural(edits.length, "change")}`;
     announce(message);
     toast.success(message);

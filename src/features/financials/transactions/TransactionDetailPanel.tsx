@@ -26,6 +26,8 @@ import { useRecordTableStoreHandle } from "../../../platform/record-engine/recor
 import { isTypingTarget } from "../../../lib/shortcutsRegistry";
 import { splitLabel, type TransactionLine } from "../../../../shared/transactionLines";
 import { TransactionLinesEditor } from "./TransactionLinesEditor";
+import { keyBelongsElsewhere } from "./transactionHotkeyTarget";
+import { useLinesDraftGuard } from "./useLinesDraftGuard";
 import { TransactionJournalView } from "./TransactionJournalView";
 import type { FinanceTagsApi } from "./useFinanceTags";
 import { useSpendBudgetOptions } from "./useSpendBudgetOptions";
@@ -136,6 +138,8 @@ export function TransactionDetailPanel({
   const [renameTarget, setRenameTarget] = useState<PayeeRenameTarget | null>(null);
   const [tab, setTab] = useState<PanelTab>("transaction");
   const [expanded, setExpanded] = useState(false);
+  // Unsaved split lines: moving to another row would throw them away.
+  const linesDraft = useLinesDraftGuard();
   const commentsRef = useRef<HTMLElement>(null);
 
   useEffect(() => setMemo(record.memo ?? ""), [record._id, record.memo]);
@@ -166,7 +170,11 @@ export function TransactionDetailPanel({
   const { records: tableOrder } = useRecordTableRowModel();
   const tableHandle = useRecordTableStoreHandle();
   const position = tableOrder.findIndex((row: any) => String(row._id) === String(record._id));
+  const navigateTo = (next: PanelTransaction) => {
+    if (!linesDraft.hold()) onNavigate(next);
+  };
   const step = (delta: number) => {
+    if (linesDraft.hold()) return;
     const nextIndex = position + delta;
     const next = position < 0 ? undefined : tableOrder[nextIndex];
     if (!next) return;
@@ -182,6 +190,7 @@ export function TransactionDetailPanel({
   const setReviewed = async (reviewed: boolean) => {
     if (Boolean(record.reviewedAtISO) === reviewed) return;
     const leavesQueue = reviewed ? reviewSegment === "to_review" : reviewSegment === "reviewed";
+    if (leavesQueue && linesDraft.hold()) return;
     if (leavesQueue && position >= 0) {
       const next = tableOrder[position + 1] ?? tableOrder[position - 1];
       tableHandle.get().setRangeAnchor(null);
@@ -200,11 +209,12 @@ export function TransactionDetailPanel({
   useEffect(() => {
     if (!canWrite) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+      if (event.defaultPrevented || event.repeat || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
       const key = event.key.toLowerCase();
       if (key !== "r" && key !== "u") return;
       if (isTypingTarget(event.target) || tableHandle.get().selectedRecordIds.size > 0) return;
-      if (event.target instanceof Element && event.target.closest('[role="dialog"]:not(.record-side-panel):not(.inspector-panel)')) return;
+      // Not from other drawers (the rule editor…) or an open menu or listbox.
+      if (keyBelongsElsewhere(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
       void setReviewedRef.current(key === "r");
@@ -299,7 +309,11 @@ export function TransactionDetailPanel({
       <div className="transaction-panel__tabs">
         <Tabs<PanelTab>
           value={tab}
-          onChange={setTab}
+          // The journal view unmounts the line editor, which would drop a draft.
+          onChange={(next) => {
+            if (next !== "transaction" && linesDraft.hold()) return;
+            setTab(next);
+          }}
           tabRoles
           ariaLabel="Transaction views"
           items={[
@@ -379,6 +393,7 @@ export function TransactionDetailPanel({
               tags={tags}
               societyId={societyId}
               onCommitCategory={(next) => void onUpdate("category", next)}
+              onDraftDirtyChange={linesDraft.setDirty}
             />
             <p className="transaction-panel__meta">
               {method ? (
@@ -458,7 +473,7 @@ export function TransactionDetailPanel({
           </section>
 
           <ReconciliationSection record={record} />
-          <OtherTransactionsSection payee={displayPayee} others={others} onNavigate={onNavigate} />
+          <OtherTransactionsSection payee={displayPayee} others={others} onNavigate={navigateTo} />
         </>
       )}
 

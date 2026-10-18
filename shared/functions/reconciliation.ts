@@ -2,6 +2,9 @@
  * PORTABLE FUNCTIONS: the bank-reconciliation domain
  * (overview / match / markManual / addManualTransaction / unmatch).
  *
+ * A line a bill or invoice payment holds (`matchedKind` "bill" / "invoice")
+ * is left to that payment: it can't be re-matched or unmatched here.
+ *
  * Reads/writes financialTransactions (plus financialConnections /
  * financialAccounts for manual entry) over `ctx.db`. Each handler runs unchanged
  * on hosted Convex, the local Dexie runtime, and the convex-test oracle.
@@ -14,7 +17,9 @@ import {
   beginningBalanceFor,
   effectivePeriodStatus,
   isClosedStatus,
+  isPaymentLinkKind,
   orderPeriods,
+  paymentLinkRefusal,
   periodFingerprint,
   summarizePeriod,
   transactionsInPeriod,
@@ -143,6 +148,9 @@ export async function matchPortable(
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("financialTransactions not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "financialTransactions", args.txnId, candidate.societyId);
+  const refusal = paymentLinkRefusal(candidate.matchedKind, "match it to something else");
+  if (refusal) throw new Error(refusal);
+  if (isPaymentLinkKind(args.matchedKind)) throw new Error(`Link a bank transaction to ${args.matchedKind === "bill" ? "a bill" : "an invoice"} by recording the payment on the ${args.matchedKind}.`);
   const principalId = await principalUserId(ctx, candidate.societyId);
   const principal = await getOwned(ctx, "users", principalId, candidate.societyId);
   const matchedTable = args.matchedKind === "filing"
@@ -171,6 +179,8 @@ export async function markManualPortable(
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("financialTransactions not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "financialTransactions", txnId, candidate.societyId);
+  const refusal = paymentLinkRefusal(candidate.matchedKind, "match it to something else");
+  if (refusal) throw new Error(refusal);
   const principalId = await principalUserId(ctx, candidate.societyId);
   const principal = await getOwned(ctx, "users", principalId, candidate.societyId);
   await ctx.db.patch(txnId, {
@@ -262,6 +272,8 @@ export async function unmatchPortable(ctx: PortableMutationCtx, { txnId }: { txn
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("financialTransactions not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "financialTransactions", txnId, candidate.societyId);
+  const refusal = paymentLinkRefusal(candidate.matchedKind, "unmatch it");
+  if (refusal) throw new Error(refusal);
   await ctx.db.patch(txnId, {
     reconciledAtISO: undefined,
     reconciledByName: undefined,
