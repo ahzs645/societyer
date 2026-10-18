@@ -38,3 +38,17 @@ export const LEGACY_LABELS: Record<string, string> = {
   msg: "Outlook message (.msg)",
   pages: "Apple Pages",
 };
+
+/** Only known media container signatures may become browser media URLs. */
+export function mediaMimeType(bytes: ArrayBuffer, name?: string) {
+  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 16));
+  const ascii = (start: number, length: number) => String.fromCharCode(...head.slice(start, start + length));
+  const ext = extensionOf(name);
+  if (ascii(0, 4) === "RIFF" && ascii(8, 4) === "WAVE") return "audio/wav";
+  if (ascii(0, 4) === "fLaC") return "audio/flac";
+  if (ascii(0, 4) === "OggS") return /^(ogg|oga)$/.test(ext) ? "audio/ogg" : "video/ogg";
+  if (ascii(0, 3) === "ID3" || head[0] === 0xff && (head[1] & 0xe0) === 0xe0) return ext === "aac" ? "audio/aac" : "audio/mpeg";
+  if (ascii(4, 4) === "ftyp") return /^(m4a|m4b|aac)$/.test(ext) ? "audio/mp4" : "video/mp4";
+  if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return ext === "mkv" ? "video/x-matroska" : "video/webm";
+  return undefined;
+}

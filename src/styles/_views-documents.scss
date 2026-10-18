@@ -16,12 +16,13 @@
   min-height: 420px;
   max-height: 80vh;
   overflow: auto;
-  padding: token('s-4');
-  border: 1px solid token('border');
+  padding: 0;
+  border: 0;
   border-radius: token('r-sm');
   background: token('bg-app');
   color-scheme: light;
 }
+.document-preview-pane .pdf-preview { padding: 4px; }
 // Tame docx-preview's default gray wrapper the same way the minutes preview
 // does (see .minutes-docx-preview .docx-wrapper) — our own container already
 // provides the backdrop, keep only the per-page paper it draws.
@@ -769,3 +770,24 @@ button.org-outline__row {
 
 .pdf-preview__viewport { width: 100%; display: flex; overflow-x: auto; }
 .pdf-preview__nav { flex-wrap: wrap; justify-content: center; }
+
+// One reading surface instead of nested modal/card/PDF gutters.
+.modal.file-preview-modal {
+  width: calc(100% - 16px);
+  max-width: 1440px !important;
+  height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  .modal__head, .modal__foot { flex-shrink: 0; }
+  .modal__body { flex: 1 1 auto; min-height: 0; padding: 0; overflow: auto; }
+  .document-preview-pane { min-height: 100%; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 0; }
+  .document-preview-pane__message, .document-preview-pane__text, .document-preview-pane__sheets { padding: 12px; }
+  .pdf-preview { padding: 4px; gap: 8px; min-height: 100%; }
+  .pdf-preview__nav { position: sticky; top: 0; z-index: 2; background: var(--bg-panel); padding: 6px; width: 100%; }
+  .document-preview-pane__image { display: block; max-width: 100%; margin: auto; }
+  .file-preview-media { display: block; width: 100%; max-height: 75dvh; margin: auto; }
+  &.modal--fullscreen { width: 100%; max-width: none !important; height: 100dvh; max-height: 100dvh; }
+}
+@media (max-width: 560px) {
+  .modal.file-preview-modal { width: 100%; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
+  .modal.file-preview-modal.modal--fullscreen { height: 100dvh; max-height: 100dvh; }
+}

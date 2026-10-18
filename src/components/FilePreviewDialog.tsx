@@ -1,10 +1,11 @@
-import { lazy, Suspense, useCallback } from "react";
-import { Download } from "lucide-react";
+import { lazy, Suspense, useCallback, useState } from "react";
+import { Download, Maximize2, Minimize2 } from "lucide-react";
 import { Modal } from "./Modal";
 
 const PreviewPane = lazy(() => import("./DocumentPreviewPane").then(module => ({ default: module.DocumentPreviewPane })));
 /** Bound in-memory previews on phones; downloading the original remains available. */
-export const MAX_FILE_PREVIEW_BYTES = 25 * 1024 * 1024;
+export { MAX_FILE_PREVIEW_BYTES } from "../lib/filePreviewBytes";
+import { MAX_FILE_PREVIEW_BYTES } from "../lib/filePreviewBytes";
 export type PreviewFile = { id: string; name: string; mimeType?: string; sha256?: string; bytes?: number };
 
 /**
@@ -19,17 +20,45 @@ export function FilePreviewDialog({ file, loadBytes, onClose, onDownload, downlo
   onDownload?: () => void;
   downloading?: boolean;
 }) {
+  const [fullscreen, setFullscreen] = useState(false);
   const boundedLoad = useCallback(async (signal: AbortSignal) => {
     const bytes = await loadBytes(signal);
     signal.throwIfAborted();
     if (bytes.byteLength > MAX_FILE_PREVIEW_BYTES) throw new Error("Inline preview supports files up to 25 MB.");
     return bytes;
   }, [loadBytes]);
-  return <Modal open title={file.name} size="xl" onClose={onClose} footer={onDownload && <button className="btn" disabled={downloading} onClick={onDownload}><Download size={14} />{downloading ? "Downloading…" : "Download original"}</button>}>
-    {file.bytes !== undefined && file.bytes > MAX_FILE_PREVIEW_BYTES
-      ? <p>Inline preview supports files up to 25 MB. Download the original to open this file.</p>
-      : <Suspense fallback={<p role="status">Loading document viewer…</p>}>
-          <PreviewPane document={{ _id: file.id, fileName: file.name, mimeType: file.mimeType, sha256: file.sha256 }} fallbackUrl={null} hasAnyFile onOpenFile={onDownload} loadBytes={boundedLoad} />
-        </Suspense>}
-  </Modal>;
+  return (
+    <Modal
+      open
+      title={file.name}
+      size="xl"
+      className="file-preview-modal"
+      resizable={false}
+      fullscreen={fullscreen}
+      headerActions={
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon"
+          aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          title={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          aria-pressed={fullscreen}
+          onClick={() => setFullscreen(value => !value)}
+        >
+          {fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        </button>
+      }
+      onClose={onClose}
+      footer={onDownload && (
+        <button className="btn" disabled={downloading} onClick={onDownload}>
+          <Download size={14} />{downloading ? "Downloading…" : "Download original"}
+        </button>
+      )}
+    >
+      {file.bytes !== undefined && file.bytes > MAX_FILE_PREVIEW_BYTES
+        ? <p>Inline preview supports files up to 25 MB. Download the original to open this file.</p>
+        : <Suspense fallback={<p role="status">Loading document viewer…</p>}>
+            <PreviewPane document={{ _id: file.id, fileName: file.name, mimeType: file.mimeType, sha256: file.sha256 }} fallbackUrl={null} hasAnyFile onOpenFile={onDownload} loadBytes={boundedLoad} />
+          </Suspense>}
+    </Modal>
+  );
 }

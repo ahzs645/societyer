@@ -1,3 +1,4 @@
+import { DocumentPreviewButton } from "./DocumentFilePreview";
 import { useState, type DragEvent } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -207,6 +208,7 @@ export function DocumentVersionsDrawer({
                 <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{v.changeNote}</div>
               )}
               <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <DocumentPreviewButton document={{ ...v, _id: String(documentId), latestVersionId: v._id, versionOnly: true }} />
                 <button
                   className="btn btn--ghost btn--sm"
                   onClick={() => download(v._id).catch((error: any) => toast.error("Could not download version", error?.message ?? String(error)))}

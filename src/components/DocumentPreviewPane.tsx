@@ -1,3 +1,4 @@
+import { assertPreviewSize, readPreviewResponse } from "../lib/filePreviewBytes";
 import { useEffect, useRef, useState } from "react";
 import { PdfPreview } from "./PdfPreview";
 import { renderAsync } from "docx-preview";
@@ -6,11 +7,11 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { restoredDocumentFile } from "../lib/documentOpen";
 import { fetchDocumentDownload } from "../lib/documentDownload";
 import { xlsxToSheets, type SheetPreview } from "../lib/xlsxPreview";
-import { hasPdfSignature, hasZipSignature, hasOleSignature, imageMimeType, extensionOf, LEGACY_LABELS } from "../lib/filePreviewSignatures";
+import { hasPdfSignature, hasZipSignature, hasOleSignature, imageMimeType, mediaMimeType, extensionOf, LEGACY_LABELS } from "../lib/filePreviewSignatures";
 
 /* ------------------------------- preview pane -------------------------------- */
 
-type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "error";
+type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "audio" | "video" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "error";
 
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -76,6 +77,7 @@ export function DocumentPreviewPane({
         }
         if (cancelled) return;
         if (restored) {
+          assertPreviewSize(restored.size);
           bytes = await restored.arrayBuffer();
           setOrigin("saved");
         }
@@ -94,7 +96,7 @@ export function DocumentPreviewPane({
             return;
           }
           const lower = (fileName ?? "").toLowerCase();
-          const previewable = mimeType?.includes("pdf") || mimeType?.includes("wordprocessingml") || mimeType?.includes("spreadsheetml") || /\.(pdf|docx|xlsx|png|jpe?g|gif|txt|csv|md)$/.test(lower);
+          const previewable = mimeType?.includes("pdf") || mimeType?.includes("wordprocessingml") || mimeType?.includes("spreadsheetml") || /\.(pdf|docx|xlsx|png|jpe?g|gif|txt|csv|md|json|vtt|srt|mp3|m4a|mp4|wav|webm|ogg|oga|flac|aac|mov|mkv)$/.test(lower);
           if (!previewable) {
             setStatus(LEGACY_LABELS[ext] ? "legacy" : "unsupported");
             return;
@@ -102,12 +104,13 @@ export function DocumentPreviewPane({
           // Fetch and re-host as a same-origin blob: URL rather than framing the
           // storage URL directly — keeps the CSP's frame-src scoped to
           // 'self' data: blob: instead of needing to allowlist every storage host.
-          const response = await fetchDocumentDownload(url);
+          const response = await fetchDocumentDownload(url, { signal: controller.signal });
           if (!response.ok) throw new Error("Couldn't load the file");
-          bytes = await response.arrayBuffer();
+          bytes = await readPreviewResponse(response, controller.signal);
           setOrigin(document.latestVersionId ? "version" : "link");
         }
         if (cancelled || !bytes) return;
+        assertPreviewSize(bytes.byteLength);
         // Never trust the filename or a response's content type: a sharing
         // link (e.g. a Drive viewer URL) can return an HTML page, and a blob:
         // URL inherits this origin, so framing it would run that page's
@@ -149,7 +152,14 @@ export function DocumentPreviewPane({
           setStatus("image");
           return;
         }
-        if (/^(txt|csv|md|json)$/.test(ext)) {
+        const media = mediaMimeType(bytes, fileName);
+        if (media) {
+          createdBlobUrl = URL.createObjectURL(new Blob([bytes], { type: media }));
+          setBlobUrl(createdBlobUrl);
+          setStatus(media.startsWith("audio/") ? "audio" : "video");
+          return;
+        }
+        if (/^(txt|csv|md|json|vtt|srt)$/.test(ext)) {
           setText(new TextDecoder().decode(bytes.slice(0, 200_000)));
           setStatus("text");
           return;
@@ -170,7 +180,7 @@ export function DocumentPreviewPane({
       controller.abort();
       if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
     };
-  }, [loadBytes, getDownloadTarget, document?._id, document?.latestVersionId, document?.sha256, fallbackUrl, fileName, hasAnyFile]);
+  }, [loadBytes, getDownloadTarget, document?._id, document?.latestVersionId, document?.sha256, document?.mimeType, fallbackUrl, fileName, hasAnyFile]);
 
   const extracted = extractedText?.trim();
   return (
@@ -188,6 +198,8 @@ export function DocumentPreviewPane({
       {status === "image" && blobUrl && (
         <img src={blobUrl} alt={fileName ?? "Document image"} className="document-preview-pane__image" />
       )}
+      {status === "audio" && blobUrl && <audio className="file-preview-media" src={blobUrl} controls preload="metadata" aria-label={fileName ?? "Audio preview"} />}
+      {status === "video" && blobUrl && <video className="file-preview-media" src={blobUrl} controls playsInline preload="metadata" aria-label={fileName ?? "Video preview"} />}
       {status === "xlsx" && (
         <div className="document-preview-pane__sheets">
           {sheets.map((sheet) => (
@@ -212,10 +224,10 @@ export function DocumentPreviewPane({
       {(status === "legacy" || status === "unsupported" || status === "not-a-file" || status === "unavailable" || status === "error") && (
         <div className="document-preview-pane__message">
           {status === "legacy" && <p><FileWarning size={16} aria-hidden /> {LEGACY_LABELS[ext] ?? "This older Office format"} can't be shown in a browser.{hasAnyFile ? " Use Open file to read the original in its own application." : ""}</p>}
-          {status === "unsupported" && <p>Preview isn't available for this file type — use “Open file” to view or download it.</p>}
+          {status === "unsupported" && <p>Preview is not available for this file type. Download the original to open it in its own application.</p>}
           {status === "not-a-file" && <p>This link didn't return the document file itself (it may be a sharing or viewer page), so it isn't previewed here. Use “Open file” to view it at its source.</p>}
           {status === "unavailable" && <p>{hasAnyFile ? "No previewable file could be loaded." : "No file is attached to this document — it's a metadata record. Its details are below."}</p>}
-          {status === "error" && <p><FileWarning size={16} aria-hidden /> Couldn't render a preview — “Open file” still works.</p>}
+          {status === "error" && <p><FileWarning size={16} aria-hidden /> Couldn't render a preview. You can still download the original.</p>}
           {onOpenFile && hasAnyFile && status !== "unavailable" && <button className="btn btn--sm" onClick={onOpenFile}><Download size={12} /> Open file</button>}
           {extracted && (
             <details className="document-preview-pane__extracted" open>

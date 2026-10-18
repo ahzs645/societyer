@@ -1,3 +1,5 @@
+import { FilePreviewDialog, MAX_FILE_PREVIEW_BYTES } from "../../../components/FilePreviewDialog";
+import { downloadMeetingSourceBlob, meetingRecordingMimeType } from "../../../lib/meetingSourceDownload";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -31,6 +33,13 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [active, setActive] = useState<MeetingSource | null>(null);
+  const [filePreview, setFilePreview] = useState<MeetingSource | null>(null);
+  const loadPreview = useCallback(async (signal: AbortSignal) => {
+    if (!filePreview || filePreview.size > MAX_FILE_PREVIEW_BYTES) throw new Error("Choose Download original for files above 25 MB.");
+    const blob = await downloadMeetingSourceBlob(filePreview.size, meetingRecordingMimeType(filePreview.fileName), { fetchRange: meetingSourceRangeFetcher(filePreview.id), signal });
+    signal.throwIfAborted();
+    return blob.arrayBuffer();
+  }, [filePreview]);
   const [preview, setPreview] = useState<MeetingSource | null>(null);
   const [page, setPage] = useState(0);
   const controller = useRef<AbortController | null>(null);
@@ -48,7 +57,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
   const refresh = useCallback(async () => { const rows = await sourceRequest("list", { meetingId }); setSources(rows); }, [meetingId]);
   useEffect(() => {
     let mounted = true;
-    setSources([]); setActive(null); setPreview(null); setPage(0); setError("");
+    setSources([]); setFilePreview(null); setActive(null); setPreview(null); setPage(0); setError("");
     sourceRequest("list", { meetingId }).then(rows => { if (mounted) setSources(rows); }).catch(e => { if (mounted) setError(e.message); });
     return () => { mounted = false; controller.current?.abort(); };
   }, [meetingId]);
@@ -127,6 +136,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
   }
 
   return <section className={`card meeting-notes-card file-drop-target is-${drop.dragState}`} aria-label="Meeting source files" onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+    {filePreview && <FilePreviewDialog file={{ id: filePreview.id, name: filePreview.fileName, bytes: filePreview.size }} loadBytes={loadPreview} onClose={() => setFilePreview(null)} onDownload={() => void download(filePreview)} />}
     <div className="card__head"><h3>Meeting source files</h3></div>
     <div className="card__body">
       <p>Attach transcripts, audio, video or Whisper ZIP exports up to 500 MB per file. Originals stay in private Microsoft storage. Only meeting editors can access these working files.</p>
@@ -143,7 +153,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
       {error && <p role="alert">{error}</p>}
       <ul>{sources.map(source => <li key={source.id} style={{ marginBlock: "0.75rem" }}>
         <strong>{source.fileName}</strong> · {(source.size / 1_000_000).toFixed(1)} MB · {source.status}
-        {source.status === "ready" && <>{" "}<button className="btn btn--sm" type="button" onClick={() => void download(source)}>Download original</button></>}
+        {source.status === "ready" && <>{" "}<button className="btn btn--sm" type="button" onClick={() => setFilePreview(source)}>Preview file</button>{" "}<button className="btn btn--sm" type="button" onClick={() => void download(source)}>Download original</button></>}
         {source.status === "ready" && source.kind === "recording" && !source.textComplete && <>{" "}<button className="btn btn--sm" type="button" disabled={busy || !speech?.configured || source.jobStatus === "processing"} onClick={async () => {
           if (!(await confirm({ title: "Transcribe recording?", message: "Transcribe this recording using the configured speech provider? Its usage charges apply.", confirmLabel: "Start transcription", tone: "warn" }))) return;
           try { await transcribe({ sourceId: source.id }); await refresh(); setMessage("Speech processing started. You can leave this meeting while it runs."); } catch (e) { setError(e instanceof Error ? e.message : "Speech processing could not start."); }

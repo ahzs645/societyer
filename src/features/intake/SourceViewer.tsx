@@ -1,3 +1,5 @@
+import { FilePreviewDialog } from "../../components/FilePreviewDialog";
+import { verifyPreviewBytes } from "../../lib/filePreviewBytes";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { FileText, GitCompare, Lock } from "lucide-react";
@@ -44,11 +46,18 @@ async function loadOriginalBlob(file: any): Promise<Blob | undefined> {
 export function SourceViewer({ societyId, file, extract, locator, versions }: { societyId: string; file: any; extract: any; locator?: ViewerLocator; versions: ClusterVersion[] }) {
   const kind = kindOf(file?.name ?? "");
   const [blob, setBlob] = useState<Blob | null | undefined>(undefined);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const loadPreview = useCallback(async (signal: AbortSignal) => {
+    if (!blob) throw new Error("The original is not available on this device.");
+    signal.throwIfAborted();
+    return verifyPreviewBytes(await blob.arrayBuffer(), file?.sha256);
+  }, [blob, file?.sha256]);
   const [mode, setMode] = useState<Mode>("text");
   const [compareFileId, setCompareFileId] = useState<string | undefined>(undefined);
   useEffect(() => {
     let alive = true;
     setBlob(undefined);
+    setPreviewOpen(false);
     void loadOriginalBlob(file).then((value) => {
       if (!alive) return;
       setBlob(value ?? null);
@@ -72,9 +81,11 @@ export function SourceViewer({ societyId, file, extract, locator, versions }: { 
   const canOriginal = Boolean(blob) && (kind === "docx" || kind === "pdf");
   return (
     <div className="intake-pane intake-pane--viewer" aria-label="Source document">
+      {previewOpen && blob && <FilePreviewDialog file={{ id: file?._id ?? file?.sha256 ?? "intake-source", name: file?.name ?? "Source", bytes: blob.size, mimeType: blob.type, sha256: file?.sha256 }} loadBytes={loadPreview} onClose={() => setPreviewOpen(false)} />}
       <div className="intake-pane__head">
         <FileText size={14} aria-hidden />
         <h2 title={file?.path}>{file?.name ?? "Source"}</h2>
+        {blob && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setPreviewOpen(true)}>Expand preview</button>}
         {restricted && <span className="intake-chip intake-chip--conflicting"><Lock size={10} /> restricted</span>}
         <div className="segmented" role="tablist" aria-label="Viewer mode" style={{ marginLeft: "auto" }}>
           <button type="button" role="tab" aria-selected={mode === "original"} className={`segmented__btn${mode === "original" ? " is-active" : ""}`} disabled={!canOriginal} onClick={() => setMode("original")} title={canOriginal ? "Rendered original" : blob === null ? "The original is not stored on this device; showing the extracted text" : "Original rendering is available for DOCX and PDF"}>Original</button>

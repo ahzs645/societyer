@@ -1,3 +1,4 @@
+import { DocumentPreviewByIdButton } from "../../components/DocumentFilePreview";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "convex/react";
@@ -108,6 +109,7 @@ export function GoverningDocumentRow({
           {present ? (
             <>
               <Link className="btn btn--ghost btn--sm" to={`/app/documents/${docId}`} aria-label={`Open ${slot.label}`}>Open</Link>
+              <DocumentPreviewByIdButton documentId={docId!} />
               {canEdit && <button type="button" className="btn btn--ghost btn--sm" onClick={onChoose} aria-label={`Replace ${slot.label}`}>Replace</button>}
               {canEdit && <button type="button" className="btn btn--ghost btn--sm" onClick={onUnlink} aria-label={`Unlink ${slot.label}`}>Unlink</button>}
             </>

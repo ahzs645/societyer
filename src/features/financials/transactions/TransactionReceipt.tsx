@@ -1,3 +1,4 @@
+import { DocumentPreviewByIdButton } from "../../../components/DocumentFilePreview";
 import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
@@ -101,6 +102,7 @@ export function TransactionReceipt({
           )}
           <span className="txn-receipt__meta">Receipt attached</span>
         </div>
+        {attached && <DocumentPreviewByIdButton documentId={attached._id} />}
         <button
           type="button"
           className="btn btn--ghost btn--icon btn--sm"

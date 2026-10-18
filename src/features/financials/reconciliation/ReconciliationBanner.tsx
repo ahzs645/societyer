@@ -1,3 +1,4 @@
+import { DocumentPreviewByIdButton } from "../../../components/DocumentFilePreview";
 import { useMutation } from "convex/react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, FileText, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
@@ -197,9 +198,9 @@ export function ReconciliationBanner({
           {period.completedAtISO && !open ? ` · completed ${formatDate(period.completedAtISO)}${period.completedByName ? ` by ${period.completedByName}` : ""}` : ""}
         </span>
         {period.statementDocumentId && (
-          <Link to={`/app/documents/${period.statementDocumentId}`} className="recon-banner__doc">
+          <><DocumentPreviewByIdButton documentId={period.statementDocumentId} label="Preview statement" /><Link to={`/app/documents/${period.statementDocumentId}`} className="recon-banner__doc">
             <FileText size={12} aria-hidden="true" /> Statement
-          </Link>
+          </Link></>
         )}
         {open && completeBlockedReason && (
           <span id="recon-complete-reason" className="recon-banner__reason">{completeBlockedReason}</span>

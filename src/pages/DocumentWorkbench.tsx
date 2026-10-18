@@ -1,3 +1,4 @@
+import { DocumentPreviewButton } from "../components/DocumentFilePreview";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -229,6 +230,7 @@ export function DocumentWorkbenchPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Review workbench</h2>
+              {openable && downloadAvailable && <DocumentPreviewButton document={openable} label="Expand preview" />}
               <span className="card__subtitle">
                 {openComments} open comment{openComments === 1 ? "" : "s"} · {(signatures ?? []).length} signature{(signatures ?? []).length === 1 ? "" : "s"}
               </span>

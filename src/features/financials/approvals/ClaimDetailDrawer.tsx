@@ -1,3 +1,4 @@
+import { DocumentPreviewByIdButton } from "../../../components/DocumentFilePreview";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
@@ -225,7 +226,7 @@ export function ClaimDetailDrawer({
         {row.submittedAtISO && <div><dt>Submitted</dt><dd>{formatDate(row.submittedAtISO)}</dd></div>}
         <div>
           <dt>Receipt</dt>
-          <dd>{row.receiptDocument ? <Link to={`/app/documents/${row.receiptDocument._id}`}>{row.receiptDocument.title}</Link> : <span className="muted">No receipt attached</span>}</dd>
+          <dd>{row.receiptDocument ? <><Link to={`/app/documents/${row.receiptDocument._id}`}>{row.receiptDocument.title}</Link> <DocumentPreviewByIdButton documentId={row.receiptDocument._id} /></> : <span className="muted">No receipt attached</span>}</dd>
         </div>
         {row.paymentReference && <div><dt>Payment reference</dt><dd>{row.paymentReference}</dd></div>}
       </dl>

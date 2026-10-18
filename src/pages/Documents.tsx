@@ -1,3 +1,4 @@
+import { DocumentFilePreview } from "../components/DocumentFilePreview";
 import { hasErrors, validateDocumentInput, type FieldErrors } from "../../shared/recordValidation";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -49,6 +50,7 @@ import { SOURCE_VERSION_STATUS_LABELS, type SourceVersionStatus } from "../../sh
 type ShowFilter = "all" | "needs_review" | "duplicates" | "versions";
 
 export function DocumentsPage() {
+  const [previewFile, setPreviewFile] = useState<any | null>(null);
   const society = useSociety();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
@@ -276,7 +278,8 @@ export function DocumentsPage() {
       id: "open",
       items: [
         { id: "review", label: "Open review page", icon: <ClipboardCheck size={14} />, onSelect: () => navigate(`/app/documents/${row._id}`) },
-        { id: "file", label: "Open file", icon: <Download size={14} />, disabled: !documentHasFile(row), onSelect: () => { void openFile(row); } },
+        { id: "preview", label: "Preview file", icon: <FileSearch size={14} />, disabled: !documentHasFile(row), onSelect: () => setPreviewFile(row) },
+        { id: "file", label: "Download original", icon: <Download size={14} />, disabled: !documentHasFile(row), onSelect: () => { void openFile(row); } },
         { id: "history", label: "File history", icon: <History size={14} />, onSelect: () => setVersionsFor({ id: row._id, title: row.title }) },
       ],
     },
@@ -293,6 +296,7 @@ export function DocumentsPage() {
 
   return (
     <div className={`page file-drop-target is-${quickDrop.dragState}`} {...pageDropHandlers}>
+      {previewFile && <DocumentFilePreview document={previewFile} onClose={() => setPreviewFile(null)} />}
       <PageHeader
         title="Documents"
         icon={<FolderOpen size={16} />}
