@@ -11,7 +11,7 @@ export function ServerNoticeRows({
   fixedParty,
   children,
 }: {
-  children: (props: { onEndReached: () => void; loading: boolean }) => ReactNode;
+  children: (props: { onEndReached: () => void; loading: boolean; hasMore: boolean }) => ReactNode;
   kind: string;
   fixedParty?: { field: "organization" | "issuedFor"; name: string };
 }) {
@@ -105,7 +105,7 @@ export function ServerNoticeRows({
     if (emptyBatches.current++ < 4) loadMore();
   }, [page, pending, loadMore]);
   return <>
-    {children({ onEndReached: () => { if (page?.page.length) loadMore(); }, loading: pending && loadedCount === 0 })}
+    {children({ onEndReached: () => { if (page?.page.length) loadMore(); }, loading: pending && loadedCount === 0, hasMore: !page?.isDone })}
     <div className="procurement-reader__pager" style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 0", flexWrap: "wrap" }}>
       <span role="status">{pending ? "Loading notices…" : `${loadedCount.toLocaleString()} results loaded${page?.isDone ? " · end of results" : ""}`}</span>
       {!page?.isDone && <button className="btn btn--secondary btn--sm" disabled={pending} onClick={() => { emptyBatches.current = 0; loadMore(); }}>Load more</button>}

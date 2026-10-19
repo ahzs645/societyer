@@ -36,3 +36,10 @@ Workspace restoration exports do not restore sign-in delivery state, processor p
 ## Deploy/update
 
 From a clean main checkout, run `npm ci`, `npm run build:ddcnorth`, deploy Convex with the production env file, then deploy `dist` to the existing Cloudflare Pages project `societyer-ddcnorth` on branch `main`. Keep credentials in the operator environment, never in Git. Record both the source commit and Pages deployment ID after rollout. The native hosted procurement reader is built with Societyer; changing it requires the Societyer build. Changes to the separate embedded Zoer plugin additionally require its build and the documented procurement asset sync before building Societyer.
+
+## Live follow-up
+
+- Confirmed automatic loading from 50 to 100 notices on the production site, with a 504px table filling the 773px viewport below the toolbar.
+- Header filters moving saved conditions into an AND group now preserve indexed date bounds; a regression covers historical records before the matching range.
+- ViewportPopover participates in the shared floating-layer stack, so nested numeric choices paint above the column menu. A pointer-selection regression passes on desktop and phone.
+- A bounded empty batch offers continuation rather than claiming there are no matches in the unseen remainder.

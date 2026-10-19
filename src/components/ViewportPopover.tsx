@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { useFloatingLayerStack } from "../lib/overlayStack";
 import { isOutsidePointerEvent } from "../lib/floatingLayer";
 
 /** Anchor mixed form controls to their trigger without clipping narrow screens. */
@@ -12,6 +13,7 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
   children: ReactNode;
 }) {
   const ref = useDialogFocus<HTMLDivElement>(open, onClose);
+  const layer = useFloatingLayerStack(open);
   const [placement, setPlacement] = useState<CSSProperties>({ visibility: "hidden" });
   useLayoutEffect(() => {
     if (!open) return;
@@ -61,5 +63,5 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
   }, [open, anchorRef, onClose, ref]);
   if (!open) return null;
   return <div ref={ref} className={className} role="dialog" aria-label={label} tabIndex={-1}
-    style={{ maxHeight: "calc(100dvh - 16px)", ...placement, position: "fixed", right: "auto", maxWidth: "calc(100vw - 16px)", minWidth: "min(240px, calc(100vw - 16px))", overflowY: "auto" }}>{children}</div>;
+    style={{ maxHeight: "calc(100dvh - 16px)", ...placement, ...layer.panel, position: "fixed", right: "auto", maxWidth: "calc(100vw - 16px)", minWidth: "min(240px, calc(100vw - 16px))", overflowY: "auto" }}>{children}</div>;
 }

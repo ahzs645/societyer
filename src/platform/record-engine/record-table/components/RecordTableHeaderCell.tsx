@@ -230,7 +230,8 @@ export function RecordTableHeaderCell({
         className="record-table__header-cell-button"
         onClick={cycleSort}
         type="button"
-        title={recordField.field.label}
+        title={sortable ? recordField.field.label : `${recordField.field.label} is available for filtering and grouping`}
+        aria-disabled={!sortable || undefined}
       >
         <FieldIcon size={13} className="record-table__header-cell-icon" aria-hidden="true" />
         <span className="record-table__header-cell-label">{recordField.field.label}</span>

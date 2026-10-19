@@ -434,7 +434,7 @@ export function NoticeTable({
   const loading = progress ? !progress.done && records.length === 0 : false;
   const [filtering, setFiltering] = useState(false);
 
-  const renderTable = (onEndReached?: () => void, serverLoading = false) => (
+  const renderTable = (onEndReached?: () => void, serverLoading = false, hasMore = false) => (
         <RecordTable
           fillViewport
           onEndReached={onEndReached}
@@ -446,12 +446,16 @@ export function NoticeTable({
             emptyState ?? (
               <div className="record-table__empty">
                 <div className="record-table__empty-title">
-                  {search
+                  {serverPaging && hasMore
+                    ? "Continue checking results"
+                    : search
                     ? `Nothing matches “${search}”`
                     : `No ${objectMetadata.labelPlural.toLowerCase()} here`}
                 </div>
                 <div className="record-table__empty-desc">
-                  {search
+                  {serverPaging && hasMore
+                    ? "Load more to check the remaining notices."
+                    : search
                     ? "Try fewer or different words."
                     : "Choose another view, or change the filters, to see more."}
                 </div>
@@ -501,7 +505,7 @@ export function NoticeTable({
         <RecordTableFilterChips />
         {serverPaging ? (
           <ServerNoticeRows kind={kind} fixedParty={fixedParty}>
-            {({ onEndReached, loading: serverLoading }) => renderTable(onEndReached, serverLoading)}
+            {({ onEndReached, loading: serverLoading, hasMore }) => renderTable(onEndReached, serverLoading, hasMore)}
           </ServerNoticeRows>
         ) : renderTable()}
 
