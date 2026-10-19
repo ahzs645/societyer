@@ -3,13 +3,15 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
-import { procurementTermFields } from "./tables/procurement";
+import { procurementTaxonomyIndexFields, procurementTermFields } from "./tables/procurement";
 
 const tables = ["procurementRecords", "procurementDetails", "procurementDocuments", "procurementEvidence"] as const;
 const tableValidator = v.union(v.literal("procurementRecords"), v.literal("procurementDetails"), v.literal("procurementDocuments"), v.literal("procurementEvidence"));
 const activation = { societyId: v.id("societies"), generation: v.string(), folder: v.string(), publishedAt: v.string(), counts: v.record(v.string(), v.number()), expected: v.record(v.string(), v.number()),
   profileVersion: v.optional(v.number()), contentHash: v.optional(v.string()), sourceCounts: v.optional(v.record(v.string(), v.number())),
   taxonomyReleases: v.optional(v.array(v.string())), taxonomyCount: v.optional(v.number()),
+  taxonomyIndexes: v.optional(v.array(v.object(procurementTaxonomyIndexFields))),
+  sourceSnapshotId: v.optional(v.string()), sourceCatalogSha256: v.optional(v.string()),
 };
 
 /** Small operator preflight; unchanged publications need no import or validation scan. */
@@ -23,7 +25,7 @@ export const state = internalQuery({
   },
 });
 
-/** Each referenced term is stored once per workspace/release, not once per snapshot. */
+/** Each term is stored once per workspace/release, not once per snapshot. */
 export const importTerms = internalMutation({
   args: { societyId: v.id("societies"), folder: v.string(), terms: v.array(v.object(procurementTermFields)) },
   returns: v.object({ inserted: v.number(), reused: v.number() }),
@@ -48,6 +50,52 @@ export const importTerms = internalMutation({
   },
 });
 
+const taxonomyScope = { societyId: v.id("societies"), ...procurementTaxonomyIndexFields };
+
+/** Reserve one immutable release before a bulk import; concurrent retries cannot append duplicates. */
+export const beginTaxonomy = internalMutation({
+  args: { ...taxonomyScope, folder: v.string() }, returns: v.union(v.literal("import"), v.literal("resume"), v.literal("reuse")),
+  handler: async (ctx, args) => {
+    validateWorkspaceProcurementReviewFolder(args.societyId, args.folder);
+    const society = await ctx.db.get(args.societyId);
+    if (!society || society.integrationSettings?.procurementReviewFolder !== args.folder) throw new Error("Workspace folder changed; taxonomy import refused.");
+    if (!Number.isSafeInteger(args.count) || args.count < 1 || args.count > 500000 || !/^[a-f0-9]{64}$/.test(args.contentHash)) throw new Error("Invalid taxonomy release metadata.");
+    const prior = await ctx.db.query("procurementTaxonomyReleases").withIndex("by_release", q => q.eq("societyId", args.societyId).eq("releaseId", args.releaseId)).unique();
+    if (prior) {
+      if (prior.contentHash !== args.contentHash || prior.count !== args.count) throw new Error("Taxonomy release changed in place; publish a new reference release.");
+      return prior.status === "ready" ? "reuse" as const : "resume" as const;
+    }
+    const existing = await ctx.db.query("procurementTaxonomyTerms").withIndex("by_release_key", q => q.eq("societyId", args.societyId).eq("releaseId", args.releaseId)).first();
+    const { folder, ...release } = args;
+    await ctx.db.insert("procurementTaxonomyReleases", { ...release, status: "importing" });
+    return existing ? "resume" as const : "import" as const;
+  },
+});
+export const taxonomyState = internalQuery({
+  args: { societyId: v.id("societies"), releaseId: v.string() },
+  returns: v.union(v.null(), v.object({ ...procurementTaxonomyIndexFields, status: v.union(v.literal("importing"), v.literal("ready")) })),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.query("procurementTaxonomyReleases").withIndex("by_release", q => q.eq("societyId", args.societyId).eq("releaseId", args.releaseId)).unique();
+    return row ? { releaseId: row.releaseId, contentHash: row.contentHash, count: row.count, status: row.status } : null;
+  },
+});
+export const termsPage = internalQuery({
+  args: { societyId: v.id("societies"), releaseId: v.string(), cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ terms: v.array(v.object(procurementTermFields)), cursor: v.string(), done: v.boolean() }),
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("procurementTaxonomyTerms").withIndex("by_release_key", q => q.eq("societyId", args.societyId).eq("releaseId", args.releaseId))
+      .paginate({ cursor: args.cursor, numItems: 1000, maximumBytesRead: 2_000_000 });
+    return { terms: page.page.map(({ societyId, _id, _creationTime, ...term }) => term), cursor: page.continueCursor, done: page.isDone };
+  },
+});
+export const commitTaxonomy = internalMutation({
+  args: taxonomyScope, returns: v.null(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.query("procurementTaxonomyReleases").withIndex("by_release", q => q.eq("societyId", args.societyId).eq("releaseId", args.releaseId)).unique();
+    if (!row || row.contentHash !== args.contentHash || row.count !== args.count) throw new Error("Taxonomy reservation mismatch.");
+    await ctx.db.patch(row._id, { status: "ready" }); return null;
+  },
+});
 /** Enumerate generations with one indexed seek per generation, not a full count scan. */
 export const generations = internalQuery({
   args: { societyId: v.id("societies") },
@@ -98,6 +146,15 @@ export const activate = internalAction({
   handler: async (ctx, args) => {
     validateWorkspaceProcurementReviewFolder(args.societyId, args.folder);
     if (args.profileVersion !== undefined && (args.profileVersion !== 2 || Object.keys(args.counts).some(kind => kind !== "opportunity" && kind !== "award"))) throw new Error("Compact imports contain only opportunities and awards.");
+    if (args.profileVersion === 2) {
+      if (!args.sourceSnapshotId || !/^[a-f0-9]{64}$/.test(args.sourceCatalogSha256 ?? "")) throw new Error("Compact imports must retain source snapshot and checksum provenance.");
+      const indexes = args.taxonomyIndexes ?? [];
+      if (indexes.length > 32 || new Set(indexes.map(x => x.releaseId)).size !== indexes.length || indexes.reduce((n, x) => n + x.count, 0) !== args.taxonomyCount) throw new Error("Invalid taxonomy release inventory.");
+      for (const index of indexes) {
+        const release = await ctx.runQuery(internal.procurementImport.taxonomyState, { societyId: args.societyId, releaseId: index.releaseId });
+        if (!release || release.status !== "ready" || release.count !== index.count || release.contentHash !== index.contentHash) throw new Error("Taxonomy release is not verified and ready.");
+      }
+    }
     const expectedRecords = Object.values(args.counts).reduce((sum, value) => sum + value, 0);
     if (args.expected.procurementRecords !== expectedRecords || args.expected.procurementDetails !== expectedRecords) throw new Error("Record counts do not match the source manifest.");
     for (const table of tables) {

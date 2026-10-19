@@ -2,8 +2,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
 const args = process.argv.slice(2);
 const value = (flag: string) => { const i = args.indexOf(flag); return i < 0 ? undefined : args[i + 1]; };
 const deployment = value("--deployment");
@@ -28,23 +26,19 @@ if (unchanged) {
   console.log(`Unchanged hosted content: reused ${prior.generation}; no row import or catalog scan.`);
   process.exit(0);
 }
-const termsPath = resolve(input, "procurementTaxonomyTerms.jsonl");
-if (existsSync(termsPath)) {
-  let batch: any[] = []; let inserted = 0, reused = 0;
-  const flush = () => {
-    if (!batch.length) return;
-    const result = run(["run", "procurementImport:importTerms", JSON.stringify({ societyId: activation.societyId, folder: activation.folder, terms: batch })], true);
-    inserted += result.inserted; reused += result.reused; batch = [];
-  };
-  for await (const line of createInterface({ input: createReadStream(termsPath), crlfDelay: Infinity })) {
-    const { societyId, ...term } = JSON.parse(line);
-    if (societyId !== activation.societyId) throw new Error("Foreign workspace in taxonomy export.");
-    batch.push(term); if (batch.length === 150) flush();
+for (const index of activation.taxonomyIndexes ?? []) {
+  const scope = { societyId: activation.societyId, ...index };
+  const action = run(["run", "procurementImport:beginTaxonomy", JSON.stringify({ ...scope, folder: activation.folder })], true);
+  if (action === "reuse") { console.log(`Reused verified taxonomy ${index.releaseId} (${index.count} terms).`); continue; }
+  if (action === "resume" && !args.includes("--activate-only")) throw new Error("Taxonomy import is already reserved. Check its previous import, then retry --activate-only to verify it without appending duplicates.");
+  if (action === "import") {
+    if (!/^[a-f0-9]{64}$/.test(index.contentHash)) throw new Error("Invalid taxonomy content hash.");
+    const termsArchive = resolve(input, `taxonomy-${index.contentHash}.zip`);
+    if (!existsSync(termsArchive)) throw new Error("Taxonomy archive missing.");
+    run(["import", "--append", termsArchive]);
   }
-  flush();
-  if (inserted + reused !== activation.taxonomyCount) throw new Error("Taxonomy count differs from activation metadata.");
-  console.log(`Taxonomy index: ${inserted} inserted, ${reused} reused across generations.`);
-} else if (activation.taxonomyCount) throw new Error("Taxonomy export missing.");
+  run(["run", "procurementTaxonomy:finishTaxonomy", JSON.stringify(scope)]);
+}
 if (!args.includes("--activate-only")) {
   for (const table of ["procurementRecords", "procurementDetails", "procurementDocuments", "procurementEvidence"]) {
     const first = run(["run", "procurementImport:countPage", JSON.stringify({ societyId: activation.societyId, generation: activation.generation, table, cursor: null })], true);

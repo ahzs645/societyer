@@ -7,6 +7,7 @@ import { lowerLabel } from "../utils/lowerLabel";
 import type { RecordField } from "../../types";
 import { RecordTableSortEditor } from "./RecordTableSortPopover";
 import { RecordTableGroupByEditor } from "./RecordTableGroupByPopover";
+import { RecordTableDisplayOptions } from "./RecordTableDisplayOptions";
 
 export type RecordTableViewTypeOption<Id extends string = string> = {
   id: Id;
@@ -28,7 +29,7 @@ export function RecordTableViewOptionsSheet<Id extends string>({
   viewTypeOptions,
   onChooseViewType,
   showGroup,
-  showSort = true,
+  showDisplay = false,
   kanbanFields,
   calendarFields,
   onSearch,
@@ -42,15 +43,14 @@ export function RecordTableViewOptionsSheet<Id extends string>({
   onChooseViewType: (id: Id) => void;
   /** Grouping applies to the table view only. */
   showGroup: boolean;
-  /** False when nothing can be sorted (a page-owned query with no sortable fields). */
-  showSort?: boolean;
+  /** Continuous scroll or pages: the table view only. */
+  showDisplay?: boolean;
   kanbanFields: RecordField[];
   calendarFields: RecordField[];
   onSearch: () => void;
   /** Present while the table offers "Select records" on phones. */
   onToggleSelection?: () => void;
-  /** Absent when the table can't export (a page-owned query holds one page at a time). */
-  onExport?: () => void;
+  onExport: () => void;
   /** The page's own toolbar actions, if any. */
   actions?: ReactNode;
 }) {
@@ -77,29 +77,23 @@ export function RecordTableViewOptionsSheet<Id extends string>({
               <span>{mobileSelectionMode ? "Exit selection" : "Select records"}</span>
             </button>
           )}
-          {onExport && (
-            <button type="button" className="record-view-sheet__action" onClick={onExport}>
-              <Download size={16} aria-hidden="true" />
-              <span>Export…</span>
-            </button>
-          )}
+          <button type="button" className="record-view-sheet__action" onClick={onExport}>
+            <Download size={16} aria-hidden="true" />
+            <span>Export…</span>
+          </button>
         </div>
 
-        {viewTypeOptions.length > 1 && (
-          <LayoutSection
-            viewTypeOptions={viewTypeOptions}
-            onChooseViewType={onChooseViewType}
-            kanbanFields={kanbanFields}
-            calendarFields={calendarFields}
-          />
-        )}
+        <LayoutSection
+          viewTypeOptions={viewTypeOptions}
+          onChooseViewType={onChooseViewType}
+          kanbanFields={kanbanFields}
+          calendarFields={calendarFields}
+        />
 
-        {showSort && (
-          <section className="record-view-sheet__section record-view-sheet__sort" aria-labelledby="record-view-sheet-sort">
-            <h3 className="record-view-sheet__label" id="record-view-sheet-sort">Sort</h3>
-            <RecordTableSortEditor />
-          </section>
-        )}
+        <section className="record-view-sheet__section record-view-sheet__sort" aria-labelledby="record-view-sheet-sort">
+          <h3 className="record-view-sheet__label" id="record-view-sheet-sort">Sort</h3>
+          <RecordTableSortEditor />
+        </section>
 
         {showGroup && (
           <section className="record-view-sheet__section record-view-sheet__group" aria-label="Group">
@@ -108,6 +102,7 @@ export function RecordTableViewOptionsSheet<Id extends string>({
         )}
 
         <DensitySection />
+        {showDisplay && <RecordTableDisplayOptions variant="sheet" />}
         <FieldsSection />
 
         {actions && <div className="record-view-sheet__section record-view-sheet__page-actions">{actions}</div>}

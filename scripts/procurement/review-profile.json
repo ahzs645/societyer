@@ -47,7 +47,10 @@
     "currency",
     "contractValueText",
     "detailUrl",
-    "sourceUrl"
+    "sourceUrl",
+    "contactName",
+    "contactEmail",
+    "contactPhone"
   ],
   "evidenceTables": [
     "reviews",

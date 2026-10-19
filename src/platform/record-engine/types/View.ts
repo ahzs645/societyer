@@ -96,6 +96,23 @@ export type ViewGroup = {
    * and dirty-checks with the rest of the view without a schema change.
    */
   groupBy?: ViewGroupBy;
+  /**
+   * How the table shows its rows, saved with the view the same way (one
+   * entry carrying this key; see `utils/viewDisplay.ts`). Absent: the
+   * table's default (`RecordTableScope` `defaultDisplayMode`).
+   */
+  display?: ViewDisplay;
+};
+
+/**
+ * "continuous": one long list that renders as it scrolls. "pages": the
+ * filtered, sorted list in pages of `pageSize` with a pager under it.
+ */
+export type ViewDisplayMode = "continuous" | "pages";
+
+export type ViewDisplay = {
+  mode: ViewDisplayMode;
+  pageSize?: number;
 };
 
 export type ViewGroupDateGranularity = "day" | "month" | "quarter" | "year";

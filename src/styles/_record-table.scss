@@ -2894,14 +2894,135 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   }
 }
 
-/* Previous / Next under a table whose page owns the query (RecordTablePager). */
+/* Pages display: "1–50 of 3,752", Previous / Next and the page number under
+ * the table or the phone cards (RecordTablePager). */
 .record-table__pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+  padding: token('s-2') token('s-1');
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+  font-variant-numeric: tabular-nums;
+}
+.record-table__pager-controls {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+}
+.record-table__pager-page { color: token('text-tertiary'); white-space: nowrap; }
+@media (max-width: 560px) {
+  // Phones: the range on its own line, the controls spread under it.
+  .record-table__pager-range { flex: 1 1 100%; text-align: center; }
+  .record-table__pager-controls { flex: 1 1 100%; justify-content: space-between; }
+  .record-table__pager-controls .btn { min-height: 40px; min-width: 44px; }
+}
+
+/* Rows per page, under the Continuous / Pages choice in the view options. */
+.record-table__page-size {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: token('s-2');
-  padding: token('s-3') token('s-4');
-  border-top: 1px solid token('border');
-  font-size: token('fs-sm');
+  margin-top: token('s-2');
+  .record-table__menu-select { width: auto; min-width: 72px; }
 }
-.record-table__pager-page { color: token('text-tertiary'); font-variant-numeric: tabular-nums; }
+
+/* Records arriving in batches (RecordTableScope loadingProgress). */
+.record-table__loading-status {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 560px) {
+  .record-table__toolbar > .record-table__loading-status {
+    order: 4;
+    flex: 1 1 100%;
+  }
+}
+
+/* Free-text filter values: the values found in the records, with counts
+ * (RecordTableFilterValuePicker). The list spans the condition row. */
+.record-table__value-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  > .record-table__filter-input { width: 100%; }
+}
+.record-table__filter-multi-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-table__value-list-wrap {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.record-table__value-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+}
+.record-table__value-option {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  min-height: 28px;
+  padding: 0 token('s-2');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-primary');
+  font: inherit;
+  font-size: token('fs-sm');
+  text-align: left;
+  cursor: pointer;
+  &:hover,
+  &.is-active { background: token('bg-hover'); }
+  &.is-selected { color: token('accent'); }
+  @media (pointer: coarse) { min-height: 40px; }
+}
+.record-table__value-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid token('border');
+  border-radius: 3px;
+  .is-selected > & { border-color: token('accent'); background: token('accent-soft'); }
+}
+.record-table__value-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-table__value-count {
+  flex: none;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-variant-numeric: tabular-nums;
+}
+.record-table__value-list-hint,
+.record-table__value-list-more,
+.record-table__value-list-empty {
+  padding: 2px token('s-2');
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}

@@ -210,6 +210,18 @@ export type RecordTableState = {
   /* loaded records */
   records: any[];
   setRecords: (records: any[]) => void;
+  /**
+   * Records still arriving in batches (`RecordTableScope` `loadingProgress`):
+   * how many are loaded of how many there are. Null once complete.
+   */
+  loadingProgress: RecordTableLoadingProgress | null;
+  setLoadingProgress: (progress: RecordTableLoadingProgress | null) => void;
+
+  /* paging — the open page of a view shown in pages (interaction state,
+     never dirty). Back to the first page whenever the search, filters,
+     sort, grouping or view change. */
+  pageIndex: number;
+  setPageIndex: (pageIndex: number) => void;
 
   /* grouping — which groups are folded (interaction state, never dirty) */
   collapsedGroupKeys: Set<string>;
@@ -251,6 +263,8 @@ export type RecordTableState = {
   discardDraftChanges: () => void;
 };
 
+export type RecordTableLoadingProgress = { loaded: number; total: number };
+
 export type RecordTableStore = ReturnType<typeof createRecordTableStore>;
 
 export function createRecordTableStore(opts: {
@@ -258,7 +272,7 @@ export function createRecordTableStore(opts: {
   objectMetadataId: string;
   labelIdentifierFieldName?: string;
 }) {
-  return createStore<RecordTableState>()((set, get) => ({
+  const store = createStore<RecordTableState>()((set, get) => ({
     tableId: opts.tableId,
     objectMetadataId: opts.objectMetadataId,
     viewId: null,
@@ -293,6 +307,8 @@ export function createRecordTableStore(opts: {
     editHistory: EMPTY_EDIT_HISTORY,
     gridAnnouncement: "",
     records: [],
+    loadingProgress: null,
+    pageIndex: 0,
     collapsedGroupKeys: new Set(),
     rangeAnchor: null,
     filterEditorRequest: null,
@@ -443,6 +459,14 @@ export function createRecordTableStore(opts: {
         return { records, pendingEdits };
       }),
 
+    setLoadingProgress: (loadingProgress) =>
+      set((state) =>
+        state.loadingProgress?.loaded === loadingProgress?.loaded && state.loadingProgress?.total === loadingProgress?.total
+          ? state
+          : { loadingProgress },
+      ),
+    setPageIndex: (pageIndex) => set({ pageIndex: Math.max(0, Math.floor(pageIndex)) }),
+
     setCollapsedGroupKeys: (collapsedGroupKeys) => set({ collapsedGroupKeys }),
     toggleGroupCollapsed: (key) =>
       set((state) => {
@@ -556,6 +580,24 @@ export function createRecordTableStore(opts: {
       });
     },
   }));
+  // A new search, filter, sort, grouping or view starts again from page one
+  // (the list it pages through is a different one). More records arriving
+  // in batches keep the page.
+  store.subscribe((state, previous) => {
+    if (state.pageIndex === 0) return;
+    if (
+      state.viewId !== previous.viewId ||
+      state.searchTerm !== previous.searchTerm ||
+      state.filters !== previous.filters ||
+      state.filterGroups !== previous.filterGroups ||
+      state.sorts !== previous.sorts ||
+      state.viewGroups !== previous.viewGroups ||
+      state.type !== previous.type
+    ) {
+      store.setState({ pageIndex: 0 });
+    }
+  });
+  return store;
 }
 
 function normalizeIdentifierColumn(

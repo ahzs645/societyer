@@ -1,21 +1,28 @@
 /**
  * The no-login demo's reader data: its bundled snapshot, opened in the catalog
- * worker. The demo catalog is small (a console read returns at most 200 rows),
- * so a kind is read once, then filtered, sorted and paged here the way the
- * hosted queries do it on the server.
+ * worker. A console read returns at most 200 rows, so a kind's list is read in
+ * 200-row batches (each shown as it arrives) and projected here the way the
+ * hosted import projects it (scripts/procurement/export-convex.py
+ * `project_record`), so the demo's list has the same columns.
  */
 import { useEffect, useMemo, useState } from "react";
 import type { SnapshotManifest } from "../../../../shared/procurementReview/manifest";
 import type { BlobReader } from "../lib/blobs";
 import type { CatalogClient } from "../lib/catalogClient";
 import { readVerifiedDocument, type StoredProcurementDocument } from "../lib/documents";
-import { sortableDate } from "../lib/notice";
+import { describeNotice, sortableDate } from "../lib/notice";
 import type { ReviewRow } from "../lib/review";
-import type { DocumentPage, ReaderSource, RecordPage, RecordQuery, RecordSummary } from "./source";
+import { progressive, useProgressive, type CatalogReviewRow, type DocumentPage, type ListRow, type Progressive, type ReaderSource, type RecordList, type RecordSummary } from "./source";
 
 type SqlRow = Record<string, unknown>;
 const REVIEW_TABLES = ["reviews", "procurement_stage_runs", "procurement_requirements", "procurement_facts", "procurement_assessments", "procurement_decisions", "procurement_tasks", "procurement_changes", "procurement_matches", "procurement_judgements"];
+/** The console's row limit. */
+const BATCH = 200;
+/** As the hosted reader (convexSource.ts). */
+const REVIEW_LIMIT = 5000;
 const str = (value: unknown) => (typeof value === "string" ? value : typeof value === "number" ? String(value) : "");
+const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const MONEY = /^(-)?\s*(?:CA)?\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?$/;
 
 /** `load`'s result once it settles; a failure is thrown to the page's error boundary rather than loading forever. */
 function useAsync<T>(key: string, load: () => Promise<T>): T | undefined {
@@ -30,11 +37,17 @@ function useAsync<T>(key: string, load: () => Promise<T>): T | undefined {
   return state.value;
 }
 
-/** The import's list projection of one catalog row (scripts/procurement/export-convex.py `project_record`). */
-function summarize(row: SqlRow): RecordSummary & { searchText: string } {
-  let data: SqlRow = {};
-  try { data = JSON.parse(str(row.data)) as SqlRow; } catch { /* a malformed row still lists by title */ }
-  const text = (...keys: string[]) => keys.map((key) => str(data[key]).trim()).find(Boolean) ?? "";
+function parse(row: SqlRow): Record<string, unknown> {
+  try {
+    const data: unknown = JSON.parse(str(row.data));
+    return data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : {};
+  } catch { return {}; /* a malformed row still lists by title */ }
+}
+const textOf = (data: Record<string, unknown>) => (...keys: string[]) => keys.map((key) => str(data[key]).trim()).find(Boolean) ?? "";
+
+/** The import's summary of one catalog row. */
+function summarize(row: SqlRow, data: Record<string, unknown>): RecordSummary {
+  const text = textOf(data);
   const kind = str(row.kind);
   const keys = kind === "award" ? ["awardDate", "issueDate"] : ["closingAt", "closingDate", "issueDate"];
   return {
@@ -42,7 +55,39 @@ function summarize(row: SqlRow): RecordSummary & { searchText: string } {
     organization: text("issuedBy", "issuingOrganization"), status: text("status"),
     date: keys.map((key) => sortableDate(data[key])).find(Boolean) ?? "",
     dateText: text("closingDate", "awardDate", "issueDate"),
-    searchText: [str(row.title), text("issuedBy", "issuingOrganization"), text("searchText", "description"), text("successfulSupplier", "mainCommodity"), str(row.id)].join(" ").toLowerCase(),
+  };
+}
+
+/** A contract value as a number when it reads as one ("$1,240,000.00", 64800); `money_value` in the exporter. */
+function moneyValue(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const m = MONEY.exec(str(value).trim());
+  if (!m) return null;
+  const number = Number(m[2].replaceAll(",", "") + (m[3] ?? ""));
+  return m[1] ? -number : number;
+}
+
+type StoredFile = { name: string; available: boolean };
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** `project_record` in scripts/procurement/export-convex.py; keep the two in step. */
+function listRow(row: SqlRow, files: StoredFile[]): ListRow {
+  const data = parse(row);
+  const summary = summarize(row, data);
+  const text = textOf(data);
+  const award = summary.kind === "award";
+  const model = describeNotice(summary, data);
+  const issuedFor = text("issuedFor");
+  return {
+    ...summary, dateText: summary.dateText ?? "",
+    issuedFor: issuedFor && squash(issuedFor) !== squash(summary.organization) ? issuedFor : "",
+    reference: model.reference,
+    documents: files.filter((file) => file.available).length,
+    listedDocuments: model.attachments.filter((item) => !files.some((file) => sameName(file.name, item.name))).length,
+    supplier: award ? text("successfulSupplier", "supplier") : "",
+    value: award ? moneyValue(data.contractValue) ?? moneyValue(data.contractValueText) : null,
+    currency: award ? text("currency").toUpperCase() : "",
+    procurementType: award ? text("opportunityType", "type") : "",
   };
 }
 
@@ -50,31 +95,67 @@ export function useSnapshotReaderSource(manifest: SnapshotManifest, catalog: Cat
   return useMemo<ReaderSource>(() => {
     const rows = async (statement: string, parameters: (string | number)[] = []) =>
       ((await catalog.call("query", { statement, parameters })) as { rows: SqlRow[] }).rows;
-    const kinds = new Map<string, Promise<(RecordSummary & { searchText: string })[]>>();
-    const all = (kind: string) => {
-      let loaded = kinds.get(kind);
-      if (!loaded) kinds.set(kind, loaded = rows("SELECT id, kind, title, data FROM records WHERE kind = ? LIMIT 200", [kind]).then((list) => list.map(summarize)));
-      return loaded;
+    /** Every stored file's record and name, read once: the list counts them per record. */
+    let files: Promise<Map<string, StoredFile[]>> | null = null;
+    const storedFiles = () => files ??= (async () => {
+      const byRecord = new Map<string, StoredFile[]>();
+      for (let after = ""; ;) {
+        const batch = await rows("SELECT id, record_id, name, sha256 FROM documents WHERE id > ? ORDER BY id LIMIT 200", [after]);
+        for (const row of batch) {
+          const list = byRecord.get(str(row.record_id)) ?? [];
+          list.push({ name: str(row.name), available: Boolean(manifest.files[str(row.sha256)]) });
+          byRecord.set(str(row.record_id), list);
+        }
+        if (batch.length < BATCH) return byRecord;
+        after = str(batch[batch.length - 1].id);
+      }
+    })();
+    const lists = new Map<string, Progressive<RecordList>>();
+    const list = (kind: string) => {
+      let store = lists.get(kind);
+      if (!store) {
+        const total = manifest.counts[kind] ?? 0;
+        store = progressive<RecordList>(async (emit) => {
+          const stored = await storedFiles();
+          let loaded: ListRow[] = [];
+          for (let after = ""; ;) {
+            const batch = await rows("SELECT id, kind, title, data FROM records WHERE kind = ? AND id > ? ORDER BY id LIMIT 200", [kind, after]);
+            loaded = loaded.concat(batch.map((row) => listRow(row, stored.get(str(row.id)) ?? [])));
+            const done = batch.length < BATCH;
+            emit({ rows: loaded, total: done ? loaded.length : Math.max(total, loaded.length), done });
+            if (done) return;
+            after = str(batch[batch.length - 1].id);
+          }
+        });
+        lists.set(kind, store);
+      }
+      return store;
     };
+    const reviews = progressive<{ rows: CatalogReviewRow[]; truncated: boolean }>(async (emit) => {
+      const found: CatalogReviewRow[] = [];
+      for (const table of REVIEW_TABLES) {
+        for (let offset = 0; found.length <= REVIEW_LIMIT; offset += BATCH) {
+          // Older snapshots lack some review tables.
+          const batch = await rows(`SELECT * FROM ${table} ORDER BY rowid LIMIT 200 OFFSET ?`, [offset]).catch(() => []);
+          for (const row of batch) found.push({ source: table, recordKey: str(row.record_id), dataJson: JSON.stringify(row) });
+          if (batch.length < BATCH) break;
+        }
+      }
+      emit({ rows: found.slice(0, REVIEW_LIMIT), truncated: found.length > REVIEW_LIMIT });
+    });
     return {
       catalog: { generation: manifest.snapshotId, publishedAt: manifest.publishedAt, counts: manifest.counts },
-      useRecords(query: RecordQuery) {
-        return useAsync<RecordPage>(JSON.stringify(query), async () => {
-          const words = query.search.toLowerCase().split(/\s+/).filter(Boolean);
-          let list = (await all(query.kind)).filter((row) => (!query.status || row.status === query.status) && words.every((word) => row.searchText.includes(word)));
-          if (query.from && !query.search) list = list.filter((row) => row.date >= query.from!).sort((a, b) => a.date.localeCompare(b.date));
-          else if (!query.search) list = [...list].sort((a, b) => b.date.localeCompare(a.date));
-          const start = Number(query.cursor ?? 0);
-          const page = list.slice(start, start + query.pageSize).map(({ searchText: _searchText, ...row }) => row);
-          return { page, isDone: start + query.pageSize >= list.length, continueCursor: String(start + query.pageSize) };
-        });
+      useList(kind: string) {
+        return useProgressive(list(kind));
+      },
+      useReviews() {
+        return useProgressive(reviews);
       },
       useRecord(recordKey: string) {
         return useAsync(`record:${recordKey}`, async () => {
           const [row] = await rows("SELECT id, kind, title, data FROM records WHERE id = ?", [recordKey]);
           if (!row) return null;
-          const { searchText: _searchText, ...summary } = summarize(row);
-          return { summary, dataJson: str(row.data) };
+          return { summary: summarize(row, parse(row)), dataJson: str(row.data) };
         });
       },
       useDocuments(recordKey: string, cursor: string | null) {

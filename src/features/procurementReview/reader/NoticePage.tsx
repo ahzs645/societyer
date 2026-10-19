@@ -5,19 +5,27 @@
  * something), Documents, and Review when Zoer reviewed it. Desktop keeps the
  * facts and contact beside every tab; phones and tablets open Overview with
  * them, under the tabs.
+ *
+ * Back (above the title, on every screen) names the place it returns to, the
+ * list or the buyer page the notice was opened from, and runs `onBack`, so the
+ * list underneath comes back at the same rows. The buyer and issued-for names
+ * open that organisation's page; they are real links, so a middle-click or a
+ * long-press opens it in a new tab.
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ChevronRight, ExternalLink, FileSearch, Gavel, Mail, Phone, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronRight, ExternalLink, FileSearch, Gavel, Mail, Phone, Sparkles } from "lucide-react";
 import { PageHeader } from "../../../pages/_helpers";
 import { Badge, EmptyState, Skeleton, TintedIconTile } from "../../../components/ui";
 import { ExpandableText } from "../../../components/ExpandableText";
+import { Tooltip } from "../../../components/Tooltip";
 import { Progress, Tabs } from "../../../components/primitives";
 import { useMediaQuery } from "../../../lib/useSheetDrag";
-import { describeNotice, formatSourceDate, parseSourceDate, type NoticeModel, type Tone } from "../lib/notice";
+import { backLabel, describeNotice, formatSourceDate, noticeDocumentRows, parseSourceDate, partyCount, type NoticeContact, type NoticeModel, type NoticeParty, type Tone } from "../lib/notice";
 import { describeReview, type ReviewModel } from "../lib/review";
 import { NoticeDocuments } from "./NoticeDocuments";
 import { NoticeReview } from "./NoticeReview";
+import { BUYER_PARAM, ISSUED_FOR_PARAM, NOTICE_PARAM, SECTION_PARAM, useReaderNavigation } from "./routes";
 import { useReaderSource } from "./source";
 
 /** Not a registered route, so the header shows no icon tile: beside a two-line notice title it wraps onto its own line. */
@@ -31,6 +39,9 @@ const isTab = (value: string | null): value is NoticeTab => value === "overview"
 function parse(json: string): unknown {
   try { return JSON.parse(json); } catch { return {}; }
 }
+
+/** A click the page handles itself; with a modifier or another button the browser opens the link's href (a new tab or window). */
+const plainClick = (event: MouseEvent) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
 export function NoticePage({ recordKey, listHref, onBack }: { recordKey: string; listHref: string; onBack: () => void }) {
   const source = useReaderSource();
@@ -52,30 +63,34 @@ export function NoticePage({ recordKey, listHref, onBack }: { recordKey: string;
   const top = useRef<HTMLDivElement>(null);
   useEffect(() => { top.current?.closest(".page")?.scrollTo({ top: 0 }); }, [recordKey]);
 
-  const crumbs = [{ label: "Procurement review", to: listHref }, { label: model?.kind === "award" ? "Award" : "Opportunity" }];
+  // The Back button is the trail: one control naming the one place it leads.
+  const backTo = backLabel({ buyer: params.get(BUYER_PARAM), issuedFor: params.get(ISSUED_FOR_PARAM), section: params.get(SECTION_PARAM), kind: params.get("kind") });
+  const back = <BackLink href={listHref} label={backTo} onBack={onBack} />;
   if (record === undefined) {
     return (
       <div ref={top} className="procurement-notice" aria-busy="true">
-        <PageHeader title="Loading notice…" routeKey={NOTICE_ROUTE_KEY} breadcrumbs={crumbs} />
+        {back}
+        <PageHeader title="Loading notice…" routeKey={NOTICE_ROUTE_KEY} breadcrumbs={false} />
         <div className="card"><div className="card__body col"><Skeleton variant="line" width="90%" /><Skeleton variant="line" width="80%" /><Skeleton variant="line" width="60%" /></div></div>
       </div>
     );
   }
   if (!record || !model) {
     return (
-      <div ref={top}>
-        <PageHeader title="Notice not found" routeKey={NOTICE_ROUTE_KEY} breadcrumbs={crumbs} />
+      <div ref={top} className="procurement-notice">
+        {back}
+        <PageHeader title="Notice not found" routeKey={NOTICE_ROUTE_KEY} breadcrumbs={false} />
         <EmptyState
           icon={<FileSearch size={18} />}
           title="This notice isn't in the published catalog"
           description="Zoer may have published a newer catalog without it, or the link is from another workspace."
-          action={<button type="button" className="btn btn--accent" onClick={onBack}>Back to procurement review</button>}
+          action={<button type="button" className="btn btn--accent" onClick={onBack}>Back to {backTo}</button>}
         />
       </div>
     );
   }
 
-  const documentCount = documents ? (documents.isDone ? documents.page.length : null) : null;
+  const documentCount = documents?.isDone ? noticeDocumentRows(documents.page, model.attachments, true).length : null;
   const tabs: { id: NoticeTab; label: string; count?: number | null }[] = [
     { id: "overview", label: "Overview" },
     { id: "documents", label: "Documents", count: documentCount || null },
@@ -84,11 +99,12 @@ export function NoticePage({ recordKey, listHref, onBack }: { recordKey: string;
 
   return (
     <div ref={top} className="procurement-notice">
+      {back}
       <PageHeader
         title={model.title}
         routeKey={NOTICE_ROUTE_KEY}
-        breadcrumbs={crumbs}
-        subtitle={model.buyer || undefined}
+        breadcrumbs={false}
+        subtitle={model.buyer ? <PartyLink party="organization" name={model.buyer} /> : undefined}
         actions={model.sourceUrl && (
           <a className="btn" href={model.sourceUrl} target="_blank" rel="noopener noreferrer" aria-label={`View on ${model.source}`}>
             <ExternalLink size={14} aria-hidden="true" /> <span className="procurement-notice__source-label">View on {model.source === "Buyer's website" ? "buyer's site" : model.source}</span>
@@ -146,7 +162,12 @@ function NoticeFacts({ model }: { model: NoticeModel }) {
     <section className="procurement-notice__facts card" aria-label="Notice details">
       <div className="card__body">
         <dl className="procurement-notice__kv">
-          {model.facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
+          {model.facts.map((fact) => (
+            <div key={fact.label}>
+              <dt>{fact.label}</dt>
+              <dd>{fact.party ? <PartyLink party={fact.party} name={fact.value} countKind={model.kind} /> : fact.value}</dd>
+            </div>
+          ))}
           <div><dt>Source</dt><dd>{model.source}</dd></div>
         </dl>
         {model.commodities.length > 0 && (
@@ -167,17 +188,94 @@ function NoticeContacts({ model }: { model: NoticeModel }) {
     <section className="procurement-notice__contact card" aria-labelledby="procurement-notice-contact">
       <div className="card__head"><h2 className="card__title" id="procurement-notice-contact">{model.contacts.length === 1 ? "Buyer contact" : "Buyer contacts"}</h2></div>
       <div className="card__body col">
-        {model.contacts.map((contact) => (
-          <div key={`${contact.name}|${contact.email}|${contact.phone}`} className="procurement-notice__person">
-            {contact.name && <strong>{contact.name}</strong>}
-            {contact.role && <span className="muted">{contact.role}</span>}
-            {contact.email && <a href={`mailto:${contact.email}`}><Mail size={13} aria-hidden="true" /> {contact.email}</a>}
-            {contact.phone && <a href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}><Phone size={13} aria-hidden="true" /> {contact.phone}</a>}
-          </div>
-        ))}
+        {model.contacts.map((contact) => <ContactPerson key={`${contact.name}|${contact.email}|${contact.phone}`} contact={contact} />)}
       </div>
     </section>
   );
+}
+
+/** One person, one line per detail: a long address ends in "…" and shows in full on hover or focus; the links still mail or call. */
+function ContactPerson({ contact }: { contact: NoticeContact }) {
+  return (
+    <div className="procurement-notice__person">
+      {contact.name && <OneLine value={contact.name} className="procurement-notice__person-name" />}
+      {contact.role && <OneLine value={contact.role} className="muted" />}
+      {contact.email && <OneLine value={contact.email} href={`mailto:${contact.email}`} icon={<Mail size={13} aria-hidden="true" />} />}
+      {contact.phone && <OneLine value={contact.phone} href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`} icon={<Phone size={13} aria-hidden="true" />} />}
+    </div>
+  );
+}
+
+/** A value kept to one line; the full value shows in the shared tooltip only when the line is cut short. */
+function OneLine({ value, href, icon, className }: { value: string; href?: string; icon?: ReactNode; className?: string }) {
+  const text = useRef<HTMLSpanElement>(null);
+  const [truncated, setTruncated] = useState(false);
+  useEffect(() => {
+    const node = text.current;
+    if (!node) return;
+    const check = () => setTruncated(node.scrollWidth > node.clientWidth + 1);
+    check();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check);
+    observer?.observe(node);
+    return () => observer?.disconnect();
+  }, [value]);
+  const body = <>{icon}<span ref={text} className="procurement-notice__line-text">{value}</span></>;
+  const line = `procurement-notice__line${className ? ` ${className}` : ""}`;
+  return (
+    <Tooltip content={value} disabled={!truncated}>
+      {href ? <a className={line} href={href}>{body}</a> : <span className={line}>{body}</span>}
+    </Tooltip>
+  );
+}
+
+/** Back to the place under the notice. Its href is the same place, for a middle-click. */
+function BackLink({ href, label, onBack }: { href: string; label: string; onBack: () => void }) {
+  return (
+    <a
+      className="procurement-notice__back"
+      href={href}
+      aria-label={`Back to ${label}`}
+      onClick={(event) => { if (!plainClick(event)) return; event.preventDefault(); onBack(); }}
+    >
+      <ArrowLeft size={16} aria-hidden="true" />
+      <span>{label}</span>
+    </a>
+  );
+}
+
+/**
+ * A buyer or issued-for name that opens the organisation's page. With
+ * `countKind`, says how many of that kind's notices name it, once the list
+ * has loaded (and only when there are others).
+ */
+function PartyLink({ party, name, countKind }: { party: NoticeParty; name: string; countKind?: string }) {
+  const { params, openParty } = useReaderNavigation();
+  const source = useReaderSource();
+  const href = useMemo(() => {
+    const next = new URLSearchParams(params);
+    next.delete(NOTICE_PARAM); next.delete("tab");
+    next.delete(party === "organization" ? ISSUED_FOR_PARAM : BUYER_PARAM);
+    next.set(party === "organization" ? BUYER_PARAM : ISSUED_FOR_PARAM, name);
+    return `?${next.toString()}`;
+  }, [params, party, name]);
+  return (
+    <a
+      className="procurement-notice__party"
+      href={href}
+      onClick={(event) => { if (!plainClick(event)) return; event.preventDefault(); openParty(party, name); }}
+    >
+      <span className="procurement-notice__party-name">{name}</span>
+      {/* The list hook is newer than some sources; without it there is simply no count. */}
+      {countKind && typeof source.useList === "function" && <PartyCount kind={countKind} party={party} name={name} />}
+    </a>
+  );
+}
+
+function PartyCount({ kind, party, name }: { kind: string; party: NoticeParty; name: string }) {
+  const list = useReaderSource().useList(kind);
+  const count = list?.done ? partyCount(list.rows, party, name) : null;
+  if (!count) return null;
+  return <small className="procurement-notice__party-count">{count} {kind === "award" ? "awards" : "opportunities"}</small>;
 }
 
 function NoticeFields({ model }: { model: NoticeModel }) {

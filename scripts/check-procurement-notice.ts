@@ -2,11 +2,12 @@
  * The hosted procurement reader's record and review models
  * (src/features/procurementReview/lib/notice.ts, review.ts): source date
  * formats, deadlines judged in the source zone, BC Bid's repeated page fields
- * dropped, and published review rows read into a decision, suggestion and
- * requirements.
+ * dropped, published review rows read into a decision, suggestion and
+ * requirements, and the page around the record: Back's label, the buyer's
+ * other notices, and the documents as one list.
  */
 import assert from "node:assert/strict";
-import { deadlineOf, describeNotice, parseSourceDate, sortableDate, statusOf } from "../src/features/procurementReview/lib/notice";
+import { backLabel, deadlineOf, describeNotice, noticeDocumentRows, onSource, parseSourceDate, partyCount, sortableDate, sourceLabel, statusOf } from "../src/features/procurementReview/lib/notice";
 import { describeReview } from "../src/features/procurementReview/lib/review";
 
 // Noon UTC on October 18, 2026 is 5 AM in Vancouver.
@@ -67,7 +68,62 @@ assert.equal(notice.status?.label, "Closed");
 assert.equal(notice.source, "BC Bid");
 assert.equal(notice.sourceUrl, "https://bcbid.gov.bc.ca/page.aspx/en/bpm/process_manage_extranet/216117");
 assert.equal(describeNotice({ recordKey: "opportunity:municipal-sites:x:1", kind: "opportunity", title: "T" }, { opportunityId: "municipal-sites:x:1", detailUrl: "javascript:alert(1)" }, now).reference, "", "Synthetic keys and unsafe links are not shown");
+assert.equal(describeNotice({ recordKey: "opportunity:bidsandtenders:s:1", kind: "opportunity", title: "T" }, { opportunityId: "bidsandtenders:surrey:abc", externalId: "1220-030" }, now).reference, "1220-030", "A synthetic key falls through to the source's own number");
+assert.equal(describeNotice({ recordKey: "opportunity:canadabuys:1", kind: "opportunity", title: "T" }, { opportunityId: "canadabuys:tender:ws123:000" }, now).reference, "", "CanadaBuys keys Zoer made up are not references");
 assert.equal(describeNotice({ recordKey: "opportunity:municipal-sites:x:1", kind: "opportunity", title: "T" }, {}, now).source, "Buyer's website");
+
+// BC Bid award keys join their parts with "::" and name no source.
+assert.equal(sourceLabel("award:hlth-2026-rfp-0219::c26hlth0418::cedar & main::2026-10-16"), "BC Bid");
+assert.equal(sourceLabel("opportunity:216117"), "BC Bid");
+assert.equal(sourceLabel("opportunity:canadabuys:tender:cb-1:000"), "CanadaBuys");
+const award = describeNotice({ recordKey: "award:hlth-2026-rfp-0219::c26hlth0418", kind: "award", title: "Peer Support" }, { issuingOrganization: "Ministry of Health", contactEmail: "procurement@example.gov.bc.ca" }, now);
+assert.deepEqual(award.contacts, [{ name: "", role: "", email: "procurement@example.gov.bc.ca", phone: "" }], "An award's flat contact fields are its contact");
+assert.equal(award.source, "BC Bid");
+
+// Buyer and Issued for open the organisation's page; the issued-for fact only appears when it names someone else.
+assert.deepEqual(notice.facts.find((fact) => fact.label === "Buyer")?.party, "organization");
+const issued = describeNotice({ recordKey: "opportunity:1", kind: "opportunity", title: "T" }, { issuedBy: "BC Housing", issuedFor: "Metro Vancouver Housing" }, now);
+assert.deepEqual(issued.facts.filter((fact) => fact.party).map((fact) => [fact.label, fact.party]), [["Buyer", "organization"], ["Issued for", "issuedFor"]]);
+assert.equal(describeNotice({ recordKey: "award:1", kind: "award", title: "T" }, { issuedBy: "City of Burnaby" }, now).facts.find((fact) => fact.label === "Buyer")?.party, "organization");
+
+// Back names the place under the notice.
+assert.equal(backLabel({}), "Opportunities");
+assert.equal(backLabel({ kind: "award" }), "Awards");
+assert.equal(backLabel({ kind: "award", buyer: " City of Burnaby " }), "City of Burnaby", "A buyer page under the notice wins over the list");
+assert.equal(backLabel({ issuedFor: "Metro Vancouver Housing" }), "Metro Vancouver Housing");
+assert.equal(backLabel({ section: "analytics", kind: "award" }), "Analytics");
+assert.equal(onSource("BC Bid"), "on BC Bid");
+assert.equal(onSource("Buyer's website"), "on the buyer's site");
+
+const listRows = [
+  { organization: "City of Burnaby", issuedFor: "" },
+  { organization: "city of burnaby", issuedFor: "Burnaby Public Library" },
+  { organization: "BC Transit", issuedFor: "" },
+];
+assert.equal(partyCount(listRows, "organization", "City of Burnaby"), 2, "Names compare without case or punctuation");
+assert.equal(partyCount(listRows, "organization", "BC Transit"), null, "Only this notice: nothing to add");
+assert.equal(partyCount(listRows, "issuedFor", "Burnaby Public Library"), null);
+assert.equal(partyCount(listRows, "organization", ""), null);
+
+// The documents: downloaded first, then the stored ones without a file, then the source's list, once each.
+const doc = (name: string, available: boolean) => ({ documentKey: `d:${name}`, name, available });
+const attachments = [
+  { name: "Tender Documents.pdf", url: "https://bcbid.gov.bc.ca/doc/1" },
+  { name: "drawings set.pdf ", url: "https://bcbid.gov.bc.ca/doc/2" },
+  { name: "Addendum 1.pdf", url: "https://bcbid.gov.bc.ca/doc/3" },
+  { name: "Addendum 1.pdf" },
+  { name: "Site photos.zip", url: "http://insecure.example/photos.zip" },
+];
+const rows = noticeDocumentRows([doc("Drawings Set.pdf", false), doc("Tender Documents.pdf", true)], attachments, true);
+assert.deepEqual(rows.map((item) => [item.state, item.name, item.state === "elsewhere" ? item.url ?? null : null]), [
+  ["downloaded", "Tender Documents.pdf", null],
+  ["elsewhere", "Drawings Set.pdf", "https://bcbid.gov.bc.ca/doc/2"],
+  ["elsewhere", "Addendum 1.pdf", "https://bcbid.gov.bc.ca/doc/3"],
+  ["elsewhere", "Site photos.zip", null],
+], "A stored file without its bytes takes the source's link; listed files dedupe by name; only https links open");
+assert.equal(new Set(rows.map((item) => item.key)).size, rows.length, "Row keys are unique");
+assert.deepEqual(noticeDocumentRows([doc("Tender Documents.pdf", true)], attachments, false).map((item) => item.name), ["Tender Documents.pdf"], "Without the whole stored list, the source's list waits");
+assert.equal(noticeDocumentRows([], [], true).length, 0);
 
 const row = (source: string, value: Record<string, unknown>) => ({ source, dataJson: JSON.stringify(value) });
 const review = describeReview([
@@ -93,4 +149,4 @@ assert.equal(review.summary?.text, "Strong fit");
 assert.equal(review.empty, false);
 assert.equal(describeReview([]).empty, true);
 
-console.log("OK: source dates, deadlines in the source zone, status wording, BC Bid field de-duplication, safe links, review rows.");
+console.log("OK: source dates, deadlines in the source zone, status wording, BC Bid field de-duplication, safe links, review rows, Back labels, party links and counts, one documents list.");

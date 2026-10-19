@@ -88,8 +88,12 @@ type NoticeSpec = {
   number: string;
   title: string;
   buyer: string;
+  /** BC Bid's "Issued for", when a buyer issues the notice on another organisation's behalf. */
+  issuedFor?: string;
   type: string;
   closesIn: number;
+  /** A closing the source states in words rather than as a date (municipal sites only). */
+  closingText?: string;
   closingTime?: string;
   status?: string;
   place?: Place;
@@ -145,7 +149,13 @@ const NOTICES: NoticeSpec[] = [
     place: place("Vancouver", METRO, "description"),
     summary: "BC Housing invites proposals from non-profit operators to provide 24/7 tenant support services at a 52-unit supportive housing building in Mount Pleasant, Vancouver. Services include meal programs, life-skills support, referrals and community integration activities.",
     contact: { name: "Helena Brandt", email: "bchousing.procurement@example.ca", phone: "604-555-0148" }, attachments: ["RFP BCH-2026-0588.pdf", "Addendum 1.pdf"] },
-  { key: "educ-language", source: "bc-bid", number: "ECC-2026-RFP-0091", title: "Indigenous Language Revitalization Learning Resource Development", buyer: "Ministry of Education and Child Care", type: "Request for Proposals", closesIn: 25, closingTime: "14:00", category: "Consulting Services - Curriculum Development", publishedDaysAgo: 9, isNew: true,
+  { key: "bch-envelope", source: "bc-bid", number: "BCH-2026-0602", title: "Building Envelope Condition Assessments - Lower Mainland Portfolio", buyer: "BC Housing Management Commission", type: "Request for Qualifications", closesIn: 22, closingTime: "14:00", category: "Engineering Services - Building Science", publishedDaysAgo: 8, isNew: true,
+    summary: "Prequalify building envelope consultants to assess the condition of 40 social housing buildings in the Lower Mainland over three years.",
+    attachments: ["RFQ BCH-2026-0602.pdf", "Appendix A - Building List.xlsx", "Appendix B - Report Template.docx"] },
+  { key: "bch-cleaning", source: "bc-bid", number: "BCH-2026-0511", title: "Janitorial Services - Victoria Area Buildings", buyer: "BC Housing Management Commission", type: "Invitation to Quote", closesIn: -19, closingTime: "14:00", status: "Closed", category: "Facility Services - Janitorial", publishedDaysAgo: 46,
+    place: place("Victoria", "Capital Regional District", "description"),
+    summary: "Janitorial services for common areas in six BC Housing buildings in Victoria and Saanich for a two-year term." },
+  { key: "educ-language", source: "bc-bid", number: "ECC-2026-RFP-0091", title: "Indigenous Language Revitalization Learning Resource Development", buyer: "Ministry of Education and Child Care", issuedFor: "First Nations Education Steering Committee", type: "Request for Proposals", closesIn: 25, closingTime: "14:00", category: "Consulting Services - Curriculum Development", publishedDaysAgo: 9, isNew: true,
     summary: "Development of K-12 learning resources supporting Indigenous language revitalization, co-developed with First Nations language authorities. The successful proponent will coordinate community review and produce print and digital materials." },
   { key: "moti-hwy99", source: "bc-bid", number: "MOTI-2026-ITT-4471", title: "Highway 99 Shoulder Widening - Squamish Section", buyer: "Ministry of Transportation and Transit", type: "Invitation to Tender", closesIn: 6, closingTime: "11:00", category: "Construction - Highways", publishedDaysAgo: 30,
     place: place("Squamish", "Squamish-Lillooet Regional District", "description"),
@@ -156,11 +166,11 @@ const NOTICES: NoticeSpec[] = [
     summary: "Plan and deliver FireSmart neighbourhood outreach events in five Cariboo communities, including printed materials, volunteer coordination and an attendance and feedback summary." },
   { key: "dbc-visitor-survey", source: "bc-bid", number: "DBC-2026-RFP-0033", title: "Regional Tourism Visitor Survey 2027", buyer: "Destination BC", type: "Request for Proposals", closesIn: 18, closingTime: "14:00", category: "Research Services - Surveys", publishedDaysAgo: 11,
     summary: "Design, field and analyze an intercept and online visitor survey across six tourism regions during the 2027 summer season, with regional dashboards and a provincial summary report." },
-  { key: "hlth-peer-eval", source: "bc-bid", number: "HLTH-2026-RFP-0219", title: "Peer Support Network Evaluation Services", buyer: "Ministry of Health", type: "Request for Proposals", closesIn: -5, closingTime: "14:00", status: "Closed", category: "Research Services - Program Evaluation", publishedDaysAgo: 40,
+  { key: "hlth-peer-eval", source: "bc-bid", number: "HLTH-2026-RFP-0219", title: "Peer Support Network Evaluation Services", buyer: "Ministry of Health", issuedFor: "Provincial Health Services Authority", type: "Request for Proposals", closesIn: -5, closingTime: "14:00", status: "Closed", category: "Research Services - Program Evaluation", publishedDaysAgo: 40,
     summary: "A developmental evaluation of the provincial peer support network, including interviews with peer workers, a survey of participating agencies and recommendations for sustainable funding." },
   { key: "transit-rider", source: "bc-bid", number: "BCT-2026-RFP-1102", title: "Accessible Transit Rider Engagement Sessions", buyer: "BC Transit", type: "Request for Proposals", closesIn: 0, closingTime: "14:00", category: "Consulting Services - Public Engagement", publishedDaysAgo: 21,
     summary: "Facilitated engagement sessions with riders who use mobility aids, are blind or partially sighted, or are Deaf or hard of hearing, to inform BC Transit's accessibility plan update." },
-  { key: "cits-digital", source: "bc-bid", number: "CITZ-2026-RFQ-0457", title: "Digital Literacy Workshops for Seniors - Pilot", buyer: "Ministry of Citizens' Services", type: "Request for Quotations", closesIn: 3, closingTime: "14:00", category: "Training Services - Community Education", publishedDaysAgo: 14,
+  { key: "cits-digital", source: "bc-bid", number: "CITZ-2026-RFQ-0457", title: "Digital Literacy Workshops for Seniors - Pilot", buyer: "Ministry of Citizens' Services", issuedFor: "Public Libraries Branch", type: "Request for Quotations", closesIn: 3, closingTime: "14:00", category: "Training Services - Community Education", publishedDaysAgo: 14,
     summary: "Deliver twelve hands-on digital literacy workshops for seniors at public libraries and community centres, covering online safety, government services online and video calling with family." },
   { key: "ag-justice", source: "bc-bid", number: "AG-2026-RFP-0628", title: "Community Justice Program Facilitation - Northern BC", buyer: "Ministry of Attorney General", type: "Request for Proposals", closesIn: 30, closingTime: "14:00", category: "Social Services - Restorative Justice", publishedDaysAgo: 5, isNew: true,
     place: place("Prince George", "Regional District of Fraser-Fort George", "description"),
@@ -174,6 +184,8 @@ const NOTICES: NoticeSpec[] = [
   { key: "sdpr-navigator", source: "bc-bid", number: "SDPR-2026-RFP-0139", title: "Income Assistance Navigator Services - Surrey", buyer: "Ministry of Social Development and Poverty Reduction", type: "Request for Proposals", closesIn: -2, closingTime: "14:00", status: "Closed", category: "Social Services - Community Navigation", publishedDaysAgo: 33,
     place: place("Surrey", METRO, "description"),
     summary: "Community-based navigators who help people apply for income and disability assistance and connect with other services, delivered from two Surrey community hubs." },
+  { key: "sdpr-advisory", source: "bc-bid", number: "SDPR-2026-RFP-0158", title: "Lived Experience Advisory Table Coordination", buyer: "Ministry of Social Development and Poverty Reduction", type: "Request for Proposals", closesIn: 45, closingTime: "14:00", category: "Consulting Services - Public Engagement", publishedDaysAgo: 1, isNew: true,
+    summary: "Recruit, support and coordinate a provincial advisory table of people with lived experience of poverty, including honoraria, accessibility supports and meeting facilitation for two years." },
   { key: "rbcm-codesign", source: "bc-bid", number: "RBCM-2026-RFP-0012", title: "Community Exhibit Co-Design Facilitation", buyer: "Royal BC Museum", type: "Request for Proposals", closesIn: 40, closingTime: "14:00", category: "Consulting Services - Public Engagement", publishedDaysAgo: 3, isNew: true,
     place: place("Victoria", "Capital Regional District", "buyer"),
     summary: "Facilitate a co-design process with community groups across the province for a travelling exhibit about neighbourhood histories, including workshops, story collection and consent management." },
@@ -206,10 +218,24 @@ const NOTICES: NoticeSpec[] = [
   { key: "richmond-food", source: "bidsandtenders", portal: "richmond", number: "RFP-26-0412", title: "Food Security Strategy Engagement Consultant", buyer: "City of Richmond", type: "Request for Proposal", closesIn: 13, closingTime: "15:00", category: "Consulting Services", publishedDaysAgo: 15, starred: true,
     summary: "The City of Richmond requires a consultant to lead community engagement for its first Food Security Strategy, including pop-up engagement at food banks and markets, a community survey and a summary of what was heard.",
     contact: { name: "Kevin Choi", email: "purchasing@example.richmond.ca", role: "Buyer" }, attachments: ["RFP-26-0412 Food Security Strategy.pdf"] },
+  { key: "richmond-childcare", source: "bidsandtenders", portal: "richmond", number: "RFP-26-0288", title: "Child Care Needs Assessment Update", buyer: "City of Richmond", type: "Request for Proposal", closesIn: -38, closingTime: "15:00", status: "Awarded", category: "Research Services", publishedDaysAgo: 75,
+    summary: "Update the City's child care needs assessment with new census data, a parent survey and space projections to 2036." },
+  { key: "richmond-wayfinding", source: "bidsandtenders", portal: "richmond", number: "RFP-26-0455", title: "Steveston Wayfinding Signage Design", buyer: "City of Richmond", type: "Request for Proposal", closesIn: 35, closingTime: "15:00", category: "Design Services", publishedDaysAgo: 4, isNew: true,
+    summary: "Design a family of pedestrian wayfinding signs for Steveston village, including community workshops and accessible, multilingual mapping." },
   { key: "surrey-dropin", source: "bidsandtenders", portal: "surrey", number: "1220-030-2026-061", title: "Youth Drop-In Program Operator - Guildford", buyer: "City of Surrey", type: "Request for Proposal", closesIn: 19, closingTime: "15:00", category: "Recreation Services", publishedDaysAgo: 10,
     summary: "Operate an after-school youth drop-in program three evenings a week at the Guildford recreation centre, including staffing, programming and monthly attendance reporting." },
+  { key: "surrey-cafe", source: "bidsandtenders", portal: "surrey", number: "1220-040-2026-072", title: "Seniors Centre Café Operator - Newton", buyer: "City of Surrey", type: "Request for Proposal", closesIn: 8, closingTime: "15:00", status: "Cancelled", category: "Food Services", publishedDaysAgo: 21,
+    summary: "Operate the café at the Newton seniors centre, offering affordable meals five days a week. The City cancelled this call and expects to reissue it in 2027." },
+  { key: "surrey-art", source: "bidsandtenders", portal: "surrey", number: "1220-050-2026-080", title: "Public Art Community Engagement - City Centre", buyer: "City of Surrey", type: "Request for Proposal", closesIn: 26, closingTime: "15:00", category: "Consulting Services", publishedDaysAgo: 2, isNew: true,
+    summary: "Engage residents, artists and businesses in City Centre on themes and locations for three new public artworks, including walking tours and an online survey.",
+    attachments: ["1220-050-2026-080 RFP.pdf", "Schedule A - Site Plans.pdf"] },
   { key: "metro-housing-survey", source: "bidsandtenders", portal: "metrovancouver", number: "RFP 26-189", title: "Regional Affordable Housing Survey Fieldwork", buyer: "Metro Vancouver", type: "Request for Proposal", closesIn: 10, closingTime: "15:00", category: "Research Services", publishedDaysAgo: 16,
-    summary: "Field a regional household survey on housing affordability, with intercept sampling in under-represented neighbourhoods and translation into six languages." },
+    summary: "Field a regional household survey on housing affordability, with intercept sampling in under-represented neighbourhoods and translation into six languages.",
+    attachments: ["RFP 26-189 Housing Survey Fieldwork.pdf", "Appendix A - Survey Instrument.pdf", "Appendix B - Sampling Plan.pdf", "Appendix C - Translation Requirements.pdf"] },
+  { key: "metro-parks-eval", source: "bidsandtenders", portal: "metrovancouver", number: "RFP 26-102", title: "Regional Parks Volunteer Program Evaluation", buyer: "Metro Vancouver", type: "Request for Proposal", closesIn: -41, closingTime: "15:00", status: "Awarded", category: "Research Services", publishedDaysAgo: 70,
+    summary: "Evaluate the regional parks volunteer program, including a volunteer survey, interviews with park staff and recommendations for recruitment and retention." },
+  { key: "metro-water-ed", source: "bidsandtenders", portal: "metrovancouver", number: "RFQ 26-211", title: "Water Conservation School Education Program", buyer: "Metro Vancouver", type: "Request for Quotation", closesIn: 20, closingTime: "15:00", category: "Education Services", publishedDaysAgo: 5, isNew: true,
+    summary: "Deliver classroom workshops on water conservation to grade 4 and 5 students in member municipalities, with teacher resources and a short evaluation." },
   { key: "coquitlam-seniors", source: "bidsandtenders", portal: "coquitlam", number: "RFQ 26-58", title: "Seniors' Wellness Program Delivery", buyer: "City of Coquitlam", type: "Request for Quotation", closesIn: 1, closingTime: "14:00", category: "Recreation Services", publishedDaysAgo: 22,
     summary: "Deliver weekly wellness programs for seniors, including gentle fitness, social lunches and health talks, at two Coquitlam community centres from January to June 2027." },
   { key: "nanaimo-outreach", source: "bidsandtenders", portal: "nanaimo", number: "4422", title: "Downtown Outreach Services", buyer: "City of Nanaimo", type: "Request for Proposal", closesIn: 7, closingTime: "15:00", category: "Social Services", publishedDaysAgo: 19,
@@ -236,6 +262,8 @@ const NOTICES: NoticeSpec[] = [
     summary: "Deliver Emergency Support Services volunteer training sessions in Hope, Boston Bar and Harrison Hot Springs." },
   { key: "quesnel-youth", source: "municipal-sites", portal: "quesnel", number: "2026-RFP-09", title: "Youth Employment Skills Program", buyer: "City of Quesnel", type: "RFP", closesIn: 17, closingTime: "14:00", category: "Social Services", publishedDaysAgo: 6, isNew: true, attachments: null,
     summary: "Deliver a ten-week employment skills program for youth aged 16 to 24, including job readiness workshops, employer site visits and paid work placements." },
+  { key: "fvrd-roster", source: "municipal-sites", portal: "fvrd", number: "FVRD-PQ-2026-01", title: "Prequalified Consultant Roster - Planning and Engineering", buyer: "Fraser Valley Regional District", type: "Prequalification", closesIn: 60, closingText: "Submissions accepted at any time", category: "Consulting", publishedDaysAgo: 90,
+    summary: "An open roster of planning and engineering consultants for small assignments under $75,000. Consultants may apply at any time; the roster is reviewed each quarter." },
   { key: "comox-janitorial", source: "municipal-sites", portal: "comox", number: "2026-T-08", title: "Facility Janitorial Services", buyer: "Town of Comox", type: "Tender", closesIn: 9, closingTime: "14:00", category: "Facility Services", publishedDaysAgo: 11, attachments: null,
     summary: "Janitorial services for the Town hall, community centre and public works yard for a three-year term." },
 ];
@@ -280,6 +308,7 @@ function noticeData(spec: NoticeSpec): { sourceKey: string; data: JsonObject; up
       { label: "Lot #", value: "1" },
       { label: "Amendment #", value: spec.key === "bch-tenant-support" ? "1" : "0" },
       { label: "Issued by", value: spec.buyer },
+      { label: "Issued for", value: spec.issuedFor ?? spec.buyer },
       { label: "Issue Date", value: `${publishedDay} 9:00:00 AM (Pacific)` },
       { label: "Closing Date and Time", value: `${closingDay} ${clock(time).replace(" ", ":00 ")} (Pacific)` },
       { label: "Delivery of Submissions", value: spec.type.startsWith("Notice of Intent") ? "Statements of capabilities must be emailed to the contact below before the closing date." : "Submissions must be made electronically through BC Bid. Paper, email and fax submissions will not be accepted." },
@@ -296,7 +325,7 @@ function noticeData(spec: NoticeSpec): { sourceKey: string; data: JsonObject; up
         commodities: [spec.category], mainCommodity: spec.category, issueDate: publishedDay, closingDate: closingDay,
         endsIn: spec.closesIn > 0 ? `${spec.closesIn} day${spec.closesIn === 1 ? "" : "s"}` : null,
         amendments: spec.key === "bch-tenant-support" ? 1 : 0, lastUpdated: daysFromToday(spec.key === "bch-tenant-support" ? -2 : -spec.publishedDaysAgo),
-        issuedFor: spec.buyer, interestedVendorList: false, sourceCapturedAt: retrievedAt,
+        issuedFor: spec.issuedFor ?? spec.buyer, interestedVendorList: false, sourceCapturedAt: retrievedAt,
         detailFields, addenda: spec.key === "bch-tenant-support" ? [{ title: "Addendum 1 - Insurance requirements and site visit", date: daysFromToday(-2), link: `${detailUrl}/documents/2/Addendum%201.pdf` }] : [],
         attachments: attachmentsFor(detailUrl),
         searchText: [spec.number, spec.title, spec.summary, spec.buyer, status, spec.type, spec.category].join(" "),
@@ -345,7 +374,7 @@ function noticeData(spec: NoticeSpec): { sourceKey: string; data: JsonObject; up
   const noticeId = shortId(spec.source, spec.portal ?? "", spec.number);
   const sourceKey = `${spec.source}:${spec.portal}:${noticeId}`;
   const bidsAndTenders = spec.source === "bidsandtenders";
-  const closingDate = bidsAndTenders ? bidsAndTendersClosing(closingDay, time) : municipalClosing(closingDay, time);
+  const closingDate = spec.closingText ?? (bidsAndTenders ? bidsAndTendersClosing(closingDay, time) : municipalClosing(closingDay, time));
   const detailUrl = bidsAndTenders
     ? `https://${portal.host}/Module/Tenders/en/Tender/Detail/${noticeId}`
     : `${portal.url}#${encodeURIComponent(spec.number)}`;
@@ -364,7 +393,7 @@ function noticeData(spec: NoticeSpec): { sourceKey: string; data: JsonObject; up
       ...common,
       sourceId: spec.source, sourceKey, processId: sourceKey, opportunityId: sourceKey, portalId: spec.portal ?? "",
       externalId: spec.number, sourceDescriptionText: spec.summary,
-      closingDate, closingAt: instant(closingDay, time), publishedAt: instant(publishedDay, "09:00"),
+      closingDate, ...(spec.closingText ? {} : { closingAt: instant(closingDay, time) }), publishedAt: instant(publishedDay, "09:00"),
       detailUrl, sourceUrl: portal.url, region: portal.place.municipality ?? portal.place.regionalDistrict, place: portal.place,
       category: spec.category, sourceCategory: spec.category,
       sourceFields, documentsCount: spec.attachments?.length ?? 0, addendaCount: 0, sourceRetrievedAt: retrievedAt,
@@ -381,7 +410,14 @@ function noticeData(spec: NoticeSpec): { sourceKey: string; data: JsonObject; up
 // Contract awards (BC Bid award history)
 // ---------------------------------------------------------------------------
 
-type AwardSpec = { opportunityId: string | null; description: string; type: string; organization: string; location: string; contractNumber: string; value: number; supplier: string; supplierAddress: string; awardedDaysAgo: number; justification?: string };
+type AwardSpec = {
+  opportunityId: string | null; description: string; type: string; organization: string; location: string; contractNumber: string;
+  /** null: the source left the value out (or wrote words, `valueText`). */
+  value: number | null; valueText?: string;
+  /** null: the source didn't say. */
+  currency?: string | null;
+  supplier: string; supplierAddress: string; awardedDaysAgo: number; justification?: string;
+};
 
 const AWARDS: AwardSpec[] = [
   { opportunityId: "HLTH-2026-RFP-0219", description: "Peer Support Network Evaluation Services", type: "Request for Proposals", organization: "Ministry of Health", location: "Victoria", contractNumber: "C26HLTH0418", value: 148500, supplier: "Cedar & Main Consulting Ltd.", supplierAddress: "Vancouver, BC", awardedDaysAgo: 2 },
@@ -399,11 +435,93 @@ const AWARDS: AwardSpec[] = [
   { opportunityId: "BCT-2025-RFP-0987", description: "Transit Accessibility Survey and Focus Groups", type: "Request for Proposals", organization: "BC Transit", location: "Victoria", contractNumber: "C25BCT0420", value: 69900, supplier: "Cedar & Main Consulting Ltd.", supplierAddress: "Vancouver, BC", awardedDaysAgo: 140 },
   { opportunityId: null, description: "Direct Award - Emergency Warming Centre Staffing (Extreme Cold)", type: "Direct Award", organization: "BC Housing Management Commission", location: "Prince George", contractNumber: "C26BCH0033", value: 45000, supplier: "Northern Shelter Partners Society", supplierAddress: "Prince George, BC", awardedDaysAgo: 255, justification: "Urgent and unforeseeable need during an extreme cold warning." },
   { opportunityId: "ECC-2025-RFP-0064", description: "Early Learning Family Engagement Resources", type: "Request for Proposals", organization: "Ministry of Education and Child Care", location: "Victoria", contractNumber: "C25ECC0251", value: 118300, supplier: "Riverside Community Society", supplierAddress: "Vancouver, BC", awardedDaysAgo: 75 },
+  ...awardHistory(),
 ];
+
+/**
+ * Three and a half years of awards for the buyers the demo follows most, so
+ * the buyer pages and the market analytics have trends, repeat suppliers and
+ * a spread of contract sizes. A few rows carry the data problems real award
+ * history has: a missing or zero value, a negative correction, a value only in
+ * words, no currency, a placeholder supplier and a date after today.
+ */
+function awardHistory(): AwardSpec[] {
+  const suppliers: Record<string, string> = {
+    cedar: "Cedar & Main Consulting Ltd.|Vancouver, BC", riverside: "Riverside Community Society|Vancouver, BC", insight: "Pacific Insight Research Corp.|Vancouver, BC",
+    northshore: "Northshore Facilitation Group|North Vancouver, BC", brightline: "Brightline Building Maintenance Inc.|Burnaby, BC", fraser: "Fraser Youth Collective Society|Surrey, BC",
+    lantern: "Lantern Housing Society|Vancouver, BC", mosaic: "Mosaic Language Services Ltd.|Richmond, BC", coastline: "Coastline Engineering Ltd.|Sechelt, BC",
+    granite: "Granite Road Builders Ltd.|Abbotsford, BC", harbourview: "Harbourview Evaluation Partners|Victoria, BC", kinship: "Kinship Family Services Society|Surrey, BC",
+    summit: "Summit Paving & Grading Inc.|Langley, BC", clearword: "Clearword Communications Inc.|Victoria, BC", westcoast: "Westcoast Transit Research Group|Victoria, BC",
+    tidewater: "Tidewater Environmental Ltd.|Delta, BC", placeholder: "To be confirmed|",
+  };
+  const TYPES: Record<string, string> = { RFP: "Request for Proposals", ITT: "Invitation to Tender", RFQ: "Request for Quotations", DA: "Direct Award", NOI: "Notice of Intent", RFSO: "Request for Standing Offer", RFQL: "Request for Qualifications" };
+  type Row = [description: string, type: string, value: number | null, supplier: string, oddity?: Partial<AwardSpec> & { date?: string }];
+  const buyers: { organization: string; prefix: string; location: string; rows: Row[] }[] = [
+    { organization: "Ministry of Social Development and Poverty Reduction", prefix: "SDPR", location: "Victoria", rows: [
+      ["Community Navigator Services - Kamloops", "RFP", 182000, "kinship"], ["Lived Experience Engagement - Northern Region", "RFP", 96500, "riverside"],
+      ["Income Assistance Outreach - Downtown Victoria", "RFP", 141250, "kinship"], ["Poverty Reduction Strategy Evaluation Framework", "RFP", 212400, "harbourview"],
+      ["Plain Language Letters Review", "RFQ", 31800, "clearword"], ["Community Engagement Facilitation - Fraser Region", "RFP", 88700, "northshore"],
+      ["Interpretation Services Standing Offer - Lower Mainland", "RFSO", 75000, "mosaic"] ] },
+    { organization: "Ministry of Children and Family Development", prefix: "MCFD", location: "Victoria", rows: [
+      ["Youth Mentorship Program Delivery - Northern Region", "RFP", 264000, "fraser"], ["Family Support Workers - Surrey North", "RFP", 418900, "kinship"],
+      ["Foster Caregiver Training Delivery", "RFP", 132600, "northshore"], ["Youth Advisory Council Facilitation", "RFQ", 42300, "riverside"],
+      ["Child Welfare Data Quality Review", "RFP", 156000, "harbourview"], ["Emergency Respite Care - Fraser Valley", "DA", 58000, "kinship", { justification: "Continuity of care for children already placed with the provider." }],
+      ["Youth Transitions Program Evaluation", "RFP", 119500, "insight"] ] },
+    { organization: "BC Housing Management Commission", prefix: "BCH", location: "Burnaby", rows: [
+      ["Tenant Support Services - Kingsway Supportive Housing", "RFP", 1185000, "lantern"], ["Janitorial Services - Burnaby Buildings", "ITT", 212300, "brightline"],
+      ["Building Envelope Assessments - Fraser Valley Portfolio", "RFQL", 96400, "coastline"], ["Tenant Survey 2024", "RFP", 74800, "insight"],
+      ["Overnight Shelter Operations - Abbotsford", "DA", 640000, "lantern", { justification: "Extreme weather response; no other operator available." }],
+      ["Common Area Cleaning - Victoria Buildings", "RFQ", 88150, "brightline"], ["Tenant Support Services - Mount Pleasant (interim)", "NOI", 0, "lantern", { valueText: "$0.00" }] ] },
+    { organization: "Ministry of Transportation and Transit", prefix: "MOTI", location: "Victoria", rows: [
+      ["Highway 99 Corridor Rehabilitation - Phase 2", "ITT", 48750000, "granite"], ["Bridge Deck Repairs - Fraser Canyon", "ITT", null, "summit"],
+      ["Paving Program - Okanagan District", "ITT", 6420000, "summit"], ["Shoulder Widening - Highway 3 Hope", "ITT", 3185000, "granite"],
+      ["Janitorial Services - Victoria Headquarters", "RFQ", 104900, "brightline"], ["Culvert Replacement - Sunshine Coast", "ITT", 1260000, "coastline"],
+      ["Engagement on the Active Transportation Strategy", "RFP", 128000, "cedar"] ] },
+    { organization: "Ministry of Health", prefix: "HLTH", location: "Victoria", rows: [
+      ["Primary Care Patient Experience Survey", "RFP", 288000, "insight"], ["Peer Support Network Evaluation - Contract Amendment", "DA", null, "cedar", { valueText: "See contract", justification: "Extension of the existing evaluation." }],
+      ["Mental Health Promotion Materials - Translation", "RFQ", 46200, "mosaic"], ["Health Workforce Engagement Sessions", "RFP", 154300, "northshore"],
+      ["Overdose Response Program Evaluation", "RFP", 336800, "harbourview"], ["Plain Language Patient Guides", "RFQ", 28750, "clearword"],
+      ["Community Health Data Review", "RFP", 97400, "insight", { date: "2026-11-02" }] ] },
+    { organization: "City of Surrey", prefix: "SURREY", location: "Surrey", rows: [
+      ["Youth Drop-In Program Operator - Whalley", "RFP", 162000, "fraser"], ["Recreation Instructor Roster", "RFSO", 0, "riverside"],
+      ["Seniors Wellness Program Delivery - Cloverdale", "RFQ", 54600, "kinship"], ["Public Engagement - Surrey Transportation Plan", "RFP", 238500, "cedar"],
+      ["Asphalt Paving Program 2025", "ITT", 9875000, "summit"], ["Community Centre Janitorial Services", "ITT", 486300, "brightline"],
+      ["Newcomer Welcome Program Delivery", "RFP", 118200, "placeholder"] ] },
+    { organization: "City of Richmond", prefix: "RICH", location: "Richmond", rows: [
+      ["Child Care Needs Assessment Update", "RFP", 92400, "insight"], ["Community Survey Translation", "RFQ", 18300, "mosaic", { currency: null }],
+      ["Food Security Pop-Up Engagement", "RFP", 64500, "riverside"], ["Dyke Upgrade Environmental Monitoring", "RFP", 412000, "tidewater"],
+      ["Steveston Heritage Interpretation Plan", "RFP", 77800, "cedar"], ["Road Resurfacing - No. 3 Road", "ITT", 2760000, "granite"],
+      ["Seniors Outreach Program Evaluation", "RFQ", 39900, "harbourview"] ] },
+    { organization: "Metro Vancouver", prefix: "METRO", location: "Burnaby", rows: [
+      ["Regional Parks Volunteer Program Evaluation", "RFP", 84600, "harbourview"], ["Housing Data Book Survey Fieldwork", "RFP", 268000, "insight"],
+      ["Water Conservation Campaign Testing", "RFQ", 46800, "clearword"], ["Grant Writing Workshops - Correction", "RFQ", -1250, "riverside", { valueText: "-$1,250.00" }],
+      ["Shoreline Monitoring - Boundary Bay", "RFP", 318400, "tidewater"], ["Regional Engagement on Climate 2050", "RFP", 196000, "northshore"],
+      ["Translation Services Standing Offer", "RFSO", 120000, "mosaic"] ] },
+    { organization: "BC Transit", prefix: "BCT", location: "Victoria", rows: [
+      ["Rider Survey Analysis 2024", "RFQ", null, "westcoast", { valueText: "$12,500.00" }], ["Accessible Transit Engagement - Kelowna", "RFP", 73400, "cedar"],
+      ["On-Board Survey Fieldwork - Regional Systems", "RFP", 158900, "westcoast"], ["Transit Shelter Cleaning - Victoria", "ITT", 228700, "brightline"],
+      ["Service Change Communications Review", "RFQ", 36500, "clearword"], ["Rural Transit Needs Study - Cariboo", "RFP", 121300, "westcoast"],
+      ["Bus Stop Accessibility Audit", "RFP", 98600, "harbourview"] ] },
+  ];
+  const START = "2023-01-10";
+  const SPAN = 1370; // to early October 2026
+  const daysAgoFor = (date: string) => Math.round((Date.parse(`${DEMO_TODAY}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86_400_000);
+  return buyers.flatMap(({ organization, prefix, location, rows }) => rows.map(([description, typeCode, value, supplierKey, oddity = {}], index): AwardSpec => {
+    const { date: fixedDate, ...rest } = oddity;
+    const date = fixedDate ?? addDays(START, Number.parseInt(sha256(`${prefix}:${description}`).slice(0, 8), 16) % SPAN);
+    const year = date.slice(0, 4);
+    const number = String(100 + index * 37 + (Number.parseInt(sha256(description).slice(0, 4), 16) % 30)).padStart(4, "0");
+    const [supplier, supplierAddress] = (suppliers[supplierKey] ?? "").split("|");
+    return {
+      opportunityId: typeCode === "DA" ? null : `${prefix}-${year}-${typeCode}-${number}`, description, type: TYPES[typeCode] ?? typeCode, organization, location,
+      contractNumber: `C${year.slice(2)}${prefix}${number}`, value, supplier, supplierAddress, awardedDaysAgo: daysAgoFor(date), ...rest,
+    };
+  }));
+}
 
 function awardData(spec: AwardSpec): { importKey: string; data: JsonObject; updatedAt: string } {
   const awardDate = daysFromToday(-spec.awardedDaysAgo);
-  const contractValueText = `$${spec.value.toLocaleString("en-CA", { minimumFractionDigits: 2 })}`;
+  const contractValueText = spec.valueText ?? (spec.value === null ? null : `$${spec.value.toLocaleString("en-CA", { minimumFractionDigits: 2 })}`);
   const importKey = [spec.opportunityId ?? "", spec.contractNumber.toLowerCase(), spec.supplier, awardDate, spec.organization, spec.description].map((part) => part.toLowerCase()).join("::");
   const importedAt = Date.parse(stamp(-1, "18:30"));
   return {
@@ -412,8 +530,8 @@ function awardData(spec: AwardSpec): { importKey: string; data: JsonObject; upda
     data: {
       opportunityId: spec.opportunityId, opportunityDescription: spec.description, opportunityType: spec.type,
       issuingOrganization: spec.organization, issuingLocation: spec.location, contractNumber: spec.contractNumber,
-      contactEmail: "procurement@example.gov.bc.ca", contractValueText, currency: "CAD", successfulSupplier: spec.supplier,
-      supplierAddress: spec.supplierAddress, awardDate, justification: spec.justification ?? null,
+      contactEmail: "procurement@example.gov.bc.ca", contractValueText, currency: spec.currency === undefined ? "CAD" : spec.currency, successfulSupplier: spec.supplier,
+      supplierAddress: spec.supplierAddress || null, awardDate, justification: spec.justification ?? null,
       _id: importKey, _creationTime: importedAt, importKey, contractValue: spec.value,
       searchText: [spec.opportunityId, spec.description, spec.type, spec.organization, spec.location, spec.contractNumber, spec.supplier, awardDate].filter(Boolean).join(" "),
       sourceFileName: null, sourceUrl: "https://bcbid.gov.bc.ca/page.aspx/en/ctr/contract_browse_public",
@@ -522,6 +640,27 @@ const DOCUMENTS: DocumentSpec[] = [
       "Period of the contract. From contract award to March 31, 2027.",
     ] },
   { notice: "burnaby-instructors", name: "Program Schedule Drawings.pdf", title: "", paragraphs: [], noText: true },
+  { notice: "metro-housing-survey", name: "RFP 26-189 Housing Survey Fieldwork.pdf", title: "RFP 26-189 Regional Affordable Housing Survey Fieldwork",
+    paragraphs: [
+      "Metro Vancouver requires a research firm to field its regional household survey on housing affordability in spring 2027.",
+      "Scope. A probability sample of at least 6,000 households across member jurisdictions, with intercept sampling in neighbourhoods that were under-represented in 2022. The survey must be offered in English and six other languages.",
+      "Mandatory requirements. The proponent must store all survey data in Canada. The proponent must carry commercial general liability insurance of not less than $2,000,000 per occurrence.",
+      "Closing. Proposals are due by 3:00 PM Pacific Time on October 28, 2026 through bids&tenders.",
+    ] },
+  { notice: "metro-housing-survey", name: "Appendix A - Survey Instrument.pdf", title: "Appendix A - Survey Instrument (2022 version)",
+    paragraphs: [
+      "Section 1: Household composition. Section 2: Current housing and tenure. Section 3: Housing costs and affordability. Section 4: Moves in the last five years. Section 5: Demographics.",
+    ] },
+  { notice: "metro-housing-survey", name: "Appendix B - Sampling Plan.pdf", title: "Appendix B - Sampling Plan",
+    paragraphs: [
+      "Target completes by subregion, with oversamples in Surrey, Burnaby and the North Shore. Intercept sites will be agreed with Metro Vancouver staff before fieldwork starts.",
+    ] },
+  { notice: "surrey-art", name: "1220-050-2026-080 RFP.pdf", title: "1220-050-2026-080 Public Art Community Engagement - City Centre",
+    paragraphs: [
+      "The City of Surrey invites proposals to engage residents, artists and businesses in City Centre on three new public artworks.",
+      "Scope. Two walking tours, three pop-up sessions, an online survey and a summary report to the Public Art Advisory Committee.",
+      "Closing. Proposals are due by 3:00 PM Pacific Time on November 13, 2026.",
+    ] },
 ];
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ import type { MenuSection } from "../../../../components/Menu";
 import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
 import { isEmptyValue } from "../utils/filterRecords";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { RecordTablePager } from "./RecordTablePager";
 import { RecordTableInlineEditContext, type RecordTableInlineEdit } from "../contexts/RecordTableInlineEditContext";
 import { useRecordTableInlineEditController } from "../hooks/useRecordTableInlineEditController";
 import { RecordTableGridChrome } from "./RecordTableGridChrome";
@@ -340,6 +341,11 @@ export function RecordTable({
   const tableId = useRecordTableState((s) => s.tableId);
   const viewId = useRecordTableState((s) => s.viewId);
   const hasFilters = useRecordTableState((s) => s.filters.length > 0 || s.searchTerm.trim().length > 0);
+  // Records arriving in batches: the first rows replace the skeleton, and an
+  // empty first batch still reads as loading rather than "No records yet".
+  const progressiveLoading = useRecordTableState((s) => s.loadingProgress !== null);
+  const showLoading = progressiveLoading ? records.length === 0 : loading;
+  const page = rowModel.page;
   const handle = useRecordTableStoreHandle();
   const saveRecord = useRecordTableUpdate();
   const getTableState = handle.get;
@@ -622,6 +628,25 @@ export function RecordTable({
     }
   }, [rowModel.records, handle]);
 
+  // Shown in pages: a focused row on another page (keyboard ↓ past the last
+  // row, ↑/↓ from the preview panel) turns to its page, and a list that
+  // shrank under the open page lands on its last page.
+  // (Only a newly focused row turns the page: the pager may leave the focused
+  // row behind.)
+  const pageIndex = useRecordTableState((s) => s.pageIndex);
+  const focusedRow = focusedCell?.rowIndex;
+  const followedRowRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!page) return;
+    const newlyFocused = focusedRow !== followedRowRef.current;
+    followedRowRef.current = focusedRow;
+    if (newlyFocused && focusedRow !== undefined && focusedRow < rowModel.records.length && (focusedRow < page.start || focusedRow >= page.end)) {
+      handle.get().setPageIndex(Math.floor(focusedRow / page.size));
+    } else if (pageIndex !== page.index) {
+      handle.get().setPageIndex(page.index);
+    }
+  }, [page, focusedRow, rowModel.records.length, pageIndex, handle]);
+
   const itemIndexByRowIndex = rowModel.itemIndexByRowIndex;
   useEffect(() => {
     if (!focusedCell) return;
@@ -674,7 +699,7 @@ export function RecordTable({
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, [handle]);
 
-  if (loading) {
+  if (showLoading) {
     if (phoneCard) {
       return (
         <div className="record-table__loading record-table__loading--cards" aria-busy="true">
@@ -735,6 +760,8 @@ export function RecordTable({
     );
   }
 
+  const pager = page ? <RecordTablePager page={page} /> : null;
+
   if (phoneCard) {
     return (
       <>
@@ -745,6 +772,7 @@ export function RecordTable({
           label={objectMetadata.labelPlural}
           selectable={selectable}
         />
+        {pager}
       </>
     );
   }
@@ -893,7 +921,8 @@ export function RecordTable({
 
   // Small result sets render without virtuoso — simpler, faster for
   // common <100-row tables. Once we cross the threshold we switch on
-  // react-virtuoso.
+  // react-virtuoso. A page (at most a few hundred rows) renders plainly too,
+  // so it reads and prints as one block with the pager under it.
   const frameModifiers =
     (inlineSelection ? " is-mobile-selecting" : "") +
     (collapsedColumns.size > 0 ? " is-condensed" : "") +
@@ -904,8 +933,9 @@ export function RecordTable({
     hasRowActions,
   };
 
-  if (rowModel.items.length <= virtualizeAbove) {
+  if (rowModel.items.length <= virtualizeAbove || page) {
     return withGridMode(
+      <>
       <div
         role="region"
         aria-label={`${objectMetadata.labelPlural} table`}
@@ -963,7 +993,9 @@ export function RecordTable({
         </div>
         {rowContextMenuElement}
         {gridController && <RecordTableGridChrome controller={gridController} />}
-      </div>,
+      </div>
+      {pager}
+      </>,
     );
   }
 

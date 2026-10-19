@@ -154,9 +154,11 @@ Societyer, while the runtime Graph grants are scoped to the procurement site.
 For the hosted site, first include the corresponding native reader changes in
 `src/features/procurementReview/reader/` and run `npm run test:procurement-convex`.
 Rebuilding the plugin alone only changes Zoer and the legacy/demo snapshot view.
-Keep hosted lists paged through Convex; never restore a whole-catalog download.
-If new sorting requires normalized metadata, activate a fresh metadata generation
-before considering that behavior qualified. Old `?record=<key>` notice links
+The hosted list loads each kind's compact list rows through the bounded
+`procurementReview:list` query (no notice bodies, documents or search text) so
+the shared table can sort and filter the whole catalog; never restore the SQLite
+`catalog.part-*` download. New list columns (documents, issued for, supplier,
+value) need a fresh metadata generation before they show on the live site. Old `?record=<key>` notice links
 remain supported alongside the reader's `?notice=<key>` links.
 
 

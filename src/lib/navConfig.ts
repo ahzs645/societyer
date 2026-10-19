@@ -269,7 +269,6 @@ export const NAV_TREE: readonly NavTreeConfigEntry[] = [
       "/app/financials/year-end",
       "/app/finance-imports",
       "/app/grants",
-      "/app/procurement-review",
       "/app/receipts",
       "/app/membership",
       "/app/dividends",
@@ -284,6 +283,9 @@ export const NAV_TREE: readonly NavTreeConfigEntry[] = [
     icon: Package,
     children: ["/app/assets", "/app/inventory"],
   },
+  // Its own section, not a Finance page: one row, and the page's tabs
+  // (opportunities, awards, analytics) hold everything related.
+  { kind: "item", to: "/app/procurement-review" },
   {
     kind: "parent",
     id: "automation",

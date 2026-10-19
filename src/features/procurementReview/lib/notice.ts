@@ -8,7 +8,9 @@
  */
 
 export type Tone = "neutral" | "success" | "warn" | "danger" | "info";
-export type NoticeFact = { label: string; value: string };
+/** Whose page a fact opens: the buyer, or the organisation the notice is issued for. */
+export type NoticeParty = "organization" | "issuedFor";
+export type NoticeFact = { label: string; value: string; party?: NoticeParty };
 export type NoticeField = { label: string; value: string; long: boolean };
 export type NoticeContact = { name: string; role: string; email: string; phone: string };
 export type NoticeAttachment = { name: string; url?: string };
@@ -62,12 +64,16 @@ const SOURCE_LABELS: Record<string, string> = {
   "browser-sites": "Buyer's website",
 };
 
-/** Where a record came from, from its stored sourceId or its catalog key (`opportunity:<source>:…`; bare BC Bid keys have no source). */
+/**
+ * Where a record came from, from its stored sourceId or its catalog key
+ * (`opportunity:<source>:…`). BC Bid keys name no source: bare opportunity
+ * keys, and award keys whose parts are joined with "::".
+ */
 export function sourceLabel(recordKey: string, data: unknown = {}): string {
   const stored = text(asData(data).sourceId);
   if (stored) return SOURCE_LABELS[stored] ?? stored;
   const [, second = "", third] = recordKey.split(":");
-  return third !== undefined ? SOURCE_LABELS[second] ?? second : "BC Bid";
+  return third ? SOURCE_LABELS[second] ?? second : "BC Bid";
 }
 
 // ---------------------------------------------------------------------------
@@ -250,8 +256,10 @@ function sourceFields(data: Data, shown: string[]): NoticeField[] {
   return fields;
 }
 
+/** The source's contacts; awards keep a single one in flat fields. */
 function contactsOf(data: Data): NoticeContact[] {
-  const raw = Array.isArray(data.contacts) ? data.contacts : [];
+  const flat = { name: data.contactName, email: data.contactEmail, phone: data.contactPhone };
+  const raw = Array.isArray(data.contacts) && data.contacts.length ? data.contacts : [flat];
   const seen = new Set<string>();
   return raw.map(asData).map((c) => ({ name: text(c.name), role: text(c.role), email: text(c.email), phone: text(c.phone) }))
     .filter((c) => (c.name || c.email || c.phone) && !seen.has(`${c.name}|${c.email}|${c.phone}`) && Boolean(seen.add(`${c.name}|${c.email}|${c.phone}`)));
@@ -271,9 +279,16 @@ function commoditiesOf(data: Data): string[] {
 }
 
 /** A reference the source published, not one of Zoer's synthetic catalog keys. */
+/** Connector keys Zoer made up stand in for a reference the source didn't give; they aren't the buyer's number. */
+const SYNTHETIC_REFERENCE = /^(browser-sites|municipal-sites|bidsandtenders|canadabuys):/;
+
+/** The first of the source's own reference fields that is a real number (a synthetic key falls through to the next). */
 function referenceOf(data: Data): string {
-  const value = first(data, "opportunityId", "externalId", "referenceNumber", "solicitationNumber");
-  return value && !/^(browser-sites|municipal-sites|bidsandtenders):/.test(value) && value.length <= 60 ? value : "";
+  for (const key of ["opportunityId", "externalId", "referenceNumber", "solicitationNumber"]) {
+    const value = text(data[key]);
+    if (value && !SYNTHETIC_REFERENCE.test(value) && value.length <= 60) return value;
+  }
+  return "";
 }
 
 function placeOf(data: Data): string {
@@ -284,7 +299,7 @@ function placeOf(data: Data): string {
 
 function money(value: unknown, currency: unknown): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return text(value);
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: text(currency) || "CAD", maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: text(currency) || "CAD", maximumFractionDigits: 0 }).format(value);
 }
 
 /**
@@ -325,16 +340,16 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
   const amendments = Number(data.amendments);
 
   const facts: NoticeFact[] = [];
-  const push = (label: string, value: string) => { if (value) facts.push({ label, value }); };
+  const push = (label: string, value: string, party?: NoticeParty) => { if (value) facts.push({ label, value, ...(party ? { party } : {}) }); };
   if (award) {
     push("Awarded", formatSourceDate(first(data, "awardDate")));
     push("Supplier", first(data, "successfulSupplier", "supplier"));
     push("Contract value", money(data.contractValue, data.currency) || first(data, "contractValueText"));
-    push("Buyer", buyer);
+    push("Buyer", buyer, "organization");
   } else {
     push("Closes", deadline?.text ?? "");
-    push("Buyer", buyer);
-    if (issuedFor && squash(issuedFor) !== squash(buyer)) push("Issued for", issuedFor);
+    push("Buyer", buyer, "organization");
+    if (issuedFor && squash(issuedFor) !== squash(buyer)) push("Issued for", issuedFor, "issuedFor");
   }
   push("Type", type);
   push("Reference", reference);
@@ -363,4 +378,65 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
     attachments: attachmentsOf(data),
     commodities,
   };
+}
+
+// ---------------------------------------------------------------------------
+// The page around the record: where Back leads, the buyer's other notices, and
+// the documents as one list.
+
+/**
+ * What the notice's Back button says, from the place under it in the reader's
+ * URL: the buyer (or issued-for organisation) page it was opened from, the
+ * analytics, or the list of its kind.
+ */
+export function backLabel(place: { buyer?: string | null; issuedFor?: string | null; section?: string | null; kind?: string | null }): string {
+  const party = text(place.buyer) || text(place.issuedFor);
+  if (party) return party;
+  if (place.section === "analytics") return "Analytics";
+  return place.kind === "award" ? "Awards" : "Opportunities";
+}
+
+/** "on BC Bid", "on the buyer's site": where a file that wasn't downloaded can be opened. */
+export function onSource(source: string): string {
+  return `on ${source === "Buyer's website" ? "the buyer's site" : source}`;
+}
+
+/** How many of a kind's notices name the organisation in that role, or null when there's nothing to add (only this one). */
+export function partyCount(rows: readonly { organization: string; issuedFor: string }[], party: NoticeParty, name: string): number | null {
+  const key = squash(name);
+  if (!key) return null;
+  const count = rows.filter((row) => squash(party === "organization" ? row.organization : row.issuedFor) === key).length;
+  return count > 1 ? count : null;
+}
+
+export type NoticeDocumentRow<D> =
+  /** Zoer downloaded and published it: preview and download here. */
+  | { state: "downloaded"; key: string; name: string; document: D }
+  /** Only on the source: stored without its file, or listed and never downloaded. `url` opens it there. */
+  | { state: "elsewhere"; key: string; name: string; url?: string; document?: D };
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The notice's files as one list: those downloaded first, then the stored
+ * ones that weren't published, then the files the source lists that Zoer
+ * didn't download, each with its source link when the source gave one.
+ * `withListed` adds the source's list; pass it only when every stored file is
+ * in hand, so a later page can't hold one of them.
+ */
+export function noticeDocumentRows<D extends { documentKey: string; name: string; available: boolean }>(stored: readonly D[], attachments: readonly NoticeAttachment[], withListed: boolean): NoticeDocumentRow<D>[] {
+  const linkFor = (name: string) => safeHttpsUrl(attachments.find((item) => sameName(item.name, name))?.url);
+  const rows: NoticeDocumentRow<D>[] = stored.filter((document) => document.available)
+    .map((document) => ({ state: "downloaded", key: document.documentKey, name: document.name, document }));
+  for (const document of stored) {
+    if (!document.available) rows.push({ state: "elsewhere", key: document.documentKey, name: document.name, url: linkFor(document.name), document });
+  }
+  if (!withListed) return rows;
+  const named = stored.map((document) => document.name);
+  for (const item of attachments) {
+    if (named.some((name) => sameName(name, item.name))) continue;
+    named.push(item.name);
+    rows.push({ state: "elsewhere", key: `listed:${item.name}`, name: item.name, url: safeHttpsUrl(item.url) });
+  }
+  return rows;
 }

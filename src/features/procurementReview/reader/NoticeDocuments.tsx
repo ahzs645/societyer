@@ -1,23 +1,22 @@
 /**
- * The notice's files: those Zoer published (previewed or downloaded from the
- * workspace's SharePoint folder, checked against their SHA-256) and, below
- * them, files the source lists that weren't published.
+ * The notice's files in one list: those Zoer downloaded first (previewed or
+ * downloaded from the workspace's SharePoint folder, checked against their
+ * SHA-256), then those it didn't download, which open on the source instead.
  */
 import { useCallback, useState } from "react";
-import { Download, Eye, FileText } from "lucide-react";
+import { Download, ExternalLink, Eye, FileText } from "lucide-react";
 import { FilePreviewDialog, MAX_FILE_PREVIEW_BYTES } from "../../../components/FilePreviewDialog";
 import type { StoredProcurementDocument } from "../lib/documents";
-import type { NoticeModel } from "../lib/notice";
+import { noticeDocumentRows, onSource, type NoticeModel } from "../lib/notice";
 import { useReaderSource } from "./source";
 
 function size(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
-function kindOf(document: StoredProcurementDocument) {
-  const extension = /\.([a-z0-9]{2,5})$/i.exec(document.name)?.[1];
-  return extension ? extension.toUpperCase() : document.mediaType.split("/").pop()?.toUpperCase() ?? "";
+function kindOf(name: string, mediaType = "") {
+  const extension = /\.([a-z0-9]{2,5})$/i.exec(name)?.[1];
+  return extension ? extension.toUpperCase() : mediaType.split("/").pop()?.toUpperCase() ?? "";
 }
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export function NoticeDocuments({ recordKey, model }: { recordKey: string; model: NoticeModel }) {
   const source = useReaderSource();
@@ -47,10 +46,11 @@ export function NoticeDocuments({ recordKey, model }: { recordKey: string; model
     }
   };
 
-  const stored = documents?.page ?? [];
-  const listedOnly = documents?.isDone && cursors.length === 1 ? model.attachments.filter((item) => !stored.some((doc) => sameName(doc.name, item.name))) : [];
-  const count = documents ? (documents.isDone && cursors.length === 1 ? String(stored.length) : `${stored.length}+`) : "";
-  const nothing = documents && stored.length === 0 && listedOnly.length === 0 && cursors.length === 1;
+  const complete = Boolean(documents?.isDone && cursors.length === 1);
+  const rows = noticeDocumentRows(documents?.page ?? [], model.attachments, complete);
+  const count = documents ? (complete ? String(rows.length) : `${rows.length}+`) : "";
+  const nothing = documents && rows.length === 0 && cursors.length === 1;
+  const where = onSource(model.source);
 
   return (
     <section className="card" aria-labelledby="procurement-notice-documents">
@@ -61,38 +61,49 @@ export function NoticeDocuments({ recordKey, model }: { recordKey: string; model
       <div className="card__body">
         {error && <p className="notice notice--danger" role="alert">{error}</p>}
         {!documents ? <p className="muted" role="status">Loading documents…</p>
-          : nothing ? <p className="muted">No documents were published with this notice{model.sourceUrl ? `. ${model.source === "Buyer's website" ? "The buyer's site" : model.source} may have them.` : "."}</p>
+          : nothing ? <p className="muted">No documents came with this notice{model.sourceUrl ? `. They may be ${where}.` : "."}</p>
           : (
             <ul className="procurement-notice__docs">
-              {stored.map((document) => {
+              {rows.map((row) => {
+                if (row.state === "elsewhere") {
+                  return (
+                    <li key={row.key} className="procurement-notice__doc" data-state="elsewhere">
+                      <FileText size={16} aria-hidden="true" className="procurement-notice__doc-icon" />
+                      <span className="procurement-notice__doc-name">
+                        <span>{row.name}</span>
+                        <small className="muted">{[kindOf(row.name, row.document?.mediaType), "Not downloaded"].filter(Boolean).join(" · ")}</small>
+                      </span>
+                      {row.url && (
+                        <span className="procurement-notice__doc-actions">
+                          <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${row.name} ${where} (opens in a new tab)`}>
+                            <ExternalLink size={14} aria-hidden="true" /> Open {where}
+                          </a>
+                        </span>
+                      )}
+                    </li>
+                  );
+                }
+                const { document } = row;
                 const tooBig = document.bytes > MAX_FILE_PREVIEW_BYTES;
                 return (
-                  <li key={document.documentKey} className="procurement-notice__doc">
+                  <li key={row.key} className="procurement-notice__doc">
                     <FileText size={16} aria-hidden="true" className="procurement-notice__doc-icon" />
                     <span className="procurement-notice__doc-name">
                       <span>{document.name}</span>
-                      <small className="muted">{document.available ? [kindOf(document), size(document.bytes)].filter(Boolean).join(" · ") : "Not published"}</small>
+                      <small className="muted">{[kindOf(document.name, document.mediaType), size(document.bytes)].filter(Boolean).join(" · ")}</small>
                     </span>
-                    {document.available && (
-                      <span className="procurement-notice__doc-actions">
-                        <button type="button" className="btn btn--ghost btn--sm" disabled={tooBig} title={tooBig ? "Preview supports files up to 25 MB" : undefined} onClick={() => setPreview(document)}><Eye size={14} aria-hidden="true" /> Preview</button>
-                        <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Download ${document.name}`} title="Download" disabled={busy !== null} onClick={() => void download(document)}>
-                          <Download size={14} aria-hidden="true" />
-                        </button>
-                      </span>
-                    )}
+                    <span className="procurement-notice__doc-actions">
+                      <button type="button" className="btn btn--ghost btn--sm" disabled={tooBig} title={tooBig ? "Preview supports files up to 25 MB" : undefined} aria-label={`Preview ${document.name}`} onClick={() => setPreview(document)}><Eye size={14} aria-hidden="true" /> Preview</button>
+                      <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Download ${document.name}`} title="Download" disabled={busy !== null} onClick={() => void download(document)}>
+                        <Download size={14} aria-hidden="true" />
+                      </button>
+                    </span>
                     {busy === document.documentKey && <small className="muted procurement-notice__doc-busy" role="status">Downloading…</small>}
                   </li>
                 );
               })}
             </ul>
           )}
-        {listedOnly.length > 0 && (
-          <div className="procurement-notice__listed">
-            <span className="muted">{stored.length ? "Also listed on the source, not published:" : "Listed on the source, not published:"}</span>
-            <ul>{listedOnly.map((item) => <li key={item.name}>{item.url ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a> : item.name}</li>)}</ul>
-          </div>
-        )}
         {(cursors.length > 1 || (documents && !documents.isDone)) && (
           <div className="procurement-reader__pager">
             <button type="button" className="btn btn--sm" disabled={cursors.length === 1} onClick={() => setCursors((values) => values.slice(0, -1))}>Previous</button>
