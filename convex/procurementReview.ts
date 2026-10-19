@@ -633,6 +633,11 @@ export const page = authorizedQuery(
         party.name.length > 1000)
     )
       throw new Error("Invalid party filter.");
+    // Numeric ordering and numeric filters share the same range index. Skip
+    // zero-document rows before paging instead of producing many empty batches.
+    const numericFilters = field === "documents" || field === "value"
+      ? filters.filter((f: any) => conjunctive(f) && columns.find((column: any) => column.fieldMetadataId === f.fieldMetadataId)?.field?.name === sortName && typeof f.value === "number" && Number.isFinite(f.value))
+      : [];
     const indexed = base
       .withIndex(
         (party && field === "date"
@@ -649,6 +654,13 @@ export const page = authorizedQuery(
           if (party && field === "date")
             scoped = scoped.eq(party.field, party.name);
           if (field === "date" && from) scoped = scoped.gte("date", from);
+          if (numericFilters.length) {
+            const lower = numericFilters.filter((f: any) => ["eq", "gt", "gte"].includes(f.operator)).sort((a: any, b: any) => b.value - a.value || Number(b.operator === "gt") - Number(a.operator === "gt"))[0];
+            const upper = numericFilters.filter((f: any) => ["eq", "lt", "lte"].includes(f.operator)).sort((a: any, b: any) => a.value - b.value || Number(b.operator === "lt") - Number(a.operator === "lt"))[0];
+            const lowerExcludesLegacyZero = field !== "documents" || (lower?.operator === "gt" ? lower.value >= 0 : lower?.value > 0);
+            if (lower && lowerExcludesLegacyZero) scoped = lower.operator === "gt" ? scoped.gt(field, lower.value) : scoped.gte(field, lower.value);
+            if (upper) scoped = upper.operator === "lt" ? scoped.lt(field, upper.value) : scoped.lte(field, upper.value);
+          }
           return scoped;
         },
       )

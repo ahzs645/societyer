@@ -139,6 +139,12 @@ const numericFilter = await reader.query(api.procurementReview.page, { ...pageAr
 assert.equal(numericFilter.page.length, 20);
 assert.ok(numericFilter.page.every((row: any) => row.documents >= 100));
 
+const ascendingThreshold = await reader.query(api.procurementReview.page, { ...pageArgs,
+  request: JSON.stringify({ ...JSON.parse(numericRequest("asc")), filters: [{ id: "min-docs", fieldMetadataId: "docs", operator: "gte", value: 100 }] }),
+});
+assert.equal(ascendingThreshold.page.length, 20, "Numeric bounds skip nonmatching index entries before pagination in ascending order");
+assert.equal(ascendingThreshold.scanned, 20);
+
 // Header filters wrap flat saved-view constraints into an AND group. Their
 // date narrowing must still skip earlier historical records before paging.
 const groupedColumns = [{ fieldMetadataId: "date", field: { _id: "date", name: "when", fieldType: "DATE_TIME", config: {} } }];
