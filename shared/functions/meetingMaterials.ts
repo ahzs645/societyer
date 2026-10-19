@@ -19,7 +19,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { readableProjectionPermissions } from "./projectionPermissions";
 import { requirePermissionPortable, type Permission } from "./permissions";
-import { agendaItemsForReader, meetingForReader, minutesForReader, readerAccessGate, tasksForReader, type ReaderAccess } from "./minutesPrivacy";
+import { agendaItemsForReader, materialsForReader, meetingForReader, minutesForReader, readerAccessGate, tasksForReader, type ReaderAccess } from "./minutesPrivacy";
 import { IN_CAMERA_DOCUMENT_TITLE, IN_CAMERA_ITEM_TITLE } from "../minutesPrivacy";
 
 /** A material whose document is withheld as in-camera material loses its own label and notes too (H1). */
@@ -248,10 +248,11 @@ export async function listForMeetingPortable(
   const societyId = candidate.societyId;
   await requireSocietyMembership(ctx, societyId);
   const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
-  const materials = await ctx.db
+  // In-camera items' materials aren't listed for readers without in-camera access.
+  const materials = await materialsForReader(ctx, societyId, await ctx.db
     .query("meetingMaterials")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-    .collect();
+    .collect());
   const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
   const visibleMaterials = materials.filter((material) => canAccessMeetingMaterial(material, accessContext!));
   const rows = await Promise.all(
@@ -277,10 +278,12 @@ export async function packageForMeetingPortable(
   const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
 
   const [materials, minutes, tasks] = await Promise.all([
+    // In-camera items' materials aren't listed (or counted) for readers without in-camera access.
     ctx.db
       .query("meetingMaterials")
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect(),
+      .collect()
+      .then((rows) => materialsForReader(ctx, societyId, rows)),
     readable.has("minutes:read") ? ctx.db
       .query("minutes")
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -342,23 +345,39 @@ export async function listForSocietyPortable(
   { societyId, actingUserId }: { societyId: string; actingUserId?: string },
 ) {
   await requireSocietyMembership(ctx, societyId);
-  const materials = await ctx.db
+  const materials = await materialsForReader(ctx, societyId, await ctx.db
     .query("meetingMaterials")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
+    .collect());
   const accessContext = await documentAccessContextForActor(ctx, societyId, actingUserId);
   const visibleMaterials = materials.filter((material) => canAccessMeetingMaterial(material, accessContext!));
+  // The embedded meeting follows the meeting rules too (in-camera working notes, decision A3).
+  const gate = readerAccessGate(ctx);
   const rows = await Promise.all(
     visibleMaterials.map(async (material) => ({
       ...material,
       document: await getAccessibleDocument(ctx, { id: String(material.documentId) }),
-      meeting: await getOwned(ctx, "meetings", String(material.meetingId), societyId),
+      meeting: await meetingForReader(ctx, await getOwned(ctx, "meetings", String(material.meetingId), societyId), gate),
     })),
   );
   return rows.map(withInCameraMaterialLabel).sort((a, b) => String(b.meeting?.scheduledAt ?? "").localeCompare(String(a.meeting?.scheduledAt ?? "")));
 }
 
 // ----- mutations ------------------------------------------------------------
+
+/**
+ * What attaching does to the document. It isn't filed under the meeting:
+ * `meetingId` means the document belongs to that meeting (made for it, or
+ * imported with it), which makes it in-camera material when the meeting has
+ * an in-camera session. A library document attached as a material stays the
+ * library's; the link lives in `meetingMaterials`.
+ */
+function materialDocumentPatch(document: Record<string, unknown>) {
+  return {
+    librarySection: document.librarySection ?? "meeting_material",
+    reviewStatus: document.reviewStatus ?? "in_review",
+  };
+}
 
 export async function attachPortable(ctx: PortableMutationCtx, args: any) {
   await requireSocietyMembership(ctx, String(args.societyId));
@@ -405,11 +424,7 @@ export async function attachPortable(ctx: PortableMutationCtx, args: any) {
   if (args.id) {
     if (!target) throw new Error("Meeting material not found.");
     await ctx.db.patch(args.id, patch);
-    await ctx.db.patch(args.documentId, {
-      meetingId: args.meetingId,
-      librarySection: document.librarySection ?? "meeting_material",
-      reviewStatus: document.reviewStatus ?? "in_review",
-    });
+    await ctx.db.patch(args.documentId, materialDocumentPatch(document));
     return args.id;
   }
 
@@ -424,11 +439,7 @@ export async function attachPortable(ctx: PortableMutationCtx, args: any) {
     ...patch,
     createdAtISO: new Date().toISOString(),
   });
-  await ctx.db.patch(args.documentId, {
-    meetingId: args.meetingId,
-    librarySection: document.librarySection ?? "meeting_material",
-    reviewStatus: document.reviewStatus ?? "in_review",
-  });
+  await ctx.db.patch(args.documentId, materialDocumentPatch(document));
   return id;
 }
 

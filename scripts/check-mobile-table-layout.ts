@@ -91,6 +91,30 @@ assert.deepEqual(
   ["name", "status", "date"],
   "phone keeps the identifier column first plus the leading others",
 );
+// A status-like column takes the second slot ahead of the leading others;
+// the kept columns stay in view order behind the identifier.
+const receiptColumns = ["number", "donor", "received", "amount", "eligible", "status"];
+const pickStatus = (candidates: string[]) => candidates.find((column) => column === "status");
+assert.deepEqual(
+  limitColumnsForPhone(receiptColumns, true, (column) => column === "donor", pickStatus),
+  ["donor", "number", "status"],
+  "phone keeps the identifier, the status column and the next column (a voided receipt shows Voided)",
+);
+assert.deepEqual(
+  limitColumnsForPhone(["name", "status", "date", "email"], true, (column) => column === "name", pickStatus),
+  ["name", "status", "date"],
+  "a status column already in view order is not duplicated",
+);
+assert.deepEqual(
+  limitColumnsForPhone(["name", "date", "email", "notes"], true, (column) => column === "name", () => undefined),
+  ["name", "date", "email"],
+  "without a status column the leading others fill the cap",
+);
+assert.deepEqual(
+  limitColumnsForPhone(["date", "email", "notes", "status"], true, undefined, pickStatus),
+  ["date", "email", "status"],
+  "without an identifier the first column leads and the status column still survives",
+);
 const fewColumns = ["name", "status"];
 assert.equal(
   limitColumnsForPhone(fewColumns, true),

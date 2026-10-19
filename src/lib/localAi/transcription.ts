@@ -27,7 +27,7 @@ import {
 } from "../../../shared/ai/transcription";
 import type { TranscriptSegment } from "../../../shared/transcriptModel";
 import { browserDeviceAiKey, deviceAiSnapshot } from "./config";
-import { DeviceAiError } from "./transport";
+import { DeviceAiError, browserNetworkError } from "./transport";
 
 /** Pieces copied to the desktop main process. */
 export const DESKTOP_UPLOAD_PIECE_BYTES = 8 * 1024 * 1024;
@@ -37,8 +37,9 @@ export const LOCAL_TRANSCRIPTION_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 export const TRANSCRIPTION_TIMEOUT_MS = 3 * 60 * 60_000;
 export const SPEECH_TEST_TIMEOUT_MS = 60_000;
 
-export const SPEECH_CORS_HINT =
-  "If the server is running, it must allow requests from this page (CORS). whisper.cpp's server allows them by default; for speaches or faster-whisper-server, allow this page's address in its CORS setting. The desktop app does not need this.";
+/** How to allow this page's origin on the common speech servers. */
+const SPEECH_SERVER_CORS_STEPS =
+  "whisper.cpp's server allows this by default; for speaches or faster-whisper-server, allow this page's address in its CORS setting. The desktop app does not need this.";
 
 export type SpeechProgress =
   | { phase: "uploading"; sentBytes: number; totalBytes: number }
@@ -77,14 +78,6 @@ export function speechStatusMessage(status: number): string {
   return `The speech-to-text server returned an error (status ${status}).`;
 }
 
-function hostOf(url: string) {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
 function stopped(signal?: AbortSignal): DeviceAiError {
   const reason: unknown = signal?.reason;
   return reason instanceof DeviceAiError ? reason : new DeviceAiError("aborted", "Transcription was cancelled.");
@@ -102,9 +95,10 @@ export function directSpeechTransport(endpoint: () => SpeechEndpoint, fetchImpl:
       const headers: Record<string, string> = { accept: "application/json" };
       if (apiKey) headers.authorization = `Bearer ${apiKey}`;
       onProgress?.({ phase: "transcribing", part: 1, parts: 1 });
+      const url = speechRequestUrl(kind, baseUrl);
       let response: Response;
       try {
-        response = await fetchImpl(speechRequestUrl(kind, baseUrl), {
+        response = await fetchImpl(url, {
           method: "POST",
           headers,
           body: form,
@@ -115,7 +109,8 @@ export function directSpeechTransport(endpoint: () => SpeechEndpoint, fetchImpl:
         });
       } catch {
         if (signal.aborted) throw stopped(signal);
-        throw new DeviceAiError("network", `Could not reach ${hostOf(baseUrl)}.`, { hint: SPEECH_CORS_HINT });
+        const failure = await browserNetworkError(url, { fetchImpl, corsSteps: SPEECH_SERVER_CORS_STEPS, signal });
+        throw signal.aborted ? stopped(signal) : failure;
       }
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined);

@@ -34,12 +34,14 @@ information it lets leave, so:
   minutes meeting that had one. Documents holding in-camera content come back as an
   "In-camera material" placeholder with no title, file, tags or text
   (`restricted: "in_camera"`): any document filed under a meeting whose minutes record
-  an in-camera session (whatever its category) or attached to it as a material,
-  attachments of agenda items inside the session, documents in-camera minutes cite
+  an in-camera session (whatever its category) or under an agenda item inside the
+  session, documents in-camera minutes cite
   (imported sources, the source record's documents, dissent reports of in-camera
   motions), and duplicates and versions linked to any of those (followed at most four
   links out and 500 documents per workspace: a longer chain of copies is an accepted
-  residual). Tasks made from in-camera action items read "In-camera action" with no
+  residual). A library document only attached as a material of an in-camera item is not
+  in-camera material (the material link is withheld from the meeting's listings
+  instead). Tasks made from in-camera action items read "In-camera action" with no
   wording, people or notes, in `list_tasks` and the snapshot. Whether a task is in camera
   is decided when it is read, against the current minutes: the task records the section
   its action came from (index and title, read from the minutes by the server), so a
@@ -199,16 +201,21 @@ codex mcp login societyer
 Codex identifies itself (dynamic registration or a metadata document), opens the consent
 page and listens on a loopback port.
 
-**The consent page** (`<app>/oauth/consent`) shows the app's name, who publishes it (the
-host of its metadata document, or "Unverified" for a self-registered app), and the host
-it returns to. A loopback return address gets a warning: any program on the computer
+**The consent page** (`<app>/oauth/consent`) names the app by what Societyer can check.
+An app with a metadata document keeps its own name in the title ("Connect Claude"), with
+"Published by <host>" (the document's host). A self-registered app is named by the host it
+returns to ("Connect an app at claude.ai", or "Connect an app on this computer" for a
+loopback address) under an **Unverified** badge; the name it gave itself is only quoted
+("Calls itself “Claude (verified)”"), so a registration can't borrow a trusted name. The
+page also lists the host it returns to. A loopback return address gets a warning: any program on the computer
 can listen there, so only continue if you just started connecting. Reads you hold are
 ticked by default; **Can propose changes for you to approve** (`tasks:write`, draft-only
 under decision A4) is always off until you tick it. A self-registered app's own website
 (`client_uri`) is shown only as "unverified, self-declared"; names and hosts lose
 invisible and direction-changing characters. **Approve** turns on once the page has been
 visible and focused for half a second, so a window that pops up under the pointer can't
-catch a click, and only after you tick **I just started connecting <app> myself**: an app's
+catch a click, and only after you tick **I just started connecting <app> myself** (`<app>` is
+the same verifiable name as the title, e.g. "the app at claude.ai"): an app's
 sign-in link someone else started and sent you would connect *their* app to your
 workspace. Connecting the same app to the same workspace again keeps one connection
 (its scopes become the ones you chose) and adds a new **session**.
@@ -229,7 +236,11 @@ see everyone's) next to personal tokens, with each app's **sessions**: one per a
 with when it started, when it was last used and where it returns. **Revoke** on a
 session ends just that one (say, a session you don't recognise); **Disconnect** stops
 all of the app's access and refresh tokens at once. Turning the workspace opt-in off makes every call `403` and
-blocks token refresh, without deleting connections. A connection lasts 90 days from
+blocks token refresh, without deleting connections. Each row's badge says where it stands:
+**Active**; **Paused** ("Connectors are off for this workspace") for tokens and apps that work
+again once the opt-in is back on, and can still be revoked; **Expired**; **Revoked** for a
+token after **Revoke** and **Disconnected** for an app after **Disconnect**, with the date
+it happened instead of its expiry. A connection lasts 90 days from
 approval; then the app asks you to connect again.
 
 **Troubleshooting**
@@ -421,7 +432,8 @@ These came out of a security review of the connector (2026-10-17).
 - **Consent spoofing.** Control and format characters (`\p{Cc}`, `\p{Cf}`: bidi
   overrides and isolates, zero-width characters, the BOM) are removed from client names
   and every host the page shows. Only a metadata document's URL host is shown as the
-  publisher; a registered client's `client_uri` is "unverified, self-declared". Approve
+  publisher; a registered client is titled by its redirect host, its own name is only
+  quoted ("Calls itself …") and its `client_uri` is "unverified, self-declared". Approve
   waits for 500 ms of the page being visible and focused, restarting on blur or a tab
   switch.
 - **Limits and clean-up.** Throttles key on the client address, IPv6 by /64; when Convex

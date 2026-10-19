@@ -43,6 +43,27 @@ const NON_WORKSPACE_EXPORT_TABLES = new Set([
   "agentGrants", "agentConnectorSettings",
   // OAuth clients, pending requests, token hashes and sessions for the MCP endpoint: authorization state.
   "mcpOAuthClients", "mcpOAuthRequests", "mcpOAuthTokens", "mcpOAuthFamilies", "mcpOAuthEvents",
+  // Development-only sign-in mail outbox (verification and reset links, one-hour expiry).
+  // It has no workspace and holds live sign-in links, so it is never exported.
+  "developmentAuthEmails",
+  // Meeting source files: transfer state bound to this deployment's SharePoint drive
+  // (upload session URL, leases, pending digests, item/version pins). The originals
+  // live in SharePoint, not Convex, and a restored row could not be rebound to them.
+  "meetingSources",
+  // Broker delivery state contains expiring sign-in links, never business data.
+  "authEmailOutbox",
+  // Processor credentials, leases and deployment-bound page receipts are not
+  // portable records. Transcript export is handled by the transcript workspace.
+  "meetingTranscriptionConnections", "meetingTranscriptionJobs", "meetingTranscriptPages",
+  // Read-only projections of the retained SharePoint publication. Re-import on
+  // the destination; restoring rows would retain invalid site/version bindings.
+  "procurementCatalogs", "procurementSearch", "procurementSyncRuns",
+  "procurementRecords", "procurementDetails", "procurementTaxonomyReleases",
+  "procurementTaxonomyTerms", "procurementDocuments", "procurementEvidence",
+  // Working text extracted from those originals, for meeting editors only (decision A1).
+  // It is untimed, so in-camera ranges can't be redacted from it. Text adopted for
+  // the meeting is exported through `transcripts` with the transcript rules.
+  "meetingSourceText",
 ]);
 const forbidden = exportTables.filter(table => NON_WORKSPACE_EXPORT_TABLES.has(table));
 if (forbidden.length) throw new Error(`Internal authorization/synchronization tables must not be exported: ${forbidden.join(", ")}.`);

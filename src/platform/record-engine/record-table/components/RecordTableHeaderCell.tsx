@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Select } from "../../../../components/Select";
 import { columnWidthStyle } from "../utils/columnWidth";
 import {
   ArrowDown,
@@ -54,6 +55,12 @@ export function RecordTableHeaderCell({
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   const [filterValue, setFilterValue] = useState("");
+  const [numericOperator, setNumericOperator] = useState<ViewFilterOperator>("eq");
+  const numeric = isNumericFieldType(recordField.field.fieldType);
+  const boolean = recordField.field.fieldType === FIELD_TYPES.BOOLEAN;
+  const sortable = recordField.field.config?.sortable !== false;
+  const noValue = boolean || ["isEmpty", "isNotEmpty"].includes(numericOperator);
+  const canApply = noValue || canApplyHeaderFilter(recordField, filterValue);
 
   const sort = sorts.find((s) => s.fieldMetadataId === recordField.fieldMetadataId);
   const FieldIcon = resolveFieldIcon(recordField.field);
@@ -80,6 +87,7 @@ export function RecordTableHeaderCell({
   }, [menuOpen]);
 
   const cycleSort = () => {
+    if (!sortable) return;
     const next = handle.get().sorts.filter(
       (s) => s.fieldMetadataId !== recordField.fieldMetadataId,
     );
@@ -127,7 +135,9 @@ export function RecordTableHeaderCell({
   };
 
   const applyHeaderFilter = () => {
-    const { operator, value } = headerFilterCondition(recordField, filterValue);
+    const condition = headerFilterCondition(recordField, filterValue);
+    const operator = numeric || boolean ? numericOperator === "eq" && boolean ? "isTrue" : numericOperator : condition.operator;
+    const value = noValue ? null : condition.value;
     const existingRoot = filterGroups.find((group) => !group.parentViewFilterGroupId);
     const rootGroup = existingRoot ?? {
       id: `fg_${Date.now()}`,
@@ -252,25 +262,38 @@ export function RecordTableHeaderCell({
             label={`${recordField.field.label} column`}
             className="record-table__header-menu"
           >
-            <button type="button" onClick={() => setSort("asc")}>
+            {sortable && <><button type="button" onClick={() => setSort("asc")}>
               <ArrowUp size={13} />
               <span>Sort ascending</span>
             </button>
             <button type="button" onClick={() => setSort("desc")}>
               <ArrowDown size={13} />
               <span>Sort descending</span>
-            </button>
+            </button></>}
             <div className="record-table__header-menu-section">
               <label>
                 <span>
                   <Filter size={13} />
                   Filter
                 </span>
-                <input
+                {(numeric || boolean) && <Select
+                  size="sm"
+                  aria-label={`${recordField.field.label} filter condition`}
+                  value={boolean && numericOperator === "eq" ? "isTrue" : numericOperator}
+                  onChange={setNumericOperator}
+                  options={boolean ? [{ value: "isTrue", label: "Yes" }, { value: "isFalse", label: "No" }] : [
+                    { value: "eq", label: "Equals" }, { value: "neq", label: "Does not equal" },
+                    { value: "gt", label: "Greater than" }, { value: "gte", label: "At least" },
+                    { value: "lt", label: "Less than" }, { value: "lte", label: "At most" },
+                    { value: "isEmpty", label: "Has no value" }, { value: "isNotEmpty", label: "Has a value" },
+                  ]}
+                />}
+                {!noValue && <input
+                  aria-label={`${recordField.field.label} filter value`}
                   value={filterValue}
                   onChange={(event) => setFilterValue(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && canApplyHeaderFilter(recordField, filterValue)) {
+                    if (event.key === "Enter" && canApply) {
                       event.preventDefault();
                       applyHeaderFilter();
                     }
@@ -278,11 +301,11 @@ export function RecordTableHeaderCell({
                   placeholder={headerFilterPlaceholder(recordField)}
                   type={headerFilterInputType(recordField)}
                   inputMode={isNumericFieldType(recordField.field.fieldType) ? "decimal" : undefined}
-                />
+                />}
               </label>
               <button
                 type="button"
-                disabled={!canApplyHeaderFilter(recordField, filterValue)}
+                disabled={!canApply}
                 onClick={applyHeaderFilter}
               >
                 Apply filter
@@ -412,5 +435,6 @@ function headerFilterInputType(recordField: RecordField) {
 function headerFilterPlaceholder(recordField: RecordField) {
   if (recordField.field.fieldType === FIELD_TYPES.BOOLEAN) return "true";
   if (recordField.field.fieldType === FIELD_TYPES.CURRENCY) return "e.g. 1.5k or $2,000";
-  return "Value";
+  if (isNumericFieldType(recordField.field.fieldType)) return "Enter a number";
+  return "Contains…";
 }

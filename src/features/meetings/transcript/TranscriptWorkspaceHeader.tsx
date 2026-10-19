@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { AudioLines, Captions, CloudDownload, FolderOpen, Loader2, Sparkles, Upload, X } from "lucide-react";
 import { Badge } from "../../../components/ui";
 import { meetingSourceBroker } from "../../../lib/meetingSourceUpload";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { AttachedRecordingsPanel, formatRecordingSize } from "./AttachedRecordingsPanel";
-import { useAttachedSharePointRecording } from "./useAttachedSharePointRecording";
+import { useAttachedSharePointRecording, type AttachedSharePointRecording } from "./useAttachedSharePointRecording";
+import { ATTACHED_RECORDINGS_INTENT } from "./timedImportOffer";
 import type { RecordingOrigin, RememberedRecording } from "./useTranscriptRecording";
 import { DEVICE_AI_SETTINGS_HREF } from "../../../lib/localAi/useDeviceAi";
 import { describeTranscriptionStep, type LocalTranscriptionJob } from "./useLocalTranscription";
@@ -27,21 +28,7 @@ export type LocalTranscriptionControls = {
   cancel: () => void;
 };
 
-export function TranscriptWorkspaceHeader({
-  meetingId,
-  provider,
-  recording,
-  localTranscription,
-  reopenHint,
-  canWrite,
-  importing,
-  importFile,
-  setRecording,
-  onDraftMinutes,
-  draftUnavailableReason,
-  draftSetUpHref,
-  draftingMinutes,
-}: {
+type TranscriptWorkspaceHeaderProps = {
   meetingId: string;
   provider?: string;
   recording?: OpenRecording;
@@ -58,7 +45,26 @@ export function TranscriptWorkspaceHeader({
   /** Shown after the explanation when on-device AI could be set up here. */
   draftSetUpHref?: string;
   draftingMinutes?: boolean;
-}) {
+  /** The Export menu (`TranscriptExportMenu`), after Import transcript. */
+  exportMenu?: ReactNode;
+};
+
+export function TranscriptWorkspaceHeader({
+  meetingId,
+  provider,
+  recording,
+  localTranscription,
+  reopenHint,
+  canWrite,
+  importing,
+  importFile,
+  setRecording,
+  onDraftMinutes,
+  draftUnavailableReason,
+  draftSetUpHref,
+  draftingMinutes,
+  exportMenu,
+}: TranscriptWorkspaceHeaderProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const mediaInput = useRef<HTMLInputElement>(null);
   const attachedToggle = useRef<HTMLButtonElement>(null);
@@ -78,6 +84,7 @@ export function TranscriptWorkspaceHeader({
     [setRecording],
   );
   const attached = useAttachedSharePointRecording(meetingId, onAttachedLoaded);
+  useAttachedRecordingsIntent(attachedAvailable, attached, setAttachedOpen);
   const draftUnavailable = Boolean(draftUnavailableReason);
   return (
     <>
@@ -124,6 +131,7 @@ export function TranscriptWorkspaceHeader({
               <span className="transcript-label-short">{importing ? "Importing…" : "Import"}</span>
             </button>
           )}
+          {exportMenu}
           {localTranscription?.available && <TranscribeOnDeviceButton controls={localTranscription} importing={importing} />}
           {onDraftMinutes && (
             <DraftMinutesButton
@@ -180,6 +188,35 @@ export function TranscriptWorkspaceHeader({
       />
     </>
   );
+}
+
+/**
+ * "Play in Transcript tab" on Meeting source files arrives with
+ * `?intent=attached-recordings`: open the list once, then drop the intent.
+ */
+function useAttachedRecordingsIntent(
+  available: boolean,
+  attached: AttachedSharePointRecording,
+  setOpen: (open: boolean) => void,
+) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const intent = searchParams.get("intent") === ATTACHED_RECORDINGS_INTENT;
+  const { refresh } = attached;
+  useEffect(() => {
+    if (!intent) return;
+    if (available) {
+      setOpen(true);
+      void refresh();
+    }
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("intent");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [intent, available, refresh, setOpen, setSearchParams]);
 }
 
 /**

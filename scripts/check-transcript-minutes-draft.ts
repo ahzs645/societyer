@@ -16,9 +16,11 @@ import { api } from "../convex/_generated/api";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import {
   ADOPTED_MINUTES_DRAFT_BLOCKED,
-  RECORDED_SECTIONS_DRAFT_BLOCKED,
+  matchesTemplateText,
   minutesDraftBlocker,
   minutesDraftTranscript,
+  recordedSectionsDraftBlocked,
+  withoutTemplateSeededSections,
 } from "../shared/minutesDraftInput";
 
 delete process.env.ANTHROPIC_API_KEY;
@@ -50,7 +52,9 @@ const modules: Record<string, () => Promise<unknown>> = {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
   "./_generated/server.js": () => import("../convex/_generated/server.js"),
   "./authorization.js": () => import("../convex/authorization"),
+  "./agendas.js": () => import("../convex/agendas"),
   "./meetings.js": () => import("../convex/meetings"),
+  "./meetingTemplates.js": () => import("../convex/meetingTemplates"),
   "./minutes.js": () => import("../convex/minutes"),
   "./transcripts.js": () => import("../convex/transcripts"),
 };
@@ -211,14 +215,149 @@ assert.deepEqual(
   "approved minutes are unchanged by drafting attempts and later speaker renames",
 );
 
-// 5. Pure pieces: blockers, explicit text, import metadata, empty transcript.
+// 5. A board meeting made from the default "Regular board meeting" template:
+//    its seeded sections (the land acknowledgement, the procedural motions'
+//    wording) are not recorded content, so drafting proceeds; a section a
+//    person changed is refused by name.
+await owner.mutation(api.meetingTemplates.seedDefaults, { societyId });
+const boardTemplate = (await owner.query(api.meetingTemplates.list, { societyId }))
+  .find((template: { name: string }) => template.name === "Regular board meeting");
+assert.ok(boardTemplate, "the default board template is seeded");
+const createFromTemplate = (title: string) =>
+  owner.mutation(api.meetings.create, {
+    societyId,
+    type: "Board",
+    title,
+    scheduledAt: "2026-12-04T18:00:00Z",
+    electronic: false,
+    status: "Held",
+    attendeeIds: [],
+    meetingTemplateId: boardTemplate._id,
+  });
+const templated = await createFromTemplate("December board meeting");
+// The page's "Start minutes from agenda" re-sync copies each agenda item's
+// resolved motion wording onto its section, as the QA repro had it.
+const templatedAgenda = await owner.query(api.agendas.getForMeeting, { meetingId: templated });
+await owner.mutation(api.agendas.startMinutesFromAgenda, { agendaId: templatedAgenda!.agenda._id });
+const templatedMeeting = await owner.query(api.meetings.get, { id: templated });
+const templatedMinutes = await owner.query(api.minutes.getByMeeting, { meetingId: templated });
+const seededSections = (templatedMinutes?.sections ?? []) as Array<{ title: string; discussion?: string; motionText?: string }>;
+assert.match(
+  String(seededSections.find((section) => section.title === "Indigenous acknowledgement")?.discussion),
+  /unceded and ancestral territory/,
+  "the template seeds the land acknowledgement",
+);
+assert.match(
+  String(seededSections.find((section) => section.title === "Adopt previous minutes")?.motionText),
+  /^BE IT RESOLVED THAT the minutes of .+, as circulated, be approved\.$/,
+  "the template's placeholders were filled in",
+);
+assert.notEqual(minutesDraftBlocker(templatedMinutes), null, "without the template, its defaults look recorded (the QA refusal)");
+assert.equal(minutesDraftBlocker(templatedMinutes, templatedMeeting), null, "template defaults alone never block a draft");
+assert.deepEqual(
+  withoutTemplateSeededSections(templatedMinutes!, templatedMeeting).sections,
+  [],
+  "template defaults alone are not a started draft, so no replace prompt",
+);
+const promptsBeforeTemplate = prompts.length;
+await owner.action(api.minutes.generateDraft, { meetingId: templated, transcript: named });
+assert.equal(prompts.length, promptsBeforeTemplate + 1, "a template meeting is drafted");
+assert.match(String((await owner.query(api.minutes.getByMeeting, { meetingId: templated }))?.discussion), /Jane Doe called the meeting to order/);
+
+const edited = await createFromTemplate("January board meeting");
+const editedMinutes = await owner.query(api.minutes.getByMeeting, { meetingId: edited });
+await owner.mutation(api.minutes.update, {
+  id: editedMinutes!._id,
+  patch: {
+    sections: (editedMinutes!.sections as Array<Record<string, unknown>>).map((section) =>
+      section.title === "Indigenous acknowledgement"
+        ? { ...section, discussion: `${section.discussion} Elder Mary Charlie offered a welcome.` }
+        : section.title === "New business"
+          ? { ...section, decisions: ["Hall rental renewed"] }
+          : section),
+  },
+});
+const editedBlocked = recordedSectionsDraftBlocked(["Indigenous acknowledgement", "New business"]);
+assert.equal(
+  editedBlocked,
+  "“Indigenous acknowledgement” and “New business” have recorded content, which a draft never overwrites. Edit or clear those sections, then draft again.",
+);
+assert.equal(
+  minutesDraftBlocker(await owner.query(api.minutes.getByMeeting, { meetingId: edited }), await owner.query(api.meetings.get, { id: edited })),
+  editedBlocked,
+  "changed template wording and an added decision are recorded content, named in the refusal",
+);
+await assert.rejects(
+  () => owner.action(api.minutes.generateDraft, { meetingId: edited, transcript: named }),
+  (error: Error) => error.message.includes(editedBlocked),
+  "the hosted action refuses edited template sections before the model",
+);
+assert.equal(prompts.length, promptsBeforeTemplate + 1, "the refused draft never reaches the model");
+await assert.rejects(
+  () =>
+    owner.mutation(api.minutes.upsertFromDraft, {
+      societyId,
+      meetingId: edited,
+      heldAt: "2026-12-04",
+      attendees: [],
+      absent: [],
+      quorumMet: false,
+      discussion: "Overwrite attempt",
+      motions: [],
+      decisions: [],
+      actionItems: [],
+    }),
+  (error: Error) => error.message.includes(editedBlocked),
+  "the authoritative upsert refuses them too",
+);
+
+// 6. Pure pieces: blockers, explicit text, import metadata, empty transcript.
 assert.equal(minutesDraftBlocker(null), null);
 assert.equal(minutesDraftBlocker({ discussion: "Working draft", sections: [] }), null);
 assert.equal(minutesDraftBlocker({ motionSnapshots: [] }), ADOPTED_MINUTES_DRAFT_BLOCKED);
 assert.equal(
-  minutesDraftBlocker({ sections: [{ title: "Budget", discussion: "Recorded" }] }),
-  RECORDED_SECTIONS_DRAFT_BLOCKED,
+  minutesDraftBlocker({ approvedAt: "2026-10-04", sections: [] }, templatedMeeting),
+  ADOPTED_MINUTES_DRAFT_BLOCKED,
+  "approved minutes are refused whatever the template",
 );
+assert.equal(
+  minutesDraftBlocker({ sections: [{ title: "Budget", discussion: "Recorded" }] }),
+  "“Budget” has recorded content, which a draft never overwrites. Edit or clear that section, then draft again.",
+);
+assert.equal(
+  recordedSectionsDraftBlocked(["A", "B", "C", "D", "E"]),
+  "“A”, “B”, “C” and 2 more have recorded content, which a draft never overwrites. Edit or clear those sections, then draft again.",
+);
+const snapshot = (items: unknown[]) => ({ templateSnapshotJson: JSON.stringify({ items }) });
+assert.equal(
+  minutesDraftBlocker(
+    { sections: [{ title: "Welcome", discussion: "  Opening\n remarks " }] },
+    snapshot([{ title: "Welcome", details: "Opening remarks" }]),
+  ),
+  null,
+  "whitespace differences from the template don't count",
+);
+assert.notEqual(
+  minutesDraftBlocker(
+    { sections: [{ title: "Welcome", discussion: "Opening remarks", motionId: "motion_1" }] },
+    snapshot([{ title: "Welcome", details: "Opening remarks" }]),
+  ),
+  null,
+  "a linked motion is recorded even under template wording",
+);
+assert.notEqual(
+  minutesDraftBlocker(
+    { sections: [{ title: "Another title", discussion: "Opening remarks" }] },
+    snapshot([{ title: "Welcome", details: "Opening remarks" }]),
+  ),
+  null,
+  "template wording under a section the template didn't make is recorded",
+);
+assert.notEqual(minutesDraftBlocker({ sections: [{ title: "Welcome", discussion: "Opening remarks" }] }, { templateSnapshotJson: "{not json" }), null);
+assert.ok(matchesTemplateText("Minutes of the previous meeting, approved.", "Minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, approved."));
+assert.ok(matchesTemplateText("Minutes of Board meeting of May 1, 2026, approved.", "Minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, approved."));
+assert.ok(!matchesTemplateText("Minutes of May, approved with changes.", "Minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, approved."));
+assert.ok(!matchesTemplateText("Costs (approx.) rose", "Costs (approx) rose"), "template text is literal, not a pattern");
 assert.equal(
   minutesDraftBlocker({ sections: [{ title: "Budget", discussion: "" }] }),
   null,
@@ -244,13 +383,14 @@ const emptyMeeting = await test.run((ctx) =>
     attendeeIds: [],
   }),
 );
+const promptsBeforeEmpty = prompts.length;
 await assert.rejects(
   () => owner.action(api.minutes.generateDraft, { meetingId: emptyMeeting, transcript: "   " }),
   /Add a transcript first/,
 );
-assert.equal(prompts.length, 1, "an empty transcript never reaches the model");
+assert.equal(prompts.length, promptsBeforeEmpty, "an empty transcript never reaches the model");
 
 globalThis.fetch = realFetch;
 console.log(
-  "Transcript minutes draft passed: assigned names reach the model prompt verbatim, renames stay authoritative, and approved minutes are refused before any model call.",
+  "Transcript minutes draft passed: assigned names reach the model prompt verbatim, renames stay authoritative, approved minutes are refused before any model call, and template-seeded sections never block a draft while edited ones are refused by name.",
 );

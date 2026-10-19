@@ -253,6 +253,22 @@ function classifyConvex(initializerText: string, isService: boolean): AccessClas
   return authenticatedSignals.some((signal) => initializerText.includes(signal)) ? "authenticated" : "unclassified";
 }
 
+// `import { internalMutation as meetingInvalidatingInternalMutation }` must
+// still register as an internalMutation; resolve local aliases to the
+// imported name, as scripts/portable-convex-scan.mjs does.
+function importAliases(file: ts.SourceFile): Map<string, string> {
+  const aliases = new Map<string, string>();
+  for (const statement of file.statements) {
+    if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if (!element.isTypeOnly && element.propertyName) aliases.set(element.name.text, element.propertyName.text);
+    }
+  }
+  return aliases;
+}
+
 function convexEntries(portable: Map<string, PortableMetadata>): FunctionInventoryEntry[] {
   const convexDir = path.join(REPO_ROOT, "convex");
   const entries: FunctionInventoryEntry[] = [];
@@ -260,11 +276,13 @@ function convexEntries(portable: Map<string, PortableMetadata>): FunctionInvento
     const filePath = path.join(convexDir, filename);
     const file = sourceFile(filePath);
     const moduleName = filename.slice(0, -3);
+    const aliases = importAliases(file);
     for (const statement of file.statements) {
       if (!ts.isVariableStatement(statement) || !isExported(statement)) continue;
       for (const declaration of statement.declarationList.declarations) {
         if (!ts.isIdentifier(declaration.name) || !declaration.initializer || !ts.isCallExpression(declaration.initializer)) continue;
-        const constructorName = callName(declaration.initializer.expression);
+        const localName = callName(declaration.initializer.expression);
+        const constructorName = localName && (aliases.get(localName) ?? localName);
         const convexKind = constructorName && CONVEX_KINDS.get(constructorName);
         if (!convexKind) continue;
         const name = `${moduleName}:${declaration.name.text}`;

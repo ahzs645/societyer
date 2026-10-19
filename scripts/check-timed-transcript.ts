@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { parseTimedTranscript } from "../src/features/meetings/transcript/timedTranscript";
 import { computePeaks, WAVEFORM_FILE_LIMIT } from "../src/features/meetings/transcript/waveform";
 import {
@@ -18,6 +20,7 @@ import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
 import { actionPermission } from "../shared/functions/actionPolicy";
 import { portableTestPrincipal, portableTestSeed } from "./portable-test-fixture";
 import type { TranscriptSegment } from "../shared/transcriptModel";
+import { inCameraDividerLabel } from "../src/features/meetings/transcript/InCameraTranscript";
 
 const vtt = parseTimedTranscript(
   "meeting.vtt",
@@ -463,7 +466,37 @@ for (const local of [false, true]) {
     () => runtime.runMutation("transcripts:importTimed", { ...base, ...vtt }),
     /meetings:write/,
   );
+  // Working transcripts and their transcription jobs are for minutes keepers (decision A1).
+  await assert.rejects(() => runtime.runQuery("transcripts:getByMeeting", { meetingId: "meeting" }), /minutes:write/);
+  await assert.rejects(() => runtime.runQuery("transcripts:jobForMeeting", { meetingId: "meeting" }), /minutes:write/);
 }
+
+// The client skips those queries without transcript access, so a Member or
+// Viewer opening the Transcript tab gets no "Permission minutes:write required".
+{
+  const sources = readdirSync("src", { recursive: true, encoding: "utf8" })
+    .filter((file) => /\.tsx?$/.test(file))
+    .map((file) => ({ file, text: readFileSync(path.join("src", file), "utf8") }));
+  const reads = sources.flatMap(({ file, text }) =>
+    [...text.matchAll(/useQuery\(\s*(?:typedApi|api)\.transcripts\.(getByMeeting|jobForMeeting)\s*,([\s\S]*?)"skip"/g)].map(
+      ([, name, args]) => ({ where: `${file} transcripts:${name}`, args }),
+    ),
+  );
+  assert.ok(reads.some((read) => read.where.endsWith("transcripts:jobForMeeting")), "the job query is found");
+  for (const read of reads)
+    assert.match(read.args, /canReadTranscript|TRANSCRIPT_READ_PERMISSION/, `${read.where} is skipped without transcript access`);
+}
+
+// The in-camera divider names the session once, whatever the minutes call it.
+assert.equal(inCameraDividerLabel("Executive director review"), "In camera: Executive director review");
+assert.equal(inCameraDividerLabel("In camera: executive director review"), "In camera: executive director review");
+assert.equal(inCameraDividerLabel("in camera session"), "in camera session");
+assert.equal(inCameraDividerLabel("In-camera session"), "In-camera session");
+assert.equal(inCameraDividerLabel("In\u2011camera: staffing"), "In\u2011camera: staffing", "non-breaking hyphen");
+assert.equal(inCameraDividerLabel("  IN CAMERA – staffing "), "IN CAMERA – staffing");
+assert.equal(inCameraDividerLabel("Incamera budget"), "Incamera budget");
+assert.equal(inCameraDividerLabel("Inca budget"), "In camera: Inca budget");
+assert.equal(inCameraDividerLabel("Review in camera"), "In camera: Review in camera");
 console.log(
   "Timed transcript checks passed: parsers, clock lookup, waveform, registry, both portable adapters, permissions, ownership, draft immutability and size bounds.",
 );

@@ -47,6 +47,19 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   // Procurement review reads SharePoint through a hosted route; the local runtimes report it unavailable.
   "procurementReview:setFolder",
   "financialHub:sync",
+  // Meeting source files: hosted-only, behind the transfer broker and private SharePoint
+  // storage. MeetingSourcesCard renders nothing in local runtimes or without
+  // VITE_MEETING_SOURCE_BROKER_URL, so these are never called offline. Local runtimes
+  // import transcripts through transcripts:importTimed and transcribe on the device.
+  "meetingSources:appendText",
+  "meetingSources:useTranscript",
+  "meetingSourceSpeech:start",
+  // Hosted processor pairing and queued SharePoint recordings have no offline
+  // counterpart. The local meeting UI transcribes on the device instead.
+  "meetingTranscription:configure",
+  "meetingTranscription:enqueue",
+  "meetingTranscription:cancel",
+  "meetingTranscription:apply",
   "minutes:generateDraft",
   "notifications:sendDigest",
   "paperless:disconnect",

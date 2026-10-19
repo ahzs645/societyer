@@ -21,9 +21,10 @@ import { REVIEW_SPEAKERS_INTENT } from "./timedImportOffer";
 import { TranscriptView } from "./TranscriptView";
 
 import { useTranscriptRecording } from "./useTranscriptRecording";
-import { useLocalTranscription } from "./useLocalTranscription";
+import { draftMinutesDisabledReason, useLocalTranscription } from "./useLocalTranscription";
 import { useTranscriptMutations, type MergeUndo } from "./useTranscriptMutations";
 import { TranscriptWorkspaceHeader } from "./TranscriptWorkspaceHeader";
+import { TranscriptExportMenu } from "./TranscriptExportMenu";
 import {
   useTranscriptFeedback,
   useTranscriptPlayback,
@@ -132,12 +133,7 @@ export function TranscriptWorkspace({
     },
     [segments, onJump, seek, jobId, page, convex, setPageIndex],
   );
-  // saveText creates synthetic five-second segments; those are not recording timestamps.
-  const timed =
-    segments.some((segment) => segment.endSec > 0) &&
-    !["manual", "text", "txt"].includes(transcript?.provider ?? "manual");
-  const duration =
-    transcript?.durationSeconds ?? segments.reduce((max, segment) => Math.max(max, segment.endSec), 0);
+  const { timed, duration } = transcriptTimeline(transcript, segments);
   useEffect(() => {
     if (!jobId || !page || !source || !clock.playing || clock.currentTime >= page.startSec && clock.currentTime <= page.endSec) return;
     void convex.query(hostedApi.meetingTranscription.pageAtTime, { jobId, seconds: clock.currentTime }).then((index: number) => { if (index !== pageIndex) setPageIndex(index); });
@@ -164,36 +160,26 @@ export function TranscriptWorkspace({
             ? onDraftMinutes
             : undefined
         }
-        draftUnavailableReason={
-          aiDraft.available ? undefined : "AI minutes drafting needs a connected server or an on-device model."
-        }
-        draftSetUpHref={aiDraft.canSetUpDevice ? DEVICE_AI_SETTINGS_HREF : undefined}
+        draftUnavailableReason={draftMinutesDisabledReason({ aiAvailable: aiDraft.available, transcribing: Boolean(localTranscription.job) })}
+        draftSetUpHref={!aiDraft.available && aiDraft.canSetUpDevice ? DEVICE_AI_SETTINGS_HREF : undefined}
         draftingMinutes={draftingMinutes}
         canWrite={canWrite}
         importing={importing}
         importFile={review.importFile}
         setRecording={setRecording}
+        exportMenu={<TranscriptExportMenu meetingId={meetingId} transcript={transcript} minutes={minutes} onExported={announce} />}
       />
-      {(error || feedback.copyError || links.error || inCamera.error) && (
-        <p role="alert" className="transcript-error">
-          {error || feedback.copyError || links.error || inCamera.error}
-        </p>
-      )}
       <TranscriptStatus notice={feedback.notice} undo={feedback.undo} />
-      {transcript?.wordsDropped && (
-        <p className="transcript-muted">
-          Word timings were omitted to keep this transcript within the storage limit. Segment timings are
-          preserved.
-        </p>
-      )}
+      <TranscriptNotices
+        error={error || feedback.copyError || links.error || inCamera.error}
+        wordsDropped={transcript?.wordsDropped}
+      />
       {/* No recording and no timeline to show: an empty 0:00 player is noise.
           A timed transcript keeps the bar for its speaker lane and minutes markers. */}
       {(source || timed) && <MediaPlayerBar
         clock={playerClock}
         source={source}
-        video={Boolean(
-          recording && (recording.type.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(recording.name)),
-        )}
+        video={isVideoRecording(recording)}
         peaks={peaks}
         segments={timed ? shown : EMPTY_SEGMENTS}
         labels={palette}
@@ -241,6 +227,40 @@ export function TranscriptWorkspace({
         <SpeakerReview {...speakerData} {...speakerActions} open={review.isOpen} onClose={review.close} />
       )}
     </section>
+  );
+}
+
+/** Whether the transcript plays along a timeline, and how long that timeline runs. */
+function transcriptTimeline(transcript: WorkspaceTranscript | null | undefined, segments: readonly TranscriptSegment[]) {
+  // saveText creates synthetic five-second segments; those are not recording timestamps.
+  const timed =
+    segments.some((segment) => segment.endSec > 0) &&
+    !["manual", "text", "txt"].includes(transcript?.provider ?? "manual");
+  const duration =
+    transcript?.durationSeconds ?? segments.reduce((max, segment) => Math.max(max, segment.endSec), 0);
+  return { timed, duration };
+}
+
+function isVideoRecording(recording: File | null | undefined): boolean {
+  return Boolean(recording && (recording.type.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(recording.name)));
+}
+
+/** The first workspace error, and a note when word timings were dropped to fit storage. */
+function TranscriptNotices({ error, wordsDropped }: { error?: string | null; wordsDropped?: boolean }) {
+  return (
+    <>
+      {error && (
+        <p role="alert" className="transcript-error">
+          {error}
+        </p>
+      )}
+      {wordsDropped && (
+        <p className="transcript-muted">
+          Word timings were omitted to keep this transcript within the storage limit. Segment timings are
+          preserved.
+        </p>
+      )}
+    </>
   );
 }
 

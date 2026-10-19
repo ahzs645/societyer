@@ -142,7 +142,7 @@ export function Modal({
         <div className="modal__head">
           <h2 className="modal__title" id={titleId}>{title}</h2>
           {headerActions}
-          <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label={i18n.t("common.close", "Close")}>
+          <button className="btn btn--ghost btn--icon modal__close" onClick={onClose} aria-label={i18n.t("common.close", "Close")}>
             <X />
           </button>
         </div>

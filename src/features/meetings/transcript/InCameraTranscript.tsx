@@ -75,6 +75,15 @@ export function SegmentInCameraEditor({
   );
 }
 
+// "In camera", "In-camera", "In‑camera" (any dash or space, or none), any case.
+const IN_CAMERA_PREFIX = /^in[\s\-\u2010-\u2015]*camera\b/i;
+
+/** The divider's label: "In camera: <title>", unless the title already says so. */
+export function inCameraDividerLabel(title: string): string {
+  const trimmed = title.trim();
+  return IN_CAMERA_PREFIX.test(trimmed) ? trimmed : `In camera: ${trimmed}`;
+}
+
 /** Where a marked in-camera session starts or ends in the transcript (editors only). */
 export function InCameraDivider({ mark, edge, onClear }: { mark: InCameraMark; edge: "start" | "end"; onClear?: (title: string) => void }) {
   const range = `${formatTranscriptTime(mark.startSec)}–${formatTranscriptTime(mark.endSec)}`;
@@ -84,7 +93,7 @@ export function InCameraDivider({ mark, edge, onClear }: { mark: InCameraMark; e
         {edge === "start" ? (
           <>
             <Lock size={12} aria-hidden="true" />
-            In camera: {mark.title} · {range}
+            {inCameraDividerLabel(mark.title)} · {range}
           </>
         ) : (
           <>End of {mark.title}</>

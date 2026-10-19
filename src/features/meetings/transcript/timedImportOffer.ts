@@ -14,6 +14,9 @@ export const REPLACE_TRANSCRIPT_CONFIRM = {
 /** `?intent=` value that opens Review speakers when the Transcript tab loads. */
 export const REVIEW_SPEAKERS_INTENT = "review-speakers";
 
+/** `?intent=` value that opens Attached recordings when the Transcript tab loads ("Play in Transcript tab"). */
+export const ATTACHED_RECORDINGS_INTENT = "attached-recordings";
+
 const TIMED_FILE = /\.(vtt|srt|json)$/i;
 // Richer formats first: Whisper JSON carries speakers and word timings.
 const zipRank = (name: string) => (/\.json$/i.test(name) ? 0 : /\.vtt$/i.test(name) ? 1 : 2);

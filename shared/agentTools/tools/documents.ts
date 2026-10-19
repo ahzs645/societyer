@@ -6,17 +6,31 @@
  */
 import { z } from "zod";
 import { AgentToolError, READ_ANNOTATIONS, defineAgentTool } from "../types";
-import { UNTRUSTED_NOTICE, asRows, idOf, isRow, label, limitInput, matchesQuery, page, untrustedTextSchema, type Row } from "../output";
+import {
+  UNTRUSTED_NOTICE,
+  asRows,
+  idOf,
+  isRow,
+  label,
+  limitInput,
+  matchesQuery,
+  page,
+  untrustedLabel,
+  untrustedLabels,
+  untrustedTextSchema,
+  untrustedTitle,
+  type Row,
+} from "../output";
 
 const documentSummary = z.object({
   id: z.string(),
-  title: z.string(),
+  title: untrustedTextSchema,
   category: z.string().optional(),
-  fileName: z.string().optional(),
+  fileName: untrustedTextSchema.optional(),
   mimeType: z.string().optional(),
   librarySection: z.string().optional(),
   reviewStatus: z.string().optional(),
-  tags: z.array(z.string()),
+  tags: z.array(untrustedTextSchema),
   createdAt: z.string().optional(),
   /** In-camera material: listed so the model knows it exists, never its title, file or text. */
   restricted: z.literal("in_camera").optional(),
@@ -25,13 +39,13 @@ const documentSummary = z.object({
 function summarizeDocument(row: Row): z.infer<typeof documentSummary> {
   return {
     id: idOf(row),
-    title: label(row.title) ?? "Untitled document",
+    title: untrustedTitle(row.title, "Untitled document"),
     category: label(row.category),
-    fileName: label(row.fileName),
+    fileName: untrustedLabel(row.fileName),
     mimeType: label(row.mimeType, 100),
     librarySection: label(row.librarySection),
     reviewStatus: label(row.reviewStatus),
-    tags: Array.isArray(row.tags) ? row.tags.slice(0, 10).map((tag) => label(tag, 40)).filter((tag): tag is string => Boolean(tag)) : [],
+    tags: untrustedLabels(row.tags, 10, 40),
     createdAt: label(row.createdAtISO),
     ...(row.inCameraWithheld === "in_camera" ? { restricted: "in_camera" as const } : {}),
   };
@@ -56,9 +70,9 @@ export const searchDocuments = defineAgentTool({
       .filter((row) => matchesQuery(query, [row.title, row.fileName, row.category, row.tags]))
       .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
     const { items, total, truncated } = page(rows, limit);
-    return { total, truncated, documents: items.map(summarizeDocument) };
+    return { notice: UNTRUSTED_NOTICE, total, truncated, documents: items.map(summarizeDocument) };
   },
-  output: z.object({ total: z.number(), truncated: z.boolean(), documents: z.array(documentSummary) }),
+  output: z.object({ notice: z.string(), total: z.number(), truncated: z.boolean(), documents: z.array(documentSummary) }),
 });
 
 const MAX_CHARS = 12_000;

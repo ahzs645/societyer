@@ -36,8 +36,9 @@ token also needs the `minutes:read` scope. Members and Viewers read the minutes 
 the Transcript tab shows "Transcript not available — Transcripts are available to people
 who keep the minutes. Read the minutes for the record." with a **Read the minutes**
 button, and the Overview of a notes meeting reads "Minute-takers only". The minutes'
-copy of the transcript (`draftTranscript`) is withheld from them too. Edits keep
-`meetings:write`.
+copy of the transcript (`draftTranscript`) is withheld from them too. The page skips
+both queries for them (Convex `"skip"`), so their Transcript tab makes no refused
+request. Edits keep `meetings:write`.
 
 **In-camera sessions in the recording** (decision A2). Editors mark where an in-camera
 session sits in the recording: select lines and choose **Mark as in-camera…** in the
@@ -53,7 +54,9 @@ stays withheld from readers without in-camera access.
 
 Editors see marked ranges as a hatched band on the scrubber and a divider in the
 transcript ("In camera: Finance committee update · 1:10–2:05" … "End of Finance
-committee update"). While some in-camera session isn't marked, a note under the player
+committee update"). A title that already starts with "In camera" ("In-camera session",
+"In camera: staffing") is shown as is, without a second prefix (`inCameraDividerLabel`).
+**Clear** stays on one line next to a wrapping title, and is 40px tall on touch. While some in-camera session isn't marked, a note under the player
 says connectors and public copies get no transcript.
 
 Readers without in-camera access (AI connectors, and the public-session export) get the
@@ -62,6 +65,9 @@ transcript with each run of segments overlapping a marked range replaced by
 in-camera section is named by a marked session. Otherwise the whole transcript is
 withheld (`withheld: "in_camera"`). Untimed transcripts (pasted text) are always
 withheld from them. See `docs/agent-tools.md` for the full rule.
+
+Exported transcript files leave in-camera parts out by default, and warn when a session
+isn't marked: see [Transcript files (Export)](#transcript-files-export).
 
 ## Speakers
 
@@ -122,10 +128,14 @@ committee meetings, which record no attendance, no longer need every name typed.
 **Meeting source files.** When an uploaded source is VTT, SRT or Whisper JSON, or a ZIP
 whose JSON, VTT or SRT entry parses (`timedImportOffer.ts`), and it is 16 MB or smaller,
 the card parses it in the browser. Once the original is attached, it offers **Open in
-Transcript tab**. That asks the Transcript tab's "Replace working transcript?" question
+Transcript tab** as its primary action. That asks the Transcript tab's "Replace working transcript?" question
 when a transcript exists, calls `transcripts:importTimed`, and moves to `?tab=transcript`
 (with the review intent when the speakers need it). Untimed text keeps the paged import
-and "Use for minutes". The card only renders on broker-configured hosted deployments.
+and "Use for minutes". Recordings get **Play in Transcript tab**, which opens Attached
+recordings (`?tab=transcript&intent=attached-recordings`). The card only renders on
+broker-configured hosted deployments, for `meetings:write`. Reading source text, the
+offer and Play in Transcript tab also follow decision A1 (`minutes:write`). The
+whole pipeline is described in [meeting-source-pipeline.md](meeting-source-pipeline.md).
 
 **Status toast.** Every action (assign, edit, combine, unmerge, import, link, copy, waveform
 notes) announces in one toast, and the latest event wins: a new message replaces whatever
@@ -223,7 +233,8 @@ board-meeting.wav (2.5 MB)"). Only the name and size are kept, in localStorage u
 speech-to-text is set up in Settings → On-device AI, an open recording gets
 **Transcribe on this device** (meeting editors). It shows progress and Cancel, asks
 before replacing a transcript, saves through `transcripts:importTimed` with provider
-`local-whisper`, and opens Review speakers like an import. See
+`local-whisper`, and opens Review speakers like an import. **Draft minutes** waits while
+it runs (disabled, "Wait for the transcription to finish."). See
 [local-ai.md](local-ai.md#speech-to-text).
 
 **Search** shows "3 matches" until Next or Previous selects one, then "1 of 3", "2 of 3"…
@@ -232,7 +243,8 @@ before replacing a transcript, saves through `transcripts:importTimed` with prov
 **Attached recordings.** On a connected deployment with the transfer broker
 (`VITE_MEETING_SOURCE_BROKER_URL`), meeting editors (`meetings:write`) also get
 **Attached recordings**. This uses the same gate as Meeting source files and is
-not shown in local or demo runtimes. It lists the meeting's `ready` sources of
+not shown in local or demo runtimes. **Play in Transcript tab** on Meeting source files
+opens it on arrival. It lists the meeting's `ready` sources of
 kind `recording` with their size, then downloads the chosen one through the
 broker's authenticated 5 MiB ranges. A progress bar and Cancel are shown while it
 downloads. Each range length is checked before it is kept (`downloadMeetingSourceRanges` in
@@ -253,11 +265,21 @@ browser-local workspace or the desktop app it drafts with the on-device model wh
 one is set up in Settings → On-device AI (see [local-ai.md](local-ai.md)), then saves
 through the portable `minutes:upsertFromDraft`. Without either it is disabled, with a
 visible "needs a connected server or an on-device model" note and a Settings link; the
-demo never drafts. It sends the transcript row's regenerated `text` (with
+demo never drafts. While **Transcribe on this device** runs it is disabled too, with the
+note (and tooltip) "Wait for the transcription to finish." (`draftMinutesDisabledReason`
+in `useLocalTranscription.ts`). It sends the transcript row's regenerated `text` (with
 assigned names, e.g. `Jane Doe: …`), not `minutes.draftTranscript`
 (`minutesDraftTranscript` in `shared/minutesDraftInput.ts`). It asks before
 replacing a started draft. Adopted minutes, and drafts whose sections hold recorded
-content, are refused up front with the server's message. `minutes:generateDraft`
+content, are refused up front with the server's message, which names those sections:
+"“Budget” has recorded content, which a draft never overwrites. Edit or clear that
+section, then draft again." Content that is still exactly what the meeting's template
+seeded (the template snapshot on the meeting, `templateSnapshotJson`: default
+discussion such as a land acknowledgement, and default motion wording, compared with
+whitespace normalised and `{{placeholders}}` matching whatever they were filled with)
+is not recorded content and is not a started draft, so a fresh meeting made from a
+template drafts without a prompt. Anything a person changed or added still counts
+(`minutesDraftBlocker(minutes, meeting)`, `recordedMinuteSectionTitles`). `minutes:generateDraft`
 repeats that check before calling the model, and `upsertFromDraft` checks again
 atomically. On success the page moves to `?tab=minutes`, unless the user has left
 the Transcript tab. Checks: `npm run test:transcript-minutes-draft` (convex-test
@@ -304,6 +326,57 @@ when every session is marked (see Access), and the section is left out when any 
 In-camera agenda items are listed as "In-camera item". The **Public copy** toggle, which
 also replaces names, leaves the transcript out entirely.
 
+## Transcript files (Export)
+
+**Export** in the Transcript tab toolbar (`TranscriptExportMenu.tsx`) downloads the
+working transcript as a file, for anyone who can read it (decision A1). It is built in
+the browser (`shared/transcriptExport.ts`, pure) and saved through a Blob download, so it
+works the same in hosted, browser-local, desktop and demo workspaces. It is hidden when
+there is no timed transcript: pasted text has synthetic five-second lines, and exporting
+them as captions would invent timings.
+
+| Format | What it holds | Re-import keeps |
+| --- | --- | --- |
+| **WebVTT** (`.vtt`) | `HH:MM:SS.mmm` cues, `<v Name>` voice tags, `&`, `<`, `>` escaped | timings, speakers |
+| **SRT** (`.srt`) | numbered `HH:MM:SS,mmm` cues, `Name: ` before each line, CRLF | timings; speakers only when the name looks like one (at most four words, no digits or `.,?!`) and repeats |
+| **Whisper JSON** (`.json`) | `segments[]` with `start`, `end`, `text`, `speaker`, and `words[]` (`word`, `start`, `end`) when the transcript has them | timings, speakers, word timings |
+
+The menu's hint for Whisper JSON reads "Includes word timings" only when the transcript
+has word timings, otherwise "Segments with timings" (`transcriptExportHint`).
+
+Speakers are written as shown: assigned names replace raw labels and combined labels
+take their target's name. Times are rounded to the millisecond; a zero-length line gets
+one millisecond in captions, which must end after they start. The JSON has no top-level
+`text`, so uploading it under Meeting source files reads lines with their speakers. The
+file is named `<meeting-title>-<YYYY-MM-DD>.<vtt|srt|json>` (lower case, letters and
+digits of any script, everything else one dash). A file over 16 MB can't be imported
+again as one file, and the toast says so.
+
+**In camera.** When the minutes record no in-camera session, a format downloads at once.
+Otherwise a dialog opens first:
+
+- **Include in-camera parts** is off by default and can only be turned on by people with
+  in-camera access (`minutes:write`, which every transcript reader holds under A1). On, the
+  dialog warns that the file holds in-camera discussion.
+- Off, each run of lines overlapping a marked in-camera range becomes one
+  "[In-camera session — not shown]" line (`redactInCameraTranscript`, the same cut readers
+  without in-camera access get). The ranges come from `inCameraExportRanges` in
+  `shared/minutesPrivacy.ts`: every marked session, live and adopted.
+- If some in-camera session or section isn't marked in the recording, its part can't be
+  cut. The dialog names it, warns "This export may contain in-camera content", and
+  **Download** stays disabled until **I understand this file may contain in-camera
+  content** is ticked. Someone without in-camera access can't export it at all until every
+  session is marked.
+
+Moving a transcript between workspaces: **Transcribe on this device** in the desktop app
+(or a browser-local workspace) → **Export** → WebVTT or Whisper JSON → upload it on the
+hosted site with **Import transcript**, or under Meeting source files and **Open in
+Transcript tab**. It round-trips through `parseTimedTranscript` and
+`transcripts:importTimed` with timings and speaker names (and word timings, from JSON).
+Check: `npm run test:transcript-export` (exact formatting, escaping, file names, in-camera
+redaction and warnings, and export → parse → `importTimed` on both portable adapters for
+the fixtures, with named and combined speakers).
+
 ## References
 
 Design and implementation references:
@@ -324,7 +397,7 @@ Emulate real touch devices (Playwright `devices[...]` with `hasTouch`/`isMobile`
   diarizer, which the import formats do not carry.
 - Undo for "Apply all suggestions" assignments. Only combines are undoable today.
 - Exercise "Open in Transcript tab" in a broker-configured browser session. It is
-  covered at unit level only.
+  covered by unit and mocked end-to-end checks only (`npm run test:meeting-source-e2e`).
 - Offer "Enrich notes from transcript" as an AI step on the Notes tab.
 - A "Remove link" action for linked motions/action items (the mutation already supports clearing).
 - Stream attached SharePoint recordings instead of downloading them whole. This needs broker support for media range requests, or a MediaSource pipeline, so large files can play without being held in memory.

@@ -4,7 +4,7 @@ One definition per tool, used by every agent surface. Full guide:
 [docs/agent-tools.md](../../docs/agent-tools.md).
 
 - `types.ts`: the contract (`AgentTool`, `AgentToolAdapter`, `AgentToolContext`, `defineAgentTool`).
-- `output.ts`: bounded output helpers. User-written text goes out as `{ untrusted: "…" }`.
+- `output.ts`: bounded output helpers. Anything a person typed (prose, titles, places, names, tags, file names) goes out as `{ untrusted: "…" }` (`untrusted`, `untrustedLabel`, `untrustedTitle`); IDs, dates, enums and counts stay plain.
 - `tools/*.ts`: the tools. `index.ts`: `AGENT_TOOLS`, `agentToolsFor`, JSON Schema, `runAgentTool`.
 - `portableAdapter.ts`: adapter over a `PortableRuntime` (local runtime, desktop, tests).
 - Browser adapter and WebMCP registration: `src/features/webmcp/`.

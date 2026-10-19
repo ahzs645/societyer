@@ -1379,6 +1379,9 @@ button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
 }
 .transcript-incamera-divider__action {
   order: 3;
+  // The label wraps around a long session title; "Clear" never does.
+  flex: none;
+  white-space: nowrap;
   padding: 0 token("s-1");
   border: 0;
   background: transparent;

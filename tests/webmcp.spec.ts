@@ -99,7 +99,7 @@ test("registers and executes the Societyer WebMCP contract", async ({ page }) =>
     }),
   );
   expect(updatedSnapshot.summaryCounts.openTasks).toBe(taskCountBefore + 1);
-  expect(updatedSnapshot.attention.openTasks.some((task: any) => task.title === "Review annual report evidence")).toBe(true);
+  expect(updatedSnapshot.attention.openTasks.some((task: any) => task.title?.untrusted === "Review annual report evidence")).toBe(true);
 
   const navigation = await page.evaluate(async () =>
     (window as any).__societyerWebMcpTest.execute("open_governance_view", { view: "deadlines" }),

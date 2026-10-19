@@ -186,6 +186,10 @@ try {
   const [result] = toolMessages(second);
   assert.equal(result.tool_call_id, call?.id, "the result answers that call");
   assert.equal(JSON.parse(result.content ?? "{}").total, 6, "the model gets the real result");
+  const listed = JSON.parse(result.content ?? "{}") as { notice?: string; meetings: Row[] };
+  assert.deepEqual(listed.meetings[0].title, { untrusted: "Committee check-in" }, "a meeting title someone typed reaches the model as { untrusted }");
+  assert.ok(listed.meetings.every((meeting) => typeof meeting.title === "object" && (meeting.location === undefined || typeof meeting.location === "object")), "every title and location is wrapped");
+  assert.ok(listed.notice?.startsWith("Text inside { untrusted } objects"), "the list says what { untrusted } means");
   assert.equal(read.text, "There are 6 meetings; the latest is Committee check-in (2026-09-10).");
   assert.equal(read.streamed, read.text, "the answer streams");
   assert.deepEqual(read.records.map((record) => [record.name, record.kind, record.status, record.summary]), [["list_meetings", "read", "complete", "meetings (6)"]]);

@@ -1,9 +1,10 @@
 import { authenticatedFetch } from "./authToken";
-import { MEETING_SOURCE_CHUNK_BYTES, validateMeetingSource } from "../../shared/storage/meetingSourceProtocol";
 import type { MeetingSourceRangeFetch } from "./meetingSourceDownload";
+import { uploadMeetingSourceWith, type MeetingSource, type MeetingSourceTransport } from "./meetingSourceTransfer";
+
+export { sourceFingerprint, type MeetingSource } from "./meetingSourceTransfer";
 
 export const meetingSourceBroker = String(import.meta.env.VITE_MEETING_SOURCE_BROKER_URL ?? "").replace(/\/$/, "");
-export type MeetingSource = { id: string; fileName: string; size: number; kind: string; status: string; offset: number; verifiedOffset: number; textChunks?: number; textBytes?: number; textComplete?: boolean; transcriptImported?: boolean; jobStatus?: string; jobError?: string };
 
 export async function sourceRequest(operation: string, data: Record<string, unknown>, signal?: AbortSignal): Promise<any> {
   const response = await sourceFetch(operation, { method: "POST", body: JSON.stringify(data), headers: { "Content-Type": "application/json" }, signal });
@@ -27,30 +28,15 @@ export function meetingSourceRangeFetcher(sourceId: string): MeetingSourceRangeF
   return (offset, signal) => sourceFetch("download", { method: "POST", body: JSON.stringify({ sourceId, offset }), headers: { "Content-Type": "application/json" }, signal });
 }
 
-/** Hash every chunk, then the manifest: resuming requires the same complete file. */
-export async function sourceFingerprint(file: File, signal?: AbortSignal) {
-  const hashes: string[] = [];
-  for (let offset = 0; offset < file.size; offset += MEETING_SOURCE_CHUNK_BYTES) {
-    signal?.throwIfAborted();
-    hashes.push(await sha(await file.slice(offset, offset + MEETING_SOURCE_CHUNK_BYTES).arrayBuffer()));
-  }
-  return sha(new TextEncoder().encode(JSON.stringify({ name: file.name, size: file.size, hashes })).buffer);
-}
-async function sha(bytes: ArrayBuffer) { return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), b => b.toString(16).padStart(2, "0")).join(""); }
+const brokerTransport: MeetingSourceTransport = {
+  request: (operation, data, signal) => sourceRequest(operation, data, signal),
+  putChunk: async (sourceId, offset, body, signal) => {
+    const query = `?${new URLSearchParams({ sourceId, offset: String(offset), size: String(body.size) })}`;
+    return (await sourceFetch("chunk", { method: "PUT", body, signal }, query)).json();
+  },
+};
 
-export async function uploadMeetingSource(file: File, meetingId: string, progress: (source: MeetingSource) => void, signal: AbortSignal) {
-  validateMeetingSource(file.name, file.size);
-  const fingerprint = await sourceFingerprint(file, signal);
-  let state = await sourceRequest("start", { meetingId, fileName: file.name, size: file.size, fingerprint }, signal);
-  progress(state);
-  state = await sourceRequest("resume", { sourceId: state.id }, signal);
-  while (state.status === "uploading" && state.offset < file.size) {
-    signal.throwIfAborted();
-    const size = Math.min(MEETING_SOURCE_CHUNK_BYTES, file.size - state.offset);
-    const response = await sourceFetch("chunk", { method: "PUT", body: file.slice(state.offset, state.offset + size), signal }, `?${new URLSearchParams({ sourceId: state.id, offset: String(state.offset), size: String(size) })}`);
-    state = await response.json(); progress(state);
-  }
-  while (state.status === "verifying") { signal.throwIfAborted(); state = await sourceRequest("verify", { sourceId: state.id }, signal); progress(state); }
-  if (state.status !== "ready") throw new Error("Upload is incomplete. Choose the same file to resume.");
-  return state as MeetingSource;
+/** Upload (or resume) through the configured broker; see meetingSourceTransfer. */
+export function uploadMeetingSource(file: File, meetingId: string, progress: (source: MeetingSource) => void, signal: AbortSignal) {
+  return uploadMeetingSourceWith(brokerTransport, file, meetingId, progress, signal);
 }

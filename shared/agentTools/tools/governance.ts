@@ -15,7 +15,10 @@ import {
   matchesQuery,
   page,
   untrusted,
+  untrustedLabel,
+  untrustedLabels,
   untrustedTextSchema,
+  untrustedTitle,
   type Row,
 } from "../output";
 
@@ -32,7 +35,7 @@ function isOpenTask(record: Row) {
 
 const snapshotItem = z.object({
   id: z.string(),
-  title: z.string(),
+  title: untrustedTextSchema,
   dueDate: z.string().optional(),
   scheduledAt: z.string().optional(),
   status: z.string().optional(),
@@ -43,7 +46,7 @@ const snapshotItem = z.object({
 function item(record: Row, dateField: "dueDate" | "scheduledAt") {
   return {
     id: idOf(record),
-    title: label(record.title ?? record.kind) ?? "Untitled",
+    title: untrustedTitle(record.title ?? record.kind, "Untitled"),
     ...(typeof record[dateField] === "string" ? { [dateField]: record[dateField] as string } : {}),
     ...(label(record.status) ? { status: label(record.status) } : {}),
     ...(label(record.category) ? { category: label(record.category) } : {}),
@@ -90,8 +93,9 @@ export const getGovernanceSnapshot = defineAgentTool({
     const unfiled = (row: Row) => row.status !== "Filed";
     const summary = isRow(dashboard) ? dashboard : {};
     return {
+      notice: UNTRUSTED_NOTICE,
       workspace: {
-        name: adapter.context.workspace.name,
+        name: untrustedLabel(adapter.context.workspace.name),
         jurisdictionCode: adapter.context.workspace.jurisdictionCode,
         entityType: adapter.context.workspace.entityType,
       },
@@ -134,7 +138,8 @@ export const getGovernanceSnapshot = defineAgentTool({
     };
   },
   output: z.object({
-    workspace: z.object({ name: z.string().optional(), jurisdictionCode: z.string().optional(), entityType: z.string().optional() }),
+    notice: z.string(),
+    workspace: z.object({ name: untrustedTextSchema.optional(), jurisdictionCode: z.string().optional(), entityType: z.string().optional() }),
     generatedAt: z.string(),
     restrictedResources: z.array(z.string()),
     horizonDays: z.number(),
@@ -181,12 +186,12 @@ export const listTasks = defineAgentTool({
       truncated,
       tasks: items.map((row) => ({
         id: idOf(row),
-        title: label(row.title) ?? "Untitled",
+        title: untrustedTitle(row.title, "Untitled"),
         status: label(row.status),
         priority: label(row.priority),
         dueDate: label(row.dueDate),
-        assignee: label(row.assignee),
-        tags: Array.isArray(row.tags) ? row.tags.slice(0, 8).map((tag) => label(tag, 40)).filter((tag): tag is string => Boolean(tag)) : [],
+        assignee: untrustedLabel(row.assignee),
+        tags: untrustedLabels(row.tags, 8, 40),
         description: untrusted(row.description, 500),
       })),
     };
@@ -197,12 +202,12 @@ export const listTasks = defineAgentTool({
     truncated: z.boolean(),
     tasks: z.array(z.object({
       id: z.string(),
-      title: z.string(),
+      title: untrustedTextSchema,
       status: z.string().optional(),
       priority: z.string().optional(),
       dueDate: z.string().optional(),
-      assignee: z.string().optional(),
-      tags: z.array(z.string()),
+      assignee: untrustedTextSchema.optional(),
+      tags: z.array(untrustedTextSchema),
       description: untrustedTextSchema.optional(),
     })),
   }),
@@ -234,7 +239,7 @@ export const listDeadlines = defineAgentTool({
       truncated,
       deadlines: items.map((row) => ({
         id: idOf(row),
-        title: label(row.title) ?? "Untitled",
+        title: untrustedTitle(row.title, "Untitled"),
         dueDate: dateOnly(row.dueDate),
         category: label(row.category),
         status: isOpenDeadline(row) ? "open" : String(row.status ?? "complete"),
@@ -249,7 +254,7 @@ export const listDeadlines = defineAgentTool({
     truncated: z.boolean(),
     deadlines: z.array(z.object({
       id: z.string(),
-      title: z.string(),
+      title: untrustedTextSchema,
       dueDate: z.string(),
       category: z.string().optional(),
       status: z.string(),
@@ -282,12 +287,12 @@ export const listCommitments = defineAgentTool({
       truncated,
       commitments: items.map((row) => ({
         id: idOf(row),
-        title: label(row.title) ?? "Untitled",
+        title: untrustedTitle(row.title, "Untitled"),
         category: label(row.category),
-        counterparty: label(row.counterparty),
+        counterparty: untrustedLabel(row.counterparty),
         cadence: label(row.cadence),
         nextDueDate: label(row.nextDueDate),
-        owner: label(row.owner),
+        owner: untrustedLabel(row.owner),
         status: label(row.status),
         requirement: untrusted(row.requirement, 600),
       })),
@@ -299,12 +304,12 @@ export const listCommitments = defineAgentTool({
     truncated: z.boolean(),
     commitments: z.array(z.object({
       id: z.string(),
-      title: z.string(),
+      title: untrustedTextSchema,
       category: z.string().optional(),
-      counterparty: z.string().optional(),
+      counterparty: untrustedTextSchema.optional(),
       cadence: z.string().optional(),
       nextDueDate: z.string().optional(),
-      owner: z.string().optional(),
+      owner: untrustedTextSchema.optional(),
       status: z.string().optional(),
       requirement: untrustedTextSchema.optional(),
     })),

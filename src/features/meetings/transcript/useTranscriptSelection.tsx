@@ -139,46 +139,70 @@ export function useTranscriptSelection({
           })),
       }))
       .filter((section) => section.items.length);
-  return selected
-    ? createPortal(
-        <div
-          className="transcript-selection-toolbar"
-          role="toolbar"
-          aria-label="Selected transcript text"
-          style={{ left: selected.left, top: selected.top }}
-          onPointerDown={(event) => event.preventDefault()}
-        >
-          <button
-            type="button"
-            onClick={() => onCopy(transcriptQuote(selected.text, selected.speaker, selected.start))}
-          >
-            Copy quote
-          </button>
-          <button type="button" onClick={() => onCopy(transcriptLink(selected.start, selected.end))}>
-            Copy link
-          </button>
-          {linkTargets.length > 0 && (
-            <Menu
-              label="Link the selection to a minutes item"
-              minWidth={280}
-              sections={linkSections(selected)}
-              onOpenChange={onLinkMenu}
-              trigger={<button type="button">Link to…</button>}
-            />
-          )}
-          {inCamera?.canMark && (
-            <Menu
-              label="Mark the selection as an in-camera session"
-              minWidth={260}
-              sections={inCameraMenuSections(inCamera, () => window.getSelection()?.removeAllRanges(), { startSec: selected.start, endSec: selected.end })}
-              onOpenChange={onLinkMenu}
-              trigger={<button type="button">Mark as in-camera…</button>}
-            />
-          )}
-        </div>,
-        document.body,
-      )
-    : null;
+  return selected ? (
+    <SelectionToolbar
+      selected={selected}
+      onCopy={onCopy}
+      linkSections={linkTargets.length > 0 ? linkSections(selected) : null}
+      inCamera={inCamera}
+      onMenuOpenChange={onLinkMenu}
+    />
+  ) : null;
+}
+
+/** Copy, link and in-camera actions over the selected text, in a portal above it. */
+function SelectionToolbar({
+  selected,
+  onCopy,
+  linkSections,
+  inCamera,
+  onMenuOpenChange,
+}: {
+  selected: SelectedQuote;
+  onCopy: (text: string) => void;
+  /** Null hides "Link to…". */
+  linkSections: MenuSection[] | null;
+  inCamera?: Pick<InCameraProps, "choices" | "canMark" | "onMark">;
+  onMenuOpenChange: (open: boolean) => void;
+}) {
+  return createPortal(
+    <div
+      className="transcript-selection-toolbar"
+      role="toolbar"
+      aria-label="Selected transcript text"
+      style={{ left: selected.left, top: selected.top }}
+      onPointerDown={(event) => event.preventDefault()}
+    >
+      <button
+        type="button"
+        onClick={() => onCopy(transcriptQuote(selected.text, selected.speaker, selected.start))}
+      >
+        Copy quote
+      </button>
+      <button type="button" onClick={() => onCopy(transcriptLink(selected.start, selected.end))}>
+        Copy link
+      </button>
+      {linkSections && (
+        <Menu
+          label="Link the selection to a minutes item"
+          minWidth={280}
+          sections={linkSections}
+          onOpenChange={onMenuOpenChange}
+          trigger={<button type="button">Link to…</button>}
+        />
+      )}
+      {inCamera?.canMark && (
+        <Menu
+          label="Mark the selection as an in-camera session"
+          minWidth={260}
+          sections={inCameraMenuSections(inCamera, () => window.getSelection()?.removeAllRanges(), { startSec: selected.start, endSec: selected.end })}
+          onOpenChange={onMenuOpenChange}
+          trigger={<button type="button">Mark as in-camera…</button>}
+        />
+      )}
+    </div>,
+    document.body,
+  );
 }
 
 function useLinkedTranscriptRange(root: RefObject<HTMLDivElement>, segments: readonly TranscriptSegment[]) {

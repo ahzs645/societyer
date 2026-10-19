@@ -37,7 +37,7 @@ const GROUPABLE_TYPES = new Set<FieldType>([
 ]);
 
 export function isGroupableField(column: RecordField) {
-  return GROUPABLE_TYPES.has(column.field.fieldType);
+  return column.field.config?.groupable !== false && GROUPABLE_TYPES.has(column.field.fieldType);
 }
 
 export function isDateGroupField(column: RecordField | undefined) {

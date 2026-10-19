@@ -14,7 +14,12 @@ import { draftToMinutesArgs, type DraftMeeting, type MinutesDraftUpsertArgs } fr
 import { minutesDraftBlocker } from "../../../shared/minutesDraftInput";
 import type { DeviceAiClient } from "../../lib/localAi/client";
 
-export type LocalDraftMeeting = DraftMeeting & { title: string; type: string };
+export type LocalDraftMeeting = DraftMeeting & {
+  title: string;
+  type: string;
+  /** The template the minutes were seeded from: its defaults are not recorded content. */
+  templateSnapshotJson?: string;
+};
 
 export type LocalDraftResult = {
   args: MinutesDraftUpsertArgs;
@@ -44,7 +49,7 @@ export async function draftMinutesOnDevice(input: {
   const transcript = input.transcript;
   if (!transcript.trim()) throw new Error("Add a transcript first.");
   // Refuse before calling the model; the upsert repeats this check.
-  const blocker = minutesDraftBlocker(input.existingMinutes);
+  const blocker = minutesDraftBlocker(input.existingMinutes, input.meeting);
   if (blocker) throw new Error(blocker);
   const meta = { meetingTitle: input.meeting.title, meetingType: input.meeting.type };
   const plan = planMinutesDraftRequests({ ...meta, transcript }, input.chunkChars);

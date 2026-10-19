@@ -14,6 +14,7 @@ import {
   ReactNode,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -621,7 +622,11 @@ export function Drawer({
   // Standalone drawers keep their footer above the on-screen keyboard.
   useKeyboardInsetTracking(open);
 
-  useEffect(() => {
+  // A layout effect, so the inspector drops `inert` from its panel in the
+  // same commit that portals the drawer into it. A passive effect left the
+  // new drawer inert for a frame: a focus or typing that landed then (a fast
+  // typist, an automated fill) went to the page behind and was lost.
+  useLayoutEffect(() => {
     if (!open || !inspector) return;
     inspector.activate(panelId, onClose);
     return () => inspector.deactivate(panelId);

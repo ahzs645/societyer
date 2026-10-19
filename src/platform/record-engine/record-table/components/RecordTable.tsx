@@ -278,7 +278,12 @@ export function RecordTable({
   renderPhoneCard,
   autoPhoneCard = true,
   inlineEdit,
+  onEndReached,
+  fillViewport = true,
 }: {
+  onEndReached?: () => void;
+  /** Occupy the remaining viewport rather than a fixed 600px box. */
+  fillViewport?: boolean;
   selectable?: boolean;
   emptyState?: ReactNode;
   loading?: boolean;
@@ -355,6 +360,22 @@ export function RecordTable({
   const scrollCleanupRef = useRef<(() => void) | null>(null);
   const virtualScrollCleanupRef = useRef<(() => void) | null>(null);
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
+  const [viewportHeight, setViewportHeight] = useState(600);
+  useLayoutEffect(() => {
+    if (!fillViewport) return;
+    const update = () => {
+      const node = tableRootRef.current;
+      if (!node) return;
+      const bottomInset = window.matchMedia("(max-width: 767px)").matches ? 100 : 64;
+      const next = Math.max(240, window.innerHeight - node.getBoundingClientRect().top - bottomInset);
+      setViewportHeight(current => Math.abs(current - next) < 2 ? current : next);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    if (tableRootRef.current?.parentElement) observer.observe(tableRootRef.current.parentElement);
+    window.addEventListener("resize", update);
+    return () => { observer.disconnect(); window.removeEventListener("resize", update); };
+  }, [fillViewport, records.length > virtualizeAbove, loading]);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; record: any } | null>(null);
 
   const isMobile = useIsMobile();
@@ -380,8 +401,6 @@ export function RecordTable({
   const autoPhoneCardRenderer = useAutoPhoneCard({
     enabled: autoPhoneCard && !renderPhoneCard && isMobile && viewType === "table" && !!onRecordClick,
     renderCell,
-    renderRowActions,
-    rowMenuSections,
   });
   // Phones, table view: the page's card, else the automatic one, else rows.
   const phoneCard = isMobile && viewType === "table" ? renderPhoneCard ?? autoPhoneCardRenderer ?? undefined : undefined;
@@ -778,10 +797,13 @@ export function RecordTable({
       <>
         {mobileSelectionControls}
         <RecordTableCardList
+          onEndReached={onEndReached}
           renderCard={phoneCard}
           emptyState={emptyState}
           label={objectMetadata.labelPlural}
           selectable={selectable}
+          renderRowActions={renderRowActions}
+          rowMenuSections={rowMenuSections}
         />
         {pager}
       </>
@@ -944,7 +966,7 @@ export function RecordTable({
     hasRowActions,
   };
 
-  if (rowModel.items.length <= virtualizeAbove || page) {
+  if ((rowModel.items.length <= virtualizeAbove && !onEndReached) || page) {
     return withGridMode(
       <>
       <div
@@ -1038,7 +1060,8 @@ export function RecordTable({
         data={virtualizedRows}
         context={{ onRowContextMenu }}
         className={`record-table__virtuoso ${densityClass}`}
-        style={{ height: 600 }}
+        style={{ height: fillViewport ? viewportHeight : 600 }}
+        endReached={onEndReached}
         components={{
           Table: VirtuosoTable,
           TableHead: VirtuosoTableHead,

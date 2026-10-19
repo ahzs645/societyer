@@ -208,7 +208,8 @@ test("a select returns focus to its trigger when it closes", async ({ page }) =>
 test("the AI assistant returns focus to its trigger when it closes", async ({ page }) => {
   test.skip(isTouch(page), "The phone and tablet trigger lives in the navigation sheet, which closes as the assistant opens");
   await page.goto("/demo/app/members");
-  const trigger = page.getByRole("button", { name: "AI assistant", exact: true }).first();
+  // The sidebar header button reads "Open AI assistant"; the collapsed rail's reads "AI assistant".
+  const trigger = page.getByRole("button", { name: /^(Open )?AI assistant$/ }).first();
   await trigger.click();
   const assistant = page.getByRole("dialog", { name: "Societyer AI assistant" });
   await expect(assistant).toBeVisible();

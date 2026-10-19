@@ -75,6 +75,25 @@ export async function* meetingTranscriptChunks(file: File): AsyncGenerator<strin
   pending += decoder.decode(); output += lineText(pending);
   yield* splitText(output);
 }
+export type MeetingSourceTextChunk = { index: number; text: string; complete: boolean };
+
+/**
+ * Sends a source's extracted text in order (meetingSources:appendText). Only the
+ * last chunk is marked complete, so an interrupted import is never usable as a
+ * completed transcript. Returns the number of chunks stored.
+ */
+export async function importMeetingSourceText(file: File, append: (chunk: MeetingSourceTextChunk) => Promise<unknown>, signal?: AbortSignal) {
+  let index = 0; let pending: string | undefined;
+  for await (const text of meetingTranscriptChunks(file)) {
+    signal?.throwIfAborted();
+    if (pending !== undefined) await append({ index: index++, text: pending, complete: false });
+    pending = text;
+  }
+  if (pending === undefined || index === 0 && !pending.trim()) throw new Error("The original is attached, but it contains no transcript text.");
+  await append({ index, text: pending, complete: true });
+  return index + 1;
+}
+
 function score(name: string) { return /\.txt$/i.test(name) ? 0 : /\.vtt$/i.test(name) ? 1 : /\.srt$/i.test(name) ? 2 : 3; }
 function safePrefix(text: string) { let end = Math.min(12_000, text.length); if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1])) end--; return text.slice(0, end); }
 function* splitText(text: string) { while (text) { const head = safePrefix(text); yield head; text = text.slice(head.length); } }

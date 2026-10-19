@@ -117,36 +117,92 @@ function statusError(status: number) {
   return new DeviceAiError("status", aiProviderStatusMessage(status), { status });
 }
 
+async function getJson(transport: DeviceAiTransport, path: DeviceAiPath, timeoutMs: number, signal?: AbortSignal) {
+  const limit = deadline(timeoutMs, signal, "The AI server did not answer in time.");
+  try {
+    const response = await transport.send(path, { method: "GET", signal: limit.signal });
+    if (!response.ok) throw statusError(response.status);
+    return await readJson(response);
+  } catch (error) {
+    rethrow(error, limit.signal);
+  } finally {
+    limit.clear();
+  }
+}
+
+async function listServerModels(transport: DeviceAiTransport, kind: DeviceAiKind, signal?: AbortSignal): Promise<string[]> {
+  let lastError: unknown;
+  for (const path of modelListPaths(kind)) {
+    try {
+      return modelIdsFromList(await getJson(transport, path, MODEL_LIST_TIMEOUT_MS, signal));
+    } catch (error) {
+      lastError = error;
+      if (error instanceof DeviceAiError && (error.code === "aborted" || error.code === "network")) break;
+    }
+  }
+  throw lastError instanceof DeviceAiError ? lastError : new DeviceAiError("network", "Could not list the server's models.");
+}
+
+/**
+ * Read one chat turn: a stream, or one JSON body from a server that ignores
+ * `stream`. Each streamed chunk calls `touch` to restart the stall timer.
+ */
+async function readChatStep(response: Response, touch: () => void, onToken?: (token: string) => void): Promise<ChatStepResult> {
+  let text = "";
+  let toolCalls: RawToolCall[] = [];
+  if (/json/i.test(response.headers.get("content-type") ?? "") || !response.body) {
+    const payload = await readJson(response);
+    text = chatCompletionContent(payload) ?? "";
+    toolCalls = chatCompletionToolCalls(payload);
+    if (text) onToken?.(text);
+  } else {
+    const calls = createToolCallAccumulator();
+    const decoder = createChatStreamDecoder({
+      onDelta: (delta) => {
+        text += delta;
+        onToken?.(delta);
+      },
+      onToolCall: (delta) => calls.push(delta),
+    });
+    const reader = response.body.getReader();
+    const bytes = new TextDecoder();
+    while (!decoder.done) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      touch();
+      decoder.push(bytes.decode(value, { stream: true }));
+    }
+    decoder.push(bytes.decode());
+    decoder.end();
+    await reader.cancel().catch(() => undefined);
+    toolCalls = calls.calls();
+  }
+  if (!text.trim() && !toolCalls.length) throw new DeviceAiError("bad_reply", "The on-device model returned an empty reply.");
+  return { text, toolCalls };
+}
+
+/** The tool test: one short request offering a single argument-free tool. */
+function toolProbeBody(model: string) {
+  return chatCompletionBody({
+    model,
+    messages: [
+      { role: "system", content: "You can call tools. When a tool can answer the question, call it instead of answering yourself." },
+      { role: "user", content: `What is today's date? Call ${TOOL_PROBE_NAME} to find out.` },
+    ],
+    tools: [{ type: "function", function: { name: TOOL_PROBE_NAME, description: "Today's date on this computer.", parameters: { type: "object", properties: {}, additionalProperties: false } } }],
+    maxTokens: 200,
+    temperature: 0,
+  });
+}
+
 export function createDeviceAiClient(options: DeviceAiClientOptions) {
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
   const modeKey = `${options.serverKey ?? ""}|${options.model}`;
 
-  async function get(path: DeviceAiPath, timeoutMs: number, signal?: AbortSignal) {
-    const limit = deadline(timeoutMs, signal, "The AI server did not answer in time.");
-    try {
-      const response = await options.transport.send(path, { method: "GET", signal: limit.signal });
-      if (!response.ok) throw statusError(response.status);
-      return await readJson(response);
-    } catch (error) {
-      rethrow(error, limit.signal);
-    } finally {
-      limit.clear();
-    }
-  }
-
   /** Model ids the server offers, from the first list endpoint that answers. */
   async function listModels(signal?: AbortSignal): Promise<string[]> {
-    let lastError: unknown;
-    for (const path of modelListPaths(options.kind)) {
-      try {
-        return modelIdsFromList(await get(path, MODEL_LIST_TIMEOUT_MS, signal));
-      } catch (error) {
-        lastError = error;
-        if (error instanceof DeviceAiError && (error.code === "aborted" || error.code === "network")) break;
-      }
-    }
-    throw lastError instanceof DeviceAiError ? lastError : new DeviceAiError("network", "Could not list the server's models.");
+    return listServerModels(options.transport, options.kind, signal);
   }
 
   async function testConnection(signal?: AbortSignal): Promise<ConnectionTestResult> {
@@ -244,8 +300,6 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
     // A stream may run as long as it keeps producing; silence ends it.
     const limit = deadline(stallTimeoutMs, input.signal, "The on-device model stopped responding.");
     const offersTools = Boolean(input.tools?.length);
-    let text = "";
-    let toolCalls: RawToolCall[] = [];
     try {
       const response = await postChat(
         chatCompletionBody({
@@ -266,35 +320,7 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
         }
         throw statusError(response.status);
       }
-      if (/json/i.test(response.headers.get("content-type") ?? "") || !response.body) {
-        const payload = await readJson(response);
-        text = chatCompletionContent(payload) ?? "";
-        toolCalls = chatCompletionToolCalls(payload);
-        if (text) input.onToken?.(text);
-      } else {
-        const calls = createToolCallAccumulator();
-        const decoder = createChatStreamDecoder({
-          onDelta: (delta) => {
-            text += delta;
-            input.onToken?.(delta);
-          },
-          onToolCall: (delta) => calls.push(delta),
-        });
-        const reader = response.body.getReader();
-        const bytes = new TextDecoder();
-        while (!decoder.done) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          limit.touch();
-          decoder.push(bytes.decode(value, { stream: true }));
-        }
-        decoder.push(bytes.decode());
-        decoder.end();
-        await reader.cancel().catch(() => undefined);
-        toolCalls = calls.calls();
-      }
-      if (!text.trim() && !toolCalls.length) throw new DeviceAiError("bad_reply", "The on-device model returned an empty reply.");
-      return { text, toolCalls };
+      return await readChatStep(response, limit.touch, input.onToken);
     } catch (error) {
       rethrow(error, limit.signal);
     } finally {
@@ -323,19 +349,7 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
   async function probeToolCalling(signal?: AbortSignal): Promise<ToolProbeResult> {
     const limit = deadline(Math.min(requestTimeoutMs, TOOL_PROBE_TIMEOUT_MS), signal, "The on-device model took too long to answer the tool test.");
     try {
-      const response = await postChat(
-        chatCompletionBody({
-          model: options.model,
-          messages: [
-            { role: "system", content: "You can call tools. When a tool can answer the question, call it instead of answering yourself." },
-            { role: "user", content: `What is today's date? Call ${TOOL_PROBE_NAME} to find out.` },
-          ],
-          tools: [{ type: "function", function: { name: TOOL_PROBE_NAME, description: "Today's date on this computer.", parameters: { type: "object", properties: {}, additionalProperties: false } } }],
-          maxTokens: 200,
-          temperature: 0,
-        }),
-        limit.signal,
-      );
+      const response = await postChat(toolProbeBody(options.model), limit.signal);
       if (!response.ok) {
         const detail = await response.text().catch(() => "");
         if (isToolsRejection(response.status, detail)) return { outcome: "rejected" };

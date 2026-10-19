@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { chooseViewType } from "./helpers/recordTableToolbar";
-import { openRowMenu } from "./helpers/rowActions";
+import { chooseViewType, searchRecords } from "./helpers/recordTableToolbar";
+import { openRowMenu, recordRows } from "./helpers/rowActions";
 
 async function openNavigation(page: Page) {
   const mobileMore = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
@@ -113,8 +113,11 @@ test("document metadata opens its review workbench and validates page comments",
   await dialog.getByLabel("Title", { exact: true }).fill(title);
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Document saved", { exact: true })).toBeVisible();
-  // Row actions live in the per-document menu (Preview stays inline).
-  await openRowMenu(page.locator("tr", { hasText: title }), "Actions for this document");
+  // Row actions live in the per-document menu (Preview stays inline); a
+  // phone card keeps them behind its "Row actions for …" button. Phones
+  // window the long card list, so find the new document by search.
+  if (page.viewportSize()!.width <= 560) await searchRecords(page, title);
+  await openRowMenu(recordRows(page).filter({ hasText: title }), "Actions for this document");
   await page.getByRole("menuitem", { name: "Open review page", exact: true }).click();
   await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
   // A metadata-only record cannot be opened; the page says why instead.
@@ -152,8 +155,12 @@ test("document metadata opens its review workbench and validates page comments",
   await openNavigation(page);
   await page.getByRole("link", { name: "Documents", exact: true }).first().click();
   await expect(page.getByRole("button", { name: "New document", exact: true })).toBeDisabled();
-  await expect(page.locator("tr", { hasText: title })).toHaveCount(0);
-  const publicBylaws = page.locator("tr", { hasText: "Current bylaws" });
+  // Phones window long card lists: search, so an absent card means hidden.
+  const phoneList = page.viewportSize()!.width <= 560;
+  if (phoneList) await searchRecords(page, title);
+  await expect(recordRows(page).filter({ hasText: title })).toHaveCount(0);
+  if (phoneList) await page.locator(".record-table__search-input").first().fill("");
+  const publicBylaws = recordRows(page).filter({ hasText: "Current bylaws" });
   // Row actions live in the per-document menu; a Viewer sees the writes disabled.
   await openRowMenu(publicBylaws, "Actions for this document");
   await expect(page.getByRole("menuitem", { name: "Flag for purge", exact: true })).toBeDisabled();

@@ -538,9 +538,12 @@ export function RecordTableToolbar({
             <span>{t("common.search", "Search")}</span>
           </button>
         )}
-        {/* Unsaved-view controls: inline on wider screens, their own line on phones. */}
+        {/* Unsaved-view controls: inline on wider screens, their own line on phones.
+          * They stay up, reading "Saving…", until the save has finished: the
+          * view's own update can arrive (and clear isDirty) before the write
+          * is durable, and a reload then would lose it. */}
         <div className="record-table__toolbar-dirty">
-        {onSaveView && isDirty && (
+        {onSaveView && (isDirty || isSaving) && (
           <>
             <button
               type="button"
@@ -577,7 +580,7 @@ export function RecordTableToolbar({
           </>
         )}
 
-        {onSaveAsView && isDirty && (
+        {onSaveAsView && (isDirty || isSaving) && (
           <button
             type="button"
             className="record-table__toolbar-button"

@@ -1044,10 +1044,11 @@ $tap-block: (
   color: token('text-tertiary');
 }
 
-// RecordTable's automatic phone card (RecordTableAutoPhoneCard): the
-// standard card, plus a "…" button for the row's actions in the chevron's
-// place. Cell content keeps its own look (select tags, an overdue red) but
-// sits on one meta line.
+// A card in RecordTable's card list (a page's RecordTablePhoneCard or the
+// automatic RecordTableAutoPhoneCard): the standard card, plus a "…" button
+// for the row's actions in the chevron's place, centred like the badge.
+// Automatic cards' cell content keeps its own look (select tags, an overdue
+// red) but sits on one meta line.
 .record-phone-card-shell {
   position: relative;
   min-width: 0;
@@ -1060,7 +1061,7 @@ $tap-block: (
 }
 // Generated titles can be long ("Organization Visa statement (last month)"):
 // two lines before the ellipsis.
-.record-phone-card-shell .record-phone-card__title {
+.record-phone-card-shell--auto .record-phone-card__title {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

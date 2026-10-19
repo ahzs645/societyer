@@ -654,7 +654,9 @@ export const page = authorizedQuery(
       continueCursor: string;
     };
     const candidateQuery = procurementCandidateQuery(search);
-    if (search && candidateQuery && active.searchReady) {
+    // Explicit ordering must apply to the whole result set, including searches.
+    // Search relevance is used only when no ordering was selected.
+    if (search && candidateQuery && active.searchReady && sorts.length === 0) {
       const candidates = await ctx.db
         .query("procurementSearch")
         .withSearchIndex("by_grams", (q) =>
@@ -711,7 +713,7 @@ export const page = authorizedQuery(
       isDone: result.isDone,
       continueCursor: result.continueCursor,
       scanned: result.page.length,
-      relevance: !!search,
+      relevance: !!search && !!candidateQuery && !!active.searchReady && sorts.length === 0,
     };
   },
 });

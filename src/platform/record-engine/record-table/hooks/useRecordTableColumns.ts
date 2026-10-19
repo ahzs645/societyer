@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { limitColumnsForPhone } from "../../../../lib/mobileTableLayout";
-import { FIELD_TYPES, type RecordField } from "../../types";
+import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
 import { useRecordTableState } from "../state/recordTableStore";
 
 /** First N visible columns stay when the preview panel condenses the table. */
@@ -35,6 +35,23 @@ export function resolveIdentifierFieldName(columns: RecordField[], labelIdentifi
   return columns[0]?.field.name;
 }
 
+/** Status-like by name even when stored as plain text ("reviewStatus"). */
+const STATUS_NAME = /(^|[a-z])(status|state|stage)$/i;
+
+/**
+ * The field that reads as a record's status, in order of preference: a
+ * select named like a status, any select, then a status-named text or
+ * yes/no field (a receipt's "Status": "Voided"). The phone column cap keeps
+ * it in view and the automatic phone card draws it as the badge.
+ */
+export function pickStatusField(fields: FieldMetadata[]): FieldMetadata | undefined {
+  return (
+    fields.find((field) => field.fieldType === FIELD_TYPES.SELECT && STATUS_NAME.test(field.name)) ??
+    fields.find((field) => field.fieldType === FIELD_TYPES.SELECT) ??
+    fields.find((field) => STATUS_NAME.test(field.name) && (field.fieldType === FIELD_TYPES.TEXT || field.fieldType === FIELD_TYPES.BOOLEAN))
+  );
+}
+
 export type RecordTableColumns = {
   /** Columns the body renders (the visible ones, in order; capped on phones). */
   columns: RecordField[];
@@ -58,9 +75,18 @@ export function useRecordTableColumns(labelIdentifierFieldName?: string): Record
   return useMemo(() => {
     const shown = allColumns.filter((column) => column.isVisible);
     const identifierFieldName = resolveIdentifierFieldName(shown, labelIdentifierFieldName);
-    // Phones render the identifier plus a couple of columns; the rest stay in
-    // the record drawer and the view's column settings (which read the store).
-    const columns = limitColumnsForPhone(shown, isMobile, (column) => column.field.name === identifierFieldName);
+    // Phones render the identifier, a status-like column and the next one or
+    // two; the rest stay in the record drawer and the view's column settings
+    // (which read the store).
+    const columns = limitColumnsForPhone(
+      shown,
+      isMobile,
+      (column) => column.field.name === identifierFieldName,
+      (candidates) => {
+        const status = pickStatusField(candidates.map((column) => column.field));
+        return status ? candidates.find((column) => column.field === status) : undefined;
+      },
+    );
     const collapsed = new Set<string>();
     // Condensing only helps a wide table sitting beside the panel.
     if (panelOpen && !isMobile && columns.length > CONDENSED_KEEP_LEADING + 1) {

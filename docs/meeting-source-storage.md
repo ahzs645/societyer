@@ -3,6 +3,8 @@
 Implemented October 17, 2026 for the DDC North cloud profile. The existing
 document-version broker retains its 8 MiB limit; this is a separate meeting-source
 pipeline with a **500,000,000-byte (500 MB)** limit per original file.
+For a stage-by-stage walkthrough from "Choose file" to approved minutes, see
+[meeting-source-pipeline.md](meeting-source-pipeline.md).
 
 ## User flow
 
@@ -32,6 +34,8 @@ browsers without that API assemble Blob parts for their normal download flow.
   requires `meetings:write`. Raw recordings and working source transcripts are
   therefore restricted to meeting editors, rather than all members who can read
   a meeting. Only the uploader can write into a transfer or start speech processing.
+  Reading imported text (`meetingSources:textPage`) also needs the transcript reader
+  rule of decision A1 (`minutes:write`), like `transcripts:getByMeeting`.
 - A dedicated Cloudflare Worker handles bounded byte transfers. Its only secret
   is a random broker key shared with Convex. Microsoft app credentials remain in
   Convex; Microsoft transfer URLs and Graph tokens never reach the browser.
@@ -107,7 +111,9 @@ were also removed. No live OpenAI transcription was performed.
 
 Convex's optional speech integration remains disabled: both
 `MEETING_TRANSCRIPTION_ENDPOINT` and `MEETING_TRANSCRIPTION_KEY` are unset.
-The UI disables Transcribe until a service is configured. Recordings remain
+The card hides Transcribe until a service is configured. It says "Automatic
+transcription isn't set up for this workspace" and suggests uploading a VTT, SRT
+or Whisper export instead. Recordings remain
 attached in SharePoint; existing transcript imports continue independently.
 There is no canned/demo transcript fallback for uploaded recordings.
 
@@ -142,6 +148,7 @@ other profiles leave it unset and retain their existing behavior.
 
 ```sh
 npm run test:meeting-sources
+npm run test:meeting-source-e2e
 npm run test:sharepoint-connection
 npm run test:sharepoint-adapter
 npx convex run --prod meetingSourceQualification:verifyConnection '{}'

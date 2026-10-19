@@ -55,3 +55,17 @@ export async function revealSelectRecords(page: Page) {
   if (!sheet) throw new Error("Select records is offered on touch layouts only (tablet toolbar row or phone View options).");
   return sheet.getByRole("button", { name: "Select records", exact: true });
 }
+
+/**
+ * Search the register. Phones open the search field from the View options
+ * sheet ("Search <records>"); wider screens show it in the toolbar. Long
+ * phone card lists are windowed, so searching is how a test reaches a card
+ * far down the list.
+ */
+export async function searchRecords(page: Page, term: string) {
+  const sheet = await openPhoneViewOptions(page);
+  if (sheet) await sheet.getByRole("button", { name: /^Search / }).click();
+  const input = page.locator(".record-table__search-input").first();
+  await input.waitFor();
+  await input.fill(term);
+}

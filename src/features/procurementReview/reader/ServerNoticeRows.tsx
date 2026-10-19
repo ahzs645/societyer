@@ -1,5 +1,5 @@
 /** Bridge the platform table controls to bounded, authenticated server pages. */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   useRecordTableState,
   useRecordTableStoreHandle,
@@ -9,7 +9,9 @@ import { useReaderSource } from "./source";
 export function ServerNoticeRows({
   kind,
   fixedParty,
+  children,
 }: {
+  children: (props: { onEndReached: () => void; loading: boolean }) => ReactNode;
   kind: string;
   fixedParty?: { field: "organization" | "issuedFor"; name: string };
 }) {
@@ -64,65 +66,50 @@ export function ServerNoticeRows({
   }, [request]);
   // The shared table offers multi-sort; this server view replaces it with one indexed ordering.
   useEffect(() => {
-    if (sorts.length > 1) handle.get().setSorts(sorts.slice(-1));
+    if (sorts.length > 1) handle.get().setSorts(sorts.slice(0, 1));
   }, [sorts, handle]);
-  const [position, setPosition] = useState<{
-    request: string;
-    cursors: (string | null)[];
-    index: number;
-  }>({ request: debounced, cursors: [null], index: 0 });
-  const current =
-    position.request === debounced
-      ? position
-      : { request: debounced, cursors: [null], index: 0 };
-  const page = source.usePage!(kind, debounced, current.cursors[current.index]);
+  // Only the current bounded page remains subscribed. Previous metadata pages
+  // are retained locally; switching any query dimension discards them together.
+  const queryKey = `${source.catalog.generation}:${kind}:${debounced}`;
+  const [position, setPosition] = useState({ key: queryKey, cursor: null as string | null });
+  const cursor = position.key === queryKey ? position.cursor : null;
+  const page = source.usePage!(kind, debounced, cursor);
+  const loaded = useRef({ key: queryKey, pages: new Map<string | null, ReturnType<typeof toNoticeRow>[]>() });
+  const [loadedCount, setLoadedCount] = useState(0);
+  const advancing = useRef<string | null>(null);
+  const emptyBatches = useRef(0);
   useEffect(() => {
-    handle.get().setRecords(page?.page.map((row) => toNoticeRow(row)) ?? []);
-  }, [page, handle]);
+    if (loaded.current.key !== queryKey) {
+      loaded.current = { key: queryKey, pages: new Map() };
+      emptyBatches.current = 0;
+      advancing.current = null;
+    }
+    if (page) loaded.current.pages.set(cursor, page.page.map(row => toNoticeRow(row)));
+    // A reactive re-delivery replaces its page, never appends duplicate records.
+    const unique = new Map([...loaded.current.pages.values()].flat().map(row => [row._id, row]));
+    handle.get().setRecords([...unique.values()]);
+    setLoadedCount(unique.size);
+    advancing.current = null;
+  }, [page, cursor, queryKey, handle]);
   const pending = !page || request !== debounced;
-  return (
-    <div
-      className="procurement-reader__pager"
-      style={{
-        display: "flex",
-        gap: 12,
-        alignItems: "center",
-        padding: "12px 0",
-        flexWrap: "wrap",
-      }}
-    >
-      <button
-        className="btn btn--secondary btn--sm"
-        disabled={pending || current.index === 0}
-        onClick={() => setPosition({ ...current, index: current.index - 1 })}
-      >
-        Previous
-      </button>
-      <span role="status">
-        {pending
-          ? "Loading notices…"
-          : `${page.page.length} results · batch ${current.index + 1}${page.relevance ? " · search relevance" : ""}`}
-      </span>
-      <button
-        className="btn btn--secondary btn--sm"
-        disabled={pending || page.isDone}
-        onClick={() =>
-          setPosition({
-            request: debounced,
-            cursors: [
-              ...current.cursors.slice(0, current.index + 1),
-              page!.continueCursor,
-            ],
-            index: current.index + 1,
-          })
-        }
-      >
-        Next
-      </button>
-      <small className="muted">
-        Filters search the catalog. Empty batches can be continued. One indexed
-        sort at a time; grouping applies to this page.
-      </small>
+  const loadMore = useCallback(() => {
+    if (pending || !page || page.isDone || page.continueCursor === cursor || advancing.current === page.continueCursor) return;
+    advancing.current = page.continueCursor;
+    setPosition({ key: queryKey, cursor: page.continueCursor });
+  }, [pending, page, cursor, queryKey]);
+  // Filters may leave an empty bounded batch. Continue a few, then give the
+  // person an explicit continuation rather than scanning an entire catalog.
+  useEffect(() => {
+    if (!page || pending || page.isDone) return;
+    if (page.page.length > 0) { emptyBatches.current = 0; return; }
+    if (emptyBatches.current++ < 4) loadMore();
+  }, [page, pending, loadMore]);
+  return <>
+    {children({ onEndReached: () => { if (page?.page.length) loadMore(); }, loading: pending && loadedCount === 0 })}
+    <div className="procurement-reader__pager" style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 0", flexWrap: "wrap" }}>
+      <span role="status">{pending ? "Loading notices…" : `${loadedCount.toLocaleString()} results loaded${page?.isDone ? " · end of results" : ""}`}</span>
+      {!page?.isDone && <button className="btn btn--secondary btn--sm" disabled={pending} onClick={() => { emptyBatches.current = 0; loadMore(); }}>Load more</button>}
+      <small className="muted">More results load as you scroll. Grouping covers loaded results.</small>
     </div>
-  );
+  </>;
 }

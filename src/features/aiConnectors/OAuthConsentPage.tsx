@@ -9,6 +9,7 @@ import { AuthPending, AuthShell, BusyLabel } from "../../auth/AuthShell";
 import { Badge, Banner, Button } from "../../components/ui";
 import { Checkbox, RadioGroup } from "../../components/Controls";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { consentIdentity, type ConsentIdentity } from "./connectorDisplay";
 
 /** What convex/mcpOAuth.ts `consentDetails` returns. */
 type ConsentScope = { permission: string; kind: "read" | "write"; label: string; description: string; held: boolean };
@@ -166,6 +167,7 @@ function ConsentForm({ request, details }: { request: string; details: PendingDe
   const approve = useAction(api.mcpOAuth.approve);
   const deny = useAction(api.mcpOAuth.deny);
   const { client } = details;
+  const identity = consentIdentity(client);
   const enabledWorkspaces = details.workspaces.filter((entry) => entry.connectorsEnabled);
   const [societyId, setSocietyId] = useState<string>(enabledWorkspaces[0]?.societyId ?? "");
   const [scopes, setScopes] = useState<string[]>(() => initialScopes(enabledWorkspaces[0], details.requestedScopes));
@@ -198,13 +200,13 @@ function ConsentForm({ request, details }: { request: string; details: PendingDe
 
   return (
     <AuthShell
-      title={`Connect ${client.name}`}
+      title={identity.title}
       icon={<Plug size={18} />}
-      lede={`${client.name} wants to read your Societyer workspace.`}
+      lede={<ConsentLede identity={identity} />}
       help="Not sure about this app?"
     >
       <div className="oauth-consent">
-        <ClientFacts client={client} />
+        <ClientFacts client={client} identity={identity} />
 
         {enabledWorkspaces.length === 0 ? (
           <Banner tone="info" title="No workspace allows AI connectors">
@@ -217,7 +219,7 @@ function ConsentForm({ request, details }: { request: string; details: PendingDe
             <WorkspaceChoice workspaces={details.workspaces} workspace={workspace} onPick={pickWorkspace} />
             {workspace?.connectedScopes && (
               <p className="oauth-consent__note">
-                {client.name} is already connected to this workspace{sessionCount(workspace.connectedSessions)}. Approving adds a new
+                This app is already connected to this workspace{sessionCount(workspace.connectedSessions)}. Approving adds a new
                 session, listed in Settings → AI connectors, and sets what every session can read.
               </p>
             )}
@@ -226,7 +228,7 @@ function ConsentForm({ request, details }: { request: string; details: PendingDe
         )}
 
         <p className="oauth-consent__privacy">
-          What {client.name} reads goes to the company that runs it, under your own account and plan with them.
+          What {identity.name} reads goes to the company that runs it, under your own account and plan with them.
           It can only read what your role can read, and nothing from an in-camera session is shared: not minutes, transcripts or documents.
           You can disconnect it any time in Settings → AI connectors.
         </p>
@@ -235,7 +237,7 @@ function ConsentForm({ request, details }: { request: string; details: PendingDe
           <Checkbox
             checked={startedHere}
             onChange={setStartedHere}
-            label={`I just started connecting ${client.name} myself`}
+            label={`I just started connecting ${identity.name} myself`}
             hint="If someone sent you this link, or you didn't start connecting, choose Deny."
           />
         )}
@@ -271,12 +273,25 @@ function sessionCount(sessions: number | undefined): string {
   return sessions === 1 ? " (1 session)" : ` (${sessions} sessions)`;
 }
 
+/** Under the title: who vouches for the app, or that nobody does and what it calls itself. */
+function ConsentLede({ identity }: { identity: ConsentIdentity }) {
+  if (identity.verified) {
+    return <>{identity.secondary && <>{identity.secondary}. </>}It wants to read your Societyer workspace.</>;
+  }
+  return (
+    <span className="oauth-consent__lede">
+      <Badge tone="warn">Unverified</Badge>
+      <span>{identity.secondary}. It wants to read your Societyer workspace.</span>
+    </span>
+  );
+}
+
 /** Who is asking and where the browser returns: the MCP spec asks for the redirect host and a loopback warning. */
-function ClientFacts({ client }: { client: ConsentClient }) {
+function ClientFacts({ client, identity }: { client: ConsentClient; identity: ConsentIdentity }) {
   return (
     <>
       <dl className="oauth-consent__facts">
-        <div><dt>App</dt><dd>{client.name}{client.registration === "dcr" && <> <Badge tone="warn">Unverified</Badge></>}</dd></div>
+        <div><dt>App</dt><dd>{identity.verified ? identity.name : identity.secondary}</dd></div>
         {client.host && <div><dt>Published by</dt><dd className="mono">{client.host}</dd></div>}
         {client.declaredHost && (
           <div>

@@ -121,9 +121,10 @@ function clock(seconds: number): string {
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
 }
 
+/** The chip label for a record; its title arrives as `{ untrusted }` and is only shown, never sent back to the model. */
 function titled(prefix: string, value: unknown): string {
-  const title = typeof record(value).title === "string" ? String(record(value).title) : "";
-  return title ? `${prefix}: ${title}` : prefix;
+  const title = record(record(value).title).untrusted;
+  return typeof title === "string" && title ? `${prefix}: ${title}` : prefix;
 }
 
 /** "meetings (12)", "transcript 0:00–5:00", "meeting: October board meeting". */

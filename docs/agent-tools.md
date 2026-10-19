@@ -63,7 +63,8 @@ holds gets the function's refusal.
   segment, are in camera, along with their depth-1 sub-items and their motions.
   Only roles with `minutes:write` (Owner, Admin, Director) read them. Everyone else
   gets the section, motion and decision in place with the text "In-camera session —
-  not shown", so they know something was withheld. The rule and redaction live in
+  not shown" (sections titled "In-camera item", like their agenda items), so they
+  know something was withheld. The rule and redaction live in
   `shared/minutesPrivacy.ts` and apply to every minutes read path (see below), so
   the tools inherit them. `get_meeting` sets `inCamera` on sections and motions and
   `inCameraRedacted` on the minutes.
@@ -94,9 +95,10 @@ holds gets the function's refusal.
 - **Documents and tasks holding in-camera content** (security review H1): for readers
   without in-camera access, a document in-camera minutes cite (imported sources, the
   source record's documents, dissent reports of in-camera motions), any document filed
-  under or attached to a meeting whose minutes record an in-camera session, an
-  attachment of an in-camera agenda item, or a duplicate or version of any of those is
-  an "In-camera material" placeholder. Tasks made from in-camera action items read
+  under a meeting whose minutes record an in-camera session or under an in-camera
+  agenda item, or a duplicate or version of any of those is an "In-camera material"
+  placeholder. A library document that is only attached as a meeting material keeps
+  its own access; the material link to an in-camera item is withheld instead. Tasks made from in-camera action items read
   "In-camera action" in `list_tasks` and the snapshot (`isInCameraTask`), judged when
   read against the current minutes from the section the task records.
   `search_documents` lists it with `restricted: "in_camera"`, and `get_document` returns
@@ -108,10 +110,19 @@ holds gets the function's refusal.
   connector scope includes `minutes:write`. `minutes:in-camera`
   (`RESERVED_IN_CAMERA_SCOPE`) is reserved for a future, audited, Owner-only scope and
   is not implemented; minting a token with it is refused.
-- **User-written text** (discussion, decisions, motion wording, transcript lines,
-  document text, task descriptions) is returned as `{ untrusted: "…", truncated?, totalChars? }`,
-  and results carry a `notice` saying to treat it as data. Titles and labels are
-  plain strings. Read tools set `untrustedContentHint: true`.
+- **User-written text** is returned as `{ untrusted: "…", truncated?, totalChars? }`,
+  and every read result carries a `notice` saying to treat it as data. That covers
+  prose (discussion, decisions, motion wording, transcript lines, document text,
+  task descriptions) and every short field a person typed: titles (meetings,
+  agenda items, motions, sessions, documents, tasks, deadlines, commitments),
+  locations, people's names (attendees, chair, secretary, movers, assignees,
+  owners, counterparties, transcript speakers), tags, file names and the
+  workspace name. Short fields are cut like labels (single-spaced, at most 200
+  characters, ending in "…"). Placeholders in those fields ("Untitled meeting",
+  "In-camera material", "In-camera session") are wrapped too, so a field always
+  has one shape. IDs, dates, times, enums (status, type, category, priority,
+  outcome), counts, flags and raw transcript speaker labels (the identifiers you
+  pass back as `speaker`) stay plain. Read tools set `untrustedContentHint: true`.
 - **Bounded output.** Lists cap at 25 to 50 rows and report `total` and `truncated`;
   long text is cut and flagged; transcripts and documents page.
 

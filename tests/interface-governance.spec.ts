@@ -1,5 +1,6 @@
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { test, expect } from "@playwright/test";
+import { recordRows } from "./helpers/rowActions";
 
 function monitor(page: import("@playwright/test").Page) {
   const errors: string[] = [];
@@ -94,8 +95,8 @@ test("minutes preview preserves the demo workspace in a new tab", async ({ page 
   const popupEvent = page.context().waitForEvent("page");
   await page.getByRole("menuitem", { name: "Open preview page", exact: true }).click();
   const popup = await popupEvent;
-  await popup.waitForLoadState("domcontentloaded");
-  expect(popup.url()).toContain("/demo/app/meetings/static_meeting_agm_2025/preview");
+  // A noopener tab starts as about:blank (url "") before it navigates.
+  await popup.waitForURL(/\/demo\/app\/meetings\/static_meeting_agm_2025\/preview/);
   await expect(popup.getByRole("heading", { name: "Minutes preview", exact: true })).toBeVisible();
   // The trail names the meeting: the full path on desktop, "← meeting" on phones.
   await expect(popup.locator(".breadcrumbs a:visible").filter({ hasText: "2025 annual general meeting" })).toHaveCount(1);
@@ -117,7 +118,9 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await memberForm.getByLabel("Last name", { exact: true }).fill("ReadOnly");
   await memberForm.getByRole("button", { name: "Save", exact: true }).click();
   await expect(memberForm).toHaveCount(0);
-  await expect(page.getByText("Audit", { exact: true }).first()).toBeVisible();
+  // A table row, or on phones the member's card ("Audit ReadOnly").
+  const auditRow = recordRows(page).filter({ hasText: "Audit" });
+  await expect(auditRow.first()).toBeVisible();
   await page.goto("/app/users");
   // Guided setup leaves contacts blank; the seeded Owner still has a name.
   await expect(page.getByRole("button", { name: "Role for Owner", exact: true })).toBeVisible();
@@ -136,12 +139,23 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await page.goto("/app/members");
   await expect(page.getByRole("button", { name: "New member", exact: true })).toBeDisabled();
   await expect(page.locator(".record-table__cell--editable")).toHaveCount(0);
-  await page.getByRole("button", { name: "Audit", exact: true }).click();
-  const memberView = page.getByRole("dialog", { name: "View member", exact: true });
-  await expect(memberView.getByLabel("First name", { exact: true })).toBeDisabled();
-  await expect(memberView.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-  await expect(memberView.locator("[contenteditable=true]")).toHaveCount(0);
-  await memberView.getByRole("button", { name: "Cancel", exact: true }).click();
+  const auditCard = recordRows(page).filter({ hasText: "Audit" }).locator(".record-phone-card");
+  if (await auditCard.count()) {
+    // Phones: the member's card opens its record panel, read-only for a Member.
+    await auditCard.first().click();
+    const panel = page.locator(".record-side-panel");
+    await expect(panel.getByText("Audit ReadOnly", { exact: true }).first()).toBeVisible();
+    await expect(panel.locator(".record-side-panel__field").first()).toBeVisible();
+    await expect(panel.locator(".record-side-panel__field--editable")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  } else {
+    await page.getByRole("button", { name: "Audit", exact: true }).click();
+    const memberView = page.getByRole("dialog", { name: "View member", exact: true });
+    await expect(memberView.getByLabel("First name", { exact: true })).toBeDisabled();
+    await expect(memberView.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(memberView.locator("[contenteditable=true]")).toHaveCount(0);
+    await memberView.getByRole("button", { name: "Cancel", exact: true }).click();
+  }
   await page.goto("/app/tasks");
   await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "New task", exact: true })).toBeDisabled();

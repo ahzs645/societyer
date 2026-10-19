@@ -11,7 +11,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { startMockOpenAiServer, PROVIDER_SECRET_MARKER } from "./fixtures/mock-openai-server";
 import { createDeviceAiClient, resetAcceptedJsonModes } from "../src/lib/localAi/client";
-import { BROWSER_CORS_HINT, DEVICE_AI_SDK_BASE_URL, DeviceAiError, deviceAiSdkFetch, directTransport } from "../src/lib/localAi/transport";
+import { BROWSER_CORS_HINT, BROWSER_UNREACHABLE_HINT, DEVICE_AI_SDK_BASE_URL, DeviceAiError, deviceAiSdkFetch, directTransport } from "../src/lib/localAi/transport";
 import { deviceAiKeyRequired, deviceAiUrl } from "../src/lib/localAi/models";
 import { DEFAULT_DEVICE_AI_CONFIG, deviceAiReadiness, migrateLegacyIntakePrefs, parseDeviceAiConfig } from "../src/lib/localAi/config";
 import { buildMinutesDraftMessages, heuristicMinutesDraft, MINUTES_DRAFT_JSON_SCHEMA, parseMinutesDraft } from "../shared/ai/minutesDraft";
@@ -63,10 +63,41 @@ try {
   assert.ok(ok.ok && ok.models.length === 2 && ok.latencyMs >= 0, "Test connection reports models and latency");
   const unreachable = await client({ baseUrl: "http://127.0.0.1:9/v1" }).testConnection();
   assert.ok(!unreachable.ok, "a closed port fails");
-  assert.match(unreachable.message, /Could not reach 127\.0\.0\.1:9/);
-  assert.equal(unreachable.hint, BROWSER_CORS_HINT, "a browser network failure carries the CORS hint (OLLAMA_ORIGINS / LM Studio CORS)");
+  assert.equal(unreachable.message, "Nothing answered at 127.0.0.1:9.", "a closed port is nothing listening, not CORS");
+  assert.equal(unreachable.hint, BROWSER_UNREACHABLE_HINT);
   assert.match(BROWSER_CORS_HINT, /OLLAMA_ORIGINS/);
   assert.match(BROWSER_CORS_HINT, /LM Studio/);
+
+  // A browser failure is told apart with one no-cors request to the same address:
+  // an (opaque) answer means a server is up but blocks this page; another network
+  // error means nothing is listening; a probe that hangs keeps the general hint.
+  const probeCases = [
+    { label: "CORS-blocked", probe: async () => new Response(null), message: /^127\.0\.0\.1:11973 is running but doesn't allow requests from this page\.$/, hint: /OLLAMA_ORIGINS/ },
+    { label: "nothing listening", probe: async () => Promise.reject(new TypeError("Failed to fetch")), message: /^Nothing answered at 127\.0\.0\.1:11973\.$/, hint: /^(?!.*OLLAMA_ORIGINS).*running/ },
+    { label: "probe hangs", probe: () => new Promise<Response>(() => undefined), message: /^Could not reach 127\.0\.0\.1:11973\.$/, hint: /^If the server is running, it must allow requests from this page\./ },
+  ];
+  for (const { label, probe, message, hint } of probeCases) {
+    const sent: RequestInit[] = [];
+    const browserFetch: typeof fetch = (_input, init) => {
+      sent.push(init ?? {});
+      return init?.mode === "no-cors" ? probe() : Promise.reject(new TypeError("Failed to fetch"));
+    };
+    const browser = createDeviceAiClient({
+      transport: directTransport(() => ({ baseUrl: "http://127.0.0.1:11973/v1", apiKey: "secret-key" }), browserFetch),
+      kind: "ollama",
+      model: "mock-llm",
+    });
+    const started = Date.now();
+    const outcome = await browser.testConnection();
+    assert.ok(!outcome.ok, `${label}: fails`);
+    assert.match(outcome.message, message, `${label}: message`);
+    assert.match(outcome.hint ?? "", hint, `${label}: hint`);
+    const probes = sent.filter((init) => init.mode === "no-cors");
+    assert.equal(probes.length, 1, `${label}: one probe, no retries (Ollama's /api/tags isn't tried after a network error)`);
+    assert.deepEqual([probes[0].method, probes[0].credentials, probes[0].body, probes[0].headers], ["GET", "omit", undefined, undefined], `${label}: the probe is a bare GET: no key, cookies or body`);
+    assert.equal(probes[0].redirect, undefined, `${label}: no-cors must follow redirects (any other mode is a network error in browsers)`);
+    assert.ok(Date.now() - started < 10_000, `${label}: bounded`);
+  }
 
   // 2. JSON modes: json_schema first; walk down only when the server rejects the format.
   resetAcceptedJsonModes();
@@ -191,4 +222,4 @@ try {
   await server.close();
 }
 
-console.log("Local AI client passed: model lists (incl. /api/tags), json_schema -> json_object -> plain with fence stripping, streaming, stall/abort, optional loopback keys, generic errors, SDK transport, settings parsing and migration.");
+console.log("Local AI client passed: model lists (incl. /api/tags), json_schema -> json_object -> plain with fence stripping, streaming, stall/abort, optional loopback keys, generic errors, browser failures told apart (CORS-blocked vs nothing listening), SDK transport, settings parsing and migration.");

@@ -25,17 +25,18 @@ function timestamp(value: string) {
   if (seconds >= 60 || minutes >= 60) throw new Error(`Invalid caption timestamp: ${value}`);
   return number((parts[0] ?? 0) * 3600 + minutes * 60 + seconds);
 }
+/** Character references, `&amp;` last so `&amp;lt;` reads as the text `&lt;`. */
+function decodeEntities(text: string) {
+  return text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/gi, "&");
+}
 function cleanCaption(text: string) {
-  return normalizeTranscriptText(
-    text
-      .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&amp;/gi, "&"),
-  );
+  return normalizeTranscriptText(decodeEntities(text.replace(/<[^>]+>/g, "")));
 }
 function number(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0)
@@ -72,7 +73,8 @@ function captionSegments(text: string): TranscriptSegment[] {
     const payload: string[] = [];
     while (i + 1 < lines.length && lines[i + 1].trim()) payload.push(lines[++i]);
     const joined = payload.join(" ");
-    const voice = joined.match(/<v(?:\.[^ >]+)?\s+([^>]+)>/i)?.[1];
+    const rawVoice = joined.match(/<v(?:\.[^ >]+)?\s+([^>]+)>/i)?.[1];
+    const voice = (rawVoice && normalizeTranscriptText(decodeEntities(rawVoice))) || undefined;
     const body = cleanCaption(joined);
     const matchPrefix = !voice ? body.match(/^([^:]{1,40}):\s*(.+)$/) : null;
     const prefix = matchPrefix ? normalizeTranscriptText(matchPrefix[1]) : undefined;

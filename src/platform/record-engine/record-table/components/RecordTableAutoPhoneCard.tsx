@@ -1,5 +1,4 @@
-import { isValidElement, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { MenuSection } from "../../../../components/Menu";
+import { isValidElement, useCallback, useMemo, type ReactNode } from "react";
 import { useRecordTableState } from "../state/recordTableStore";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
@@ -17,7 +16,6 @@ import {
 import type { RecordTableCardHelpers, RecordTableCardRecord, RecordTableCardRenderer } from "./RecordTableCardList";
 import type { RecordTableCellRenderer } from "./RecordTable";
 import { RecordTablePhoneCard } from "./RecordTablePhoneCard";
-import { PinnedRowActionsMenu, collectRowActionItems } from "./RecordTableRow";
 
 /**
  * Past this many records the phone keeps the virtualised table: the card
@@ -61,7 +59,7 @@ function isInlineDisplay(node: ReactNode, depth = 0): boolean {
  * `renderPhoneCard`: the record's title, its first status/select field as
  * the cell draws it, and up to two more fields (a short fact and a date) on
  * the meta line, all through the table's own cell renderers. The row's
- * actions (`renderRowActions`, `rowMenuSections`) open from a "…" button.
+ * actions open from RecordTablePhoneCard's "…" button.
  *
  * Returns null — keep the column table — off phones, outside the table view,
  * without a way to open records, when the view has no title-like identifier
@@ -70,13 +68,9 @@ function isInlineDisplay(node: ReactNode, depth = 0): boolean {
 export function useAutoPhoneCard({
   enabled,
   renderCell,
-  renderRowActions,
-  rowMenuSections,
 }: {
   enabled: boolean;
   renderCell?: RecordTableCellRenderer;
-  renderRowActions?: (record: RecordTableCardRecord) => ReactNode;
-  rowMenuSections?: (record: RecordTableCardRecord) => MenuSection[];
 }): RecordTableCardRenderer | null {
   const { objectMetadata } = useRecordTableContextOrThrow();
   const columns = useRecordTableState((s) => s.columns);
@@ -94,16 +88,9 @@ export function useAutoPhoneCard({
   const render = useCallback<RecordTableCardRenderer>(
     (record, helpers) =>
       cardPlan ? (
-        <AutoPhoneCard
-          record={record}
-          helpers={helpers}
-          plan={cardPlan}
-          renderCell={renderCell}
-          renderRowActions={renderRowActions}
-          rowMenuSections={rowMenuSections}
-        />
+        <AutoPhoneCard record={record} helpers={helpers} plan={cardPlan} renderCell={renderCell} />
       ) : null,
-    [cardPlan, renderCell, renderRowActions, rowMenuSections],
+    [cardPlan, renderCell],
   );
   return usable ? render : null;
 }
@@ -113,18 +100,13 @@ function AutoPhoneCard({
   helpers,
   plan,
   renderCell,
-  renderRowActions,
-  rowMenuSections,
 }: {
   record: RecordTableCardRecord;
   helpers: RecordTableCardHelpers;
   plan: AutoPhoneCardPlan;
   renderCell?: RecordTableCellRenderer;
-  renderRowActions?: (record: RecordTableCardRecord) => ReactNode;
-  rowMenuSections?: (record: RecordTableCardRecord) => MenuSection[];
 }) {
   const { objectMetadata } = useRecordTableContextOrThrow();
-  const actionsSourceRef = useRef<HTMLDivElement>(null);
   const title = autoPhoneCardTitle(record, plan) ?? `Untitled ${objectMetadata.labelSingular.toLowerCase()}`;
 
   // The page's own renderer when it is a short display-only run (Documents'
@@ -150,47 +132,14 @@ function AutoPhoneCard({
     );
   });
 
-  const rowActions = renderRowActions?.(record);
-  // A page's renderRowActions may draw nothing for some records.
-  const [inlineActionCount, setInlineActionCount] = useState(0);
-  useLayoutEffect(() => {
-    setInlineActionCount(actionsSourceRef.current?.querySelectorAll("button, a[href]").length ?? 0);
-  }, [rowActions]);
-  const hasActions = inlineActionCount > 0 || !!rowMenuSections;
-
   return (
-    <div className={`record-phone-card-shell${hasActions ? " has-actions" : ""}`}>
-      <RecordTablePhoneCard title={title} badge={badge} meta={meta} onOpen={helpers.open} selecting={helpers.selecting} />
-      {/* The page's inline actions stay rendered (hidden) so the menu runs
-          their own click handlers, as the table's pinned actions do. */}
-      {rowActions != null && (
-        <div ref={actionsSourceRef} hidden>
-          {rowActions}
-        </div>
-      )}
-      {hasActions && (
-        <div className="record-phone-card__actions">
-          <PinnedRowActionsMenu
-            recordName={title}
-            triggerClassName="record-phone-card__actions-button"
-            disabled={helpers.selecting}
-            getSections={() =>
-              [
-                {
-                  id: "row-actions",
-                  // The menu is titled with the record: "Mark deadline as
-                  // closed", not "Mark deadline File annual report as closed".
-                  items: collectRowActionItems(actionsSourceRef.current, title).map((item) => ({
-                    ...item,
-                    label: typeof item.label === "string" ? item.label.replace(` ${title} `, " ") : item.label,
-                  })),
-                },
-                ...(rowMenuSections?.(record) ?? []),
-              ].filter((section) => section.items.length > 0)
-            }
-          />
-        </div>
-      )}
-    </div>
+    <RecordTablePhoneCard
+      title={title}
+      badge={badge}
+      meta={meta}
+      onOpen={helpers.open}
+      selecting={helpers.selecting}
+      variant="auto"
+    />
   );
 }

@@ -391,7 +391,11 @@
   .app-shell.is-mobile .sidebar,
   .app-shell.is-mobile.is-collapsed .sidebar {
     inset: auto 0 0;
-    width: 100%;
+    /* `auto` (stretched by the insets), not 100%: the desktop sidebar's
+     * width transition cannot interpolate from auto, so widening the window
+     * past the phone breakpoint drops straight to the 256px column instead
+     * of animating down from the full screen width and squeezing the page. */
+    width: auto;
     max-width: none;
     height: 85vh;
     height: 85dvh;

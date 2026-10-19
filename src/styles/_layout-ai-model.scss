@@ -328,10 +328,27 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  /* The chat list folds behind a "Chats" bar (closed by default) so the
+   * conversation keeps the height; opened, it pushes the chat down. */
   .global-ai-thread-list {
-    max-height: 132px;
     border-right: 0;
     border-bottom: 1px solid token('border');
+  }
+
+  .global-ai-thread-bar {
+    display: flex;
+    align-items: center;
+    gap: token('s-1');
+    padding: token('s-1') token('s-2');
+  }
+
+  .global-ai-thread-list:not(.is-open) .global-ai-thread-list__items,
+  .global-ai-thread-new {
+    display: none;
+  }
+
+  .global-ai-thread-list.is-open .global-ai-thread-list__items {
+    max-height: min(45dvh, 320px);
   }
 
   /* While typing, the conversation gets the rows the thread strip used. */
@@ -341,14 +358,33 @@
   :root[data-keyboard-open] .global-ai-body {
     grid-template-rows: minmax(0, 1fr);
   }
+}
 
-  .global-ai-thread-list__items {
-    flex-direction: row;
-    overflow-x: auto;
+/* No hover to reveal it: the per-chat menu stays visible, at a touch size. */
+@media (max-width: 768px), (pointer: coarse) {
+  .global-ai-thread__menu {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  .global-ai-thread {
+    min-height: token('control-h-touch');
+    padding-right: calc(#{token('control-h-touch-icon')} + #{token('s-2')});
   }
 
-  .global-ai-thread {
-    flex: 0 0 auto;
-    min-width: 156px;
+  .global-ai-thread__menu-trigger {
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+  }
+
+  .global-ai-thread-toggle {
+    min-height: token('tap-target');
+  }
+
+  .global-ai-thread-bar .global-ai-icon-btn {
+    width: token('tap-target');
+    height: token('tap-target');
   }
 }

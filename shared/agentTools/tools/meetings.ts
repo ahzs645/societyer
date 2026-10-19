@@ -24,8 +24,11 @@ import {
   numberOrUndefined,
   page,
   untrusted,
+  untrustedLabel,
+  untrustedLabels,
   untrustedList,
   untrustedTextSchema,
+  untrustedTitle,
   type Row,
 } from "../output";
 
@@ -33,22 +36,22 @@ const can = (adapter: AgentToolAdapter, permission: string) => adapter.context.p
 
 const meetingSummary = z.object({
   id: z.string(),
-  title: z.string(),
+  title: untrustedTextSchema,
   type: z.string().optional(),
   status: z.string().optional(),
   scheduledAt: z.string().optional(),
-  location: z.string().optional(),
+  location: untrustedTextSchema.optional(),
   recordKind: z.string().optional(),
 });
 
 function summarizeMeeting(row: Row): z.infer<typeof meetingSummary> {
   return {
     id: idOf(row),
-    title: label(row.title) ?? "Untitled meeting",
+    title: untrustedTitle(row.title, "Untitled meeting"),
     type: label(row.type),
     status: label(row.status),
     scheduledAt: label(row.scheduledAt),
-    location: label(row.location),
+    location: untrustedLabel(row.location),
     recordKind: label(row.recordKind) ?? "minutes",
   };
 }
@@ -76,9 +79,9 @@ export const listMeetings = defineAgentTool({
       .filter((row) => matchesQuery(query, [row.title, row.type, row.location]))
       .sort((a, b) => dateOnly(b.scheduledAt).localeCompare(dateOnly(a.scheduledAt)));
     const { items, total, truncated } = page(rows, limit);
-    return { total, truncated, meetings: items.map(summarizeMeeting) };
+    return { notice: UNTRUSTED_NOTICE, total, truncated, meetings: items.map(summarizeMeeting) };
   },
-  output: z.object({ total: z.number(), truncated: z.boolean(), meetings: z.array(meetingSummary) }),
+  output: z.object({ notice: z.string(), total: z.number(), truncated: z.boolean(), meetings: z.array(meetingSummary) }),
 });
 
 const MAX_SECTIONS = 40;
@@ -87,11 +90,11 @@ const MAX_ITEMS = 30;
 
 const motionOutput = z.object({
   number: z.number(),
-  title: z.string().optional(),
+  title: untrustedTextSchema.optional(),
   text: untrustedTextSchema.optional(),
   outcome: z.string().optional(),
-  movedBy: z.string().optional(),
-  secondedBy: z.string().optional(),
+  movedBy: untrustedTextSchema.optional(),
+  secondedBy: untrustedTextSchema.optional(),
   votes: z.object({ for: z.number().optional(), against: z.number().optional(), abstained: z.number().optional() }).optional(),
   sectionIndex: z.number().optional(),
   inCamera: z.boolean(),
@@ -101,11 +104,11 @@ function motionView(motion: Row, index: number, facts: InCameraFacts): z.infer<t
   const votes = { for: numberOrUndefined(motion.votesFor), against: numberOrUndefined(motion.votesAgainst), abstained: numberOrUndefined(motion.abstentions) };
   return {
     number: index + 1,
-    title: label(motion.name ?? motion.title),
+    title: untrustedLabel(motion.name ?? motion.title),
     text: untrusted(motion.text, 1000),
     outcome: label(motion.outcome),
-    movedBy: label(motion.movedBy),
-    secondedBy: label(motion.secondedBy),
+    movedBy: untrustedLabel(motion.movedBy),
+    secondedBy: untrustedLabel(motion.secondedBy),
     ...(Object.values(votes).some((value) => value !== undefined) ? { votes } : {}),
     sectionIndex: numberOrUndefined(motion.sectionIndex),
     inCamera: motion.inCameraRedacted === true || isInCameraMotion(motion, facts),
@@ -117,24 +120,24 @@ const minutesOutput = z.object({
   status: z.enum(["approved", "draft"]),
   heldAt: z.string().optional(),
   approvedAt: z.string().optional(),
-  attendees: z.array(z.string()),
+  attendees: z.array(untrustedTextSchema),
   attendeeCount: z.number(),
   absentCount: z.number(),
   quorum: z.string().optional(),
-  chair: z.string().optional(),
-  secretary: z.string().optional(),
+  chair: untrustedTextSchema.optional(),
+  secretary: untrustedTextSchema.optional(),
   discussion: untrustedTextSchema.optional(),
-  sessions: z.array(z.object({ type: z.string(), title: z.string().optional(), startedAt: z.string().optional(), endedAt: z.string().optional() })),
+  sessions: z.array(z.object({ type: z.string(), title: untrustedTextSchema.optional(), startedAt: z.string().optional(), endedAt: z.string().optional() })),
   sections: z.array(z.object({
     index: z.number(),
-    title: z.string(),
+    title: untrustedTextSchema,
     type: z.string().optional(),
     inCamera: z.boolean(),
     discussion: untrustedTextSchema.optional(),
     decisions: z.array(untrustedTextSchema),
   })),
   decisions: z.array(untrustedTextSchema),
-  actionItems: z.array(z.object({ text: untrustedTextSchema.optional(), assignee: z.string().optional(), dueDate: z.string().optional(), done: z.boolean() })),
+  actionItems: z.array(z.object({ text: untrustedTextSchema.optional(), assignee: untrustedTextSchema.optional(), dueDate: z.string().optional(), done: z.boolean() })),
   motions: z.array(motionOutput),
   inCameraRedacted: z.boolean(),
   truncated: z.boolean(),
@@ -152,22 +155,22 @@ function minutesView(minutes: Row): z.infer<typeof minutesOutput> {
     status: minutes.approvedAt ? "approved" : "draft",
     heldAt: label(minutes.heldAt),
     approvedAt: label(minutes.approvedAt),
-    attendees: attendees.slice(0, 50).map((name) => label(name, 120)).filter((name): name is string => Boolean(name)),
+    attendees: untrustedLabels(attendees, 50, 120),
     attendeeCount: attendees.length,
     absentCount: Array.isArray(minutes.absent) ? minutes.absent.length : 0,
     quorum: label(minutes.quorumStatus) ?? (typeof minutes.quorumMet === "boolean" ? (minutes.quorumMet ? "confirmed" : "not_met") : undefined),
-    chair: label(minutes.chairName),
-    secretary: label(minutes.secretaryName),
+    chair: untrustedLabel(minutes.chairName),
+    secretary: untrustedLabel(minutes.secretaryName),
     discussion: untrusted(minutes.discussion, 4000),
     sessions: asRows(minutes.sessionSegments).slice(0, 10).map((segment) => ({
       type: label(segment.type) ?? "other",
-      title: label(segment.title),
+      title: untrustedLabel(segment.title),
       startedAt: label(segment.startedAt),
       endedAt: label(segment.endedAt),
     })),
     sections: sections.slice(0, MAX_SECTIONS).map((section, index) => ({
       index,
-      title: label(section.title) ?? `Item ${index + 1}`,
+      title: untrustedTitle(section.title, `Item ${index + 1}`),
       type: label(section.type),
       inCamera: section.inCameraRedacted === true || facts.sectionIndexes.includes(index),
       discussion: untrusted(section.discussion, 1500),
@@ -176,7 +179,7 @@ function minutesView(minutes: Row): z.infer<typeof minutesOutput> {
     decisions: untrustedList(decisions, MAX_ITEMS, 300),
     actionItems: actionItems.slice(0, MAX_ITEMS).map((action) => ({
       text: untrusted(action.text, 300),
-      assignee: label(action.assignee),
+      assignee: untrustedLabel(action.assignee),
       dueDate: label(action.dueDate),
       done: action.done === true,
     })),
@@ -229,20 +232,20 @@ const transcriptOutput = z.discriminatedUnion("available", [
     available: z.literal(true),
     notice: z.string(),
     meetingId: z.string(),
-    meetingTitle: z.string(),
+    meetingTitle: untrustedTextSchema,
     provider: z.string().optional(),
     durationSeconds: z.number().optional(),
     totalSegments: z.number(),
     matchingSegments: z.number(),
     page: z.object({ startIndex: z.number(), count: z.number(), nextStartIndex: z.number().nullable() }),
-    speakers: z.array(z.object({ label: z.string(), name: z.string() })),
-    segments: z.array(z.object({ index: z.number(), startSec: z.number(), endSec: z.number(), speaker: z.string(), text: untrustedTextSchema.optional(), inCamera: z.literal(true).optional() })),
+    speakers: z.array(z.object({ label: z.string(), name: untrustedTextSchema })),
+    segments: z.array(z.object({ index: z.number(), startSec: z.number(), endSec: z.number(), speaker: untrustedTextSchema, text: untrustedTextSchema.optional(), inCamera: z.literal(true).optional() })),
     inCameraNotice: z.string().optional(),
   }),
   z.object({
     available: z.literal(false),
     meetingId: z.string(),
-    meetingTitle: z.string(),
+    meetingTitle: untrustedTextSchema,
     reason: z.enum(["none", "in_camera", "paged"]),
     message: z.string(),
   }),
@@ -274,7 +277,7 @@ export const getTranscript = defineAgentTool({
   async handler({ meetingId, startIndex, limit, fromSec, toSec, speaker }, adapter) {
     const meeting = await adapter.query<unknown>("meetings:get", { id: meetingId });
     if (!isRow(meeting)) throw new AgentToolError("not_found", "Meeting not found.");
-    const meetingTitle = label(meeting.title) ?? "Untitled meeting";
+    const meetingTitle = untrustedTitle(meeting.title, "Untitled meeting");
     const transcript = await adapter.query<unknown>("transcripts:getByMeeting", { meetingId });
     if (!isRow(transcript)) {
       return { available: false as const, meetingId, meetingTitle, reason: "none" as const, message: "This meeting has no working transcript." };
@@ -319,14 +322,14 @@ export const getTranscript = defineAgentTool({
       totalSegments: all.length,
       matchingSegments: matching.length,
       page: { startIndex, count: slice.length, nextStartIndex: next < matching.length ? next : null },
-      speakers: labels.slice(0, 50).map((raw) => ({ label: raw, name: names.name(raw) })),
+      speakers: labels.slice(0, 50).map((raw) => ({ label: raw, name: untrustedTitle(names.name(raw), "Unknown speaker") })),
       segments: slice.map((segment) => ({
         index: segment.index,
         startSec: segment.startSec,
         endSec: segment.endSec,
         ...(segment.inCamera
-          ? { speaker: IN_CAMERA_TITLE, text: untrusted(IN_CAMERA_TRANSCRIPT_LINE, 100), inCamera: true as const }
-          : { speaker: names.name(segment.label), text: untrusted(segment.text, 1000) }),
+          ? { speaker: { untrusted: IN_CAMERA_TITLE }, text: untrusted(IN_CAMERA_TRANSCRIPT_LINE, 100), inCamera: true as const }
+          : { speaker: untrustedTitle(names.name(segment.label), "Unknown speaker"), text: untrusted(segment.text, 1000) }),
       })),
       ...(transcript.inCameraRedacted === true ? { inCameraNotice: `Parts recorded in camera are replaced by "${IN_CAMERA_TRANSCRIPT_LINE}".` } : {}),
     };

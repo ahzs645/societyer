@@ -933,7 +933,7 @@ export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: an
   validateGenericEvidence(payload, existing[0]);
   await assertMeetingHistoryReferences(ctx, args.societyId, payload, existing[0]?._id, args.heldAt);
   if (existing[0]) {
-    const draftBlocker = minutesDraftBlocker(existing[0]);
+    const draftBlocker = minutesDraftBlocker(existing[0], meeting);
     if (draftBlocker) throw new Error(draftBlocker);
     assertMeetingHistoryMutable(existing[0], normalizeMeetingHistory(payload));
     await ctx.db.patch(existing[0]._id, payload);

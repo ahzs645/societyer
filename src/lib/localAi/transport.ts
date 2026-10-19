@@ -43,8 +43,61 @@ export type DeviceAiTransport = {
   send(path: DeviceAiPath, init: DeviceAiRequestInit): Promise<Response>;
 };
 
-export const BROWSER_CORS_HINT =
-  "If the server is running, it must allow requests from this page. Ollama: set OLLAMA_ORIGINS to this page's address (or *) and restart it. LM Studio: turn on CORS in the Developer server settings. llama.cpp: llama-server normally allows this; if it sits behind a proxy, allow this origin there.";
+/** How to allow this page's origin on the common model servers. */
+const MODEL_SERVER_CORS_STEPS =
+  "Ollama: set OLLAMA_ORIGINS to this page's address (or *) and restart it. LM Studio: turn on CORS in the Developer server settings. llama.cpp: llama-server normally allows this; if it sits behind a proxy, allow this origin there.";
+
+/** When the browser can't say why a request failed. */
+export const BROWSER_CORS_HINT = `If the server is running, it must allow requests from this page. ${MODEL_SERVER_CORS_STEPS}`;
+
+export const BROWSER_UNREACHABLE_HINT =
+  "Check that the server is running and that the address and port are right. If it is running, the browser may be blocking the connection: allow this site to reach devices on your network if the browser asks, and use an https address for a server on another computer.";
+
+/** The no-cors probe after a failed browser request: one request, never retried. */
+const BROWSER_PROBE_TIMEOUT_MS = 3_000;
+
+function hostOf(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * A browser request that fails with a network error doesn't say why. One
+ * `no-cors` GET to the same address tells the two usual causes apart: an
+ * (opaque) answer means a server is up but doesn't allow this page's origin
+ * (CORS); another network error means nothing answered there. A probe that
+ * doesn't finish in time leaves the cause unknown. Browser requests only: the
+ * desktop app's main process has no CORS.
+ */
+export async function browserNetworkError(
+  url: string,
+  { fetchImpl, corsSteps, signal }: { fetchImpl: typeof fetch; corsSteps: string; signal?: AbortSignal },
+): Promise<DeviceAiError> {
+  const host = hostOf(url);
+  const probe = new AbortController();
+  const timer = setTimeout(() => probe.abort(), BROWSER_PROBE_TIMEOUT_MS);
+  const stop = () => probe.abort();
+  signal?.addEventListener("abort", stop, { once: true });
+  const answered = await Promise.race([
+    // no-cors only allows following redirects; any other redirect mode is a network error.
+    fetchImpl(url, { method: "GET", mode: "no-cors", credentials: "omit", signal: probe.signal }).then(
+      () => true,
+      () => (probe.signal.aborted ? undefined : false),
+    ),
+    // A fetch that ignores its signal still can't hold the error back.
+    new Promise<undefined>((resolve) => probe.signal.addEventListener("abort", () => resolve(undefined), { once: true })),
+  ]);
+  clearTimeout(timer);
+  signal?.removeEventListener("abort", stop);
+  if (answered === true) {
+    return new DeviceAiError("network", `${host} is running but doesn't allow requests from this page.`, { hint: `Allow this page's address on the server (CORS). ${corsSteps}` });
+  }
+  if (answered === false) return new DeviceAiError("network", `Nothing answered at ${host}.`, { hint: BROWSER_UNREACHABLE_HINT });
+  return new DeviceAiError("network", `Could not reach ${host}.`, { hint: `If the server is running, it must allow requests from this page. ${corsSteps}` });
+}
 
 function isAbort(error: unknown, signal?: AbortSignal) {
   return Boolean(signal?.aborted) || (error instanceof DOMException && error.name === "AbortError");
@@ -62,11 +115,12 @@ export function directTransport(endpoint: () => { baseUrl: string; apiKey: strin
     async send(path, init) {
       const { baseUrl, apiKey } = endpoint();
       if (!baseUrl) throw new DeviceAiError("not_configured", "On-device AI has no server address.");
+      const url = deviceAiUrl(baseUrl, path);
       const headers: Record<string, string> = { accept: init.stream ? "text/event-stream" : "application/json" };
       if (init.body) headers["content-type"] = "application/json";
       if (apiKey) headers.authorization = `Bearer ${apiKey}`;
       try {
-        return await fetchImpl(deviceAiUrl(baseUrl, path), {
+        return await fetchImpl(url, {
           method: init.method,
           headers,
           body: init.body,
@@ -79,13 +133,9 @@ export function directTransport(endpoint: () => { baseUrl: string; apiKey: strin
         const ours = abortReason(init.signal);
         if (ours) throw ours;
         if (isAbort(error, init.signal)) throw new DeviceAiError("aborted", "The AI request was stopped.");
-        let host = baseUrl;
-        try {
-          host = new URL(baseUrl).host;
-        } catch {
-          // Keep the raw value.
-        }
-        throw new DeviceAiError("network", `Could not reach ${host}.`, { hint: BROWSER_CORS_HINT });
+        const failure = await browserNetworkError(url, { fetchImpl, corsSteps: MODEL_SERVER_CORS_STEPS, signal: init.signal });
+        // Stopped while probing: report the stop, not the probe.
+        throw abortReason(init.signal) ?? (init.signal?.aborted ? new DeviceAiError("aborted", "The AI request was stopped.") : failure);
       }
     },
   };

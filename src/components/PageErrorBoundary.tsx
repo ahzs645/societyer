@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { isStaleBuildError, reloadForNewBuild } from "../lib/staleBuild";
 
 type Props = {
   children: ReactNode;
@@ -36,6 +37,8 @@ export class PageErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+    // A tab left open across a deploy asks for page code that no longer exists.
+    if (isStaleBuildError(error) && reloadForNewBuild()) return;
     console.error(`[PageErrorBoundary${this.props.subject ? `:${this.props.subject}` : ""}]`, error, info?.componentStack);
   }
 
@@ -53,6 +56,7 @@ export class PageErrorBoundary extends Component<Props, State> {
   render() {
     const { error, attempt } = this.state;
     if (!error) return <ErrorBoundaryContent key={attempt}>{this.props.children}</ErrorBoundaryContent>;
+    if (isStaleBuildError(error)) return <StaleBuildNotice inline={this.props.variant === "inline"} />;
     const subject = this.props.subject ?? "this page";
     if (this.props.variant === "inline") {
       return (
@@ -87,4 +91,26 @@ export class PageErrorBoundary extends Component<Props, State> {
 
 function ErrorBoundaryContent({ children }: { children: ReactNode }) {
   return <>{children}</>;
+}
+
+/** Shown when reloading for a new build didn't happen automatically (a reload just ran). */
+function StaleBuildNotice({ inline }: { inline: boolean }) {
+  const body = (
+    <>
+      <p style={{ margin: 0 }}>
+        <strong>Societyer was updated.</strong> Reload to open this page with the new version.
+      </p>
+      <button type="button" className="btn btn--accent btn--sm" onClick={() => window.location.reload()} style={{ marginTop: 8 }}>
+        <RefreshCw size={12} aria-hidden="true" /> Reload
+      </button>
+    </>
+  );
+  if (inline) return <div className="card__body page-error page-error--inline" role="alert">{body}</div>;
+  return (
+    <div className="page page-error" role="alert">
+      <section className="card">
+        <div className="card__body">{body}</div>
+      </section>
+    </div>
+  );
 }

@@ -17,6 +17,8 @@ import {
   inCameraFacts,
   inCameraTaskIdsOf,
   isInCameraDocument,
+  isInCameraMaterial,
+  inCameraAgendaTitleKeys,
   isInCameraTask,
   isInCameraMotion,
   minutesSectionsOf,
@@ -200,13 +202,14 @@ export async function meetingForReader<T extends PortableDoc>(ctx: PortableQuery
  * scoped service principals. A redacted export is not a full backup.
  */
 export async function exportRowsForReader<T extends PortableDoc>(ctx: PortableQueryCtx, societyId: string, table: string, rows: T[]): Promise<T[]> {
-  if (!["minutes", "motions", "transcripts", "meetings", "agendaItems", "tasks", "documents"].includes(table) || !rows.length) return rows;
+  if (!["minutes", "motions", "transcripts", "meetings", "agendaItems", "tasks", "documents", "meetingMaterials"].includes(table) || !rows.length) return rows;
   const access = await readerAccessGate(ctx)(societyId);
   if (table === "transcripts" && !access.transcript) return [];
   if (table === "minutes" && !access.transcript) rows = rows.map((row) => withoutTranscriptCopy(row));
   if (access.inCamera) return rows;
   if (table === "minutes") return rows.map((row) => redactInCameraMinutes(row));
   if (table === "tasks") return tasksForReader(ctx, societyId, rows);
+  if (table === "meetingMaterials") return materialsForReader(ctx, societyId, rows);
   // In-camera documents never pass the export's document check; import bookkeeping (raw imported text) stays out too.
   if (table === "documents") return rows.filter((row) => !isInternalDocumentRecord(row));
   if (table === "motions") return motionRowsForReader(ctx, societyId, rows);
@@ -295,27 +298,32 @@ export async function inCameraIndex(ctx: PortableQueryCtx, societyId: string): P
   const documentIds = new Set<string>();
   const meetingIds = new Set<string>();
   const agendaItemIds = new Set<string>();
+  const inCameraAgendaTitles = new Map<string, Set<string>>();
   const taskIds = new Set<string>();
   await Promise.all(inCamera.map(async (minutes) => {
     const meetingId = String(minutes.meetingId);
     meetingIds.add(meetingId);
-    const [motions, agendas, meetingDocuments, materials] = await Promise.all([
+    // Documents filed under the meeting belong to it; library documents only
+    // attached as its materials don't (their in-camera links are withheld instead).
+    const [motions, agendas, meetingDocuments] = await Promise.all([
       ctx.db.query("motions").withIndex("by_minutes", (q) => q.eq("minutesId", minutes._id)).collect(),
       ctx.db.query("agendas").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).collect(),
       ctx.db.query("documents").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).omitFields("content").collect(),
-      ctx.db.query("meetingMaterials").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).collect(),
     ]);
     for (const id of inCameraDocumentIdsOf(minutes, motions)) documentIds.add(id);
     for (const row of meetingDocuments) if (row.societyId === societyId) documentIds.add(String(row._id));
-    for (const row of materials) if (row.societyId === societyId) documentIds.add(String(row.documentId));
     for (const id of inCameraTaskIdsOf(minutes)) taskIds.add(id);
+    const titles = new Set<string>();
     for (const agenda of agendas) {
       const items = await ctx.db.query("agendaItems").withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id)).collect();
       items.sort((a, b) => Number(a.order) - Number(b.order));
-      for (const id of inCameraAgendaItemIds(items, minutes)) agendaItemIds.add(id);
+      const ids = inCameraAgendaItemIds(items, minutes);
+      for (const id of ids) agendaItemIds.add(id);
+      for (const title of inCameraAgendaTitleKeys(items, ids)) titles.add(title);
     }
+    inCameraAgendaTitles.set(meetingId, titles);
   }));
-  return { documentIds: await withLinkedCopies(ctx, societyId, documentIds), meetingIds, agendaItemIds, taskIds, minutesSections };
+  return { documentIds: await withLinkedCopies(ctx, societyId, documentIds), meetingIds, agendaItemIds, inCameraAgendaTitles, taskIds, minutesSections };
 }
 
 /** One index per workspace for the life of a query or mutation (a ctx is never reused across calls). */
@@ -339,18 +347,29 @@ export function readerInCameraIndex(ctx: PortableQueryCtx, societyId: string): P
   return index;
 }
 
-/** Is this document in-camera material? `materials` are the workspace's meeting materials. */
-export type InCameraDocumentTest = (document: unknown, materials: readonly unknown[]) => boolean;
+/** Is this document in-camera material (does it belong to an in-camera meeting)? */
+export type InCameraDocumentTest = (document: unknown) => boolean;
 
 const NEVER_IN_CAMERA: InCameraDocumentTest = () => false;
 
 function documentTestFor(index: InCameraIndex | null): InCameraDocumentTest {
-  return !index || !index.meetingIds.size ? NEVER_IN_CAMERA : (document, materials) => isInCameraDocument(document, materials, index);
+  return !index || !index.meetingIds.size ? NEVER_IN_CAMERA : (document) => isInCameraDocument(document, index);
 }
 
 /** Which documents the current reader sees only as an in-camera placeholder. */
 export async function inCameraDocumentTest(ctx: PortableQueryCtx, societyId: string): Promise<InCameraDocumentTest> {
   return documentTestFor(await readerInCameraIndex(ctx, societyId));
+}
+
+/**
+ * Meeting materials the current reader may see listed: a material filed under
+ * an in-camera agenda item is left out for readers without in-camera access
+ * (its link, label and notes), whatever its document.
+ */
+export async function materialsForReader<T extends PortableDoc>(ctx: PortableQueryCtx, societyId: string, materials: T[]): Promise<T[]> {
+  if (!materials.length) return materials;
+  const index = await readerInCameraIndex(ctx, societyId);
+  return index ? materials.filter((material) => !isInCameraMaterial(material, index)) : materials;
 }
 
 /** The same rule for an anonymous public viewer, who never has in-camera access. */

@@ -73,7 +73,9 @@ test("the cash-flow Sankey reads by hover, selection and table", async ({ page }
   const card = page.locator(".cash-flow-sankey");
   await expect(card).toBeVisible({ timeout: 60_000 });
   await card.scrollIntoViewIfNeeded();
-  if (page.viewportSize()!.width >= 980) {
+  // The chart draws as ranked bars only when its card is narrower than the
+  // chart's compact width (phones); a tablet's full-width card draws the diagram.
+  if (!(await card.locator(".chart--sankey.is-compact").count())) {
     await card.locator(".sankey__node.is-selectable .sankey__bar").first().hover({ force: true });
     await expect(card.locator(".chart-tooltip")).toContainText("of money in");
     await card.locator(".sankey__node.is-selectable .sankey__bar").first().click({ force: true });

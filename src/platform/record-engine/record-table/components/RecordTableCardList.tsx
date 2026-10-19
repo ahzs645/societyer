@@ -1,10 +1,11 @@
-import { forwardRef, useCallback, useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useRecordTableRowModel, type RecordTableRowItem } from "../hooks/useRecordTableRowModel";
 import { useLongPress } from "../hooks/useLongPress";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
+import { RecordTableCardActionsContext, type RecordTableCardActionsValue } from "../contexts/RecordTableCardActionsContext";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { recordTitleText } from "../utils/recordTitle";
 import { RecordTableEmpty } from "./RecordTableEmpty";
@@ -58,18 +59,29 @@ const VirtualCardSlot = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement
  *
  * With `selectable`, a long press starts "Select records" (as on table rows)
  * and, while it is on, a tap anywhere on a card toggles it.
+ *
+ * The table's row actions reach each card through
+ * RecordTableCardActionsContext; `RecordTablePhoneCard` puts them behind a
+ * "…" button, so a page's own card keeps the row's menu.
  */
 export function RecordTableCardList({
   renderCard,
   emptyState,
   label,
   selectable = false,
+  renderRowActions,
+  rowMenuSections,
+  onEndReached,
 }: {
+  onEndReached?: () => void;
   renderCard: RecordTableCardRenderer;
   emptyState?: ReactNode;
   /** Accessible name for the list, e.g. "Assets". */
   label: string;
   selectable?: boolean;
+  /** The table's row actions, offered on each card (see RecordTablePhoneCard). */
+  renderRowActions?: RecordTableCardActionsValue["renderRowActions"];
+  rowMenuSections?: RecordTableCardActionsValue["rowMenuSections"];
 }) {
   const model = useRecordTableRowModel();
   const handle = useRecordTableStoreHandle();
@@ -83,6 +95,16 @@ export function RecordTableCardList({
     const parent = scrollParentOf(anchorRef.current);
     setScrollParent((current) => (current === parent ? current : parent));
   }, [virtualize]);
+
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (virtualize || !onEndReached || !endRef.current) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) onEndReached();
+    }, { root: scrollParentOf(endRef.current), rootMargin: "120px" });
+    observer.observe(endRef.current);
+    return () => observer.disconnect();
+  }, [virtualize, onEndReached, model.items.length]);
 
   if (model.ordered.length === 0) {
     return hasRecords
@@ -107,7 +129,15 @@ export function RecordTableCardList({
         </button>
       </div>
     ) : (
-      <RecordTableCardItem key={item.key} record={item.record} renderCard={renderCard} selectable={selectable} position={position} />
+      <RecordTableCardItem
+        key={item.key}
+        record={item.record}
+        renderCard={renderCard}
+        selectable={selectable}
+        position={position}
+        renderRowActions={renderRowActions}
+        rowMenuSections={rowMenuSections}
+      />
     );
   };
 
@@ -117,6 +147,7 @@ export function RecordTableCardList({
         {/* Wait for the scroll container so the first frame is windowed against it. */}
         {scrollParent !== undefined && (
           <Virtuoso
+            endReached={onEndReached}
             data={model.items}
             {...(scrollParent ? { customScrollParent: scrollParent } : { useWindowScroll: true })}
             increaseViewportBy={CARD_OVERSCAN}
@@ -132,6 +163,7 @@ export function RecordTableCardList({
   return (
     <div ref={anchorRef} className="record-cards" role="list" aria-label={label}>
       {model.items.map((item) => renderItem(item))}
+      <div ref={endRef} aria-hidden="true" />
     </div>
   );
 }
@@ -141,17 +173,25 @@ function RecordTableCardItem({
   renderCard,
   selectable,
   position,
+  renderRowActions,
+  rowMenuSections,
 }: {
   record: RecordTableCardRecord;
   renderCard: RecordTableCardRenderer;
   selectable: boolean;
   position?: { "aria-posinset": number; "aria-setsize": number };
+  renderRowActions?: RecordTableCardActionsValue["renderRowActions"];
+  rowMenuSections?: RecordTableCardActionsValue["rowMenuSections"];
 }) {
   const { objectMetadata, onRecordClick } = useRecordTableContextOrThrow();
   const handle = useRecordTableStoreHandle();
   const recordId = String(record._id);
   const selecting = useRecordTableState((s) => selectable && s.mobileSelectionMode);
   const isSelected = useRecordTableState((s) => s.selectedRecordIds.has(recordId));
+  const actions = useMemo<RecordTableCardActionsValue>(
+    () => ({ record, renderRowActions, rowMenuSections }),
+    [record, renderRowActions, rowMenuSections],
+  );
 
   const toggle = useCallback(() => {
     const next = new Set(handle.get().selectedRecordIds);
@@ -187,7 +227,9 @@ function RecordTableCardItem({
 
   return (
     <div className={className} role="listitem" {...position} {...longPress}>
-      {renderCard(record, helpers)}
+      <RecordTableCardActionsContext.Provider value={actions}>
+        {renderCard(record, helpers)}
+      </RecordTableCardActionsContext.Provider>
       {selecting && (
         // Covers the card so a tap anywhere toggles it instead of opening it.
         <label className="record-cards__select">

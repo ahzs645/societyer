@@ -10,6 +10,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import { PORTABLE_TEST_AUTH_SUBJECT } from "./portable-test-fixture";
+import { minutesDraftBlocker } from "../shared/minutesDraftInput";
 import {
   defaultRecordKindForType,
   discussionSeededWithNotes,
@@ -248,6 +249,17 @@ assert.equal((minutesFor(fromTemplate.notes)[0].motionIds as unknown[]).length, 
 const convertedAgain = await client.mutation("meetings:startMinutesFromNotes", { id: fromTemplate.notes }) as { motionsSeeded: number };
 assert.equal(convertedAgain.motionsSeeded, 0, "motions are seeded once");
 assert.equal(motionsFor(fromTemplate.notes).length, 2);
+// The converted minutes hold only the template's scaffold, so a transcript draft may replace them.
+const convertedMinutes = await client.query("minutes:getByMeeting", { meetingId: fromTemplate.notes });
+await client.mutation("agendas:startMinutesFromAgenda", { agendaId: tables().agendas.find((row) => row.meetingId === fromTemplate.notes)?._id });
+const resyncedMinutes = await client.query("minutes:getByMeeting", { meetingId: fromTemplate.notes });
+const convertedMeeting = await client.query("meetings:get", { id: fromTemplate.notes });
+assert.ok(
+  (resyncedMinutes as { sections: Array<{ motionText?: string }> }).sections.some((section) => section.motionText),
+  "the agenda re-sync copies the template's motion wording onto its sections",
+);
+assert.equal(minutesDraftBlocker(convertedMinutes, convertedMeeting), null, "turned-into-minutes template scaffolds don't block drafting");
+assert.equal(minutesDraftBlocker(resyncedMinutes, convertedMeeting), null, "nor do the template motions' wording on their sections");
 // "Start minutes" on a no-write-up meeting (no notes) goes through the same mutation.
 const startedFromMeeting = await client.mutation("meetings:startMinutesFromNotes", { id: fromTemplate.meeting }) as { seeded: boolean; motionsSeeded: number };
 assert.equal(startedFromMeeting.seeded, false, "no notes, nothing copied");

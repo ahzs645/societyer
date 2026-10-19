@@ -29,6 +29,14 @@ a {
   color: inherit;
   text-decoration: none;
 }
+// A link inside running text, e.g. to a guide: underlined so it reads as a
+// link without relying on colour alone.
+.text-link {
+  color: token('accent-text');
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.text-link:hover { text-decoration-thickness: 2px; }
 
 button {
   font-family: inherit;

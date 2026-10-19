@@ -32,11 +32,17 @@ export const TRANSCRIPT_READ_SCOPE: Permission = "minutes:read";
  */
 export const RESERVED_IN_CAMERA_SCOPE = "minutes:in-camera";
 
+/*
+ * What readers without in-camera access see, one name per kind of thing:
+ * the session itself (a time range in the meeting) is an "In-camera session";
+ * an agenda item inside it, and its minutes section, are an "In-camera item";
+ * a motion is an "In-camera motion".
+ */
 export const IN_CAMERA_PLACEHOLDER = "In-camera session — not shown";
 export const IN_CAMERA_TITLE = "In-camera session";
 export const IN_CAMERA_MOTION_TITLE = "In-camera motion";
 export const IN_CAMERA_OUTCOME = "Not shown";
-/** An agenda item inside an in-camera session (decision A3). */
+/** An agenda item inside an in-camera session, and its minutes section (decision A3). */
 export const IN_CAMERA_ITEM_TITLE = "In-camera item";
 /** The line that stands in for transcript segments recorded in camera (decision A2). */
 export const IN_CAMERA_TRANSCRIPT_LINE = `[${IN_CAMERA_PLACEHOLDER}]`;
@@ -160,7 +166,7 @@ export function redactInCameraMotion<T>(motion: T): T {
     title: IN_CAMERA_MOTION_TITLE,
     text: IN_CAMERA_PLACEHOLDER,
     outcome: IN_CAMERA_OUTCOME,
-    sectionTitle: IN_CAMERA_TITLE,
+    sectionTitle: IN_CAMERA_ITEM_TITLE,
     inCameraRedacted: true,
   };
   return redacted as T;
@@ -169,7 +175,7 @@ export function redactInCameraMotion<T>(motion: T): T {
 function redactSection(section: Row): Row {
   return {
     ...pick(section, ["agendaItemId", "depth", "motionId"]),
-    title: IN_CAMERA_TITLE,
+    title: IN_CAMERA_ITEM_TITLE,
     type: isInCameraType(section.type) ? section.type : "executive_session",
     discussion: IN_CAMERA_PLACEHOLDER,
     decisions: [],
@@ -329,6 +335,47 @@ export function inCameraRecordingRanges(minutes: unknown): InCameraRecordingRang
   return all.length ? all : null;
 }
 
+/** One minutes view's marked ranges, and the in-camera sessions or sections no marked range covers. */
+function ownMarkedRanges(minutes: Row) {
+  const ranges: InCameraRecordingRange[] = [];
+  const unmarked = new Map<string, string>();
+  const marked = new Set<string>();
+  for (const segment of rows(minutes.sessionSegments).filter((row) => isInCameraType(row.type))) {
+    const title = typeof segment.title === "string" && segment.title.trim() ? segment.title.trim() : IN_CAMERA_TITLE;
+    const range = recordingRange(segment);
+    if (range) {
+      ranges.push({ title, ...range });
+      marked.add(normalized(title));
+    } else unmarked.set(normalized(title), title);
+  }
+  for (const section of rows(minutes.sections)) {
+    if (section.depth === 1 || !isInCameraType(section.type)) continue;
+    const title = typeof section.title === "string" && section.title.trim() ? section.title.trim() : IN_CAMERA_TITLE;
+    // Matched on the raw title, as `ownRecordingRanges` does.
+    if (!marked.has(normalized(section.title))) unmarked.set(normalized(title), title);
+  }
+  return { ranges, unmarked };
+}
+
+/**
+ * For someone with in-camera access exporting a transcript without its
+ * in-camera parts: every marked range (live and adopted), and the titles of
+ * in-camera sessions the export can't cut because nothing places them in the
+ * recording. `unmarked` is empty exactly when `inCameraRecordingRanges` is not
+ * null. Unlike that rule, marked ranges are still returned when some session
+ * isn't marked, so the person can choose to export with a warning.
+ */
+export function inCameraExportRanges(minutes: unknown): { ranges: InCameraRecordingRange[]; unmarked: string[] } {
+  if (!isRow(minutes) || !inCameraFacts(minutes).hasInCamera) return { ranges: [], unmarked: [] };
+  const snapshot = adoptedView(minutes);
+  const views = [ownMarkedRanges(minutes), ...(snapshot ? [ownMarkedRanges(snapshot)] : [])];
+  const ranges = views.flatMap((view) => view.ranges);
+  const unmarked = new Map(views.flatMap((view) => [...view.unmarked]));
+  // In camera, yet no session or section to name: nothing can be placed.
+  if (!ranges.length && !unmarked.size) unmarked.set(normalized(IN_CAMERA_TITLE), IN_CAMERA_TITLE);
+  return { ranges: ranges.sort((a, b) => a.startSec - b.startSec), unmarked: [...unmarked.values()] };
+}
+
 /** Every in-camera session of the minutes (marked or not), for the Transcript tab's "Mark as in camera" choices. */
 export function inCameraSessionChoices(minutes: unknown): Array<{ title: string; startSec?: number; endSec?: number }> {
   if (!isRow(minutes)) return [];
@@ -484,6 +531,12 @@ export function inCameraAgendaItemIds(items: readonly unknown[], minutes: unknow
   return ids;
 }
 
+/** The titles of the agenda items inside an in-camera session, as editors see them (the material drawer's topics). */
+export function inCameraAgendaTopics(items: readonly unknown[], minutes: unknown): Set<string> {
+  const ids = inCameraAgendaItemIds(items, minutes);
+  return new Set(rows(items).filter((item) => ids.has(String(item._id)) && typeof item.title === "string").map((item) => String(item.title)));
+}
+
 const AGENDA_ITEM_KEPT_FIELDS = ["_id", "_creationTime", "societyId", "agendaId", "order", "type", "depth", "timeAllottedMinutes", "createdAtISO"] as const;
 
 /** An in-camera agenda item for a reader without access: position and type stay, wording goes. */
@@ -588,6 +641,8 @@ export type InCameraIndex = {
   documentIds: ReadonlySet<string>;
   meetingIds: ReadonlySet<string>;
   agendaItemIds: ReadonlySet<string>;
+  /** Per in-camera meeting: the titles of its in-camera agenda items (normalized), for materials filed by topic. */
+  inCameraAgendaTitles: ReadonlyMap<string, ReadonlySet<string>>;
   taskIds: ReadonlySet<string>;
   /**
    * Every meeting with minutes: its sections' titles (normalized) and which
@@ -601,7 +656,7 @@ export type InCameraIndex = {
 /** `unlocated`: an in-camera session no section holds, so any action may have come from it. */
 export type MinutesSections = { titles: readonly string[]; inCamera: ReadonlySet<number>; unlocated: boolean };
 
-export const NO_IN_CAMERA_INDEX: InCameraIndex = { documentIds: new Set(), meetingIds: new Set(), agendaItemIds: new Set(), taskIds: new Set(), minutesSections: new Map() };
+export const NO_IN_CAMERA_INDEX: InCameraIndex = { documentIds: new Set(), meetingIds: new Set(), agendaItemIds: new Set(), inCameraAgendaTitles: new Map(), taskIds: new Set(), minutesSections: new Map() };
 
 /** A minutes record's sections for task checks: titles and the in-camera ones. */
 export function minutesSectionsOf(minutes: unknown): MinutesSections {
@@ -677,22 +732,39 @@ export function isInCameraSection(minutes: unknown, sectionIndex: number): boole
 }
 
 /**
- * Whether a document is in-camera material: listed in the index (cited by
- * in-camera minutes, a duplicate or version of such a document), or tied to
- * an in-camera meeting or agenda item by its own links or a meeting material.
- * Any category counts: a board pack or letter filed under the meeting may
- * hold the session's content. `materials` are meeting materials; only those
- * linking this document count.
+ * Whether a document is in-camera material: it belongs to an in-camera
+ * meeting. That is: cited by in-camera minutes, filed under an in-camera
+ * meeting (`meetingId`, whatever its category: a board pack or letter filed
+ * there may hold the session's content) or agenda item (`agendaItemId`), or a
+ * duplicate or version of such a document. Being attached as a meeting
+ * material doesn't make a library document the meeting's: attaching records
+ * the link in `meetingMaterials` only, and an in-camera item's material link
+ * is withheld instead (`isInCameraMaterial`).
  */
-export function isInCameraDocument(document: unknown, materials: readonly unknown[], index: InCameraIndex): boolean {
+export function isInCameraDocument(document: unknown, index: InCameraIndex): boolean {
   if (!isRow(document)) return false;
-  const id = String(document._id);
   const linkedTo = (value: unknown, set: ReadonlySet<string>) => typeof value === "string" && set.has(value);
-  if (index.documentIds.has(id)) return true;
+  if (index.documentIds.has(String(document._id))) return true;
   if (linkedTo(document.meetingId, index.meetingIds) || linkedTo(document.agendaItemId, index.agendaItemIds)) return true;
-  if (linkedTo(document.duplicateOfDocumentId, index.documentIds) || linkedTo(document.supersedesDocumentId, index.documentIds)) return true;
-  return materials.some((material) => isRow(material) && String(material.documentId) === id
-    && (linkedTo(material.meetingId, index.meetingIds) || linkedTo(material.agendaItemId, index.agendaItemIds)));
+  return linkedTo(document.duplicateOfDocumentId, index.documentIds) || linkedTo(document.supersedesDocumentId, index.documentIds);
+}
+
+/**
+ * Whether a meeting material is filed under an in-camera agenda item, by its
+ * `agendaItemId` or its agenda topic (`agendaLabel`, the item's title). Readers
+ * without in-camera access don't see the link, its label or its notes; the
+ * document itself follows `isInCameraDocument`.
+ */
+export function isInCameraMaterial(material: unknown, index: InCameraIndex): boolean {
+  if (!isRow(material)) return false;
+  if (typeof material.agendaItemId === "string" && index.agendaItemIds.has(material.agendaItemId)) return true;
+  const titles = index.inCameraAgendaTitles.get(String(material.meetingId));
+  return !!titles && titles.has(normalized(material.agendaLabel));
+}
+
+/** Normalized titles of the agenda items inside an in-camera session, keyed for `InCameraIndex.inCameraAgendaTitles`. */
+export function inCameraAgendaTitleKeys(items: readonly unknown[], inCameraIds: ReadonlySet<string>): Set<string> {
+  return new Set(rows(items).filter((item) => inCameraIds.has(String(item._id))).map((item) => normalized(item.title)).filter(Boolean));
 }
 
 /** A task made from an imported or minutes action item, before tasks recorded where they came from. */

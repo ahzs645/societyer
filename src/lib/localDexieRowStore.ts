@@ -179,6 +179,8 @@ export class LocalDexieRowStore implements LocalRowStore {
   /** Namespace for persisted projection memos (a build id); undefined = memory only. */
   private projectionNamespace: string | undefined;
   private projectionWrites = new Set<Promise<void>>();
+  /** Background commits from the legacy row API (see applyLegacyOp). */
+  private legacyWrites = new Set<Promise<void>>();
   /** Heavy values written but not yet durable (read before IndexedDB). */
   private pendingHeavy = new Map<string, Record<string, unknown>>();
   /** Heavy values when there is no IndexedDB (memory-only session never splits). */
@@ -535,9 +537,21 @@ export class LocalDexieRowStore implements LocalRowStore {
       this.scheduleNotify([op.table]);
       return;
     }
-    void this.commitBatch([op]).catch((error) => {
+    const write = this.commitBatch([op]).catch((error) => {
       console.warn("[societyer-local] background write failed", error);
     });
+    this.legacyWrites.add(write);
+    void write.finally(() => this.legacyWrites.delete(write));
+  }
+
+  /**
+   * Resolves once every background write from the legacy row API is in
+   * IndexedDB (failures were already reported). A legacy mutation awaits it
+   * before resolving, so a save the UI reports as done survives a reload
+   * straight after it.
+   */
+  async flushLegacyWrites() {
+    while (this.legacyWrites.size) await Promise.all([...this.legacyWrites]);
   }
 
   private recordUndo(table: string, id: string) {

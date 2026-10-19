@@ -243,11 +243,11 @@
   border: 1px solid token('border');
   white-space: nowrap;
 }
-.badge--success { background: token('success-soft'); color: token('success'); border-color: token('green-6'); }
-.badge--warn { background: token('warn-soft'); color: token('warn'); border-color: token('orange-6'); }
-.badge--danger { background: token('danger-soft'); color: token('danger'); border-color: token('red-6'); }
+.badge--success { background: token('success-soft'); color: token('success-text'); border-color: token('green-6'); }
+.badge--warn { background: token('warn-soft'); color: token('warn-text'); border-color: token('orange-6'); }
+.badge--danger { background: token('danger-soft'); color: token('danger-text'); border-color: token('red-6'); }
 .badge--info { background: token('info-soft'); color: token('info'); border-color: token('blue-6'); }
-.badge--accent { background: token('accent-soft'); color: token('accent'); border-color: token('blue-6'); }
+.badge--accent { background: token('accent-soft'); color: token('accent-text'); border-color: token('blue-6'); }
 
 .badge--blue      { background: token('blue-3');      color: token('blue-11');      border-color: token('blue-6'); }
 .badge--red       { background: token('red-3');       color: token('red-11');       border-color: token('red-6'); }

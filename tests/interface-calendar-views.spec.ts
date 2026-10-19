@@ -35,7 +35,8 @@ test("calendar layouts save, discard and reload while dated records open their a
   await expect(calendar.getByRole("button", { name: "Calendar source deadline", exact: true })).toHaveCount(0);
   await calendar.getByRole("button", { name: "Previous week", exact: true }).click();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeHidden();
+  // The button reads "Saving…" until the write is stored; reload only after.
+  await expect(page.getByRole("button", { name: /^(Save changes|Saving…)$/ })).toHaveCount(0);
   await page.reload();
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
   await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
@@ -43,7 +44,8 @@ test("calendar layouts save, discard and reload while dated records open their a
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
   await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeHidden();
+  // The button reads "Saving…" until the write is stored; reload only after.
+  await expect(page.getByRole("button", { name: /^(Save changes|Saving…)$/ })).toHaveCount(0);
   await page.reload();
   await expect(calendar.getByRole("button", { name: "Agenda", exact: true })).toHaveAttribute("aria-pressed", "true");
   await fits(page);

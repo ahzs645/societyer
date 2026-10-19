@@ -631,6 +631,15 @@ body.modal-resizing {
 .modal__head > button {
   flex-shrink: 0;
 }
+// Touch: the close button is a full 40px target, like the drawer's (_forms.scss).
+@media (pointer: coarse) {
+  .modal__head .btn.btn--icon.modal__close {
+    width: token('control-h-lg');
+    min-width: token('control-h-lg');
+    height: token('control-h-lg');
+    min-height: token('control-h-lg');
+  }
+}
 .modal__body {
   padding: 14px;
   overflow-y: auto;

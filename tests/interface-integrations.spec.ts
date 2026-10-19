@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { pinnedRowActions, recordRows, rowActionsArePinned } from "./helpers/rowActions";
 
 // Use client navigation after the initial load: this also exercises route/tab
 // state without masking failures behind a fresh app mount.
@@ -149,7 +150,15 @@ test("local preparation stays useful while external sends, workflow runs, and fe
   await page.getByRole("button", { name: "Test", exact: true }).click();
   await expect(page.getByText("Paperless demo adapter is ready", { exact: true })).toBeVisible();
   await openApp(page, "workflows", "Workflows");
-  await expect(page.getByRole("button", { name: "Run now", exact: true }).first()).toBeDisabled();
+  // Phone cards, and a table wider than its frame, keep row actions behind "Row actions for …".
+  const workflow = recordRows(page).first();
+  if (await rowActionsArePinned(workflow)) {
+    await pinnedRowActions(workflow).click();
+    await expect(page.getByRole("menuitem", { name: "Run now", exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+  } else {
+    await expect(page.getByRole("button", { name: "Run now", exact: true }).first()).toBeDisabled();
+  }
   await openApp(page, "calendar-sync", "Calendar sync");
   await expect(page.getByText(/Outbound calendar subscriptions require a connected server/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Enable calendar feed", exact: true })).toHaveCount(0);

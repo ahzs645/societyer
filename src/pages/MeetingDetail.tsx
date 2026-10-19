@@ -22,8 +22,8 @@ import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { MeetingSourcesCard } from "../features/meetings/components/MeetingSourcesCard";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
-import { minutesDraftBlocker, minutesDraftTranscript } from "../../shared/minutesDraftInput";
-import { TRANSCRIPT_READ_PERMISSION, TRANSCRIPT_WITHHELD_IN_CAMERA, transcriptTextWithoutInCamera } from "../../shared/minutesPrivacy";
+import { minutesDraftBlocker, minutesDraftTranscript, withoutTemplateSeededSections } from "../../shared/minutesDraftInput";
+import { TRANSCRIPT_READ_PERMISSION, TRANSCRIPT_WITHHELD_IN_CAMERA, inCameraAgendaTopics, transcriptTextWithoutInCamera } from "../../shared/minutesPrivacy";
 import { TranscriptAccessNotice, type TranscriptAccess } from "../features/meetings/components/TranscriptAccessNotice";
 import { bylawBaselineForOrganization, quorumRequiresLegalRegisterFor } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
@@ -317,7 +317,7 @@ export function MeetingDetailPage() {
   const runPipeline = useAction(api.transcripts.runPipeline);
   const transcriptionJob = useQuery(
     api.transcripts.jobForMeeting,
-    can("meetings:read") && meetingId ? { meetingId } : "skip",
+    canReadTranscript && meetingId ? { meetingId } : "skip",
   );
   const toast = useToast();
   const confirm = useConfirm();
@@ -521,13 +521,14 @@ export function MeetingDetailPage() {
   const runGenerateWithOverwriteGuard = async (): Promise<boolean> => {
     if (!(canMinutesWrite)) return false;
     // Adopted minutes and recorded sections are refused by the server; say so
-    // before asking to replace anything.
-    const draftBlocker = minutesDraftBlocker(minutes);
+    // before asking to replace anything. Sections holding only the meeting
+    // template's defaults are neither recorded nor a started draft.
+    const draftBlocker = minutesDraftBlocker(minutes, meeting);
     if (draftBlocker) {
       toast.error(draftBlocker);
       return false;
     }
-    if (hasStartedMinutesDraft(minutes)) {
+    if (minutes && hasStartedMinutesDraft(withoutTemplateSeededSections(minutes, meeting))) {
       const ok = await confirm({
         title: "Replace existing minutes?",
         message: "These minutes already have content. Re-drafting will overwrite what's there with a fresh AI draft from the transcript on file.",
@@ -685,6 +686,8 @@ export function MeetingDetailPage() {
   const agendaTree = agendaEntriesFromRecord((minutes as any)?.adoptedAgenda?.items ? (minutes as any).adoptedAgenda : agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
+  // Topics inside an in-camera session: the material drawer warns that their links are hidden from Members.
+  const inCameraTopics = inCameraAgendaTopics(agendaRecord?.items ?? [], minutes);
   // Until the minutes query answers, counts would read as "none recorded".
   const minutesLoading = minutes === undefined && canMinutesRead;
   const sourceFidelityInExport = effectiveSourceFidelity(storedSourceFidelity, sourceFidelityChoice[String(meeting._id)], minutes, meeting);
@@ -2585,7 +2588,7 @@ export function MeetingDetailPage() {
           />
         )}
         {activeTab === "transcript" && !transcriptAccess && <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} />}
-        {(activeTab === "overview" || activeTab === "minutes" || activeTab === "sources") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} />}
+        {(activeTab === "overview" || activeTab === "minutes" || activeTab === "sources") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} canReadTranscript={canReadTranscript} />}
         {activeTab === "overview" && recordKind === "meeting" && (
           <MeetingRecordKindPrompt
             meetingId={meeting._id}
@@ -2980,6 +2983,7 @@ export function MeetingDetailPage() {
         setMaterialDraft={setMaterialDraft}
         allDocuments={allDocuments ?? []}
         agenda={agenda}
+        inCameraTopics={inCameraTopics}
         grantCandidates={grantCandidates}
         onClose={() => setMaterialDraft(null)}
         onSave={saveMaterial}

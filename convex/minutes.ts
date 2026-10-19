@@ -388,7 +388,7 @@ export const generateDraft = authorizedAction("minutes:generateDraft", action)({
     if (!meeting) throw new Error("Meeting not found");
     if (!transcript.trim()) throw new Error("Add a transcript first.");
     // Refuse before calling the model; upsertFromDraft repeats this check atomically.
-    const draftBlocker = minutesDraftBlocker(await ctx.runQuery(api.minutes.getByMeeting, { meetingId }));
+    const draftBlocker = minutesDraftBlocker(await ctx.runQuery(api.minutes.getByMeeting, { meetingId }), meeting);
     if (draftBlocker) throw new Error(draftBlocker);
 
     const draft = await summarizeMinutes(

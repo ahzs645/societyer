@@ -7,7 +7,9 @@
  *    minutes:upsertFromDraft) send the same prompt and produce the same upsert
  *    arguments and the same stored minutes.
  * 2. Long transcripts on a small budget are drafted in parts and merged.
- * 3. Adopted minutes are refused before any model call, on device too.
+ * 3. Adopted minutes are refused before any model call, on device too. A
+ *    meeting made from the default board template drafts on device; once a
+ *    person edits a seeded section it is refused by name, before the model.
  * 4. Hosted drafting now uses the workspace's saved AI provider, and a saved
  *    address on a private host is refused (the deployment key is used instead).
  */
@@ -25,7 +27,7 @@ import { directTransport } from "../src/lib/localAi/transport";
 import { draftMinutesOnDevice } from "../src/features/meetings/localMinutesDraft";
 import { buildMinutesDraftMessages } from "../shared/ai/minutesDraft";
 import { mergeMinuteDrafts, splitTranscript } from "../shared/ai/minutesDraftChunks";
-import { ADOPTED_MINUTES_DRAFT_BLOCKED } from "../shared/minutesDraftInput";
+import { ADOPTED_MINUTES_DRAFT_BLOCKED, recordedSectionsDraftBlocked } from "../shared/minutesDraftInput";
 
 const server = await startMockOpenAiServer();
 const ENV_KEY = "deployment-env-key";
@@ -157,6 +159,48 @@ await assert.rejects(
 assert.equal(server.requests.length, 0, "adopted minutes never reach the model");
 await assert.rejects(() => runtime.runMutation("minutes:upsertFromDraft", device.args), /Adopted minutes are frozen/, "the portable upsert refuses too");
 await assert.rejects(() => draftMinutesOnDevice({ client: deviceClient, meeting: deviceMeeting, transcript: "  ", existingMinutes: null, chunkChars: 8000 }), /Add a transcript first/);
+
+// ---- Template meetings on device: defaults never block; edits are named -------
+await runtime.runMutation("meetingTemplates:seedDefaults", { societyId });
+const deviceTemplates = await runtime.runQuery<Array<{ _id: string; name: string }>>("meetingTemplates:list", { societyId });
+const boardTemplateId = deviceTemplates.find((template) => template.name === "Regular board meeting")?._id;
+assert.ok(boardTemplateId, "the default board template is seeded on device");
+type DeviceMeetingRow = typeof deviceMeeting & { templateSnapshotJson?: string };
+type DeviceMinutesRow = { _id: string; sections: Array<Record<string, unknown>> };
+const templateMeetingId = await runtime.runMutation<string>("meetings:create", {
+  societyId, type: TYPE, title: "December board meeting", scheduledAt: "2026-12-04T18:00:00Z", electronic: false, status: "Held", attendeeIds: [], meetingTemplateId: boardTemplateId,
+});
+const templateMeeting = await runtime.runQuery<DeviceMeetingRow>("meetings:get", { id: templateMeetingId });
+const templateMinutes = await runtime.runQuery<DeviceMinutesRow>("minutes:getByMeeting", { meetingId: templateMeetingId });
+assert.ok(templateMinutes.sections.some((section) => /unceded and ancestral territory/.test(String(section.discussion))), "the land acknowledgement is seeded");
+server.requests.length = 0;
+const templateDraft = await draftMinutesOnDevice({ client: deviceClient, meeting: templateMeeting, transcript, existingMinutes: templateMinutes, chunkChars: 8000 });
+assert.equal(chatBodies().length, 1, "a template meeting is drafted on device");
+await runtime.runMutation("minutes:upsertFromDraft", templateDraft.args);
+const templateDrafted = await runtime.runQuery<Record<string, unknown>>("minutes:getByMeeting", { meetingId: templateMeetingId });
+assert.equal(templateDrafted.discussion, templateDraft.args.discussion, "the portable upsert accepts it");
+
+const editedMeetingId = await runtime.runMutation<string>("meetings:create", {
+  societyId, type: TYPE, title: "January board meeting", scheduledAt: "2027-01-08T18:00:00Z", electronic: false, status: "Held", attendeeIds: [], meetingTemplateId: boardTemplateId,
+});
+const editedSeed = await runtime.runQuery<DeviceMinutesRow>("minutes:getByMeeting", { meetingId: editedMeetingId });
+await runtime.runMutation("minutes:update", {
+  id: editedSeed._id,
+  patch: { sections: editedSeed.sections.map((section) => section.title === "Adopt agenda" ? { ...section, discussion: "Moved by Jane Doe." } : section) },
+});
+const editedMeeting = await runtime.runQuery<DeviceMeetingRow>("meetings:get", { id: editedMeetingId });
+const editedMinutes = await runtime.runQuery("minutes:getByMeeting", { meetingId: editedMeetingId });
+server.requests.length = 0;
+await assert.rejects(
+  () => draftMinutesOnDevice({ client: deviceClient, meeting: editedMeeting, transcript, existingMinutes: editedMinutes, chunkChars: 8000 }),
+  (error: Error) => error.message === recordedSectionsDraftBlocked(["Adopt agenda"]),
+);
+assert.equal(server.requests.length, 0, "an edited template section never reaches the model");
+await assert.rejects(
+  () => runtime.runMutation("minutes:upsertFromDraft", { ...templateDraft.args, meetingId: editedMeetingId }),
+  (error: Error) => error.message.includes("“Adopt agenda” has recorded content"),
+  "the portable upsert refuses it too",
+);
 
 // ---- Hosted: the saved workspace provider is used (and policy-checked) -------
 async function saveWorkspaceProvider(baseUrl: string) {

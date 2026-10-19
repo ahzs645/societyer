@@ -42,21 +42,27 @@ export const DEFAULT_FREEZE_FIRST_COLUMN_ABOVE = 6;
 // exports/column pickers keep using the uncapped list.
 export const MOBILE_MAX_VISIBLE_COLUMNS = 3;
 
-// `isIdentifier` marks the column that opens the record: it always survives
-// the cap (first), and the remaining slots go to the leading other columns in
-// view order.
+// Which columns survive the cap, in priority order within its budget:
+// - the identifier (`isIdentifier`, the column that opens the record), always
+//   first; without one, the first column takes its place;
+// - a status-like column (`pickStatus` chooses it from the rest), so a
+//   receipt's "Voided" or a filing's "Overdue" stays in view;
+// - then the leading other columns in view order.
+// The survivors after the identifier keep their view order.
 export function limitColumnsForPhone<T>(
   columns: T[],
   isMobile: boolean,
   isIdentifier?: (column: T) => boolean,
+  pickStatus?: (candidates: T[]) => T | undefined,
 ): T[] {
   if (!isMobile || columns.length <= MOBILE_MAX_VISIBLE_COLUMNS) return columns;
-  const identifier = isIdentifier ? columns.find(isIdentifier) : undefined;
-  if (!identifier) return columns.slice(0, MOBILE_MAX_VISIBLE_COLUMNS);
-  return [
-    identifier,
-    ...columns.filter((column) => column !== identifier).slice(0, MOBILE_MAX_VISIBLE_COLUMNS - 1),
-  ];
+  const lead = (isIdentifier ? columns.find(isIdentifier) : undefined) ?? columns[0];
+  const rest = columns.filter((column) => column !== lead);
+  const status = pickStatus?.(rest);
+  const kept = new Set(
+    (status ? [status, ...rest.filter((column) => column !== status)] : rest).slice(0, MOBILE_MAX_VISIBLE_COLUMNS - 1),
+  );
+  return [lead, ...rest.filter((column) => kept.has(column))];
 }
 
 export function getMobileTableLayout({

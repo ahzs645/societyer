@@ -1,7 +1,7 @@
 import { usePermissions } from "@/hooks/usePermissions";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { LockKeyhole } from "lucide-react";
-import { Badge, Drawer, Field } from "../../../components/ui";
+import { Badge, Banner, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
@@ -21,11 +21,22 @@ type GrantCandidate = {
   label: string;
 };
 
+/** Attaching to an in-camera topic hides the link from Members, not the document (decision A5, final QA). */
+function InCameraTopicNotice() {
+  return (
+    <Banner tone="warn" title="This topic is in camera">
+      Members won't see this material listed with the meeting. The document itself isn't hidden: anyone the Access
+      setting below allows can still open it in Documents.
+    </Banner>
+  );
+}
+
 export function MeetingMaterialDrawer({
   materialDraft,
   setMaterialDraft,
   allDocuments,
   agenda,
+  inCameraTopics,
   grantCandidates,
   onClose,
   onSave,
@@ -35,6 +46,8 @@ export function MeetingMaterialDrawer({
   setMaterialDraft: Dispatch<SetStateAction<any | null>>;
   allDocuments: any[];
   agenda: string[];
+  /** Agenda topics inside an in-camera session. */
+  inCameraTopics: ReadonlySet<string>;
   grantCandidates: GrantCandidate[];
   onClose: () => void;
   onSave: () => void | Promise<void>;
@@ -90,6 +103,7 @@ export function MeetingMaterialDrawer({
               ]}
             />
           </Field>
+          {inCameraTopics.has(materialDraft.agendaLabel) && <InCameraTopicNotice />}
           <Field label="Label">
             <input className="input" value={materialDraft.label} onChange={(event) => setMaterialDraft({ ...materialDraft, label: event.target.value })} placeholder="Optional display label" />
           </Field>

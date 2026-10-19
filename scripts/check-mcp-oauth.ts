@@ -24,7 +24,10 @@
  *     the daily clean-up (L1); invisible characters in names and the
  *     unverified client_uri (L4); audit of denials, RFC 7009, failed code
  *     exchanges (L6); malformed Basic auth, replay by another client and
- *     streamed oversized bodies (info).
+ *     streamed oversized bodies (info);
+ *   - final QA: connector status wording (Paused while the opt-in is off,
+ *     Revoked/Disconnected with their date) and the consent page naming a
+ *     self-registered app by its redirect host, not its self-declared name.
  *
  * Run: node --import tsx scripts/check-mcp-oauth.ts
  */
@@ -50,6 +53,7 @@ import {
   throttleIpKey,
   unknownIpBuckets,
 } from "../shared/mcp/oauth";
+import { connectorStatus, consentIdentity } from "../src/features/aiConnectors/connectorDisplay";
 
 const SITE = "https://oauth-test.convex.site";
 const APP = "https://app.example.test";
@@ -102,6 +106,53 @@ assert.equal(throttleIpKey("203.0.113.9"), "v4:203.0.113.9");
 assert.deepEqual(unknownIpBuckets({}), { authorize: { capacity: 60, perHour: 600 }, register: { capacity: 20, perHour: 200 } });
 assert.deepEqual(unknownIpBuckets({ SOCIETYER_MCP_OAUTH_UNKNOWN_IP_AUTHORIZE_PER_HOUR: "3000", SOCIETYER_MCP_OAUTH_UNKNOWN_IP_REGISTER_PER_HOUR: "5" }), { authorize: { capacity: 300, perHour: 3000 }, register: { capacity: 1, perHour: 5 } });
 for (const bad of ["0", "-5", "lots", "1.5"]) assert.deepEqual(unknownIpBuckets({ SOCIETYER_MCP_OAUTH_UNKNOWN_IP_AUTHORIZE_PER_HOUR: bad }).authorize, { capacity: 60, perHour: 600 }, `${bad} falls back to the default`);
+
+// Final QA item 3/11: what Settings → AI connectors says about a token or a connected app.
+{
+  const NOW = Date.parse("2026-10-18T12:00:00.000Z");
+  const live = { expiresAtISO: "2027-01-04T12:00:00.000Z", connectorsEnabled: true };
+  const revokedAtISO = "2026-10-17T09:00:00.000Z";
+  assert.deepEqual(
+    pick(connectorStatus({ kind: "token", ...live }, NOW)),
+    { state: "active", label: "Active", live: true, dateLabel: "Expires", dateISO: live.expiresAtISO },
+  );
+  for (const kind of ["token", "oauth"] as const) {
+    const paused = connectorStatus({ kind, ...live, connectorsEnabled: false }, NOW);
+    assert.equal(`${paused.label} — ${paused.note?.toLowerCase()}`, "Paused — connectors are off for this workspace", `${kind}: not "Active" while the opt-in is off`);
+    assert.equal(paused.live, true, `${kind}: a paused one can still be revoked`);
+  }
+  assert.deepEqual(
+    pick(connectorStatus({ kind: "token", ...live, revokedAtISO }, NOW)),
+    { state: "revoked", label: "Revoked", live: false, dateLabel: "Revoked", dateISO: revokedAtISO },
+    "a revoked token shows when it was revoked, not \"Expires …\"",
+  );
+  assert.deepEqual(
+    pick(connectorStatus({ kind: "oauth", ...live, revokedAtISO, connectorsEnabled: false }, NOW)),
+    { state: "revoked", label: "Disconnected", live: false, dateLabel: "Disconnected", dateISO: revokedAtISO },
+    "\"Disconnect\" leaves a \"Disconnected\" app, opt-in or not",
+  );
+  assert.equal(connectorStatus({ kind: "token", expiresAtISO: "2026-10-01T00:00:00.000Z", connectorsEnabled: false }, NOW).label, "Expired", "expired beats paused");
+}
+function pick({ state, label, live, dateLabel, dateISO }: ReturnType<typeof connectorStatus>) {
+  return { state, label, live, dateLabel, dateISO };
+}
+
+// Final QA item 4: an unverified app is named by where it returns, not by what it calls itself.
+{
+  const dcr = { name: "Claude (verified)", host: null, registration: "dcr" as const, redirectHost: "claude.ai", loopback: false };
+  assert.deepEqual(consentIdentity(dcr), { title: "Connect an app at claude.ai", name: "the app at claude.ai", secondary: "Calls itself “Claude (verified)”", verified: false });
+  assert.deepEqual(
+    consentIdentity({ ...dcr, redirectHost: "localhost (this computer)", loopback: true }),
+    { title: "Connect an app on this computer", name: "the app on this computer", secondary: "Calls itself “Claude (verified)”", verified: false },
+  );
+  assert.equal(consentIdentity({ ...dcr, name: "Cla‮ude​", redirectHost: "evil​.example" }).secondary, "Calls itself “Claude”", "format characters stay out");
+  assert.equal(consentIdentity({ ...dcr, redirectHost: "evil​.example" }).title, "Connect an app at evil.example");
+  assert.deepEqual(
+    consentIdentity({ name: "Claude", host: "claude.ai", registration: "cimd", redirectHost: "claude.ai", loopback: false }),
+    { title: "Connect Claude", name: "Claude", secondary: "Published by claude.ai", verified: true },
+    "a metadata document's name is backed by its host",
+  );
+}
 
 // --- Fixture ---------------------------------------------------------------------------------
 const modules: Record<string, () => Promise<unknown>> = {

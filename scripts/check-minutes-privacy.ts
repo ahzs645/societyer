@@ -16,12 +16,15 @@
  *   - in-camera agenda titles read "In-camera item" and a minutes meeting's
  *     working notes are withheld (A3); notes meetings keep their notes;
  *   - no connector scope reads in-camera content, even for the Owner (A5);
- *   - documents holding in-camera content (a meeting's minutes scan, materials
- *     of in-camera agenda items, sources in-camera minutes cite) are a
- *     placeholder in documents:list/listSummaries/get/getMany/browse/
- *     reviewQueues and the meeting package, and can't be opened, downloaded
- *     or commented on, for readers without minutes:write and every connector
- *     scope; editors read them as usual (security review H1);
+ *   - documents holding in-camera content (a meeting's minutes scan, documents
+ *     filed under an in-camera meeting or item, sources in-camera minutes
+ *     cite) are a placeholder in documents:list/listSummaries/get/getMany/
+ *     browse/reviewQueues and the meeting package, and can't be opened,
+ *     downloaded or commented on, for readers without minutes:write and every
+ *     connector scope; editors read them as usual (security review H1);
+ *   - a library document attached as a material of an in-camera item stays
+ *     readable as a document; the material link (listing, label, notes) is
+ *     withheld instead, and attaching never files a document under the meeting;
  *   - the public copy renderer drops in-camera content for everyone;
  *   - the hosted AI agent's find_minutes tool is limited to roles that hold
  *     in-camera access (tasks:write); its redaction guards scoped tokens;
@@ -54,8 +57,11 @@ import {
   minutesSectionsOf,
   inCameraRecordingRanges,
   isInCameraDocument,
+  isInCameraMaterial,
+  inCameraAgendaTopics,
   redactInCameraAgendaTitles,
   redactInCameraMinutes,
+  redactInCameraMotion,
   redactInCameraTranscript,
   transcriptTextWithoutInCamera,
   withoutTranscriptCopy,
@@ -113,6 +119,9 @@ assert.equal((redactedBoard.sections as Row[]).length, 4, "sections keep their p
 assert.equal((redactedBoard.decisions as string[]).length, 2);
 assert.equal((redactedBoard.decisions as string[])[0], "Approve the budget");
 assert.equal((redactedBoard.sections as Row[])[0].discussion, "Budget reviewed.", "public sections are untouched");
+// Final QA: one name per kind of thing. A section (an agenda item's record) reads like its agenda item.
+assert.deepEqual((redactedBoard.sections as Row[]).slice(1, 3).map((section) => section.title), [IN_CAMERA_ITEM_TITLE, IN_CAMERA_ITEM_TITLE], "in-camera sections read \"In-camera item\", as on the agenda");
+assert.equal((redactInCameraMotion({ text: "SECRET", sectionTitle: "In camera — executive director review" }) as Row).sectionTitle, IN_CAMERA_ITEM_TITLE, "a motion's section too");
 assert.equal(redactedBoard.draftTranscript, undefined, "the working transcript copy is withheld");
 assert.equal(redactedBoard.inCameraRedacted, true);
 const unlocated = redactInCameraMinutes(seed.minutes.find((row) => row._id === "minutes_unlocated")!) as Row;
@@ -170,14 +179,15 @@ assert.deepEqual(inCameraDocumentIdsOf({ ...publicRow, sourceDocumentIds: ["doc_
 assert.deepEqual(inCameraDocumentIdsOf(boardRow, [{ _id: "motion_secret", minutesId: "minutes_board", sectionIndex: 1, dissentDocumentId: "doc_dissent" }, { _id: "motion_budget", sectionIndex: 0, dissentDocumentId: "doc_open_dissent" }]), ["doc_dissent"], "dissent reports of in-camera motions only");
 const index = {
   documentIds: new Set(["doc_cited"]), meetingIds: new Set(["meeting_board"]), agendaItemIds: new Set(["item_review"]), taskIds: new Set(["task_linked"]),
+  inCameraAgendaTitles: new Map([["meeting_board", new Set(["in camera — executive director review"])]]),
   minutesSections: new Map([["meeting_board", minutesSectionsOf(boardRow)], ["meeting_public", minutesSectionsOf(publicRow)]]),
 };
-assert.ok(isInCameraDocument({ _id: "doc_cited" }, [], index));
-assert.ok(isInCameraDocument({ _id: "doc_scan", category: "meeting minutes", meetingId: "meeting_board" }, [], index), "a minutes document of the meeting (category aliases too)");
-assert.ok(isInCameraDocument({ _id: "doc_agenda", category: "Correspondence", meetingId: "meeting_board" }, [], index), "any category filed under the meeting (round 2)");
-assert.ok(!isInCameraDocument({ _id: "doc_other", category: "Minutes", meetingId: "meeting_public" }, [], index));
-assert.ok(isInCameraDocument({ _id: "doc_copy", duplicateOfDocumentId: "doc_cited" }, [], index) && isInCameraDocument({ _id: "doc_v2", supersedesDocumentId: "doc_cited" }, [], index), "copies and versions of in-camera documents");
-assert.ok(isInCameraDocument({ _id: "doc_material" }, [{ documentId: "doc_material", meetingId: "meeting_board" }], index), "any material of the meeting");
+assert.ok(isInCameraDocument({ _id: "doc_cited" }, index));
+assert.ok(isInCameraDocument({ _id: "doc_scan", category: "meeting minutes", meetingId: "meeting_board" }, index), "a minutes document of the meeting (category aliases too)");
+assert.ok(isInCameraDocument({ _id: "doc_agenda", category: "Correspondence", meetingId: "meeting_board" }, index), "any category filed under the meeting (round 2)");
+assert.ok(!isInCameraDocument({ _id: "doc_other", category: "Minutes", meetingId: "meeting_public" }, index));
+assert.ok(isInCameraDocument({ _id: "doc_copy", duplicateOfDocumentId: "doc_cited" }, index) && isInCameraDocument({ _id: "doc_v2", supersedesDocumentId: "doc_cited" }, index), "copies and versions of in-camera documents");
+assert.ok(!isInCameraDocument({ _id: "doc_material", category: "Policy" }, index), "final QA: a library document attached as a material doesn't belong to the meeting");
 assert.deepEqual(inCameraTaskIdsOf(boardRow), ["task_ic_linked"], "tasks linked from in-camera action items");
 assert.ok(isInCameraTask({ _id: "task_linked" }, index) && isInCameraTask({ _id: "t", inCamera: true }, index), "linked tasks; the hint holds for a task with no minutes");
 // Round 3: decided at read time against the current minutes.
@@ -191,9 +201,18 @@ assert.ok(!isInCameraTask(action({ minutesSectionIndex: 5, minutesSectionTitle: 
 assert.ok(isInCameraTask(action({ minutesSectionIndex: 0, minutesSectionTitle: "Renamed section" }), index), "a section that can't be found counts as in camera");
 assert.ok(!isInCameraTask({ _id: "t", meetingId: "meeting_public", tags: ["minutes-action"] }, index), "nothing is in camera at that meeting");
 assert.ok(!isInCameraTask({ _id: "t", meetingId: "meeting_board", tags: [] }, index), "an ordinary task about the meeting");
-assert.ok(isInCameraDocument({ _id: "doc_pack" }, [{ documentId: "doc_pack", agendaItemId: "item_review" }], index), "a material of an in-camera agenda item");
-assert.ok(isInCameraDocument({ _id: "doc_attached", agendaItemId: "item_review" }, [], index));
-assert.ok(!isInCameraDocument({ _id: "doc_pack" }, [{ documentId: "doc_pack", agendaItemId: "item_budget" }], index));
+assert.ok(isInCameraDocument({ _id: "doc_attached", agendaItemId: "item_review" }, index), "a document filed under an in-camera agenda item");
+// Final QA: the material link to an in-camera item is what's withheld, by item id or topic.
+assert.ok(isInCameraMaterial({ meetingId: "meeting_board", documentId: "doc_pack", agendaItemId: "item_review" }, index), "a material of an in-camera agenda item");
+assert.ok(isInCameraMaterial({ meetingId: "meeting_board", documentId: "doc_pack", agendaLabel: "  In camera — Executive  director review " }, index), "filed by topic (normalized)");
+assert.ok(!isInCameraMaterial({ meetingId: "meeting_board", documentId: "doc_pack", agendaLabel: "Budget" }, index), "an open item's material");
+assert.ok(!isInCameraMaterial({ meetingId: "meeting_board", documentId: "doc_pack" }, index), "general materials of the meeting");
+assert.ok(!isInCameraMaterial({ meetingId: "meeting_public", documentId: "doc_pack", agendaLabel: "In camera — executive director review" }, index), "the same topic at another meeting");
+assert.deepEqual(
+  [...inCameraAgendaTopics(seed.agendaItems.filter((item) => item.agendaId === "agenda_board"), boardRow)],
+  ["In camera — executive director review", "SECRET follow-up item"],
+  "the material drawer warns on the in-camera item and its sub-item",
+);
 
 // --- Both portable adapters, every role ---------------------------------------
 for (const local of [false, true]) {
@@ -329,10 +348,28 @@ for (const local of [false, true]) {
     const committeeMinutes = await runtime.runQuery<Row>("documents:get", { id: "doc_committee_minutes" });
     assert.equal(committeeMinutes.content, "Updates were shared.", `${label}: minutes of a meeting with nothing in camera read as usual`);
     const packMaterials = pack.materials as Row[];
-    withheldDoc(packMaterials, "meeting package materials (label, notes, document)");
+    assert.equal(json(packMaterials).includes(SECRET), sees, `${label}: meeting package materials (label, notes, document)`);
     assert.equal(json(pack.tasks).includes(SECRET), sees, `${label}: meeting package tasks`);
-    if (!sees) assert.equal(packMaterials.find((row) => row.documentId === "doc_review_pack")?.label, IN_CAMERA_DOCUMENT_TITLE);
-    withheldDoc(await runtime.runQuery("meetingMaterials:listForMeeting", { meetingId: "meeting_board" }), "meetingMaterials:listForMeeting");
+    // Final QA: an in-camera item's materials aren't listed without in-camera access, whatever their document;
+    // an open item's material of the same meeting is, with its library document.
+    const listedMaterials = (rows: Row[]) => rows.map((row) => row._id).sort();
+    const expectedMaterials = sees ? ["material_budget_background", "material_library_rules", "material_review_pack"] : ["material_budget_background"];
+    assert.deepEqual(listedMaterials(packMaterials), expectedMaterials, `${label}: meeting package materials listed`);
+    assert.equal(pack.counts && (pack.counts as Row).materials, expectedMaterials.length, `${label}: package counts what's listed`);
+    const meetingMaterials = await runtime.runQuery<Row[]>("meetingMaterials:listForMeeting", { meetingId: "meeting_board" });
+    assert.deepEqual(listedMaterials(meetingMaterials), expectedMaterials, `${label}: meetingMaterials:listForMeeting`);
+    assert.equal(json(meetingMaterials).includes(SECRET), sees, `${label}: meetingMaterials:listForMeeting label and notes`);
+    const societyMaterials = await runtime.runQuery<Row[]>("meetingMaterials:listForSociety", { societyId: "privacy-society" });
+    assert.deepEqual(listedMaterials(societyMaterials), expectedMaterials, `${label}: meetingMaterials:listForSociety`);
+    assert.equal(json(societyMaterials).includes(SECRET), sees, `${label}: meetingMaterials:listForSociety label and notes`);
+    assert.equal(packMaterials.find((row) => row._id === "material_budget_background")?.label, "Budget history", `${label}: an open item's material keeps its label`);
+    for (const id of ["doc_library_rules", "doc_budget_background"]) {
+      const document = await runtime.runQuery<Row>("documents:get", { id });
+      assert.equal(document.inCameraWithheld, undefined, `${label}: ${id} is a library document, readable wherever its access allows`);
+      assert.ok(document.content, `${label}: ${id} content`);
+    }
+    const rulesListed = listed.find((row) => row._id === "doc_library_rules");
+    assert.equal(rulesListed?.title, "Card spending rules", `${label}: the library listing keeps its title`);
   }
 
   // A2: marking a range needs minutes:write and refuses approved minutes.
@@ -399,13 +436,34 @@ for (const local of [false, true]) {
   as(servicePrincipal(["meetings:read", "minutes:read"]));
   assert.ok(!json(await runtime.runQuery("minutes:getByMeeting", { meetingId: "meeting_board" })).includes(SECRET), `${adapter}: read scopes don't grant in-camera access`);
   as(servicePrincipal(["exports:*"]));
-  for (const table of ["minutes", "motions", "transcripts", "meetings", "agendaItems", "tasks", "documents"]) {
+  for (const table of ["minutes", "motions", "transcripts", "meetings", "agendaItems", "tasks", "documents", "meetingMaterials"]) {
     const rows = await runtime.runQuery("exports:exportTable", { societyId: "privacy-society", table });
     assert.ok(!json(rows).includes(SECRET), `${adapter}: ${table} export for a scoped token`);
   }
   assert.deepEqual(await runtime.runQuery("exports:exportTable", { societyId: "privacy-society", table: "transcripts" }), [], `${adapter}: no transcript access, no transcript rows`);
   as(servicePrincipal(["exports:*", "minutes:write"]));
   assert.ok(json(await runtime.runQuery("exports:exportTable", { societyId: "privacy-society", table: "minutes" })).includes(SECRET), `${adapter}: a minutes:write scope keeps the full export`);
+
+  // Final QA: attaching a library document to an in-camera item doesn't file it under the meeting, so Members
+  // still read the document in the library while the material link stays hidden from them.
+  {
+    const attaching = privacyRuntime(local);
+    attaching.as(rolePrincipal("Admin"));
+    await attaching.runtime.runMutation("meetingMaterials:attach", {
+      societyId: "privacy-society", meetingId: "meeting_board", documentId: "doc_policy",
+      agendaLabel: "In camera — executive director review", label: "SECRET attached label", accessLevel: "members",
+    });
+    const attachedPolicy = await attaching.db.get("doc_policy") as Row;
+    assert.equal(attachedPolicy.meetingId, undefined, `${adapter}: attaching never files a library document under the meeting`);
+    attaching.as(rolePrincipal("Member"));
+    const policy = await attaching.runtime.runQuery<Row>("documents:get", { id: "doc_policy" });
+    assert.deepEqual([policy.title, policy.inCameraWithheld], ["Conflict of interest policy", undefined], `${adapter}: Members keep reading the policy`);
+    const memberListing = await attaching.runtime.runQuery<Row[]>("meetingMaterials:listForMeeting", { meetingId: "meeting_board" });
+    assert.ok(!memberListing.some((row) => row.documentId === "doc_policy") && !json(memberListing).includes(SECRET), `${adapter}: but don't see it listed with the meeting`);
+    attaching.as(rolePrincipal("Director"));
+    const directorListing = await attaching.runtime.runQuery<Row[]>("meetingMaterials:listForMeeting", { meetingId: "meeting_board" });
+    assert.equal(directorListing.find((row) => row.documentId === "doc_policy")?.label, "SECRET attached label", `${adapter}: editors see the link`);
+  }
 
   // Rounds 2 and 3: "Create task from action" records where the action came from; reads decide against the current minutes.
   {

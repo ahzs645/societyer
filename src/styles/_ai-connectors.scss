@@ -188,6 +188,14 @@
   min-width: 0;
 }
 
+// An unverified app: the badge sits on its own line under the title, before what the app calls itself.
+.oauth-consent__lede {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: token('s-2');
+}
+
 .oauth-consent__facts {
   display: grid;
   gap: token('s-2');

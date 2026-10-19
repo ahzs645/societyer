@@ -279,6 +279,7 @@ assert.equal(meetings.isError, false);
 assert.deepEqual(JSON.parse(meetings.content[0].text), meetings.structuredContent, "text copy of structuredContent");
 const allMeetings = await call(owner.token, "list_meetings");
 assert.deepEqual((allMeetings.structuredContent?.meetings as { id: string }[]).map((row) => row.id), [publicId, boardId, markedId], "newest first");
+assert.ok((allMeetings.structuredContent?.meetings as { title: unknown }[]).every((row) => typeof (row.title as { untrusted?: unknown }).untrusted === "string"), "meeting titles people typed arrive as { untrusted }");
 
 for (const [label, token] of [["Owner", owner.token], ["Member", member.token], ["Viewer", viewer.token]] as const) {
   const board = await call(token, "get_meeting", { meetingId: boardId });
@@ -299,7 +300,7 @@ for (const documentId of [boardScanId, boardSourceId]) {
   assert.equal(withheldDocument.isError, false);
   assert.ok(!JSON.stringify(withheldDocument).includes(SECRET), `${documentId}: no in-camera text, title, file name or tags through get_document`);
   assert.equal(withheldDocument.structuredContent?.content, null);
-  assert.deepEqual([(withheldDocument.structuredContent?.document as Record<string, unknown>).title, (withheldDocument.structuredContent?.document as Record<string, unknown>).restricted], ["In-camera material", "in_camera"]);
+  assert.deepEqual([(withheldDocument.structuredContent?.document as Record<string, unknown>).title, (withheldDocument.structuredContent?.document as Record<string, unknown>).restricted], [{ untrusted: "In-camera material" }, "in_camera"]);
 }
 // Round 2: the residual paths the reviewer found, through /mcp with the Owner's token.
 for (const [label, documentId] of Object.entries(residualDocs)) {

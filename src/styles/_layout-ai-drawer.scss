@@ -105,6 +105,81 @@
   background: token('bg-subtle');
 }
 
+/* "Chats" disclosure bar: narrow drawers only (see _layout-ai-model.scss). */
+.global-ai-thread-bar {
+  display: none;
+}
+
+.global-ai-thread-toggle {
+  flex: 1;
+  min-width: 0;
+  min-height: token('control-h-md');
+  @include flex-center;
+  gap: token('s-2');
+  padding: 0 token('s-2');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  text-align: left;
+  cursor: pointer;
+}
+
+.global-ai-thread-toggle:hover {
+  background: token('bg-hover-alpha');
+}
+
+.global-ai-thread-toggle:focus-visible {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: -2px;
+}
+
+.global-ai-thread-toggle > svg {
+  flex: none;
+  color: token('text-secondary');
+}
+
+.global-ai-thread-toggle__label {
+  flex: none;
+  font-weight: 600;
+}
+
+.global-ai-thread-toggle__count {
+  flex: none;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: token('r-pill');
+  background: token('bg-muted');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.global-ai-thread-toggle__current {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: token('text-secondary');
+}
+
+.global-ai-thread-toggle__chevron {
+  transition: transform token('motion-move-fast') token('ease-move');
+}
+
+.global-ai-thread-toggle[aria-expanded='true'] .global-ai-thread-toggle__chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-ai-thread-toggle__chevron {
+    transition: none;
+  }
+}
+
 .global-ai-thread-list__items {
   flex: 1;
   min-height: 0;
@@ -537,6 +612,11 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity token('motion-fade') token('ease-fade');
+}
+
+/* The open menu paints over the rows below it. */
+.global-ai-thread.has-menu {
+  z-index: 1;
 }
 
 .global-ai-thread:hover .global-ai-thread__menu,

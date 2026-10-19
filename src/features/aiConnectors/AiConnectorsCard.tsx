@@ -9,6 +9,7 @@ import { useConfirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { formatDate, formatDateTime, relative } from "../../lib/format";
 import { copyTextToClipboard } from "../../lib/regulatoryCitations";
+import { connectorStatus } from "./connectorDisplay";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 /** What convex/agentConnectors.ts `overview` returns. */
@@ -60,12 +61,6 @@ const EXPIRY_OPTIONS = [
 ];
 const ENDPOINT_PLACEHOLDER = "https://<your-deployment>.convex.site/mcp";
 
-function grantStatus(grant: ConnectorGrant): { label: string; tone: "success" | "neutral" | "danger" } {
-  if (grant.revokedAtISO) return { label: "Revoked", tone: "neutral" };
-  if (Date.parse(grant.expiresAtISO) <= Date.now()) return { label: "Expired", tone: "danger" };
-  return { label: "Active", tone: "success" };
-}
-
 /** Copy-ready setup for the clients that take a bearer token today. */
 export function connectorSetupSnippets(endpoint: string, token?: string) {
   const exportLine = `export SOCIETYER_MCP_TOKEN="${token ?? "soc_mcp_…"}"`;
@@ -115,12 +110,13 @@ function Snippets({ endpoint, token }: { endpoint: string; token?: string }) {
   );
 }
 
-function GrantRow({ grant, onRevoke, onRevokeSession }: {
+function GrantRow({ grant, connectorsEnabled, onRevoke, onRevokeSession }: {
   grant: ConnectorGrant;
+  connectorsEnabled: boolean;
   onRevoke: (grant: ConnectorGrant) => void;
   onRevokeSession: (grant: ConnectorGrant, session: ConnectorSession) => void;
 }) {
-  const status = grantStatus(grant);
+  const status = connectorStatus({ ...grant, connectorsEnabled }, Date.now());
   return (
     <div className="settings-row ai-connectors__grant">
       <div className="ai-connectors__grant-body">
@@ -137,13 +133,14 @@ function GrantRow({ grant, onRevoke, onRevokeSession }: {
               </span>
             )
             : <span className="mono">{grant.tokenHint}</span>}
+          {status.note && <span>{status.note}</span>}
           {grant.createdBy && <span>{grant.createdBy}</span>}
           <span>Last used {grant.lastUsedAtISO ? relative(grant.lastUsedAtISO) : "never"}</span>
-          <span title={formatDate(grant.expiresAtISO)}>{status.label === "Expired" ? "Expired" : "Expires"} {formatDate(grant.expiresAtISO)}</span>
+          <span title={formatDateTime(status.dateISO)}>{status.dateLabel} {formatDate(status.dateISO)}</span>
         </div>
-        {grant.sessions && status.label === "Active" && <SessionList grant={grant} sessions={grant.sessions} onRevoke={onRevokeSession} />}
+        {grant.sessions && status.live && <SessionList grant={grant} sessions={grant.sessions} onRevoke={onRevokeSession} />}
       </div>
-      {status.label === "Active" && <Button size="sm" onClick={() => onRevoke(grant)}>{grant.kind === "oauth" ? "Disconnect" : "Revoke"}</Button>}
+      {status.live && <Button size="sm" onClick={() => onRevoke(grant)}>{grant.kind === "oauth" ? "Disconnect" : "Revoke"}</Button>}
     </div>
   );
 }
@@ -317,7 +314,9 @@ export function AiConnectorsCard({ societyId }: { societyId: Id<"societies"> }) 
       toast.error(oauth ? "Couldn't disconnect the app" : "Couldn't revoke the token", error instanceof Error ? error.message : "Please try again.");
     }
   };
-  const row = (grant: ConnectorGrant) => <GrantRow key={grant._id} grant={grant} onRevoke={revoke} onRevokeSession={revokeSession} />;
+  const row = (grant: ConnectorGrant) => (
+    <GrantRow key={grant._id} grant={grant} connectorsEnabled={overview.enabled} onRevoke={revoke} onRevokeSession={revokeSession} />
+  );
   const myApps = overview.grants.filter((grant) => grant.kind === "oauth");
   const myTokens = overview.grants.filter((grant) => grant.kind !== "oauth");
 

@@ -7,6 +7,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
+import { useRevealOnFieldLeave } from "../hooks/useRevealOnFieldLeave";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
@@ -59,6 +60,7 @@ export function DirectorsPage() {
   // A new record's "Required before saving" note waits until a field has
   // been left or Save was pressed, so an empty form doesn't open in red.
   const [problemsRevealed, setProblemsRevealed] = useState(false);
+  const revealProblemsOnLeave = useRevealOnFieldLeave(() => setProblemsRevealed(true));
   const [open, setOpen] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -358,7 +360,7 @@ export function DirectorsPage() {
       >
         {selected?._id && <div style={{ marginBottom: 8 }}><SourceProvenanceButton table="directors" id={selected._id} /></div>}
         {selected && (
-          <fieldset disabled={!canManage} onBlur={() => setProblemsRevealed(true)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <fieldset disabled={!canManage} {...revealProblemsOnLeave} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             {showSelectedProblems && (
               <InspectorNote tone="danger" title="Required before saving">
                 {selectedProblems.join(" ")}

@@ -210,8 +210,9 @@ export function mockToolAnswer(chat: ChatBody): string {
     if (error) return `A tool failed with ${String(error.code)}.`;
     if (value.status === "awaiting_approval") return "I proposed a change; it is waiting for your approval.";
     if (Array.isArray(value.meetings)) {
-      const first = value.meetings[0] as { title?: unknown; scheduledAt?: unknown } | undefined;
-      return `There are ${String(value.total)} meetings${first ? `; the latest is ${String(first.title)} (${String(first.scheduledAt ?? "").slice(0, 10)})` : ""}.`;
+      // Titles people typed arrive as { untrusted: "…" }.
+      const first = value.meetings[0] as { title?: { untrusted?: unknown }; scheduledAt?: unknown } | undefined;
+      return `There are ${String(value.total)} meetings${first ? `; the latest is ${String(first.title?.untrusted)} (${String(first.scheduledAt ?? "").slice(0, 10)})` : ""}.`;
     }
     if (Array.isArray(value.tasks)) return `There are ${String(value.total)} tasks.`;
     return "I read one more record.";

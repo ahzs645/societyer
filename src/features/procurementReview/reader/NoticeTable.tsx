@@ -93,6 +93,7 @@ function tableFor(kind: NoticeKind) {
       ? [
           {
             name: "title",
+            config: { groupable: false },
             label: "Award",
             fieldType: FIELD_TYPES.TEXT,
             size: 340,
@@ -111,6 +112,7 @@ function tableFor(kind: NoticeKind) {
           },
           {
             name: "value",
+            config: { groupable: false },
             label: "Value",
             fieldType: FIELD_TYPES.NUMBER,
             size: 130,
@@ -123,6 +125,7 @@ function tableFor(kind: NoticeKind) {
           },
           {
             name: "source",
+            config: { sortable: false },
             label: "Source",
             fieldType: FIELD_TYPES.TEXT,
             size: 130,
@@ -138,6 +141,7 @@ function tableFor(kind: NoticeKind) {
       : [
           {
             name: "title",
+            config: { groupable: false },
             label: "Opportunity",
             fieldType: FIELD_TYPES.TEXT,
             size: 340,
@@ -157,6 +161,7 @@ function tableFor(kind: NoticeKind) {
           },
           {
             name: "source",
+            config: { sortable: false },
             label: "Source",
             fieldType: FIELD_TYPES.TEXT,
             size: 130,
@@ -176,6 +181,7 @@ function tableFor(kind: NoticeKind) {
           },
           {
             name: "documents",
+            config: { groupable: false },
             label: "Documents",
             fieldType: FIELD_TYPES.NUMBER,
             size: 110,
@@ -428,6 +434,33 @@ export function NoticeTable({
   const loading = progress ? !progress.done && records.length === 0 : false;
   const [filtering, setFiltering] = useState(false);
 
+  const renderTable = (onEndReached?: () => void, serverLoading = false) => (
+        <RecordTable
+          fillViewport
+          onEndReached={onEndReached}
+          loading={loading || serverLoading}
+          showAggregateFooter={false}
+          renderCell={renderCell}
+          renderPhoneCard={renderPhoneCard}
+          emptyState={
+            emptyState ?? (
+              <div className="record-table__empty">
+                <div className="record-table__empty-title">
+                  {search
+                    ? `Nothing matches “${search}”`
+                    : `No ${objectMetadata.labelPlural.toLowerCase()} here`}
+                </div>
+                <div className="record-table__empty-desc">
+                  {search
+                    ? "Try fewer or different words."
+                    : "Choose another view, or change the filters, to see more."}
+                </div>
+              </div>
+            )
+          }
+        />
+  );
+
   return (
     <div className="procurement-reader">
       <RecordTableScope
@@ -466,31 +499,12 @@ export function NoticeTable({
           onClose={() => setFiltering(false)}
         />
         <RecordTableFilterChips />
-        <RecordTable
-          loading={loading}
-          showAggregateFooter={false}
-          renderCell={renderCell}
-          renderPhoneCard={renderPhoneCard}
-          emptyState={
-            emptyState ?? (
-              <div className="record-table__empty">
-                <div className="record-table__empty-title">
-                  {search
-                    ? `Nothing matches “${search}”`
-                    : `No ${objectMetadata.labelPlural.toLowerCase()} here`}
-                </div>
-                <div className="record-table__empty-desc">
-                  {search
-                    ? "Try fewer or different words."
-                    : "Choose another view, or change the filters, to see more."}
-                </div>
-              </div>
-            )
-          }
-        />
-        {serverPaging && (
-          <ServerNoticeRows kind={kind} fixedParty={fixedParty} />
-        )}
+        {serverPaging ? (
+          <ServerNoticeRows kind={kind} fixedParty={fixedParty}>
+            {({ onEndReached, loading: serverLoading }) => renderTable(onEndReached, serverLoading)}
+          </ServerNoticeRows>
+        ) : renderTable()}
+
       </RecordTableScope>
     </div>
   );

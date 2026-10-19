@@ -19,6 +19,16 @@ export type LocalTranscriptionJob = { fileName: string; step: LocalTranscription
 
 export const TRANSCRIPTION_CANCELLED = "Transcription cancelled. Nothing was changed.";
 
+/**
+ * Why Draft minutes is disabled, if it is: no AI to draft with (lasting, so it
+ * wins), or a transcription in progress that will replace the transcript.
+ */
+export function draftMinutesDisabledReason({ aiAvailable, transcribing }: { aiAvailable: boolean; transcribing: boolean }): string | undefined {
+  if (!aiAvailable) return "AI minutes drafting needs a connected server or an on-device model.";
+  if (transcribing) return "Wait for the transcription to finish.";
+  return undefined;
+}
+
 export function useLocalTranscription({
   recording,
   canWrite,

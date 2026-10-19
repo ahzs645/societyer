@@ -34,9 +34,11 @@ export function RecordTableSortPopover({
  * Sort section in the phone "View options" sheet.
  */
 export function RecordTableSortEditor() {
-  const columns = useRecordTableState((state) => state.columns);
+  const allColumns = useRecordTableState((state) => state.columns);
+  const columns = allColumns.filter(column => column.field.config?.sortable !== false);
   const sorts = useRecordTableState((state) => state.sorts);
   const handle = useRecordTableStoreHandle();
+  const serverProcessed = useRecordTableState(state => state.serverProcessed);
 
   const setSorts = (next: typeof sorts) => handle.get().setSorts(next);
   const addSort = () => {
@@ -44,7 +46,7 @@ export function RecordTableSortEditor() {
       (column) => !sorts.some((sort) => sort.fieldMetadataId === column.fieldMetadataId),
     );
     if (!firstUnused) return;
-    setSorts([...sorts, { fieldMetadataId: firstUnused.fieldMetadataId, direction: "asc" }]);
+    setSorts(serverProcessed ? [{ fieldMetadataId: firstUnused.fieldMetadataId, direction: "asc" }] : [...sorts, { fieldMetadataId: firstUnused.fieldMetadataId, direction: "asc" }]);
   };
 
   return (
@@ -97,7 +99,7 @@ export function RecordTableSortEditor() {
       <button
         type="button"
         className="record-table__toolbar-button"
-        disabled={sorts.length >= columns.length}
+        disabled={sorts.length >= columns.length || (serverProcessed && sorts.length >= 1)}
         onClick={addSort}
       >
         <Plus size={12} />

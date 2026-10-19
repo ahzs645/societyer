@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
+import { useRevealOnFieldLeave } from "../hooks/useRevealOnFieldLeave";
 import { useSociety } from "../hooks/useSociety";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -64,6 +65,7 @@ export function MembersPage() {
   // A new record's "Required before saving" note waits until a field has
   // been left or Save was pressed, so an empty form doesn't open in red.
   const [problemsRevealed, setProblemsRevealed] = useState(false);
+  const revealProblemsOnLeave = useRevealOnFieldLeave(() => setProblemsRevealed(true));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [bulkRows, setBulkRows] = useState<any[] | null>(null);
   const [mergeRows, setMergeRows] = useState<any[] | null>(null);
@@ -357,7 +359,7 @@ export function MembersPage() {
         }
       >
         {selected && (
-          <fieldset disabled={!canManage} onBlur={() => setProblemsRevealed(true)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <fieldset disabled={!canManage} {...revealProblemsOnLeave} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             {showSelectedProblems && (
               <InspectorNote tone="danger" title="Required before saving">{selectedProblems.join(" ")}</InspectorNote>
             )}

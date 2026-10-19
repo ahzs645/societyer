@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { toPortableQueryCtx } from "./lib/portable";
 import { hasPermission, requirePermissionPortable } from "../shared/functions/permissions";
+import { requireTranscriptReaderPortable } from "../shared/functions/minutesPrivacy";
 import { MEETING_SOURCE_CHUNK_BYTES, MEETING_SOURCE_MAX_BYTES, MEETING_TRANSCRIPT_MAX_BYTES, validateMeetingSource } from "../shared/storage/meetingSourceProtocol";
 
 async function access(ctx: QueryCtx | MutationCtx, meetingId: Id<"meetings">) {
@@ -119,18 +120,24 @@ export const textPage = authorizedQuery("meetingSources:textPage", query)({
     const s = await ctx.db.get(a.sourceId);
     if (!s || s.status !== "ready") throw new Error("Verified source required.");
     await access(ctx, s.meetingId);
+    // Reading transcript text is for minute-takers (decision A1), like transcripts:getByMeeting.
+    await requireTranscriptReaderPortable(await toPortableQueryCtx(ctx), s.societyId);
     return ctx.db.query("meetingSourceText").withIndex("by_source_index", q => q.eq("sourceId", s._id).eq("index", a.index)).unique();
   },
 });
+
+// The browser extractor and the speech poller write chunks of at most 12,000 characters,
+// so a 600 KB transcript needs up to about 51 of them.
+const MEETING_TRANSCRIPT_MAX_CHUNKS = 64;
 
 export const useTranscript = authorizedMutation("meetingSources:useTranscript", mutation)({
   args: { sourceId: v.id("meetingSources") }, returns: v.null(),
   handler: async (ctx, { sourceId }) => {
     const s = await ctx.db.get(sourceId);
-    if (!s || s.status !== "ready" || !s.textComplete || !s.textBytes || s.textBytes > MEETING_TRANSCRIPT_MAX_BYTES) throw new Error("Select a completed transcript of at most 600 KB for the minutes editor. Larger transcripts remain available in pages.");
+    if (!s || s.status !== "ready" || !s.textComplete || !s.textBytes || s.textBytes > MEETING_TRANSCRIPT_MAX_BYTES || !s.textChunks || s.textChunks > MEETING_TRANSCRIPT_MAX_CHUNKS) throw new Error("Select a completed transcript of at most 600 KB for the minutes editor. Larger transcripts remain available in pages.");
     await access(ctx, s.meetingId);
     await requirePermissionPortable(await toPortableQueryCtx(ctx), s.societyId, "minutes:write");
-    const chunks = await ctx.db.query("meetingSourceText").withIndex("by_source_index", q => q.eq("sourceId", s._id)).take(32);
+    const chunks = await ctx.db.query("meetingSourceText").withIndex("by_source_index", q => q.eq("sourceId", s._id)).take(s.textChunks);
     if (chunks.length !== s.textChunks) throw new Error("Transcript import is incomplete.");
     const text = chunks.map(c => c.text).join("");
     const existing = await ctx.db.query("transcripts").withIndex("by_meeting", q => q.eq("meetingId", s.meetingId)).first();

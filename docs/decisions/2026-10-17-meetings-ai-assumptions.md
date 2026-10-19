@@ -33,6 +33,9 @@ handler checks the role), `shared/agentTools/tools/meetings.ts` (`get_transcript
 `src/features/meetings/components/TranscriptAccessNotice.tsx`, `src/pages/MeetingDetail.tsx`,
 `src/features/meetings/pages/MeetingMinutesPreviewPage.tsx`. The minutes' transcript copy
 (`draftTranscript`) follows the same rule; import metadata stored in that field stays.
+The page skips `transcripts:getByMeeting` and `transcripts:jobForMeeting` without
+`minutes:write`, so Members and Viewers make no refused transcript requests (final QA;
+test: `check-timed-transcript`).
 To reverse: set `TRANSCRIPT_READ_PERMISSION` back to `minutes:read` and drop
 `requiresRole` from `get_transcript`. Tests: `check-minutes-privacy`, `check-agent-tools`,
 `check-mcp-endpoint`, `check-device-assistant-tools`.
@@ -64,6 +67,11 @@ otherwise the whole transcript is withheld. UI:
 `TranscriptTurns.tsx`, `useTranscriptSelection.tsx`, `MediaPlayerBar.tsx`,
 `TranscriptWorkspace.tsx`, `src/styles/_meeting-transcript.scss`. Tests:
 `check-minutes-privacy`, `check-agent-tools`, `check-mcp-endpoint`.
+Transcript file exports (Transcript tab **Export**: VTT, SRT, Whisper JSON) cut the marked
+ranges by default; **Include in-camera parts** is for in-camera access only, and an
+unmarked session needs an explicit acknowledgement before download
+(`inCameraExportRanges`, `shared/transcriptExport.ts`, `TranscriptExportMenu.tsx`; test:
+`check-transcript-export`).
 
 ### A3. In-camera gaps are closed
 **Decision.** For readers without in-camera access:
@@ -83,6 +91,15 @@ exports of `meetings` and `agendaItems`), `shared/functions/agendas.ts`
 labels), `convex/lib/offlineMeetingProjection.ts`, `minutesRenderer.ts` (public copy),
 `src/pages/MeetingDetail.tsx` (Overview notes "Restricted"). Agent tools read no agenda
 items or working notes. Tests: `check-minutes-privacy`.
+
+**Wording (final QA, 2026-10-18).** One name per kind of thing, so a Member sees the
+same label for the same item on the agenda and in the minutes record: the session
+itself (a time range, a session segment, a transcript cut) is an **"In-camera
+session"**; an agenda item inside it *and its minutes section* are an **"In-camera
+item"** (sections used to read "In-camera session"); a motion is an **"In-camera
+motion"**; a document is **"In-camera material"**; a task is an **"In-camera action"**.
+`redactSection` and `redactInCameraMotion` (`sectionTitle`) in `shared/minutesPrivacy.ts`.
+Test: `check-minutes-privacy`.
 
 ### A4. AI never writes without a person approving
 **Decision.**
@@ -179,6 +196,41 @@ hold in-camera access). Implemented in `shared/minutesPrivacy.ts` (`isInCameraDo
 `convex/tables/documents.ts`, `convex/tables/policies.ts`, `convex/tasks.ts`,
 `src/features/meetings/components/MeetingActionItemsCard.tsx`. Tests:
 `check-minutes-privacy`, `check-mcp-endpoint`.
+
+**Final QA (2026-10-18) — library documents attached to in-camera items.** Attaching a
+library document (say, a policy Members may read) as a material of an in-camera agenda
+item made it "In-camera material" for Members everywhere, because attaching filed the
+document under the meeting (`documents.meetingId`) and every material of an in-camera
+meeting counted. Now:
+- A document is in-camera material only when it **belongs** to the in-camera meeting:
+  cited by its minutes, filed under it or under an in-camera agenda item
+  (`meetingId`, `agendaItemId`: set when a document is made or imported for the
+  meeting), or a copy or version of such a document. Being a material no longer counts.
+- **Provenance:** `meetingMaterials:attach` no longer sets the document's `meetingId`;
+  the link lives only in `meetingMaterials`. So `meetingId` again means "made or filed
+  for this meeting".
+- The **material link** to an in-camera item (by `agendaItemId` or by its agenda topic,
+  `agendaLabel`) is what's withheld: `meetingMaterials:listForMeeting`,
+  `packageForMeeting` (rows and counts), `listForSociety` and scoped `meetingMaterials`
+  exports leave it out for readers without in-camera access, label and notes included.
+  The document keeps its own access (for a material, the link's Access level).
+- The attach drawer warns when the topic is in camera: "Members won't see this material
+  listed with the meeting. The document itself isn't hidden: anyone the Access setting
+  below allows can still open it in Documents."
+- Found while testing: `listForSociety` embedded the raw meeting row, with in-camera
+  working notes; it now goes through `meetingForReader`.
+- **Accepted residual:** documents attached before this change already carry the
+  meeting's `meetingId` and stay withheld (privacy-protective) until an editor re-files
+  them; nothing records which attach set it. The material drawer has no upload, so
+  "uploaded via the material flow" has no separate signal.
+
+Implemented in `shared/minutesPrivacy.ts` (`isInCameraDocument(document, index)`,
+`isInCameraMaterial`, `inCameraAgendaTopics`, `InCameraIndex.inCameraAgendaTitles`),
+`shared/functions/minutesPrivacy.ts` (`inCameraIndex`, `materialsForReader`,
+`exportRowsForReader`), `shared/functions/meetingMaterials.ts`, `shared/functions/documents.ts`,
+`src/features/meetings/components/MeetingMaterialDrawer.tsx`, `src/pages/MeetingDetail.tsx`.
+Tests: `check-minutes-privacy` (pure rule, every role on both adapters, attach, exports),
+`check-mcp-endpoint`, the document checks.
 
 **Security review round 3 — tasks judged when read; accepted residuals (H1).** Round 2
 decided a task's in-camera status once, when it was made, from a section index the page
@@ -302,6 +354,30 @@ Implemented in `shared/mcp/oauth.ts`, `convex/mcpOAuth.ts`, `convex/mcpOAuthHttp
 Implemented in `convex/mcpOAuth.ts`, `convex/mcpOAuthHttp.ts`, `convex/tables/mcpOAuth.ts`,
 `convex/crons.ts`. Tests: `check-mcp-oauth`.
 
+**Final QA (2026-10-18) — connector UI.**
+- *Consent identity.* A self-registered (DCR) client's self-declared name is never the
+  headline: the title, the "I just started connecting …" checkbox and the privacy note
+  use the redirect host ("an app at claude.ai"; loopback: "this computer"), with a
+  prominent Unverified badge and the name only quoted ("Calls itself “…”"). Clients with
+  a metadata document keep their name, with "Published by <host>"
+  (`consentIdentity` in `src/features/aiConnectors/connectorDisplay.ts`).
+- *Status.* While a workspace's opt-in is off, tokens and connected apps read **Paused —
+  connectors are off for this workspace**, not Active (they can still be revoked).
+  Revoked tokens read **Revoked <date>**, disconnected apps **Disconnected <date>**, never
+  "Expires" (`connectorStatus`).
+- *Contrast.* Small status-badge text uses new `--success-text`, `--warn-text`,
+  `--danger-text`, `--accent-text` tokens (≥ 4.5:1 in both themes).
+Tests: `check-mcp-oauth`.
+
+**Final QA (2026-10-18) — tool output and on-device errors.** Every read tool wraps text a
+person typed (titles, locations, names, tags, file names, the workspace name) as
+`{ untrusted }`; IDs, dates, enums and counts stay plain. Connector clients that read
+`title` as a string must read `title.untrusted`. In the browser, a failed on-device AI or
+speech request is followed by one `no-cors` probe (3 s, never retried): an opaque answer
+means the server is up but doesn't allow this page (CORS), a network error means nothing
+answered. Tests: `check-agent-tools`, `check-device-assistant-tools`, `check-mcp-endpoint`,
+`check-local-ai-client`, `check-local-transcription`.
+
 ### B2. The desktop bridge is not built yet
 **Decision.** The owner said not to build the desktop app's connector yet. It
 stays a documented roadmap item (`docs/mcp-connector.md`). Codex CLI 0.163 supports
@@ -333,6 +409,23 @@ default and 365 at most.
 - Existing meetings without the field behave as formal minutes.
 - Notes meetings keep the template's agenda topics. Template motions are added only
   when the meeting is turned into minutes.
+
+### C1a. A meeting template's defaults are not recorded minutes (final QA, 2026-10-18)
+Drafting minutes refuses sections with recorded content, so it never overwrites what a
+person wrote. A meeting made from a template had its sections seeded with the
+template's defaults (a land acknowledgement, the procedural motions' wording), and those
+counted, so drafting was refused on every templated board meeting. Now content that is
+still exactly what the template seeded (the meeting's `templateSnapshotJson`,
+whitespace normalised, each `{{placeholder}}` matching what it was filled with) is
+neither recorded content nor a started draft. Anything changed or added (wording, a
+decision, an action, a linked task or motion, a submitted report) still counts, and
+adopted minutes are always refused. The refusal names the sections and says "Edit or
+clear those sections, then draft again" (there is no "draft into a copy"). Same rule on
+the page, `minutes:generateDraft`, `upsertFromDraftPortable` and on device
+(`minutesDraftBlocker(row, meeting)` in `shared/minutesDraftInput.ts`). Not covered:
+motion wording that came from a motion template's body (not in the snapshot) and
+agenda items seeded by "Schedule next meeting" (no snapshot) still count. Tests:
+`check-transcript-minutes-draft`, `check-minutes-draft-shared`, `check-meeting-record-kind`.
 
 ### C2. Speaker merges are reversible
 Merges are recorded on the speaker map, not by rewriting segments. Transcripts

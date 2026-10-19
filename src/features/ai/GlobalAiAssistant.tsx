@@ -13,6 +13,7 @@ import {
   KeyRound,
   Loader2,
   MapPin,
+  MessagesSquare,
   MoreHorizontal,
   PanelRightClose,
   Paperclip,
@@ -36,6 +37,7 @@ import {
   ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -154,6 +156,9 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [creatingNewThread, setCreatingNewThread] = useState(false);
+  // Phones: the chat list folds behind a "Chats" button (closed by default) so the conversation keeps the height.
+  const [chatsOpen, setChatsOpen] = useState(false);
+  const chatListId = useId();
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState("");
   // On-device turns are saved only once the model answers; show the question meanwhile.
@@ -222,6 +227,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     lockedModelId ?? pickedModelId ?? effectiveProvider?.modelId ?? undefined;
 
   const threadGroups = useMemo(() => groupThreadsByDate(canWrite ? threads ?? [] : []), [threads, canWrite]);
+  const chatCount = threadGroups.reduce((total, group) => total + group.threads.length, 0);
   // A proposal is settled once a later on-device message approves or dismisses it.
   const settledProposalIds = useMemo(
     () => new Set((messages ?? []).flatMap((message) => parseDeviceToolRecords(message.toolCalls)).flatMap((record) => (record.resolves ? [record.resolves] : []))),
@@ -322,6 +328,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     if (!canWrite) return;
     setSelectedThreadId(undefined);
     setCreatingNewThread(true);
+    setChatsOpen(false);
     setInput("");
     setStreamingText("");
     setAttachedFiles([]);
@@ -503,6 +510,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   const onSelectThread = (id: string) => {
     setSelectedThreadId(id);
     setCreatingNewThread(false);
+    setChatsOpen(false);
     setStreamingText("");
     setLastError(null);
   };
@@ -639,8 +647,29 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
             </header>
 
             <div className="global-ai-body">
-              <section className="global-ai-thread-list" aria-label="AI threads">
-                <div className="global-ai-thread-list__items">
+              <section className={`global-ai-thread-list${chatsOpen ? " is-open" : ""}`} aria-label="AI threads">
+                {/* Narrow drawers only: the list folds behind this bar. */}
+                <div className="global-ai-thread-bar">
+                  <button
+                    type="button"
+                    className="global-ai-thread-toggle"
+                    aria-expanded={chatsOpen}
+                    aria-controls={chatListId}
+                    onClick={() => setChatsOpen((value) => !value)}
+                  >
+                    <MessagesSquare size={14} aria-hidden="true" />
+                    <span className="global-ai-thread-toggle__label">Chats</span>
+                    {chatCount > 0 && <span className="global-ai-thread-toggle__count">{chatCount}</span>}
+                    <span className="global-ai-thread-toggle__current">{selectedThread?.title ?? "New chat"}</span>
+                    <ChevronDown size={14} className="global-ai-thread-toggle__chevron" aria-hidden="true" />
+                  </button>
+                  <Tooltip content="New chat">
+                    <button type="button" className="icon-btn global-ai-icon-btn" onClick={startNewThread} disabled={!canWrite} aria-label="New chat">
+                      <Plus size={14} />
+                    </button>
+                  </Tooltip>
+                </div>
+                <div className="global-ai-thread-list__items" id={chatListId}>
                   {threadsLoading ? (
                     <ThreadListSkeleton />
                   ) : threadGroups.length === 0 ? (
@@ -1142,7 +1171,7 @@ function ThreadItem({
 
   return (
     <div
-      className={`global-ai-thread${isActive ? " is-active" : ""}`}
+      className={`global-ai-thread${isActive ? " is-active" : ""}${menuOpen ? " has-menu" : ""}`}
       onClick={() => !renaming && onSelect()}
       role="button"
       tabIndex={0}

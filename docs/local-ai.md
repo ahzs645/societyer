@@ -73,8 +73,22 @@ the page's origin. The desktop app does not need this.
 - **llama.cpp**: `llama-server` answers browser requests by default. If it sits
   behind a reverse proxy, allow this origin there.
 
-When the test reports "Could not reach …", the server is either not running or not
-allowing this page; the message repeats these steps.
+A browser doesn't say why a request failed, so after a network error the page
+sends one more request to the same address in `no-cors` mode (a bare GET: no key,
+no cookies, no body; at most 3 seconds, never retried). This also applies to the
+speech-to-text server below, and to failed requests outside the test.
+
+- "**… is running but doesn't allow requests from this page**": the probe got an
+  answer, so the server is up and blocks this page's origin. The message repeats
+  the steps above for that kind of server.
+- "**Nothing answered at …**": the probe failed too: the server isn't running, the
+  address or port is wrong, or the browser blocked the connection (a local-network
+  permission it asked for, or a plain `http://` address on another computer from an
+  `https://` page).
+- "**Could not reach …**": the probe didn't finish in time; the message gives the
+  CORS steps.
+
+The desktop app sends requests from its main process, so none of this applies there.
 
 ## Privacy
 
@@ -157,8 +171,11 @@ offered, gets an error result the model can correct, never an exception.
   Settings. With a local server, records stay on this computer. With OpenAI or
   OpenRouter selected, what the tools return is sent to that service.
 - Text written by workspace users (minutes, transcript lines, document text,
-  task descriptions) reaches the model wrapped as `{ "untrusted": "…" }`, and the
-  system prompt says that text inside these wrappers is data, never instructions.
+  task descriptions, and short fields such as meeting and task titles,
+  locations, names, tags and file names) reaches the model wrapped as
+  `{ "untrusted": "…" }`, and the system prompt says that text inside these
+  wrappers is data, never instructions. IDs, dates, statuses and counts stay
+  plain. The lookup chips show the unwrapped title.
 
 ## Long transcripts
 
@@ -202,6 +219,7 @@ device) and speech-to-text set up, **Transcribe on this device** appears for mee
 editors. The recording line shows its size and duration. While it runs, the tab
 shows the step ("Handing the recording to the desktop app… 40%", "Preparing the
 audio with ffmpeg…", "Transcribing part 2 of 6…"), the elapsed time and **Cancel**.
+**Draft minutes** is disabled meanwhile ("Wait for the transcription to finish.").
 When it finishes it asks before replacing an existing transcript, saves through
 `transcripts:importTimed` (provider `local-whisper`) and opens **Review speakers**
 when there are speaker labels to name, as after an import. Cancel, a failure or
@@ -231,6 +249,16 @@ links to Settings instead. The demo never transcribes.
   would be diarized with its own `SPEAKER_n` labels. Without ffmpeg, or if ffmpeg
   cannot read the file, the original is sent whole.
 
+**Moving the transcript to the hosted site.** A transcript made here stays in this
+workspace. To use it on the hosted site: **Transcribe on the desktop app → Export VTT →
+upload on the hosted site**. After transcribing (and naming speakers in Review speakers),
+choose **Export → WebVTT** in the Transcript tab toolbar, or **Whisper JSON** to keep word
+timings too. On the hosted site, upload the file under the meeting's Meeting source files
+and choose **Open in Transcript tab**, or use **Import transcript**. Timings and speaker
+names come across; the recording itself is not in the file. In-camera parts are left out
+unless you include them; see
+[Transcript files (Export)](meeting-transcript-workspace.md#transcript-files-export).
+
 **Privacy.** Recordings go only to the speech-to-text address in Settings; with a
 server on this computer, audio never leaves it. Nothing is uploaded to the
 workspace: only the resulting transcript (text, timings, speaker labels) is saved,
@@ -258,7 +286,9 @@ back to the rule-based draft, exactly as on the server.
 ## Safety rules
 
 - Adopted minutes, and drafts whose sections already hold recorded content, are
-  refused before any model call. `minutes:upsertFromDraft` checks again when it
+  refused before any model call; the message names those sections. Sections that
+  still hold only what the meeting's template seeded don't count (see
+  meeting-transcript-workspace.md, "Drafting minutes"). `minutes:upsertFromDraft` checks again when it
   writes. Replacing a started draft asks first.
 - No network request ever happens inside a portable mutation. The page calls the
   model, then saves through `minutes:upsertFromDraft` or

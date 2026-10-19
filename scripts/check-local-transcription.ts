@@ -15,6 +15,7 @@
  * 5. `transcripts:importTimed` with provider "local-whisper" on both portable
  *    adapters keeps words and speakers; the 20,000-segment limit; words are
  *    dropped to fit the row.
+ * 6. Draft minutes is disabled, with a reason, while a transcription runs.
  */
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -40,7 +41,7 @@ import {
   transcribeRecording,
   type SpeechProgress,
 } from "../src/lib/localAi/transcription";
-import { DeviceAiError } from "../src/lib/localAi/transport";
+import { BROWSER_UNREACHABLE_HINT, DeviceAiError } from "../src/lib/localAi/transport";
 import { parseDeviceAiConfig, speechToTextReadiness } from "../src/lib/localAi/config";
 import { parseFfmpegDuration, TranscriptionUploads, transcribeUpload, wavArgs } from "../electron/localTranscription";
 import { LocalAiProxyError, sanitizeLocalAiConfig, speechProxyTargetUrl } from "../electron/localAiProxy";
@@ -49,6 +50,7 @@ import { LocalStoreDb, MemoryDb, MemoryRowStore, PortableRuntime, makeCapabiliti
 import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
 import { actionPermission } from "../shared/functions/actionPolicy";
 import { portableTestPrincipal, portableTestSeed } from "./portable-test-fixture";
+import { draftMinutesDisabledReason } from "../src/features/meetings/transcript/useLocalTranscription";
 
 // --- 1. Parsers -----------------------------------------------------------------
 
@@ -236,7 +238,16 @@ try {
     "network",
     "unreachable",
   );
-  assert.match(unreachable.hint ?? "", /CORS/);
+  assert.equal(unreachable.message, "Nothing answered at 127.0.0.1:9.", "a closed port is nothing listening, not CORS");
+  assert.equal(unreachable.hint, BROWSER_UNREACHABLE_HINT);
+  // A server that answers a no-cors probe is up but blocks this page.
+  const corsBlocked = directSpeechTransport(
+    () => ({ kind: "openai-compatible", baseUrl: "http://127.0.0.1:8000/v1", model: "mock-whisper", apiKey: "" }),
+    (_input, init) => (init?.mode === "no-cors" ? Promise.resolve(new Response(null)) : Promise.reject(new TypeError("Failed to fetch"))),
+  );
+  const blocked = await rejectsWith(transcribeRecording({ transport: corsBlocked, file: recording, fileName: recording.name }), "network", "CORS-blocked");
+  assert.equal(blocked.message, "127.0.0.1:8000 is running but doesn't allow requests from this page.");
+  assert.match(blocked.hint ?? "", /CORS.*speaches/);
   await rejectsWith(transcribeRecording({ transport: direct("openai-compatible"), file: new File([], "empty.wav"), fileName: "empty.wav" }), "refused", "empty file");
 
   // Cancel while the server is working.
@@ -255,7 +266,7 @@ try {
   assert.ok(tested.ok, "silence is a readable, empty reply");
   assert.ok(speechForms().at(-1)!.fileBytes < 64 * 1024);
   const testFailed = await testSpeechToText(direct("openai-compatible", "", "http://127.0.0.1:9/v1"));
-  assert.ok(!testFailed.ok && /Could not reach/.test(testFailed.message));
+  assert.ok(!testFailed.ok && /Nothing answered at/.test(testFailed.message));
 
   // Settings: speech-to-text is its own section, with its own key.
   const config = parseDeviceAiConfig({ speechToText: { kind: "whisperx", baseUrl: "http://127.0.0.1:8000/v1/", model: "large-v3" } });
@@ -459,4 +470,14 @@ try {
   }
 }
 
-console.log("Local transcription checks passed: parsers (OpenAI, whisper.cpp, WhisperX), parts and overlap merge, browser client against the mock (fields, keys, errors, cancel, test), the desktop pipeline (pieces, ffmpeg parts, cleanup, cancel), and importTimed round trips with the 20,000-segment limit.");
+// --- 6. Draft minutes waits for a transcription in progress ---------------------
+
+{
+  const noAi = "AI minutes drafting needs a connected server or an on-device model.";
+  assert.equal(draftMinutesDisabledReason({ aiAvailable: true, transcribing: false }), undefined);
+  assert.equal(draftMinutesDisabledReason({ aiAvailable: true, transcribing: true }), "Wait for the transcription to finish.");
+  assert.equal(draftMinutesDisabledReason({ aiAvailable: false, transcribing: false }), noAi);
+  assert.equal(draftMinutesDisabledReason({ aiAvailable: false, transcribing: true }), noAi, "the lasting reason wins");
+}
+
+console.log("Local transcription checks passed: parsers (OpenAI, whisper.cpp, WhisperX), parts and overlap merge, browser client against the mock (fields, keys, errors, cancel, test), the desktop pipeline (pieces, ffmpeg parts, cleanup, cancel), and importTimed round trips with the 20,000-segment limit; Draft minutes waits for a transcription in progress.");

@@ -243,7 +243,7 @@ export async function documentReadPolicy(ctx: PortableQueryCtx, societyId: strin
   ]);
   return {
     opens: (document: any, access = "view") => !!context && String(document?.societyId) === societyId && canAccessDocument(document, materials, context, access),
-    inCamera: (document: any) => inCamera(document, materials),
+    inCamera,
   };
 }
 
@@ -308,7 +308,7 @@ export async function publicDocumentAccessPredicate(ctx: PortableQueryCtx, socie
     ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     publicInCameraDocumentTest(ctx, societyId),
   ]);
-  return (document: any) => String(document?.societyId) === societyId && canAccessDocument(document, materials, { userRole: "Viewer" }) && !inCamera(document, materials);
+  return (document: any) => String(document?.societyId) === societyId && canAccessDocument(document, materials, { userRole: "Viewer" }) && !inCamera(document);
 }
 
 /* ------------------------------- handlers --------------------------------- */
@@ -368,7 +368,7 @@ async function listVisibleDocuments(
     .filter((doc) => !isInternalDocumentRecord(doc))
     .filter((doc) => accessContext && canAccessDocument(doc, linkedMaterials, accessContext))
     .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
-  const withheld = new Set(visible.filter((doc) => inCamera(doc, linkedMaterials)).map((doc) => String(doc._id)));
+  const withheld = new Set(visible.filter((doc) => inCamera(doc)).map((doc) => String(doc._id)));
   if (!withheld.size) return withPreparationReview(ctx, societyId, visible);
   // In-camera material stays in the list, in place, as a placeholder.
   const reviewed = new Map((await withPreparationReview(ctx, societyId, visible.filter((doc) => !withheld.has(String(doc._id))))).map((doc) => [String(doc._id), doc]));
@@ -395,7 +395,7 @@ export async function getPortable(
   ]);
   if (!accessContext || !canAccessDocument(document, linkedMaterials, accessContext)) return null;
   // In-camera material: the reader learns it exists and why it's withheld, never its content (H1).
-  if (inCamera(document, linkedMaterials)) return withheldInCameraDocument(document);
+  if (inCamera(document)) return withheldInCameraDocument(document);
   return (await withPreparationReview(ctx, String(document.societyId), [document]))[0];
 }
 
@@ -437,7 +437,7 @@ export async function getManyPortable(
   });
   const isWithheld = (document: any) => {
     const societyId = String(document.societyId);
-    return inCameraBySociety.get(societyId)?.(document, materialsBySociety.get(societyId) ?? []) ?? false;
+    return inCameraBySociety.get(societyId)?.(document) ?? false;
   };
   const open = visible.filter((document) => !isWithheld(document));
   const reviewed = (await Promise.all(societyIds.map(societyId => withPreparationReview(ctx, societyId, open.filter(document => String(document.societyId) === societyId))))).flat();
@@ -687,8 +687,8 @@ export async function reviewQueuesPortable(
 
   const listed = [...documentsById.values()];
   const docs = [
-    ...await withPreparationReview(ctx, societyId, listed.filter((doc) => !inCamera(doc, materials))),
-    ...listed.filter((doc) => inCamera(doc, materials)).map(withheldInCameraDocument),
+    ...await withPreparationReview(ctx, societyId, listed.filter((doc) => !inCamera(doc))),
+    ...listed.filter((doc) => inCamera(doc)).map(withheldInCameraDocument),
   ];
   const annotate = (doc: any) => ({
     _id: doc._id,

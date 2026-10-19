@@ -69,6 +69,7 @@ const fixture = await t.run(async (ctx) => {
       date: "2099-01-01",
       updatedAt: "2026-10-18",
       searchText: `Bridge ${i} City`,
+      documents: i,
     };
     await ctx.db.insert("procurementRecords", row);
     await ctx.db.insert("procurementDetails", {
@@ -116,6 +117,28 @@ await assert.rejects(
   t.query(api.procurementReview.page, pageArgs),
   /auth|identity|sign|access/i,
 );
+// A chosen numeric ordering applies across cursor pages, including search.
+const numericRequest = (direction: string, searchTerm = "") => JSON.stringify({
+  columns: [{ fieldMetadataId: "docs", field: { _id: "docs", name: "documents", fieldType: "NUMBER", config: {} } }],
+  filters: [], sorts: [{ fieldMetadataId: "docs", direction }], searchTerm,
+});
+for (const searchTerm of ["", "bridge city"]) {
+  for (const direction of ["asc", "desc"]) {
+    const request = numericRequest(direction, searchTerm);
+    const head = await reader.query(api.procurementReview.page, { ...pageArgs, request });
+    const tail = await reader.query(api.procurementReview.page, { ...pageArgs, request, paginationOpts: { numItems: 50, cursor: head.continueCursor } });
+    const values = [...head.page, ...tail.page].map((row: any) => row.documents);
+    assert.equal(values.length, 100);
+    assert.ok(values.every((value: number, i: number) => !i || (direction === "asc" ? values[i - 1] <= value : values[i - 1] >= value)), "Sort remains global across pages and searches");
+    assert.equal(head.relevance, false);
+  }
+}
+const numericFilter = await reader.query(api.procurementReview.page, { ...pageArgs,
+  request: JSON.stringify({ ...JSON.parse(numericRequest("desc")), filters: [{ id: "min-docs", fieldMetadataId: "docs", operator: "gte", value: 100 }] }),
+});
+assert.equal(numericFilter.page.length, 20);
+assert.ok(numericFilter.page.every((row: any) => row.documents >= 100));
+
 const old = fixture.rows[0],
   newRow = { ...old, title: "Updated bridge" },
   detail = {

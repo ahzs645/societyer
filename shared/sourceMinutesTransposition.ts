@@ -206,11 +206,18 @@ export function buildSourceMinuteSections(args: {
     reviewStatus:'imported_needs_review',note:proposed ? 'Agenda, script or template wording describes proposed business; it does not establish attendance, an appointment or a passed decision.' : 'Source-derived sections need review against the original; no adoption or statutory status is inferred.'}};
 }
 
+/** Whether one minutes section holds anything beyond its title. */
+export function sectionHasRecordedContent(section: unknown): boolean {
+  if (!section || typeof section !== 'object') return false;
+  const row = section as Record<string, unknown>;
+  const count = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+  return !!(text(row.discussion).trim() || text(row.motionText).trim() || row.motionId ||
+    count(row.decisions) || count(row.actionItems) || count(row.linkedTaskIds) || row.reportSubmitted);
+}
+
 /** A seeded empty agenda scaffold is safe to enrich; an edited section is not. */
 export function hasRecordedMinuteSectionContent(sections: any): boolean {
-  return Array.isArray(sections) && sections.some(section =>
-    text(section.discussion).trim() || text(section.motionText).trim() || section.motionId ||
-    (section.decisions?.length ?? 0) || (section.actionItems?.length ?? 0) || (section.linkedTaskIds?.length ?? 0) || section.reportSubmitted);
+  return Array.isArray(sections) && sections.some(sectionHasRecordedContent);
 }
 
 /** Only attach an existing native object when its exact source wording identifies

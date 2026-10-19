@@ -6,7 +6,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { meetingSourceBroker, meetingSourceRangeFetcher, sourceRequest, uploadMeetingSource, type MeetingSource } from "@/lib/meetingSourceUpload";
 import { downloadMeetingSourceRanges } from "@/lib/meetingSourceDownload";
-import { meetingTranscriptChunks } from "@/lib/meetingTranscriptImport";
+import { importMeetingSourceText } from "@/lib/meetingTranscriptImport";
 import { isLocalDataRuntime } from "@/lib/staticRuntime";
 import { MEETING_TRANSCRIPT_MAX_BYTES } from "../../../../shared/storage/meetingSourceProtocol";
 import { api as typedApi } from "../../../../convex/_generated/api";
@@ -14,20 +14,34 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { useFileDrop } from "../../../components/FileDropZone";
 import { useConfirm } from "../../../components/Modal";
 import { usePermissionedMutation } from "../../../hooks/usePermissionedMutation";
-import { REPLACE_TRANSCRIPT_CONFIRM, REVIEW_SPEAKERS_INTENT, timedTranscriptOffer } from "../transcript/timedImportOffer";
+import { ATTACHED_RECORDINGS_INTENT, REPLACE_TRANSCRIPT_CONFIRM, REVIEW_SPEAKERS_INTENT, timedTranscriptOffer } from "../transcript/timedImportOffer";
 import { needsSpeakerReview } from "../transcript/speakerSuggestions";
 import type { TimedTranscript } from "../transcript/timedTranscript";
 
 type TimedOffer = TimedTranscript & { fileName: string; sourceName: string };
 
 const SOURCE_ACCEPT = ".txt,.vtt,.srt,.json,.zip,.mp3,.mp4,.m4a,.wav,.webm,.ogg,.oga,.flac,.aac,.mov,.mkv,.wma";
+const PIPELINE_DOC_URL = "https://github.com/ahzs645/societyer/blob/main/docs/meeting-source-pipeline.md";
 
-export function MeetingSourcesCard({ societyId, meetingId, canWrite, canDraft }: { societyId: string; meetingId: string; canWrite: boolean; canDraft: boolean }) {
+/** Chrome's File System Access save dialog; other browsers download through a Blob URL. */
+type SaveFilePicker = (options: { suggestedName: string }) => Promise<{ createWritable: () => Promise<FileSystemWritableFileStream> }>;
+
+type MeetingSourcesAccess = {
+  societyId: string;
+  meetingId: string;
+  /** minutes:write: "Use for minutes" replaces the working transcript. */
+  canDraft: boolean;
+  /** Decision A1: reading a working transcript needs meetings:read and minutes:write. */
+  canReadTranscript: boolean;
+};
+
+/** Sources are working files for meeting editors (meetings:write) on broker-configured hosted deployments. */
+export function MeetingSourcesCard({ canWrite, ...access }: MeetingSourcesAccess & { canWrite: boolean }) {
   if (!meetingSourceBroker || isLocalDataRuntime() || !canWrite) return null;
-  return <ConnectedMeetingSources societyId={societyId} meetingId={meetingId} canDraft={canDraft} />;
+  return <ConnectedMeetingSources {...access} />;
 }
 
-function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId: string; meetingId: string; canDraft: boolean }) {
+function ConnectedMeetingSources({ societyId, meetingId, canDraft, canReadTranscript }: MeetingSourcesAccess) {
   const [sources, setSources] = useState<MeetingSource[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -52,10 +66,10 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
   // Timed files (.vtt/.srt/.json, or the one inside a ZIP) can also become the timed working transcript.
   const [timedOffer, setTimedOffer] = useState<TimedOffer | null>(null);
   const importTimed = usePermissionedMutation(typedApi.transcripts.importTimed, true);
-  const workingTranscript = useQuery(typedApi.transcripts.getByMeeting, { meetingId: meetingId as Id<"meetings"> });
+  const workingTranscript = useQuery(typedApi.transcripts.getByMeeting, canReadTranscript ? { meetingId: meetingId as Id<"meetings"> } : "skip");
   const confirm = useConfirm();
   const [, setSearchParams] = useSearchParams();
-  const textPage = useQuery(api.meetingSources.textPage, preview ? { sourceId: preview.id, index: page } : "skip") as { text: string } | null | undefined;
+  const textPage = useQuery(api.meetingSources.textPage, preview && canReadTranscript ? { sourceId: preview.id, index: page } : "skip") as { text: string } | null | undefined;
   const refresh = useCallback(async () => { const rows = await sourceRequest("list", { meetingId }); setSources(rows); }, [meetingId]);
   useEffect(() => {
     let mounted = true;
@@ -76,18 +90,13 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
       setMessage("Original attached and verified.");
       if (/\.(txt|vtt|srt|json|zip)$/i.test(file.name)) {
         setMessage("Original attached. Importing transcript text…");
-        let index = 0; let pending: string | undefined;
-        for await (const text of meetingTranscriptChunks(file)) {
-          abort.signal.throwIfAborted();
-          if (pending !== undefined) await appendText({ sourceId: source.id, index: index++, text: pending, complete: false });
-          pending = text;
-        }
-        if (pending === undefined || index === 0 && !pending.trim()) throw new Error("The original is attached, but it contains no transcript text.");
-        await appendText({ sourceId: source.id, index, text: pending, complete: true });
-        setMessage("Original attached. Transcript imported; review it below before using it for minutes.");
+        await importMeetingSourceText(file, chunk => appendText({ sourceId: source.id, ...chunk }), abort.signal);
         const parsed = await timed;
-        if (parsed) setTimedOffer({ ...parsed, sourceName: file.name });
-      } else setMessage(zoer?.enabled ? "Recording attached and verified. Choose Queue transcription or open the Transcript tab." : speech?.configured ? "Recording attached and verified. Choose Transcribe to create its transcript." : "Recording attached and verified. Speech processing is not configured yet; you can upload an existing transcript.");
+        if (parsed && canReadTranscript) {
+          setTimedOffer({ ...parsed, sourceName: file.name });
+          setMessage("Original attached and transcript imported.");
+        } else setMessage(canDraft ? "Original attached. Transcript imported; read it below, then choose Use for minutes." : "Original attached and transcript imported.");
+      } else setMessage(zoer?.enabled ? "Recording attached and verified. Queue transcription or play it in the Transcript tab." : speech?.configured ? "Recording attached and verified. Choose Transcribe to create its transcript, or play it in the Transcript tab." : "Recording attached and verified. Play it in the Transcript tab under Attached recordings.");
     } catch (e) {
       if (abort.signal.aborted) setMessage("Paused. Choose the same file to resume. If a chunk was in flight, wait 90 seconds first.");
       else setError(e instanceof Error ? e.message : "Upload failed.");
@@ -106,6 +115,15 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
   });
   const { onDragEnter, onDragOver, onDragLeave, onDrop } = drop.rootProps;
 
+  function goToTranscriptTab(intent?: string) {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", "transcript");
+      if (intent) next.set("intent", intent);
+      return next;
+    });
+  }
+
   async function openInTranscriptTab(offer: TimedOffer) {
     if (workingTranscript && !(await confirm(REPLACE_TRANSCRIPT_CONFIRM))) return;
     setError("");
@@ -113,12 +131,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
       const { provider, segments, durationSeconds } = offer;
       await importTimed({ societyId: societyId as Id<"societies">, meetingId: meetingId as Id<"meetings">, provider, segments, durationSeconds });
       setTimedOffer(null);
-      setSearchParams(prev => {
-        const next = new URLSearchParams(prev);
-        next.set("tab", "transcript");
-        if (needsSpeakerReview(segments)) next.set("intent", REVIEW_SPEAKERS_INTENT);
-        return next;
-      });
+      goToTranscriptTab(needsSpeakerReview(segments) ? REVIEW_SPEAKERS_INTENT : undefined);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not open the transcript."); }
   }
 
@@ -126,7 +139,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
     setError("");
     try {
       // Chrome can stream directly to disk; other browsers use their Blob download path.
-      const picker = (window as any).showSaveFilePicker;
+      const picker = (window as Window & { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
       const handle = picker ? await picker({ suggestedName: source.fileName }) : null;
       const writable = handle ? await handle.createWritable() : null; const parts: Blob[] = [];
       try {
@@ -142,7 +155,9 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
     <div className="card__head"><h3>Meeting source files</h3></div>
     <div className="card__body">
       <p>Attach transcripts, audio, video or Whisper ZIP exports up to 500 MB per file. Originals stay in private Microsoft storage. Only meeting editors can access these working files.</p>
-      {speech && !speech.configured && <p>Queue audio/video recordings from the Transcript tab using a connected Zoer WhisperX processor. Uploads and transcript imports work independently.</p>}
+      {canReadTranscript && <p>Timed exports (VTT, SRT, Whisper JSON) open in the Transcript tab, where you name the speakers. Recordings play there under Attached recordings.</p>}
+      {speech && !speech.configured && !zoer?.enabled && <p>Automatic transcription isn't set up for this workspace. Upload a VTT, SRT or Whisper export of the recording instead, for example from Teams, Zoom or a Whisper app on your computer. <a className="text-link" href={PIPELINE_DOC_URL} target="_blank" rel="noreferrer">How meeting files become minutes</a></p>}
+      {zoer?.enabled && <p>Queue recordings for your connected Zoer WhisperX processor in the Transcript tab. Uploads and transcript imports work independently.</p>}
       <input {...drop.inputProps} />
       <button className="btn" type="button" disabled={busy} onClick={drop.open}>Choose file / resume upload</button>{" "}
       {busy && <button className="btn" type="button" onClick={() => controller.current?.abort()}>Pause</button>}
@@ -150,19 +165,20 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
       {message && <p role="status">{message}</p>}
       {timedOffer && <p>
         {timedOffer.sourceName} has timings{timedOffer.segments.some(segment => segment.speaker !== "Speaker") ? " and speakers" : ""} ({timedOffer.segments.length.toLocaleString()} segments). Open it in the Transcript tab to read it with the recording and name the speakers.{" "}
-        <button className="btn btn--sm" type="button" disabled={busy} onClick={() => void openInTranscriptTab(timedOffer)}>Open in Transcript tab</button>
+        <button className="btn btn--primary btn--sm" type="button" disabled={busy} onClick={() => void openInTranscriptTab(timedOffer)}>Open in Transcript tab</button>
       </p>}
       {error && <p role="alert">{error}</p>}
       <ul>{sources.map(source => <li key={source.id} style={{ marginBlock: "0.75rem" }}>
         <strong>{source.fileName}</strong> · {(source.size / 1_000_000).toFixed(1)} MB · {source.status}
         {source.status === "ready" && <>{" "}<button className="btn btn--sm" type="button" onClick={() => setFilePreview(source)}>Preview file</button>{" "}<button className="btn btn--sm" type="button" onClick={() => void download(source)}>Download original</button></>}
-        {source.status === "ready" && source.kind === "recording" && !source.textComplete && <>{" "}<button className="btn btn--sm" type="button" disabled={busy || (!speech?.configured && !zoer?.enabled) || !canDraft || source.jobStatus === "processing"} onClick={async () => {
+        {canReadTranscript && source.status === "ready" && source.kind === "recording" && <>{" "}<button className="btn btn--sm" type="button" onClick={() => goToTranscriptTab(ATTACHED_RECORDINGS_INTENT)}>Play in Transcript tab</button></>}
+        {(speech?.configured || zoer?.enabled) && source.status === "ready" && source.kind === "recording" && !source.textComplete && <>{" "}<button className="btn btn--sm" type="button" disabled={busy || (!speech?.configured && !zoer?.enabled) || !canDraft || source.jobStatus === "processing"} onClick={async () => {
           if (zoer?.enabled) { try { await queueWhisperX({ sourceId: source.id }); setSearchParams(prev => { const next = new URLSearchParams(prev); next.set("tab", "transcript"); return next; }); } catch (e) { setError(e instanceof Error ? e.message : "Could not queue recording."); } return; }
           if (!(await confirm({ title: "Transcribe recording?", message: "Transcribe this recording using the configured speech provider? Its usage charges apply.", confirmLabel: "Start transcription", tone: "warn" }))) return;
           try { await transcribe({ sourceId: source.id }); await refresh(); setMessage("Speech processing started. You can leave this meeting while it runs."); } catch (e) { setError(e instanceof Error ? e.message : "Speech processing could not start."); }
         }}>{zoer?.enabled ? "Queue transcription" : source.jobStatus === "processing" ? "Transcribing…" : "Transcribe"}</button></>}
         {source.jobError && <p role="status">{source.jobError}</p>}
-        {source.textComplete && <>{" "}<button className="btn btn--sm" type="button" onClick={() => { setPreview(source); setPage(0); }}>Read transcript</button></>}
+        {canReadTranscript && source.textComplete && <>{" "}<button className="btn btn--sm" type="button" onClick={() => { setPreview(source); setPage(0); }}>Read transcript</button></>}
         {canDraft && source.textComplete && (source.textBytes ?? 0) <= MEETING_TRANSCRIPT_MAX_BYTES && <>{" "}<button className="btn btn--sm" type="button" disabled={busy} onClick={async () => {
           if (!(await confirm({ title: "Use this transcript for the meeting?", message: "This replaces the current working transcript. Existing minutes text stays as it is.", confirmLabel: "Use transcript", tone: "warn" }))) return;
           try { await selectTranscript({ sourceId: source.id }); setMessage("Working transcript updated. You can now draft minutes from the transcript card."); await refresh(); } catch (e) { setError(e instanceof Error ? e.message : "Import failed."); }
@@ -170,7 +186,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft }: { societyId
         {source.textComplete && (source.textBytes ?? 0) > MEETING_TRANSCRIPT_MAX_BYTES && <p>This large transcript can be read in pages. Choose a shorter excerpt in the transcript editor for AI drafting.</p>}
         {!["ready", "cancelled"].includes(source.status) && <>{" "}<button className="btn btn--sm" type="button" disabled={busy} onClick={async () => { try { await sourceRequest("cancel", { sourceId: source.id }); await refresh(); } catch (e) { setError(e instanceof Error ? e.message : "Cancellation failed."); } }}>Cancel upload</button></>}
       </li>)}</ul>
-      {preview && <div><h4>{preview.fileName} — transcript</h4><p>Page {page + 1} of {preview.textChunks}</p>
+      {canReadTranscript && preview && <div><h4>{preview.fileName} — transcript</h4><p>Page {page + 1} of {preview.textChunks}</p>
         <pre style={{ whiteSpace: "pre-wrap", maxHeight: "24rem", overflow: "auto" }}>{textPage?.text ?? "Loading…"}</pre>
         <button className="btn btn--sm" type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</button>{" "}
         <button className="btn btn--sm" type="button" disabled={page + 1 >= (preview.textChunks ?? 0)} onClick={() => setPage(p => p + 1)}>Next</button>{" "}

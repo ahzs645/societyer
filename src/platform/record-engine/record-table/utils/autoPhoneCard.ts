@@ -1,5 +1,5 @@
 import { FIELD_TYPES, type FieldMetadata, type FieldType, type RecordField } from "../../types";
-import { resolveIdentifierFieldName } from "../hooks/useRecordTableColumns";
+import { pickStatusField, resolveIdentifierFieldName } from "../hooks/useRecordTableColumns";
 import { recordPersonName, recordText, recordTitleText } from "./recordTitle";
 
 /**
@@ -27,8 +27,6 @@ const TITLE_TYPES: ReadonlySet<FieldType> = new Set([FIELD_TYPES.TEXT, FIELD_TYP
 const DATE_TYPES: ReadonlySet<FieldType> = new Set([FIELD_TYPES.DATE, FIELD_TYPES.DATE_TIME]);
 /** Short facts for the meta line, in order of preference (words before counts). */
 const SHORT_TYPES: readonly FieldType[] = [FIELD_TYPES.TEXT, FIELD_TYPES.SELECT, FIELD_TYPES.RELATION, FIELD_TYPES.CURRENCY, FIELD_TYPES.NUMBER];
-/** Status-like by name even when stored as plain text ("reviewStatus"). */
-const STATUS_NAME = /(^|[a-z])(status|state|stage)$/i;
 /** Fields that are only part of a person's name, which the title already shows. */
 const NAME_PARTS = new Set(["firstName", "lastName"]);
 /** Long-form text reads badly on one line: used only when nothing else is set. */
@@ -53,10 +51,7 @@ export function planAutoPhoneCard(
   const rest = visible
     .map((column) => column.field)
     .filter((field) => field.name !== identifierFieldName && !(NAME_PARTS.has(identifierFieldName) && NAME_PARTS.has(field.name)));
-  const badge =
-    rest.find((field) => field.fieldType === FIELD_TYPES.SELECT && STATUS_NAME.test(field.name)) ??
-    rest.find((field) => field.fieldType === FIELD_TYPES.SELECT) ??
-    rest.find((field) => STATUS_NAME.test(field.name) && (field.fieldType === FIELD_TYPES.TEXT || field.fieldType === FIELD_TYPES.BOOLEAN));
+  const badge = pickStatusField(rest);
   const others = rest.filter((field) => field !== badge);
   const dates = others.filter((field) => DATE_TYPES.has(field.fieldType));
   const byType = SHORT_TYPES.flatMap((type) => others.filter((field) => field.fieldType === type));

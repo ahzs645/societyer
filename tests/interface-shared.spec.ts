@@ -80,12 +80,14 @@ test("long record titles leave confirmation actions reachable without page overf
   expect(toastGeometry.fitsContent).toBe(true);
   await testInfo.attach("long-title-toast", { body: await page.screenshot(), contentType: "image/png" });
   await page.goto("/demo/app/meetings");
-  const row = page.locator(".record-table__row").filter({ hasText: title });
+  // A table row, or on phones the meeting's card (its "Row actions for …" button).
+  const row = recordRows(page).filter({ hasText: title });
   await openRowMenu(row, "Actions for this meeting");
   const actions = page.getByRole("menu");
   await expect(actions).toBeVisible();
   const scroller = page.locator(".record-table__scroll");
-  const canScroll = await scroller.evaluate((element) => element.scrollWidth > element.clientWidth + 30);
+  const canScroll = await scroller.count() > 0
+    && await scroller.evaluate((element) => element.scrollWidth > element.clientWidth + 30);
   if (canScroll) {
     await scroller.evaluate((element) => { element.scrollLeft = 30; });
     await expect.poll(() => scroller.evaluate((element) => element.scrollLeft)).toBe(30);
@@ -524,9 +526,12 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
     } else await control.click();
   };
   // A mouse layout whose table is wider than its frame folds a row's actions
-  // behind its pinned "Row actions" button; touch keeps them inline.
+  // behind its pinned "Row actions" button; touch keeps them inline, except
+  // on a phone card, which always keeps them behind its "Row actions" button.
+  const isCard = (row: Locator) => row.evaluate((element) => element.classList.contains("record-cards__item"));
+  const usesMenu = async (row: Locator) => (!touch || await isCard(row)) && await rowActionsArePinned(row);
   const act = async (row: Locator, name: string) => {
-    if (!touch && await rowActionsArePinned(row)) await runRowAction(row, name);
+    if (await usesMenu(row)) await runRowAction(row, name);
     else await activate(row.getByRole("button", { name, exact: true }));
   };
   await page.goto("/demo/app/receipts");
@@ -546,8 +551,8 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   await page.reload();
   await expect(receipt).toContainText("Voided");
   await page.goto("/demo/app/workflows");
-  const workflow = page.locator(".record-table__row").first();
-  if (!touch && await rowActionsArePinned(workflow)) {
+  const workflow = recordRows(page).first();
+  if (await usesMenu(workflow)) {
     await pinnedRowActions(workflow).click();
     await expect(page.getByRole("menuitem", { name: "Run now", exact: true })).toBeDisabled();
     await page.keyboard.press("Escape");
@@ -564,7 +569,7 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   await act(workflow, toggledLabel);
   await expect(pause).toHaveText(initialLabel);
   await page.goto("/demo/app/insurance");
-  await act(page.locator(".record-table__row").first(), "Edit");
+  await act(recordRows(page).first(), "Edit");
   const policy = page.getByRole("dialog", { name: "Edit policy", exact: true });
   await expect(policy).toBeVisible();
   await policy.getByRole("button", { name: "Cancel", exact: true }).click();

@@ -3,7 +3,6 @@ import { MoreHorizontal } from "lucide-react";
 import { Menu } from "../../../components/Menu";
 import {
   isUnnamedSpeaker,
-  linkTargetMenuLabel,
   transcriptLink,
   transcriptQuote,
   truncateLabel,
@@ -16,7 +15,8 @@ import { formatTranscriptTime } from "./activeIndex";
 import type { LinkMinutesItem } from "./useMinutesLinks";
 import { InCameraBoundary, InCameraDivider, SegmentInCameraEditor, type InCameraProps } from "./InCameraTranscript";
 export type { InCameraProps } from "./InCameraTranscript";
-export type UpdateSegment = (index: number, patch: { text?: string; speaker?: string }) => Promise<void>;
+import { SegmentLinkEditor, SegmentSpeakerEditor, SegmentTextEditor, type UpdateSegment } from "./SegmentEditors";
+export type { UpdateSegment } from "./SegmentEditors";
 
 export type TranscriptMatch = { segment: number; start: number; end: number };
 function marked(text: string, matches: readonly TranscriptMatch[], offset = 0) {
@@ -60,184 +60,6 @@ function SegmentText({ segment, hits }: { segment: TranscriptSegment; hits: read
         );
       })}
     </>
-  );
-}
-
-function SegmentTextEditor({
-  index,
-  text,
-  onUpdate,
-  onDone,
-}: {
-  index: number;
-  text: string;
-  onUpdate: UpdateSegment;
-  onDone: () => void;
-}) {
-  const [draft, setDraft] = useState(text);
-  const [busy, setBusy] = useState(false);
-  async function save() {
-    setBusy(true);
-    try {
-      await onUpdate(index, { text: draft });
-      onDone();
-    } catch {
-      // The workspace displays the mutation error; keep the draft available to retry.
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form
-      className="transcript-inline-edit"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <label>
-        Edit segment text
-        <textarea
-          autoFocus
-          value={draft}
-          maxLength={20_000}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-      </label>
-      <button className="btn-action" disabled={busy || !draft.trim()}>
-        Save
-      </button>
-      <button type="button" className="btn-action" onClick={onDone} disabled={busy}>
-        Cancel
-      </button>
-    </form>
-  );
-}
-
-function SegmentSpeakerEditor({
-  index,
-  label,
-  labels,
-  speakers,
-  onUpdate,
-  onDone,
-}: {
-  index: number;
-  label: string;
-  labels: readonly string[];
-  speakers: readonly TranscriptSpeaker[];
-  onUpdate: UpdateSegment;
-  onDone: () => void;
-}) {
-  const [draft, setDraft] = useState(label);
-  const [busy, setBusy] = useState(false);
-  async function save() {
-    // `label` is the displayed (resolved) speaker; re-applying it must not
-    // relabel a line whose raw label is combined into it.
-    if (draft.trim() === label) {
-      onDone();
-      return;
-    }
-    setBusy(true);
-    try {
-      await onUpdate(index, { speaker: draft.trim() });
-      onDone();
-    } catch {
-      // The workspace displays the mutation error; keep the draft available to retry.
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form
-      className="transcript-inline-edit"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <label>
-        This segment →
-        <select
-          aria-label="Existing speaker label"
-          value={labels.includes(draft) ? draft : "new"}
-          onChange={(event) => setDraft(event.target.value === "new" ? "" : event.target.value)}
-        >
-          {labels.map((value) => (
-            <option key={value} value={value}>
-              {speakerName(value, speakers)} ({value})
-            </option>
-          ))}
-          <option value="new">New label…</option>
-        </select>
-      </label>
-      <input
-        autoFocus
-        aria-label="Speaker label for this segment"
-        maxLength={200}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-      />
-      <button className="btn-action" disabled={busy || !draft.trim()}>
-        Apply
-      </button>
-      <button type="button" className="btn-action" disabled={busy} onClick={onDone}>
-        Cancel
-      </button>
-    </form>
-  );
-}
-
-function SegmentLinkEditor({
-  segment,
-  targets,
-  onLink,
-  onDone,
-}: {
-  segment: TranscriptSegment;
-  targets: readonly MinutesLinkTarget[];
-  onLink: LinkMinutesItem;
-  onDone: () => void;
-}) {
-  const [key, setKey] = useState(targets[0]?.key ?? "");
-  const [busy, setBusy] = useState(false);
-  const target = targets.find((candidate) => candidate.key === key);
-  async function save() {
-    if (!target) return;
-    setBusy(true);
-    try {
-      await onLink(target, { startSec: segment.startSec, endSec: segment.endSec });
-      onDone();
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form
-      className="transcript-inline-edit"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <label>
-        Link {formatTranscriptTime(segment.startSec)}–{formatTranscriptTime(segment.endSec)} to
-        <select autoFocus value={key} onChange={(event) => setKey(event.target.value)}>
-          {targets.map((candidate) => (
-            <option key={candidate.key} value={candidate.key}>
-              {linkTargetMenuLabel(candidate)}
-              {candidate.ref ? ` (now ${formatTranscriptTime(candidate.ref.startSec)})` : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button className="btn-action" disabled={busy || !target}>
-        Link
-      </button>
-      <button type="button" className="btn-action" disabled={busy} onClick={onDone}>
-        Cancel
-      </button>
-    </form>
   );
 }
 
@@ -346,6 +168,58 @@ export type MinutesLinkProps = {
   onLink: LinkMinutesItem;
 };
 
+/** A turn's start time; the transcript's click handler seeks to `data-seek`. */
+function TurnTimestamp({ startSec }: { startSec: number }) {
+  return (
+    <button type="button" className="transcript-time" data-seek={startSec}>
+      {formatTranscriptTime(startSec)}
+    </button>
+  );
+}
+
+/** The speaker chip (for editors, a button that opens speaker assignment) and the inline start time. */
+function TurnHeader({
+  label,
+  speakers,
+  palette,
+  canWrite,
+  startSec,
+}: {
+  label: string;
+  speakers: readonly TranscriptSpeaker[];
+  palette: readonly string[];
+  canWrite: boolean;
+  startSec: number;
+}) {
+  const name = speakerName(label, speakers);
+  const unnamed = isUnnamedSpeaker(label, name);
+  const chipClass = `transcript-speaker-name transcript-color-${(Math.max(0, palette.indexOf(label)) % 8) + 1}${unnamed ? " is-unnamed" : ""}`;
+  const chip = (
+    <>
+      <span className="transcript-swatch" />
+      <span className="transcript-speaker-name__label">{name}</span>
+      {unnamed && <span className="transcript-speaker-name__hint">Name speaker</span>}
+    </>
+  );
+  return (
+    <header>
+      {canWrite ? (
+        <button
+          type="button"
+          data-speaker-label={label}
+          className={chipClass}
+          aria-label={`Open speaker assignment for ${name}`}
+        >
+          {chip}
+        </button>
+      ) : (
+        <span className={chipClass}>{chip}</span>
+      )}
+      <span className="transcript-turn__inline-time"><TurnTimestamp startSec={startSec} /></span>
+    </header>
+  );
+}
+
 /** Clock ticks and editor drafts do not re-render the document. */
 export const TranscriptTurns = memo(function TranscriptTurns({
   segments,
@@ -401,43 +275,15 @@ export const TranscriptTurns = memo(function TranscriptTurns({
       {turns.map((turn, turnIndex) => {
         const previousMark = turnIndex > 0 ? turns[turnIndex - 1].mark : -1;
         const lastTurn = turnIndex === turns.length - 1;
-        const name = speakerName(turn.label, speakers);
-        const unnamed = isUnnamedSpeaker(turn.label, name);
-        const chipClass = `transcript-speaker-name transcript-color-${(Math.max(0, palette.indexOf(turn.label)) % 8) + 1}${unnamed ? " is-unnamed" : ""}`;
-        const chip = (
-          <>
-            <span className="transcript-swatch" />
-            <span className="transcript-speaker-name__label">{name}</span>
-            {unnamed && <span className="transcript-speaker-name__hint">Name speaker</span>}
-          </>
-        );
-        const timestamp = (
-          <button type="button" className="transcript-time" data-seek={segments[turn.indexes[0]].startSec}>
-            {formatTranscriptTime(segments[turn.indexes[0]].startSec)}
-          </button>
-        );
+        const startSec = segments[turn.indexes[0]].startSec;
         const onClear = inCamera.canMark ? inCamera.onClear : undefined;
         return (
           <Fragment key={turn.indexes[0]}>
           <InCameraBoundary marks={marks} previous={previousMark} current={turn.mark} onClear={onClear} />
           <article className={`transcript-turn${turn.mark >= 0 ? " is-in-camera" : ""}`}>
-            <div className="transcript-turn__gutter">{timestamp}</div>
+            <div className="transcript-turn__gutter"><TurnTimestamp startSec={startSec} /></div>
             <div className="transcript-turn__main">
-              <header>
-                {canWrite ? (
-                  <button
-                    type="button"
-                    data-speaker-label={turn.label}
-                    className={chipClass}
-                    aria-label={`Open speaker assignment for ${name}`}
-                  >
-                    {chip}
-                  </button>
-                ) : (
-                  <span className={chipClass}>{chip}</span>
-                )}
-                <span className="transcript-turn__inline-time">{timestamp}</span>
-              </header>
+              <TurnHeader label={turn.label} speakers={speakers} palette={palette} canWrite={canWrite} startSec={startSec} />
               {turn.indexes.map((index) => {
                 const segment = segments[index];
                 return (

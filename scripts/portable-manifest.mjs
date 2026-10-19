@@ -60,7 +60,7 @@ function scanConvex() {
       functions.push(fn);
     }
   }
-  functions.sort((a, b) => a.name.localeCompare(b.name));
+  functions.sort((a, b) => a.name.localeCompare(b.name, "en"));
   return functions;
 }
 

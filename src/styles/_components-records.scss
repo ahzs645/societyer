@@ -15,6 +15,8 @@
 // A page-level banner sits above cards; without a gap it fused with the next
 // card's border (Webhooks, Calendar sync in a local workspace).
 .page > .banner:not(:last-child) { margin-bottom: token('s-4'); }
+// The same inside a drawer, where the next field's label would touch it.
+.drawer__body .banner:not(:last-child) { margin-bottom: token('s-4'); }
 .banner__icon { flex: 0 0 auto; display: flex; align-items: center; color: token('text-secondary'); }
 .banner__icon svg { width: 16px; height: 16px; }
 .banner__content { flex: 1 1 auto; min-width: 0; }
@@ -30,6 +32,15 @@
 }
 .banner__dismiss:hover { background: token('bg-hover-alpha'); color: token('text-secondary'); }
 .banner__dismiss svg { width: 14px; height: 14px; }
+// Touch: a 40px target; the negative margins keep the icon and the banner's height where they were.
+@media (pointer: coarse) {
+  .banner__dismiss {
+    width: token('control-h-lg');
+    height: token('control-h-lg');
+    margin-block: calc((22px - #{token('control-h-lg')}) / 2);
+    margin-inline-end: calc((22px - #{token('control-h-lg')}) / 2);
+  }
+}
 .banner--info    { border-color: color-mix(in oklab, token('info') 40%, token('border'));    background: color-mix(in oklab, token('info') 8%, token('bg-panel')); }
 .banner--info    .banner__icon { color: token('info'); }
 .banner--success { border-color: color-mix(in oklab, token('success') 40%, token('border')); background: color-mix(in oklab, token('success') 8%, token('bg-panel')); }

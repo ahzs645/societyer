@@ -15,6 +15,7 @@ import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
 import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
 import { captureInstallPrompt, isStandalonePwa, registerServiceWorker } from "./lib/pwa";
+import { installStaleBuildRecovery } from "./lib/staleBuild";
 import { appRuntimeNeedsSetup, isBrowserLocalWorkspace } from "./lib/appRuntime";
 import { useSocieties } from "./hooks/useSociety";
 import { useLocalWorkspaceReady } from "./hooks/useLocalWorkspaceReady";
@@ -188,6 +189,7 @@ if (import.meta.env.VITE_E2E_TEST_HARNESS === "1") {
 }
 
 applyThemePreference(getStoredThemePreference());
+installStaleBuildRecovery();
 registerServiceWorker();
 captureInstallPrompt();
 

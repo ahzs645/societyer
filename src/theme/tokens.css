@@ -102,6 +102,13 @@
   --danger-soft:  var(--red-3);
   --info:         var(--blue-9);
   --info-soft:    var(--blue-3);
+  /* Small text on a -soft tint (badges) or on a panel (links): at least 4.5:1.
+     Light step 11 alone falls short on green-3 and orange-3, so it leans a
+     quarter of the way to step 12. */
+  --success-text: color-mix(in oklab, var(--green-11) 75%, var(--green-12));
+  --warn-text:    color-mix(in oklab, var(--orange-11) 75%, var(--orange-12));
+  --danger-text:  color-mix(in oklab, var(--red-11) 75%, var(--red-12));
+  --accent-text:  var(--blue-11);
 
   /* ---------------- Typography (FONT_COMMON) ---------------- */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
@@ -449,6 +456,10 @@
   --danger-soft:  var(--red-3);
   --info:         var(--blue-11);
   --info-soft:    var(--blue-3);
+  --success-text: var(--green-11);
+  --warn-text:    var(--orange-11);
+  --danger-text:  var(--red-11);
+  --accent-text:  var(--blue-11);
 
   /* Shadows — dark tier from BOX_SHADOW_DARK */
   --shadow-light:

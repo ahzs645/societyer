@@ -1,3 +1,4 @@
+import { authorizedQuery, authorizedMutation } from "./lib/authorizedServer";
 import { query, mutation as baseMutation, internalMutation } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -29,12 +30,12 @@ async function meetingAccess(ctx: QueryCtx | MutationCtx, meetingId: Id<"meeting
 }
 const publicConnection = (c: Doc<"meetingTranscriptionConnections"> | null) => c ? { id: c._id, name: c.name, enabled: c.enabled, settings: c.settings, heartbeatAt: c.heartbeatAt ?? null, capabilities: c.capabilities ? JSON.parse(c.capabilities) : null } : null;
 export const publicJob = (j: Doc<"meetingTranscriptionJobs">) => ({ id: j._id, sourceId: j.sourceId, meetingId: j.meetingId, status: j.status, settings: j.settings, phase: j.status === "applied" ? "Transcript applied" : j.phase ?? null, progress: j.progress ?? null, error: j.error ?? null, pageCount: j.pageCount, segmentCount: j.segmentCount, createdAt: j.createdAt, updatedAt: j.updatedAt });
-export const settings = query({ args: { societyId: v.id("societies") }, returns: v.any(), handler: async (ctx, a) => {
+export const settings = authorizedQuery("meetingTranscription:settings", query)({ args: { societyId: v.id("societies") }, returns: v.any(), handler: async (ctx, a) => {
   await human(ctx, a.societyId);
   return publicConnection(await ctx.db.query("meetingTranscriptionConnections").withIndex("by_society", q => q.eq("societyId", a.societyId)).unique());
 } });
 /** The browser generates a random pairing key; only its SHA-256 is persisted. */
-export const configure = mutation({ args: { societyId: v.id("societies"), enabled: v.boolean(), name: v.string(), settings: whisperXSettingsValidator, keyHash: v.optional(v.string()), allowRecordingProcessing: v.boolean() }, returns: v.null(), handler: async (ctx, a) => {
+export const configure = authorizedMutation("meetingTranscription:configure", mutation)({ args: { societyId: v.id("societies"), enabled: v.boolean(), name: v.string(), settings: whisperXSettingsValidator, keyHash: v.optional(v.string()), allowRecordingProcessing: v.boolean() }, returns: v.null(), handler: async (ctx, a) => {
   const actor = await human(ctx, a.societyId, true);
   validateWhisperXSettings(a.settings);
   if (!a.name.trim() || a.name.length > 120 || !a.allowRecordingProcessing) throw new Error("Allow this processor to access queued recordings, including private meeting sections.");
@@ -46,11 +47,11 @@ export const configure = mutation({ args: { societyId: v.id("societies"), enable
   else await ctx.db.insert("meetingTranscriptionConnections", { societyId: a.societyId, keyHash: a.keyHash!, ...data });
   return null;
 } });
-export const jobs = query({ args: { meetingId: v.id("meetings") }, returns: v.any(), handler: async (ctx, a) => {
+export const jobs = authorizedQuery("meetingTranscription:jobs", query)({ args: { meetingId: v.id("meetings") }, returns: v.any(), handler: async (ctx, a) => {
   await meetingAccess(ctx, a.meetingId);
   return (await ctx.db.query("meetingTranscriptionJobs").withIndex("by_meeting", q => q.eq("meetingId", a.meetingId)).order("desc").take(30)).map(publicJob);
 } });
-export const enqueue = mutation({ args: { sourceId: v.id("meetingSources"), settings: v.optional(whisperXSettingsValidator) }, returns: v.id("meetingTranscriptionJobs"), handler: async (ctx, a) => {
+export const enqueue = authorizedMutation("meetingTranscription:enqueue", mutation)({ args: { sourceId: v.id("meetingSources"), settings: v.optional(whisperXSettingsValidator) }, returns: v.id("meetingTranscriptionJobs"), handler: async (ctx, a) => {
   const s = await ctx.db.get(a.sourceId);
   if (!s || s.status !== "ready" || s.kind !== "recording") throw new Error("Choose a verified recording.");
   const { actor } = await meetingAccess(ctx, s.meetingId, true);
@@ -65,13 +66,13 @@ export const enqueue = mutation({ args: { sourceId: v.id("meetingSources"), sett
   const now = Date.now();
   return ctx.db.insert("meetingTranscriptionJobs", { societyId: s.societyId, meetingId: s.meetingId, sourceId: s._id, actorId: actor._id as Id<"users">, connectionId: connection._id, status: "queued", settings, sourceFingerprint: s.fingerprint, createdAt: now, updatedAt: now, attempt: 0, pageCount: 0, segmentCount: 0, speakers: [], ...(transcript ? { baseTranscriptRevision: transcript.contentRevision ?? `${transcript._id}:${transcript.createdAtISO}` } : {}) });
 } });
-export const cancel = mutation({ args: { jobId: v.id("meetingTranscriptionJobs") }, returns: v.null(), handler: async (ctx, a) => {
+export const cancel = authorizedMutation("meetingTranscription:cancel", mutation)({ args: { jobId: v.id("meetingTranscriptionJobs") }, returns: v.null(), handler: async (ctx, a) => {
   const job = await ctx.db.get(a.jobId); if (!job) throw new Error("Job unavailable.");
   await meetingAccess(ctx, job.meetingId, true);
   if (["queued", "running", "ready"].includes(job.status)) await ctx.db.patch(job._id, { status: "cancelled", lease: undefined, leaseUntil: undefined, updatedAt: Date.now() });
   return null;
 } });
-export const apply = mutation({ args: { jobId: v.id("meetingTranscriptionJobs"), replace: v.boolean(), expectedRevision: v.optional(v.string()) }, returns: v.null(), handler: async (ctx, a) => {
+export const apply = authorizedMutation("meetingTranscription:apply", mutation)({ args: { jobId: v.id("meetingTranscriptionJobs"), replace: v.boolean(), expectedRevision: v.optional(v.string()) }, returns: v.null(), handler: async (ctx, a) => {
   const job = await ctx.db.get(a.jobId); if (!job || !["ready", "applied"].includes(job.status)) throw new Error("A completed transcript is required.");
   await meetingAccess(ctx, job.meetingId, true);
   if (job.status === "applied") return null;
@@ -169,24 +170,24 @@ async function readableJob(ctx: QueryCtx | MutationCtx, jobId: Id<"meetingTransc
   await meetingAccess(ctx, job.meetingId, write);
   return job;
 }
-export const page = query({ args: { jobId: v.id("meetingTranscriptionJobs"), page: v.number() }, returns: v.any(), handler: async (ctx, a) => {
+export const page = authorizedQuery("meetingTranscription:page", query)({ args: { jobId: v.id("meetingTranscriptionJobs"), page: v.number() }, returns: v.any(), handler: async (ctx, a) => {
   const job = await readableJob(ctx, a.jobId);
   if (!Number.isSafeInteger(a.page) || a.page < 0 || a.page >= job.pageCount) throw new Error("Invalid transcript page.");
   const row = await ctx.db.query("meetingTranscriptPages").withIndex("by_job_attempt_page", q => q.eq("jobId", job._id).eq("attempt", job.attempt).eq("page", a.page)).unique();
   if (!row) throw new Error("Transcript page unavailable.");
   return { page: row.page, segments: row.segments, revision: row.revision, startIndex: row.startIndex, startSec: row.startSec, endSec: row.endSec };
 } });
-export const search = query({ args: { jobId: v.id("meetingTranscriptionJobs"), text: v.string() }, returns: v.any(), handler: async (ctx, a) => {
+export const search = authorizedQuery("meetingTranscription:search", query)({ args: { jobId: v.id("meetingTranscriptionJobs"), text: v.string() }, returns: v.any(), handler: async (ctx, a) => {
   const job = await readableJob(ctx, a.jobId);
   if (!a.text.trim() || a.text.length > 200) return [];
   return (await ctx.db.query("meetingTranscriptPages").withSearchIndex("search_text", q => q.search("text", a.text.trim()).eq("jobId", job._id).eq("attempt", job.attempt)).take(20)).map(p => ({ page: p.page, startSec: p.startSec, excerpt: p.text.slice(0, 220) }));
 } });
-export const pageAtTime = query({ args: { jobId: v.id("meetingTranscriptionJobs"), seconds: v.number() }, returns: v.number(), handler: async (ctx, a) => {
+export const pageAtTime = authorizedQuery("meetingTranscription:pageAtTime", query)({ args: { jobId: v.id("meetingTranscriptionJobs"), seconds: v.number() }, returns: v.number(), handler: async (ctx, a) => {
   const job = await readableJob(ctx, a.jobId);
   if (!Number.isFinite(a.seconds) || a.seconds < 0) throw new Error("Invalid recording time.");
   return (await ctx.db.query("meetingTranscriptPages").withIndex("by_job_attempt_startSec", q => q.eq("jobId", job._id).eq("attempt", job.attempt).lte("startSec", a.seconds)).order("desc").first())?.page ?? 0;
 } });
-export const editSegment = mutation({ args: { jobId: v.id("meetingTranscriptionJobs"), page: v.number(), revision: v.number(), index: v.number(), text: v.optional(v.string()), speaker: v.optional(v.string()) }, returns: v.object({ wordsDropped: v.boolean() }), handler: async (ctx, a) => {
+export const editSegment = authorizedMutation("meetingTranscription:editSegment", mutation)({ args: { jobId: v.id("meetingTranscriptionJobs"), page: v.number(), revision: v.number(), index: v.number(), text: v.optional(v.string()), speaker: v.optional(v.string()) }, returns: v.object({ wordsDropped: v.boolean() }), handler: async (ctx, a) => {
   const job = await readableJob(ctx, a.jobId, true);
   const transcript = await ctx.db.query("transcripts").withIndex("by_meeting", q => q.eq("meetingId", job.meetingId)).first();
   if (transcript?.pagedJobId !== job._id) throw new Error("This transcript is no longer active.");

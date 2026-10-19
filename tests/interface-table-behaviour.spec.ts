@@ -25,9 +25,10 @@ test("an outside click or tap saves an open inline cell edit; Escape still cance
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   // Phones list members as cards, so the tap path runs on a register that
-  // stays an editable table on phones (Court orders' file number).
+  // stays an editable table on phones (Court orders' court; the phone column
+  // cap keeps the title, the status and the next column, Court).
   await page.goto(phone ? "/demo/app/court-orders" : "/demo/app/members");
-  const cells = page.locator(`td[data-field-name="${phone ? "fileNumber" : "lastName"}"]`);
+  const cells = page.locator(`td[data-field-name="${phone ? "court" : "lastName"}"]`);
   const cell = cells.first();
   await expect(cell).toBeVisible();
   const before = (await cell.innerText()).trim();
