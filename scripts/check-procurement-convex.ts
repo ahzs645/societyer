@@ -82,6 +82,9 @@ await t.run(async ctx => {
   await ctx.db.insert("procurementRecords", { societyId: ids.societyId, generation: "inactive", recordKey: "opportunity:old", kind: "opportunity", title: "Old", organization: "", status: "", date: "", updatedAt: "", searchText: "Old" });
   await ctx.db.insert("procurementDetails", { societyId: ids.societyId, generation: "inactive", recordKey: "opportunity:old", dataJson: "{}" });
 });
+await t.run(async ctx => { await ctx.db.insert("procurementDetails", { societyId: ids.societyId, generation: "partial-retirement", recordKey: "award:old", dataJson: "{}" }); });
+assert.ok((await t.query(api.procurementImport.generations, { societyId: ids.societyId })).generations.includes("partial-retirement"), "Interrupted cleanup remains discoverable after all list rows are gone");
+await t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: "partial-retirement" });
 await t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: "inactive" });
 assert.deepEqual((await t.query(api.procurementImport.generations, { societyId: ids.societyId })).generations, [ids.generation]);
 assert.deepEqual(await t.mutation(api.procurementImport.importTerms, termBatch), { inserted: 0, reused: 1 }, "Retiring a generation retains shared taxonomy");

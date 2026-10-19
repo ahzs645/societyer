@@ -102,15 +102,20 @@ export const generations = internalQuery({
   returns: v.object({ active: v.union(v.string(), v.null()), generations: v.array(v.string()), truncated: v.boolean() }),
   handler: async (ctx, { societyId }) => {
     const active = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", societyId)).unique();
-    const generations: string[] = [];
-    let after: string | undefined;
-    for (let i = 0; i < 21; i++) {
-      const row = await ctx.db.query("procurementRecords").withIndex("by_key", q => after === undefined ? q.eq("societyId", societyId) : q.eq("societyId", societyId).gt("generation", after)).first();
-      if (!row) return { active: active?.generation ?? null, generations, truncated: false };
-      if (i === 20) return { active: active?.generation ?? null, generations, truncated: true };
-      generations.push(row.generation); after = row.generation;
+    const found = new Set<string>();
+    // Include partially retired generations whose list rows are gone but details/files remain.
+    for (const table of tables) {
+      const index = table === "procurementRecords" || table === "procurementDetails" ? "by_key" : table === "procurementDocuments" ? "by_record" : "by_record_source";
+      let after: string | undefined;
+      for (let i = 0; i < 21; i++) {
+        const row = await ctx.db.query(table).withIndex(index as any, (q: any) => after === undefined ? q.eq("societyId", societyId) : q.eq("societyId", societyId).gt("generation", after)).first();
+        if (!row) break;
+        if (i === 20) return { active: active?.generation ?? null, generations: [...found].sort(), truncated: true };
+        found.add(row.generation); after = row.generation;
+        if (found.size > 20) return { active: active?.generation ?? null, generations: [...found].sort(), truncated: true };
+      }
     }
-    return { active: active?.generation ?? null, generations, truncated: true };
+    return { active: active?.generation ?? null, generations: [...found].sort(), truncated: false };
   },
 });
 
@@ -181,7 +186,7 @@ export const purgePage = internalMutation({
     if (active?.generation === args.generation) throw new Error("Cannot purge the active generation.");
     const index = args.table === "procurementRecords" || args.table === "procurementDetails" ? "by_key" : args.table === "procurementDocuments" ? "by_record" : "by_record_source";
     const page = await ctx.db.query(args.table).withIndex(index as any, (q: any) => q.eq("societyId", args.societyId).eq("generation", args.generation))
-      .paginate({ cursor: null, numItems: 500, maximumBytesRead: 2_000_000 });
+      .paginate({ cursor: null, numItems: 1000, maximumBytesRead: 4_000_000 });
     for (const row of page.page) await ctx.db.delete(row._id);
     return page.page.length;
   },
