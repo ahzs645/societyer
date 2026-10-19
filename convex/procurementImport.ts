@@ -207,6 +207,38 @@ export const purgeSlice = internalAction({
   },
 });
 
+const retirementRange = { lowerKey: v.string(), upperKey: v.union(v.string(), v.null()) };
+/** Bound the index range as well as the page. This also skips large already-deleted prefixes on retries. */
+export const purgeRangePage = internalMutation({
+  args: { societyId: v.id("societies"), generation: v.string(), table: tableValidator, ...retirementRange, cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ removed: v.number(), cursor: v.string(), done: v.boolean() }),
+  handler: async (ctx, args) => {
+    const active = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", args.societyId)).unique();
+    if (active?.generation === args.generation) throw new Error("Cannot purge the active generation.");
+    const index = args.table === "procurementRecords" || args.table === "procurementDetails" ? "by_key" : args.table === "procurementDocuments" ? "by_record" : "by_record_source";
+    const page = await ctx.db.query(args.table).withIndex(index as any, (q: any) => {
+      const range = q.eq("societyId", args.societyId).eq("generation", args.generation).gte("recordKey", args.lowerKey);
+      return args.upperKey === null ? range : range.lt("recordKey", args.upperKey);
+    }).paginate({ cursor: args.cursor, numItems: 1000, maximumBytesRead: 4_000_000 });
+    for (const row of page.page) await ctx.db.delete(row._id);
+    return { removed: page.page.length, cursor: page.continueCursor, done: page.isDone };
+  },
+});
+export const purgeRanges = internalAction({
+  args: { societyId: v.id("societies"), generation: v.string(), table: tableValidator, ranges: v.array(v.object(retirementRange)), cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ removed: v.number(), completedRanges: v.number(), cursor: v.union(v.string(), v.null()) }),
+  handler: async (ctx, args) => {
+    if (!args.ranges.length || args.ranges.length > 10) throw new Error("Retire one to ten verified backup ranges per request.");
+    let cursor = args.cursor, removed = 0, completedRanges = 0;
+    for (let step = 0; step < 10 && completedRanges < args.ranges.length; step++) {
+      const page: { removed: number; cursor: string; done: boolean } = await ctx.runMutation(internal.procurementImport.purgeRangePage, { societyId: args.societyId, generation: args.generation, table: args.table, ...args.ranges[completedRanges], cursor });
+      removed += page.removed;
+      if (page.done) { completedRanges++; cursor = null; } else cursor = page.cursor;
+    }
+    return { removed, completedRanges, cursor };
+  },
+});
+
 export const purgeGeneration = internalAction({
   args: { societyId: v.id("societies"), generation: v.string() }, returns: v.null(),
   handler: async (ctx, args) => {

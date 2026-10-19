@@ -54,10 +54,11 @@ The maintenance tool is dry-run by default and retains one previous generation:
 
 ```sh
 npx tsx scripts/procurement/retire-convex.ts \
-  --deployment industrious-cricket-610 --workspace WORKSPACE_ID
+  --deployment industrious-cricket-610 --workspace WORKSPACE_ID \
+  --backup PRIVATE_BACKUP.zip
 ```
 
-After reviewing the exact generations, add `--apply --backup PRIVATE_BACKUP.zip`; choose `--keep-previous 0` only when a verified private backup provides rollback for all earlier generations. The tool verifies ZIP integrity and that each candidate's records/details are present, prints its SHA-256, and uses short, bounded backend action slices with progress output that refuse the active generation on every delete batch. If a CLI response is lost, inspect server completion before retrying; rerunning the retirement tool resumes from remaining inactive rows and also finds generations whose list rows were removed before their detail rows. Shared taxonomy releases and all SharePoint files/source snapshots are retained. Do not remove shared content-addressed file objects while retained snapshots reference them. Backup retention is an operator decision; these scripts do not expire backups or delete source archives.
+With `--backup`, the plan covers only generations present in that verified backup; any later unbacked generation is left alone. After reviewing the exact generations, add `--apply`; choose `--keep-previous 0` only when a verified private backup provides rollback for all earlier generations. The tool verifies ZIP integrity and that each candidate's records/details are present, prints its SHA-256, and uses short, bounded backend action slices with progress output that refuse the active generation on every delete batch. Large deletions can make discovery queries over already-deleted index prefixes exceed Convex's system-operation budget. The verified backup supplies bounded key ranges (up to 500 keys or roughly 1 MB of source rows) instead of scanning those prefixes. Each request runs at most ten delete pages, carries continuation cursors across deletes, and verifies exhaustion of every backup range. If a CLI response is lost, inspect server completion before retrying; rerunning the retirement tool resumes from remaining inactive rows and also finds generations whose list rows were removed before their detail rows. Shared taxonomy releases and all SharePoint files/source snapshots are retained. Do not remove shared content-addressed file objects while retained snapshots reference them. Backup retention is an operator decision; these scripts do not expire backups or delete source archives.
 
 ## Updating the UI
 

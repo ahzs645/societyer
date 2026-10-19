@@ -90,6 +90,16 @@ await t.run(async ctx => {
 });
 assert.deepEqual(await t.action(api.procurementImport.purgeSlice, { societyId: ids.societyId, generation: "slice-resume", table: "procurementDetails" }), { removed: 5000, done: false });
 assert.deepEqual(await t.action(api.procurementImport.purgeSlice, { societyId: ids.societyId, generation: "slice-resume", table: "procurementDetails" }), { removed: 200, done: true }, "A short maintenance slice resumes without touching the active generation");
+await t.run(async ctx => {
+  for (let i = 0; i < 1010; i++) await ctx.db.insert("procurementDetails", { societyId: ids.societyId, generation: "range-resume", recordKey: `award:${String(i).padStart(4, "0")}`, dataJson: "{}" });
+});
+const rangeArgs = { societyId: ids.societyId, generation: "range-resume", table: "procurementDetails", lowerKey: "", upperKey: null };
+const rangePage = await t.mutation(api.procurementImport.purgeRangePage, { ...rangeArgs, cursor: null });
+assert.deepEqual([rangePage.removed, rangePage.done], [1000, false]);
+const rangeTail = await t.mutation(api.procurementImport.purgeRangePage, { ...rangeArgs, cursor: rangePage.cursor });
+assert.deepEqual([rangeTail.removed, rangeTail.done], [10, true], "Continuation cursors survive deleting the previous page");
+assert.deepEqual(await t.action(api.procurementImport.purgeRanges, { societyId: ids.societyId, generation: "range-resume", table: "procurementDetails", ranges: [{ lowerKey: "", upperKey: null }], cursor: null }), { removed: 0, completedRanges: 1, cursor: null }, "Already retired backup ranges are idempotent");
+await assert.rejects(t.mutation(api.procurementImport.purgeRangePage, { ...rangeArgs, generation: ids.generation, cursor: null }), /active generation/);
 await t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: "inactive" });
 assert.deepEqual((await t.query(api.procurementImport.generations, { societyId: ids.societyId })).generations, [ids.generation]);
 assert.deepEqual(await t.mutation(api.procurementImport.importTerms, termBatch), { inserted: 0, reused: 1 }, "Retiring a generation retains shared taxonomy");
