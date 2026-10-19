@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { renderAsync } from "docx-preview";
+import { ScrollArea } from "./ScrollArea";
 import { clampZoom } from "./previewViewport";
 import { captureZoomAnchor, PreviewZoomControls, restoreZoomAnchor, usePinchZoom, verticalScroller, visibleCentre, type ZoomAnchor } from "./PreviewZoom";
 
@@ -70,10 +71,10 @@ export function DocxPreview({ blob, onError }: { blob: Blob; onError?: (error: u
       <PreviewZoomControls zoom={zoom} onZoom={zoomTo} />
     </div>}
     {!ready && <p role="status" className="pdf-preview__status">Rendering document…</p>}
-    <div ref={host} className="docx-preview__viewport" tabIndex={0} role="region" aria-label="Word document" data-testid="file-docx-preview">
+    <ScrollArea ref={host} viewportClassName="docx-preview__viewport" tabIndex={0} role="region" aria-label="Word document" data-testid="file-docx-preview">
       <div ref={content} className="docx-preview__content">
         <div ref={render} className="minutes-docx-preview__render docx-preview__render" />
       </div>
-    </div>
+    </ScrollArea>
   </div>;
 }

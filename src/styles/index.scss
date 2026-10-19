@@ -56,6 +56,7 @@
 
 // Component library (split from the former monolithic _components.scss — original order).
 @use "components-overlays"; // empty state, select trigger, menu, calendar, modals, quick-action picker
+@use "scroll-area"; // layout-neutral, auto-hiding scrollbars for document readers
 @use "components-inputs"; // confirm icon, toast, text input/area, tooltip
 @use "components-legal-citation"; // legal guide badge/track, citation badge/popover, check row
 @use "components-pickers"; // switch, icon picker, color swatch/pop, calendar, bylaw history

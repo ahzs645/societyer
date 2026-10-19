@@ -2,6 +2,7 @@ import { assertPreviewSize, readPreviewResponse } from "../lib/filePreviewBytes"
 import { useCallback, useEffect, useState } from "react";
 import { PdfPreview } from "./PdfPreview";
 import { DocxPreview } from "./DocxPreview";
+import { ScrollArea } from "./ScrollArea";
 import { Download, FileWarning, Loader2, ShieldCheck } from "lucide-react";
 import type { Id } from "../../convex/_generated/dataModel";
 import { restoredDocumentFile } from "../lib/documentOpen";
@@ -186,7 +187,7 @@ export function DocumentPreviewPane({
   }, []);
   const extracted = extractedText?.trim();
   return (
-    <div className="document-preview-pane">
+    <ScrollArea className="document-preview-pane" viewportClassName="document-preview-pane__viewport" tabIndex={0} role="region" aria-label="Document preview">
       {origin === "saved" && status !== "loading" && (
         <div className="document-preview-pane__origin"><ShieldCheck size={12} /> Showing the saved original</div>
       )}
@@ -240,6 +241,6 @@ export function DocumentPreviewPane({
           )}
         </div>
       )}
-    </div>
+    </ScrollArea>
   );
 }

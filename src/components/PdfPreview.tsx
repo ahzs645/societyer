@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ScrollArea } from "./ScrollArea";
 import { canvasPixelRatio, clampZoom, parsePageInput, planPdfPages } from "./previewViewport";
 import { captureZoomAnchor, observerRoot, PreviewZoomControls, restoreZoomAnchor, usePinchZoom, verticalScroller, visibleCentre, type ZoomAnchor } from "./PreviewZoom";
 
@@ -326,7 +327,7 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, testI
     </div>}
     {!drawnAny && !error && <p role="status" className="pdf-preview__status">Rendering PDF…</p>}
     {error && <p role="alert" className="pdf-preview__status">Could not render this PDF: {error}</p>}
-    <div ref={host} data-testid={testId} className="pdf-preview__viewport" tabIndex={0} role="region" aria-label={pageCount ? `PDF, ${pageCount} pages` : "PDF"}>
+    <ScrollArea ref={host} data-testid={testId} viewportClassName="pdf-preview__viewport" tabIndex={0} role="region" aria-label={pageCount ? `PDF, ${pageCount} pages` : "PDF"}>
       <div ref={pages} className="pdf-preview__pages">
         {boxes.map((box, index) => <div
           key={index}
@@ -336,6 +337,6 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, testI
           style={{ width: box.width, height: box.height }}
         />)}
       </div>
-    </div>
+    </ScrollArea>
   </div>;
 }

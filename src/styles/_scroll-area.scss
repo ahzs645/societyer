@@ -1,0 +1,40 @@
+@use "tokens" as *;
+
+.scroll-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.scroll-area__viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; width: 0; height: 0; }
+}
+.scroll-area__thumb {
+  position: absolute;
+  z-index: 3;
+  border-radius: 8px;
+  background: token('text-secondary');
+  box-shadow: 0 0 0 1px token('bg-app');
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  transition: opacity 180ms ease;
+  &--y { top: 4px; right: 3px; width: 6px; }
+  &--x { bottom: 3px; left: 4px; height: 6px; }
+}
+.scroll-area.is-scrolling > .scroll-area__thumb { opacity: 0.65; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .scroll-area__thumb { transition: none; } }
+// Preserve system scrollbar visibility/contrast in accessibility colour modes.
+@media (forced-colors: active) {
+  .scroll-area__viewport { scrollbar-width: auto; &::-webkit-scrollbar { display: revert; width: auto; height: auto; } }
+  .scroll-area__thumb { display: none; }
+}
