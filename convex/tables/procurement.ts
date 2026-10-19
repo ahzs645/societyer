@@ -12,9 +12,15 @@ export const procurementDocumentFields = {
   ...scope, recordKey: v.string(), documentKey: v.string(), name: v.string(), mediaType: v.string(),
   sha256: v.string(), sourceUrl: v.string(), status: v.string(), bytes: v.number(), parts: v.number(), available: v.boolean(),
 };
+/** Small reference index shared across this workspace's catalog generations. */
+export const procurementTermFields = {
+  key: v.string(), releaseId: v.string(), scheme: v.string(), version: v.string(), code: v.string(), title: v.string(), parentKey: v.union(v.string(), v.null()),
+};
 export const procurementTables = {
   procurementCatalogs: defineTable({
     ...scope, folder: v.string(), publishedAt: v.string(), counts: v.record(v.string(), v.number()),
+    profileVersion: v.optional(v.number()), contentHash: v.optional(v.string()), sourceCounts: v.optional(v.record(v.string(), v.number())),
+    taxonomyReleases: v.optional(v.array(v.string())), taxonomyCount: v.optional(v.number()),
   }).index("by_society", ["societyId"]),
   // List projections stay small; a page never reads notice bodies or file contents.
   procurementRecords: defineTable(procurementRecordFields)
@@ -24,6 +30,8 @@ export const procurementTables = {
     .searchIndex("search_records", { searchField: "searchText", filterFields: ["societyId", "generation", "kind", "status"] }),
   procurementDetails: defineTable({ ...scope, recordKey: v.string(), dataJson: v.string() })
     .index("by_key", ["societyId", "generation", "recordKey"]),
+  procurementTaxonomyTerms: defineTable({ societyId: v.id("societies"), ...procurementTermFields })
+    .index("by_release_key", ["societyId", "releaseId", "key"]),
   procurementDocuments: defineTable(procurementDocumentFields)
     .index("by_record", ["societyId", "generation", "recordKey"]),
   procurementEvidence: defineTable({ ...scope, recordKey: v.string(), source: v.string(), dataJson: v.string() })

@@ -3,6 +3,39 @@ spec = importlib.util.spec_from_file_location('exporter', pathlib.Path(__file__)
 exporter = importlib.util.module_from_spec(spec); spec.loader.exec_module(exporter)
 
 class ExportTests(unittest.TestCase):
+    def test_references_are_compact_and_shared_and_raw_notice_fields_are_omitted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp); db = sqlite3.connect(root/'catalog.sqlite')
+            db.execute('CREATE TABLE records(id TEXT PRIMARY KEY,kind,title,data,updated_at)')
+            db.execute('CREATE TABLE documents(id,record_id,url,name,media_type,sha256,status)')
+            rows = [
+                ('opportunity:1', 'opportunity', dict(descriptionText='Notice', sourceDescriptionText='Notice', rawSourceData='RAW_SOURCE_SENTINEL', searchText='Notice City', classificationCodes=['110'], taxonomyReleaseId='release:1')),
+                ('taxonomy:parent', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='100', title='Parent', parentId=None, ancestors=[], definition='DEFINITION_SENTINEL')),
+                ('taxonomy:child', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='110', title='Child', parentId='taxonomy:parent', ancestors=['taxonomy:parent'])),
+                ('taxonomy:unused', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='999', title='Unused')),
+            ]
+            for key, kind, data in rows: db.execute('INSERT INTO records VALUES(?,?,?,?,?)',(key,kind,key,json.dumps(data),'2026-10-18'))
+            db.commit(); db.close()
+            manifest = dict(snapshotId='snapshot', publishedAt='2026-10-18', counts={'opportunity':1,'taxonomy-term':3}, files={})
+            counts = exporter.export(root/'catalog.sqlite', manifest, 'workspace', 'folder', root)
+            self.assertEqual(counts, dict(procurementRecords=1, procurementDetails=1))
+            terms = [json.loads(line) for line in (root/'procurementTaxonomyTerms.jsonl').read_text().splitlines()]
+            self.assertEqual({t['key'] for t in terms}, {'taxonomy:parent', 'taxonomy:child'})
+            self.assertTrue(all('generation' not in t and 'definition' not in t and 'ancestors' not in t for t in terms))
+            detail = json.loads(json.loads((root/'procurementDetails.jsonl').read_text())['dataJson'])
+            self.assertEqual(detail, {'sourceDescriptionText':'Notice'})
+            activation = json.loads((root/'activation.json').read_text())
+            self.assertEqual(activation['counts'], {'opportunity':1}); self.assertEqual(activation['taxonomyCount'],2)
+            # The companion reader and legacy fallback produce equivalent imports.
+            entries = [dict(type='record', record=dict(id='opportunity:1', kind='opportunity', title='opportunity:1', updatedAt='2026-10-18', searchText=exporter.notice_search('opportunity:1', rows[0][2], 'opportunity:1'), data=exporter.notice_data(rows[0][2])))]
+            entries += [dict(type='taxonomy',term={k:v for k,v in t.items() if k != 'societyId'}) for t in terms]
+            companion = root/'review.jsonl'; companion.write_text('\n'.join(json.dumps(e) for e in entries)+'\n')
+            other = root/'compact'; other.mkdir()
+            manifest['review'] = dict(counts={'opportunity':1}, taxonomy=dict(sourceTerms=3,selectedTerms=2,unresolvedReferences=0))
+            exporter.export_review(companion, manifest, 'workspace', 'folder', other)
+            self.assertEqual(json.loads((other/'activation.json').read_text())['contentHash'],activation['contentHash'])
+            with zipfile.ZipFile(other/'metadata.zip') as archive: self.assertNotIn('procurementTaxonomyTerms/documents.jsonl',archive.namelist())
+
     def test_metadata_only_and_file_binding(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp); db = sqlite3.connect(root / 'catalog.sqlite')

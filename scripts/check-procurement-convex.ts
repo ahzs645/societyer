@@ -45,6 +45,28 @@ const activation = { societyId: ids.societyId, generation: ids.generation, folde
 await assert.rejects(t.action(api.procurementImport.activate, { ...activation, counts: { opportunity: 62, award: 3 }, expected: { ...activation.expected, procurementRecords: 65, procurementDetails: 65 } }), /incomplete/);
 assert.equal(await reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), null);
 await t.action(api.procurementImport.activate, activation);
+const term = { key: "taxonomy-term:UNSPSC:1:100", releaseId: "taxonomy-release:UNSPSC:1", scheme: "UNSPSC", version: "1", code: "100", title: "Construction", parentKey: null };
+const termBatch = { societyId: ids.societyId, folder: ids.folder, terms: [term] };
+assert.deepEqual(await t.mutation(api.procurementImport.importTerms, termBatch), { inserted: 1, reused: 0 });
+assert.deepEqual(await t.mutation(api.procurementImport.importTerms, termBatch), { inserted: 0, reused: 1 }, "Unchanged taxonomy is reused, not copied for every generation");
+await assert.rejects(t.mutation(api.procurementImport.importTerms, { ...termBatch, terms: [{ ...term, title: "Changed in place" }] }), /release changed/i);
+await assert.rejects(t.mutation(api.procurementImport.importTerms, { ...termBatch, terms: [term, term] }), /Duplicate/);
+await assert.rejects(t.mutation(api.procurementImport.importTerms, { ...termBatch, folder: `Zoer/bc-bid-monitor/${ids.foreign}` }), /folder|workspace/i);
+assert.deepEqual((await t.query(api.procurementImport.generations, { societyId: ids.societyId })).generations, [ids.generation]);
+const state = await t.query(api.procurementImport.state, { societyId: ids.societyId });
+assert.equal(state.generation, ids.generation);
+await t.mutation(api.procurementImport.commit, { ...activation, profileVersion: 2, contentHash: "a".repeat(64), sourceCounts: { opportunity: 61, award: 3, "taxonomy-term": 89972 }, taxonomyReleases: [term.releaseId], taxonomyCount: 1 });
+assert.equal((await t.query(api.procurementImport.state, { societyId: ids.societyId })).contentHash, "a".repeat(64));
+await t.mutation(api.procurementImport.commit, activation);
+assert.equal((await t.query(api.procurementImport.state, { societyId: ids.societyId })).profileVersion, undefined, "Legacy rollback clears the compact fingerprint");
+await t.run(async ctx => {
+  await ctx.db.insert("procurementRecords", { societyId: ids.societyId, generation: "inactive", recordKey: "opportunity:old", kind: "opportunity", title: "Old", organization: "", status: "", date: "", updatedAt: "", searchText: "Old" });
+  await ctx.db.insert("procurementDetails", { societyId: ids.societyId, generation: "inactive", recordKey: "opportunity:old", dataJson: "{}" });
+});
+await t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: "inactive" });
+assert.deepEqual((await t.query(api.procurementImport.generations, { societyId: ids.societyId })).generations, [ids.generation]);
+assert.deepEqual(await t.mutation(api.procurementImport.importTerms, termBatch), { inserted: 0, reused: 1 }, "Retiring a generation retains shared taxonomy");
+await assert.rejects(t.action(api.procurementImport.activate, { ...activation, profileVersion: 2, counts: { opportunity: 61, award: 2, "taxonomy-term": 1 } }), /only opportunities/i);
 await assert.rejects(t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: ids.generation }), /active generation/);
 let cursor: string | null = null; const seen = new Set<string>(); let calls = 0;
 for (;;) {
