@@ -64,6 +64,27 @@ class ExportTests(unittest.TestCase):
                 self.assertNotIn(b'BINARY_SENTINEL',content); self.assertNotIn(b'EXTRACTED_TEXT_SENTINEL',content)
             self.assertEqual(json.loads((root/'activation.json').read_text())['expected'],counts)
 
+    def test_restore_keeps_source_fields_and_excludes_other_generations(self):
+        restore_spec = importlib.util.spec_from_file_location('restore', pathlib.Path(__file__).with_name('restore-export.py'))
+        restore = importlib.util.module_from_spec(restore_spec); restore_spec.loader.exec_module(restore)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary); backup = root/'backup.zip'
+            scope = dict(societyId='workspace', generation='old')
+            original = dict(scope, _id='generated', _creationTime=1, recordKey='award:1', kind='award', opaqueSourceField={'nested':['preserve',0]})
+            with zipfile.ZipFile(backup,'w') as archive:
+                archive.writestr('procurementCatalogs/documents.jsonl', json.dumps(dict(scope, folder='folder', publishedAt='date', counts={'award':1})))
+                for table in ('procurementRecords','procurementDetails','procurementDocuments','procurementEvidence'):
+                    rows = [original] if table in ('procurementRecords','procurementDetails') else []
+                    rows += [dict(original, generation='unrelated'),dict(original,societyId='foreign')]
+                    archive.writestr(table+'/documents.jsonl', '\n'.join(json.dumps(r) for r in rows))
+            result = restore.prepare(backup,'workspace',root/'restore')
+            self.assertEqual(result['expected']['procurementRecords'],1)
+            with zipfile.ZipFile(root/'restore/metadata.zip') as archive:
+                row = json.loads(archive.read('procurementRecords/documents.jsonl'))
+                self.assertEqual(row, {k:v for k,v in original.items() if k not in ('_id','_creationTime')})
+                self.assertEqual(archive.read('procurementDocuments/documents.jsonl'),b'')
+            with self.assertRaises(FileExistsError): restore.prepare(backup,'workspace',root/'restore')
+
     def test_sortable_dates(self):
         cases = {
             '2026-10-30': '2026-10-30',

@@ -14,6 +14,14 @@ import type { CatalogReviewRow, ListRow } from "../src/features/procurementRevie
 import { RESOLVED_NAV_TREE, navEntryInArea, navParentForPath } from "../src/lib/navTree";
 import { ROUTE_IDENTITY } from "../src/lib/routeIdentity";
 
+import { canonicalReaderParams, readerPlaces } from "../src/features/procurementReview/reader/routes";
+const migrated = canonicalReaderParams(new URLSearchParams("record=opportunity%3A233770&tab=documents&buyer=City"))!;
+assert.equal(migrated.get("notice"), "opportunity:233770");
+assert.equal(migrated.has("record"), false, "Old bookmarks must not open the shared table inspector and reset notice tabs");
+assert.equal(migrated.get("tab"), "documents");
+assert.equal(readerPlaces(migrated).party?.name, "City");
+assert.equal(canonicalReaderParams(new URLSearchParams("record=unrelated-record")), null);
+assert.equal(canonicalReaderParams(new URLSearchParams("notice=award%3A1")), null);
 const TODAY = "2026-10-18";
 const base: ListRow = {
   recordKey: "", kind: "award", title: "", organization: "", issuedFor: "", status: "Awarded", date: "", dateText: "",

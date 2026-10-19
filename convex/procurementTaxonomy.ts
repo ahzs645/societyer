@@ -30,4 +30,3 @@ export const finishTaxonomy = internalAction({
     await ctx.runMutation(internal.procurementImport.commitTaxonomy, args); return null;
   },
 });
-

@@ -8,6 +8,7 @@
  * a notice bring their own.
  */
 import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { BarChart3 } from "lucide-react";
 import { Tabs } from "../../../components/primitives";
 import { CatalogBrowser } from "./CatalogBrowser";
@@ -15,7 +16,7 @@ import { BuyerPage } from "./BuyerPage";
 import { NoticePage } from "./NoticePage";
 import { ProcurementAnalytics } from "./analytics/ProcurementAnalytics";
 import type { NoticeKind } from "./NoticeTable";
-import { placeKey, readerPlaces, useReaderNavigation, type ReaderPlace } from "./routes";
+import { canonicalReaderParams, placeKey, readerPlaces, useReaderNavigation, type ReaderPlace } from "./routes";
 import { ReaderSourceContext, type ReaderSource } from "./source";
 
 /** Reference data (taxonomy terms and the like) is published too, but isn't something a reviewer browses. */
@@ -26,6 +27,9 @@ const KINDS: { id: NoticeKind; label: string }[] = [
 const ANALYTICS = "analytics";
 
 export function ProcurementReader({ source, header }: { source: ReaderSource; header: ReactNode }) {
+  const location = useLocation();
+  const canonical = canonicalReaderParams(new URLSearchParams(location.search));
+  if (canonical) return <Navigate to={{ pathname: location.pathname, search: `?${canonical.toString()}` }} replace state={location.state} />;
   return (
     <ReaderSourceContext.Provider value={source}>
       <ReaderLayers source={source} header={header} />

@@ -18,6 +18,14 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 export const NOTICE_PARAM = "notice";
 /** Links from before the reader had its own param (`?record=<key>`) still open the notice. */
 const LEGACY_NOTICE_PARAM = "record";
+/** Normalize old bookmarks before mounting the shared table, whose inspector owns `record`/`tab`. */
+export function canonicalReaderParams(params: URLSearchParams): URLSearchParams | null {
+  const legacy = params.get(LEGACY_NOTICE_PARAM);
+  if (!legacy || params.has(NOTICE_PARAM) || !/^(opportunity|award):/.test(legacy)) return null;
+  const next = new URLSearchParams(params);
+  next.set(NOTICE_PARAM, legacy); next.delete(LEGACY_NOTICE_PARAM);
+  return next;
+}
 export const BUYER_PARAM = "buyer";
 export const ISSUED_FOR_PARAM = "issuedFor";
 export const SECTION_PARAM = "section";
