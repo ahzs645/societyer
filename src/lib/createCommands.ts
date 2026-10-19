@@ -3,15 +3,17 @@
  * opens the same form as the page's own New button, and is listed only when
  * the viewer may create that record (the page checks again before opening).
  *
- * "New task" and "New meeting" keep the ids of the older "Add task" and
- * "Create meeting" actions so pins made under the old names keep working.
+ * "New task", "New meeting" and "New transaction rule" keep the ids of the
+ * older static actions so pins made under the old names keep working. The
+ * finance items are the Create menu's (lib/financeCreateItems.ts).
  */
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, GitCompareArrows, ListTodo, Receipt, ReceiptText } from "lucide-react";
+import { Calendar, ListTodo, Receipt } from "lucide-react";
 import type { ComponentType } from "react";
 import { usePermissions } from "../hooks/usePermissions";
 import type { ModuleKey } from "./modules";
+import { FINANCE_CREATE_ITEMS } from "./financeCreateItems";
 
 export type CreateCommand = {
   id: string;
@@ -23,7 +25,7 @@ export type CreateCommand = {
 };
 
 /** Static palette actions these commands replace (same id, new label). */
-export const CREATE_COMMAND_IDS = new Set(["action-add-task", "action-create-meeting"]);
+export const CREATE_COMMAND_IDS = new Set(["action-add-task", "action-create-meeting", "action-new-transaction-rule"]);
 
 export function useCreateCommands(): CreateCommand[] {
   const navigate = useNavigate();
@@ -43,20 +45,14 @@ export function useCreateCommands(): CreateCommand[] {
           keywords: ["expense report", "reimbursement", "claim", "receipt", "add expense"],
           run: () => navigate("/app/treasurer?intent=new-claim"),
         },
-        {
-          id: "create-invoice",
-          label: "New invoice",
-          icon: ReceiptText,
-          keywords: ["bill", "invoice a customer", "dues invoice", "create invoice"],
-          run: () => navigate("/app/invoices?builder=new"),
-        },
-        {
-          id: "create-journal-entry",
-          label: "New journal entry",
-          icon: GitCompareArrows,
-          keywords: ["journal", "ledger entry", "post entry", "adjusting entry", "accounting"],
-          run: () => navigate("/app/financials/accounting?intent=new-journal"),
-        },
+        // The finance Create menu's items (lib/financeCreateItems.ts).
+        ...FINANCE_CREATE_ITEMS.map((item) => ({
+          id: item.id,
+          label: item.commandLabel,
+          icon: item.icon,
+          keywords: item.keywords,
+          run: () => navigate(item.to),
+        })),
       );
     }
     if (tasks) {

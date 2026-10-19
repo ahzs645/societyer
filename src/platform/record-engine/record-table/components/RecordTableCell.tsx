@@ -1,6 +1,5 @@
-import { isValidElement, useCallback, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode, type RefObject } from "react";
+import { isValidElement, useCallback, useMemo, useRef, type HTMLAttributes, type ReactNode, type RefObject } from "react";
 import { columnWidthStyle } from "../utils/columnWidth";
-import { createPortal } from "react-dom";
 import { Copy, ExternalLink, Mail, Pencil } from "lucide-react";
 import type { RecordField } from "../../types";
 import { FIELD_TYPES } from "../../types";
@@ -16,10 +15,16 @@ import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordT
 import type { RecordTableCellRenderer } from "./RecordTable";
 import { Tooltip } from "../../../../components/Tooltip";
 import { EntityHoverCard } from "../../../../components/HoverCard/EntityHoverCard";
+import { useRecordTableInlineEdit } from "../contexts/RecordTableInlineEditContext";
+import { formatInlineText } from "../utils/inlineEditValues";
+import { RecordTableCellEditorFrame } from "./RecordTableCellEditorFrame";
+import { RecordTableGridCellEditor } from "./RecordTableGridCellEditor";
 
 /**
  * One body cell. Double-click enters edit mode (for editable fields).
- * Display/edit dispatch goes through the field-type registry.
+ * Display/edit dispatch goes through the field-type registry; a column the
+ * table declared in `inlineEdit` (grid mode) edits with the grid editors and
+ * saves through the grid's commit path instead.
  */
 export function RecordTableCell({
   recordField,
@@ -89,6 +94,10 @@ export function RecordTableCell({
     const edit = state.pendingEdits.get(recordId)?.get(recordField.field.name);
     return !!edit && !edit.settled;
   });
+  // Batch grid mode: edited but not saved yet.
+  const isStaged = useRecordTableState((state) => state.stagedEdits.get(recordId)?.has(recordField.field.name) ?? false);
+  const inlineEdit = useRecordTableInlineEdit();
+  const gridColumn = inlineEdit?.columnFor(recordField.field.name);
   const handle = useRecordTableStoreHandle();
   const cellRef = useRef<HTMLTableCellElement | null>(null);
   const lastPointerTypeRef = useRef<string>("mouse");
@@ -105,7 +114,11 @@ export function RecordTableCell({
   }, [handle]);
 
   const value = record[recordField.field.name];
-  const canEdit = isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
+  // A declared grid column decides for itself (including rows it locks);
+  // every other column keeps the metadata rule.
+  const canEdit = inlineEdit && gridColumn
+    ? inlineEdit.canEditCell(record, recordField.field)
+    : isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
   // Phones: a tap anywhere on the row opens the record when the table can open
   // one, and fields are edited in its drawer/panel rather than in the grid.
   const tapOpensRecord = isMobile && !!tableCtx.onRecordClick;
@@ -114,8 +127,14 @@ export function RecordTableCell({
   const isNumeric = isNumericCellType(recordField.field.fieldType);
   const isEditing = canEdit && isEditingThisCell;
   const secondaryActions = useMemo(
-    () => getSecondaryActions({ fieldType: recordField.field.fieldType, value }),
-    [recordField.field.fieldType, value],
+    () => gridColumn
+      ? getGridCopyAction(
+          value,
+          () => formatInlineText(value, recordField.field, gridColumn, record),
+          () => inlineEdit?.announce(`Copied ${recordField.field.label}`),
+        )
+      : getSecondaryActions({ fieldType: recordField.field.fieldType, value }),
+    [gridColumn, inlineEdit, record, recordField.field, value],
   );
   const { cellPreview } = tableCtx;
   const previewRef = useMemo(
@@ -172,11 +191,13 @@ export function RecordTableCell({
         (isFocused ? " record-table__cell--focused" : "") +
         (isInRange ? " record-table__cell--in-range" : "") +
         (isNumeric ? " record-table__cell--numeric" : "") +
+        (isStaged ? " record-table__cell--staged" : "") +
         (collapsed ? " record-table__cell--collapsed" : "")
       }
       tabIndex={isFocused && !collapsed ? 0 : -1}
       aria-selected={isFocused || isInRange}
       aria-busy={isPending || undefined}
+      aria-readonly={inlineEdit ? !canInlineEdit : undefined}
       {...pressHandlers}
       onPointerDown={(event) => {
         lastPointerTypeRef.current = event.pointerType;
@@ -318,7 +339,18 @@ export function RecordTableCell({
           ) : null}
         </div>
       )}
-      {isEditing && (
+      {isEditing && inlineEdit && gridColumn && (
+        <RecordTableGridCellEditor
+          anchorRef={cellRef}
+          record={record}
+          field={recordField.field}
+          column={gridColumn}
+          position={{ rowIndex, columnIndex }}
+          initialText={editingInitialValue}
+          controller={inlineEdit}
+        />
+      )}
+      {isEditing && !gridColumn && (
         <RecordTableFloatingCellEditor
           anchorRef={cellRef}
           registerFlush={registerFlush}
@@ -358,52 +390,8 @@ export function RecordTableFloatingCellEditor({
   onCommit: (value: unknown) => void | Promise<void>;
   onCancel: () => void;
 }) {
-  const [rect, setRect] = useState<DOMRect | null>(null);
-
-  useLayoutEffect(() => {
-    const update = () => {
-      const next = anchorRef.current?.getBoundingClientRect();
-      if (next) setRect(next);
-    };
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    // The mobile keyboard pans/resizes the visual viewport without firing
-    // window scroll/resize — re-measure so the editor stays on its anchor.
-    window.visualViewport?.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("scroll", update);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-      window.visualViewport?.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("scroll", update);
-    };
-  }, [anchorRef]);
-
-  if (!rect) return null;
-
-  const expanded = isExpandedEditorType(field.fieldType);
-  const editorWidth = expanded ? Math.min(360, window.innerWidth - 16) : rect.width + 4;
-  const editorLeft = expanded
-    ? Math.min(Math.max(8, rect.left - 2), Math.max(8, window.innerWidth - editorWidth - 8))
-    : Math.max(8, rect.left - 2);
-  const placeExpandedAbove = expanded && rect.top > window.innerHeight / 2;
-
-  return createPortal(
-    <div
-      className={`record-table__cell-editor-popover${expanded ? " record-table__cell-editor-popover--expanded" : ""}`}
-      data-record-cell-editor-anchor
-      style={{
-        left: editorLeft,
-        top: placeExpandedAbove ? undefined : Math.max(8, rect.top - 2),
-        bottom: placeExpandedAbove ? Math.max(8, window.innerHeight - rect.bottom - 2) : undefined,
-        minWidth: editorWidth,
-        width: expanded ? editorWidth : undefined,
-        height: expanded ? undefined : rect.height + 4,
-      }}
-      onMouseDown={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
+  return (
+    <RecordTableCellEditorFrame anchorRef={anchorRef} expanded={isExpandedEditorType(field.fieldType)}>
       <FieldInputFlushContext.Provider value={registerFlush ?? null}>
         <FieldInput
           value={value}
@@ -413,8 +401,7 @@ export function RecordTableFloatingCellEditor({
           onCancel={onCancel}
         />
       </FieldInputFlushContext.Provider>
-    </div>,
-    document.body,
+    </RecordTableCellEditorFrame>
   );
 }
 
@@ -438,6 +425,18 @@ function isExpandedEditorType(fieldType: string) {
     FIELD_TYPES.LINKS,
     FIELD_TYPES.FILES,
   ].includes(fieldType as any);
+}
+
+/** Grid columns copy the text that pastes back to the same value. */
+function getGridCopyAction(value: unknown, text: () => string, onCopied: () => void) {
+  if (value === null || value === undefined || value === "") return [];
+  return [{
+    label: "Copy value",
+    icon: <Copy size={12} />,
+    onClick: () => {
+      void navigator.clipboard?.writeText(text()).then(onCopied, () => undefined);
+    },
+  }];
 }
 
 function getSecondaryActions({

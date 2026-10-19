@@ -1,9 +1,11 @@
+import { assertExternalIdentityActive } from "./identity";
 import { isActiveMembership } from "./access";
 import type { PortableDoc, PortableQueryCtx } from "../portable/ctx";
 
 export type InvitationRow = PortableDoc & {
   societyId: string;
   email: string;
+  targetUserId?: string;
   role: string;
   token?: string;
   tokenHash?: string;
@@ -35,7 +37,7 @@ export async function findInvitation(ctx: PortableQueryCtx, token: string): Prom
   const tokenHash = await hashInvitationToken(token);
   const rows = await ctx.db.query<InvitationRow>("invitations")
     .withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash))
-    .collect();
+    .take(2);
   // Existing plaintext invitations have no reviewed expiry and must be reissued.
   return rows.length === 1 ? rows[0] : null;
 }
@@ -49,6 +51,7 @@ export function invitationAvailability(invitation: InvitationRow): string | null
 
 export async function invitationIssuerAuthorized(ctx: PortableQueryCtx, invitation: InvitationRow): Promise<boolean> {
   const inviter = invitation.invitedByUserId ? await ctx.db.get(invitation.invitedByUserId, "users") : null;
-  return Boolean(inviter && inviter.societyId === invitation.societyId && isActiveMembership(inviter) &&
-    (inviter.role === "Owner" || (inviter.role === "Admin" && !["Owner", "Admin"].includes(invitation.role))));
+  if (!inviter || inviter.societyId !== invitation.societyId || !isActiveMembership(inviter)) return false;
+  try { await assertExternalIdentityActive(ctx.db, inviter); } catch { return false; }
+  return inviter.role === "Owner" || (inviter.role === "Admin" && !["Owner", "Admin"].includes(invitation.role));
 }

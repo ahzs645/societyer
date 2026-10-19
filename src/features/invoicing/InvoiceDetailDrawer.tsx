@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { Ban, Bell, CheckCircle2, CircleDashed, Copy, Eye, FilePlus2, Landmark, MoreHorizontal, Pencil, Printer, Repeat, RotateCcw, Send, Trash2, Undo2, Wallet } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, Ban, Bell, BookCheck, CheckCircle2, CircleDashed, Copy, Eye, FilePlus2, Landmark, Link2, MoreHorizontal, Pencil, Printer, Repeat, RotateCcw, Send, Trash2, Undo2, Wallet } from "lucide-react";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "@/lib/convexApi";
 import { Drawer } from "../../components/ui";
 import { Menu } from "../../components/Menu";
@@ -11,8 +13,10 @@ import { formatDate, formatDateTime } from "../../lib/format";
 import { formatMoney } from "../../lib/money";
 import { INVOICE_TERMS_LABEL, PAYMENT_METHOD_LABEL, isOpenStatus, type InvoiceTerms, type PaymentMethod } from "../../../shared/invoicing";
 import { InvoiceDocument, InvoicePrintPortal } from "./InvoiceDocument";
-import { InvoiceStatusPill } from "./InvoiceStatusPill";
+import { InvoiceStatusPill, NeedsActionPill } from "./InvoiceStatusPill";
 import { RecordPaymentForm } from "./RecordPaymentForm";
+import { InvoiceDepositLink } from "./InvoiceDepositLink";
+import type { NeedsActionFlag } from "../../../shared/invoiceLedger";
 import type { InvoiceRow, InvoiceWorkspace } from "./types";
 
 const TIMELINE_ICONS: Record<string, typeof CircleDashed> = {
@@ -26,6 +30,9 @@ const TIMELINE_ICONS: Record<string, typeof CircleDashed> = {
   reverted: RotateCcw,
   voided: Ban,
   restored: RotateCcw,
+  posted: BookCheck,
+  reversed: Undo2,
+  deposit: Link2,
 };
 
 type Props = {
@@ -36,10 +43,13 @@ type Props = {
   onClose: () => void;
   onEdit: (id: string) => void;
   onOpenSeries: (seriesId: string) => void;
+  onEditMapping: () => void;
+  /** Admins may post an invoice that isn't in the books yet. */
+  canPost: boolean;
 };
 
 /** Invoice panel: balance, actions, payments (with bank links), timeline and a preview. */
-export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onClose, onEdit, onOpenSeries }: Props) {
+export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onClose, onEdit, onOpenSeries, onEditMapping, canPost }: Props) {
   const markSent = useMutation(api.invoices.markSent);
   const voidInvoices = useMutation(api.invoices.voidInvoices);
   const restoreVoided = useMutation(api.invoices.restoreVoided);
@@ -48,11 +58,28 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
   const revertToUnpaid = useMutation(api.invoices.revertToUnpaid);
   const removePayment = useMutation(api.invoices.removePayment);
   const sendReminders = useMutation(api.invoices.sendReminders);
+  const postExisting = useMutation(api.invoices.postExisting);
   const confirm = useConfirm();
   const prompt = usePrompt();
   const toast = useToast();
   const [paying, setPaying] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [linkingKey, setLinkingKey] = useState<string | null>(null);
+  const depositLabel = (id: string | undefined) => workspace.ledger.accounts.deposit.find((account) => account._id === id)?.label;
+  const defaultDeposit = depositLabel(workspace.settings.depositAccountId) ?? workspace.ledger.defaults.deposit?.label ?? "Undeposited funds";
+
+  const fix = (flag: NeedsActionFlag) => {
+    if (flag.fix === "edit_mapping") onEditMapping();
+    else if (flag.fix === "link_deposit") setLinkingKey(flag.paymentKey ?? invoice.payments[0]?.key ?? null);
+    else document.getElementById("inv-payments")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const ledgerNote = (() => {
+    const { ledger } = invoice;
+    if (ledger.state === "posted") return ledger.reasons.length ? `In the books. Not posted: ${ledger.reasons.join(" ")}` : "In the books.";
+    if (ledger.state === "ready") return ledger.entryId ? `In the books; ${ledger.paymentsToPost === 1 ? "a payment isn't" : `${ledger.paymentsToPost} payments aren't`} posted yet.` : "Not in the books yet.";
+    if (ledger.state === "blocked") return `Not in the books: ${ledger.reasons.join(" ")}`;
+    return null;
+  })();
 
   const open = isOpenStatus(invoice.status);
   const organization = { ...workspace.organization, logoUrl };
@@ -122,6 +149,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
         <div className="invoice-drawer__head">
           <span className="invoice-drawer__number">{invoice.number}</span>
           <InvoiceStatusPill status={invoice.status} daysOverdue={invoice.daysOverdue} partial={invoice.paidCents > 0} />
+          <NeedsActionPill flags={invoice.needsAction} />
         </div>
       }
     >
@@ -183,8 +211,47 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
 
       {invoice.voidReason && invoice.lifecycle === "void" && <p className="muted invoice-drawer__note">Voided: {invoice.voidReason}</p>}
 
+      {invoice.needsAction.length > 0 && (
+        <section className="invoice-drawer__section invoice-needs-action" aria-labelledby="inv-needs-action">
+          <h3 id="inv-needs-action" className="invoice-drawer__heading"><AlertTriangle size={14} aria-hidden="true" /> Needs action</h3>
+          <ul className="invoice-needs-action__list">
+            {invoice.needsAction.map((flag, index) => (
+              <li key={`${flag.code}-${index}`} className="invoice-needs-action__item">
+                <span className="invoice-needs-action__text">
+                  <strong>{flag.title}</strong>
+                  <span className="muted">{flag.detail}</span>
+                </span>
+                {flag.fix === "record_manually" ? (
+                  <Link className="btn btn--sm" to="/app/financials/journal-entries">{flag.fixLabel}</Link>
+                ) : (
+                  <button type="button" className="btn btn--sm" disabled={!canWrite && flag.fix !== "review_payments"} onClick={() => fix(flag)}>{flag.fixLabel}</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {ledgerNote && (
+        <p className="muted invoice-drawer__note invoice-drawer__ledger">
+          <BookCheck size={14} aria-hidden="true" /> {ledgerNote}
+          {invoice.ledger.entryId && <> <Link to={`/app/financials/journal-entries?entry=${invoice.ledger.entryId}`}>View entry</Link></>}
+          {invoice.ledger.state === "ready" && canPost && (
+            <> <button type="button" className="btn btn--ghost btn--sm" onClick={() => void run(() => postExisting({ societyId: invoice.societyId as Id<"societies">, ids: [invoice._id as Id<"invoices">] }), "Posted to the books")}>Post now</button></>
+          )}
+        </p>
+      )}
+
       {paying && (
-        <RecordPaymentForm invoice={invoice} transactions={workspace.transactions} today={workspace.today} onDone={() => setPaying(false)} onCancel={() => setPaying(false)} />
+        <RecordPaymentForm
+          invoice={invoice}
+          transactions={workspace.transactions}
+          today={workspace.today}
+          depositAccounts={workspace.ledger.accounts.deposit}
+          defaultDepositLabel={defaultDeposit}
+          onDone={() => setPaying(false)}
+          onCancel={() => setPaying(false)}
+        />
       )}
 
       <section className="invoice-drawer__section" aria-labelledby="inv-payments">
@@ -203,9 +270,25 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
                       <Landmark size={12} aria-hidden="true" />
                       <span className="invoice-bank-chip__text">{payment.transaction.description ?? "Bank deposit"} · {formatDate(payment.transaction.date)}</span>
                     </span>
+                  ) : payment.journalEntryId ? (
+                    <span className="muted invoice-payments__deposit">In {depositLabel(payment.depositAccountId) ?? defaultDeposit}</span>
                   ) : null}
+                  {linkingKey === payment.key && (
+                    <InvoiceDepositLink invoice={invoice} payment={payment} transactions={workspace.transactions} onDone={() => setLinkingKey(null)} />
+                  )}
                 </span>
                 <Money cents={payment.amountCents} currency={invoice.currency} tone="in" />
+                {canWrite && linkingKey !== payment.key && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label={`${payment.financialTransactionId ? "Change the deposit for" : "Link a deposit to"} the ${formatMoney(payment.amountCents)} payment from ${formatDate(payment.date)}`}
+                    title={payment.financialTransactionId ? "Change deposit" : "Link deposit"}
+                    onClick={() => setLinkingKey(payment.key)}
+                  >
+                    <Link2 size={14} />
+                  </button>
+                )}
                 {canWrite && (
                   <button
                     type="button"

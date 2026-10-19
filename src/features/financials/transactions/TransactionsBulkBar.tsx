@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { CheckCheck, Download, Landmark, Tag, Zap } from "lucide-react";
+import { useMutation } from "convex/react";
+import { CheckCheck, Download, Landmark, PiggyBank, RotateCcw, Tag, Tags, Zap } from "lucide-react";
+import { api } from "@/lib/convexApi";
 import { RecordTableBulkBar, useRecordTableStoreHandle } from "@/platform/record-engine";
 import { Modal } from "../../../components/Modal";
 import { Field } from "../../../components/ui";
@@ -10,6 +12,9 @@ import { downloadDelimitedText, exportFileName, toDelimitedText } from "../../..
 import { draftFromSelection, selectionPayees, SELECTION_RULE_MAX_PAYEES } from "./selectionRuleDraft";
 import { useRuleDrawer } from "./RuleDrawerHost";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
+import type { FinanceTagsApi } from "./useFinanceTags";
+import { booksLockedNote, restoredMessage } from "./booksLockNote";
+import { useSpendBudgetOptions } from "./useSpendBudgetOptions";
 
 type BulkRow = {
   _id: string;
@@ -24,14 +29,19 @@ type BulkRow = {
   receiptStatus?: string;
 };
 
-type Pending = { kind: "category" | "fund"; ids: string[] } | null;
+type Pending = { kind: "category" | "fund" | "tag" | "budget"; ids: string[] } | null;
+
+type TagResult = { updated: number; skipped: number; skippedLocked?: number; previous: Array<{ id: string; values: Record<string, unknown> }> };
+
+/** "remove:<groupId>" in the tag picker clears that group's tag. */
+const REMOVE_PREFIX = "remove:";
 
 /**
  * The floating bulk island for the transactions table: set a category, mark
- * reviewed, assign a fund, create a rule from the selection, or export it.
- * Every change shows Undo.
+ * reviewed or unreviewed, assign a fund or a tag, create a rule from the
+ * selection, or export it. Every change shows Undo.
  */
-export function TransactionsBulkBar({ societyId, canWrite, exportName }: { societyId: string; canWrite: boolean; exportName: string }) {
+export function TransactionsBulkBar({ societyId, canWrite, exportName, tags }: { societyId: string; canWrite: boolean; exportName: string; tags: FinanceTagsApi }) {
   const drawer = useRuleDrawer();
   const handle = useRecordTableStoreHandle();
   const runBulk = useTransactionBulkEdit(societyId);
@@ -39,6 +49,11 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
   const [pending, setPending] = useState<Pending>(null);
   const [category, setCategory] = useState("");
   const [fundId, setFundId] = useState("");
+  const [budgetId, setBudgetId] = useState("");
+  const budgets = useSpendBudgetOptions(societyId);
+  const [tagChoice, setTagChoice] = useState("");
+  const assignTag = useMutation(api.transactionLines.assignTag);
+  const restore = useMutation(api.financialHub.restoreTransactions);
   const funds = drawer?.workspace?.fundRestrictions ?? [];
   const categories = drawer?.workspace?.categories ?? [];
 
@@ -46,6 +61,39 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
     setPending(null);
     setCategory("");
     setFundId("");
+    setBudgetId("");
+    setTagChoice("");
+  };
+
+  const runAssignTag = async (ids: string[], choice: string) => {
+    const removing = choice.startsWith(REMOVE_PREFIX);
+    const groupId = removing ? choice.slice(REMOVE_PREFIX.length) : undefined;
+    const tag = removing ? undefined : tags.tag(choice);
+    try {
+      const result = (await assignTag({ societyId, ids, tagId: removing ? null : choice, ...(groupId ? { groupId } : {}) })) as TagResult;
+      const lockedNote = booksLockedNote(result.skippedLocked);
+      if (result.updated === 0) {
+        toast.info("Nothing changed", lockedNote ?? (removing ? "None of the selected transactions had a tag from that group." : `The selected transactions already have ${tag?.name ?? "that tag"}.`));
+        return;
+      }
+      toast.success(
+        removing ? `Removed the ${tags.group(groupId!)?.name ?? "group"} tag from ${pluralize(result.updated, "transaction")}` : `Tagged ${pluralize(result.updated, "transaction")} ${tag?.name ?? ""}`.trim(),
+        {
+          description: lockedNote,
+          duration: 10_000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void restore({ societyId, rows: result.previous })
+                .then((undone) => toast.info(...restoredMessage(undone)))
+                .catch((error: unknown) => toast.error("Could not undo", error instanceof Error ? error.message : undefined));
+            },
+          },
+        },
+      );
+    } catch (error) {
+      toast.error("Could not tag the transactions", error instanceof Error ? error.message : undefined);
+    }
   };
   const finish = () => {
     close();
@@ -85,6 +133,23 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
             icon: <CheckCheck size={12} aria-hidden="true" />,
             onRun: (ids: string[]) => runBulk(ids, { reviewed: true }, (count) => `Marked ${pluralize(count, "transaction")} as reviewed`),
           },
+          {
+            id: "bulk-unreviewed",
+            label: "Mark unreviewed",
+            icon: <RotateCcw size={12} aria-hidden="true" />,
+            onRun: (ids: string[]) => runBulk(ids, { reviewed: false }, (count) => `Moved ${pluralize(count, "transaction")} back to To review`),
+          },
+          ...(tags.options.length > 0
+            ? [
+                {
+                  id: "bulk-tag",
+                  label: "Assign tag…",
+                  icon: <Tags size={12} aria-hidden="true" />,
+                  keepSelection: true,
+                  onRun: (ids: string[]) => setPending({ kind: "tag", ids }),
+                },
+              ]
+            : []),
           ...(funds.length > 0
             ? [
                 {
@@ -93,6 +158,17 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
                   icon: <Landmark size={12} aria-hidden="true" />,
                   keepSelection: true,
                   onRun: (ids: string[]) => setPending({ kind: "fund", ids }),
+                },
+              ]
+            : []),
+          ...(budgets.options.length > 0
+            ? [
+                {
+                  id: "bulk-budget",
+                  label: "Charge to budget…",
+                  icon: <PiggyBank size={12} aria-hidden="true" />,
+                  keepSelection: true,
+                  onRun: (ids: string[]) => setPending({ kind: "budget", ids }),
                 },
               ]
             : []),
@@ -168,6 +244,43 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
         </datalist>
       </Modal>
       <Modal
+        open={pending?.kind === "tag"}
+        onClose={close}
+        size="sm"
+        title={`Tag ${pluralize(count, "transaction")}`}
+        footer={
+          <>
+            <button type="button" className="btn" onClick={close}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn--accent"
+              disabled={!tagChoice}
+              onClick={() => {
+                const ids = pending?.ids ?? [];
+                const choice = tagChoice;
+                finish();
+                void runAssignTag(ids, choice);
+              }}
+            >
+              {tagChoice.startsWith(REMOVE_PREFIX) ? "Remove tag" : "Assign tag"}
+            </button>
+          </>
+        }
+      >
+        <Field label="Tag" hint="Every line of a split gets the tag. A tag replaces any other tag from its group.">
+          <Select
+            value={tagChoice}
+            onChange={setTagChoice}
+            placeholder="Choose a tag"
+            searchable
+            options={[
+              ...tags.options,
+              ...tags.activeGroups.map((group) => ({ value: `${REMOVE_PREFIX}${group._id}`, label: `Remove the ${group.name} tag`, hint: group.name })),
+            ]}
+          />
+        </Field>
+      </Modal>
+      <Modal
         open={pending?.kind === "fund"}
         onClose={close}
         size="sm"
@@ -203,6 +316,42 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName }: { socie
               ...funds.map((fund) => ({ value: fund._id, label: fund.name, hint: fund.purpose })),
               { value: "none", label: "No fund (unrestricted)" },
             ]}
+          />
+        </Field>
+      </Modal>
+      <Modal
+        open={pending?.kind === "budget"}
+        onClose={close}
+        size="sm"
+        title={`Charge ${pluralize(count, "transaction")} to a spend budget`}
+        footer={
+          <>
+            <button type="button" className="btn" onClick={close}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn--accent"
+              disabled={!budgetId}
+              onClick={() => {
+                const ids = pending?.ids ?? [];
+                const value = budgetId === "none" ? null : budgetId;
+                const name = budgets.nameOf(budgetId);
+                finish();
+                void runBulk(ids, { spendBudgetId: value }, (n) =>
+                  value ? `Charged ${pluralize(n, "transaction")} to ${name ?? "the budget"}` : `Took ${pluralize(n, "transaction")} off their budget`,
+                );
+              }}
+            >
+              Charge to budget
+            </button>
+          </>
+        }
+      >
+        <Field label="Spend budget" hint="Only money-out lines dated within the budget count against it.">
+          <Select
+            value={budgetId}
+            onChange={setBudgetId}
+            placeholder="Choose a budget"
+            options={[...budgets.options, { value: "none", label: "No budget" }]}
           />
         </Field>
       </Modal>

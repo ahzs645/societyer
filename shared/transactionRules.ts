@@ -57,6 +57,8 @@ export type RuleTransaction = {
   category?: string | null;
   categorizedBy?: string | null;
   ruleId?: string | null;
+  /** Line items; two or more mean a split, which rules never change. */
+  lines?: readonly unknown[] | null;
 };
 
 export const TEXT_OPERATOR_LABELS: Record<TextOperator, string> = {
@@ -173,14 +175,16 @@ export function isRecodeRule(rule: Pick<TransactionRuleLike, "conditions">): boo
  * The rule that should be applied to this line now, or null. Uncategorised
  * lines take the first matching rule. A line that already has a category is
  * only re-coded by a "category is" rule, never when the category was set by
- * hand, and never twice by the same rule. Rules in `skip` (for example rules
- * that point at a removed account) are passed over.
+ * hand, and never twice by the same rule. A split transaction (two or more
+ * line items) is never touched: rules set a single category. Rules in `skip`
+ * (for example rules that point at a removed account) are passed over.
  */
 export function findApplicableRule<T extends TransactionRuleLike>(
   rules: readonly T[],
   txn: RuleTransaction,
   skip?: ReadonlySet<string>,
 ): T | null {
+  if (Array.isArray(txn.lines) && txn.lines.length > 1) return null;
   const uncategorised = isUncategorized(txn);
   if (!uncategorised && txn.categorizedBy === "manual") return null;
   for (const rule of sortRules(rules)) {

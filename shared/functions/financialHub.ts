@@ -19,6 +19,10 @@ import { getOwned, requireRolePortable, requireSocietyMembership } from "./acces
 import { fiscalWindow } from "./treasury";
 import { todayDateOnly } from "../dateOnly";
 import { RULE_TOUCHED_FIELDS, snapshotRuleFields } from "../transactionRules";
+import { categoryAmounts, isSplitTransaction } from "../transactionLines";
+import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync, patchTransactionWithJournal } from "./accounting";
+import { requireBudgetForTransaction } from "./spendBudgets";
+import { releaseInboxMatches } from "./receiptInbox";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -520,6 +524,9 @@ export async function getConnectionPortable(ctx: PortableQueryCtx, { id }: { id:
 // (date, description, category, counterparty, amount, notes and the receipt
 // document) are patchable; the account binding and external/source
 // identifiers stay immutable. The receipt status follows the receipt document.
+// A change that re-posts the journal entry (category, amount, date) is refused
+// when that entry is dated on or before the books close date, or would move there.
+// `spendBudgetId` charges a money-out line to an active spend budget (null clears it).
 export async function updateTransactionPortable(
   ctx: PortableMutationCtx,
   {
@@ -537,6 +544,7 @@ export async function updateTransactionPortable(
       memo?: string;
       /** A document id attaches it as the receipt; null removes the receipt. */
       receiptDocumentId?: string | null;
+      spendBudgetId?: string | null;
     };
     actingUserId?: string;
   },
@@ -546,8 +554,25 @@ export async function updateTransactionPortable(
   await requireSocietyMembership(ctx, String(row.societyId));
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
   await getOwned(ctx, "financialTransactions", id, String(row.societyId));
-  const { receiptDocumentId, memo, ...rest } = patch;
+  const { receiptDocumentId, memo, spendBudgetId, ...rest } = patch;
+  if (patch.category !== undefined && patch.category !== row.category && isSplitTransaction({ lines: row.lines })) {
+    throw new Error("This transaction is split into lines. Change the categories on its lines in the transaction panel.");
+  }
+  if (patch.amountCents !== undefined && patch.amountCents !== row.amountCents && isSplitTransaction({ lines: row.lines })) {
+    throw new Error("This transaction is split into lines. Change the line amounts in the transaction panel so they still add up to the total.");
+  }
+  if (patch.category !== undefined || patch.amountCents !== undefined || patch.date !== undefined) {
+    await assertTransactionBooksOpen(ctx, String(row.societyId), id, patch.date);
+  }
   const next: Record<string, unknown> = { ...rest };
+  if (spendBudgetId !== undefined) {
+    if (spendBudgetId) {
+      await requireBudgetForTransaction(ctx, String(row.societyId), spendBudgetId, { amountCents: patch.amountCents ?? row.amountCents, date: patch.date ?? row.date, matchedKind: row.matchedKind, matchedId: row.matchedId });
+      next.spendBudgetId = spendBudgetId;
+    } else {
+      next.spendBudgetId = undefined;
+    }
+  }
   if (memo !== undefined) {
     const trimmed = String(memo).trim();
     if (trimmed.length > 2000) throw new Error("Keep notes under 2,000 characters.");
@@ -568,20 +593,43 @@ export async function updateTransactionPortable(
     ? { categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined }
     : {};
   await ctx.db.patch(id, { ...next, ...provenance });
+  // A receipt removed or replaced here no longer matches its inbox item.
+  if (receiptDocumentId !== undefined) await releaseInboxMatches(ctx, id, receiptDocumentId || undefined);
+  // A posted transaction's journal entry follows a new category, amount or date.
+  if (patch.category !== undefined || patch.amountCents !== undefined || patch.date !== undefined) {
+    await createTransactionJournalSync(ctx, String(row.societyId))(id);
+  }
   return id;
 }
 
 /** Most transactions one bulk edit (or its undo) may touch. */
 export const BULK_TRANSACTION_LIMIT = 500;
 
-const BULK_SNAPSHOT_FIELDS = [...RULE_TOUCHED_FIELDS, "ruleApplication"] as const;
+const BULK_SNAPSHOT_FIELDS = [...RULE_TOUCHED_FIELDS, "ruleApplication", "lines", "tagIds", "spendBudgetId"] as const;
+
+/** A row's values for every field a bulk edit, a line edit or a tag change can touch (for Undo). */
+export function snapshotBulkFields(row: Record<string, unknown>): Record<string, unknown> {
+  const values: Record<string, unknown> = snapshotRuleFields(row);
+  for (const field of ["ruleApplication", "lines", "tagIds", "spendBudgetId"] as const) {
+    if (row[field] !== undefined && row[field] !== null) values[field] = row[field];
+  }
+  return values;
+}
 
 /**
  * Apply one change to several transactions (the bulk island on the
  * transactions table): set a category, assign a fund (null clears it) or mark
- * reviewed. Returns each changed line's previous values so the client can
- * offer Undo through `restoreTransactions`. Lines from another organization
- * are only counted as skipped, never named.
+ * reviewed (`reviewed: false` puts lines back in the review queue). Returns
+ * each changed line's previous values so the client can offer Undo through
+ * `restoreTransactions`. Lines from another organization are only counted as
+ * skipped, never named. A category is not forced onto a split transaction
+ * (its lines keep their categories); those are counted in `splitSkipped`.
+ * A category or fund change to a transaction whose journal entry is dated on
+ * or before the books close date (or in a closed fiscal period) is skipped
+ * and counted in `skippedLocked`; the transaction is left as it was.
+ * `spendBudgetId` charges money-out lines to an active spend budget (null
+ * clears it); lines the budget can't take (money in, outside its dates, a
+ * claim payout it already counts) are counted in `budgetSkipped`.
  */
 export async function bulkUpdateTransactionsPortable(
   ctx: PortableMutationCtx,
@@ -593,7 +641,7 @@ export async function bulkUpdateTransactionsPortable(
   }: {
     societyId: string;
     ids: string[];
-    patch: { category?: string; fundRestrictionId?: string | null; reviewed?: boolean };
+    patch: { category?: string; fundRestrictionId?: string | null; reviewed?: boolean; spendBudgetId?: string | null };
     actingUserId?: string;
   },
 ) {
@@ -604,35 +652,77 @@ export async function bulkUpdateTransactionsPortable(
   if (unique.length > BULK_TRANSACTION_LIMIT) throw new Error(`Edit at most ${BULK_TRANSACTION_LIMIT} transactions at once.`);
   const category = patch.category === undefined ? undefined : String(patch.category).trim();
   if (patch.category !== undefined && !category) throw new Error("Choose a category.");
-  if (category === undefined && patch.fundRestrictionId === undefined && !patch.reviewed) throw new Error("Nothing to change.");
+  if (category === undefined && patch.fundRestrictionId === undefined && patch.reviewed === undefined && patch.spendBudgetId === undefined) throw new Error("Nothing to change.");
   if (patch.fundRestrictionId) await getOwned(ctx, "fundRestrictions", patch.fundRestrictionId, societyId);
+  if (patch.spendBudgetId) await getOwned(ctx, "spendBudgets", patch.spendBudgetId, societyId);
   const nowISO = new Date().toISOString();
   const previous: Array<{ id: string; values: Record<string, unknown> }> = [];
+  const sync = createTransactionJournalSync(ctx, societyId);
+  const lockedByBooks = createTransactionBooksLock(ctx, societyId);
   let skipped = 0;
+  let splitSkipped = 0;
+  let skippedLocked = 0;
+  let budgetSkipped = 0;
   for (const id of unique) {
     const row: any = await ctx.db.get(id, "financialTransactions");
     if (!row || String(row.societyId) !== String(societyId)) {
       skipped += 1;
       continue;
     }
-    const values: Record<string, unknown> = snapshotRuleFields(row);
-    if (row.ruleApplication) values.ruleApplication = row.ruleApplication;
+    const values = snapshotBulkFields(row);
     const next: Record<string, unknown> = {};
+    const split = isSplitTransaction(row);
     if (category !== undefined && category !== row.category) {
-      Object.assign(next, { category, categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined });
+      if (split) splitSkipped += 1;
+      else Object.assign(next, { category, categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined });
     }
-    if (patch.fundRestrictionId !== undefined && (patch.fundRestrictionId || undefined) !== row.fundRestrictionId) {
-      next.fundRestrictionId = patch.fundRestrictionId || undefined;
+    if (patch.fundRestrictionId !== undefined) {
+      const fund = patch.fundRestrictionId || undefined;
+      if (split) {
+        const lines = (row.lines as Array<{ fundRestrictionId?: string }>).map((line) => ({ ...line, fundRestrictionId: fund }));
+        if (lines.some((line, index) => line.fundRestrictionId !== row.lines[index].fundRestrictionId)) Object.assign(next, { lines, fundRestrictionId: fund });
+      } else if (fund !== row.fundRestrictionId) {
+        next.fundRestrictionId = fund;
+      }
+    }
+    if (patch.spendBudgetId !== undefined && String(patch.spendBudgetId ?? "") !== String(row.spendBudgetId ?? "")) {
+      if (!patch.spendBudgetId) next.spendBudgetId = undefined;
+      else {
+        try {
+          await requireBudgetForTransaction(ctx, societyId, patch.spendBudgetId, row);
+          next.spendBudgetId = patch.spendBudgetId;
+        } catch {
+          budgetSkipped += 1;
+        }
+      }
     }
     if (patch.reviewed && !row.reviewedAtISO) next.reviewedAtISO = nowISO;
+    if (patch.reviewed === false && row.reviewedAtISO) next.reviewedAtISO = undefined;
     if (Object.keys(next).length === 0) continue;
-    await ctx.db.patch(row._id, next);
+    const reposts = "category" in next || "fundRestrictionId" in next;
+    if (reposts && (await lockedByBooks(String(row._id)))) {
+      skippedLocked += 1;
+      continue;
+    }
+    if (reposts) {
+      if (!(await patchTransactionWithJournal(ctx, sync, row, next))) {
+        skippedLocked += 1;
+        continue;
+      }
+    } else {
+      await ctx.db.patch(row._id, next);
+    }
     previous.push({ id: String(row._id), values });
   }
-  return { updated: previous.length, skipped, previous };
+  return { updated: previous.length, skipped, splitSkipped, skippedLocked, budgetSkipped, previous };
 }
 
-/** Undo a bulk edit: put back the snapshot `bulkUpdateTransactions` returned. */
+/**
+ * Undo a bulk edit: put back the snapshot `bulkUpdateTransactions` returned.
+ * Transactions whose journal entry is now on or before the books close date
+ * (or in a closed fiscal period) are left as they are and counted in
+ * `skippedLocked`.
+ */
 export async function restoreTransactionsPortable(
   ctx: PortableMutationCtx,
   {
@@ -650,23 +740,43 @@ export async function restoreTransactionsPortable(
   if (rows.length > BULK_TRANSACTION_LIMIT) throw new Error(`Restore at most ${BULK_TRANSACTION_LIMIT} transactions at once.`);
   let restored = 0;
   let skipped = 0;
+  let skippedLocked = 0;
+  const sync = createTransactionJournalSync(ctx, societyId);
+  const lockedByBooks = createTransactionBooksLock(ctx, societyId);
   for (const entry of rows) {
     const row: any = await ctx.db.get(String(entry.id), "financialTransactions");
     if (!row || String(row.societyId) !== String(societyId)) {
       skipped += 1;
       continue;
     }
+    if (await lockedByBooks(String(row._id))) {
+      skippedLocked += 1;
+      continue;
+    }
     const values = entry.values ?? {};
     if (values.fundRestrictionId) await getOwned(ctx, "fundRestrictions", String(values.fundRestrictionId), societyId);
     if (values.accountingAccountId) await getOwned(ctx, "financialAccounts", String(values.accountingAccountId), societyId);
+    if (values.spendBudgetId) await getOwned(ctx, "spendBudgets", String(values.spendBudgetId), societyId);
     if (values.ruleId && !(await ctx.db.get(String(values.ruleId), "transactionRules"))) delete (values as any).ruleId;
     if (values.ruleId) await getOwned(ctx, "transactionRules", String(values.ruleId), societyId);
+    // Restored lines must still add up and point at this organization's records.
+    const lines = Array.isArray(values.lines) ? (values.lines as Array<Record<string, unknown>>) : [];
+    if (lines.length && lines.reduce((sum, line) => sum + Number(line.amountCents), 0) !== row.amountCents) throw new Error("The saved lines no longer add up to this transaction.");
+    for (const line of lines) {
+      if (line.accountingAccountId) await getOwned(ctx, "financialAccounts", String(line.accountingAccountId), societyId);
+      if (line.fundRestrictionId) await getOwned(ctx, "fundRestrictions", String(line.fundRestrictionId), societyId);
+    }
+    const restoredTags = [...(Array.isArray(values.tagIds) ? values.tagIds : []), ...lines.flatMap((line) => (Array.isArray(line.tagIds) ? line.tagIds : []))];
+    for (const tagId of new Set(restoredTags.map(String))) await getOwned(ctx, "financeTags", tagId, societyId);
     const patch: Record<string, unknown> = {};
     for (const field of BULK_SNAPSHOT_FIELDS) patch[field] = values[field] ?? undefined;
-    await ctx.db.patch(row._id, patch);
+    if (!(await patchTransactionWithJournal(ctx, sync, row, patch))) {
+      skippedLocked += 1;
+      continue;
+    }
     restored += 1;
   }
-  return { restored, skipped };
+  return { restored, skipped, skippedLocked };
 }
 
 // A small derived query for the dashboard — balances by purpose/category.
@@ -706,8 +816,12 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
   const budgetYear = budgetYears.find((year) => year.start <= today && today <= year.end) ?? budgetYears[0];
   const actualsByCategory: Record<string, number> = {};
   for (const t of transactions) {
-    if (!t.category || !budgetYear || t.date < budgetYear.start || t.date > budgetYear.end) continue;
-    actualsByCategory[t.category] = (actualsByCategory[t.category] ?? 0) + Math.abs(t.amountCents);
+    if (!budgetYear || t.date < budgetYear.start || t.date > budgetYear.end) continue;
+    // A split transaction counts each line toward its own category.
+    for (const { category, amountCents } of categoryAmounts({ amountCents: t.amountCents, category: t.category, lines: t.lines })) {
+      if (!category) continue;
+      actualsByCategory[category] = (actualsByCategory[category] ?? 0) + Math.abs(amountCents);
+    }
   }
 
   const budgetRows = categoryBudgets.filter((b: any) => String(b.fiscalYear) === budgetYear?.label).map((b) => ({

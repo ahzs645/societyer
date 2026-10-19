@@ -20,18 +20,21 @@ import type { BudgetKind } from "../lib/budgetKind";
 import { CashFlowSankeyCard } from "./CashFlowSankeyCard";
 import { FinanceRangeBar } from "./FinanceRangeBar";
 import { FinanceRangeStats } from "./FinanceRangeStats";
+import { NarrativeInsights } from "./NarrativeInsights";
 import { OperatingReserveTile } from "./OperatingReserveTile";
 import { TopFlowsCard } from "./TopFlowsCard";
 import { topFlows } from "./topFlows";
 import {
   balanceLookup,
   balanceRows,
+  compareLabel,
+  compareRange,
   defaultPreset,
   flowTotals,
   monthEndBalances,
   monthlyFlowRows,
   presetRange,
-  previousRange,
+  type CompareChoice,
   type RangePreset,
 } from "./series";
 import { useFinanceInsightsData } from "./useFinanceInsightsData";
@@ -47,10 +50,18 @@ const dollars = (cents: number, signDisplay?: "exceptZero") => formatMoney(Math.
 const BALANCE_SERIES: ChartSeries = { key: "balance", label: "Cash balance", color: "var(--dv-cat-1)", variant: "area" };
 const PREVIOUS_SERIES: ChartSeries = { key: "previous", label: "Previous period", color: "var(--dv-previous)", comparison: true };
 
+/** What the comparison note says when the history does not reach the comparison window. */
+const UNCOVERED_NOTE: Record<Exclude<CompareChoice, "off">, string> = {
+  previous: "The previous period predates the imported transactions, so totals are not compared.",
+  lastYear: "The same period last year predates the imported transactions, so totals are not compared.",
+};
+
 /**
  * Financials overview trends: range presets, cash over time (with
- * drag-to-select), money in vs out by month, range stat tiles and budget vs
- * actual bars. Renders nothing for a workspace with no bank data at all.
+ * drag-to-select), money in vs out by month, range stat tiles, written
+ * insights (runway, money-out trend, top money-in sources) and budget vs
+ * actual bars. "Compare to" switches the comparison between the previous
+ * period and the same period last year. Renders nothing for a workspace with no bank data at all.
  *
  * Phones: four headline tiles, every other figure (plus the page's
  * `moreMetrics`) in a "More metrics" fold, and each section after the first
@@ -71,12 +82,13 @@ export function FinancialInsights({
   const isMobile = useIsMobile();
   const today = todayDateOnly();
   const [presetChoice, setPresetChoice] = useState<RangePreset | null>(null);
-  const [compare, setCompare] = useState(false);
+  const [compareMode, setCompareMode] = useState<CompareChoice>("off");
+  const compare = compareMode !== "off";
   const [selection, setSelection] = useState<DateRange | null>(null);
   const preset = presetChoice ?? defaultPreset(data.txns, today);
   const range = useMemo(() => presetRange(preset, today, { earliest: data.earliest, fiscalYearEnd: society.fiscalYearEnd }), [data.earliest, preset, society.fiscalYearEnd, today]);
   const focus = selection ?? range;
-  const view = useInsightSeries(data.txns, data.currentBalance, range, focus, selection, compare);
+  const view = useInsightSeries(data.txns, data.currentBalance, range, focus, selection, compareMode);
 
   const notEnough = !data.loading && data.txns.length < 2;
   const showStats = !notEnough && !data.loading;
@@ -106,12 +118,12 @@ export function FinancialInsights({
           setPresetChoice(next);
           setSelection(null);
         }}
-        compare={compare}
-        onCompare={setCompare}
+        compare={compareMode}
+        onCompare={setCompareMode}
         range={range}
         selection={selection}
         onClearSelection={() => setSelection(null)}
-        compareNote={compare && !data.loading && !view.previousCovered ? "The previous period predates the imported transactions, so totals are not compared." : undefined}
+        compareNote={compareMode !== "off" && !data.loading && !view.previousCovered ? UNCOVERED_NOTE[compareMode] : undefined}
       />
       {showStats && (
         <FinanceRangeStats
@@ -120,11 +132,15 @@ export function FinancialInsights({
           closingBalance={view.closing}
           previousClosing={view.previousClosing}
           currentBalance={data.currentBalance}
+          compareLabel={compareMode === "lastYear" ? "vs same period last year" : "vs previous period"}
           headline={isMobile}
           more={(tiles, count) => moreFold(tiles, count)}
         >
           <OperatingReserveTile societyId={society._id} txns={data.txns} unrestrictedCents={data.unrestrictedBalance} today={today} />
         </FinanceRangeStats>
+      )}
+      {showStats && (
+        <NarrativeInsights txns={data.txns} balanceCents={data.currentBalance} range={focus} mode={compareMode === "off" ? "previous" : compareMode} today={today} />
       )}
       {/* Too little history for range tiles: the bank balance joins the page figures. */}
       {isMobile && notEnough && moreFold(<StatTile label="Bank balance" value={<Money variant="hero" trimWholeCents cents={data.currentBalance} />} />, 1)}
@@ -138,7 +154,7 @@ export function FinancialInsights({
         >
           <TimeSeriesChart
             data={view.cashRows}
-            series={compare ? [BALANCE_SERIES, PREVIOUS_SERIES] : [BALANCE_SERIES]}
+            series={compareMode === "off" ? [BALANCE_SERIES] : [BALANCE_SERIES, { ...PREVIOUS_SERIES, label: compareLabel(compareMode) }]}
             curve="step"
             average={{ key: "balance", label: "Avg" }}
             ariaLabel={view.cashSummary}
@@ -184,17 +200,20 @@ function largestFlowSummary(txns: ReturnType<typeof useFinanceInsightsData>["txn
   return top ? `Biggest spend: ${top.label}, ${dollars(top.cents)}` : "No money out in this range";
 }
 
-function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"], currentBalance: number, range: DateRange, focus: DateRange, selection: DateRange | null, compare: boolean) {
+function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"], currentBalance: number, range: DateRange, focus: DateRange, selection: DateRange | null, compareMode: CompareChoice) {
   return useMemo(() => {
-    const cashRows: TimeRow[] = balanceRows(txns, currentBalance, range, compare);
+    const compare = compareMode !== "off";
+    // With comparison off, the (unused) comparison figures default to the previous period.
+    const mode = compareMode === "off" ? "previous" : compareMode;
+    const cashRows: TimeRow[] = balanceRows(txns, currentBalance, range, compare && mode);
     const flowRows: FlowRow[] = monthlyFlowRows(txns, range, selection);
     const totals = flowTotals(txns, focus);
-    const prior = previousRange(focus);
+    const prior = compareRange(focus, mode);
     const previousTotals = flowTotals(txns, prior);
     const balanceAt = balanceLookup(txns, currentBalance);
     const closing = balanceAt(focus.end);
     const previousClosing = balanceAt(prior.end);
-    // Only compare against a previous period the imported history fully covers.
+    // Only compare against a period the imported history fully covers.
     const previousCovered = txns.length > 0 && prior.start >= txns[0].date.slice(0, 7) + "-01";
     const months = monthEndBalances(cashRows);
     const known = months.filter((m) => m.value != null);
@@ -221,7 +240,7 @@ function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"
         columns: [
           { key: "month", label: "Month" },
           { key: "balance", label: "Closing balance", numeric: true },
-          ...(compare ? [{ key: "previous", label: "Previous period", numeric: true }] : []),
+          ...(compare ? [{ key: "previous", label: compareLabel(mode), numeric: true }] : []),
         ],
         rows: months.map((m) => ({ month: formatMonthLong(m.month), balance: formatMoney(m.value), ...(compare ? { previous: formatMoney(m.previous ?? null) } : {}) })),
       },
@@ -236,7 +255,7 @@ function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"
         rows: flowRows.map((r) => ({ month: r.tooltipLabel ?? r.label, inflow: formatMoney(r.inflow), outflow: formatMoney(r.outflow), net: formatMoney(r.inflow - r.outflow, { signDisplay: "exceptZero" }) })),
       },
     };
-  }, [compare, currentBalance, focus, range, selection, txns]);
+  }, [compareMode, currentBalance, focus, range, selection, txns]);
 }
 
 function BudgetVsActualCard({ rows, loading }: { rows: Array<{ _id: string; category: string; fiscalYear: string; plannedCents: number; actualCents: number; kind: BudgetKind }>; loading: boolean }) {

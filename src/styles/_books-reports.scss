@@ -1,0 +1,183 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Financial reports (/app/financials/reports/:report): period toolbar,
+// summary chart strip, multi-period statements and the general ledger.
+// ============================================================
+
+.books-reports__switcher {
+  margin-bottom: token('s-3');
+}
+
+.books-report {
+  @include flex-column;
+  gap: token('s-3');
+  min-width: 0;
+}
+
+// ---------- Toolbar ----------
+// Rows of controls that wrap as whole groups on narrow screens.
+.books-report-toolbar {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2') token('s-4');
+  min-width: 0;
+}
+.books-report-toolbar__group {
+  @include inline-flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  min-width: 0;
+}
+
+// The tag filter's trigger names the chosen tags; long names truncate.
+.books-report-toolbar__tags {
+  max-width: 220px;
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+// ---------- Notes (filters, warnings, truncation) ----------
+.books-report__note {
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.books-report__note--warn {
+  padding: token('s-2') token('s-3');
+  border: 1px solid color-mix(in srgb, token('warn') 40%, transparent);
+  border-radius: token('r-md');
+  background: token('warn-soft');
+  color: token('text-primary');
+}
+
+// ---------- Summary chart strip ----------
+.books-report-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: token('s-3');
+  min-width: 0;
+  .chart-card {
+    margin: 0;
+  }
+}
+.books-report-charts--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  @media (max-width: 980px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.books-report-charts__stat {
+  @include flex-column;
+  align-items: flex-end;
+  gap: 0;
+  line-height: 1.2;
+  .money {
+    font-size: token('fs-md');
+    font-weight: token('fw-semibold');
+  }
+}
+.books-report-charts__stat-label {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  white-space: nowrap;
+}
+
+// ---------- General ledger ----------
+.books-ledger__bar {
+  @include flex-between;
+  gap: token('s-2');
+  min-width: 0;
+}
+.books-ledger__count {
+  font-size: token('fs-sm');
+}
+// The wrap scrolls both ways so the header stays in view over long ledgers.
+.books-ledger {
+  max-height: min(72vh, 960px);
+  overflow: auto;
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-md');
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: 2px;
+  }
+}
+.books-ledger__table {
+  tbody td,
+  tbody th,
+  tfoot td,
+  tfoot th {
+    height: auto;
+    min-height: 32px;
+    padding: token('s-1') 8px;
+    vertical-align: top;
+    line-height: 1.4;
+  }
+  tbody th {
+    border-right: 1px solid token('border-color-light');
+    border-bottom: 1px solid token('border-color-light');
+    background: token('bg-panel');
+    font-weight: token('fw-medium');
+    text-align: left;
+  }
+  // Totals and the closing balance stay pinned under a long ledger.
+  tfoot {
+    position: sticky;
+    bottom: 0;
+    z-index: token('z-base');
+  }
+  tfoot tr + tr td,
+  tfoot tr + tr th {
+    border-top: 1px solid token('border-color-light');
+  }
+}
+.books-ledger__balance-row {
+  td,
+  th {
+    background: token('bg-subtle');
+    font-weight: token('fw-medium');
+  }
+}
+.books-ledger__date {
+  white-space: nowrap;
+  a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: token('border-strong');
+    text-underline-offset: 2px;
+    &:hover {
+      color: token('accent');
+      text-decoration-color: currentColor;
+    }
+  }
+}
+.books-ledger__account,
+.books-ledger__party {
+  max-width: 220px;
+  overflow-wrap: anywhere;
+}
+.books-ledger__contra {
+  max-width: 240px;
+  .badge {
+    margin-right: token('s-1');
+  }
+}
+.books-ledger__memo {
+  max-width: 320px;
+  .finance-table__sub {
+    display: block;
+  }
+}
+.books-ledger__truncate {
+  display: inline;
+  overflow-wrap: anywhere;
+}
+.books-ledger__links {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+.books-ledger .num {
+  white-space: nowrap;
+}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useSearchParams } from "react-router-dom";
-import { BellRing, Check, ClipboardCheck, Landmark, Link2, MoreHorizontal } from "lucide-react";
+import { BellRing, Check, ClipboardCheck, Download, Landmark, Link2, MoreHorizontal } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
@@ -21,8 +21,11 @@ import { ClaimDetailDrawer } from "../features/financials/approvals/ClaimDetailD
 import { ClaimPolicyCard } from "../features/financials/approvals/ClaimPolicyCard";
 import { useClaimShareActions } from "../features/financials/approvals/ClaimChecks";
 import type { ApprovalQueue, QueueRow, QueueTab } from "../features/financials/approvals/types";
+import { BillApprovalsPanel, useBillsAwaitingApproval } from "../features/bills/BillApprovalsPanel";
+import { exportClaimsCsv } from "../features/financials/approvals/claimExport";
+import { mileageSummary } from "../../shared/expensePolicy";
 
-const TAB_IDS: QueueTab[] = ["awaiting", "approved", "paid", "closed", "drafts", "rules", "policy"];
+const TAB_IDS: QueueTab[] = ["awaiting", "bills", "approved", "paid", "closed", "drafts", "rules", "policy"];
 
 function rowsForTab(rows: QueueRow[], tab: QueueTab): QueueRow[] {
   switch (tab) {
@@ -35,7 +38,7 @@ function rowsForTab(rows: QueueRow[], tab: QueueTab): QueueRow[] {
   }
 }
 
-const EMPTY_COPY: Record<Exclude<QueueTab, "rules" | "policy">, { title: string; description: string }> = {
+const EMPTY_COPY: Record<Exclude<QueueTab, "bills" | "rules" | "policy">, { title: string; description: string }> = {
   awaiting: { title: "Nothing waiting for approval", description: "Submitted expense claims appear here until they have the approvals your rules require." },
   approved: { title: "Nothing to pay", description: "Approved claims wait here until someone records the payment." },
   paid: { title: "No paid claims yet", description: "Reimbursed claims are kept here with their payment reference." },
@@ -53,6 +56,7 @@ export function ApprovalsPage() {
   const { canWrite } = useFinancePermissions();
   const queue = useQuery(api.expenseReports.approvalQueue, society ? { societyId: society._id } : "skip") as ApprovalQueue | undefined;
   const bulkApprove = useMutation(api.expenseReports.bulkApprove);
+  const billApprovals = useBillsAwaitingApproval(society?._id);
   const decide = useMutation(api.expenseReports.decide);
   const confirm = useConfirm();
   const toast = useToast();
@@ -171,7 +175,7 @@ export function ApprovalsPage() {
         title="Approvals"
         icon={<ClipboardCheck size={16} />}
         iconColor="green"
-        subtitle="Review, approve and pay expense claims."
+        subtitle="Review, approve and pay expense claims and vendor bills."
         info={
           <p>
             Approval rules decide how many people must approve a claim of a given size and who may approve it.
@@ -180,9 +184,14 @@ export function ApprovalsPage() {
           </p>
         }
         actions={
-          <Link className="btn-action" to="/app/treasurer">
-            <Landmark size={12} aria-hidden="true" /> Treasurer dashboard
-          </Link>
+          <>
+            <button type="button" className="btn-action" disabled={!queue?.rows.length} onClick={() => queue && toast.success("Claims exported", exportClaimsCsv(queue.rows))}>
+              <Download size={12} aria-hidden="true" /> Export all
+            </button>
+            <Link className="btn-action" to="/app/treasurer">
+              <Landmark size={12} aria-hidden="true" /> Treasurer dashboard
+            </Link>
+          </>
         }
       />
 
@@ -193,6 +202,7 @@ export function ApprovalsPage() {
         ariaLabel="Approval queues"
         items={[
           { id: "awaiting", label: "Awaiting approval", count: counts?.awaiting ?? null },
+          { id: "bills", label: "Bills", count: billApprovals.workspace ? billApprovals.rows.length : null },
           { id: "approved", label: "Approved, to pay", count: counts?.approved ?? null },
           { id: "paid", label: "Paid", count: counts?.paid ?? null },
           { id: "closed", label: "Declined & recalled", count: counts?.closed ?? null },
@@ -204,6 +214,10 @@ export function ApprovalsPage() {
 
       {queue === undefined ? (
         <div className="card"><div className="card__body"><div className="record-table__loading">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="record-table__loading-row" />)}</div></div></div>
+      ) : tab === "bills" ? (
+        <div className="card approvals-card">
+          <BillApprovalsPanel rows={billApprovals.rows} loading={billApprovals.workspace === undefined} />
+        </div>
       ) : tab === "policy" ? (
         <div className="approvals-settings">
           <ClaimPolicyCard queue={queue} societyId={society._id} />
@@ -298,11 +312,15 @@ export function ApprovalsPage() {
                       <button type="button" className="approvals-table__title" onClick={(event) => { event.stopPropagation(); setOpenId(row._id); }}>
                         {row.title}
                       </button>
-                      <span className="muted approvals-table__category">{row.category}</span>
-                      {(row.policyException || (row.status === "Submitted" && row.policyIssues.length > 0) || row.possibleDuplicate) && (
+                      <span className="muted approvals-table__category">
+                        {row.claimType === "mileage" ? mileageSummary(row.mileage) : row.category}
+                        {row.spendBudget ? ` · ${row.spendBudget.name}` : ""}
+                      </span>
+                      {(row.policyException || (row.status === "Submitted" && row.policyIssues.length > 0) || row.possibleDuplicate || row.spendBudget?.exceeds) && (
                         <span className="approvals-table__flags">
                           {row.policyException ? <Badge tone="warn">Policy exception</Badge> : row.status === "Submitted" && row.policyIssues.length > 0 ? <Badge tone="warn">Misses policy</Badge> : null}
                           {row.possibleDuplicate && <Badge tone="orange">Possible duplicate</Badge>}
+                          {row.spendBudget?.exceeds && !["Paid", "Rejected", "Recalled"].includes(row.status) && <Badge tone="warn">Over budget</Badge>}
                         </span>
                       )}
                     </td>

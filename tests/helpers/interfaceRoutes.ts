@@ -426,8 +426,44 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/financials/reports",
+    "path": "/demo/app/financials/reports",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/reports/:report",
+    "path": "/demo/app/financials/reports/operations",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/journal-entries",
+    "path": "/demo/app/financials/journal-entries",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/chart-of-accounts",
+    "path": "/demo/app/financials/chart-of-accounts",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/books-settings",
+    "path": "/demo/app/financials/books-settings",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
     "pattern": "/app/financials/year-end",
     "path": "/demo/app/financials/year-end",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/tags",
+    "path": "/demo/app/financials/tags",
     "kind": "app",
     "fixture": "route"
   },
@@ -632,6 +668,24 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/financials/accounts",
+    "path": "/demo/app/financials/accounts",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/financials/receipts",
+    "path": "/demo/app/financials/receipts",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/spend-budgets",
+    "path": "/demo/app/spend-budgets",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
     "pattern": "/app/transaction-rules",
     "path": "/demo/app/transaction-rules",
     "kind": "app",
@@ -640,6 +694,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
   {
     "pattern": "/app/invoices",
     "path": "/demo/app/invoices",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/bills",
+    "path": "/demo/app/bills",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/bills/vendors",
+    "path": "/demo/app/bills/vendors",
     "kind": "app",
     "fixture": "route"
   },

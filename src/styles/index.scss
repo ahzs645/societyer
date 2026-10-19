@@ -129,19 +129,26 @@
 
 @use "ai-tables"; // Copy / CSV / Excel on tables in assistant answers
 @use "chart-of-accounts"; // Accounting workbench: chart of accounts tree
+@use "books"; // Books pages: shared sub-nav
+@use "books-reports"; // Financial reports: period toolbar, chart strip, general ledger
+@use "books-registers"; // Journal entries and chart of accounts registers
+@use "books-settings"; // Books settings and the overview's written insights
 @use "insights-flows"; // Financials overview: top payees / categories, operating reserve
 
 // Sankey chart and the cash-flow card on the Financials overview.
 @use "sankey";
 
 @use "business-registers"; // Payroll, Credit cards and Investments registers
+@use "bills"; // Bills and Vendors (payables)
 
 @use "incorporation-setup"; // guided setup jurisdiction + governing Act questions
 @use "expense-policy"; // Claim policy, receipts, duplicate hints, reminders, rule change control
+@use "banking"; // Accounts page, reconciliation by month, receipt inbox, spend budgets, mileage claims
 @use "file-drop"; // shared FileDropZone: drag states, marching border, paste, progress
 
 // Transactions surface: detail panel, receipt drop zone, payee names.
 @use "transaction-panel";
+@use "books-transactions"; // review queue, money summary, line items, journal entry, tags page
 
 @use "panels-hovercards"; // hover cards, stacked record panels, minimise dock
 

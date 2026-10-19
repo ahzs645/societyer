@@ -34,4 +34,13 @@ export {
 } from "./state/recordTableStore";
 
 export { useRecordTableContextOrThrow } from "./contexts/RecordTableContext";
+export { useRecordTableInlineEdit } from "./contexts/RecordTableInlineEditContext";
+export type {
+  RecordTableInlineEdit,
+  RecordTableEditableColumn,
+  RecordTableEditorKind,
+  RecordTableCellEdit,
+  InlineEditRecord,
+} from "./contexts/RecordTableInlineEditContext";
+export { RECORD_TABLE_GRID_SHORTCUTS } from "./utils/gridShortcuts";
 export { useRecordTableRowContextOrThrow } from "./contexts/RecordTableRowContext";

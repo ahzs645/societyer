@@ -26,6 +26,7 @@ import { BillToPicker, type BillToValue } from "./BillToPicker";
 import { InvoiceDocument, InvoicePrintPortal } from "./InvoiceDocument";
 import { InvoiceStatusPill } from "./InvoiceStatusPill";
 import { LineItemsEditor, blankLine, toLineDraft, type LineDraft } from "./LineItemsEditor";
+import { useFinanceTags } from "../financials/transactions/useFinanceTags";
 import { findLikelyDuplicate } from "../../../shared/expensePolicy";
 import { appRouteHref } from "../../lib/appRouteHref";
 import type { InvoiceRow, InvoiceWorkspace } from "./types";
@@ -90,6 +91,7 @@ function cleanLines(lines: LineDraft[]): InvoiceLine[] {
       delete out.taxLabel;
     }
     if (!out.catalogItemId) delete out.catalogItemId;
+    if (!out.tagIds?.length) delete out.tagIds;
     return out;
   });
 }
@@ -146,6 +148,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   };
 
   const lines = useMemo(() => cleanLines(draft.lines), [draft.lines]);
+  const financeTags = useFinanceTags(societyId);
   const discount = discountFrom(draft);
   const totals = computeInvoiceTotals(lines, discount);
   const dueDate = draft.terms === "custom" ? draft.dueDate || draft.issueDate : dueDateForTerms(draft.issueDate, draft.terms);
@@ -443,6 +446,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
             catalog={activeCatalog}
             readOnly={readOnly}
             gstHint={hasTax && !workspace.organization.gstNumber}
+            tags={financeTags}
           />
 
           <section className="invoice-builder__section invoice-builder__summary" aria-labelledby="ib-totals">

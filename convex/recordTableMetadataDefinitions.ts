@@ -9,6 +9,8 @@
 import { ROUTINE_MOTION_TAGS } from "../shared/proceduralMotions";
 import { DOMAIN_RECORD_TABLE_OBJECTS } from "./recordTableDomainObjects";
 import { BUSINESS_REGISTER_RECORD_TABLE_OBJECTS } from "./recordTableBusinessRegisterObjects";
+import { BILL_RECORD_TABLE_OBJECTS } from "./recordTableBillObjects";
+import { BOOKS_RECORD_TABLE_OBJECTS } from "./recordTableBooksObjects";
 
 // Field types the registry understands — keep in sync with
 // src/platform/record-engine/types/FieldType.ts
@@ -2823,6 +2825,9 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         },
       },
       { name: "memo", label: "Notes", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote" },
+      // The restricted fund of a single-line transaction (split lines carry
+      // their own); the page shows the fund's name and edits it in grid mode.
+      { name: "fundRestrictionId", label: "Fund", fieldType: FIELD_TYPES.TEXT, icon: "PiggyBank" },
       {
         name: "receiptStatus",
         label: "Receipt",
@@ -2871,7 +2876,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     ],
     // Column set and widths follow the common bank-ledger layout: who first
     // (the identifier column), then date, a right-aligned amount, where the
-    // money moved, how it is categorised, notes and the receipt indicator.
+    // money moved, how it is categorised (and the fund), notes and the
+    // receipt indicator.
     defaultView: {
       name: "Recent transactions",
       sorts: [{ fieldName: "date", direction: "desc" }],
@@ -2882,6 +2888,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "account", size: 180 },
         { fieldName: "method", size: 170 },
         { fieldName: "category", size: 200 },
+        { fieldName: "fundRestrictionId", size: 150 },
         { fieldName: "memo", size: 300 },
         { fieldName: "receiptStatus", size: 104 },
         { fieldName: "status", size: 104 },
@@ -3660,4 +3667,6 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
   },
   ...DOMAIN_RECORD_TABLE_OBJECTS,
   ...BUSINESS_REGISTER_RECORD_TABLE_OBJECTS,
+  ...BILL_RECORD_TABLE_OBJECTS,
+  ...BOOKS_RECORD_TABLE_OBJECTS,
 ];

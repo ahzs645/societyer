@@ -40,7 +40,14 @@ function isTypingTarget(target: EventTarget | null) {
  * (the current search and filters): a row hidden by a search is never
  * archived or merged without being seen.
  */
-export function RecordTableBulkBar({ actions }: { actions: BulkAction[] }) {
+export function RecordTableBulkBar({
+  actions,
+  summary,
+}: {
+  actions: BulkAction[];
+  /** Extra context after the count (e.g. the selection's total), from the selected visible rows. */
+  summary?: (records: Array<Record<string, unknown>>) => ReactNode;
+}) {
   const selected = useRecordTableState((s) => s.selectedRecordIds);
   const visible = useFilteredRecords();
   const handle = useRecordTableStoreHandle();
@@ -76,6 +83,7 @@ export function RecordTableBulkBar({ actions }: { actions: BulkAction[] }) {
     <div className="record-table__bulk-bar" role="region" aria-label="Bulk actions">
       <div className="record-table__bulk-bar-count" aria-live="polite">
         <strong>{selectedRecords.length}</strong> selected
+        {summary ? <> · {summary(selectedRecords)}</> : null}
       </div>
       <div className="record-table__bulk-bar-actions">
         {actions.map((action) => (

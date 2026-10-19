@@ -21,6 +21,8 @@ export function StartReconciliationModal({
   open,
   accounts,
   initialAccountId,
+  initialEndDate,
+  suggestedEndingCents,
   societyId,
   onClose,
   onStarted,
@@ -28,6 +30,10 @@ export function StartReconciliationModal({
   open: boolean;
   accounts: ReconAccount[];
   initialAccountId?: string;
+  /** Statement end date to start from, e.g. the end of the month chosen on the month strip. */
+  initialEndDate?: string;
+  /** The bank feed's balance on that date, offered as a starting point for the ending balance. */
+  suggestedEndingCents?: number;
   societyId: string;
   onClose: () => void;
   onStarted: (periodId: string, accountId: string) => void;
@@ -54,11 +60,12 @@ export function StartReconciliationModal({
 
   useEffect(() => {
     if (!account) return;
-    const start = account.nextStartDate ?? "";
+    // An opening balance from the Accounts page seeds the first statement.
+    const start = account.nextStartDate ?? account.suggestedStartDate ?? "";
     setStartDate(start);
-    setEndDate(start ? lastDayOfMonth(start) : "");
-    setOpening("");
-    setEnding("");
+    setEndDate(initialEndDate && (!start || initialEndDate >= start) ? initialEndDate : start ? lastDayOfMonth(start) : "");
+    setOpening(account.needsOpeningBalance && account.suggestedOpeningBalanceCents !== undefined ? (account.suggestedOpeningBalanceCents / 100).toFixed(2) : "");
+    setEnding(initialEndDate && suggestedEndingCents !== undefined ? (suggestedEndingCents / 100).toFixed(2) : "");
     setErrors({});
   }, [account?._id, account?.nextStartDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -138,7 +145,7 @@ export function StartReconciliationModal({
         <Field label="Statement end date" required error={errors.endDate}>
           <DatePicker value={endDate} onChange={setEndDate} min={startDate || undefined} clearable={false} />
         </Field>
-        <Field label="Statement ending balance" required error={errors.ending}>
+        <Field label="Statement ending balance" required error={errors.ending} hint={initialEndDate && suggestedEndingCents !== undefined ? "Filled in from the bank feed. Check it against the statement." : undefined}>
           <input className="input" inputMode="decimal" placeholder="$0.00" value={ending} onChange={(event) => setEnding(event.target.value)} />
         </Field>
       </div>

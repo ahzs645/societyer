@@ -85,7 +85,7 @@ async function runPipeline(mode: "clerk" | "better-auth" | "convex") {
   assert.equal(listed.length, 3);
   assert.ok(listed.every((row: any) => !("token" in row) && !("tokenHash" in row)), label("listed invites never expose tokens"));
   assert.deepEqual(await t.query(api.invitations.getByToken, { token: carolInvite.token }),
-    { societyId, role: "Viewer", expiresAtISO: carolInvite.expiresAtISO }, label("anonymous invite preview"));
+    { societyId, role: "Viewer", expiresAtISO: carolInvite.expiresAtISO, workspaceName: "Riverside Society", kind: "email", email: "carol@example.org" }, label("anonymous invite preview"));
 
   // 5. Existing account accepts: gains a second membership; own workspace untouched.
   assert.equal((await bob.mutation(api.invitations.accept, { token: bobInvite.token })).status, "invitation-accepted", label("existing account accepts"));

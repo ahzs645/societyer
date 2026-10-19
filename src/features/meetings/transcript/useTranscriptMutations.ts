@@ -15,6 +15,7 @@ export function useTranscriptMutations({
   canWrite,
   hasTranscript,
   speakers,
+  paged,
 }: {
   societyId: Id<"societies">;
   meetingId: Id<"meetings">;
@@ -22,12 +23,14 @@ export function useTranscriptMutations({
   hasTranscript: boolean;
   /** The current speaker map, to name the combine target in the toast. */
   speakers: readonly TranscriptSpeaker[];
+  paged?: { jobId: Id<"meetingTranscriptionJobs">; page: number; revision: number };
 }) {
   const assignSpeaker = usePermissionedMutation(api.transcripts.assignSpeaker, canWrite);
   const updateSegment = usePermissionedMutation(api.transcripts.updateSegment, canWrite);
   const mergeSpeakers = usePermissionedMutation(api.transcripts.mergeSpeakers, canWrite);
   const unmergeSpeaker = usePermissionedMutation(api.transcripts.unmergeSpeaker, canWrite);
   const importTimed = usePermissionedMutation(api.transcripts.importTimed, canWrite);
+  const editPaged = usePermissionedMutation(api.meetingTranscription.editSegment, canWrite);
   const confirm = useConfirm();
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -71,7 +74,7 @@ export function useTranscriptMutations({
       setError("");
       setStatus("");
       try {
-        const result = await updateSegment({ societyId, meetingId, index, ...patch });
+        const result = paged ? await editPaged({ ...paged, index, ...patch }) : await updateSegment({ societyId, meetingId, index, ...patch });
         setStatus(
           `Segment saved.${result.wordsDropped ? " Word timings were omitted to keep the transcript within the storage limit." : ""}`,
         );
@@ -80,7 +83,7 @@ export function useTranscriptMutations({
         throw cause;
       }
     },
-    [updateSegment, societyId, meetingId],
+    [updateSegment, editPaged, paged, societyId, meetingId],
   );
   const onUnmerge = useCallback<UnmergeSpeaker>(
     async (label) => {

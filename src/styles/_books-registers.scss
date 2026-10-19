@@ -1,0 +1,166 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Journal entries and chart of accounts registers
+// (/app/financials/journal-entries, /app/financials/chart-of-accounts).
+// ============================================================
+
+.books-register-page {
+  .tabs,
+  .books-register__notice {
+    margin-bottom: token('s-3');
+  }
+}
+
+.books-register__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: token('s-2');
+
+  svg {
+    flex: none;
+    margin-top: 3px;
+    color: token('info');
+  }
+}
+
+// ---------- Register cells ----------
+.books-register__accounts {
+  @include flex-center;
+  gap: token('s-1');
+  min-width: 0;
+}
+.books-register__accounts-list,
+.books-register__memo-text,
+.books-register__account-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.books-register__more {
+  flex: none;
+  font-size: token('fs-xs');
+}
+
+.books-register__memo {
+  @include flex-center;
+  gap: token('s-2');
+  min-width: 0;
+
+  .muted {
+    flex: none;
+    font-size: token('fs-xs');
+    font-variant-numeric: tabular-nums;
+  }
+}
+.books-register__lock {
+  @include inline-flex-center;
+  flex: none;
+  color: token('text-tertiary');
+}
+
+// Sub-accounts step in under their parent (depth 0 is a top-level account).
+.books-register__account {
+  @include flex-center;
+  gap: token('s-2');
+  min-width: 0;
+
+  &[data-depth="1"] { padding-inline-start: token('s-4'); }
+  &[data-depth="2"] { padding-inline-start: calc(#{token('s-4')} * 2); }
+  &[data-depth="3"] { padding-inline-start: calc(#{token('s-4')} * 3); }
+}
+.books-register__account-parent {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: token('fs-xs');
+}
+
+.books-register__tags,
+.books-register__badges {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-1');
+}
+
+// ---------- Drawers ----------
+.books-register__badges {
+  margin-bottom: token('s-3');
+
+  .badge svg {
+    margin-right: 2px;
+    vertical-align: -1px;
+  }
+}
+
+.books-register__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: token('s-3') token('s-4');
+  margin: 0 0 token('s-4');
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+
+  dt {
+    color: token('text-tertiary');
+    font-size: token('fs-xs');
+  }
+  dd {
+    margin: 2px 0 0;
+    color: token('text-primary');
+    font-size: token('fs-sm');
+  }
+}
+.books-register__facts-link {
+  display: flex;
+  align-items: flex-end;
+  font-size: token('fs-sm');
+
+  a {
+    @include inline-flex-center;
+    gap: token('s-1');
+  }
+}
+
+.books-register__form {
+  @include flex-column;
+  gap: token('s-3');
+}
+
+.books-register__section-title {
+  margin: token('s-4') 0 token('s-2');
+  font-size: token('fs-sm');
+  font-weight: token('fw-semibold');
+}
+.books-register__note {
+  margin: 0 0 token('s-3');
+  font-size: token('fs-sm');
+}
+
+.books-register__lines {
+  overflow-x: auto;
+
+  .table {
+    width: 100%;
+  }
+  tfoot th,
+  tfoot td {
+    border-top: 1px solid token('border-strong');
+    font-weight: token('fw-semibold');
+  }
+  tfoot th {
+    text-align: left;
+  }
+}
+
+.books-register__blocked {
+  margin-right: auto;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+}

@@ -7,10 +7,12 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, EmptyState, Field, Flag } from "../components/ui";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { useCreateIntent } from "../hooks/useCreateIntent";
+import { FinanceCreateMenu } from "../features/financials/components/FinanceCreateMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
-import { formatDate, formatDateTime, formatShortDate } from "../lib/format";
+import { formatDate, formatDateTime, formatShortDate, pluralize } from "../lib/format";
 import { organizationTodayISO } from "../lib/dateRanges";
 import { budgetVariance, formatMoney } from "../lib/money";
 import { Money } from "../components/Money";
@@ -20,14 +22,31 @@ import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { CategorizationProvenance, TransactionRulesBar } from "../features/financials/rules";
+import { MatchReceiptsButton } from "../features/financials/receipts/MatchReceiptsButton";
 import { RuleDrawerProvider } from "../features/financials/transactions/RuleDrawerHost";
 import { TransactionsBulkBar } from "../features/financials/transactions/TransactionsBulkBar";
 import { useTransactionsSurface } from "../features/financials/transactions/useTransactionsSurface";
-import { Database, FileUp, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
+import { useFinanceTags } from "../features/financials/transactions/useFinanceTags";
+import { TransactionsFilterBar } from "../features/financials/transactions/TransactionsFilterBar";
+import { TransactionsSummary } from "../features/financials/transactions/TransactionsSummary";
+import { TransactionsExportDialog } from "../features/financials/transactions/TransactionsExportDialog";
+import { TransactionHotkeys, TransactionShortcutsSheet } from "../features/financials/transactions/TransactionShortcuts";
+import { TagChips } from "../features/financials/transactions/TagPicker";
+import { useTransactionBulkEdit } from "../features/financials/transactions/useTransactionBulkEdit";
+import {
+  matchesTransactionFilters,
+  readTransactionFilters,
+  reviewCounts,
+  withTransactionFilters,
+  type FilterableTransaction,
+  type TransactionFilterState,
+} from "../features/financials/transactions/transactionFilters";
+import { isSplitTransaction, splitLabel, transactionTagIds } from "../../shared/transactionLines";
+import { Database, Download, FileUp, Keyboard, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { Tabs } from "../components/primitives";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { appliesBcSocietyRules } from "../../shared/entityRuleScope";
@@ -81,7 +100,7 @@ export function FinancialsPage() {
   const { canWrite, canEditSettings, canManageIntegration } = useFinancePermissions();
   const society = useSociety();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const items = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
   const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const connections = useQuery(
@@ -153,6 +172,8 @@ export function FinancialsPage() {
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [tab, setTab] = useUrlTab(FINANCIALS_TABS, "overview");
   const waveResources = useQuery(
     api.waveCache.resources,
@@ -229,10 +250,15 @@ export function FinancialsPage() {
   }, [isMobile, tableData.hydratedView]);
   const focusedTransactionId = searchParams.get("transaction");
   const focusedTransaction = (transactions ?? []).find((row: any) => String(row._id) === focusedTransactionId);
+  // The To review / Reviewed queue, categorisation method and tag filters (in the URL).
+  const txnFilters = useMemo(() => readTransactionFilters(searchParams), [searchParams]);
+  const setTxnFilters = (next: TransactionFilterState) => setSearchParams((prev) => withTransactionFilters(prev, next), { replace: true });
+  const financeTags = useFinanceTags(society?._id);
   // Detail panel, bulk island, in-place rule editor, rule prompt and payee names.
-  const txnSurface = useTransactionsSurface({ societyId: society?._id, canWrite, transactions });
+  const txnSurface = useTransactionsSurface({ societyId: society?._id, canWrite, transactions, tags: financeTags, reviewSegment: txnFilters.review });
+  const runTransactionBulk = useTransactionBulkEdit(society?._id);
   const { decorate: decorateTransactions } = txnSurface;
-  const records = useMemo(
+  const allRecords = useMemo(
     () => decorateTransactions((transactions ?? []).filter((t: any) => !focusedTransactionId || String(t._id) === focusedTransactionId).map((t: any) => ({
       ...t,
       account: (accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "",
@@ -243,8 +269,26 @@ export function FinancialsPage() {
     }))),
     [transactions, accounts, linksByTransactionId, assetsByTransactionId, focusedTransactionId, decorateTransactions],
   );
+  // A linked purchase (`?transaction=`) shows on its own, whatever the queue.
+  const records = useMemo(
+    () => (focusedTransactionId ? allRecords : allRecords.filter((row) => matchesTransactionFilters(row as FilterableTransaction, txnFilters))),
+    [allRecords, focusedTransactionId, txnFilters],
+  );
+  const txnReviewCounts = useMemo(() => reviewCounts(allRecords as FilterableTransaction[], txnFilters), [allRecords, txnFilters]);
+  const rulesWorkspace = txnSurface.ruleDrawer.api.workspace;
+  const exportLookups = useMemo(
+    () => ({
+      tagName: financeTags.tagName,
+      fundName: (id: string) => rulesWorkspace?.fundRestrictions.find((fund) => fund._id === id)?.name ?? rulesWorkspace?.archivedFunds?.find((fund) => fund._id === id)?.name,
+      accountName: (id: string) => {
+        const account = rulesWorkspace?.accounts.find((row) => row._id === id);
+        return account ? `${account.code ? `${account.code} ` : ""}${account.name}` : undefined;
+      },
+    }),
+    [financeTags, rulesWorkspace],
+  );
   const { renderSidePanel: renderTransactionSidePanel } = txnSurface;
-  const renderTransactionPanel = useMemo(() => renderTransactionSidePanel(records as any[]), [renderTransactionSidePanel, records]);
+  const renderTransactionPanel = useMemo(() => renderTransactionSidePanel(allRecords as any[]), [renderTransactionSidePanel, allRecords]);
   const closePurchaseLink = () => {
     setLinkTxn(null);
     setLinkAssetId("");
@@ -456,6 +500,7 @@ export function FinancialsPage() {
         actions={
           activeConnection ? (
             <>
+              <FinanceCreateMenu />
               <span title={`Connected to ${providerLabel(activeConnection.provider)}`}>
                 <Badge tone="success">{providerLabel(activeConnection.provider)}</Badge>
               </span>
@@ -502,6 +547,7 @@ export function FinancialsPage() {
             </>
           ) : (
             <>
+              <FinanceCreateMenu />
               <MoreActionsMenu
                 items={[
                   { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
@@ -537,6 +583,7 @@ export function FinancialsPage() {
       </div>
 
       {tab === "transactions" && <TransactionRulesBar societyId={society._id} />}
+      {tab === "transactions" && <MatchReceiptsButton societyId={society._id} />}
 
       {tab === "transactions" && (accounts ?? []).length > 0 && (
         <BankCsvImportCard
@@ -919,20 +966,48 @@ export function FinancialsPage() {
                 currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
                 onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
                 onOpenFilter={() => setFilterOpen((x) => !x)}
+                actions={
+                  <>
+                    <button type="button" className="btn btn--sm" onClick={() => setExportOpen(true)} disabled={records.length === 0}>
+                      <Download size={12} aria-hidden="true" /> Export
+                    </button>
+                    <button type="button" className="btn btn--sm btn--icon" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={() => setShortcutsOpen(true)}>
+                      <Keyboard size={14} aria-hidden="true" />
+                    </button>
+                  </>
+                }
               />
+              {!focusedTransactionId && (
+                <TransactionsFilterBar state={txnFilters} onChange={setTxnFilters} counts={txnReviewCounts} tags={financeTags} />
+              )}
               <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
               <RecordTableFilterChips />
               <TransactionLinkFilters />
+              <TransactionsSummary />
               <RecordTable
                 selectable={canWrite}
                 loading={tableData.loading || transactions === undefined}
+                inlineEdit={txnSurface.inlineEdit}
                 renderCell={({ record: t, field }) => {
                   if (field.name === "description" && t.payeeRenamed) return <span title={t.description}>{t.payeeName}</span>;
                   if (field.name === "counterparty") return t.payeeRenamed ? <span title={t.counterparty || t.description}>{t.payeeName}</span> : undefined;
                   if (field.name === "date") return <span title={formatDate(t.date, "EEEE, MMMM d, yyyy")}>{formatShortDate(t.date, todayISO)}</span>;
                   if (field.name === "account") return <span className="muted">{t.account || "—"}</span>;
-                  if (field.name === "category") return <span className="category-cell"><CategorizationProvenance txn={t} /><Badge>{t.category ?? "uncategorized"}</Badge></span>;
+                  if (field.name === "category") {
+                    const split = splitLabel(t);
+                    return (
+                      <span className="category-cell">
+                        <CategorizationProvenance txn={t} />
+                        <Badge>{split ?? txnSurface.accountLabels.get(String(t.category)) ?? t.category ?? "uncategorized"}</Badge>
+                        <TagChips tagIds={transactionTagIds(t)} tags={financeTags} />
+                      </span>
+                    );
+                  }
                   if (field.name === "amountCents") return <Money cents={t.amountCents} tone={t.amountCents > 0 ? "in" : "auto"} />;
+                  if (field.name === "fundRestrictionId") {
+                    if (isSplitTransaction(t)) return <span className="muted">By line</span>;
+                    return t.fundRestrictionId ? <span>{txnSurface.fundNames.get(String(t.fundRestrictionId)) ?? "Archived fund"}</span> : <span className="muted">Unrestricted</span>;
+                  }
                   if (field.name === "items") {
                     const links = linksByTransactionId.get(t._id) ?? [];
                     const linkedAssetIds = new Set(links.map((link: any) => String(link.assetId ?? "")).filter(Boolean));
@@ -963,7 +1038,21 @@ export function FinancialsPage() {
                   return undefined;
                 }}
               />
-              <TransactionsBulkBar societyId={society._id} canWrite={canWrite} exportName="Transactions" />
+              <TransactionsBulkBar societyId={society._id} canWrite={canWrite} exportName="Transactions" tags={financeTags} />
+              <TransactionsExportDialog
+                open={exportOpen}
+                onClose={() => setExportOpen(false)}
+                viewName={txnFilters.review === "reviewed" ? "Transactions - reviewed" : "Transactions - to review"}
+                lookups={exportLookups}
+              />
+              <TransactionShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+              <TransactionHotkeys
+                canWrite={canWrite}
+                onToggleSheet={() => setShortcutsOpen((open) => !open)}
+                onSetReviewed={(ids, reviewed) =>
+                  void runTransactionBulk(ids, { reviewed }, (count) => (reviewed ? `Marked ${pluralize(count, "transaction")} as reviewed` : `Moved ${pluralize(count, "transaction")} back to To review`))
+                }
+              />
             </RecordTableScope>
             {txnSurface.ruleDrawer.element}
             </RuleDrawerProvider>
@@ -1239,6 +1328,12 @@ function BankCsvImportCard({
   const [parsed, setParsed] = useState<ParsedCsvRow[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The finance Create menu's "Import → Bank CSV" lands here.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useCreateIntent("import-csv", "financials:write", () => {
+    cardRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    cardRef.current?.focus({ preventScroll: true });
+  });
 
   const onFile = async (file: File) => {
     setFileName(file.name);
@@ -1281,7 +1376,7 @@ function BankCsvImportCard({
   };
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card" style={{ marginBottom: 16 }} ref={cardRef} tabIndex={-1} aria-label="Import bank / credit-card CSV">
       <div className="card__head">
         <h2 className="card__title">Import bank / credit-card CSV</h2>
         <span className="card__subtitle">

@@ -243,7 +243,7 @@ const transcriptOutput = z.discriminatedUnion("available", [
     available: z.literal(false),
     meetingId: z.string(),
     meetingTitle: z.string(),
-    reason: z.enum(["none", "in_camera"]),
+    reason: z.enum(["none", "in_camera", "paged"]),
     message: z.string(),
   }),
 ]);
@@ -288,6 +288,7 @@ export const getTranscript = defineAgentTool({
         message: "This meeting had an in-camera session that isn't marked in the recording, so its working transcript can't be shared here.",
       };
     }
+    if (transcript.pagedJobId) return { available: false as const, meetingId, meetingTitle, reason: "paged" as const, message: "This meeting has a paged WhisperX transcript. Open its Transcript tab to read or export the complete transcript; this tool does not expose paged transcripts yet." };
     const speakers = asRows(transcript.speakers)
       .filter((row) => typeof row.label === "string")
       .map((row): TranscriptSpeaker => ({ label: String(row.label), name: label(row.name), mergedInto: label(row.mergedInto) }));

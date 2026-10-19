@@ -3,10 +3,12 @@ import { useQuery } from "convex/react";
 import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
 import { DeploymentCapabilitiesGate } from "./DeploymentCapabilities";
+import { PendingInvitations } from "./PendingInvitations";
 
 export function AuthGate({ children, allowWorkspaceCreation = false }: { children: React.ReactNode; allowWorkspaceCreation?: boolean }) {
   const auth = useAuth();
   const creationAccess = useQuery(api.http.workspaceCreationAccess, auth.mode !== "none" && auth.sessionStatus === "authenticated" && auth.convexAuthStatus === "authenticated" && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
+  const invitations = useQuery(api.invitations.pendingForAccount, auth.mode !== "none" && auth.isConvexAuthenticated && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
 
   if (auth.mode === "none") return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
 
@@ -55,6 +57,8 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
 
   if (auth.membershipState !== "ready" || auth.membershipStatus !== "bound") {
     if (auth.membershipStatus === "needs-invitation") {
+      if (invitations === undefined) return <AuthMessage title="Checking invitations" message="Looking for invitations sent to your verified email…" />;
+      if (invitations.length) return <div className="page"><h1>Join your workspace</h1><PendingInvitations /><button className="btn" onClick={() => void auth.signOut()}>Sign out</button></div>;
       if (creationAccess === undefined) return <AuthMessage title="Checking setup access" message="Checking whether this account can create its own workspace…" />;
       if (allowWorkspaceCreation && creationAccess.allowed) return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
       return (

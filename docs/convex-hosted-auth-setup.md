@@ -103,6 +103,46 @@ Pages. Graph's `202` confirms acceptance, not arrival in the recipient's inbox;
 the adapter's identifier is a request correlation ID, not a Microsoft message ID.
 [Graph sendMail contract](https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0).
 
+#### Invitation onboarding and delivery
+
+On the hosted site, **Users & access → Invite user** creates an expiring,
+single-use invitation and schedules an email, including when the recipient has
+no account. Adding a user record alone does not bind an identity. Existing
+unbound records have **Invite to join** in their action menu; acceptance binds
+that record only after the invited mailbox is verified, preserving its ID and
+related records. A matching email alone never grants membership.
+
+New accounts verify their email and see **Join your workspace** before organization
+creation. Existing accounts see pending workspace invitations inside the app.
+Accepting selects the invited workspace; the workspace picker returns to its
+dashboard so record URLs from another workspace do not carry across. Roles remain
+independent per workspace, and an invitation never silently promotes an existing
+member. A wrong-email session can sign out from the invitation page.
+
+Verification and reset mail use a private, retryable `authEmailOutbox`. Bodies are
+removed after provider acceptance or exhausted retries, and rows expire after one
+hour. Duplicate signup of an unverified account resends verification while
+preserving its original password and invitation return path. Existing verified
+accounts still receive the generic signup response and should sign in or reset
+their password.
+
+The invitation list distinguishes **Queued**, **Accepted by mail provider**, and
+**Email failed**. Resending rotates the secret, invalidates earlier links, and has
+a server-enforced one-minute cooldown. Revoked, accepted, expired, and rotated
+invitations are skipped by pending mail jobs. Provider acceptance is not inbox
+receipt; use Exchange message trace or recipient confirmation for delivery issues.
+The existing `SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS` policy still applies to invited
+accounts. Share links are copied for the administrator to send and do not email
+anyone automatically. Browser-local workspaces also copy links without claiming
+that an email was sent.
+
+Run `npm run test:invitation-onboarding`, `npm run test:multi-user-pipeline`,
+`npm run test:identity-binding`, `npm run test:microsoft-email`, and
+`npm run test:development-mail` for the focused regression checks. The onboarding
+check exercises real Better Auth signup/verification routes with an in-memory
+adapter and Convex invitation/mail handlers with the provider boundary stubbed;
+it does not send mail to real recipients.
+
 #### Microsoft 365 provisioning
 
 1. In the correct tenant, choose a licensed existing mailbox or a dedicated
@@ -304,3 +344,23 @@ carried over, and Societyer never matches people by email. Existing workspace
 memberships stay bound to their old issuer. To move a deployment, each person
 creates an account here and is re-invited (or an operator rebinds memberships
 explicitly), and you keep the old mode running until that's done.
+
+### Workspace selection across browser tabs
+
+Each tab retains its own workspace and matching membership user/role. The last
+selection is saved for a reload or new tab, but changes in another tab do not
+switch an open page. This prevents a tab opened before invitation acceptance,
+whose cached membership list still contains only the original workspace, from
+rejecting and overwriting the newly invited workspace selected elsewhere.
+
+Selection readers use React's external-store subscription so a change made while
+components mount is observed consistently. Unknown membership IDs are rejected
+without clearing an existing selection or deleting another tab's preference.
+Browser-local and demo workspaces retain their own selection behavior and keys.
+
+`npm run test:workspace-selection` exercises the actual React hooks in isolated
+JavaScript realms representing separate tabs, with shared browser-storage events
+and stubbed auth/query transport. It reproduces the original rollback and checks
+workspace/user/role consistency, new-tab persistence, mount timing, unavailable
+storage, and local/demo compatibility. Server membership authorization remains
+independent of the browser's selection.

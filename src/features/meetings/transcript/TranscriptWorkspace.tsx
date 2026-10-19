@@ -1,3 +1,7 @@
+import { useConvex, useQuery } from "convex/react";
+import { api as hostedApi } from "@/lib/convexApi";
+import { WhisperXQueue } from "./WhisperXQueue";
+import { PagedTranscriptToolbar } from "./PagedTranscriptToolbar";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -37,6 +41,12 @@ const TRANSCRIPT_FORMATS_HINT = "VTT, SRT or Whisper JSON";
 const EMPTY_SPEAKERS: TranscriptSpeaker[] = [];
 type WorkspaceTranscript = {
   text: string;
+  _id?: string;
+  createdAtISO?: string;
+  contentRevision?: string;
+  pagedJobId?: Id<"meetingTranscriptionJobs">;
+  pageCount?: number;
+  segmentCount?: number;
   segments?: TranscriptSegment[];
   speakers?: TranscriptSpeaker[];
   durationSeconds?: number;
@@ -69,6 +79,14 @@ export function TranscriptWorkspace({
   /** Where an untimed transcript is kept and edited, shown with its text. */
   plainTextNote?: ReactNode;
 }) {
+  const headerTranscript = transcript;
+  const jobId = transcript?.pagedJobId;
+  const [cursor, setCursor] = useState({ jobId: "", index: 0 });
+  const pageIndex = cursor.jobId === jobId ? Math.min(cursor.index, Math.max(0, (transcript?.pageCount ?? 1) - 1)) : 0;
+  const setPageIndex = useCallback((index: number) => setCursor({ jobId: jobId ?? "", index }), [jobId]);
+  const convex = useConvex();
+  const page = useQuery(hostedApi.meetingTranscription.page, jobId ? { jobId, page: pageIndex } : "skip") as { segments: TranscriptSegment[]; revision: number; startSec: number; endSec: number } | undefined;
+  if (jobId) transcript = { ...transcript!, segments: page?.segments ?? EMPTY_SEGMENTS };
   const workspace = useTranscriptPlayerLayout();
   const { can } = usePermissions();
   const aiDraft = useAiDraftAvailability();
@@ -80,6 +98,7 @@ export function TranscriptWorkspace({
       canWrite,
       hasTranscript: Boolean(transcript),
       speakers: transcript?.speakers ?? EMPTY_SPEAKERS,
+      paged: jobId && page ? { jobId, page: pageIndex, revision: page.revision } : undefined,
     });
   const clock = useMediaClock();
   const { recording, recordingOrigin, setRecording, lastRecording, source, peaks, waveformNote } =
@@ -94,8 +113,8 @@ export function TranscriptWorkspace({
   // Combined labels resolve at read time: the transcript, lane and colours use
   // the speaker each segment resolves to; the speaker panel nests the raw labels.
   const shown = useMemo(() => displaySegments(segments, speakers), [segments, speakers]);
-  const labels = useMemo(() => [...new Set(shown.map((segment) => segment.speaker))], [shown]);
-  const palette = useMemo(() => speakerPalette(segments), [segments]);
+  const labels = useMemo(() => [...new Set([...shown.map((segment) => segment.speaker), ...(jobId ? speakers.filter(s => !s.mergedInto).map(s => s.label) : [])])], [shown, jobId, speakers]);
+  const palette = useMemo(() => jobId ? speakers.map(s => s.label) : speakerPalette(segments), [segments, jobId, speakers]);
   const review = useSpeakerReview(canWrite, segments.length > 0, importFile);
   const localTranscription = useLocalTranscription({ recording, canWrite, importTranscribed, announce, onSaved: review.openIfNeeded });
   const attendees = useMemo(() => attendeesProp ?? speakerCandidates({ minutes }), [attendeesProp, minutes]);
@@ -106,11 +125,12 @@ export function TranscriptWorkspace({
   // A marker scrolls the transcript to its line and seeks there (which resumes following).
   const onMarker = useCallback(
     (seconds: number) => {
+      if (jobId && page && (seconds < page.startSec || seconds > page.endSec)) void convex.query(hostedApi.meetingTranscription.pageAtTime, { jobId, seconds }).then((index: number) => setPageIndex(index));
       const index = activeIndex(segments, seconds);
       if (index >= 0) onJump(index);
       seek(seconds);
     },
-    [segments, onJump, seek],
+    [segments, onJump, seek, jobId, page, convex, setPageIndex],
   );
   // saveText creates synthetic five-second segments; those are not recording timestamps.
   const timed =
@@ -118,6 +138,10 @@ export function TranscriptWorkspace({
     !["manual", "text", "txt"].includes(transcript?.provider ?? "manual");
   const duration =
     transcript?.durationSeconds ?? segments.reduce((max, segment) => Math.max(max, segment.endSec), 0);
+  useEffect(() => {
+    if (!jobId || !page || !source || !clock.playing || clock.currentTime >= page.startSec && clock.currentTime <= page.endSec) return;
+    void convex.query(hostedApi.meetingTranscription.pageAtTime, { jobId, seconds: clock.currentTime }).then((index: number) => { if (index !== pageIndex) setPageIndex(index); });
+  }, [jobId, page, source, clock.currentTime, clock.playing, convex, pageIndex, headerTranscript?.pageCount, setPageIndex]);
   return (
     <section
       ref={workspace}
@@ -125,6 +149,9 @@ export function TranscriptWorkspace({
       aria-label="Transcript workspace"
       onKeyDown={(event) => handleWorkspaceKeyDown(event, Boolean(source), clock.toggle, skip)}
     >
+      <WhisperXQueue societyId={societyId} meetingId={meetingId} transcript={headerTranscript} />
+      {jobId && <PagedTranscriptToolbar jobId={jobId} page={pageIndex} pageCount={headerTranscript?.pageCount ?? 1} segmentCount={headerTranscript?.segmentCount ?? 0} onPage={setPageIndex} speakers={speakers} />}
+      {jobId && !page && <p role="status">Loading transcript page…</p>}
       <TranscriptWorkspaceHeader
         meetingId={meetingId}
         provider={transcript?.provider}
@@ -176,7 +203,7 @@ export function TranscriptWorkspace({
         inCameraMarks={timed ? inCamera.marks : []}
       />}
       {timed && inCamera.choices.length > 0 && !inCamera.allMarked && <InCameraNote canMark={inCamera.canMark} />}
-      <TranscriptFallback transcript={transcript} segments={segments} timed={timed} canWrite={canWrite} note={plainTextNote} />
+      {(!jobId || page) && <TranscriptFallback transcript={transcript} segments={segments} timed={timed} canWrite={canWrite} note={plainTextNote} />}
       {timed && (
         <div className="transcript-columns">
           <SpeakerPanel

@@ -11,7 +11,7 @@ import { assertValid, validateWorkspaceUserInput } from "../recordValidation";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 import { requirePermissionPortable } from "./permissions";
-import { findInvitation, invitationAvailability, invitationIssuerAuthorized, isShareLinkInvitation, LINK_INVITATION_ROLES } from "./invitationTokens";
+import { findInvitation, invitationAvailability, invitationIssuerAuthorized, isShareLinkInvitation, LINK_INVITATION_ROLES, type InvitationRow } from "./invitationTokens";
 import { matchesAuthBinding, normalizeAuthIssuer, matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
 
 export type MembershipResolution =
@@ -204,7 +204,7 @@ export async function userGetByAuthSubject(ctx: PortableQueryCtx, { authSubject 
 
 export async function ensureCurrentMembershipPortable(
   ctx: PortableMutationCtx,
-  args: { societyId: string; invitationToken?: string },
+  args: { societyId: string; invitationToken?: string; invitationId?: string },
 ): Promise<MembershipResolution> {
   const principal = ctx.principal;
   if (
@@ -241,9 +241,13 @@ export async function ensureCurrentMembershipPortable(
     return { status: "bound", societyId: args.societyId, userId: existing._id };
   }
 
-  if (!args.invitationToken) return { status: "needs-invitation" };
-  const invitation = await findInvitation(ctx, args.invitationToken);
+  if (!args.invitationToken && !args.invitationId) return { status: "needs-invitation" };
+  const invitation = args.invitationId
+    ? await ctx.db.get<InvitationRow>(args.invitationId, "invitations")
+    : await findInvitation(ctx, args.invitationToken!);
   if (!invitation) return { status: "invalid-invitation" };
+  // An ID is only a lookup for the intended verified mailbox, never a share-link credential.
+  if (args.invitationId && isShareLinkInvitation(invitation as any)) return { status: "invalid-invitation" };
   const unavailable = invitationAvailability(invitation);
   if (unavailable) return { status: unavailable } as MembershipResolution;
   // Email invitations bind to a verified mailbox. A share link is itself the
@@ -270,8 +274,11 @@ export async function ensureCurrentMembershipPortable(
     }
   }
 
+  const target = invitation.targetUserId ? await ctx.db.get<UserRow>(invitation.targetUserId, "users") : null;
+  if (invitation.targetUserId && (!target || target.societyId !== invitation.societyId || target.email?.trim().toLowerCase() !== invitation.email.trim().toLowerCase() || target.authSubject || target.authIssuer || target.externalIdentityId || target.role !== invitation.role)) return { status: "invalid-invitation" };
+  if (target && ["Disabled", "Suspended"].includes(String(target.status))) return { status: "membership-disabled" };
   const externalIdentityId = await ensureExternalIdentityPortable(ctx, principal.issuer, principal.subject);
-  const userId = await ctx.db.insert("users", {
+  const membership = {
     societyId: invitation.societyId,
     email: principal.email,
     displayName: principal.name?.trim() || principal.email,
@@ -281,10 +288,14 @@ export async function ensureCurrentMembershipPortable(
     authIssuer: principal.issuer,
     externalIdentityId,
     status: "Active",
-    createdAtISO: now,
+    createdAtISO: target?.createdAtISO ?? now,
     emailVerifiedAtISO: principal.emailVerified ? now : undefined,
     lastLoginAtISO: now,
-  });
+  };
+  // Binding an existing placeholder requires this fresh, verified-email invitation;
+  // matching an email alone never grants access.
+  const userId = target ? target._id : await ctx.db.insert("users", membership);
+  if (target) await ctx.db.patch(target._id, membership);
   await ctx.db.patch(invitation._id, {
     acceptedAtISO: now,
     acceptedByUserId: userId,

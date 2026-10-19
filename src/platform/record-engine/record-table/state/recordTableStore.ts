@@ -16,6 +16,8 @@ import type {
 } from "../../types";
 import type { DateRangeContext } from "../../../../lib/dateRanges";
 import { todayDateOnly } from "../../../../../shared/dateOnly";
+import { stageWrites, type StagedEdits, type StagedWrite } from "../utils/stagedEdits";
+import { EMPTY_EDIT_HISTORY, type EditHistory } from "../utils/editHistory";
 
 /**
  * Per-table-instance state. Mirrors Twenty's `createAtomComponentState`
@@ -193,6 +195,18 @@ export type RecordTableState = {
   beginPendingEdit: (recordId: string, fieldName: string, value: unknown) => number;
   settlePendingEdit: (token: number, ok: boolean) => void;
 
+  /*
+   * Grid mode (RecordTable `inlineEdit`): the batch changeset not saved yet,
+   * the session's undo/redo stack, and the screen-reader announcement.
+   */
+  stagedEdits: StagedEdits;
+  stageEdits: (writes: StagedWrite[]) => void;
+  clearStagedEdits: () => void;
+  editHistory: EditHistory;
+  setEditHistory: (history: EditHistory) => void;
+  gridAnnouncement: string;
+  announce: (message: string) => void;
+
   /* loaded records */
   records: any[];
   setRecords: (records: any[]) => void;
@@ -289,6 +303,9 @@ export function createRecordTableStore(opts: {
     editingInitialValue: undefined,
     editorFlush: null,
     pendingEdits: new Map(),
+    stagedEdits: new Map(),
+    editHistory: EMPTY_EDIT_HISTORY,
+    gridAnnouncement: "",
     records: [],
     loadingProgress: null,
     pageIndex: 0,
@@ -417,6 +434,18 @@ export function createRecordTableStore(opts: {
         const result = marked ? next : pendingEdits;
         return result === state.pendingEdits ? state : { pendingEdits: result };
       }),
+
+    stageEdits: (writes) =>
+      set((state) => {
+        const byId = new Map(state.records.map((record) => [String(record?._id), record]));
+        const stagedEdits = stageWrites(state.stagedEdits, writes, (recordId, fieldName) => byId.get(recordId)?.[fieldName]);
+        return stagedEdits === state.stagedEdits ? state : { stagedEdits };
+      }),
+    clearStagedEdits: () => set((state) => (state.stagedEdits.size === 0 ? state : { stagedEdits: new Map() })),
+    setEditHistory: (editHistory) => set({ editHistory }),
+    // A trailing zero-width space makes a repeated message announce again.
+    announce: (message) =>
+      set((state) => ({ gridAnnouncement: state.gridAnnouncement === message ? `${message}\u200b` : message })),
 
     setRecords: (records) =>
       set((state) => {

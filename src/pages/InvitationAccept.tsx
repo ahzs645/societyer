@@ -26,6 +26,8 @@ export function InvitationAcceptPage() {
   const auth = useAuth();
   const accept = useMutation(api.invitations.accept);
   const navigate = useNavigate();
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const attemptedToken = useRef<string | null>(null);
   const [result, setResult] = useState<MembershipResolution | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,9 +93,26 @@ export function InvitationAcceptPage() {
     );
   }
   if (result.status === "invitation-email-unverified" && auth.mode === "convex") {
-    return <InvitationState message="Your email address isn't verified yet. Open the verification link we emailed you, then come back to this invitation. If no email arrives, ask the workspace administrator for a share link instead." />;
+    return <InvitationState message="Verify your email to join this workspace. You do not need to create an organization.">
+      <button className="btn btn--primary auth__submit" disabled={resending} onClick={async () => {
+        setResending(true);
+        try {
+          const { loadSessionAuthClient } = await import("../lib/sessionAuthClient");
+          const { authClient } = await loadSessionAuthClient();
+          const callbackURL = new URL(`/login?verified=1&redirect=${encodeURIComponent(`/invite/${token}`)}`, window.location.origin).href;
+          const response = await authClient.sendVerificationEmail({ email: auth.session!.user.email!, callbackURL });
+          if (response.error) throw new Error(response.error.message);
+          setResendMessage("Check your email for a fresh verification link, then sign in.");
+        } catch { setResendMessage("Could not request the email. Please try again in a minute."); }
+        finally { setResending(false); }
+      }}>{resending ? "Requesting…" : "Send verification email"}</button>
+      {resendMessage && <p role="status">{resendMessage}</p>}
+    </InvitationState>;
   }
-  return <InvitationState message={FAILURE_MESSAGES[result.status] ?? "This invitation cannot be accepted."} />;
+  return <InvitationState message={FAILURE_MESSAGES[result.status] ?? "This invitation cannot be accepted."}>
+    {result.status === "invitation-email-mismatch" && <button className="btn auth__submit" onClick={() => void auth.signOut()}>Sign in with another account</button>}
+    <button className="btn auth__submit" onClick={() => navigate("/app")}>Go to your workspace</button>
+  </InvitationState>;
 }
 
 function InvitationState({

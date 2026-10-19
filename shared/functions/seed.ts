@@ -18,6 +18,7 @@ import { addDaysIso } from "../agreements";
 import { todayDateOnly } from "../dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../demoData/bankFeed";
 import { demoSubAccountRows } from "../demoData/chartOfAccounts";
+import { DEMO_LEDGER_ACCOUNTS, buildDemoJournal, demoBalancesAt, demoBooksSettings, demoFiscalPeriods, type DemoLedgerKey } from "../demoData/journals";
 import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../demoData/members";
 import { addDays, createRng, demoAsOfDate } from "../demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel } from "../demoData/work";
@@ -29,7 +30,11 @@ import {
   demoTransactionRules,
   type DemoFinancePerson,
 } from "../demoData/financeWorkflows";
+import { applyDemoLinesAndTags, demoFinanceTagGroups, demoFinanceTags } from "../demoData/booksTags";
 import { invoiceDemoRows, type DemoInvoiceMember, type DemoInvoiceMemberKey } from "../demoData/invoicing";
+import { billDemoRows } from "../demoData/bills";
+import { demoBankAccountProfiles, demoPettyCashAccount, demoReceiptInbox, demoSpendBudgetClaims, demoSpendBudgets } from "../demoData/banking";
+import { invoiceLedgerDemoRows } from "../demoData/invoiceLedger";
 import { businessRegisterDemoRows } from "../demoData/businessRegisters";
 import { syncRegisterDeadlines } from "./businessRegisters";
 import { CORPORATION_DEMO_KEYS, CORPORATION_DEMO_TABLE_ORDER, buildCorporationDemo, insertCorporationDemo } from "../demoData/corporations";
@@ -844,9 +849,39 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     normalBalance: "debit",
   });
   // Sub-accounts under facilities, so the chart of accounts shows a hierarchy.
-  for (const { doc } of demoSubAccountRows({ societyId, connectionId: financialConnectionId, facilitiesAccountId: facilitiesExpenseAccountId })) {
-    await ctx.db.insert("financialAccounts", doc);
+  const subAccountIds: Record<string, string> = {};
+  for (const { key, doc } of demoSubAccountRows({ societyId, connectionId: financialConnectionId, facilitiesAccountId: facilitiesExpenseAccountId })) {
+    subAccountIds[key] = await ctx.db.insert("financialAccounts", doc);
   }
+  // Accounts payable and program supplies, which the bills demo posts to.
+  const payablesAccountId = await ctx.db.insert("financialAccounts", {
+    societyId,
+    connectionId: financialConnectionId,
+    externalId: "accounts-payable",
+    code: "2000",
+    name: "Accounts payable",
+    currency: "CAD",
+    accountType: "Liability",
+    subtype: "payable",
+    balanceCents: 0,
+    isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "credit",
+  });
+  const programSuppliesAccountId = await ctx.db.insert("financialAccounts", {
+    societyId,
+    connectionId: financialConnectionId,
+    externalId: "program-supplies",
+    code: "5000",
+    name: "Program supplies",
+    currency: "CAD",
+    accountType: "Expense",
+    subtype: "program",
+    balanceCents: 0,
+    isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "debit",
+  });
   const fundRestrictionId = await ctx.db.insert("fundRestrictions", {
     societyId,
     name: "Youth resilience grant",
@@ -1407,7 +1442,23 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       receiptDocumentId: presentationId,
       members,
       plans: { regular: regularPlanId, student: studentPlanId },
+      billAccounts: { payable: payablesAccountId, facilities: facilitiesExpenseAccountId, venue: subAccountIds.venue, utilities: subAccountIds.utilities, program: programSuppliesAccountId },
+      financeCommitteeId,
     });
+    // The books: opening balances, fiscal periods and a journal entry per
+    // categorised bank line (after the rules above have categorised them).
+    await seedDemoLedger(ctx, {
+      societyId,
+      connectionId: financialConnectionId,
+      bankAccountIds: { operating: operatingAccountId, restricted: restrictedAccountId, card: cardAccountId },
+      fundRestrictionId,
+      treasurerId: userRef("Priya Shah", "Director").id,
+      feed: bankFeed,
+      feedTransactions,
+      asOf: demoAsOf,
+    });
+    // The invoices in the books, once the chart and fiscal periods exist.
+    await seedInvoiceLedger(ctx, { societyId, connectionId: financialConnectionId, treasurer: userRef("Priya Shah", "Director") });
   }
 
   // A couple of notifications so the bell lights up on first load.
@@ -2138,6 +2189,8 @@ function seedRowWriter(ctx: PortableMutationCtx) {
     return value;
   };
   return {
+    /** Swap placeholders already inserted for their ids (for patches written after the rows). */
+    resolve: (value: unknown) => resolve(value, "patch"),
     async insert(table: string, rows: ReadonlyArray<Record<string, any>>) {
       const ids: string[] = [];
       for (const { _id, ...doc } of rows) {
@@ -2177,7 +2230,166 @@ type SeedFinanceDemoArgs = {
   receiptDocumentId: string;
   members: Record<DemoInvoiceMemberKey, DemoInvoiceMember>;
   plans: { regular: string; student: string };
+  billAccounts: { payable: string; facilities: string; venue: string; utilities: string; program: string };
+  financeCommitteeId: string;
 };
+
+/**
+ * The demo books (shared/demoData/journals.ts), as in the in-browser demo:
+ * the rest of the chart of accounts, one open fiscal period per fiscal year,
+ * Books settings, the 2026-01-01 opening balances and a posted journal entry
+ * per categorised bank line since then.
+ */
+async function seedDemoLedger(ctx: PortableMutationCtx, args: {
+  societyId: string;
+  connectionId: string;
+  bankAccountIds: Record<DemoFeedAccountKey, string>;
+  fundRestrictionId: string;
+  treasurerId: string;
+  feed: Parameters<typeof demoBalancesAt>[0];
+  /** The stored bank-feed rows, with rule categories applied. */
+  feedTransactions: Array<Record<string, unknown>>;
+  asOf: string;
+}) {
+  const booksStart = "2026-01-01";
+  const existing = await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  const idByCode = new Map(existing.filter((row) => row.code).map((row) => [String(row.code), String(row._id)]));
+  for (const account of DEMO_LEDGER_ACCOUNTS) {
+    if (idByCode.has(account.code)) continue;
+    const parentCode = DEMO_LEDGER_ACCOUNTS.find((candidate) => candidate.key === account.parent)?.code;
+    const id = await ctx.db.insert("financialAccounts", {
+      societyId: args.societyId,
+      connectionId: args.connectionId,
+      externalId: `societyer:${account.code}`,
+      code: account.code,
+      name: account.name,
+      currency: "CAD",
+      accountType: account.accountType,
+      subtype: account.subtype,
+      balanceCents: 0,
+      isRestricted: account.key === "restrictedNetAssets",
+      sourceSystem: "societyer",
+      normalBalance: account.normalBalance,
+      ...(parentCode && idByCode.get(parentCode) ? { parentAccountId: idByCode.get(parentCode) } : {}),
+    });
+    idByCode.set(account.code, id);
+  }
+  const ledgerIds = Object.fromEntries(DEMO_LEDGER_ACCOUNTS.map((account) => [account.key, idByCode.get(account.code) as string])) as Record<DemoLedgerKey, string>;
+  const periodIds = new Map<string, string>();
+  for (const period of demoFiscalPeriods(booksStart, args.asOf)) {
+    const { key: _key, ...doc } = period;
+    periodIds.set(period.fiscalYear, await ctx.db.insert("accountingFiscalPeriods", { societyId: args.societyId, ...doc, createdAtISO: `${period.startDate}T00:00:00.000Z`, updatedAtISO: `${period.startDate}T00:00:00.000Z` }));
+  }
+  await ctx.db.insert("booksSettings", { societyId: args.societyId, ...demoBooksSettings(booksStart), createdAtISO: `${booksStart}T18:00:00.000Z`, updatedAtISO: `${booksStart}T18:00:00.000Z` });
+  const feedKeyByAccount = new Map(Object.entries(args.bankAccountIds).map(([key, id]) => [id, key as DemoFeedAccountKey]));
+  const journal = buildDemoJournal({
+    transactions: args.feedTransactions
+      .filter((row) => feedKeyByAccount.has(String(row.accountId)))
+      .map((row) => ({ transactionId: String(row._id), account: feedKeyByAccount.get(String(row.accountId)) as DemoFeedAccountKey, date: String(row.date), description: String(row.description), amountCents: Number(row.amountCents), category: row.category ? String(row.category) : undefined, status: row.status ? String(row.status) : undefined, tagIds: Array.isArray(row.tagIds) ? row.tagIds.map(String) : undefined, lines: Array.isArray(row.lines) ? row.lines : undefined })),
+    openingDate: booksStart,
+    openingBalances: demoBalancesAt(args.feed, "2025-12-31"),
+    asOf: args.asOf,
+  });
+  const accountId = (account: DemoFeedAccountKey | DemoLedgerKey) => (account in args.bankAccountIds ? args.bankAccountIds[account as DemoFeedAccountKey] : ledgerIds[account as DemoLedgerKey]);
+  for (const entry of journal) {
+    const at = `${entry.date}T19:00:00.000Z`;
+    const entryId = await ctx.db.insert("journalEntries", {
+      societyId: args.societyId,
+      fiscalPeriodId: periodIds.get(entry.fiscalYear),
+      entryNumber: entry.entryNumber,
+      date: entry.date,
+      memo: entry.memo,
+      source: entry.source,
+      status: "posted",
+      fiscalYear: entry.fiscalYear,
+      createdByUserId: args.treasurerId,
+      postedAtISO: at,
+      createdAtISO: at,
+      updatedAtISO: at,
+    });
+    for (const [index, line] of entry.lines.entries()) {
+      await ctx.db.insert("journalLines", {
+        societyId: args.societyId,
+        journalEntryId: entryId,
+        accountId: accountId(line.account),
+        lineOrder: index,
+        amountCents: line.amountCents,
+        side: line.side,
+        description: line.description,
+        ...(line.programCode ? { programCode: line.programCode } : {}),
+        ...(line.restrictedFund ? { fundRestrictionId: args.fundRestrictionId } : {}),
+        ...(line.transactionId ? { financialTransactionId: line.transactionId } : {}),
+        ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
+        createdAtISO: at,
+        updatedAtISO: at,
+      });
+    }
+  }
+}
+
+/**
+ * The invoicing demo in the books (shared/demoData/invoiceLedger.ts), as the
+ * in-browser demo has it: Accounts receivable, GST/HST payable and
+ * Undeposited funds, the GL account mapping on the invoice settings, the
+ * entries the sent invoices and their payments posted, and the linked
+ * deposits matched to their invoices. Runs after the demo ledger, so the
+ * revenue accounts and fiscal periods exist.
+ */
+async function seedInvoiceLedger(ctx: PortableMutationCtx, args: { societyId: string; connectionId: string; treasurer: DemoFinancePerson }) {
+  const writer = seedRowWriter(ctx);
+  const booksStart = "2026-01-01";
+  const bySociety = (table: string) => ctx.db.query(table).withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  const accounts = await bySociety("financialAccounts");
+  const idByCode = new Map(accounts.filter((row) => row.code).map((row) => [String(row.code), String(row._id)]));
+  const chartAccount = async (code: string, name: string, accountType: string, subtype: string, normalBalance: string) =>
+    idByCode.get(code) ?? (await ctx.db.insert("financialAccounts", {
+      societyId: args.societyId,
+      connectionId: args.connectionId,
+      externalId: `societyer:${code}`,
+      code,
+      name,
+      currency: "CAD",
+      accountType,
+      subtype,
+      balanceCents: 0,
+      isRestricted: false,
+      sourceSystem: "societyer",
+      normalBalance,
+    }));
+  const ledgerId = (key: DemoLedgerKey) => idByCode.get(DEMO_LEDGER_ACCOUNTS.find((account) => account.key === key)!.code)!;
+  const periods = await bySociety("accountingFiscalPeriods");
+  const settings = await bySociety("invoiceSettings");
+  const data = invoiceLedgerDemoRows({
+    societyId: args.societyId,
+    accounts: {
+      receivable: await chartAccount("1100", "Accounts receivable", "Asset", "receivable", "debit"),
+      undeposited: await chartAccount("1050", "Undeposited funds", "Asset", "undeposited_funds", "debit"),
+      taxPayable: await chartAccount("2300", "GST/HST payable", "Liability", "sales_tax_payable", "credit"),
+      dues: ledgerId("dues"),
+      programFees: ledgerId("programFees"),
+      otherIncome: ledgerId("otherIncome"),
+      donations: ledgerId("donations"),
+    },
+    invoices: await bySociety("invoices"),
+    catalog: await bySociety("invoiceCatalogItems"),
+    transactions: (await bySociety("financialTransactions")).filter((row) => String(row.externalId ?? "").startsWith("csv-invoice-")),
+    booksStart: { openingBalanceDate: booksStart, booksStartDate: booksStart },
+    treasurer: args.treasurer,
+    idFor: (kind, key) => seedRef(kind, `invoice_ledger_${key}`),
+    fiscalPeriodIdFor: (fiscalYear) => periods.find((period) => period.fiscalYear === fiscalYear)?._id,
+  });
+  await writer.insert("journalEntries", data.journalEntries);
+  await writer.insert("journalLines", data.journalLines);
+  for (const invoice of data.invoices) {
+    if (typeof invoice.journalEntryId === "string") await ctx.db.patch(invoice._id, writer.resolve({ journalEntryId: invoice.journalEntryId, payments: invoice.payments }) as Record<string, unknown>);
+  }
+  const before = new Map((await bySociety("financialTransactions")).map((row) => [row._id, row]));
+  for (const txn of data.transactions) {
+    const patch = changedFields(before.get(txn._id) ?? {}, txn);
+    if (Object.keys(patch).length) await ctx.db.patch(txn._id, patch);
+  }
+  for (const row of settings) await ctx.db.patch(row._id, data.mapping);
+}
 
 /**
  * The finance workflows (rules, statement periods, approval rules, claims) and
@@ -2208,6 +2420,12 @@ async function seedFinanceDemo(ctx: PortableMutationCtx, args: SeedFinanceDemoAr
   // period fingerprints cover their real ids), then written back as patches.
   const before = new Map(args.feedTransactions.map((row) => [row._id, JSON.parse(JSON.stringify(row))]));
   const periods = applyDemoFinanceWorkflows(refs, args.feedTransactions, rules, args.accountBalances);
+  // Tags before the feed rows that carry them: split lines, tags and review state.
+  const tagRefs = { societyId: args.societyId, idFor: seedRef };
+  await writer.insert("financeTagGroups", demoFinanceTagGroups(tagRefs));
+  const tagIds = await writer.insert("financeTags", demoFinanceTags(tagRefs));
+  const tagIdByRef = new Map(demoFinanceTags(tagRefs).map((tag, index) => [tag._id, tagIds[index]]));
+  applyDemoLinesAndTags(args.feedTransactions, (key) => tagIdByRef.get(seedRef("tag", key))!);
   for (const row of args.feedTransactions) {
     const patch = changedFields(before.get(row._id), row);
     if (Object.keys(patch).length) await ctx.db.patch(row._id, patch);
@@ -2242,10 +2460,58 @@ async function seedFinanceDemo(ctx: PortableMutationCtx, args: SeedFinanceDemoAr
   await writer.insert("invoiceSettings", invoicing.invoiceSettings);
   await writer.insert("memberSubscriptions", invoicing.memberSubscriptions);
   await writer.insert("organizationIdentifiers", invoicing.organizationIdentifiers);
-  // Payment deposits are real bank lines: operating chequing's balance stays
-  // its opening balance plus the sum of its transactions.
+
+  // Bills: vendors, then the bank lines and journal entries the bills point
+  // at, then the bills. A linked bank line names its bill and an entry's key
+  // carries the bill id, so those two are patched in once the bills exist.
+  const billing = billDemoRows({
+    societyId: args.societyId,
+    connectionId: args.connectionId,
+    cashAccountId: args.cashAccountId,
+    accounts: args.billAccounts,
+    fundRestrictionId: args.fundRestrictionId,
+    owner: args.owner,
+    treasurer: args.treasurer,
+    secretary: args.secretary,
+    idFor: seedRef,
+    // The demo tags were written above with this writer, so their placeholders resolve.
+    tagId: (key) => seedRef("tag", key),
+  });
+  const withoutBillRefs = <T extends Record<string, unknown>>(row: T, fields: string[]) =>
+    Object.fromEntries(Object.entries(row).filter(([key]) => !fields.includes(key))) as T;
+  await writer.insert("accountingCounterparties", billing.accountingCounterparties);
+  const billTxnIds = await writer.insert("financialTransactions", billing.financialTransactions.map((row) => withoutBillRefs(row, ["matchedId"])));
+  const billEntryIds = await writer.insert("journalEntries", billing.journalEntries.map((row) => withoutBillRefs(row, ["sourceExternalId"])));
+  await writer.insert("journalLines", billing.journalLines);
+  const billIds = await writer.insert("bills", billing.bills);
+  const realBillId = new Map(billing.bills.map((row, index) => [row._id, billIds[index]]));
+  const swapBillId = (value: string) => {
+    for (const [placeholder, id] of realBillId) value = value.split(placeholder).join(id);
+    return value;
+  };
+  for (const [index, row] of billing.financialTransactions.entries()) {
+    if (typeof row.matchedId === "string") await ctx.db.patch(billTxnIds[index], { matchedId: swapBillId(row.matchedId) });
+  }
+  for (const [index, row] of billing.journalEntries.entries()) {
+    if (typeof row.sourceExternalId === "string") await ctx.db.patch(billEntryIds[index], { sourceExternalId: swapBillId(row.sourceExternalId) });
+  }
+
+  // Payment deposits and bill payments are real bank lines: operating
+  // chequing's balance stays its opening balance plus the sum of its transactions.
   const deposits = invoicing.financialTransactions.reduce((sum, row) => sum + row.amountCents, 0);
-  await ctx.db.patch(args.cashAccountId, { balanceCents: args.accountBalances[args.cashAccountId] + deposits });
+  const billPayments = billing.financialTransactions.reduce((sum, row) => sum + Number(row.amountCents), 0);
+  await ctx.db.patch(args.cashAccountId, { balanceCents: args.accountBalances[args.cashAccountId] + deposits + billPayments });
+
+  // Banking (shared/demoData/banking.ts): account details and petty cash, a
+  // receipt inbox picked from the feed, spend budgets and their claims.
+  const banking = { ...refs, connectionId: args.connectionId, financeCommitteeId: args.financeCommitteeId, today: todayDateOnly() };
+  const inbox = demoReceiptInbox(banking, args.feedTransactions as Array<Record<string, unknown> & { _id: string; accountId: string; date: string; amountCents: number }>);
+  await writer.insert("financialAccounts", [demoPettyCashAccount(banking)]);
+  await writer.insert("bankAccountProfiles", demoBankAccountProfiles(banking));
+  await writer.insert("documents", inbox.documents);
+  await writer.insert("receiptInboxItems", inbox.items);
+  await writer.insert("spendBudgets", demoSpendBudgets(banking));
+  await writer.insert("expenseReports", demoSpendBudgetClaims(banking));
 }
 
 export async function resetPortable(ctx: PortableMutationCtx): Promise<{ ok: boolean }> {
@@ -2306,7 +2572,10 @@ async function wipe(ctx: PortableMutationCtx) {
     "payRuns",
     "payrollSettings",
     "investmentHoldings",
-    // Finance workflows and invoicing (seedFinanceDemo)
+    // Finance workflows, invoicing and bills (seedFinanceDemo)
+    "bills",
+    "journalLines",
+    "journalEntries",
     "invoices",
     "invoiceSeries",
     "invoiceCatalogItems",
@@ -2320,7 +2589,17 @@ async function wipe(ctx: PortableMutationCtx) {
     "approvalPolicyChanges",
     "reconciliationPeriods",
     "transactionRules",
+    "financeTags",
+    "financeTagGroups",
+    "booksSettings",
+    "journalLines",
+    "journalEntries",
+    "accountingFiscalPeriods",
     "fundRestrictions",
+    // Banking (seedFinanceDemo)
+    "bankAccountProfiles",
+    "receiptInboxItems",
+    "spendBudgets",
     // Seeded since the wipe list was written; without them a re-run duplicated them.
     "programStatements",
     "grantTransactions",

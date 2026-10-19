@@ -16,6 +16,8 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 /** `?notice=<record key>` (the shared table keeps `record` for its side panel). */
 export const NOTICE_PARAM = "notice";
+/** Links from before the reader had its own param (`?record=<key>`) still open the notice. */
+const LEGACY_NOTICE_PARAM = "record";
 export const BUYER_PARAM = "buyer";
 export const ISSUED_FOR_PARAM = "issuedFor";
 export const SECTION_PARAM = "section";
@@ -30,7 +32,7 @@ export type ReaderPlace =
   | { layer: "list"; kind: string };
 
 export function readerPlaces(params: URLSearchParams) {
-  const notice = params.get(NOTICE_PARAM);
+  const notice = params.get(NOTICE_PARAM) ?? params.get(LEGACY_NOTICE_PARAM);
   const buyer = params.get(BUYER_PARAM);
   const issuedFor = params.get(ISSUED_FOR_PARAM);
   const party = buyer ? { field: "organization" as const, name: buyer } : issuedFor ? { field: "issuedFor" as const, name: issuedFor } : null;
@@ -54,6 +56,8 @@ const PUSHED = "procurementReader";
 const patched = (params: URLSearchParams, patch: Record<string, string | null>) => {
   const next = new URLSearchParams(params);
   for (const [key, value] of Object.entries(patch)) { if (value) next.set(key, value); else next.delete(key); }
+  // Whatever sets or clears the notice settles an old `?record=` link too.
+  if (NOTICE_PARAM in patch) next.delete(LEGACY_NOTICE_PARAM);
   return next;
 };
 const partyPatch = (field: PartyField, name: string): Record<string, string | null> => ({
@@ -74,7 +78,7 @@ export function useReaderNavigation() {
 
   /** Where Back leads when the reader didn't push the current entry (a pasted link). */
   const parentPatch = (): Record<string, string | null> =>
-    params.get(NOTICE_PARAM) ? { [NOTICE_PARAM]: null, tab: null }
+    params.get(NOTICE_PARAM) || params.get(LEGACY_NOTICE_PARAM) ? { [NOTICE_PARAM]: null, tab: null }
       : params.get(BUYER_PARAM) || params.get(ISSUED_FOR_PARAM) ? { [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null }
       : { [SECTION_PARAM]: null };
 

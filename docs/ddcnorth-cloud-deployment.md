@@ -364,3 +364,51 @@ npx convex deploy --yes --typecheck enable
 npm run deploy:meeting-transfer:ddcnorth
 CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b npx wrangler pages deploy dist --project-name societyer-ddcnorth --branch main
 ```
+
+### Invitation onboarding correction — 2026-10-18
+
+The hosted Users page previously created unbound user records through **Add
+user**, while the separate email-bound invitation function never called a mail
+provider. The primary action now sends invitations, unbound records show **Not
+joined** with an **Invite to join** action, and the invitation table reports mail
+acceptance and supports resend. Accepting an explicit verified-email invitation
+can bind an existing unbound record without replacing its ID or related records.
+New verified accounts see their pending invitations before workspace creation;
+existing accounts also see invitations, and acceptance selects the new workspace.
+
+Production Convex uses the existing scoped Microsoft 365 sender. A live operator
+mail probe and a normal public password-reset request for the owner both received
+provider acceptance. The reset message passed through the private delivery queue
+on its first attempt; no password was changed. The existing unbound Admin record
+was issued its missing invitation and Microsoft accepted that invitation as well.
+The recipient still needs to accept it. Provider acceptance does not establish
+inbox receipt; no recipient mailbox was opened during these checks.
+
+Validation: the DDC North build and both TypeScript checks passed, as did the
+focused invitation onboarding checks, all three brokers' multi-user pipeline,
+identity binding, Microsoft email, development mail isolation, and the portable
+manifest check. The existing full authorization scanner stops on the unchanged
+`meetingTranscription.ts` module's manually guarded public functions. A separate
+qualification run excluded only that module from the static wrapper scan and
+passed the remaining authorization assertions; the full scanner has not been
+reported as passing. The ddcnorth.com domain restriction remains enabled.
+
+### Workspace-switch rollback correction — 2026-10-18
+
+The invited account had two active, correctly bound memberships. The switching
+failure was reproduced with actual React selection hooks: an older tab knew only
+workspace A, while the invitation tab knew A and B. Selecting B broadcast storage
+events to the older tab, which rejected B, removed the shared preference, and
+selected A again. Both tabs ended back at A.
+
+Workspace and membership-user selections now remain local to each open tab while
+persisting the last choice for reload/new-tab startup. Stale tabs cannot reset
+other tabs, invalid selections preserve the current choice, and external-store
+subscriptions also prevent missed selection events during component mounting.
+The picker refreshes membership data if its selection is not yet authorized in
+that tab. No server access or email-domain policy was relaxed.
+
+The two-tab regression, membership pipeline, invitation onboarding checks, and
+DDC North production build passed. Existing open pages need a refresh to load the
+corrected client code. No recipient password was requested or changed, and no
+additional workspace access was granted to test the fix.

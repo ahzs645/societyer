@@ -32,7 +32,18 @@ import { isInternalTransfer } from "../transferCategories";
 
 export type DemoFinancePerson = { id: string; name: string; role: string };
 
-export type DemoFinanceIdKind = "rule" | "period" | "approvalRule" | "expense" | "claimPolicy";
+export type DemoFinanceIdKind =
+  | "rule"
+  | "period"
+  | "approvalRule"
+  | "expense"
+  | "claimPolicy"
+  // Banking (shared/demoData/banking.ts)
+  | "account"
+  | "accountProfile"
+  | "receiptDocument"
+  | "receiptInbox"
+  | "spendBudget";
 
 export type DemoFinanceRefs = {
   societyId: string;
@@ -398,6 +409,8 @@ export function demoExpenseClaimPolicy(refs: DemoFinanceRefs) {
     noteOverCents: 50_000,
     maxAgeDays: 60,
     enforcement: "warn",
+    // The organisation's configured mileage rate (shared/demoData/banking.ts).
+    mileageRateCentsPerKm: 70,
     updatedByUserId: refs.owner.id,
     updatedByName: refs.owner.name,
     createdAtISO: at,

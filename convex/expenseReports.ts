@@ -44,6 +44,15 @@ export const upsert = authorizedMutation("expenseReports:upsert", mutation)({
     actingUserId: v.optional(v.id("users")),
     // Required to submit a claim that misses a blocking claim policy.
     policyExceptionReason: v.optional(v.string()),
+    // Mileage claims are priced on the server at the claim policy's rate.
+    claimType: v.optional(v.union(v.literal("expense"), v.literal("mileage"))),
+    mileage: v.optional(v.object({
+      distanceKm: v.number(),
+      fromLocation: v.optional(v.string()),
+      toLocation: v.optional(v.string()),
+      tripDescription: v.optional(v.string()),
+    })),
+    spendBudgetId: v.optional(v.id("spendBudgets")),
   },
   returns: v.any(),
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
@@ -138,6 +147,7 @@ export const saveClaimPolicy = authorizedMutation("expenseReports:saveClaimPolic
     noteOverCents: v.optional(v.number()),
     maxAgeDays: v.optional(v.number()),
     enforcement: v.union(v.literal("warn"), v.literal("block")),
+    mileageRateCentsPerKm: v.optional(v.number()),
   },
   returns: v.any(),
   handler: async (ctx, args) => saveClaimPolicyPortable(await toPortableMutationCtx(ctx), args),

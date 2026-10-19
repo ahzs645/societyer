@@ -23,6 +23,10 @@ export const transcriptTables = {
     meetingId: v.id("meetings"),
     provider: v.string(), // whisper | demo
     storageKey: v.optional(v.string()),
+    pagedJobId: v.optional(v.id("meetingTranscriptionJobs")),
+    contentRevision: v.optional(v.string()),
+    segmentCount: v.optional(v.number()),
+    pageCount: v.optional(v.number()),
     durationSeconds: v.optional(v.number()),
     language: v.optional(v.string()),
     text: v.string(),

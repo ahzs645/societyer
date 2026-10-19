@@ -1,5 +1,14 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { transactionLineValidator } from "./financeTags";
+
+/** The rule run that last categorised a bank transaction, and what it replaced (for Undo). */
+export const transactionRuleApplicationValidator = v.object({
+  ruleName: v.string(),
+  batchId: v.string(),
+  appliedAtISO: v.string(),
+  previous: v.optional(v.any()),
+});
 
 /**
  * Accounting & budgeting tables (financial accounts, fiscal periods, journals,
@@ -59,6 +68,14 @@ export const accountingTables = {
     email: v.optional(v.string()),
     taxIdentifier: v.optional(v.string()),
     notes: v.optional(v.string()),
+    // Vendor details used by bills (all optional, so existing rows stay valid).
+    contactName: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    defaultAccountId: v.optional(v.id("financialAccounts")),
+    defaultTerms: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()),
+    paymentDetails: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
@@ -124,6 +141,10 @@ export const accountingTables = {
     // although dated on or before the opening-balance entry) or
     // "unmapped_suspense" (offset posted to the suspense account).
     reviewFlags: v.optional(v.array(v.string())),
+    // Which accounting basis the entry belongs to: "both" (default when
+    // absent), "accrual-only" (invoice / bill accruals) or "cash-only" (their
+    // recognition on payment). See shared/booksReports.ts.
+    basis: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
@@ -131,7 +152,23 @@ export const accountingTables = {
     .index("by_society_date", ["societyId", "date"])
     .index("by_society_status", ["societyId", "status"])
     .index("by_society_source", ["societyId", "source"])
+    // Idempotent posting: one live entry per source and source key (invoices, bills).
+    .index("by_society_source_external", ["societyId", "source", "sourceExternalId"])
     .index("by_connection", ["connectionId"]),
+
+  // Books details: when the books start, the accounting basis reports use,
+  // and the close (lock) date on or before which no journal entry can be
+  // posted, edited or voided. One row per society.
+  booksSettings: defineTable({
+    societyId: v.id("societies"),
+    booksStartDate: v.optional(v.string()),
+    accountingBasis: v.optional(v.string()), // accrual | cash
+    closeDate: v.optional(v.string()),
+    closeDateSetAtISO: v.optional(v.string()),
+    closeDateSetByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  }).index("by_society", ["societyId"]),
 
   journalLines: defineTable({
     societyId: v.id("societies"),
@@ -147,6 +184,9 @@ export const accountingTables = {
     fundRestrictionId: v.optional(v.id("fundRestrictions")),
     financialTransactionId: v.optional(v.id("financialTransactions")),
     transactionCandidateId: v.optional(v.id("transactionCandidates")),
+    // Reporting tags carried from the bank transaction line it posts (at most
+    // one per tag group); see convex/tables/financeTags.ts.
+    tagIds: v.optional(v.array(v.id("financeTags"))),
     documentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalId: v.optional(v.string()),
     rawJson: v.optional(v.string()),
@@ -159,7 +199,8 @@ export const accountingTables = {
     .index("by_counterparty", ["counterpartyId"])
     .index("by_grant", ["grantId"])
     .index("by_fund_restriction", ["fundRestrictionId"])
-    .index("by_transaction_candidate", ["transactionCandidateId"]),
+    .index("by_transaction_candidate", ["transactionCandidateId"])
+    .index("by_financial_transaction", ["financialTransactionId"]),
 
   financialTransactions: defineTable({
     societyId: v.id("societies"),
@@ -185,12 +226,7 @@ export const accountingTables = {
     // manual) and, for rules, which rule and what it replaced (for undo).
     categorizedBy: v.optional(v.string()),
     ruleId: v.optional(v.id("transactionRules")),
-    ruleApplication: v.optional(v.object({
-      ruleName: v.string(),
-      batchId: v.string(),
-      appliedAtISO: v.string(),
-      previous: v.optional(v.any()),
-    })),
+    ruleApplication: v.optional(transactionRuleApplicationValidator),
     accountingAccountId: v.optional(v.id("financialAccounts")),
     fundRestrictionId: v.optional(v.id("fundRestrictions")),
     reviewedAtISO: v.optional(v.string()),
@@ -203,6 +239,15 @@ export const accountingTables = {
     // The receipt document attached from the transaction panel; receiptStatus
     // follows it (attached while set, missing once removed).
     receiptDocumentId: v.optional(v.id("documents")),
+    // Line items. Absent (or a single line) means one line that mirrors
+    // category / accountingAccountId / fundRestrictionId above; two or more
+    // lines are a split whose amounts sum to amountCents, and the top-level
+    // fields then summarise the largest line (shared/transactionLines.ts).
+    lines: v.optional(v.array(transactionLineValidator)),
+    // Reporting tags of a single-line transaction (split lines carry their own).
+    tagIds: v.optional(v.array(v.id("financeTags"))),
+    // The spend budget a money-out line counts against (shared/spendBudgets.ts).
+    spendBudgetId: v.optional(v.id("spendBudgets")),
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])

@@ -10,27 +10,32 @@ import { useToast } from "../../components/Toast";
 import { formatDate } from "../../lib/format";
 import { formatMoney, parseMoneyInput } from "../../lib/money";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL, suggestPaymentTransactions } from "../../../shared/invoicing";
-import type { InvoiceRow, MoneyInTransaction } from "./types";
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { InvoiceRow, LedgerAccountOption, MoneyInTransaction } from "./types";
 
 type Props = {
   invoice: InvoiceRow;
   transactions: MoneyInTransaction[];
   today: string;
+  /** Where an unlinked payment can be deposited in the books, and what is used when none is chosen. */
+  depositAccounts: LedgerAccountOption[];
+  defaultDepositLabel: string;
   onDone: () => void;
   onCancel: () => void;
 };
 
 /** Record a full or partial payment, optionally linked to a money-in bank line. */
-export function RecordPaymentForm({ invoice, transactions, today, onDone, onCancel }: Props) {
+export function RecordPaymentForm({ invoice, transactions, today, depositAccounts, defaultDepositLabel, onDone, onCancel }: Props) {
   const recordPayment = useMutation(api.invoices.recordPayment);
   const toast = useToast();
-  const unlinked = useMemo(() => transactions.filter((txn) => !txn.linkedInvoiceId), [transactions]);
+  const unlinked = useMemo(() => transactions.filter((txn) => !txn.linkedInvoiceId && !txn.matchedElsewhere), [transactions]);
   const suggestions = useMemo(() => suggestPaymentTransactions(invoice, unlinked), [invoice, unlinked]);
   const [amountInput, setAmountInput] = useState((invoice.balanceCents / 100).toFixed(2));
   const [date, setDate] = useState(suggestions[0]?.date && suggestions[0].exact ? suggestions[0].date : today);
   const [method, setMethod] = useState<string>("e_transfer");
   const [reference, setReference] = useState("");
   const [txnId, setTxnId] = useState<string>(suggestions[0]?.exact ? suggestions[0]._id : "");
+  const [depositAccountId, setDepositAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +67,8 @@ export function RecordPaymentForm({ invoice, transactions, today, onDone, onCanc
         amountCents,
         method,
         reference: reference || undefined,
-        financialTransactionId: (txnId || undefined) as any,
+        financialTransactionId: txnId ? (txnId as Id<"financialTransactions">) : undefined,
+        depositAccountId: !txnId && depositAccountId ? (depositAccountId as Id<"financialAccounts">) : undefined,
       });
       const remaining = invoice.balanceCents - amountCents;
       toast.success(remaining <= 0 ? `${invoice.number} paid in full` : `Payment of ${formatMoney(amountCents)} recorded`, remaining > 0 ? `${formatMoney(remaining)} still due.` : undefined);
@@ -124,6 +130,18 @@ export function RecordPaymentForm({ invoice, transactions, today, onDone, onCanc
           />
           {txnId && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setTxnId("")}>Don't link</button>}
         </div>
+        {!txnId && (
+          <Field label="Deposited to" hint="Without a bank deposit, the payment waits here in the books until you link one.">
+            <Select
+              value={depositAccountId}
+              onChange={setDepositAccountId}
+              options={depositAccounts.map((account) => ({ value: account._id, label: account.label }))}
+              placeholder={defaultDepositLabel}
+              clearable
+              clearLabel={defaultDepositLabel}
+            />
+          </Field>
+        )}
       </fieldset>
 
       {error && <p className="field__error" role="alert">{error}</p>}

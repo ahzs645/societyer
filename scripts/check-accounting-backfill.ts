@@ -2,7 +2,7 @@
  * Gate: "Backfill imports" never misstates the books silently.
  *
  * Reproduces the audit finding on the demo seed (opening balances posted on
- * 2026-01-01, total assets $76,980): the old backfill posted every imported
+ * 2026-01-01; total assets were $76,980 when it was found): the old backfill posted every imported
  * transaction, including those dated in 2025 (already reflected in the opening
  * balances), which moved total assets ($76,980 -> $78,535 on the original
  * fourteen-row seed). It also sent every unmapped row to the first
@@ -16,7 +16,8 @@
  */
 import assert from "node:assert/strict";
 import { StaticConvexClient } from "../src/lib/staticConvex";
-import { planTransactionBackfill, BEFORE_OPENING_FLAG, SUSPENSE_FLAG } from "../shared/accountingBackfill";
+import { journalLinesForPlanRow, planTransactionBackfill, BEFORE_OPENING_FLAG, SUSPENSE_FLAG } from "../shared/accountingBackfill";
+import { transactionLines } from "../shared/transactionLines";
 
 async function demoClient() {
   const client = new StaticConvexClient({ databaseName: `societyer-backfill-${Date.now()}-${Math.random().toString(36).slice(2)}` });
@@ -66,6 +67,15 @@ async function totalAssetsCents(client: StaticConvexClient, societyId: string) {
   assert.equal(included.summary.beforeOpeningIncluded, 2);
   const already = planTransactionBackfill({ ...base, postedTransactionIds: ["t3"] });
   assert.equal(already.rows.find((row) => row.transactionId === "t3")?.status, "already_posted");
+  // A feed linked to another ledger account posts its cash side there (bankAccountProfiles.ledgerAccountId).
+  const ledger = { _id: "ledger_bank", code: "1010", name: "Operating (ledger)", accountType: "Bank" };
+  const linked = planTransactionBackfill({ ...base, accounts: [...accounts, ledger], cashAccountByFeed: new Map([["cash", "ledger_bank"], ["missing", "ledger_bank"]]) });
+  const t3 = linked.rows.find((row) => row.transactionId === "t3")!;
+  assert.equal(t3.cashAccountId, "ledger_bank");
+  assert.deepEqual(journalLinesForPlanRow(transactions[2], t3).map((line) => [line.accountId, line.side, line.amountCents]), [["ledger_bank", "credit", 100], ["rent", "debit", 100]], "the bank line goes to the linked ledger account");
+  assert.equal(linked.rows.find((row) => row.transactionId === "t5")?.status, "post", "a feed account missing from the chart posts through its link");
+  const gone = planTransactionBackfill({ ...base, cashAccountByFeed: new Map([["cash", "deleted_account"]]) });
+  assert.equal(gone.rows.find((row) => row.transactionId === "t3")?.cashAccountId, "cash", "a link to an account that no longer exists falls back to the feed account");
 }
 
 // --- Demo seed: the opening-balance cutoff on the generated bank feed --------
@@ -89,11 +99,19 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
   const preOpening = open.filter((row) => row.date <= OPENING);
   const postOpening = open.filter((row) => row.date > OPENING);
   const assetNet = (rows: any[]) => rows.filter((row) => assetAccountIds.has(String(row.accountId))).reduce((sum, row) => sum + row.amountCents, 0);
+  // Each line item posts its own offset line: a split line coded to a ledger
+  // account needs no mapping, any other unmapped line goes to suspense.
+  const accountIds = new Set(accounts.map((account) => String(account._id)));
+  const unmappedLines = (row: any) =>
+    transactionLines(row).filter((line) => !(line.accountingAccountId && accountIds.has(String(line.accountingAccountId))) && !mappedCategories.has(String(line.category ?? "").trim().toLowerCase()));
+  const postOpeningUnmapped = postOpening.filter((row) => unmappedLines(row).length > 0);
   return {
     transactions,
+    posted,
     preOpening,
     postOpening,
-    postOpeningUnmapped: postOpening.filter((row) => !mappedCategories.has(String(row.category ?? "").trim().toLowerCase())),
+    postOpeningUnmapped,
+    postOpeningUnmappedLines: postOpeningUnmapped.reduce((sum, row) => sum + unmappedLines(row).length, 0),
     assetNet,
   };
 }
@@ -101,8 +119,20 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
 {
   const { client, societyId } = await demoClient();
   const before = await totalAssetsCents(client, societyId);
-  assert.equal(before, 7_698_000, "demo seed starts at total assets $76,980");
   const facts = await feedFacts(client, societyId);
+  // The demo ledger (shared/demoData/journals.ts) carries the $62,400 of cash
+  // in the 2026-01-01 opening balances plus every bank line already posted.
+  // The invoicing demo is in the books too (shared/demoData/invoiceLedger.ts):
+  // what posted invoices still owe sits in Accounts receivable, and payments
+  // not linked to a bank deposit sit in Undeposited funds.
+  type InvoicePayment = { journalEntryId?: string; financialTransactionId?: string; amountCents: number };
+  type InvoiceFacts = { invoices: Array<{ journalEntryId?: string; lifecycle: string; balanceCents: number; payments: InvoicePayment[] }> };
+  const invoices = (await client.query("invoices:workspace", { societyId })) as InvoiceFacts;
+  const postedInvoices = invoices.invoices.filter((row) => row.journalEntryId && row.lifecycle === "sent");
+  const receivable = postedInvoices.reduce((sum, row) => sum + row.balanceCents, 0);
+  const undeposited = postedInvoices.flatMap((row) => row.payments).filter((payment) => payment.journalEntryId && !payment.financialTransactionId).reduce((sum, payment) => sum + payment.amountCents, 0);
+  assert.ok(receivable > 0 && undeposited > 0, "the invoicing demo leaves receivables and undeposited payments in the books");
+  assert.equal(before, 6_240_000 + facts.assetNet(facts.transactions.filter((row) => facts.posted.has(String(row._id)))) + receivable + undeposited, "demo seed starts at the opening balances plus the posted bank lines and the invoices' receivables");
   assert.ok(facts.transactions.length >= 400, `the demo bank feed is dense (${facts.transactions.length} rows)`);
   assert.ok(facts.preOpening.length >= 100, "a year of 2025 imports predates the opening balances");
   assert.ok(facts.postOpening.length > 0 && facts.postOpeningUnmapped.length > 0, "2026 imports include unmapped categories");
@@ -131,7 +161,7 @@ async function feedFacts(client: StaticConvexClient, societyId: string) {
   assert.ok(suspense && suspense.subtype === "suspense", "an explicit suspense account is created");
   const ledger: any[] = await client.query("accounting:generalLedger", { societyId });
   assert.ok(!ledger.some((line) => line.accountId === equipment._id), "no line was posted to the old fallback account");
-  assert.equal(ledger.filter((line) => line.accountId === suspense._id).length, facts.postOpeningUnmapped.length);
+  assert.equal(ledger.filter((line) => line.accountId === suspense._id).length, facts.postOpeningUnmappedLines, "one suspense line per unmapped line item");
   const entries: any[] = await client.query("accounting:journalEntries", { societyId, limit: 10_000 });
   assert.equal(entries.filter((entry) => entry.reviewFlags?.includes(SUSPENSE_FLAG)).length, facts.postOpeningUnmapped.length);
 

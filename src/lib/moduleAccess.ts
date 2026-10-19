@@ -101,6 +101,10 @@ const OPTIONAL_POLICY: Record<ModuleKey, Pick<ModuleAccessDefinition, "permissio
     permissions: { view: ["employees:read"], write: ["employees:write"] },
     notes: [ACTION_POLICY_NOTE],
   },
+  bills: {
+    permissions: { view: ["financials:read"], write: ["financials:write"] },
+    notes: [ACTION_POLICY_NOTE, "Approving a bill follows the expense approval rules and the workspace's approver-access setting, like expense claims."],
+  },
   payroll: {
     permissions: { view: ["financials:read"], write: ["financials:write"] },
     notes: [ACTION_POLICY_NOTE, "Employee names on pay runs come from the employee register and need employees:read to list."],

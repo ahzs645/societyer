@@ -59,7 +59,12 @@ const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => (
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
 const AccountingWorkbenchPage = React.lazy(() => import("./features/financials/pages/AccountingWorkbenchPage").then((m) => ({ default: m.AccountingWorkbenchPage })));
 const FinancialYearDetailPage = React.lazy(() => import("./features/financials/pages/FinancialYearDetailPage").then((m) => ({ default: m.FinancialYearDetailPage })));
+const BooksReportsPage = React.lazy(() => import("./features/financials/pages/BooksReportsPage").then((m) => ({ default: m.BooksReportsPage })));
+const JournalEntriesPage = React.lazy(() => import("./features/financials/pages/JournalEntriesPage").then((m) => ({ default: m.JournalEntriesPage })));
+const ChartOfAccountsPage = React.lazy(() => import("./features/financials/pages/ChartOfAccountsPage").then((m) => ({ default: m.ChartOfAccountsPage })));
+const BooksSettingsPage = React.lazy(() => import("./features/financials/pages/BooksSettingsPage").then((m) => ({ default: m.BooksSettingsPage })));
 const YearEndReportsPage = React.lazy(() => import("./features/financials/pages/YearEndReportsPage").then((m) => ({ default: m.YearEndReportsPage })));
+const TransactionTagsPage = React.lazy(() => import("./features/financials/pages/TransactionTagsPage").then((m) => ({ default: m.TransactionTagsPage })));
 const WaveAccountDetailPage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveAccountDetailPage })));
 const WaveResourceDetailPage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveResourceDetailPage })));
 const WaveResourceTablePage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveResourceTablePage })));
@@ -88,6 +93,8 @@ const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => (
 const ApprovalsPage = React.lazy(() => import("./pages/Approvals").then((m) => ({ default: m.ApprovalsPage })));
 const TransactionRulesPage = React.lazy(() => import("./pages/TransactionRules").then((m) => ({ default: m.TransactionRulesPage })));
 const InvoicesPage = React.lazy(() => import("./pages/Invoices").then((m) => ({ default: m.InvoicesPage })));
+const BillsPage = React.lazy(() => import("./pages/Bills").then((m) => ({ default: m.BillsPage })));
+const BillVendorsPage = React.lazy(() => import("./pages/BillVendors").then((m) => ({ default: m.BillVendorsPage })));
 const PayrollPage = React.lazy(() => import("./pages/Payroll").then((m) => ({ default: m.PayrollPage })));
 const CorporateCardsPage = React.lazy(() => import("./pages/CorporateCards").then((m) => ({ default: m.CorporateCardsPage })));
 const InvestmentsPage = React.lazy(() => import("./pages/Investments").then((m) => ({ default: m.InvestmentsPage })));
@@ -118,6 +125,9 @@ const FilingPreFillPage = React.lazy(() => import("./pages/FilingPreFill").then(
 const BylawDiffPage = React.lazy(() => import("./pages/BylawDiff").then((m) => ({ default: m.BylawDiffPage })));
 const BylawsHistoryPage = React.lazy(() => import("./pages/BylawsHistory").then((m) => ({ default: m.BylawsHistoryPage })));
 const ReconciliationPage = React.lazy(() => import("./pages/Reconciliation").then((m) => ({ default: m.ReconciliationPage })));
+const BankAccountsPage = React.lazy(() => import("./pages/BankAccounts").then((m) => ({ default: m.BankAccountsPage })));
+const ReceiptInboxPage = React.lazy(() => import("./pages/ReceiptInbox").then((m) => ({ default: m.ReceiptInboxPage })));
+const SpendBudgetsPage = React.lazy(() => import("./pages/SpendBudgets").then((m) => ({ default: m.SpendBudgetsPage })));
 const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
 const InvitationAcceptPage = React.lazy(() => import("./pages/InvitationAccept").then((m) => ({ default: m.InvitationAcceptPage })));
 const OAuthConsentPage = React.lazy(() => import("./features/aiConnectors/OAuthConsentPage").then((m) => ({ default: m.OAuthConsentPage })));
@@ -472,7 +482,15 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="financials/accounting" element={<AccountingWorkbenchPage />} />
+            <Route path="financials/reports" element={<Navigate to="/app/financials/reports/balance-sheet" replace />} />
+            <Route path="financials/reports/:report" element={<BooksReportsPage />} />
+            <Route path="financials/journal-entries" element={<JournalEntriesPage />} />
+            <Route path="financials/chart-of-accounts" element={<ChartOfAccountsPage />} />
+            <Route path="financials/books-settings" element={<BooksSettingsPage />} />
+            <Route path="financials/accounts" element={<BankAccountsPage />} />
+            <Route path="financials/receipts" element={<ReceiptInboxPage />} />
             <Route path="financials/year-end" element={<YearEndReportsPage />} />
+            <Route path="financials/tags" element={<TransactionTagsPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
             <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
             <Route path="financials/wave/:resourceType/:resourceId" element={<WaveResourceDetailPage />} />
@@ -524,8 +542,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="motion-library" element={<Navigate to="/app/motions?tab=templates" replace />} />
             <Route path="treasurer" element={<TreasurerPage />} />
             <Route path="approvals" element={<ApprovalsPage />} />
+            <Route path="spend-budgets" element={<SpendBudgetsPage />} />
             <Route path="transaction-rules" element={<TransactionRulesPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="bills" element={withModule("bills", <BillsPage />)} />
+            <Route path="bills/vendors" element={withModule("bills", <BillVendorsPage />)} />
             <Route path="payroll" element={withModule("payroll", <PayrollPage />)} />
             <Route path="corporate-cards" element={withModule("cards", <CorporateCardsPage />)} />
             <Route path="investments" element={withModule("investments", <InvestmentsPage />)} />

@@ -1,0 +1,12 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Books pages (/app/financials/reports, journal-entries,
+// chart-of-accounts, books-settings): the shared sub-nav.
+// Page-specific blocks follow in their own sections.
+// ============================================================
+
+.books-nav {
+  margin-bottom: token('s-4');
+}

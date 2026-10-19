@@ -84,8 +84,14 @@ import * as customFieldsFns from "./customFields";
 import * as motionTemplatesFns from "./motionTemplates";
 const reconciliationFns = lazyHandlers(() => import("./reconciliation"), "reconciliation");
 const transactionRulesFns = lazyHandlers(() => import("./transactionRules"), "transactionRules");
+const transactionLinesFns = lazyHandlers(() => import("./transactionLines"), "transactionLines");
+const financeTagsFns = lazyHandlers(() => import("./financeTags"), "financeTags");
 const invoicesFns = lazyHandlers(() => import("./invoices"), "invoices");
+const billsFns = lazyHandlers(() => import("./bills"), "bills");
 const businessRegistersFns = lazyHandlers(() => import("./businessRegisters"), "businessRegisters");
+const bankAccountsFns = lazyHandlers(() => import("./bankAccounts"), "bankAccounts");
+const receiptInboxFns = lazyHandlers(() => import("./receiptInbox"), "receiptInbox");
+const spendBudgetsFns = lazyHandlers(() => import("./spendBudgets"), "spendBudgets");
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
 import * as policiesFns from "./policies";
@@ -425,6 +431,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invitations:create", handler: invitationsFns.createPortable }),
   definePortableMutation({ name: "invitations:revoke", handler: invitationsFns.revokePortable }),
   definePortableMutation({ name: "invitations:accept", handler: invitationsFns.acceptPortable }),
+  definePortableQuery({ name: "invitations:pendingForAccount", handler: invitationsFns.pendingForAccountPortable }),
+  definePortableMutation({ name: "invitations:acceptForAccount", handler: invitationsFns.acceptForAccountPortable }),
+  definePortableMutation({ name: "invitations:resend", handler: invitationsFns.resendPortable }),
 
   // significantIndividualSteps
   definePortableQuery({ name: "significantIndividualSteps:list", handler: significantIndividualStepsFns.listPortable }),
@@ -615,6 +624,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "reconciliation:completePeriod", handler: reconciliationFns.completePeriodPortable }),
   definePortableMutation({ name: "reconciliation:reopenPeriod", handler: reconciliationFns.reopenPeriodPortable }),
   definePortableMutation({ name: "reconciliation:removePeriod", handler: reconciliationFns.removePeriodPortable }),
+  definePortableQuery({ name: "reconciliation:accountMonths", handler: reconciliationFns.accountMonthsPortable }),
+  definePortableMutation({ name: "reconciliation:autoReconcilePeriod", handler: reconciliationFns.autoReconcilePeriodPortable }),
   // transactionRules
   definePortableQuery({ name: "transactionRules:workspace", handler: transactionRulesFns.workspacePortable }),
   definePortableMutation({ name: "transactionRules:upsert", handler: transactionRulesFns.upsertPortable }),
@@ -624,6 +635,36 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "transactionRules:applyToUncategorized", handler: transactionRulesFns.applyToUncategorizedPortable }),
   definePortableMutation({ name: "transactionRules:undoBatch", handler: transactionRulesFns.undoBatchPortable }),
   definePortableMutation({ name: "transactionRules:removeApplication", handler: transactionRulesFns.removeApplicationPortable }),
+  // transactionLines
+  definePortableMutation({ name: "transactionLines:save", handler: transactionLinesFns.savePortable }),
+  definePortableQuery({ name: "transactionLines:journal", handler: transactionLinesFns.journalPortable }),
+  definePortableMutation({ name: "transactionLines:assignTag", handler: transactionLinesFns.assignTagPortable }),
+  // financeTags
+  definePortableQuery({ name: "financeTags:workspace", handler: financeTagsFns.workspacePortable }),
+  definePortableMutation({ name: "financeTags:upsertGroup", handler: financeTagsFns.upsertGroupPortable }),
+  definePortableMutation({ name: "financeTags:upsertTag", handler: financeTagsFns.upsertTagPortable }),
+  definePortableMutation({ name: "financeTags:setGroupArchived", handler: financeTagsFns.setGroupArchivedPortable }),
+  definePortableMutation({ name: "financeTags:setTagArchived", handler: financeTagsFns.setTagArchivedPortable }),
+  // bankAccounts (the Accounts page)
+  definePortableQuery({ name: "bankAccounts:overview", handler: bankAccountsFns.overviewPortable }),
+  definePortableMutation({ name: "bankAccounts:createManualAccount", handler: bankAccountsFns.createManualAccountPortable }),
+  definePortableMutation({ name: "bankAccounts:updateAccount", handler: bankAccountsFns.updateAccountPortable }),
+  definePortableMutation({ name: "bankAccounts:linkLedgerAccount", handler: bankAccountsFns.linkLedgerAccountPortable }),
+  definePortableMutation({ name: "bankAccounts:setArchived", handler: bankAccountsFns.setArchivedPortable }),
+  // receiptInbox
+  definePortableQuery({ name: "receiptInbox:list", handler: receiptInboxFns.listPortable }),
+  definePortableMutation({ name: "receiptInbox:add", handler: receiptInboxFns.addPortable }),
+  definePortableMutation({ name: "receiptInbox:update", handler: receiptInboxFns.updatePortable }),
+  definePortableMutation({ name: "receiptInbox:confirmMatch", handler: receiptInboxFns.confirmMatchPortable }),
+  definePortableMutation({ name: "receiptInbox:unmatch", handler: receiptInboxFns.unmatchPortable }),
+  definePortableMutation({ name: "receiptInbox:setDiscarded", handler: receiptInboxFns.setDiscardedPortable }),
+  definePortableMutation({ name: "receiptInbox:matchAllHighConfidence", handler: receiptInboxFns.matchAllHighConfidencePortable }),
+  // spendBudgets
+  definePortableQuery({ name: "spendBudgets:list", handler: spendBudgetsFns.listPortable }),
+  definePortableQuery({ name: "spendBudgets:optionsForClaim", handler: spendBudgetsFns.optionsForClaimPortable }),
+  definePortableMutation({ name: "spendBudgets:upsert", handler: spendBudgetsFns.upsertPortable }),
+  definePortableMutation({ name: "spendBudgets:setArchived", handler: spendBudgetsFns.setArchivedPortable }),
+  definePortableMutation({ name: "spendBudgets:remove", handler: spendBudgetsFns.removePortable }),
   // invoices
   definePortableQuery({ name: "invoices:workspace", handler: invoicesFns.workspacePortable }),
   definePortableMutation({ name: "invoices:upsert", handler: invoicesFns.upsertPortable }),
@@ -646,6 +687,26 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invoices:setSeriesStatus", handler: invoicesFns.setSeriesStatusPortable }),
   definePortableMutation({ name: "invoices:issueFromSeries", handler: invoicesFns.issueFromSeriesPortable }),
   definePortableMutation({ name: "invoices:saveSettings", handler: invoicesFns.saveSettingsPortable }),
+  definePortableMutation({ name: "invoices:linkDeposit", handler: invoicesFns.linkDepositPortable }),
+  definePortableMutation({ name: "invoices:saveAccountMapping", handler: invoicesFns.saveAccountMappingPortable }),
+  definePortableQuery({ name: "invoices:postingPreview", handler: invoicesFns.postingPreviewPortable }),
+  definePortableMutation({ name: "invoices:postExisting", handler: invoicesFns.postExistingPortable }),
+
+  // bills
+  definePortableQuery({ name: "bills:workspace", handler: billsFns.workspacePortable }),
+  definePortableMutation({ name: "bills:upsert", handler: billsFns.upsertPortable }),
+  definePortableMutation({ name: "bills:submit", handler: billsFns.submitPortable }),
+  definePortableMutation({ name: "bills:recall", handler: billsFns.recallPortable }),
+  definePortableMutation({ name: "bills:decide", handler: billsFns.decidePortable }),
+  definePortableMutation({ name: "bills:bulkApprove", handler: billsFns.bulkApprovePortable }),
+  definePortableMutation({ name: "bills:setSchedule", handler: billsFns.setSchedulePortable }),
+  definePortableMutation({ name: "bills:recordPayment", handler: billsFns.recordPaymentPortable }),
+  definePortableMutation({ name: "bills:removePayment", handler: billsFns.removePaymentPortable }),
+  definePortableMutation({ name: "bills:markPaid", handler: billsFns.markPaidPortable }),
+  definePortableMutation({ name: "bills:cancel", handler: billsFns.cancelPortable }),
+  definePortableMutation({ name: "bills:remove", handler: billsFns.removePortable }),
+  definePortableMutation({ name: "bills:attachDocument", handler: billsFns.attachDocumentPortable }),
+  definePortableMutation({ name: "bills:upsertVendor", handler: billsFns.upsertVendorPortable }),
 
   // business registers: payroll records, corporate cards, invested reserves
   definePortableQuery({ name: "payroll:workspace", handler: businessRegistersFns.payrollWorkspacePortable }),
@@ -949,6 +1010,15 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "accounting:postOpeningBalances", handler: accountingFns.postOpeningBalancesPortable }),
   definePortableMutation({ name: "accounting:createReconciliationRun", handler: accountingFns.createReconciliationRunPortable }),
   definePortableMutation({ name: "accounting:setReconciliationRunStatus", handler: accountingFns.setReconciliationRunStatusPortable }),
+  definePortableQuery({ name: "accounting:booksSettings", handler: accountingFns.booksSettingsPortable }),
+  definePortableMutation({ name: "accounting:updateBooksSettings", handler: accountingFns.updateBooksSettingsPortable }),
+  definePortableQuery({ name: "accounting:booksReport", handler: accountingFns.booksReportPortable }),
+  definePortableQuery({ name: "accounting:booksReportLines", handler: accountingFns.booksReportLinesPortable }),
+  definePortableQuery({ name: "accounting:generalLedgerReport", handler: accountingFns.generalLedgerReportPortable }),
+  definePortableQuery({ name: "accounting:journalEntryRegister", handler: accountingFns.journalEntryRegisterPortable }),
+  definePortableQuery({ name: "accounting:chartOfAccountsRegister", handler: accountingFns.chartOfAccountsRegisterPortable }),
+  definePortableMutation({ name: "accounting:upsertChartAccount", handler: accountingFns.upsertChartAccountPortable }),
+  definePortableMutation({ name: "accounting:voidJournalEntry", handler: accountingFns.voidJournalEntryPortable }),
 
   // assets
   definePortableQuery({ name: "assets:get", handler: assetsFns.getPortable }),

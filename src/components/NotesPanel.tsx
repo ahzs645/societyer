@@ -22,14 +22,20 @@ type Note = {
 };
 
 /** Freeform notes attached to a record via (entityType, entityId).
- * Renders the list + a compose form; authors can edit/delete their own. */
+ * Renders the list + a compose form; authors can edit/delete their own.
+ * `noun` relabels it for surfaces that call them comments. */
 export function NotesPanel({
   entityType,
   entityId,
+  noun = "note",
+  emptyDescription,
 }: {
   entityType: string;
   entityId: string;
+  noun?: "note" | "comment";
+  emptyDescription?: string;
 }) {
+  const Noun = noun === "comment" ? "Comment" : "Note";
   const society = useSociety();
   const user = useCurrentUser();
   const { loaded, can } = usePermissions();
@@ -77,7 +83,7 @@ export function NotesPanel({
   const destroy = async (note: Note) => {
     if (!canWrite || note.author !== author) return;
     const ok = await confirm({
-      title: "Delete note?",
+      title: `Delete ${noun}?`,
       message: "This can't be undone.",
       confirmLabel: "Delete",
       tone: "danger",
@@ -87,7 +93,7 @@ export function NotesPanel({
   };
 
   if (loaded && !canRead) {
-    return <p className="muted" role="status">Notes require additional access.</p>;
+    return <p className="muted" role="status">{Noun}s require additional access.</p>;
   }
 
   return (
@@ -101,7 +107,7 @@ export function NotesPanel({
       >
         <MentionInput
           className="textarea notes-panel__textarea"
-          placeholder="Add a note — use @ to mention"
+          placeholder={`Add a ${noun} — use @ to mention`}
           value={draft}
           onChange={setDraft}
           rows={3}
@@ -113,10 +119,10 @@ export function NotesPanel({
             type="submit"
             disabled={!canWrite || !draft.trim() || saving}
           >
-            {saving ? "Saving…" : "Post note"}
+            {saving ? "Saving…" : `Post ${noun}`}
           </Button>
         </div>
-      </form> : loaded && <p className="muted" role="status">Read-only notes. Your role cannot add, edit, or delete notes.</p>}
+      </form> : loaded && <p className="muted" role="status">Read-only {noun}s. Your role cannot add, edit, or delete {noun}s.</p>}
 
       {notes === undefined ? (
         <div className="notes-panel__list" aria-busy="true">
@@ -131,8 +137,8 @@ export function NotesPanel({
       ) : notes.length === 0 ? (
         <EmptyState
           icon={<MessageSquare size={18} />}
-          title="No notes yet"
-          description="Use notes to capture context, decisions, and follow-ups attached to this record."
+          title={`No ${noun}s yet`}
+          description={emptyDescription ?? "Use notes to capture context, decisions, and follow-ups attached to this record."}
           size="sm"
         />
       ) : (
@@ -153,7 +159,7 @@ export function NotesPanel({
                       <button
                         type="button"
                         className="btn btn--ghost btn--sm btn--icon"
-                        aria-label="Edit note"
+                        aria-label={`Edit ${noun}`}
                         onClick={() => {
                           if (!canWrite) return;
                           setEditingId(note._id);
@@ -165,7 +171,7 @@ export function NotesPanel({
                       <button
                         type="button"
                         className="btn btn--ghost btn--sm btn--icon"
-                        aria-label="Delete note"
+                        aria-label={`Delete ${noun}`}
                         onClick={() => destroy(note)}
                       >
                         <Trash2 size={12} />

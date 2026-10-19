@@ -162,6 +162,11 @@ const ROUTE_KEYWORDS: Record<string, string[]> = {
   "/app/exports": ["download", "backup", "csv"],
   "/app/society": ["organization", "org"],
   "/app/financials": ["money", "accounting", "budget"],
+  "/app/financials/tags": ["tag groups", "program", "grant", "event", "dimensions", "class"],
+  "/app/financials/reports": ["balance sheet", "profit and loss", "p&l", "statement of operations", "income statement", "cash flow", "general ledger", "monthly report"],
+  "/app/financials/journal-entries": ["journal", "journal entry", "adjusting entry", "ledger entries"],
+  "/app/financials/chart-of-accounts": ["chart of accounts", "ledger accounts", "gl codes", "account codes"],
+  "/app/financials/books-settings": ["close books", "lock date", "close date", "cash basis", "accrual basis", "books start date"],
   "/app/financials/year-end": ["year end", "annual report", "actuals", "budget", "gaming grant", "restricted funds", "financial statement"],
   "/app/members": ["people", "contacts", "roster"],
   // Sidebar shows this route as "Membership classes" (society) / "Share

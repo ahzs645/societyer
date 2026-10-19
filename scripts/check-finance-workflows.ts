@@ -1,6 +1,7 @@
 // Finance workflows end-to-end on the portable engine, seeded with the demo
 // workspace: statement periods (complete, out of balance, reopen), rule
-// application + undo, and server-side approval-rule and approver-access enforcement.
+// application + undo (and the books close date on both), and server-side
+// approval-rule and approver-access enforcement.
 import assert from "node:assert/strict";
 import { tables } from "../src/lib/staticConvexFixtures";
 import { DEMO_RECONCILIATION, feedTransactionId } from "../src/lib/staticFinanceWorkflowFixtures";
@@ -8,6 +9,7 @@ import { MemoryDb } from "../shared/portable/memoryDb";
 import { makeCapabilities } from "../shared/portable/capabilities";
 import * as recon from "../shared/functions/reconciliation";
 import * as rules from "../shared/functions/transactionRules";
+import * as accounting from "../shared/functions/accounting";
 import * as exp from "../shared/functions/expenseReports";
 import { requireFunctionAction } from "../shared/functions/actionPolicy";
 import { DEFAULT_APPROVAL_RULES, FINANCE_EDIT_REQUIRED_REASON, approvalRuleWarnings, diffApprovalRules, financeControlFindings } from "../shared/expenseApprovals";
@@ -41,18 +43,19 @@ const balanceAtEndOf = (accountId: string, date: string) =>
 assert.equal(balanceAtEndOf(cashId, "2025-12-31"), 3490000, "operating chequing opens 2026 at the journal's balance");
 assert.equal(balanceAtEndOf(grantId, "2025-12-31"), 2750000, "restricted fund opens 2026 at the journal's balance");
 // Besides the generated feed, the only bank lines are the three journal-linked
-// ones and the invoicing demo's payment deposits, which must post after every
-// statement period so they never disturb a reconciliation.
-const isInvoiceDeposit = (t: any) => String(t.externalId ?? "").startsWith("csv-invoice-");
+// ones, the invoicing demo's payment deposits and the bills demo's payments,
+// which must post after every statement period so they never disturb a
+// reconciliation.
+const isInvoiceDeposit = (t: any) => /^csv-(invoice|bill)-/.test(String(t.externalId ?? ""));
 assert.equal(
   seed.financialTransactions.filter((t: any) => !String(t._id).startsWith("static_tx_feed_") && !isInvoiceDeposit(t)).length,
   3,
-  "no hand-written bank lines beyond the three journal-linked ones and invoice deposits",
+  "no hand-written bank lines beyond the three journal-linked ones, invoice deposits and bill payments",
 );
 const lastStatementEnd = seed.reconciliationPeriods.map((period: any) => period.endDate).sort().at(-1);
 assert.ok(
   seed.financialTransactions.filter(isInvoiceDeposit).every((t: any) => t.date > lastStatementEnd),
-  "invoice deposits post after the last statement period",
+  "invoice deposits and bill payments post after the last statement period",
 );
 
 // ---- periods (statement balances are the feed's running balances)
@@ -208,11 +211,59 @@ assert.equal(again.applied, 0, "a re-code rule applies once");
 await rules.undoBatchPortable(mina, { societyId: S, batch: recodeRun.batchId });
 await rules.removePortable(mina, { id: recodeId });
 
+// The books close date: a rule run leaves a line whose journal entry is inside
+// it alone and counts it; Undo of a batch skips it too; removing a rule's
+// application from it refuses.
+{
+  await accounting.backfillFinancialTransactionsToJournalPortable(mina, { societyId: S, transactionIds: [latestHydro._id], includeBeforeOpening: true });
+  const settingsId = await db.insert("booksSettings", { societyId: S, closeDate: latestHydro.date, createdAtISO: new Date().toISOString(), updatedAtISO: new Date().toISOString() });
+  const lockedRun = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.ok(lockedRun.skippedLocked >= 1, "the posted line inside the close date is counted");
+  assert.equal((await db.get(latestHydro._id)).category, undefined, "and left uncategorised");
+  await rules.undoBatchPortable(mina, { societyId: S, batch: lockedRun.batchId });
+  await db.patch(settingsId, { closeDate: "2000-01-01" });
+  const run = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.equal(run.skippedLocked, 0);
+  assert.equal((await db.get(latestHydro._id)).category, "Facilities");
+  await db.patch(settingsId, { closeDate: latestHydro.date });
+  await assert.rejects(() => rules.removeApplicationPortable(mina, { txnId: latestHydro._id }), /books are closed through/);
+  const lockedUndo = await rules.undoBatchPortable(mina, { societyId: S, batch: run.batchId });
+  assert.ok(lockedUndo.skippedLocked >= 1, "Undo skips the locked line and counts it");
+  assert.equal((await db.get(latestHydro._id)).category, "Facilities", "the locked line keeps the rule's category");
+  await db.delete(settingsId);
+  await rules.undoBatchPortable(mina, { societyId: S, batch: run.batchId });
+  assert.equal((await db.get(latestHydro._id)).category, undefined, "once the date moves, Undo restores it");
+}
+
+// A closed fiscal period: the rule run and Undo leave the transaction as it was (its journal entry can't follow).
+{
+  const period = (await db.query("accountingFiscalPeriods").collect()).find((row: any) => row.societyId === S && row.startDate <= latestHydro.date && row.endDate >= latestHydro.date);
+  assert.ok(period, "a fiscal period covers the posted line");
+  await db.patch(period._id, { status: "closed" });
+  const closedRun = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.ok(closedRun.skippedLocked >= 1, "the posted line in the closed period is counted");
+  assert.equal((await db.get(latestHydro._id)).category, undefined, "and left as it was, so the register matches its journal entry");
+  await rules.undoBatchPortable(mina, { societyId: S, batch: closedRun.batchId });
+  await db.patch(period._id, { status: "open" });
+  const openRun = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.equal((await db.get(latestHydro._id)).category, "Facilities");
+  await db.patch(period._id, { status: "closed" });
+  await assert.rejects(() => rules.removeApplicationPortable(mina, { txnId: latestHydro._id }), /Fiscal period .* is closed/, "removing a rule's application refuses in a closed period");
+  const closedUndo = await rules.undoBatchPortable(mina, { societyId: S, batch: openRun.batchId });
+  assert.ok(closedUndo.skippedLocked >= 1, "Undo skips it too");
+  assert.deepEqual([(await db.get(latestHydro._id)).category, (await db.get(latestHydro._id)).categorizedBy], ["Facilities", "rule"], "it keeps the rule's category and provenance");
+  await db.patch(period._id, { status: "open" });
+  await rules.undoBatchPortable(mina, { societyId: S, batch: openRun.batchId });
+  assert.equal((await db.get(latestHydro._id)).category, undefined);
+}
+
 // ---- approvals (default approver access: finance edit access required)
 // Mina = Owner, Avery = Admin (both finance writers); Jordan = Director with
 // read-only finance access; a Viewer is added below.
 let q = await exp.approvalQueuePortable(mina, { societyId: S });
-assert.deepEqual(q.counts, { awaiting: 5, awaitingMe: 4, approved: 1, paid: 1, closed: 2, drafts: 2 });
+// Includes the spend-budget claims (shared/demoData/banking.ts): two submitted,
+// two approved and one paid this cycle; their drafts belong to Jordan and Avery.
+assert.deepEqual(q.counts, { awaiting: 7, awaitingMe: 6, approved: 3, paid: 2, closed: 2, drafts: 2 });
 assert.equal(q.policy.source, "configured");
 assert.deepEqual(
   { value: q.approverAccess.value, isDefault: q.approverAccess.isDefault, canChange: q.approverAccess.canChange },
@@ -247,6 +298,27 @@ await assert.rejects(() => exp.setStatusPortable(avery, { id: "static_expense_wo
 await exp.setStatusPortable(mina, { id: "static_expense_workshop_supplies", status: "Approved" });
 assert.equal((await db.get("static_expense_workshop_supplies")).status, "Approved");
 await assert.rejects(() => exp.setStatusPortable(mina, { id: "static_expense_kitchen_deposit", status: "Paid" }), /approved/);
+// Paying a claim posts on the organization's local date, and a closed fiscal period refuses it before anything changes.
+{
+  const claimId = "static_expense_workshop_supplies";
+  const before = await db.get(claimId);
+  const expenseAccount = seed.financialAccounts.find((a: any) => a.societyId === S && a.accountType === "Expense")._id;
+  const { resolutionCalendarDate, resolutionTimeZone } = await import("../shared/writtenResolutionEvidence");
+  const localToday = resolutionCalendarDate(new Date().toISOString(), resolutionTimeZone(await db.get(S))) ?? todayDateOnly();
+  const period = (await db.query("accountingFiscalPeriods").collect()).find((row: any) => row.societyId === S && row.startDate <= localToday && row.endDate >= localToday);
+  assert.ok(period, "a fiscal period covers today");
+  await db.patch(period._id, { status: "closed" });
+  await assert.rejects(() => exp.setStatusPortable(mina, { id: claimId, status: "Paid", expenseAccountId: expenseAccount, bankAccountId: cashId }), /Fiscal period .* is closed/, "a claim can't post into a closed period");
+  assert.equal((await db.get(claimId)).status, "Approved", "and stays approved");
+  await db.patch(period._id, { status: "open" });
+  await exp.setStatusPortable(mina, { id: claimId, status: "Paid", expenseAccountId: expenseAccount, bankAccountId: cashId });
+  const paid = await db.get(claimId);
+  const entry = await db.get(paid.journalEntryId);
+  assert.deepEqual([entry.date, entry.fiscalPeriodId], [localToday, period._id], "the reimbursement is dated the organization's today, in its period");
+  for (const line of (await db.query("journalLines").collect()).filter((row: any) => row.journalEntryId === entry._id)) await db.delete(line._id);
+  await db.delete(entry._id);
+  await db.patch(claimId, Object.fromEntries(Object.keys(paid).filter((key) => !key.startsWith("_")).map((key) => [key, before[key]])));
+}
 await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_kitchen_deposit", decision: "decline" }), /reason/);
 await assert.rejects(() => exp.upsertPortable(mina, { id: "static_expense_office_chair", societyId: S, claimantName: "Mina Patel", title: "Chair", category: "Supplies", amountCents: 18900, currency: "CAD", incurredAtISO: "2026-04-16", status: "Approved" }), /approvals queue/);
 const bulk = await exp.bulkApprovePortable(mina, { societyId: S, ids: ["static_expense_kitchen_deposit", "static_expense_printer_toner"] });

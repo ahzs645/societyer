@@ -1,6 +1,8 @@
 import { FormEvent, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
 import { AuthPending, AuthShell, BusyLabel } from "../auth/AuthShell";
 import { CheckEmailBody, checkEmailShell, type SentState } from "../auth/CheckEmail";
@@ -97,6 +99,14 @@ function EmailSignIn({ safeRedirect }: { safeRedirect: string }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const invitationToken = /^\/invite\/([A-Za-z0-9_-]+)$/.exec(safeRedirect)?.[1];
+  const invitation = useQuery(api.invitations.getByToken, invitationToken ? { token: invitationToken } : "skip");
+  const prefilledInvitation = useRef<string | null>(null);
+  useEffect(() => {
+    if (!invitation?.email || !invitationToken || prefilledInvitation.current === invitationToken) return;
+    prefilledInvitation.current = invitationToken;
+    setEmail(current => current || invitation.email);
+  }, [invitation, invitationToken]);
   const [busy, setBusy] = useState<"email" | "microsoft" | "resend" | null>(null);
   const [error, setError] = useState<AuthFailure | null>(() =>
     searchParams.get("sso") === "failed"
@@ -368,6 +378,7 @@ function EmailSignIn({ safeRedirect }: { safeRedirect: string }) {
       }
       help={mode === "sign-in" && !canResetByEmail ? "Trouble signing in?" : undefined}
     >
+      {invitation && <p className="notice auth__notice">You’re invited to <strong>{invitation.workspaceName}</strong>. {invitation.email ? `Use ${invitation.email}. ` : ""}Sign in or verify a new account to join directly. You don’t need to create an organization.</p>}
       {notice && <div role="status" className="notice notice--success auth__notice">{notice}</div>}
       {mode === "sign-up" && capabilities?.signUpEnabled === false && (
         <p role="status" className="notice notice--warn auth__notice">{SIGN_UP_UNAVAILABLE}</p>
