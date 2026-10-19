@@ -113,6 +113,15 @@ assert.equal(
   new Set([...first.page, ...second.page].map((r: any) => r.recordKey)).size,
   100,
 );
+const oldCursorPage = await reader.query(api.procurementReview.page, { ...pageArgs, paginationOpts: { numItems: 50, cursor: "old-native-cursor" } });
+assert.equal(oldCursorPage.restart, true);
+assert.equal(oldCursorPage.page.length, 50, "Old deployment cursors restart without an InvalidCursor page crash");
+const changedOrdering = await reader.query(api.procurementReview.page, { ...pageArgs,
+  request: JSON.stringify({ columns: [{ fieldMetadataId: "title", field: { name: "title" } }], sorts: [{ fieldMetadataId: "title", direction: "asc" }] }),
+  paginationOpts: { numItems: 50, cursor: first.continueCursor },
+});
+assert.equal(changedOrdering.restart, true, "A cursor from another indexed ordering cannot be reused");
+
 await assert.rejects(
   t.query(api.procurementReview.page, pageArgs),
   /auth|identity|sign|access/i,

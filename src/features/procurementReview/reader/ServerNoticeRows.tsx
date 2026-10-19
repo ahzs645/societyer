@@ -84,6 +84,13 @@ export function ServerNoticeRows({
       emptyBatches.current = 0;
       advancing.current = null;
     }
+    if (page?.restart && cursor !== null) {
+      loaded.current.pages.clear();
+      handle.get().setRecords([]);
+      setLoadedCount(0);
+      setPosition({ key: queryKey, cursor: null });
+      return;
+    }
     if (page) loaded.current.pages.set(cursor, page.page.map(row => toNoticeRow(row)));
     // A reactive re-delivery replaces its page, never appends duplicate records.
     const unique = new Map([...loaded.current.pages.values()].flat().map(row => [row._id, row]));

@@ -43,3 +43,7 @@ From a clean main checkout, run `npm ci`, `npm run build:ddcnorth`, deploy Conve
 - Header filters moving saved conditions into an AND group now preserve indexed date bounds; a regression covers historical records before the matching range.
 - ViewportPopover participates in the shared floating-layer stack, so nested numeric choices paint above the column menu. A pointer-selection regression passes on desktop and phone.
 - A bounded empty batch offers continuation rather than claiming there are no matches in the unseen remainder.
+
+Numeric ranges now narrow the ordering index before pagination, preserving legacy missing counts as zero. Server cursors include their query-plan identity. Older deployment cursors restart safely and clear the accumulated pages, so an open browser survives an index/range plan update. When changing the paging planner, bump its plan version.
+
+Source reconciliation: Societyer includes the saved local meeting/AI/UI changes; Zoer workspace setup is on main (live deployment left to the separate Hostinger task at the user's request); Connect retention is on main with passing PHP 8.1–8.3/package CI, and its stable publication remains subject to the hosting/updater qualification receipt required by its README; the playbook's Zoer-only tooling and tests are on main. Original dirty checkouts remain untouched.

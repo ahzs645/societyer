@@ -542,6 +542,7 @@ export const page = authorizedQuery(
     continueCursor: v.string(),
     scanned: v.number(),
     relevance: v.boolean(),
+    restart: v.optional(v.boolean()),
   }),
   handler: async (ctx, a) => {
     if (a.request.length > 60000 || !Number.isFinite(a.asOf))
@@ -665,8 +666,21 @@ export const page = authorizedQuery(
         },
       )
       .order(sorts[0]?.direction === "asc" ? "asc" : "desc");
+    // Opaque cursors carry the query-plan version. A deployed index/range
+    // change must not feed an older native cursor into a different query.
+    const cursorPlan = JSON.stringify([2, storage, a.societyId, a.kind, field, sorts[0]?.direction ?? "desc", party ?? null, from, numericFilters.map((f: any) => [f.operator, f.value]), active.searchReady && sorts.length === 0 ? search : ""]);
+    let nativeCursor: string | null = null;
+    let restart = false;
+    if (a.paginationOpts.cursor) {
+      try {
+        const saved = JSON.parse(a.paginationOpts.cursor);
+        if (saved.plan === cursorPlan && typeof saved.cursor === "string") nativeCursor = saved.cursor;
+        else restart = true;
+      } catch { restart = true; }
+    }
     const opts = {
       ...a.paginationOpts,
+      cursor: nativeCursor,
       numItems: Math.min(50, Math.max(1, a.paginationOpts.numItems)),
       maximumRowsRead: 100,
       maximumBytesRead: 750000,
@@ -734,7 +748,8 @@ export const page = authorizedQuery(
         )
         .map((r) => r.raw),
       isDone: result.isDone,
-      continueCursor: result.continueCursor,
+      continueCursor: result.isDone ? "" : JSON.stringify({ plan: cursorPlan, cursor: result.continueCursor }),
+      ...(restart ? { restart: true } : {}),
       scanned: result.page.length,
       relevance: !!search && !!candidateQuery && !!active.searchReady && sorts.length === 0,
     };

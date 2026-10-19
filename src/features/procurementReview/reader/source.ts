@@ -30,7 +30,7 @@ export type CatalogReviewRow = ReviewRow & { recordKey: string };
 export type ReaderSource = {
   catalog: ReaderCatalog;
   /** Hosted interactive page; absent for the offline snapshot host. */
-  usePage?: (kind: string, request: string, cursor: string | null) => { page: ListRow[]; isDone: boolean; continueCursor: string; scanned: number; relevance: boolean } | undefined;
+  usePage?: (kind: string, request: string, cursor: string | null) => { page: ListRow[]; isDone: boolean; continueCursor: string; scanned: number; relevance: boolean; restart?: boolean } | undefined;
   /**
    * Every record of a kind, loaded progressively; `undefined` until the first
    * rows arrive. A kind loads the first time it is asked for and stays loaded
