@@ -84,12 +84,7 @@ await t.run(async ctx => {
 });
 await t.run(async ctx => { await ctx.db.insert("procurementDetails", { societyId: ids.societyId, generation: "partial-retirement", recordKey: "award:old", dataJson: "{}" }); });
 assert.ok((await t.query(api.procurementImport.generations, { societyId: ids.societyId })).generations.includes("partial-retirement"), "Interrupted cleanup remains discoverable after all list rows are gone");
-assert.deepEqual(await t.action(api.procurementImport.purgeSlice, { societyId: ids.societyId, generation: "partial-retirement", table: "procurementDetails" }), { removed: 1, done: true });
-await t.run(async ctx => {
-  for (let i = 0; i < 5200; i++) await ctx.db.insert("procurementDetails", { societyId: ids.societyId, generation: "slice-resume", recordKey: `award:${i}`, dataJson: "{}" });
-});
-assert.deepEqual(await t.action(api.procurementImport.purgeSlice, { societyId: ids.societyId, generation: "slice-resume", table: "procurementDetails" }), { removed: 5000, done: false });
-assert.deepEqual(await t.action(api.procurementImport.purgeSlice, { societyId: ids.societyId, generation: "slice-resume", table: "procurementDetails" }), { removed: 200, done: true }, "A short maintenance slice resumes without touching the active generation");
+assert.deepEqual(await t.action(api.procurementImport.purgeRanges, { societyId: ids.societyId, generation: "partial-retirement", table: "procurementDetails", ranges: [{ lowerKey: "", upperKey: null }], cursor: null }), { removed: 1, completedRanges: 1, cursor: null });
 await t.run(async ctx => {
   for (let i = 0; i < 1010; i++) await ctx.db.insert("procurementDetails", { societyId: ids.societyId, generation: "range-resume", recordKey: `award:${String(i).padStart(4, "0")}`, dataJson: "{}" });
 });

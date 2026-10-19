@@ -192,21 +192,6 @@ export const purgePage = internalMutation({
   },
 });
 
-/** Keep each operator request short; large maintenance calls can outlive the CLI response window. */
-export const purgeSlice = internalAction({
-  args: { societyId: v.id("societies"), generation: v.string(), table: tableValidator },
-  returns: v.object({ removed: v.number(), done: v.boolean() }),
-  handler: async (ctx, args) => {
-    let removed = 0;
-    for (let i = 0; i < 5; i++) {
-      const count: number = await ctx.runMutation(internal.procurementImport.purgePage, args);
-      removed += count;
-      if (!count) return { removed, done: true };
-    }
-    return { removed, done: false };
-  },
-});
-
 const retirementRange = { lowerKey: v.string(), upperKey: v.union(v.string(), v.null()) };
 /** Bound the index range as well as the page. This also skips large already-deleted prefixes on retries. */
 export const purgeRangePage = internalMutation({
@@ -239,6 +224,7 @@ export const purgeRanges = internalAction({
   },
 });
 
+/** Legacy operator API; prefer the backup-bounded retirement tool for large catalogs. */
 export const purgeGeneration = internalAction({
   args: { societyId: v.id("societies"), generation: v.string() }, returns: v.null(),
   handler: async (ctx, args) => {
