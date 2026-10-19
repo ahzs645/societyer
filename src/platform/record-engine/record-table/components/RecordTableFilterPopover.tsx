@@ -18,6 +18,8 @@ import {
 } from "../utils/filterValues";
 import { childFilterGroups, filterTreeSignature, rootFilterGroup } from "../utils/filterTree";
 import { RecordTableAskFilter } from "./RecordTableAskFilter";
+import { useFilterValuePicker } from "./RecordTableFilterValuePicker";
+import { supportsValuePicker } from "../utils/distinctFieldValues";
 
 type DraftCondition = {
   id: string;
@@ -492,6 +494,17 @@ function ConditionRow({
       }))
     : [];
   const isCurrency = fieldType === FIELD_TYPES.CURRENCY;
+  // Free-text fields (a buyer, a vendor): the values in the records, to pick.
+  const usesValuePicker = Boolean(column && !valueless && condition.operator !== "between" && options.length === 0 && supportsValuePicker(column.field));
+  const valuePicker = useFilterValuePicker({
+    enabled: usesValuePicker,
+    column,
+    operator: condition.operator,
+    text: condition.text,
+    value: condition.value,
+    invalid,
+    onChange,
+  });
 
   let valueControl: ReactNode = null;
   if (column && !valueless) {
@@ -547,6 +560,8 @@ function ConditionRow({
           options={options}
         />
       );
+    } else if (usesValuePicker) {
+      valueControl = valuePicker.control;
     } else if (fieldType && isDateFieldType(fieldType)) {
       valueControl = (
         <DatePicker
@@ -599,9 +614,11 @@ function ConditionRow({
           // Ranges, value lists and single values hold different shapes.
           const kind = valueKind(operator);
           const previous = valueKind(condition.operator);
+          // Typed text carries over to a list as its first value, and back.
+          const single = typeof condition.value === "string" && condition.value ? condition.value : condition.text.trim();
           if (kind === previous) onChange({ operator });
-          else if (kind === "list" && typeof condition.value === "string" && condition.value) onChange({ operator, value: [condition.value] });
-          else if (previous === "list" && kind === "single" && Array.isArray(condition.value) && condition.value.length) onChange({ operator, value: String(condition.value[0]) });
+          else if (kind === "list" && previous === "single" && single) onChange({ operator, value: [single], text: "" });
+          else if (previous === "list" && kind === "single" && Array.isArray(condition.value) && condition.value.length) onChange({ operator, value: String(condition.value[0]), text: String(condition.value[0]) });
           else onChange({ operator, value: "", text: "" });
         }}
         options={operators.map((operator) => ({ value: operator, label: operatorLabel(operator, fieldType) }))}
@@ -611,6 +628,7 @@ function ConditionRow({
       <button type="button" className="record-table__icon-btn" aria-label="Remove condition" title="Remove" onClick={onRemove}>
         <X size={13} />
       </button>
+      {usesValuePicker && valuePicker.panel}
     </div>
   );
 }

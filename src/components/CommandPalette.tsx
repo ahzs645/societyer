@@ -168,7 +168,7 @@ const ROUTE_KEYWORDS: Record<string, string[]> = {
   // register" (corporation) via labelByEntityKind; make all names searchable.
   "/app/rights-ledger": ["membership classes", "share register", "voting classes", "share classes"],
   "/app/meetings": ["agm", "sgm", "board meeting", "gathering"],
-  "/app/procurement-review": ["bc bid", "bids", "tenders", "rfp", "procurement", "opportunities", "zoer"],
+  "/app/procurement-review": ["bc bid", "bids", "tenders", "rfp", "procurement", "opportunities", "awards", "buyers", "suppliers", "market analysis", "analytics", "zoer"],
 };
 
 /**

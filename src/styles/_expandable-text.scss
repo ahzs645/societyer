@@ -1,0 +1,59 @@
+@use "tokens" as *;
+
+// ExpandableText (components/ExpandableText.tsx): clamped text with a trailing "… more".
+.expandable-text {
+  --expandable-bg: #{token("bg-panel")};
+  position: relative;
+  display: block;
+  min-width: 0;
+
+  &__body {
+    display: block;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+  &[data-collapsed] > &__body {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--expandable-lines);
+    line-clamp: var(--expandable-lines);
+    overflow: hidden;
+  }
+  &[data-clamped] > &__body { cursor: pointer; }
+
+  // Sits over the end of the last line, fading the text out behind it.
+  &__more {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    padding: 0 0 0 2.5em;
+    border: 0;
+    background: linear-gradient(to right, transparent, var(--expandable-bg) 2em);
+    color: token("accent");
+    font: inherit;
+    font-weight: token("fw-medium");
+    line-height: inherit;
+    cursor: pointer;
+    span { color: token("text-tertiary"); font-weight: token("fw-regular"); }
+    &:focus-visible { outline: 2px solid token("accent"); outline-offset: 2px; border-radius: token("r-xs"); }
+  }
+  &__less {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: token("accent");
+    font: inherit;
+    font-size: token("fs-sm");
+    font-weight: token("fw-medium");
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 760px) {
+  .expandable-text[data-collapsed] > .expandable-text__body {
+    -webkit-line-clamp: var(--expandable-phone-lines);
+    line-clamp: var(--expandable-phone-lines);
+  }
+}

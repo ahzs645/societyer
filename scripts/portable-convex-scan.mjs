@@ -20,10 +20,12 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   // Procurement review reads SharePoint through a hosted HTTP route the local runtimes don't have.
   "procurementReview:folder",
   "procurementReview:catalog",
-  "procurementReview:records",
+  "procurementReview:list",
   "procurementReview:record",
   "procurementReview:documents",
   "procurementReview:evidence",
+  "procurementReview:review",
+  "procurementReview:reviews",
 
   "procurementReview:setFolder",
 ]);

@@ -73,25 +73,39 @@ export const catalog = authorizedQuery("procurementReview:catalog", query)({
   },
 });
 
-export const records = authorizedQuery("procurementReview:records", query)({
-  args: { societyId: v.id("societies"), generation: v.string(), kind: v.string(), search: v.optional(v.string()), status: v.optional(v.string()), paginationOpts: paginationOptsValidator },
-  returns: paginationResultValidator(v.object(summaryFields)),
+/** The most rows one `list` page reads; a page also stops at LIST_PAGE_BYTES read. */
+const LIST_PAGE_ROWS = 1000;
+/** Rows of older imports carry a search corpus of up to 16 KB, which counts toward the bytes read: 4 MB is at least ~240 of those, ~1,000 current rows. */
+const LIST_PAGE_BYTES = 4_000_000;
+const listRowFields = {
+  recordKey: v.string(), kind: v.string(), title: v.string(), organization: v.string(), issuedFor: v.string(), status: v.string(),
+  date: v.string(), dateText: v.string(), reference: v.string(), documents: v.number(), listedDocuments: v.number(),
+  supplier: v.string(), value: v.union(v.number(), v.null()), currency: v.string(), procurementType: v.string(),
+};
+/** `ListRow` in src/features/procurementReview/reader/source.ts. Columns an older import lacks read as empty. */
+function listRow(row: Doc<"procurementRecords">) {
+  return {
+    recordKey: row.recordKey, kind: row.kind, title: row.title, organization: row.organization, issuedFor: row.issuedFor ?? "", status: row.status,
+    date: row.date, dateText: row.dateText ?? "", reference: row.reference ?? "", documents: row.documents ?? 0, listedDocuments: row.listedDocuments ?? 0,
+    supplier: row.supplier ?? "", value: row.value ?? null, currency: row.currency ?? "", procurementType: row.procurementType ?? "",
+  };
+}
+
+/**
+ * Every record of a kind, in large bounded pages: the reader loads the whole
+ * list (small rows: no notice bodies, no search corpus) and sorts, filters and
+ * searches it in memory. A page can stop short of `numItems` when it reaches
+ * its bytes bound; follow `continueCursor` until `isDone`.
+ */
+export const list = authorizedQuery("procurementReview:list", query)({
+  args: { societyId: v.id("societies"), generation: v.string(), kind: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(v.object(listRowFields)),
   handler: async (ctx, args) => {
     const active = await activeCatalog(ctx, args.societyId);
     if (!active || active.generation !== args.generation) return { page: [], isDone: true, continueCursor: "" };
-    const opts = { ...args.paginationOpts, numItems: Math.min(50, Math.max(1, args.paginationOpts.numItems)), maximumRowsRead: 200, maximumBytesRead: 1_000_000 };
-    if ((args.search?.length ?? 0) > 200) throw new Error("Search is too long.");
-    const base = ctx.db.query("procurementRecords");
-    const query = args.search?.trim()
-      ? base.withSearchIndex("search_records", q => {
-          const search = q.search("searchText", args.search!.trim()).eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind);
-          return args.status ? search.eq("status", args.status) : search;
-        })
-      : args.status
-        ? base.withIndex("by_kind_status_date", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind).eq("status", args.status!)).order("desc")
-        : base.withIndex("by_kind_date", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind)).order("desc");
-    const result = await query.paginate(opts);
-    return { ...result, page: result.page.map(summaryFor) };
+    const result = await ctx.db.query("procurementRecords").withIndex("by_kind_date", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind))
+      .paginate({ ...args.paginationOpts, numItems: Math.min(LIST_PAGE_ROWS, Math.max(1, args.paginationOpts.numItems)), maximumRowsRead: LIST_PAGE_ROWS, maximumBytesRead: LIST_PAGE_BYTES });
+    return { ...result, page: result.page.map(listRow) };
   },
 });
 
@@ -129,5 +143,39 @@ export const evidence = authorizedQuery("procurementReview:evidence", query)({
     const result = await ctx.db.query("procurementEvidence").withIndex("by_record_source", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("recordKey", args.recordKey).eq("source", args.source))
       .paginate({ ...args.paginationOpts, numItems: Math.min(10, Math.max(1, args.paginationOpts.numItems)), maximumRowsRead: 20, maximumBytesRead: 1_000_000 });
     return { ...result, page: result.page.map(row => ({ dataJson: row.dataJson })) };
+  },
+});
+
+/**
+ * Every published review row for one record (decisions, AI suggestion and
+ * summary, requirements, facts, tasks, changes), in one bounded read so the
+ * notice page can lay them out together. `truncated` when there were more.
+ */
+export const review = authorizedQuery("procurementReview:review", query)({
+  args: { societyId: v.id("societies"), generation: v.string(), recordKey: v.string() },
+  returns: v.object({ rows: v.array(v.object({ source: v.string(), dataJson: v.string() })), truncated: v.boolean() }),
+  handler: async (ctx, args) => {
+    const active = await activeCatalog(ctx, args.societyId);
+    if (!active || active.generation !== args.generation) return { rows: [], truncated: false };
+    const result = await ctx.db.query("procurementEvidence").withIndex("by_record_source", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("recordKey", args.recordKey))
+      .paginate({ numItems: 120, cursor: null, maximumRowsRead: 120, maximumBytesRead: 2_000_000 });
+    return { rows: result.page.map(row => ({ source: row.source, dataJson: row.dataJson })), truncated: !result.isDone };
+  },
+});
+
+/**
+ * Every published review row in the catalog with the record it belongs to,
+ * for the catalog-wide insights, in bounded pages (at most 500 rows or 4 MB
+ * read each). The reader stops after a few thousand rows and says so.
+ */
+export const reviews = authorizedQuery("procurementReview:reviews", query)({
+  args: { societyId: v.id("societies"), generation: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(v.object({ recordKey: v.string(), source: v.string(), dataJson: v.string() })),
+  handler: async (ctx, args) => {
+    const active = await activeCatalog(ctx, args.societyId);
+    if (!active || active.generation !== args.generation) return { page: [], isDone: true, continueCursor: "" };
+    const result = await ctx.db.query("procurementEvidence").withIndex("by_record_source", q => q.eq("societyId", args.societyId).eq("generation", active.generation))
+      .paginate({ ...args.paginationOpts, numItems: Math.min(500, Math.max(1, args.paginationOpts.numItems)), maximumRowsRead: 500, maximumBytesRead: 4_000_000 });
+    return { ...result, page: result.page.map(row => ({ recordKey: row.recordKey, source: row.source, dataJson: row.dataJson })) };
   },
 });

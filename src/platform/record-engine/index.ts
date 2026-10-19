@@ -16,6 +16,8 @@ export type {
   ViewOpenRecordIn,
   ViewVisibility,
   ViewSort,
+  ViewDisplay,
+  ViewDisplayMode,
   SelectOption,
   SelectFieldConfig,
   CurrencyFieldConfig,

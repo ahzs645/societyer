@@ -28,6 +28,8 @@ const meetingsSource = readFileSync(join(ROOT, "pages/Meetings.tsx"), "utf8");
 
 const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/features/financials/pages/WavePages.tsx": 2,
+  // A code-defined read-only table (staticRecordTable) over the whole procurement list, loaded in batches.
+  "src/features/procurementReview/reader/NoticeTable.tsx": 1,
   "src/pages/Agreements.tsx": 1,
   "src/pages/ApiKeysPage.tsx": 2,
   "src/pages/Attestations.tsx": 1,
@@ -198,6 +200,25 @@ assert.equal(editedRecord.relationLabel, "Morgan Patel", "relation edit refreshe
 
 const recordTableCount = Object.values(REVIEWED_RECORD_TABLE_FILES).reduce((sum, count) => sum + count, 0);
 const objectTableCount = Object.values(REVIEWED_OBJECT_RECORD_TABLE_FILES).reduce((sum, count) => sum + count, 0);
+// Every table gets the whole toolbar: no mode where the page owns the
+// query and the table's search, filters, sort or grouping stop applying.
+const engineSources = sourceFiles(join(ROOT, "platform/record-engine")).map((file) => readFileSync(file, "utf8")).join("\n");
+assert.doesNotMatch(engineSources, /serverQuery|RecordTableServerQuery|serverDriven/, "the server-query mode is gone; tables filter and sort every record in memory");
+const filteredRecordsSource = readFileSync(join(ROOT, "platform/record-engine/record-table/hooks/useFilteredRecords.ts"), "utf8");
+assert.match(filteredRecordsSource, /filterAndSortRecords\(\{ records: applyPendingEdits\(records, pendingEdits\)/, "every table searches, filters and sorts its records");
+// Continuous scroll or pages, per view, from the desktop Options menu and the phone sheet.
+const toolbarSource = readFileSync(join(ROOT, "platform/record-engine/record-table/components/RecordTableToolbar.tsx"), "utf8");
+const sheetSource = readFileSync(join(ROOT, "platform/record-engine/record-table/components/RecordTableViewOptionsSheet.tsx"), "utf8");
+const recordTableSource = readFileSync(join(ROOT, "platform/record-engine/record-table/components/RecordTable.tsx"), "utf8");
+assert.match(toolbarSource, /<RecordTableDisplayOptions variant="menu" \/>/, "the desktop Options menu offers continuous scroll or pages");
+assert.match(sheetSource, /<RecordTableDisplayOptions variant="sheet" \/>/, "the phone View options sheet offers continuous scroll or pages");
+assert.match(recordTableSource, /<RecordTablePager page=\{page\} \/>/, "a table shown in pages draws its pager");
+assert.match(recordTableScopeSource, /defaultDisplayMode = "continuous"/, "tables scroll continuously unless the page says otherwise");
+assert.match(recordTableScopeSource, /loadingProgress\?: \{ loaded: number; total: number \} \| null/, "the scope takes batch loading progress");
+// Free-text filters offer the values in the records.
+const filterPopoverSource = readFileSync(join(ROOT, "platform/record-engine/record-table/components/RecordTableFilterPopover.tsx"), "utf8");
+assert.match(filterPopoverSource, /useFilterValuePicker\(/, "free-text filter conditions offer the values found in the records");
+
 console.log(
   `record table acceptance checks passed: ${recordTableCount} RecordTable instances, ${objectTableCount} ObjectRecordTable registers, no legacy DataTable, ${LAB_FIELDS.length} field types`,
 );

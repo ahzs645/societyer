@@ -14,6 +14,11 @@ export type { BulkAction } from "./components/RecordTableBulkBar";
 export { RecordTableEmpty } from "./components/RecordTableEmpty";
 export { ObjectRecordTable } from "./components/ObjectRecordTable";
 export { RecordTablePhoneCard } from "./components/RecordTablePhoneCard";
+export { RECORD_TABLE_PAGE_SIZES, DEFAULT_RECORD_TABLE_PAGE_SIZE } from "./utils/viewDisplay";
+export type { RecordTableDisplay } from "./utils/viewDisplay";
+export type { RecordTableLoadingProgress } from "./state/recordTableStore";
+export { staticRecordTable } from "./utils/staticRecordTable";
+export type { StaticFieldDefinition } from "./utils/staticRecordTable";
 export type { RecordTableCardHelpers, RecordTableCardRecord, RecordTableCardRenderer } from "./components/RecordTableCardList";
 export { recordPersonName, recordText, recordTitleText } from "./utils/recordTitle";
 

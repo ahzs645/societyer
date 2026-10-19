@@ -1,5 +1,5 @@
 import type { RecordField, ViewFilter, ViewFilterGroup } from "../../types/View";
-import { applyRecordFilter } from "./filterRecords";
+import { compileRecordFilter, type RecordPredicate } from "./filterRecords";
 import type { DateRangeContext } from "../../../../lib/dateRanges";
 
 export type SerializedViewFilters = {
@@ -25,66 +25,62 @@ export function recordMatchesViewFilters({
   filterGroups,
   dateContext,
 }: {
-  record: any;
+  record: Record<string, unknown>;
   columns: RecordField[];
   filters: ViewFilter[];
   filterGroups?: ViewFilterGroup[];
   dateContext?: DateRangeContext;
 }) {
-  const fieldById = new Map(columns.map((column) => [column.fieldMetadataId, column]));
-  if (!filterGroups || filterGroups.length === 0) {
-    return filters.every((filter) =>
-      applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter, dateContext),
-    );
-  }
-
-  const rootGroups = filterGroups.filter((group) => !group.parentViewFilterGroupId);
-  if (rootGroups.length === 0) {
-    return filters.every((filter) =>
-      applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter, dateContext),
-    );
-  }
-
-  return rootGroups.every((group) =>
-    matchesGroup({ record, fieldById, filters, filterGroups, groupId: group.id, dateContext }),
-  );
+  return compileViewFilters({ columns, filters, filterGroups, dateContext })(record);
 }
 
-function matchesGroup({
-  record,
-  fieldById,
+/**
+ * The view's filter tree as one predicate: each condition compiled once and
+ * the AND / OR groups resolved up front, so filtering a long list does no
+ * per-record lookups of fields, groups or positions.
+ */
+export function compileViewFilters({
+  columns,
   filters,
   filterGroups,
-  groupId,
   dateContext,
 }: {
-  record: any;
-  fieldById: Map<string, RecordField>;
+  columns: RecordField[];
   filters: ViewFilter[];
-  filterGroups: ViewFilterGroup[];
-  groupId: string;
+  filterGroups?: ViewFilterGroup[];
   dateContext?: DateRangeContext;
-}) {
-  const group = filterGroups.find((entry) => entry.id === groupId);
-  if (!group) return true;
+}): RecordPredicate {
+  const fieldById = new Map(columns.map((column) => [column.fieldMetadataId, column]));
+  const compile = (filter: ViewFilter) => compileRecordFilter(fieldById.get(filter.fieldMetadataId), filter, dateContext);
+  const all = (predicates: RecordPredicate[]): RecordPredicate =>
+    predicates.length === 1 ? predicates[0] : (record) => predicates.every((predicate) => predicate(record));
+  const rootGroups = (filterGroups ?? []).filter((group) => !group.parentViewFilterGroupId);
+  if (!filterGroups || filterGroups.length === 0 || rootGroups.length === 0) {
+    return filters.length === 0 ? () => true : all(filters.map(compile));
+  }
 
-  const childResults = [
-    ...filters
-      .filter((filter) => filter.viewFilterGroupId === groupId)
-      .sort((a, b) => (a.positionInViewFilterGroup ?? 0) - (b.positionInViewFilterGroup ?? 0))
-      .map((filter) => applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter, dateContext)),
-    ...filterGroups
-      .filter((child) => child.parentViewFilterGroupId === groupId)
-      .sort((a, b) => (a.positionInViewFilterGroup ?? 0) - (b.positionInViewFilterGroup ?? 0))
-      .map((child) =>
-        matchesGroup({ record, fieldById, filters, filterGroups, groupId: child.id, dateContext }),
-      ),
-  ];
-
-  if (childResults.length === 0) return true;
-  return group.logicalOperator === "or"
-    ? childResults.some(Boolean)
-    : childResults.every(Boolean);
+  const byPosition = (a: { positionInViewFilterGroup?: number | null }, b: { positionInViewFilterGroup?: number | null }) =>
+    (a.positionInViewFilterGroup ?? 0) - (b.positionInViewFilterGroup ?? 0);
+  const compileGroup = (group: ViewFilterGroup, seen: Set<string>): RecordPredicate => {
+    // A malformed tree that loops back on itself matches rather than recursing forever.
+    if (seen.has(group.id)) return () => true;
+    const path = new Set(seen).add(group.id);
+    const children: RecordPredicate[] = [
+      ...filters
+        .filter((filter) => filter.viewFilterGroupId === group.id)
+        .sort(byPosition)
+        .map(compile),
+      ...filterGroups
+        .filter((child) => child.parentViewFilterGroupId === group.id)
+        .sort(byPosition)
+        .map((child) => compileGroup(child, path)),
+    ];
+    if (children.length === 0) return () => true;
+    return group.logicalOperator === "or"
+      ? (record) => children.some((child) => child(record))
+      : all(children);
+  };
+  return all(rootGroups.map((group) => compileGroup(group, new Set())));
 }
 
 export function serializeViewFiltersToUrl({

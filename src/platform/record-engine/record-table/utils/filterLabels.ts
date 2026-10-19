@@ -1,13 +1,14 @@
 import { FIELD_TYPES, type FieldType } from "../../types/FieldType";
 import type { RecordField, ViewFilter, ViewFilterOperator } from "../../types/View";
 import { describeFilterValue, isDateFieldType } from "./filterValues";
+import { formatCalendarDate } from "../../../../lib/dateRanges";
 
 /** Operators offered per field type, most useful first. */
 export const OPERATORS_BY_FIELD_TYPE: Partial<Record<FieldType, ViewFilterOperator[]>> = {
-  [FIELD_TYPES.TEXT]: ["contains", "eq", "neq", "startsWith", "endsWith", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.EMAIL]: ["contains", "eq", "neq", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.PHONE]: ["contains", "eq", "neq", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.LINK]: ["contains", "eq", "isEmpty", "isNotEmpty"],
+  [FIELD_TYPES.TEXT]: ["contains", "in", "notIn", "eq", "neq", "notContains", "startsWith", "endsWith", "isEmpty", "isNotEmpty"],
+  [FIELD_TYPES.EMAIL]: ["contains", "in", "notIn", "eq", "neq", "isEmpty", "isNotEmpty"],
+  [FIELD_TYPES.PHONE]: ["contains", "in", "notIn", "eq", "neq", "isEmpty", "isNotEmpty"],
+  [FIELD_TYPES.LINK]: ["contains", "in", "eq", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.NUMBER]: ["eq", "neq", "gt", "gte", "lt", "lte", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.CURRENCY]: ["gte", "lte", "gt", "lt", "eq", "neq", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.RATING]: ["eq", "gt", "lt", "isEmpty", "isNotEmpty"],
@@ -17,8 +18,8 @@ export const OPERATORS_BY_FIELD_TYPE: Partial<Record<FieldType, ViewFilterOperat
   [FIELD_TYPES.SELECT]: ["eq", "neq", "in", "notIn", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.MULTI_SELECT]: ["contains", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.RELATION]: ["eq", "neq", "in", "notIn", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.UUID]: ["eq", "neq"],
-  [FIELD_TYPES.ARRAY]: ["contains", "isEmpty", "isNotEmpty"],
+  [FIELD_TYPES.UUID]: ["eq", "neq", "in"],
+  [FIELD_TYPES.ARRAY]: ["contains", "in", "notIn", "isEmpty", "isNotEmpty"],
 };
 
 export function operatorsForField(fieldType: FieldType | undefined): ViewFilterOperator[] {
@@ -65,7 +66,23 @@ export function describeFilter(filter: ViewFilter, column: RecordField | undefin
   if (filter.operator === "isEmpty" || filter.operator === "isNotEmpty") return `${field} ${operatorLabel(filter.operator)}`;
   if (filter.operator === "in" || filter.operator === "notIn") {
     const values = (Array.isArray(filter.value) ? filter.value : [filter.value]).map((value) => describeFilterValue(column?.field, value));
-    return `${field} ${filter.operator === "in" ? "is" : "is not"} ${values.join(" or ")}`;
+    // A long pick reads as its first two values and a count.
+    const listed = values.length > 3 ? `${values.slice(0, 2).join(", ")} or ${values.length - 2} more` : values.join(" or ");
+    return `${field} ${filter.operator === "in" ? "is" : "is not"} ${listed}`;
+  }
+  // An open-ended custom range reads as a bound: "Closes is on or after Oct 18, 2026", not "is within From Oct 18, 2026".
+  if (filter.operator === "between" && isOpenEndedRange(filter.value)) {
+    const { start, end } = filter.value;
+    return start ? `${field} is on or after ${formatCalendarDate(start)}` : `${field} is on or before ${formatCalendarDate(end ?? "")}`;
   }
   return `${field} ${operatorLabel(filter.operator, fieldType)} ${describeFilterValue(column?.field, filter.value)}`;
+}
+
+function isOpenEndedRange(value: unknown): value is { start?: string; end?: string } {
+  if (!value || typeof value !== "object") return false;
+  const range = value as { preset?: unknown; start?: unknown; end?: unknown };
+  if (range.preset !== undefined && range.preset !== "custom") return false;
+  const start = typeof range.start === "string" && range.start ? range.start : "";
+  const end = typeof range.end === "string" && range.end ? range.end : "";
+  return Boolean(start) !== Boolean(end);
 }

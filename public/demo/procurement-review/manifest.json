@@ -3,7 +3,7 @@
   "formatVersion": 1,
   "pluginId": "bc-bid-monitor",
   "pluginVersion": "0.35.3",
-  "snapshotId": "20261018T150000Z-0257598f0476",
+  "snapshotId": "20261018T150000Z-56ff28d1550f",
   "publishedAt": "2026-10-18T15:00:00.000Z",
   "publisher": {
     "zoerVersion": "demo",
@@ -11,13 +11,13 @@
   },
   "catalog": {
     "encoding": "gzip",
-    "sha256": "0257598f0476fc017e3c41d665fad078266898e750a0551a5a6ce23bfda1ec1c",
-    "bytes": 868352,
+    "sha256": "56ff28d1550f8fd9311900941405dd6c156b3c7ab286126b868fdd0a2611591a",
+    "bytes": 1183744,
     "parts": [
       {
-        "path": "snapshots/20261018T150000Z-0257598f0476/catalog.part-000",
-        "bytes": 92898,
-        "sha256": "164e20774826ddb1914f4522acb0257f6b5b54362c811296660c472f7a7b34b3"
+        "path": "snapshots/20261018T150000Z-56ff28d1550f/catalog.part-000",
+        "bytes": 123143,
+        "sha256": "6f584e9cbbb6755c40ab3ac2819ee2d0087c9ded9c3360604765aec54a940621"
       }
     ]
   },
@@ -26,8 +26,20 @@
       "bytes": 628,
       "parts": 0
     },
+    "269d8a5c7b39dfabd69f7d9d86bfa2eb29e58fb393eb97bcff8dc3ff2ff6f490": {
+      "bytes": 874,
+      "parts": 0
+    },
     "43b3d6417340140642ae931a9cf3061d99bc8289752db234b734301640023cd2": {
       "bytes": 1039,
+      "parts": 0
+    },
+    "4774a17e8c950d2bf39aad3b8d387c264c7b33c86686481007ae8eb2aac7af67": {
+      "bytes": 841,
+      "parts": 0
+    },
+    "61dbc2f3181ce109cd9e8dfe5a21ce6b529d74fee0eb45c2d417e310cc3ddf2a": {
+      "bytes": 1073,
       "parts": 0
     },
     "790871b1ae1c3c51c4c983d636a76526b18ee09e9cf77d5082b10f9e79cda79e": {
@@ -46,6 +58,10 @@
       "bytes": 1572,
       "parts": 0
     },
+    "a1400cd1dc0282b050b8deb67929adffaf4d63ef62d5de90f90dad02fb966446": {
+      "bytes": 1409,
+      "parts": 0
+    },
     "c12fb9e0b2a3df99e4d5206c33cef51ea7187217f2399760e9cb767c233c1c25": {
       "bytes": 997,
       "parts": 0
@@ -56,7 +72,7 @@
     }
   },
   "counts": {
-    "award": 15,
-    "opportunity": 41
+    "award": 78,
+    "opportunity": 52
   }
 }

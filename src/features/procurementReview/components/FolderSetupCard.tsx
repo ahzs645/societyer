@@ -28,6 +28,15 @@ export function FolderSetupCard({ societyId, folder, canConfigure, onSaved, onCa
   let error: string | undefined;
   try { validateWorkspaceProcurementReviewFolder(societyId, value); } catch (caught) { error = caught instanceof Error ? caught.message : "Invalid folder path."; }
 
+  const copyPath = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Folder path copied", "Use it as the folder in Zoer's SharePoint publish targets.");
+    } catch {
+      toast.info("Copy this folder path", value);
+    }
+  };
+
   const save = async () => {
     setTouched(true);
     if (error || !canConfigure) return;
@@ -73,6 +82,7 @@ export function FolderSetupCard({ societyId, folder, canConfigure, onSaved, onCa
             </Field>
             <div className="row" style={{ gap: 8 }}>
               <button type="submit" className="btn btn--accent" disabled={saving || (touched && Boolean(error))}>{saving ? "Saving…" : "Save folder"}</button>
+              <button type="button" className="btn btn--ghost" disabled={Boolean(error)} onClick={() => void copyPath()}>Copy path for Zoer</button>
               {onCancel && <button type="button" className="btn btn--ghost" disabled={saving} onClick={onCancel}>Cancel</button>}
             </div>
           </form>

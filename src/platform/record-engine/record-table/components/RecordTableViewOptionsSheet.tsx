@@ -7,6 +7,7 @@ import { lowerLabel } from "../utils/lowerLabel";
 import type { RecordField } from "../../types";
 import { RecordTableSortEditor } from "./RecordTableSortPopover";
 import { RecordTableGroupByEditor } from "./RecordTableGroupByPopover";
+import { RecordTableDisplayOptions } from "./RecordTableDisplayOptions";
 
 export type RecordTableViewTypeOption<Id extends string = string> = {
   id: Id;
@@ -28,6 +29,7 @@ export function RecordTableViewOptionsSheet<Id extends string>({
   viewTypeOptions,
   onChooseViewType,
   showGroup,
+  showDisplay = false,
   kanbanFields,
   calendarFields,
   onSearch,
@@ -41,6 +43,8 @@ export function RecordTableViewOptionsSheet<Id extends string>({
   onChooseViewType: (id: Id) => void;
   /** Grouping applies to the table view only. */
   showGroup: boolean;
+  /** Continuous scroll or pages: the table view only. */
+  showDisplay?: boolean;
   kanbanFields: RecordField[];
   calendarFields: RecordField[];
   onSearch: () => void;
@@ -98,6 +102,7 @@ export function RecordTableViewOptionsSheet<Id extends string>({
         )}
 
         <DensitySection />
+        {showDisplay && <RecordTableDisplayOptions variant="sheet" />}
         <FieldsSection />
 
         {actions && <div className="record-view-sheet__section record-view-sheet__page-actions">{actions}</div>}

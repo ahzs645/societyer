@@ -152,4 +152,43 @@ assert.match(
   "phone editor portal interactions cannot bubble back into a cell and reopen it",
 );
 
+// --- Phones: long lists, pages, batch loading and the value picker ---------
+const cardListSource = readFileSync(
+  new URL("../src/platform/record-engine/record-table/components/RecordTableCardList.tsx", import.meta.url),
+  "utf8",
+);
+const recordTableSource = readFileSync(
+  new URL("../src/platform/record-engine/record-table/components/RecordTable.tsx", import.meta.url),
+  "utf8",
+);
+const toolbarSource = readFileSync(
+  new URL("../src/platform/record-engine/record-table/components/RecordTableToolbar.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  cardListSource,
+  /customScrollParent: scrollParent[\s\S]*useWindowScroll/,
+  "phone cards window against the page's own scroller (.page), so 25,000 cards mount a screenful",
+);
+assert.match(
+  recordTableSource,
+  /<RecordTableCardList[\s\S]*?\/>\s*\{pager\}/,
+  "phone cards shown in pages get the pager under them",
+);
+assert.match(
+  recordTableStyles,
+  /@media \(max-width: 560px\) \{\s*\/\/ Phones: the range on its own line[\s\S]*min-height: 40px;/,
+  "the phone pager puts the range on its own line with touch-sized buttons",
+);
+assert.match(
+  toolbarSource,
+  /\{isPhone && loadingStatusElement\}/,
+  "phones show batch loading progress on its own line under the toolbar row",
+);
+assert.match(
+  recordTableStyles,
+  /\.record-table__value-option \{[\s\S]*@media \(pointer: coarse\) \{ min-height: 40px; \}/,
+  "filter values are touch-sized on phones",
+);
+
 console.log("mobile table layout checks passed");

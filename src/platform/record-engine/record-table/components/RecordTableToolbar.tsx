@@ -42,6 +42,7 @@ import { RecordTableExportDialog } from "./RecordTableExportDialog";
 import { getViewGroupBy } from "../utils/groupRecords";
 import { RecordTableAskFilterButton } from "./RecordTableAskFilterButton";
 import { RecordTableViewOptionsSheet } from "./RecordTableViewOptionsSheet";
+import { RecordTableDisplayOptions } from "./RecordTableDisplayOptions";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -245,7 +246,22 @@ export function RecordTableToolbar({
     { id: "kanban" as const, Icon: Kanban, label: t("recordTable.kanbanView", "Kanban view"), short: t("recordTable.kanbanShort", "Board"), active: !listActive && isKanban },
     { id: "calendar" as const, Icon: CalendarDays, label: t("recordTable.calendarView", "Calendar view"), short: t("recordTable.calendarShort", "Calendar"), active: !listActive && viewType === "calendar" },
   ];
-  const viewCount = filteredRecords.length;
+  // Records still arriving in batches count toward the total straight away
+  // (a search or filter counts the matches loaded so far).
+  const loadingProgress = useRecordTableState((s) => s.loadingProgress);
+  const searchingOrFiltered = filters.length > 0 || searchTerm.trim().length > 0;
+  const viewCount = loadingProgress && !searchingOrFiltered
+    ? Math.max(loadingProgress.total, filteredRecords.length)
+    : filteredRecords.length;
+  const loadingStatus = loadingProgress && loadingProgress.loaded < loadingProgress.total
+    ? `Loading ${loadingProgress.loaded.toLocaleString("en-CA")} of ${loadingProgress.total.toLocaleString("en-CA")}…`
+    : null;
+  // Beside the view name; phones give it its own line under the toolbar row.
+  const loadingStatusElement = loadingStatus && (
+    <span className="record-table__loading-status" role="status" aria-live="polite">
+      {loadingStatus}
+    </span>
+  );
   // Sorts and grouping live in the phone options sheet; its button counts them.
   const viewOptionsActive = sorts.length + (groupByLabel && !listActive && viewType === "table" ? 1 : 0);
 
@@ -306,7 +322,7 @@ export function RecordTableToolbar({
             >
               {resolvedIcon}
               <span className="record-table__view-name">{activeViewName}</span>
-              <span className="record-table__view-count">{filteredRecords.length}</span>
+              <span className="record-table__view-count">{viewCount}</span>
               <ChevronDown size={12} />
             </button>
             {viewMenuOpen && (
@@ -335,9 +351,10 @@ export function RecordTableToolbar({
           <div className="record-table__title">
             {resolvedIcon}
             <span>{label}</span>
-            <span className="record-table__view-count">{filteredRecords.length}</span>
+            <span className="record-table__view-count">{viewCount}</span>
           </div>
         )}
+        {!isPhone && loadingStatusElement}
         {isMobile && !isPhone && (
           <div className="record-table__mobile-tools">
             {!showSearch && (
@@ -575,6 +592,7 @@ export function RecordTableToolbar({
             viewTypeOptions={viewTypeOptions}
             onChooseViewType={chooseViewType}
             showGroup={!listActive && viewType === "table"}
+            showDisplay={!listActive && viewType === "table"}
             kanbanFields={selectableKanbanFields}
             calendarFields={selectableCalendarFields}
             onSearch={openSearchFromSheet}
@@ -714,6 +732,7 @@ export function RecordTableToolbar({
                   </button>
                 </div>
               </div>
+              {!listActive && viewType === "table" && <RecordTableDisplayOptions variant="menu" />}
               <div className="record-table__menu-section">
                 <button
                   type="button"
@@ -750,6 +769,7 @@ export function RecordTableToolbar({
         </>
         )}
       </div>
+      {isPhone && loadingStatusElement}
       <RecordTableExportDialog
         open={exportOpen}
         onClose={() => setExportOpen(false)}

@@ -11,7 +11,7 @@ import {
   Filter,
   Rows3,
 } from "lucide-react";
-import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../types";
+import { FIELD_TYPES, type RecordField, type SelectOption, type ViewFilterOperator } from "../../types";
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useIsMobile } from "../../../../lib/useIsMobile";
@@ -127,8 +127,7 @@ export function RecordTableHeaderCell({
   };
 
   const applyHeaderFilter = () => {
-    const operator = defaultHeaderOperator(recordField);
-    const value = normalizedHeaderFilterValue(recordField, filterValue, operator);
+    const { operator, value } = headerFilterCondition(recordField, filterValue);
     const existingRoot = filterGroups.find((group) => !group.parentViewFilterGroupId);
     const rootGroup = existingRoot ?? {
       id: `fg_${Date.now()}`,
@@ -344,6 +343,24 @@ export function RecordTableHeaderCell({
       )}
     </th>
   );
+}
+
+/**
+ * What the column menu's one text box filters by. Options: an exact label or
+ * key is "is <option>", anything else "contains" (labels as well as keys).
+ * Relations match their display names.
+ */
+function headerFilterCondition(recordField: RecordField, raw: string): { operator: ViewFilterOperator; value: unknown } {
+  const options = Array.isArray(recordField.field.config?.options) ? (recordField.field.config.options as SelectOption[]) : [];
+  if (options.length > 0) {
+    const typed = raw.trim().toLowerCase();
+    const option = options.find((entry) => String(entry.label ?? entry.value).toLowerCase() === typed || String(entry.value).toLowerCase() === typed);
+    if (option && recordField.field.fieldType !== FIELD_TYPES.MULTI_SELECT) return { operator: "eq", value: String(option.value) };
+    return { operator: "contains", value: raw.trim() };
+  }
+  if (recordField.field.fieldType === FIELD_TYPES.RELATION) return { operator: "contains", value: raw.trim() };
+  const operator = defaultHeaderOperator(recordField);
+  return { operator, value: normalizedHeaderFilterValue(recordField, raw, operator) };
 }
 
 function defaultHeaderOperator(recordField: RecordField): ViewFilterOperator {

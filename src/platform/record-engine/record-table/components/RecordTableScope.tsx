@@ -15,7 +15,8 @@ import {
   RecordTableContext,
   type RecordTableContextValue,
 } from "../contexts/RecordTableContext";
-import type { HydratedView, ObjectMetadata } from "../../types";
+import type { HydratedView, ObjectMetadata, ViewDisplayMode } from "../../types";
+import { DEFAULT_RECORD_TABLE_PAGE_SIZE, normalizePageSize } from "../utils/viewDisplay";
 import { RecordTableSidePanel } from "./RecordTableSidePanel";
 import { useRecordPanelStack } from "./RecordTableSidePanelStack";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
@@ -49,6 +50,9 @@ export function RecordTableScope({
   recordPreview = false,
   renderSidePanel,
   cellPreviews = true,
+  defaultDisplayMode = "continuous",
+  defaultPageSize = DEFAULT_RECORD_TABLE_PAGE_SIZE,
+  loadingProgress,
   children,
 }: {
   tableId: string;
@@ -76,6 +80,20 @@ export function RecordTableScope({
    * Pass false for a table where the preview would repeat the row.
    */
   cellPreviews?: boolean;
+  /**
+   * How rows show until a view picks otherwise in its options: "continuous"
+   * (one list that renders as it scrolls) or "pages" (a pager under the
+   * table, `defaultPageSize` rows a page). Either way search, filters and
+   * sort run over every record first.
+   */
+  defaultDisplayMode?: ViewDisplayMode;
+  defaultPageSize?: number;
+  /**
+   * Records still arriving in batches: the toolbar says "Loading 4,000 of
+   * 21,877…", counts use `total`, and the loading skeleton gives way as soon
+   * as the first rows are in. Leave unset (or null) once everything has loaded.
+   */
+  loadingProgress?: { loaded: number; total: number } | null;
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -194,6 +212,13 @@ export function RecordTableScope({
   useEffect(() => {
     store.getState().setRecords(records);
   }, [records, store]);
+  const loadingLoaded = loadingProgress?.loaded;
+  const loadingTotal = loadingProgress?.total;
+  useEffect(() => {
+    store.getState().setLoadingProgress(
+      loadingLoaded !== undefined && loadingTotal !== undefined ? { loaded: loadingLoaded, total: loadingTotal } : null,
+    );
+  }, [loadingLoaded, loadingTotal, store]);
 
   const handleRecordClick = useCallback<NonNullable<RecordTableContextValue["onRecordClick"]>>(
     (recordId, record, options) => {
@@ -223,6 +248,7 @@ export function RecordTableScope({
     [objectNameSingular],
   );
 
+  const normalizedPageSize = normalizePageSize(defaultPageSize);
   const contextValue = useMemo<RecordTableContextValue>(
     () => ({
       tableId,
@@ -232,8 +258,9 @@ export function RecordTableScope({
       onCreate,
       onReorder,
       cellPreview: cellPreviews ? cellPreview : undefined,
+      displayDefaults: { mode: defaultDisplayMode, pageSize: normalizedPageSize },
     }),
-    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder, cellPreviews, cellPreview],
+    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
   );
 
   const currentSidePanelRecord = activeSidePanelRecord

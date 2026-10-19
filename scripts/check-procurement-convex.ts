@@ -21,45 +21,77 @@ const ids = await t.run(async ctx => {
   await ctx.db.patch(societyId, { integrationSettings: { ...defaultIntegrationSettings(), procurementReviewFolder: folder } as any });
   for (const [subject, sid] of [["reader", societyId], ["foreign", foreign]] as const) await ctx.db.insert("users", { societyId: sid, email: `${subject}@example.invalid`, displayName: subject, role: "Viewer", status: "Active", authSubject: subject, authIssuer: issuer, authProvider: "better-auth", createdAtISO: "2026-10-18" });
   const generation = "20261018T170258Z-1138c2082de4";
-  for (let i = 0; i < 61; i++) {
-    const recordKey = `opportunity:${i}`;
-    await ctx.db.insert("procurementRecords", { societyId, generation, recordKey, kind: "opportunity", title: `Bridge ${i}`, organization: "Test City", status: i % 2 ? "Open" : "Closed", date: `2026-${String(i).padStart(3, "0")}`, updatedAt: "2026-10-18", searchText: `Bridge ${i} Test City` });
+  // 1,300 opportunities: more than one list page. Half are an older import's rows with a 16 KB search corpus and none of the list columns.
+  const corpus = "x".repeat(16_000);
+  for (let i = 0; i < 1300; i++) {
+    const recordKey = `opportunity:${String(i).padStart(4, "0")}`;
+    const columns = i % 2 ? { searchText: corpus } : { issuedFor: "Health Authority", reference: `REF-${i}`, documents: i % 3, listedDocuments: 1, supplier: "", currency: "", procurementType: "" };
+    await ctx.db.insert("procurementRecords", { societyId, generation, recordKey, kind: "opportunity", title: `Bridge ${i}`, organization: "Test City", status: i % 2 ? "Open" : "Closed", date: `2026-10-${String(1 + (i % 28)).padStart(2, "0")}`, updatedAt: "2026-10-18", ...columns });
     await ctx.db.insert("procurementDetails", { societyId, generation, recordKey, dataJson: JSON.stringify({ descriptionText: "Notice body only fetched on demand" }) });
   }
+  for (const [key, date, value] of [["award:a", "2026-10-01", 148500], ["award:b", "2026-10-20T14:00", undefined], ["award:c", "2026-11-05", 0]] as const) {
+    await ctx.db.insert("procurementRecords", { societyId, generation, recordKey: key, kind: "award", title: `Award ${key}`, organization: "Test City", status: "Awarded", date, dateText: date, updatedAt: "2026-10-18", supplier: "Cedar & Main", currency: "CAD", procurementType: "Request for Proposals", ...(value === undefined ? {} : { value }) });
+    await ctx.db.insert("procurementDetails", { societyId, generation, recordKey: key, dataJson: "{}" });
+  }
+  for (const [recordKey, source] of [["opportunity:0000", "procurement_decisions"], ["opportunity:0000", "procurement_requirements"], ["opportunity:0001", "procurement_decisions"]]) {
+    await ctx.db.insert("procurementEvidence", { societyId, generation, recordKey, source, dataJson: JSON.stringify({ record_id: recordKey, source }) });
+  }
+  await ctx.db.insert("procurementEvidence", { societyId: foreign, generation, recordKey: "opportunity:0000", source: "procurement_decisions", dataJson: "{\"secret\":true}" });
   // Another workspace deliberately reuses the same generation and source key.
-  await ctx.db.insert("procurementRecords", { societyId: foreign, generation, recordKey: "opportunity:0", kind: "opportunity", title: "Private foreign record", organization: "Secret", status: "Open", date: "2099", updatedAt: "", searchText: "Secret" });
-  await ctx.db.insert("procurementDocuments", { societyId, generation, recordKey: "opportunity:0", documentKey: "doc", name: "test.pdf", mediaType: "application/pdf", sha256: "a".repeat(64), sourceUrl: "https://example.invalid", status: "ready", bytes: 10, parts: 0, available: true });
+  await ctx.db.insert("procurementRecords", { societyId: foreign, generation, recordKey: "opportunity:0000", kind: "opportunity", title: "Private foreign record", organization: "Secret", status: "Open", date: "2099", updatedAt: "" });
+  await ctx.db.insert("procurementDocuments", { societyId, generation, recordKey: "opportunity:0000", documentKey: "doc", name: "test.pdf", mediaType: "application/pdf", sha256: "a".repeat(64), sourceUrl: "https://example.invalid", status: "ready", bytes: 10, parts: 0, available: true });
   return { societyId, foreign, generation, folder };
 });
 const reader = t.withIdentity({ subject: "reader", issuer });
-const args = { societyId: ids.societyId, generation: ids.generation, kind: "opportunity", paginationOpts: { numItems: 25, cursor: null } };
+const args = { societyId: ids.societyId, generation: ids.generation, kind: "opportunity", paginationOpts: { numItems: 1000, cursor: null } };
 assert.equal(await reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), null, "Unactivated imports are invisible");
-const activation = { societyId: ids.societyId, generation: ids.generation, folder: ids.folder, publishedAt: "2026-10-18T17:02:58Z", counts: { opportunity: 61 }, expected: { procurementRecords: 61, procurementDetails: 61, procurementDocuments: 1 } };
-await assert.rejects(t.action(api.procurementImport.activate, { ...activation, counts: { opportunity: 62 }, expected: { ...activation.expected, procurementRecords: 62, procurementDetails: 62 } }), /incomplete/);
+const activation = { societyId: ids.societyId, generation: ids.generation, folder: ids.folder, publishedAt: "2026-10-18T17:02:58Z", counts: { opportunity: 1300, award: 3 }, expected: { procurementRecords: 1303, procurementDetails: 1303, procurementDocuments: 1, procurementEvidence: 3 } };
+await assert.rejects(t.action(api.procurementImport.activate, { ...activation, counts: { opportunity: 1301, award: 3 }, expected: { ...activation.expected, procurementRecords: 1304, procurementDetails: 1304 } }), /incomplete/);
 assert.equal(await reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), null);
 await t.action(api.procurementImport.activate, activation);
 await assert.rejects(t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: ids.generation }), /active generation/);
-let cursor: string | null = null; const seen = new Set<string>(); let calls = 0;
-for (;;) {
-  const result = await reader.query(api.procurementReview.records, { ...args, paginationOpts: { numItems: 25, cursor } });
-  assert.ok(result.page.length <= 25);
-  for (const row of result.page) { assert.ok(!seen.has(row.recordKey)); seen.add(row.recordKey); assert.ok(!("dataJson" in row)); assert.ok(!row.title.includes("foreign")); }
-  calls++;
-  if (result.isDone) break;
-  cursor = result.continueCursor;
+/** Every page of a paginated query, as the reader loads it. */
+async function allPages<Row>(name: unknown, base: Record<string, unknown>, numItems: number) {
+  let cursor: string | null = null; const rows: Row[] = []; let calls = 0;
+  for (;;) {
+    const result: { page: Row[]; isDone: boolean; continueCursor: string } = await reader.query(name as never, { ...base, paginationOpts: { numItems, cursor } } as never);
+    assert.ok(result.page.length <= numItems);
+    assert.ok(JSON.stringify(result).length < 1_000_000, "A list page stays well under a function's return limit");
+    rows.push(...result.page); calls++;
+    if (result.isDone) return { rows, calls };
+    cursor = result.continueCursor;
+  }
 }
-assert.equal(seen.size, 61); assert.equal(calls, 3);
-const filtered = await reader.query(api.procurementReview.records, { ...args, status: "Open", search: "Bridge" });
-assert.ok(filtered.page.length); assert.ok(filtered.page.every((row: any) => row.status === "Open"));
-assert.ok(JSON.stringify(filtered).length < 25000, "List results remain small");
-assert.equal((await reader.query(api.procurementReview.record, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0" })).summary.title, "Bridge 0");
-assert.equal((await reader.query(api.procurementReview.documents, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0", paginationOpts: { numItems: 10, cursor: null } })).page[0].name, "test.pdf");
-await assert.rejects(t.query(api.procurementReview.records, args), /auth|sign|identity|access/i);
-await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).query(api.procurementReview.records, args), /membership|access|workspace|bound/i);
+type ListRow = { recordKey: string; title: string; issuedFor: string; reference: string; documents: number; listedDocuments: number; supplier: string; value: number | null; currency: string; procurementType: string; dateText: string };
+const { rows: opportunities, calls } = await allPages<ListRow>(api.procurementReview.list, args, 1000);
+assert.equal(new Set(opportunities.map((row) => row.recordKey)).size, 1300, "Every opportunity, once");
+assert.ok(calls >= 3, `Older rows' search corpus counts toward the bytes bound, so pages stop early (${calls} pages)`);
+for (const row of opportunities) { assert.ok(!("searchText" in row) && !("dataJson" in row) && !("societyId" in row)); assert.ok(!row.title.includes("foreign")); }
+const old = opportunities.find((row) => row.recordKey === "opportunity:0001")!;
+assert.deepEqual([old.issuedFor, old.reference, old.documents, old.listedDocuments, old.value, old.dateText], ["", "", 0, 0, null, ""], "An older import's missing columns read as empty");
+const fresh = opportunities.find((row) => row.recordKey === "opportunity:0002")!;
+assert.deepEqual([fresh.issuedFor, fresh.reference, fresh.documents, fresh.listedDocuments], ["Health Authority", "REF-2", 2, 1]);
+const awards = (await allPages<ListRow>(api.procurementReview.list, { ...args, kind: "award" }, 1000)).rows;
+assert.deepEqual(awards.map((row) => [row.recordKey, row.value, row.supplier, row.currency]), [["award:a", 148500, "Cedar & Main", "CAD"], ["award:b", null, "Cedar & Main", "CAD"], ["award:c", 0, "Cedar & Main", "CAD"]], "Awards carry supplier, value (null when unreadable) and currency, in date order");
+assert.equal((await reader.query(api.procurementReview.list, { ...args, paginationOpts: { numItems: 50_000, cursor: null } })).page.length <= 1000, true, "A page never exceeds its row bound");
+assert.equal((await reader.query(api.procurementReview.record, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" })).summary.title, "Bridge 0");
+assert.equal((await reader.query(api.procurementReview.documents, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000", paginationOpts: { numItems: 10, cursor: null } })).page[0].name, "test.pdf");
+const catalogReviews = (await allPages<{ recordKey: string; source: string }>(api.procurementReview.reviews, { societyId: ids.societyId, generation: ids.generation }, 500)).rows;
+assert.deepEqual(catalogReviews.map((row) => `${row.recordKey} ${row.source}`).sort(), ["opportunity:0000 procurement_decisions", "opportunity:0000 procurement_requirements", "opportunity:0001 procurement_decisions"], "Every review row in the workspace's catalog, with its record, and none of another workspace's");
+const review = await reader.query(api.procurementReview.review, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" });
+assert.deepEqual(review.rows.map((row: { source: string }) => row.source).sort(), ["procurement_decisions", "procurement_requirements"], "One read returns every review row for the record, and only that record's");
+assert.equal(review.truncated, false);
+assert.deepEqual(await reader.query(api.procurementReview.review, { societyId: ids.societyId, generation: "another", recordKey: "opportunity:0000" }), { rows: [], truncated: false });
+await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).query(api.procurementReview.review, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" }), /membership|access|workspace|bound/i);
+for (const [name, query] of [[api.procurementReview.list, args], [api.procurementReview.reviews, { societyId: ids.societyId, generation: ids.generation, paginationOpts: args.paginationOpts }]]) {
+  await assert.rejects(t.query(name, query), /auth|sign|identity|access/i);
+  await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).query(name, query), /membership|access|workspace|bound/i);
+}
 await assert.rejects(reader.mutation(api.procurementReview.setFolder, { societyId: ids.societyId, folder: ids.folder }), /Permission/);
 await t.run(async ctx => { await ctx.db.patch(ids.societyId, { integrationSettings: { ...defaultIntegrationSettings(), procurementReviewFolder: `${ids.folder}/new` } as any }); });
 assert.equal(await reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), null, "Folder changes immediately hide the previous import");
-assert.equal((await reader.query(api.procurementReview.records, args)).page.length, 0);
+assert.equal((await reader.query(api.procurementReview.list, args)).page.length, 0);
+assert.equal((await reader.query(api.procurementReview.reviews, { societyId: ids.societyId, generation: ids.generation, paginationOpts: { numItems: 500, cursor: null } })).page.length, 0);
 await t.run(async ctx => { await ctx.db.patch(ids.societyId, { disabledModules: [] }); });
 await assert.rejects(reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), /module|enabled|disabled/i);
-console.log("OK: authenticated indexed pages, full-text search, bounded payload, workspace isolation, read-only permissions, incomplete-import refusal, atomic activation, folder and module gates.");
+console.log("OK: whole-kind list in bounded pages (rows and bytes), older imports' empty columns, catalog-wide review rows, one-read review rows, compact payload, workspace isolation, read-only permissions, incomplete-import refusal, atomic activation, folder and module gates.");

@@ -3,7 +3,7 @@ import type { DateRangeContext } from "../../../../lib/dateRanges";
 import { filterRecords } from "./filterRecords";
 import { sortRecords } from "./sortRecords";
 
-export function filterAndSortRecords({
+export function filterAndSortRecords<T extends object>({
   records,
   columns,
   filters,
@@ -12,14 +12,14 @@ export function filterAndSortRecords({
   searchTerm,
   dateContext,
 }: {
-  records: any[];
+  records: T[];
   columns: RecordField[];
   filters: ViewFilter[];
   filterGroups?: ViewFilterGroup[];
   sorts: ViewSort[];
   searchTerm?: string;
   dateContext?: DateRangeContext;
-}) {
+}): T[] {
   return sortRecords({
     records: filterRecords({ records, columns, filters, filterGroups, searchTerm, dateContext }),
     columns,

@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import type { ObjectMetadata, ViewOpenRecordIn } from "../../types";
 import type { EntityRef } from "../../../../components/HoverCard/entityRefs";
+import type { RecordTableDisplay } from "../utils/viewDisplay";
 
 export type RecordTableOpenOptions =
   | {
@@ -37,6 +38,11 @@ export type RecordTableContextValue = {
    * `RECORD_TABLE_CELL_PREVIEWS` (components/HoverCard/entityRefs.ts).
    */
   cellPreview?: (fieldName: string, isLabelIdentifier: boolean, record: any) => EntityRef | null;
+  /**
+   * How the table shows its rows until a view chooses otherwise
+   * (`RecordTableScope` `defaultDisplayMode` / `defaultPageSize`).
+   */
+  displayDefaults: RecordTableDisplay;
 };
 
 export const RecordTableContext = createContext<RecordTableContextValue | null>(null);
