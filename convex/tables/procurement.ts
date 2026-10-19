@@ -25,7 +25,12 @@ export const procurementTables = {
   // List projections stay small; a list read never touches notice bodies or file contents.
   procurementRecords: defineTable(procurementRecordFields)
     .index("by_kind_date", ["societyId", "generation", "kind", "date"])
-    .index("by_key", ["societyId", "generation", "recordKey"]),
+    .index("by_key", ["societyId", "generation", "recordKey"])
+    // The paged reader (released October 18, 2026) read these two. The whole-list
+    // reader doesn't, but they stay until a release no longer needs to roll back to
+    // it: removing them drops 240k documents from both, and restoring needs a backfill.
+    .index("by_kind_status_date", ["societyId", "generation", "kind", "status", "date"])
+    .searchIndex("search_records", { searchField: "searchText", filterFields: ["societyId", "generation", "kind", "status"] }),
   procurementDetails: defineTable({ ...scope, recordKey: v.string(), dataJson: v.string() })
     .index("by_key", ["societyId", "generation", "recordKey"]),
   procurementDocuments: defineTable(procurementDocumentFields)
