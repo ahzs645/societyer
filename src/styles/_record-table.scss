@@ -3061,3 +3061,13 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   font-size: token('fs-xs');
   color: token('text-tertiary');
 }
+
+// A column filter contains both a condition picker and a value input. A label
+// cannot wrap both: native label activation can click the picker a second time.
+.record-table__header-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  > span { display: flex; gap: 6px; align-items: center; }
+  input { width: 100%; min-width: 0; }
+}

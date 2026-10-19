@@ -271,7 +271,7 @@ export function RecordTableHeaderCell({
               <span>Sort descending</span>
             </button></>}
             <div className="record-table__header-menu-section">
-              <label>
+              <div className="record-table__header-filter">
                 <span>
                   <Filter size={13} />
                   Filter
@@ -302,7 +302,7 @@ export function RecordTableHeaderCell({
                   type={headerFilterInputType(recordField)}
                   inputMode={isNumericFieldType(recordField.field.fieldType) ? "decimal" : undefined}
                 />}
-              </label>
+              </div>
               <button
                 type="button"
                 disabled={!canApply}

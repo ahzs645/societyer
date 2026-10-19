@@ -603,11 +603,22 @@ export const page = authorizedQuery(
     const dateField = columns.find(
       (c: any) => c.field?.name === "when",
     )?.fieldMetadataId;
+    // A conjunction can be safely narrowed by its date range even after
+    // the column menu puts formerly flat conditions into an AND group.
+    const conjunctive = (filter: any) => {
+      let id = filter.viewFilterGroupId;
+      const seen = new Set<string>();
+      while (id) {
+        if (seen.has(id)) return false;
+        seen.add(id);
+        const group = filterGroups.find((entry: any) => entry.id === id);
+        if (!group || group.logicalOperator !== "and") return false;
+        id = group.parentViewFilterGroupId;
+      }
+      return true;
+    };
     const dateFilter = filters.find(
-      (f: any) =>
-        !f.viewFilterGroupId &&
-        f.fieldMetadataId === dateField &&
-        f.operator === "between",
+      (f: any) => conjunctive(f) && f.fieldMetadataId === dateField && f.operator === "between",
     );
     const from =
       typeof dateFilter?.value?.start === "string" &&

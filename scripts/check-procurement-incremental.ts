@@ -139,6 +139,20 @@ const numericFilter = await reader.query(api.procurementReview.page, { ...pageAr
 assert.equal(numericFilter.page.length, 20);
 assert.ok(numericFilter.page.every((row: any) => row.documents >= 100));
 
+// Header filters wrap flat saved-view constraints into an AND group. Their
+// date narrowing must still skip earlier historical records before paging.
+const groupedColumns = [{ fieldMetadataId: "date", field: { _id: "date", name: "when", fieldType: "DATE_TIME", config: {} } }];
+const groupedRequest = JSON.stringify({ columns: groupedColumns, filters: [{ id: "date-filter", fieldMetadataId: "date", operator: "between", value: { preset: "custom", start: "2099-01-01" }, viewFilterGroupId: "root" }], filterGroups: [{ id: "root", logicalOperator: "and" }], sorts: [{ fieldMetadataId: "date", direction: "asc" }] });
+await t.run(async ctx => {
+  for (let i = 0; i < 260; i++) await ctx.db.insert("procurementRecords", { ...fixture.rows[0], recordKey: `historical:${i}`, date: "2000-01-01" });
+});
+const narrowed = await reader.query(api.procurementReview.page, { ...pageArgs, request: groupedRequest });
+assert.equal(narrowed.page.length, 50, "Grouped date constraints retain the indexed lower bound rather than stopping on empty historical batches");
+await t.run(async ctx => {
+  const historical = await ctx.db.query("procurementRecords").withIndex("by_key", q => q.eq("societyId", fixture.societyId).eq("generation", generation)).take(1000);
+  for (const row of historical) if (row.recordKey.startsWith("historical:")) await ctx.db.delete(row._id);
+});
+
 const old = fixture.rows[0],
   newRow = { ...old, title: "Updated bridge" },
   detail = {
