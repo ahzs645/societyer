@@ -1,7 +1,14 @@
 /** Operator-only, resumable changed-row application. Readers pause while a plan is incomplete. */
 import type { Id } from "./_generated/dataModel";
+import { makeFunctionReference } from "convex/server";
+import { listRow } from "./procurementReview";
+import { toNoticeRow } from "../shared/procurementNoticeRow";
+import {
+  procurementGrams,
+  procurementIndexCorpus,
+} from "../shared/procurementSearchText";
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalAction, internalMutation } from "./_generated/server";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
 const table = v.union(
   v.literal("procurementRecords"),
@@ -238,6 +245,31 @@ export const applyBatch = internalMutation({
         if (before) counts[before.kind] = (counts[before.kind] ?? 0) - 1;
         if (row) counts[row.kind] = (counts[row.kind] ?? 0) + 1;
       }
+      if (op.table === "procurementRecords") {
+        const entry = await ctx.db
+          .query("procurementSearch")
+          .withIndex("by_key", (q) =>
+            q
+              .eq("societyId", run.societyId)
+              .eq("generation", generation)
+              .eq("recordKey", op.recordKey),
+          )
+          .unique();
+        const data = {
+          societyId: run.societyId,
+          generation,
+          recordKey: op.recordKey,
+          kind: identity.kind,
+          active: !!row,
+          grams: row
+            ? procurementGrams(
+                procurementIndexCorpus(toNoticeRow(listRow(row), 0)),
+              )
+            : (entry?.grams ?? ""),
+        };
+        if (entry) await ctx.db.replace(entry._id, data);
+        else await ctx.db.insert("procurementSearch", data);
+      }
       if (op.row === null) {
         if (!old)
           throw new Error(
@@ -340,5 +372,87 @@ export const finish = internalMutation({
     });
     await ctx.db.patch(run._id, { completed: true, changedAt: Date.now() });
     return null;
+  },
+});
+
+/** One-off materialization of the search projection; a new import updates only changed notices. */
+export const indexSearchPage = internalMutation({
+  args: { societyId: v.id("societies"), cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    cursor: v.string(),
+    done: v.boolean(),
+    rows: v.number(),
+  }),
+  handler: async (ctx, a) => {
+    const c = await ctx.db
+      .query("procurementCatalogs")
+      .withIndex("by_society", (q) => q.eq("societyId", a.societyId))
+      .unique();
+    if (!c || c.syncRunId) throw new Error("Catalog unavailable or updating.");
+    const generation = c.storageGeneration ?? c.generation;
+    const page = await ctx.db
+      .query("procurementRecords")
+      .withIndex("by_key", (q) =>
+        q.eq("societyId", a.societyId).eq("generation", generation),
+      )
+      .paginate({
+        numItems: 100,
+        cursor: a.cursor,
+        maximumRowsRead: 100,
+        maximumBytesRead: 1000000,
+      });
+    for (const row of page.page) {
+      const entry = await ctx.db
+        .query("procurementSearch")
+        .withIndex("by_key", (q) =>
+          q
+            .eq("societyId", a.societyId)
+            .eq("generation", generation)
+            .eq("recordKey", row.recordKey),
+        )
+        .unique();
+      const data = {
+        societyId: a.societyId,
+        generation,
+        recordKey: row.recordKey,
+        kind: row.kind,
+        active: !row.archived,
+        grams: procurementGrams(
+          procurementIndexCorpus(toNoticeRow(listRow(row), 0)),
+        ),
+      };
+      if (!entry) await ctx.db.insert("procurementSearch", data);
+      else if (entry.grams !== data.grams || entry.active !== data.active)
+        await ctx.db.replace(entry._id, data);
+    }
+    if (page.isDone) await ctx.db.patch(c._id, { searchReady: true });
+    return {
+      cursor: page.continueCursor,
+      done: page.isDone,
+      rows: page.page.length,
+    };
+  },
+});
+export const indexSearchSlice = internalAction({
+  args: { societyId: v.id("societies"), cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    cursor: v.string(),
+    done: v.boolean(),
+    rows: v.number(),
+  }),
+  handler: async (ctx, a) => {
+    let cursor = a.cursor,
+      rows = 0;
+    for (let i = 0; i < 10; i++) {
+      const result: { cursor: string; done: boolean; rows: number } =
+        await ctx.runMutation(
+          makeFunctionReference<"mutation">("procurementSync:indexSearchPage"),
+          { societyId: a.societyId, cursor },
+        );
+      rows += result.rows;
+      cursor = result.cursor;
+      if (result.done) return { cursor, done: true, rows };
+    }
+    return { cursor: cursor!, done: false, rows };
   },
 });

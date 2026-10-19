@@ -71,12 +71,14 @@ export function BuyerPage({
   name: string;
 }) {
   const source = useReaderSource();
+  const navigation = useReaderNavigation();
   const [analysis, setAnalysis] = useState(false),
     [kind, setKind] = useState<"opportunity" | "award">("opportunity");
   if (!source.usePage || analysis)
     return <FullBuyerPage field={field} name={name} />;
   return (
     <>
+      <button className="btn btn--ghost" onClick={navigation.back}><ArrowLeft size={14} /> Back</button>
       <PageHeader title={name} subtitle="Notices for this organisation" />
       <div className="btn-group">
         <button

@@ -261,8 +261,12 @@ export type RecordTableState = {
   loadView: (hydrated: HydratedView) => void;
   /** Promote current live state into savedView (call after server save). */
   markSaved: (savedState?: RecordTableState) => void;
-  /** Restore live state to savedView, throwing away unsaved edits. */
-  discardDraftChanges: () => void;
+  /**
+   * Restore live state to savedView, throwing away unsaved edits.
+   * `keepQuickSearch` leaves a transient search typed over a view that saves
+   * none (choosing the view again resets its filters, not the search box).
+   */
+  discardDraftChanges: (options?: { keepQuickSearch?: boolean }) => void;
 };
 
 export type RecordTableLoadingProgress = { loaded: number; total: number };
@@ -561,9 +565,10 @@ export function createRecordTableStore(opts: {
       });
     },
 
-    discardDraftChanges: () => {
+    discardDraftChanges: (options) => {
       const snap = get().savedView;
       if (!snap) return;
+      const searchTerm = options?.keepQuickSearch && snap.searchTerm === "" ? get().searchTerm : snap.searchTerm;
       set({
         viewId: snap.viewId,
         columns: snap.columns,
@@ -576,7 +581,7 @@ export function createRecordTableStore(opts: {
         calendarFieldMetadataId: snap.calendarFieldMetadataId,
         calendarLayout: snap.calendarLayout,
         fieldGroups: snap.fieldGroups,
-        searchTerm: snap.searchTerm,
+        searchTerm,
         anyFieldFilterValue: snap.anyFieldFilterValue,
         viewGroups: snap.viewGroups,
         visibility: snap.visibility,
@@ -738,4 +743,25 @@ export function computeIsDirty(s: RecordTableState): boolean {
 /** Returns true whenever the live view state differs from what's saved on the server. */
 export function useRecordTableIsDirty(): boolean {
   return useRecordTableState(computeIsDirty);
+}
+
+/**
+ * Whether the rows on show are no longer the view's own: its filters, sort or
+ * saved search were changed (or cleared) since it loaded. Columns, density and
+ * a transient quick search don't count; the view still shows what it says.
+ */
+export function computeIsViewEdited(s: RecordTableState): boolean {
+  const snap = s.savedView;
+  if (!snap) return false;
+  return (
+    (snap.searchTerm !== "" && s.searchTerm !== snap.searchTerm) ||
+    s.anyFieldFilterValue !== snap.anyFieldFilterValue ||
+    !filtersEqual(s.filters, snap.filters) ||
+    !jsonEqual(s.filterGroups, snap.filterGroups) ||
+    !sortsEqual(s.sorts, snap.sorts)
+  );
+}
+
+export function useRecordTableIsViewEdited(): boolean {
+  return useRecordTableState(computeIsViewEdited);
 }

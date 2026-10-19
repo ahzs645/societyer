@@ -48,19 +48,71 @@ export function filterRecords<T extends object>({
   /** Organisation calendar for relative date-range filters. */
   dateContext?: DateRangeContext;
 }): T[] {
-  const query = searchTerm?.trim().toLowerCase() ?? "";
-  if (filters.length === 0 && !query) return records;
+  const terms = parseSearchTerms(searchTerm ?? "");
+  if (filters.length === 0 && terms.length === 0) return records;
   // Filters are compiled once (field lookups, date ranges, option labels),
   // not re-derived for every record.
   const matches = filters.length > 0 ? compileViewFilters({ columns, filters, filterGroups, dateContext }) : null;
-  const searchFields = query ? columns.map((column) => column.field) : [];
+  const searchFields = terms.length > 0 ? columns.map((column) => column.field) : [];
 
   return records.filter((record) => {
     const row = record as FilterableRecord;
     if (matches && !matches(row)) return false;
-    if (!query) return true;
-    return recordSearchText(row, searchFields).includes(query);
+    return terms.length === 0 || recordMatchesSearch(row, searchFields, terms);
   });
+}
+
+/* --------------------------------- search -------------------------------- */
+
+/**
+ * One word (or "quoted phrase") of a quick search, folded like the records'
+ * text. `compact` is the word without its separators, for a word with a digit
+ * or punctuation in it (a reference number), else null.
+ */
+export type SearchTerm = { text: string; compact: string | null };
+
+const COMBINING_MARKS = /[\u0300-\u036f]/g;
+const NOT_ASCII = /[\u0080-\uffff]/;
+const SEPARATORS = /[^\p{L}\p{N}]+/gu;
+const NEEDS_COMPACT = /[\p{N}]|[^\p{L}\p{N}\s]/u;
+
+/** Lower case without accents, with typographic quotes as plain ones: "Montréal’s" reads "montreal's". */
+export function foldSearchText(value: string): string {
+  const lower = value.toLowerCase();
+  if (!NOT_ASCII.test(lower)) return lower;
+  return lower.normalize("NFD").replace(COMBINING_MARKS, "").replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"');
+}
+
+/**
+ * A quick search as the table matches it: its words, each to be found
+ * somewhere in a record (any field, any order), and "quoted phrases" kept
+ * whole. Case and accents don't matter, and a word with a digit or
+ * punctuation in it also matches with the separators left out on either side,
+ * so "is27nri014" finds "IS27-NRI-014" and "rfp-0219" finds "RFP 0219".
+ */
+export function parseSearchTerms(searchTerm: string): SearchTerm[] {
+  const folded = foldSearchText(searchTerm.trim());
+  if (!folded) return [];
+  const terms: SearchTerm[] = [];
+  for (const match of folded.matchAll(/"([^"]+)"|(\S+)/g)) {
+    const text = (match[1] ?? match[2].replace(/^"+|"+$/g, "")).trim();
+    if (!text || terms.some((term) => term.text === text)) continue;
+    const compact = NEEDS_COMPACT.test(text) ? text.replace(SEPARATORS, "") : "";
+    terms.push({ text, compact: compact.length >= 2 ? compact : null });
+  }
+  return terms;
+}
+
+/** Whether every word of the search is in the record's text. */
+export function recordMatchesSearch(record: FilterableRecord, fields: FieldMetadata[], terms: SearchTerm[]): boolean {
+  const corpus = searchCorpus(record, fields);
+  for (const term of terms) {
+    if (corpus.text.includes(term.text)) continue;
+    if (!term.compact) return false;
+    corpus.compact ??= corpus.text.replace(SEPARATORS, "");
+    if (!corpus.compact.includes(term.compact)) return false;
+  }
+  return true;
 }
 
 /* ------------------------------ search text ------------------------------ */
@@ -72,7 +124,9 @@ export function filterRecords<T extends object>({
  */
 const fieldIds = new WeakMap<FieldMetadata, number>();
 let nextFieldId = 0;
-const searchTextCaches = new Map<string, WeakMap<object, string>>();
+/** A record's folded search text, and the same without separators once a reference-like word needs it. */
+type SearchCorpus = { text: string; compact?: string };
+const searchTextCaches = new Map<string, WeakMap<object, SearchCorpus>>();
 const SEARCH_CACHE_LIMIT = 16;
 
 function fieldsSignature(fields: FieldMetadata[]) {
@@ -89,12 +143,37 @@ function fieldsSignature(fields: FieldMetadata[]) {
 }
 
 /**
- * What the quick search looks in, lower-cased: every field as its cell reads
- * (option labels and relation names, not stored keys or ids), stored option
- * keys as well, and an adapter's `_searchText`. Built once per record object;
- * an edited record is a new object and gets a fresh entry.
+ * What the quick search looks in, folded (foldSearchText): every field as its
+ * cell reads (option labels and relation names, not stored keys or ids),
+ * stored option keys as well, and an adapter's `_searchText`. Built once per
+ * record object; an edited record is a new object and gets a fresh entry.
  */
 export function recordSearchText(record: FilterableRecord, fields: FieldMetadata[]): string {
+  return searchCorpus(record, fields).text;
+}
+
+/**
+ * Builds the search text of `records` ahead of the first search, a few
+ * milliseconds at a time, so the first letter typed over a long table
+ * doesn't wait for every record's text. Returns a function that stops it.
+ */
+export function prepareRecordSearch(records: readonly object[], fields: FieldMetadata[]): () => void {
+  let index = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const step = () => {
+    const until = performance.now() + 8;
+    while (index < records.length && performance.now() < until) {
+      for (const stop = Math.min(records.length, index + 100); index < stop; index += 1) {
+        searchCorpus(records[index] as FilterableRecord, fields);
+      }
+    }
+    timer = index < records.length ? setTimeout(step, 0) : null;
+  };
+  timer = setTimeout(step, 0);
+  return () => { if (timer !== null) clearTimeout(timer); };
+}
+
+function searchCorpus(record: FilterableRecord, fields: FieldMetadata[]): SearchCorpus {
   const signature = fieldsSignature(fields);
   let cache = searchTextCaches.get(signature);
   if (!cache) {
@@ -120,9 +199,9 @@ export function recordSearchText(record: FilterableRecord, fields: FieldMetadata
       parts.push(getSearchableValue(value, field.fieldType));
     }
   }
-  const text = parts.join("\n").toLowerCase();
-  cache.set(record, text);
-  return text;
+  const corpus: SearchCorpus = { text: foldSearchText(parts.join("\n")) };
+  cache.set(record, corpus);
+  return corpus;
 }
 
 /* -------------------------------- filters -------------------------------- */

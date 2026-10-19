@@ -191,4 +191,37 @@ assert.match(
   "filter values are touch-sized on phones",
 );
 
+// --- Phones: a collapsible search is an icon in the toolbar row ---------------
+assert.match(
+  toolbarSource,
+  /\{collapsibleSearch && \(isPhone \|\| !showSearch\) && \([\s\S]*?record-table__toolbar-button--search/,
+  "a collapsible search keeps its button in the phone row (beside the open field) and swaps it for the field on wider screens",
+);
+assert.match(
+  toolbarSource,
+  /flushSync\(\(\) => setSearchOpen\(true\)\);\s*searchInputRef\.current\?\.focus\(\);/,
+  "the field opens and takes focus in the same tap, so a phone raises its keyboard",
+);
+assert.match(
+  toolbarSource,
+  /const showSearch = \(!isMobile && !collapsibleSearch\) \|\| searchOpen \|\| searching;/,
+  "an active search keeps the field open, so a searched list always shows its search",
+);
+assert.match(
+  toolbarSource,
+  /autoCapitalize="none"[\s\S]*autoCorrect="off"[\s\S]*spellCheck=\{false\}[\s\S]*enterKeyHint="search"/,
+  "phone keyboards don't capitalise or autocorrect names and reference numbers",
+);
+assert.match(
+  recordTableStyles,
+  /@media \(max-width: 560px\) \{\s*\.record-table__toolbar \.record-table__view-button > \.record-table__view-edited \{/,
+  "an edited view shows as a dot in the phone's view pill",
+);
+const procurementStyles = readFileSync(new URL("../src/styles/_procurement-review.scss", import.meta.url), "utf8");
+assert.match(
+  procurementStyles,
+  /@media \(max-width: 560px\) \{\s*\.procurement-reader__layer > \.tabs \.tab \{[\s\S]*?> \.tab__count \{ display: none; \}/,
+  "the procurement reader's tabs fit a phone without their counts",
+);
+
 console.log("mobile table layout checks passed");

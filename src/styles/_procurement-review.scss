@@ -123,6 +123,14 @@ $zoer-theme: (
   visibility: hidden;
   pointer-events: none;
 }
+// Phones: Opportunities, Awards and Analytics fit the width without their counts (21877 alone
+// pushed Analytics out of sight); each list's toolbar leads with the count of what it shows.
+@media (max-width: 560px) {
+  .procurement-reader__layer > .tabs .tab {
+    padding-inline: 8px;
+    > .tab__count { display: none; }
+  }
+}
 .procurement-reader__when {
   display: inline-flex;
   flex-wrap: wrap;

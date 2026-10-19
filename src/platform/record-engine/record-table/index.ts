@@ -31,6 +31,8 @@ export {
   useRecordTableStoreHandle,
   useRecordTableIsDirty,
   computeIsDirty,
+  useRecordTableIsViewEdited,
+  computeIsViewEdited,
 } from "./state/recordTableStore";
 
 export { useRecordTableContextOrThrow } from "./contexts/RecordTableContext";

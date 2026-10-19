@@ -2,6 +2,44 @@ import assert from "node:assert/strict";
 import { createServer } from "vite";
 import { hasPdfSignature, hasZipSignature, hasOleSignature, imageMimeType, mediaMimeType } from "../src/lib/filePreviewSignatures";
 import { MAX_FILE_PREVIEW_BYTES, readPreviewResponse, verifyPreviewBytes } from "../src/lib/filePreviewBytes";
+import { canvasPixelRatio, clampZoom, MAX_PREVIEW_ZOOM, MIN_PREVIEW_ZOOM, parsePageInput, planPdfPages, splitFileName, stepZoom, zoomLabel } from "../src/components/previewViewport";
+// Zoom is relative to fit-width, can go below it, and steps from pinched values to the next preset.
+assert.equal(clampZoom(0.01), MIN_PREVIEW_ZOOM); assert.equal(clampZoom(99), MAX_PREVIEW_ZOOM); assert.equal(clampZoom(Number.NaN), 1);
+assert.ok(MIN_PREVIEW_ZOOM <= 0.5, "Previews must zoom out below fit-width");
+assert.equal(stepZoom(1, -1), 0.8); assert.equal(stepZoom(1, 1), 1.25); assert.equal(stepZoom(1.37, 1), 1.5); assert.equal(stepZoom(1.37, -1), 1.25);
+assert.equal(stepZoom(MIN_PREVIEW_ZOOM, -1), MIN_PREVIEW_ZOOM); assert.equal(stepZoom(MAX_PREVIEW_ZOOM, 1), MAX_PREVIEW_ZOOM);
+assert.equal(zoomLabel(1), "Fit"); assert.equal(zoomLabel(0.5), "50%");
+// Canvas pixel ratio: capped at 2x, and at 4 MP per canvas when zoomed in.
+assert.equal(canvasPixelRatio(374, 484, 3), 2);
+assert.equal(canvasPixelRatio(374, 484, 1), 1);
+const zoomedRatio = canvasPixelRatio(1500, 1940, 3);
+assert.ok(1500 * 1940 * zoomedRatio ** 2 <= 4_000_001, "Zoomed canvases stay within the pixel cap");
+// Page window: draw near pages nearest-first, keep a few neighbours, release the rest.
+const pageMp = () => 1_000_000;
+let plan = planPdfPages({ pageCount: 120, near: [10, 12], current: 11, rendered: new Map(), pixelsOf: pageMp });
+assert.deepEqual(plan.render, [11, 10, 12, 9, 13]); assert.deepEqual(plan.release, []);
+plan = planPdfPages({ pageCount: 120, near: [60, 61], current: 60, rendered: new Map([[1, true], [2, true], [58, true], [62, true], [64, true]]), pixelsOf: pageMp });
+assert.deepEqual(plan.release, [1, 2], "Far canvases are released"); assert.deepEqual(plan.render, [60, 61, 59]);
+plan = planPdfPages({ pageCount: 120, near: [60, 61], current: 60, rendered: new Map([[58, false], [62, true]]), pixelsOf: pageMp });
+assert.deepEqual(plan.release, [58], "Stale canvases outside the draw range are released, not redrawn");
+plan = planPdfPages({ pageCount: 3, near: null, current: 9, rendered: new Map(), pixelsOf: pageMp });
+assert.deepEqual(plan.render, [3, 2], "Out-of-range pages clamp to the document");
+plan = planPdfPages({ pageCount: 120, near: [40, 42], current: 41, rendered: new Map([[38, true]]), pixelsOf: () => 6_000_000, pixelBudget: 16_000_000 });
+assert.deepEqual(plan.render, [41, 40, 42], "Visible pages are drawn even past the budget"); assert.deepEqual(plan.release, [38]);
+assert.deepEqual(planPdfPages({ pageCount: 0, near: null, current: 1, rendered: new Map([[1, true]]), pixelsOf: pageMp }), { render: [], release: [1] });
+for (let current = 1; current <= 120; current += 7) {
+  const window = planPdfPages({ pageCount: 120, near: [current, Math.min(120, current + 2)], current, rendered: new Map(), pixelsOf: () => 800_000 });
+  assert.ok(window.render.length <= 6, "A phone-sized view draws a bounded number of pages");
+}
+assert.equal(parsePageInput(" 77 ", 120), 77); assert.equal(parsePageInput("0", 120), null); assert.equal(parsePageInput("121", 120), null); assert.equal(parsePageInput("2.5", 120), null); assert.equal(parsePageInput("", 120), null);
+// Long titles keep their extension and last word visible.
+const longName = "Forestry Digital Services Senior End to End Product Design (with AI Expertise) - IS27NRI014 MULRFQ Forestry Digital Services Senior End to End Product Design.docx";
+const split = splitFileName(longName);
+assert.equal(split.head + split.tail, longName); assert.equal(split.tail, "Design.docx");
+assert.deepEqual(splitFileName("minutes.pdf"), { head: "minutes.pdf", tail: "" });
+const noSpaces = splitFileName("IS27NRI014MULRFQFORESTRYDIGITALSERVICES.pdf");
+assert.equal(noSpaces.head + noSpaces.tail, "IS27NRI014MULRFQFORESTRYDIGITALSERVICES.pdf"); assert.ok(noSpaces.tail.endsWith(".pdf") && noSpaces.head.length > 0);
+assert.equal(splitFileName("A very long transcript name without any extension at all").tail.length > 0, true);
 const buffer = (text: string) => new TextEncoder().encode(text).buffer;
 assert.equal(hasPdfSignature(buffer("<html><script>alert('not a PDF')</script></html>")), false);
 assert.equal(imageMimeType(buffer('<svg onload="alert(1)"></svg>')), undefined);
@@ -78,7 +116,7 @@ try {
   const versionRequests = opened.length;
   await assert.rejects(readDocumentPreview({ ...selected, fileSizeBytes: MAX_FILE_PREVIEW_BYTES + 1 }, access, signal), /25 MB/);
   assert.equal(opened.length, versionRequests, "Known large previews must not request file targets");
-  console.log("OK file previews: byte signatures reject HTML/SVG, real file/media signatures, bounded streaming reads, integrity checks, selected-file routing, size/checksum validation, missing-file fallback and cancellation.");
+  console.log("OK file previews: zoom clamping/steps, canvas pixel caps, lazy PDF page window, page input, middle-ellipsis titles, byte signatures reject HTML/SVG, real file/media signatures, bounded streaming reads, integrity checks, selected-file routing, size/checksum validation, missing-file fallback and cancellation.");
 } finally {
   globalThis.fetch = priorFetch;
   envNames.forEach((key, i) => { if (priorEnv[i] === undefined) delete process.env[key]; else process.env[key] = priorEnv[i]; });

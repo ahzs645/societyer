@@ -6,7 +6,7 @@ import { filterAndSortRecords } from "../src/platform/record-engine/record-table
 import { deserializeViewFiltersFromUrl, serializeViewFiltersToUrl } from "../src/platform/record-engine/record-table/utils/viewFilterGroups";
 import { adaptLegacyDataTableView } from "../src/platform/record-engine/record-table/utils/legacyDataTableView";
 import { hydrateHydratedView } from "../src/platform/record-engine/types";
-import { filterRecords } from "../src/platform/record-engine/record-table/utils/filterRecords";
+import { filterRecords, parseSearchTerms } from "../src/platform/record-engine/record-table/utils/filterRecords";
 import { sortRecords } from "../src/platform/record-engine/record-table/utils/sortRecords";
 import { distinctFieldValues, searchDistinctValues, supportsValuePicker } from "../src/platform/record-engine/record-table/utils/distinctFieldValues";
 import {
@@ -19,7 +19,7 @@ import {
 } from "../src/platform/record-engine/record-table/utils/viewDisplay";
 import { withViewGroupBy, getViewGroupBy } from "../src/platform/record-engine/record-table/utils/groupRecords";
 import { buildRowModel, pageRowModel } from "../src/platform/record-engine/record-table/hooks/useRecordTableRowModel";
-import { createRecordTableStore } from "../src/platform/record-engine/record-table/state/recordTableStore";
+import { computeIsDirty, computeIsViewEdited, createRecordTableStore } from "../src/platform/record-engine/record-table/state/recordTableStore";
 
 function field(id: string, name: string, fieldType: FieldType): RecordField {
   const metadata: FieldMetadata = {
@@ -225,6 +225,36 @@ assert.equal(
   assert.deepEqual(filter([], "m_draft"), ["d"], "search still finds stored option keys");
 }
 
+// --- Quick search: words in any field and order, folded, references loosely --
+{
+  const columns = [
+    field("s-title", "title", FIELD_TYPES.TEXT),
+    field("s-buyer", "buyer", FIELD_TYPES.TEXT),
+  ];
+  const rows = [
+    { _id: "a", title: "Digital records strategy", buyer: "Ministry of Forests", _searchText: "IS27-NRI-014" },
+    { _id: "b", title: "Forestry digital twin", buyer: "City of Montréal", _searchText: "HLTH-2026-RFP-0219" },
+    { _id: "c", title: "Snow removal - Burnaby", buyer: "Café Société", _searchText: "" },
+    { _id: "d", title: "Removal of snow fencing", buyer: "BC Hydro", _searchText: "RFP 0219" },
+  ];
+  const search = (term: string) => filterRecords({ records: rows, columns, filters: [], searchTerm: term }).map((row) => row._id);
+  assert.deepEqual(search("forestry digital"), ["b"], "every word must match, in any order");
+  assert.deepEqual(search("digital forests"), ["a"], "words match across fields");
+  assert.deepEqual(search("  DIGITAL  "), ["a", "b"], "case and surrounding space don't matter");
+  assert.deepEqual(search("montreal"), ["b"], "accents don't matter in the records");
+  assert.deepEqual(search("SOCIÉTÉ café"), ["c"], "or in the search");
+  assert.deepEqual(search("is27nri014"), ["a"], "a reference matches without its dashes");
+  assert.deepEqual(search("is27 nri"), ["a"], "or in pieces");
+  assert.deepEqual(search("rfp-0219"), ["b", "d"], "and with other separators than the record's");
+  assert.deepEqual(search("hlth2026rfp0219"), ["b"]);
+  assert.deepEqual(search("snow removal"), ["c", "d"], "plain words match anywhere");
+  assert.deepEqual(search('"snow removal"'), ["c"], "a quoted phrase matches as written");
+  assert.deepEqual(search('"snow'), ["c", "d"], "a stray quote is ignored");
+  assert.deepEqual(search("cityof"), [], "words of letters only don't match across spaces");
+  assert.deepEqual(parseSearchTerms("Is27-NRI  is27-nri"), [{ text: "is27-nri", compact: "is27nri" }], "repeated words count once");
+  assert.deepEqual(parseSearchTerms("   "), []);
+}
+
 // --- Distinct values for the free-text filter picker ---------------------------
 {
   const buyer = field("p-buyer", "buyer", FIELD_TYPES.TEXT);
@@ -300,6 +330,34 @@ assert.equal(
   store.getState().setPageIndex(2);
   store.setState({ filters: [{ fieldMetadataId: "g-name", operator: "contains", value: "a" }] });
   assert.equal(store.getState().pageIndex, 0, "a new filter (however it is set) starts at page one");
+}
+
+// --- A view whose filters or sort changed says so, and comes back -------------
+{
+  const name = field("v-name", "name", FIELD_TYPES.TEXT);
+  const filters = [{ id: "open", fieldMetadataId: "v-name", operator: "contains" as const, value: "open" }];
+  const sorts = [{ fieldMetadataId: "v-name", direction: "asc" as const }];
+  const view = hydrateHydratedView({ view: { _id: "preset", objectMetadataId: "o", name: "Open first", type: "table", filtersJson: JSON.stringify(filters), sortsJson: JSON.stringify(sorts) }, columns: [{ viewField: { _id: "vf", fieldMetadataId: "v-name" }, field: name.field }] });
+  const store = createRecordTableStore({ tableId: "t", objectMetadataId: "o" });
+  store.getState().loadView(view);
+  assert.equal(computeIsViewEdited(store.getState()), false, "a freshly loaded view shows its own rows");
+  store.getState().setSearchTerm("snow");
+  assert.equal(computeIsViewEdited(store.getState()), false, "a quick search over a view isn't an edit of it");
+  store.getState().toggleColumnVisibility(store.getState().columns[0].viewFieldId);
+  store.getState().setDensity("comfortable");
+  assert.equal(computeIsViewEdited(store.getState()), false, "nor are columns or density");
+  store.setState({ filters: [], filterGroups: [] });
+  assert.equal(computeIsViewEdited(store.getState()), true, "clearing the view's filters (Clear all, Clear filters) is");
+  store.getState().discardDraftChanges({ keepQuickSearch: true });
+  assert.equal(computeIsViewEdited(store.getState()), false, "choosing the view again restores its filters");
+  assert.equal(computeIsDirty(store.getState()), false, "and everything else it saved");
+  assert.equal(store.getState().filters.length, 1);
+  assert.equal(store.getState().searchTerm, "snow", "keeping the search typed over it");
+  store.getState().setSorts([]);
+  assert.equal(computeIsViewEdited(store.getState()), true, "removing the view's sort is an edit");
+  store.getState().discardDraftChanges();
+  assert.equal(store.getState().searchTerm, "", "a plain discard drops the quick search too");
+  assert.deepEqual(store.getState().sorts, view.view.sorts);
 }
 
 console.log("record table utility checks passed");

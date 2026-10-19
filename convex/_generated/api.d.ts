@@ -176,6 +176,7 @@ import type * as powersync_checkpoints from "../powersync_checkpoints.js";
 import type * as procurementImport from "../procurementImport.js";
 import type * as procurementReview from "../procurementReview.js";
 import type * as procurementReviewHttp from "../procurementReviewHttp.js";
+import type * as procurementSync from "../procurementSync.js";
 import type * as procurementTaxonomy from "../procurementTaxonomy.js";
 import type * as programStatements from "../programStatements.js";
 import type * as providers_accounting from "../providers/accounting.js";
@@ -467,6 +468,7 @@ declare const fullApi: ApiFromModules<{
   procurementImport: typeof procurementImport;
   procurementReview: typeof procurementReview;
   procurementReviewHttp: typeof procurementReviewHttp;
+  procurementSync: typeof procurementSync;
   procurementTaxonomy: typeof procurementTaxonomy;
   programStatements: typeof programStatements;
   "providers/accounting": typeof providers_accounting;

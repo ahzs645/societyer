@@ -449,6 +449,7 @@ export function NoticeTable({
         <RecordTableToolbar
           label={label ?? objectMetadata.labelPlural}
           icon={<FileSearch size={14} />}
+          collapsibleSearch
           onOpenFilter={() => setFiltering((open) => !open)}
           {...(onChangeView && kind === "opportunity"
             ? {
@@ -496,10 +497,11 @@ export function NoticeTable({
 }
 
 /**
- * The search box follows the caller's term (the URL): seeded from it, written
- * back after a pause in typing. Loading a view (a preset, or the table's own
- * first load) resets the table's search, so the term is put back after every
- * view load.
+ * The search box follows the caller's term (the URL): seeded from it, and
+ * written back after a pause in typing. Only a term changed elsewhere (Back,
+ * a link) is put into the box; the URL catching up with the typing must not
+ * put an older term back over letters typed since. Loading a view (a preset)
+ * resets the table's search, so the term from before the load is put back.
  */
 function SearchSync({
   search,
@@ -510,9 +512,12 @@ function SearchSync({
 }) {
   const handle = useRecordTableStoreHandle();
   const term = useRecordTableState((s) => s.searchTerm);
-  const wanted = useRef(search);
-  wanted.current = search;
+
+  // The term the URL has, or is being given, from this box.
+  const synced = useRef<string | null>(null);
   useEffect(() => {
+    if (synced.current === search) return;
+    synced.current = search;
     if (handle.get().searchTerm.trim() !== search)
       handle.get().setSearchTerm(search);
   }, [handle, search]);
@@ -521,16 +526,20 @@ function SearchSync({
       handle.subscribe((state, previous) => {
         if (
           state.savedView !== previous.savedView &&
-          state.searchTerm.trim() !== wanted.current
+          state.searchTerm !== previous.searchTerm
         )
-          state.setSearchTerm(wanted.current);
+          state.setSearchTerm(previous.searchTerm);
       }),
     [handle],
   );
+
   useEffect(() => {
     const value = term.trim();
-    if (value === search || value.length > 200) return;
-    const timer = setTimeout(() => onSearch(value), 300);
+    if (value === synced.current || value.length > 200) return;
+    const timer = setTimeout(() => {
+      synced.current = value;
+      onSearch(value);
+    }, 300);
     return () => clearTimeout(timer);
   }, [term]); // eslint-disable-line react-hooks/exhaustive-deps -- only typing schedules a write
   return null;

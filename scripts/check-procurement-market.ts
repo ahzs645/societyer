@@ -6,6 +6,7 @@
  * `tsx scripts/check-procurement-market.ts`.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   distribution, filterAwards, isPlaceholderSupplier, matrix, metadata, money, normalizeAwards, normalizeLabel, overview, quantile, rank, trends, validateFilters, yearly,
 } from "../src/features/procurementReview/lib/market";
@@ -22,6 +23,14 @@ assert.equal(migrated.get("tab"), "documents");
 assert.equal(readerPlaces(migrated).party?.name, "City");
 assert.equal(canonicalReaderParams(new URLSearchParams("record=unrelated-record")), null);
 assert.equal(canonicalReaderParams(new URLSearchParams("notice=award%3A1")), null);
+
+// The list's search is an icon in its toolbar, and the URL catching up with the
+// typing (q=) never puts an older term back over letters typed since.
+const noticeTable = readFileSync(new URL("../src/features/procurementReview/reader/NoticeTable.tsx", import.meta.url), "utf8");
+assert.match(noticeTable, /<RecordTableToolbar\s[\s\S]{0,200}?\bcollapsibleSearch\b/, "the reader's search starts as an icon");
+assert.match(noticeTable, /if \(synced\.current === search\) return;/, "only a term changed elsewhere (Back, a link) is put into the box");
+assert.match(noticeTable, /const timer = setTimeout\(\(\) => \{\s*synced\.current = value;\s*onSearch\(value\);\s*\}, 300\);/, "the box remembers the term it wrote");
+assert.match(noticeTable, /state\.setSearchTerm\(previous\.searchTerm\)/, "a preset loading keeps the search typed before it");
 const TODAY = "2026-10-18";
 const base: ListRow = {
   recordKey: "", kind: "award", title: "", organization: "", issuedFor: "", status: "Awarded", date: "", dateText: "",

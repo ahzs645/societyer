@@ -62,6 +62,7 @@ export const procurementTables = {
     publishedAt: v.string(),
     counts: v.record(v.string(), v.number()),
     storageGeneration: v.optional(v.string()),
+    searchReady: v.optional(v.boolean()),
     syncRunId: v.optional(v.id("procurementSyncRuns")),
     profileVersion: v.optional(v.number()),
     contentHash: v.optional(v.string()),
@@ -75,6 +76,18 @@ export const procurementTables = {
     sourceCatalogSha256: v.optional(v.string()),
   }).index("by_society", ["societyId"]),
   // List projections stay small; a list read never touches notice bodies or file contents.
+  procurementSearch: defineTable({
+    ...scope,
+    recordKey: v.string(),
+    kind: v.string(),
+    active: v.boolean(),
+    grams: v.string(),
+  })
+    .index("by_key", ["societyId", "generation", "recordKey"])
+    .searchIndex("by_grams", {
+      searchField: "grams",
+      filterFields: ["societyId", "generation", "kind", "active"],
+    }),
   procurementSyncRuns: defineTable({
     societyId: v.id("societies"),
     baseHash: v.string(),

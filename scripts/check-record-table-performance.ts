@@ -123,6 +123,14 @@ const firstSearch = performance.now() - firstSearchStart;
 results.push(["search 25,000 rows (first, builds corpus)", firstSearch]);
 assert.ok(firstSearch < BUDGET_MS * 3, `first search took ${firstSearch.toFixed(1)} ms`);
 measure("search 25,000 rows (cached)", () => filterAndSortRecords({ records, columns, filters: [], sorts: [], searchTerm: "snow removal" }));
+measure("search 25,000 rows, three words", () => filterAndSortRecords({ records, columns, filters: [], sorts: [], searchTerm: "snow item vendor 12" }));
+// A reference-like word also looks in the text without separators, built on first need.
+const firstLooseStart = performance.now();
+filterAndSortRecords({ records, columns, filters: [], sorts: [], searchTerm: "vendor-129" });
+const firstLoose = performance.now() - firstLooseStart;
+results.push(["search 25,000 rows by reference (first, builds loose text)", firstLoose]);
+assert.ok(firstLoose < BUDGET_MS * 3, `first reference search took ${firstLoose.toFixed(1)} ms`);
+measure("search 25,000 rows by reference (cached)", () => filterAndSortRecords({ records, columns, filters: [], sorts: [], searchTerm: "vendor-129" }));
 
 measure("distinct buyers (≈4,000 values)", () => {
   const values = distinctFieldValues(records, columns[1].field);

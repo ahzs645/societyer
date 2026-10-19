@@ -1,7 +1,7 @@
 import { assertPreviewSize, readPreviewResponse } from "../lib/filePreviewBytes";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PdfPreview } from "./PdfPreview";
-import { renderAsync } from "docx-preview";
+import { DocxPreview } from "./DocxPreview";
 import { Download, FileWarning, Loader2, ShieldCheck } from "lucide-react";
 import type { Id } from "../../convex/_generated/dataModel";
 import { restoredDocumentFile } from "../lib/documentOpen";
@@ -19,7 +19,8 @@ const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordproces
  * Renders the real file inline where possible: a saved original from a
  * restored backup first, then the latest uploaded version, then a fetched
  * link (finding D-02). PDFs use the shared PDF.js viewer only after the
- * bytes prove to be a PDF (finding D-01); DOCX via docx-preview; XLSX as plain
+ * bytes prove to be a PDF (finding D-01); DOCX via docx-preview, fitted to the
+ * width with zoom controls (`DocxPreview`); XLSX as plain
  * tables; images as <img>; legacy Office files explain why they cannot render
  * and show the text extracted at import instead.
  */
@@ -43,11 +44,11 @@ export function DocumentPreviewPane({
 }) {
   const [status, setStatus] = useState<PreviewStatus>("loading");
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [docxBlob, setDocxBlob] = useState<Blob | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [sheets, setSheets] = useState<SheetPreview[]>([]);
   const [text, setText] = useState<string>("");
   const [origin, setOrigin] = useState<"saved" | "version" | "link" | null>(null);
-  const renderRef = useRef<HTMLDivElement>(null);
   const fileName = document?.fileName;
   const ext = extensionOf(fileName);
 
@@ -58,6 +59,7 @@ export function DocumentPreviewPane({
     setStatus("loading");
     setBlobUrl(null);
     setPdfBlob(null);
+    setDocxBlob(null);
     setSheets([]);
     setText("");
     setOrigin(null);
@@ -130,11 +132,7 @@ export function DocumentPreviewPane({
             return;
           }
           if (ext === "docx" || mimeType?.includes("wordprocessingml") || !ext) {
-            const container = renderRef.current;
-            if (!container) throw new Error("Preview container missing");
-            container.replaceChildren();
-            await renderAsync(new Blob([bytes], { type: DOCX_MIME_TYPE }), container);
-            if (cancelled) return;
+            setDocxBlob(new Blob([bytes], { type: DOCX_MIME_TYPE }));
             setStatus("docx");
             return;
           }
@@ -182,6 +180,10 @@ export function DocumentPreviewPane({
     };
   }, [loadBytes, getDownloadTarget, document?._id, document?.latestVersionId, document?.sha256, document?.mimeType, fallbackUrl, fileName, hasAnyFile]);
 
+  const docxFailed = useCallback((error: unknown) => {
+    console.error("Failed to render document preview", error);
+    setStatus("error");
+  }, []);
   const extracted = extractedText?.trim();
   return (
     <div className="document-preview-pane">
@@ -195,6 +197,7 @@ export function DocumentPreviewPane({
         </div>
       )}
       {status === "pdf" && pdfBlob && <PdfPreview blob={pdfBlob} />}
+      {status === "docx" && docxBlob && <DocxPreview blob={docxBlob} onError={docxFailed} />}
       {status === "image" && blobUrl && (
         <img src={blobUrl} alt={fileName ?? "Document image"} className="document-preview-pane__image" />
       )}
@@ -237,11 +240,6 @@ export function DocumentPreviewPane({
           )}
         </div>
       )}
-      <div
-        ref={renderRef}
-        className="minutes-docx-preview__render"
-        style={{ display: status === "docx" ? "block" : "none" }}
-      />
     </div>
   );
 }

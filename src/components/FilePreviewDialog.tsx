@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useState } from "react";
 import { Download, Maximize2, Minimize2 } from "lucide-react";
 import { Modal } from "./Modal";
+import { splitFileName } from "./previewViewport";
 
 const PreviewPane = lazy(() => import("./DocumentPreviewPane").then(module => ({ default: module.DocumentPreviewPane })));
 /** Bound in-memory previews on phones; downloading the original remains available. */
@@ -12,6 +13,11 @@ export type PreviewFile = { id: string; name: string; mimeType?: string; sha256?
  * Storage-independent preview dialog for any platform feature. The caller's
  * loader must authorize access and verify stored-file integrity. No storage URL
  * or credentials are passed to a third-party document viewer.
+ *
+ * The header shows the file name on one line with a middle ellipsis, so the
+ * extension and the expand/close actions always stay visible; tapping the name
+ * (or hovering it) shows it in full. The modal's own heading stays as the
+ * dialog's accessible name, visually hidden.
  */
 export function FilePreviewDialog({ file, loadBytes, onClose, onDownload, downloading = false }: {
   file: PreviewFile;
@@ -35,7 +41,8 @@ export function FilePreviewDialog({ file, loadBytes, onClose, onDownload, downlo
       className="file-preview-modal"
       resizable={false}
       fullscreen={fullscreen}
-      headerActions={
+      headerActions={<>
+        <FilePreviewTitle name={file.name} />
         <button
           type="button"
           className="btn btn--ghost btn--icon"
@@ -46,7 +53,7 @@ export function FilePreviewDialog({ file, loadBytes, onClose, onDownload, downlo
         >
           {fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
-      }
+      </>}
       onClose={onClose}
       footer={onDownload && (
         <button className="btn" disabled={downloading} onClick={onDownload}>
@@ -60,5 +67,19 @@ export function FilePreviewDialog({ file, loadBytes, onClose, onDownload, downlo
             <PreviewPane document={{ _id: file.id, fileName: file.name, mimeType: file.mimeType, sha256: file.sha256 }} fallbackUrl={null} hasAnyFile onOpenFile={onDownload} loadBytes={boundedLoad} />
           </Suspense>}
     </Modal>
+  );
+}
+
+/** One line, cut in the middle ("Forestry Digital…Design.docx"); a tap toggles the full name. */
+function FilePreviewTitle({ name }: { name: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const { head, tail } = splitFileName(name);
+  return (
+    <button type="button" className={`file-preview-title${expanded ? " is-expanded" : ""}`} title={name} aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
+      {expanded || !tail ? <span className="file-preview-title__head">{name}</span> : <>
+        <span className="file-preview-title__head">{head}</span>
+        <span className="file-preview-title__tail">{tail}</span>
+      </>}
+    </button>
   );
 }

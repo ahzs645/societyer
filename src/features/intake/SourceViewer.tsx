@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useQuery } from "convex/react";
 import { FileText, GitCompare, Lock } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { PdfPreview } from "../../components/PdfPreview";
+import { PdfPreview, type PdfTextLayerInfo } from "../../components/PdfPreview";
 import { diffTokens, tokenize, type Chunk } from "../../lib/wordDiff";
 import { getRestoredFile } from "../../lib/workspaceArchiveFiles";
 import type { IntakeBlock } from "../../../shared/intake/blocks";
@@ -158,9 +158,10 @@ function findQuoteInDom(root: HTMLElement | null, quote: string) {
 }
 
 function PdfView({ blob, locator, context }: { blob: Blob; locator?: ViewerLocator; context?: string }) {
-  const highlight = useCallback((elements: HTMLElement[], text: string[]) => {
+  // Every drawn page gets its highlight; only the locator's page scrolls to it.
+  const highlight = useCallback((elements: HTMLElement[], text: string[], { focus }: PdfTextLayerInfo) => {
     const first = highlightSpans(elements, text, locator?.quote, context);
-    first?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (focus) first?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [locator?.quote, context]);
   return <PdfPreview blob={blob} pageNumber={locator?.page} focusKey={locator?.quote} onTextLayerReady={highlight} testId="intake-pdf" />;
 }

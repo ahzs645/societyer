@@ -98,6 +98,37 @@
   color: token('accent');
 }
 
+// The view's filters or sort were changed since it loaded (choosing it
+// again resets them). Phones show a dot; the button's name says "edited".
+.record-table__view-edited {
+  flex: none;
+  padding: 0 6px;
+  border-radius: token('r-pill');
+  background: token('accent-soft');
+  color: token('accent');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  line-height: 18px;
+}
+@media (max-width: 560px) {
+  .record-table__toolbar .record-table__view-button > .record-table__view-edited {
+    width: 7px;
+    min-width: 7px;
+    height: 7px;
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    font-size: 0;
+    background: token('accent');
+  }
+}
+
+// A collapsible search (RecordTableToolbar `collapsibleSearch`) leaves no
+// field between the two groups while folded: the buttons keep to the right.
+.record-table__toolbar-left + .record-table__toolbar-right {
+  margin-left: auto;
+}
+
 // "Save changes" button shown when the view has unsaved edits. Yellow
 // tone so it reads as a pending action, not a destructive one.
 .record-table__toolbar-button--dirty {
@@ -2272,6 +2303,10 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-table__empty-action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
   margin-top: 12px;
 }
 

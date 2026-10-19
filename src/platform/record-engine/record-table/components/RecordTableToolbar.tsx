@@ -1,6 +1,7 @@
 import { ViewportPopover } from "@/components/ViewportPopover";
 import { lowerLabel } from "../utils/lowerLabel";
-import { createElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createElement, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useLocation } from "react-router-dom";
 import {
   ArrowDownUp,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import {
   useRecordTableIsDirty,
+  useRecordTableIsViewEdited,
   useRecordTableState,
   useRecordTableStoreHandle,
 } from "../state/recordTableStore";
@@ -32,6 +34,7 @@ import { usePrompt } from "../../../../components/Modal";
 import { useTranslation } from "react-i18next";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
+import { prepareRecordSearch } from "../utils/filterRecords";
 import { usePermissions } from "../../../../hooks/usePermissions";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { useIsMobile } from "../../../../lib/useIsMobile";
@@ -65,6 +68,14 @@ function resetScrollForViewSwitch() {
 
 export type TableListViewOption = { active: boolean; onSelect: () => void; onLeave: () => void };
 
+/**
+ * Tables at least this long filter a pause after typing rather than on every
+ * key: the field keeps up with the typing, and the list (and its count)
+ * changes once per pause instead of jumping on each letter.
+ */
+const SEARCH_DEBOUNCE_ROWS = 1000;
+const SEARCH_DEBOUNCE_MS = 150;
+
 export function RecordTableToolbar({
   icon,
   label,
@@ -77,6 +88,7 @@ export function RecordTableToolbar({
   actions,
   listView,
   hideViewPickerOnPhone = false,
+  collapsibleSearch = false,
 }: {
   icon?: ReactNode;
   label: string;
@@ -107,6 +119,14 @@ export function RecordTableToolbar({
    * view. The row then just counts the records. Wider screens keep it.
    */
   hideViewPickerOnPhone?: boolean;
+  /**
+   * Search starts as a Search button in the toolbar row (on phones too, where
+   * it is otherwise only in the "View options" sheet). It opens the field,
+   * focused; the field folds back once it is empty and loses focus, or with
+   * its ×. While a search applies the field stays open, so a searched list
+   * always says so.
+   */
+  collapsibleSearch?: boolean;
 }) {
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
@@ -119,6 +139,7 @@ export function RecordTableToolbar({
   const handle = useRecordTableStoreHandle();
   const filteredRecords = useFilteredRecords();
   const isDirty = useRecordTableIsDirty();
+  const viewEdited = useRecordTableIsViewEdited();
   const { objectMetadata } = useRecordTableContextOrThrow();
   const toast = useToast();
   const prompt = usePrompt();
@@ -142,6 +163,44 @@ export function RecordTableToolbar({
     if (isPhone) setViewOptionsOpen(true);
   }, [isPhone, viewOptionsRequest]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // The field shows what is typed straight away; long tables take it a pause
+  // later (SEARCH_DEBOUNCE_MS). A search set from elsewhere (a view loading,
+  // "Clear filters", a link) replaces what the field shows.
+  const [searchDraft, setSearchDraft] = useState(searchTerm);
+  const writtenSearch = useRef(searchTerm);
+  const searchTimer = useRef<number | null>(null);
+  const debounceSearch = useRecordTableState((s) => s.records.length >= SEARCH_DEBOUNCE_ROWS);
+  useEffect(() => {
+    if (searchTerm === writtenSearch.current) return;
+    writtenSearch.current = searchTerm;
+    if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+    setSearchDraft(searchTerm);
+  }, [searchTerm]);
+  // A long table reads its records' search text while the field is first focused, before any letter is typed.
+  const stopPreparing = useRef<(() => void) | null>(null);
+  useEffect(() => () => {
+    if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
+    stopPreparing.current?.();
+  }, []);
+  const prepareSearch = () => {
+    if (!debounceSearch) return;
+    stopPreparing.current?.();
+    const state = handle.get();
+    stopPreparing.current = prepareRecordSearch(state.records, state.columns.map((column) => column.field));
+  };
+  const writeSearch = (value: string, now = false) => {
+    setSearchDraft(value);
+    if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+    const commit = () => {
+      searchTimer.current = null;
+      writtenSearch.current = value;
+      handle.get().setSearchTerm(value);
+    };
+    if (now || !debounceSearch) commit();
+    else searchTimer.current = window.setTimeout(commit, SEARCH_DEBOUNCE_MS);
+  };
   const mobileSelectable = useRecordTableState((s) => s.mobileSelectable);
   const mobileSelectionMode = useRecordTableState((s) => s.mobileSelectionMode);
   useEffect(() => {
@@ -150,7 +209,30 @@ export function RecordTableToolbar({
   }, [handle]);
   // The page-mounted filter editor portals into this row and floats under it.
   const toolbarRef = useCallback((element: HTMLDivElement | null) => handle.get().setToolbarElement(element), [handle]);
-  const showSearch = !isMobile || searchOpen || Boolean(searchTerm);
+  const searching = Boolean(searchDraft || searchTerm);
+  const showSearch = (!isMobile && !collapsibleSearch) || searchOpen || searching;
+  // Rendered and focused in the same tap, so phones raise the keyboard.
+  const openSearch = () => {
+    flushSync(() => setSearchOpen(true));
+    searchInputRef.current?.focus();
+  };
+  const closeSearch = () => {
+    writeSearch("", true);
+    setSearchOpen(false);
+  };
+  const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape" && (searchDraft || searchOpen)) {
+      // First Esc clears the search, the next folds the field away.
+      event.preventDefault();
+      event.stopPropagation();
+      if (searchDraft) writeSearch("", true);
+      else { setSearchOpen(false); event.currentTarget.blur(); }
+    } else if (event.key === "Enter") {
+      writeSearch(event.currentTarget.value, true);
+      // Phones: the keyboard's Search key puts the keyboard away to show the results.
+      if (isMobile) event.currentTarget.blur();
+    }
+  };
 
   // The section icon comes from the route registry so a table's icon always
   // matches its page header and sidebar nav (single source of truth, same as
@@ -282,7 +364,7 @@ export function RecordTableToolbar({
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     if (switcher.parentElement) observer?.observe(switcher.parentElement);
     return () => observer?.disconnect();
-  }, [activeViewName, viewCount]);
+  }, [activeViewName, viewCount, viewEdited]);
 
   const filterButton = (
     <button
@@ -317,11 +399,14 @@ export function RecordTableToolbar({
               className="record-table__view-button"
               // The count chip can be visually hidden on phones (is-tight);
               // the name keeps it either way.
-              aria-label={`${activeViewName} ${viewCount}`}
+              aria-label={`${activeViewName}${viewEdited ? " (edited)" : ""} ${viewCount}`}
+              title={viewEdited ? "Its filters or sort have changed. Choose the view again to reset them." : undefined}
               onClick={() => setViewMenuOpen((x) => !x)}
             >
               {resolvedIcon}
               <span className="record-table__view-name">{activeViewName}</span>
+              {/* The view's own filters or sort were changed: the name alone would claim rows it isn't showing. */}
+              {viewEdited && <span className="record-table__view-edited">Edited</span>}
               <span className="record-table__view-count">{viewCount}</span>
               <ChevronDown size={12} />
             </button>
@@ -336,12 +421,15 @@ export function RecordTableToolbar({
                       (v._id === currentViewId ? " record-table__menu-item--active" : "")
                     }
                     onClick={() => {
+                      // Choosing the view on show again puts back its own filters and sort.
+                      if (v._id === currentViewId && viewEdited) handle.get().discardDraftChanges({ keepQuickSearch: true });
                       onChangeView?.(v._id);
                       setViewMenuOpen(false);
                     }}
                   >
                     {v.name}
                     {v.isSystem && <span className="record-table__menu-badge">system</span>}
+                    {v._id === currentViewId && viewEdited && <span className="record-table__menu-badge">reset</span>}
                   </button>
                 ))}
               </ViewportPopover>
@@ -357,15 +445,12 @@ export function RecordTableToolbar({
         {!isPhone && loadingStatusElement}
         {isMobile && !isPhone && (
           <div className="record-table__mobile-tools">
-            {!showSearch && (
+            {!showSearch && !collapsibleSearch && (
               <button
                 type="button"
                 className="record-table__icon-button"
                 aria-label={`Search ${lowerLabel(objectMetadata.labelPlural)}`}
-                onClick={() => {
-                  setSearchOpen(true);
-                  window.setTimeout(() => searchInputRef.current?.focus(), 0);
-                }}
+                onClick={openSearch}
               >
                 <Search size={16} />
               </button>
@@ -400,17 +485,28 @@ export function RecordTableToolbar({
             ref={searchInputRef}
             className="record-table__search-input"
             placeholder={`Search ${lowerLabel(objectMetadata.labelPlural)}…`}
-            value={searchTerm}
-            onChange={(e) => handle.get().setSearchTerm(e.target.value)}
-            onBlur={() => { if (!searchTerm) setSearchOpen(false); }}
+            aria-label={`Search ${lowerLabel(objectMetadata.labelPlural)}`}
+            value={searchDraft}
+            // Names and reference numbers: no autocorrect or capitals.
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="search"
+            onChange={(e) => writeSearch(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            onFocus={prepareSearch}
+            onBlur={(e) => {
+              if (searchTimer.current !== null) writeSearch(e.currentTarget.value, true);
+              if (!e.currentTarget.value) setSearchOpen(false);
+            }}
           />
-          {(searchTerm || (isMobile && searchOpen)) && (
+          {(searching || ((isMobile || collapsibleSearch) && searchOpen)) && (
             <button
               type="button"
               className="record-table__search-clear"
-              aria-label={searchTerm ? "Clear search" : "Close search"}
+              aria-label={searching ? "Clear search" : "Close search"}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => { handle.get().setSearchTerm(""); setSearchOpen(false); }}
+              onClick={closeSearch}
             >
               <X size={isMobile ? 14 : 11} />
             </button>
@@ -420,6 +516,28 @@ export function RecordTableToolbar({
       )}
 
       <div className="record-table__toolbar-right">
+        {/* Phones keep the button beside the open field (it shows the search is on); wider screens swap it for the field. */}
+        {collapsibleSearch && (isPhone || !showSearch) && (
+          <button
+            type="button"
+            className={
+              "record-table__toolbar-button record-table__toolbar-button--collapsible record-table__toolbar-button--search" +
+              (searching ? " record-table__toolbar-button--active" : "")
+            }
+            aria-label={`Search ${lowerLabel(objectMetadata.labelPlural)}${searching ? " · on" : ""}`}
+            aria-expanded={showSearch}
+            title={`Search ${lowerLabel(objectMetadata.labelPlural)}`}
+            // Keeps the open field's focus, so a tap folds an empty field rather than blurring and reopening it.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              if (showSearch && !searching) setSearchOpen(false);
+              else openSearch();
+            }}
+          >
+            <Search size={12} />
+            <span>{t("common.search", "Search")}</span>
+          </button>
+        )}
         {/* Unsaved-view controls: inline on wider screens, their own line on phones. */}
         <div className="record-table__toolbar-dirty">
         {onSaveView && isDirty && (

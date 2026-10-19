@@ -103,7 +103,7 @@ if (delta) {
     prior?.generation === activation.generation
   ) {
     console.log(
-      "Delta already activated; no database reads or writes required.",
+      "Delta already activated; no row imports or catalog scans.",
     );
     process.exit(0);
   }

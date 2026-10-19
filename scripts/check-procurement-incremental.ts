@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { procurementSearchMatches } from "../shared/procurementSearchText";
+assert.equal(procurementSearchMatches("Ministry of Forêts IS27-NRI-014", "forets ministry"), true);
+assert.equal(procurementSearchMatches("Ministry of Forêts IS27-NRI-014", "is27nri014"), true);
+assert.equal(procurementSearchMatches("Ministry of Forêts", "ministry timber"), false);
 import { convexTest } from "convex-test";
 import { anyApi } from "convex/server";
 import schema from "../convex/schema";
@@ -270,6 +274,13 @@ await assert.rejects(
   }),
   /active/,
 );
+
+// Materialize the same candidate index used in production, then exercise exact search.
+let searchCursor:string|null=null;
+for(;;){const indexed=await t.mutation(api.procurementSync.indexSearchPage,{societyId:fixture.societyId,cursor:searchCursor});if(indexed.done)break;searchCursor=indexed.cursor;}
+const searchable=await reader.query(api.procurementReview.page,{...pageArgs,generation:"publication-2",request:JSON.stringify({columns:[],filters:[],sorts:[],searchTerm:"CITY updated"})});
+assert.equal(searchable.page.length,1);assert.equal(searchable.page[0].recordKey,old.recordKey,"Search is case-insensitive, any order and every word must match");
+
 console.log(
   "OK: bounded cursor pages, authentication, baseline conflicts, resumable checkpoint/retry, concurrent-plan refusal, incomplete-publication gate, count verification, unchanged row preservation, archived removals, storage-generation guards.",
 );

@@ -22,7 +22,6 @@
   background: token('bg-app');
   color-scheme: light;
 }
-.document-preview-pane .pdf-preview { padding: 4px; }
 // Tame docx-preview's default gray wrapper the same way the minutes preview
 // does (see .minutes-docx-preview .docx-wrapper) — our own container already
 // provides the backdrop, keep only the per-page paper it draws.
@@ -749,9 +748,36 @@ button.org-outline__row {
 .org-node__member .org-node__role { display: block; }
 .org-node--root .org-node__name { white-space: normal; }
 
-.pdf-preview { background: var(--bg-muted); padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+// Shared PDF / Word viewers (PdfPreview, DocxPreview): a toolbar over one
+// scroll viewport. Inside the file-preview dialog the viewport itself scrolls
+// (both axes, so a zoomed page pans without a scrollbar at the far end of the
+// document); inline, the surrounding pane scrolls. Pinches are handled in JS
+// (usePinchZoom), so the viewport only lets the browser pan.
+.pdf-preview, .docx-preview { display: flex; flex-direction: column; min-width: 0; background: var(--bg-muted); }
+.pdf-preview__nav, .docx-preview__toolbar {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px;
+  padding: 6px; background: var(--bg-panel); border-bottom: 1px solid token('border-color-light');
+  font-size: var(--fs-xs);
+}
+.pdf-preview__page-field { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pdf-preview__page-input {
+  height: 28px; padding: 0 4px; text-align: center; font: inherit; font-variant-numeric: tabular-nums;
+  color: token('text-primary'); background: token('bg-app'); border: 1px solid token('border'); border-radius: token('r-sm');
+}
+.pdf-preview__nav-gap { width: 6px; }
+.preview-zoom__level { min-width: 52px; justify-content: center; font-variant-numeric: tabular-nums; }
+.pdf-preview__status { margin: 0; padding: 12px; text-align: center; color: token('text-secondary'); }
+.pdf-preview__viewport, .docx-preview__viewport {
+  width: 100%; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y;
+  &:focus-visible { outline: token('focus-ring-width') solid token('focus-ring-color'); outline-offset: -2px; }
+}
+// Centred while narrower than the viewport, scrollable from the left edge once wider.
+.pdf-preview__pages { display: grid; justify-content: safe center; gap: 8px; padding: 8px; width: max-content; min-width: 100%; box-sizing: border-box; }
 .pdf-preview__page { position: relative; box-shadow: 0 1px 4px var(--gray-a-5); background: #fff; }
-.pdf-preview__page canvas { display: block; }
+.pdf-preview__page canvas { display: block; width: 100%; height: 100%; }
+.docx-preview__content { width: max-content; min-width: 100%; padding: 8px; box-sizing: border-box; }
+.docx-preview .docx-wrapper { align-items: safe center; }
 /* Minimal pdf.js text-layer rules (from pdfjs-dist/web/pdf_viewer.css), scoped to the viewer. */
 .pdf-preview .textLayer {
   position: absolute; inset: 0; overflow: clip; line-height: 1; text-size-adjust: none; transform-origin: 0 0; z-index: 0;
@@ -766,10 +792,20 @@ button.org-outline__row {
 }
 .pdf-preview .textLayer .markedContent { display: contents; }
 .pdf-preview .textLayer span.intake-hl { background: rgba(255, 196, 0, 0.45); box-shadow: none; border-radius: 0; }
-.pdf-preview__nav { display: flex; gap: 8px; align-items: center; font-size: var(--fs-xs); }
 
-.pdf-preview__viewport { width: 100%; display: flex; overflow-x: auto; }
-.pdf-preview__nav { flex-wrap: wrap; justify-content: center; }
+// File name in the dialog header: one line, cut in the middle so the extension
+// stays (FilePreviewDialog's FilePreviewTitle); a tap shows the whole name.
+.file-preview-title {
+  display: flex; align-items: baseline; flex: 1 1 auto; min-width: 0;
+  margin: 0; padding: 2px 4px; border: 0; border-radius: token('r-sm'); background: none;
+  color: token('text-primary'); font: inherit; @include text-title-section; text-align: left; cursor: pointer;
+  &:focus-visible { outline: token('focus-ring-width') solid token('focus-ring-color'); outline-offset: 0; }
+  &.is-expanded .file-preview-title__head { white-space: normal; overflow-wrap: anywhere; }
+}
+.file-preview-title__head { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.file-preview-title__tail { flex: none; white-space: pre; }
+// The brief "Loading file information…" dialog shows the same long names.
+.modal.modal--one-line-title .modal__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 
 // One reading surface instead of nested modal/card/PDF gutters.
 .modal.file-preview-modal {
@@ -778,11 +814,14 @@ button.org-outline__row {
   height: calc(100dvh - 32px);
   max-height: calc(100dvh - 32px);
   .modal__head, .modal__foot { flex-shrink: 0; }
-  .modal__body { flex: 1 1 auto; min-height: 0; padding: 0; overflow: auto; }
-  .document-preview-pane { min-height: 100%; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 0; }
+  // The heading stays the dialog's accessible name; .file-preview-title shows it.
+  .modal__title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .modal__head > .file-preview-title { flex: 1 1 auto; }
+  .modal__body { flex: 1 1 auto; min-height: 0; padding: 0; overflow: auto; display: flex; flex-direction: column; }
+  .document-preview-pane { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; display: flex; flex-direction: column; border: 0; border-radius: 0; padding: 0; }
   .document-preview-pane__message, .document-preview-pane__text, .document-preview-pane__sheets { padding: 12px; }
-  .pdf-preview { padding: 4px; gap: 8px; min-height: 100%; }
-  .pdf-preview__nav { position: sticky; top: 0; z-index: 2; background: var(--bg-panel); padding: 6px; width: 100%; }
+  .pdf-preview, .docx-preview { flex: 1 1 auto; min-height: 0; padding: 0; }
+  .pdf-preview__viewport, .docx-preview__viewport { flex: 1 1 auto; min-height: 0; }
   .document-preview-pane__image { display: block; max-width: 100%; margin: auto; }
   .file-preview-media { display: block; width: 100%; max-height: 75dvh; margin: auto; }
   &.modal--fullscreen { width: 100%; max-width: none !important; height: 100dvh; max-height: 100dvh; }
@@ -790,4 +829,5 @@ button.org-outline__row {
 @media (max-width: 560px) {
   .modal.file-preview-modal { width: 100%; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
   .modal.file-preview-modal.modal--fullscreen { height: 100dvh; max-height: 100dvh; }
+  .modal.file-preview-modal .modal__head { gap: 4px; }
 }

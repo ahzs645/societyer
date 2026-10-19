@@ -340,7 +340,9 @@ export function RecordTable({
   const { columns: visibleColumns, collapsed: collapsedColumns } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
   const tableId = useRecordTableState((s) => s.tableId);
   const viewId = useRecordTableState((s) => s.viewId);
-  const hasFilters = useRecordTableState((s) => s.filters.length > 0 || s.searchTerm.trim().length > 0);
+  const activeSearch = useRecordTableState((s) => s.searchTerm.trim());
+  const filterCount = useRecordTableState((s) => s.filters.length);
+  const hasFilters = filterCount > 0 || activeSearch.length > 0;
   // Records arriving in batches: the first rows replace the skeleton, and an
   // empty first batch still reads as loading rather than "No records yet".
   const progressiveLoading = useRecordTableState((s) => s.loadingProgress !== null);
@@ -732,23 +734,32 @@ export function RecordTable({
 
   if (filtered.length === 0) {
     if (records.length > 0 && hasFilters) {
+      const plural = lowerLabel(records.length === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural);
+      // Each button clears only its own part: clearing a search keeps the view's filters.
       return (
         <RecordTableEmpty
           variant="filtered"
-          title="Nothing matches these filters"
-          description={`None of the ${records.length} ${lowerLabel(records.length === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural)} match the current search and filters.`}
+          title={activeSearch ? `Nothing matches “${activeSearch}”` : "Nothing matches these filters"}
+          description={`None of the ${records.length.toLocaleString("en-CA")} ${plural} match the ${
+            activeSearch && filterCount > 0 ? "search and filters" : activeSearch ? "search. Try fewer or different words" : "current filters"
+          }.`}
           action={
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => {
-                handle.get().setSearchTerm("");
-                handle.get().setFilters([]);
-                handle.get().setFilterGroups([]);
-              }}
-            >
-              Clear filters
-            </button>
+            <>
+              {activeSearch && (
+                <button type="button" className="btn btn--sm" onClick={() => handle.get().setSearchTerm("")}>
+                  Clear search
+                </button>
+              )}
+              {filterCount > 0 && (
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => handle.set({ filters: [], filterGroups: [] })}
+                >
+                  Clear filters
+                </button>
+              )}
+            </>
           }
         />
       );

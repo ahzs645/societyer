@@ -5,6 +5,11 @@
  * no route to SharePoint, so these functions have no portable twin.
  * See zoer/docs/societyer-review-contract.md.
  */
+import {
+  procurementCandidateQuery,
+  procurementSearchCorpus,
+  procurementSearchMatches,
+} from "../shared/procurementSearchText";
 import { procurementPredicate } from "../shared/procurementBrowseFilters";
 import { toNoticeRow } from "../shared/procurementNoticeRow";
 import { v } from "convex/values";
@@ -617,40 +622,68 @@ export const page = authorizedQuery(
         party.name.length > 1000)
     )
       throw new Error("Invalid party filter.");
-    const indexed = search
-      ? base.withSearchIndex("search_records", (q) =>
-          q
-            .search("searchText", search)
+    const indexed = base
+      .withIndex(
+        (party && field === "date"
+          ? party.field === "organization"
+            ? "by_live_buyer_date"
+            : "by_live_issued_date"
+          : `by_live_kind_${field}`) as "by_live_kind_date",
+        (q) => {
+          let scoped: any = q
             .eq("societyId", a.societyId)
             .eq("generation", storage)
-            .eq("kind", a.kind),
-        )
-      : base
-          .withIndex(
-            (party && field === "date"
-              ? party.field === "organization"
-                ? "by_live_buyer_date"
-                : "by_live_issued_date"
-              : `by_live_kind_${field}`) as "by_live_kind_date",
-            (q) => {
-              let scoped: any = q
-                .eq("societyId", a.societyId)
-                .eq("generation", storage)
-                .eq("archived", undefined)
-                .eq("kind", a.kind);
-              if (party && field === "date")
-                scoped = scoped.eq(party.field, party.name);
-              if (field === "date" && from) scoped = scoped.gte("date", from);
-              return scoped;
-            },
-          )
-          .order(sorts[0]?.direction === "asc" ? "asc" : "desc");
-    const result = await indexed.paginate({
+            .eq("archived", undefined)
+            .eq("kind", a.kind);
+          if (party && field === "date")
+            scoped = scoped.eq(party.field, party.name);
+          if (field === "date" && from) scoped = scoped.gte("date", from);
+          return scoped;
+        },
+      )
+      .order(sorts[0]?.direction === "asc" ? "asc" : "desc");
+    const opts = {
       ...a.paginationOpts,
       numItems: Math.min(50, Math.max(1, a.paginationOpts.numItems)),
       maximumRowsRead: 100,
       maximumBytesRead: 750000,
-    });
+    };
+    let result: {
+      page: Doc<"procurementRecords">[];
+      isDone: boolean;
+      continueCursor: string;
+    };
+    const candidateQuery = procurementCandidateQuery(search);
+    if (search && candidateQuery && active.searchReady) {
+      const candidates = await ctx.db
+        .query("procurementSearch")
+        .withSearchIndex("by_grams", (q) =>
+          q
+            .search("grams", candidateQuery)
+            .eq("societyId", a.societyId)
+            .eq("generation", storage)
+            .eq("kind", a.kind)
+            .eq("active", true),
+        )
+        .paginate(opts);
+      const records = await Promise.all(
+        candidates.page.map((entry) =>
+          ctx.db
+            .query("procurementRecords")
+            .withIndex("by_key", (q) =>
+              q
+                .eq("societyId", a.societyId)
+                .eq("generation", storage)
+                .eq("recordKey", entry.recordKey),
+            )
+            .unique(),
+        ),
+      );
+      result = {
+        ...candidates,
+        page: records.filter((r): r is Doc<"procurementRecords"> => r !== null),
+      };
+    } else result = await indexed.paginate(opts);
     const visible = result.page
       .filter((r) => !r.archived)
       .map((r) => ({
@@ -664,7 +697,17 @@ export const page = authorizedQuery(
       dateContext ?? { today: new Date(a.asOf).toISOString().slice(0, 10) },
     );
     return {
-      page: visible.filter((r) => matches(r.drawn)).map((r) => r.raw),
+      page: visible
+        .filter(
+          (r) =>
+            matches(r.drawn) &&
+            (!search ||
+              procurementSearchMatches(
+                procurementSearchCorpus(r.drawn),
+                search,
+              )),
+        )
+        .map((r) => r.raw),
       isDone: result.isDone,
       continueCursor: result.continueCursor,
       scanned: result.page.length,
