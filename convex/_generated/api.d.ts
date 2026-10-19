@@ -174,6 +174,7 @@ import type * as policies from "../policies.js";
 import type * as postIncorporation from "../postIncorporation.js";
 import type * as powersync_checkpoints from "../powersync_checkpoints.js";
 import type * as procurementImport from "../procurementImport.js";
+import type * as procurementMaintenance from "../procurementMaintenance.js";
 import type * as procurementReview from "../procurementReview.js";
 import type * as procurementReviewHttp from "../procurementReviewHttp.js";
 import type * as procurementSync from "../procurementSync.js";
@@ -466,6 +467,7 @@ declare const fullApi: ApiFromModules<{
   postIncorporation: typeof postIncorporation;
   powersync_checkpoints: typeof powersync_checkpoints;
   procurementImport: typeof procurementImport;
+  procurementMaintenance: typeof procurementMaintenance;
   procurementReview: typeof procurementReview;
   procurementReviewHttp: typeof procurementReviewHttp;
   procurementSync: typeof procurementSync;

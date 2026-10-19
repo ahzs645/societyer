@@ -94,13 +94,23 @@ async function processorAccess(ctx: QueryCtx | MutationCtx, keyHash: string) {
   if (!owner || owner.societyId !== c.societyId || owner.status && owner.status !== "Active" || !hasPermission(String(owner.role), "settings:write")) throw new Error("Processor administrator access revoked.");
   return c;
 }
-async function leased(ctx: QueryCtx | MutationCtx, keyHash: string, jobId: Id<"meetingTranscriptionJobs">, lease: string) {
-  const connection = await processorAccess(ctx, keyHash);
+async function leased(ctx: QueryCtx | MutationCtx, connection: Doc<"meetingTranscriptionConnections">, jobId: Id<"meetingTranscriptionJobs">, lease: string) {
   const job = await ctx.db.get(jobId);
   if (!job || job.connectionId !== connection._id || job.status !== "running" || job.lease !== lease || (job.leaseUntil ?? 0) < Date.now()) throw new Error("Processing lease ended.");
   const s = await ctx.db.get(job.sourceId); const actor = await ctx.db.get(job.actorId);
   if (!s || s.status !== "ready" || s.fingerprint !== job.sourceFingerprint || s.meetingId !== job.meetingId || !actor || actor.societyId !== job.societyId || actor.status && actor.status !== "Active" || !hasPermission(String(actor.role), "minutes:write") || !hasPermission(String(actor.role), "meetings:write")) throw new Error("Recording processing access revoked.");
   return { connection, job, source: s };
+}
+// The UI considers the worker online for two minutes. Avoid rewriting the connection
+// on every idle poll: all authenticated worker operations depend on this same row.
+const CONNECTION_HEARTBEAT_MS = 30_000;
+async function touchConnection(ctx: MutationCtx, c: Doc<"meetingTranscriptionConnections">, now: number, capabilities?: string) {
+  const heartbeatDue = c.heartbeatAt === undefined || now - c.heartbeatAt >= CONNECTION_HEARTBEAT_MS;
+  const capabilitiesChanged = capabilities !== undefined && capabilities !== c.capabilities;
+  if (heartbeatDue || capabilitiesChanged) await ctx.db.patch(c._id, {
+    ...(heartbeatDue ? { heartbeatAt: now } : {}),
+    ...(capabilitiesChanged ? { capabilities } : {}),
+  });
 }
 export const processor = internalMutation({ args: { keyHash: v.string(), operation: v.string(), data: v.any(), nonce: v.string() }, returns: v.any(), handler: async (ctx, a) => {
   const c = await processorAccess(ctx, a.keyHash); const d = a.data; const now = Date.now();
@@ -119,7 +129,7 @@ export const processor = internalMutation({ args: { keyHash: v.string(), operati
   }
   if (a.operation === "claim") {
     if (typeof d.workerId !== "string" || !/^[A-Za-z0-9._-]{1,100}$/.test(d.workerId) || (!d.capabilities || Array.isArray(d.capabilities) || typeof d.capabilities !== "object") || JSON.stringify(d.capabilities).length > 4096) throw new Error("Invalid worker identity.");
-    await ctx.db.patch(c._id, { heartbeatAt: now, capabilities: JSON.stringify(d.capabilities) });
+    await touchConnection(ctx, c, now, JSON.stringify(d.capabilities));
     let job = c.activeJobId ? await ctx.db.get(c.activeJobId) : null;
     if (job?.status === "running" && (job.leaseUntil ?? 0) > now) return { job: null, busy: true };
     if (job?.status !== "running") job = await ctx.db.query("meetingTranscriptionJobs").withIndex("by_connection_status", q => q.eq("connectionId", c._id).eq("status", "queued")).first();
@@ -135,15 +145,17 @@ export const processor = internalMutation({ args: { keyHash: v.string(), operati
     const prior = await ctx.db.get(d.jobId as Id<"meetingTranscriptionJobs">);
     if (prior && prior.connectionId === c._id && ["ready", "applied"].includes(prior.status) && prior.receipt === d.lease && prior.pageCount === d.pageCount && prior.segmentCount === d.segmentCount) return { status: prior.status };
   }
-  const { job, source } = await leased(ctx, a.keyHash, d.jobId, d.lease);
+  const { job, source } = await leased(ctx, c, d.jobId, d.lease);
   if (a.operation === "download") {
     if (!Number.isSafeInteger(d.offset) || d.offset < 0 || d.offset >= source.size || d.offset % (5 * 1024 * 1024)) throw new Error("Invalid recording offset.");
     return { source, offset: d.offset };
   }
   if (a.operation === "heartbeat") {
     const progress = typeof d.progress === "number" && Number.isFinite(d.progress) ? Math.min(1, Math.max(0, d.progress)) : job.progress;
-    await ctx.db.patch(job._id, { leaseUntil: now + TRANSCRIPTION_LEASE_MS, updatedAt: now, phase: String(d.phase ?? job.phase ?? "Processing").slice(0, 80), ...(progress !== undefined ? { progress } : {}) });
-    await ctx.db.patch(c._id, { heartbeatAt: now }); return { status: "running", settings: job.settings };
+    const phase = String(d.phase ?? job.phase ?? "Processing").slice(0, 80);
+    if (phase !== job.phase || progress !== job.progress || (job.leaseUntil ?? 0) - now <= TRANSCRIPTION_LEASE_MS - CONNECTION_HEARTBEAT_MS)
+      await ctx.db.patch(job._id, { leaseUntil: now + TRANSCRIPTION_LEASE_MS, updatedAt: now, phase, ...(progress !== undefined ? { progress } : {}) });
+    await touchConnection(ctx, c, now); return { status: "running", settings: job.settings };
   }
   if (a.operation === "page") {
     validateTranscriptPage(d.segments);

@@ -7,10 +7,13 @@ Societyer owns meeting uploads, permissions, queue state and transcript results.
 1. Upload and verify a recording under a meeting’s **Sources** tab (up to 500 MiB).
 2. In **Transcript → WhisperX transcription**, choose that recording and queue it.
 3. The worker claims one recording per workspace, receiving a two-minute lease. It renews the lease while downloading and processing. Its credential cannot enumerate SharePoint or retrieve unqueued files.
+
 4. The existing Cloudflare meeting-transfer Worker returns verified 5 MiB ranges of the pinned Microsoft file version. Microsoft application credentials and signed download URLs never reach Zoer, the browser, or the ML process.
 5. WhisperX transcribes and aligns the recording on the Zoer server. Audio is decoded in ten-minute windows with two seconds of context; words belong to exactly one window. Timings use the recording’s global clock.
 6. Results are uploaded in pages of at most 50 segments and 192 KB. Partial attempts cannot be read or activated. Word timings remain attached to the segments.
 7. A meeting editor reviews the candidate and explicitly selects **Use transcript**. Replacing a transcript checks its revision. This never rewrites draft or approved minutes.
+
+Connection liveness is persisted at most once every 30 seconds when capabilities are unchanged. Unchanged job heartbeats skip a write while more than 90 seconds of the two-minute lease remain; changed progress/phase is persisted immediately. Heartbeats continue validating the administrator, submitting editor, source fingerprint and job lease on every request, and renew before expiry even when progress is unchanged. This reduces contention on the shared connection/job documents without changing worker polling, cancellation or credential-revocation behavior. The UI still treats a heartbeat less than two minutes old as online.
 
 The reused transcript interface provides playback, speaker assignment/combining, segment editing, minutes citations and in-camera ranges. Paging and whole-transcript search avoid loading the entire transcript on entry. Speaker counts and timeline segments describe the displayed page. Opening an attached recording in the existing browser player still downloads that recording; server transcription itself does not require the browser to download it.
 

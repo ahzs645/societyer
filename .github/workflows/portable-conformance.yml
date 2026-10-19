@@ -61,3 +61,6 @@ jobs:
         run: |
           npm run test:voting-power
           npm run test:corporation-equity
+          npm run test:procurement-convex
+          npx tsx scripts/check-whisperx-queue.ts
+          npx tsx scripts/check-whisperx-transfer.ts

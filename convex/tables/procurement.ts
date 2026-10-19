@@ -56,6 +56,9 @@ export const procurementTaxonomyIndexFields = {
   count: v.number(),
 };
 export const procurementTables = {
+  procurementMaintenanceLeases: defineTable({
+    societyId: v.id("societies"), owner: v.string(), purpose: v.string(), expiresAt: v.number(),
+  }).index("by_society", ["societyId"]),
   procurementCatalogs: defineTable({
     ...scope,
     folder: v.string(),

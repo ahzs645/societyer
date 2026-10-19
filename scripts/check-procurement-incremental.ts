@@ -23,6 +23,7 @@ const t = convexTest(schema, {
     "./procurementReview.js": () => import("../convex/procurementReview"),
     "./procurementSync.js": () => import("../convex/procurementSync"),
     "./procurementImport.js": () => import("../convex/procurementImport"),
+    "./procurementMaintenance.js": () => import("../convex/procurementMaintenance"),
   } as any),
   api: any = anyApi;
 const issuer = betterAuthIssuer(),

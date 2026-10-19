@@ -13,6 +13,7 @@ const t = convexTest(schema, {
   "./procurementReview.js": () => import("../convex/procurementReview"),
   "./procurementTaxonomy.js": () => import("../convex/procurementTaxonomy"),
   "./procurementImport.js": () => import("../convex/procurementImport"),
+  "./procurementMaintenance.js": () => import("../convex/procurementMaintenance"),
 } as any);
 const api: any = anyApi;
 const issuer = betterAuthIssuer();
@@ -90,9 +91,15 @@ await t.run(async ctx => {
 });
 const rangeArgs = { societyId: ids.societyId, generation: "range-resume", table: "procurementDetails", lowerKey: "", upperKey: null };
 const rangePage = await t.mutation(api.procurementImport.purgeRangePage, { ...rangeArgs, cursor: null });
-assert.deepEqual([rangePage.removed, rangePage.done], [1000, false]);
-const rangeTail = await t.mutation(api.procurementImport.purgeRangePage, { ...rangeArgs, cursor: rangePage.cursor });
-assert.deepEqual([rangeTail.removed, rangeTail.done], [10, true], "Continuation cursors survive deleting the previous page");
+assert.deepEqual([rangePage.removed, rangePage.done], [100, false]);
+let retired = rangePage.removed, retirementCursor = rangePage.cursor;
+for (;;) {
+  const tail = await t.mutation(api.procurementImport.purgeRangePage, { ...rangeArgs, cursor: retirementCursor });
+  assert.ok(tail.removed <= 100, "Delete transactions remain small");
+  retired += tail.removed; retirementCursor = tail.cursor;
+  if (tail.done) break;
+}
+assert.equal(retired, 1010, "Continuation cursors survive deleting every previous page");
 assert.deepEqual(await t.action(api.procurementImport.purgeRanges, { societyId: ids.societyId, generation: "range-resume", table: "procurementDetails", ranges: [{ lowerKey: "", upperKey: null }], cursor: null }), { removed: 0, completedRanges: 1, cursor: null }, "Already retired backup ranges are idempotent");
 await assert.rejects(t.mutation(api.procurementImport.purgeRangePage, { ...rangeArgs, generation: ids.generation, cursor: null }), /active generation/);
 await t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: "inactive" });

@@ -10,6 +10,7 @@ import {
 import { v } from "convex/values";
 import { internalAction, internalMutation } from "./_generated/server";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
+import { requireMaintenanceLease, withMaintenanceLease } from "./procurementMaintenance";
 const table = v.union(
   v.literal("procurementRecords"),
   v.literal("procurementDetails"),
@@ -377,29 +378,42 @@ export const finish = internalMutation({
 
 /** One-off materialization of the search projection; a new import updates only changed notices. */
 export const indexSearchPage = internalMutation({
-  args: { societyId: v.id("societies"), cursor: v.union(v.string(), v.null()) },
+  args: { societyId: v.id("societies"), cursor: v.union(v.string(), v.null()), maintenanceOwner: v.optional(v.string()) },
   returns: v.object({
     cursor: v.string(),
     done: v.boolean(),
     rows: v.number(),
   }),
   handler: async (ctx, a) => {
+    await requireMaintenanceLease(ctx, a.societyId, a.maintenanceOwner);
     const c = await ctx.db
       .query("procurementCatalogs")
       .withIndex("by_society", (q) => q.eq("societyId", a.societyId))
       .unique();
     if (!c || c.syncRunId) throw new Error("Catalog unavailable or updating.");
+    // Completed bootstraps are no-ops. Incremental imports maintain their own projection.
+    if (c.searchReady) return { cursor: a.cursor ?? "", done: true, rows: 0 };
     const generation = c.storageGeneration ?? c.generation;
+    const publication = JSON.stringify([a.societyId, c.generation, generation, c.contentHash ?? null]);
+    let cursor: string | null = null;
+    if (a.cursor !== null) {
+      let saved: { publication?: unknown; cursor?: unknown };
+      try { saved = JSON.parse(a.cursor); }
+      catch { throw new Error("Search checkpoint predates publication binding; restart with a new checkpoint."); }
+      if (!saved || saved.publication !== publication || typeof saved.cursor !== "string")
+        throw new Error("Search publication changed; restart with a new checkpoint.");
+      cursor = saved.cursor;
+    }
     const page = await ctx.db
       .query("procurementRecords")
       .withIndex("by_key", (q) =>
         q.eq("societyId", a.societyId).eq("generation", generation),
       )
       .paginate({
-        numItems: 100,
-        cursor: a.cursor,
-        maximumRowsRead: 100,
-        maximumBytesRead: 1000000,
+        numItems: 25,
+        cursor,
+        maximumRowsRead: 25,
+        maximumBytesRead: 500_000,
       });
     for (const row of page.page) {
       const entry = await ctx.db
@@ -422,12 +436,12 @@ export const indexSearchPage = internalMutation({
         ),
       };
       if (!entry) await ctx.db.insert("procurementSearch", data);
-      else if (entry.grams !== data.grams || entry.active !== data.active)
+      else if (entry.grams !== data.grams || entry.active !== data.active || entry.kind !== data.kind)
         await ctx.db.replace(entry._id, data);
     }
     if (page.isDone) await ctx.db.patch(c._id, { searchReady: true });
     return {
-      cursor: page.continueCursor,
+      cursor: JSON.stringify({ publication, cursor: page.continueCursor }),
       done: page.isDone,
       rows: page.page.length,
     };
@@ -441,18 +455,20 @@ export const indexSearchSlice = internalAction({
     rows: v.number(),
   }),
   handler: async (ctx, a) => {
-    let cursor = a.cursor,
-      rows = 0;
-    for (let i = 0; i < 10; i++) {
-      const result: { cursor: string; done: boolean; rows: number } =
-        await ctx.runMutation(
-          makeFunctionReference<"mutation">("procurementSync:indexSearchPage"),
-          { societyId: a.societyId, cursor },
-        );
-      rows += result.rows;
-      cursor = result.cursor;
-      if (result.done) return { cursor, done: true, rows };
-    }
-    return { cursor: cursor!, done: false, rows };
+    return withMaintenanceLease(ctx, a.societyId, "bootstrap search", async maintenanceOwner => {
+      let cursor = a.cursor,
+        rows = 0;
+      for (let i = 0; i < 10; i++) {
+        const result: { cursor: string; done: boolean; rows: number } =
+          await ctx.runMutation(
+            makeFunctionReference<"mutation">("procurementSync:indexSearchPage"),
+            { societyId: a.societyId, cursor, maintenanceOwner },
+          );
+        rows += result.rows;
+        cursor = result.cursor;
+        if (result.done) return { cursor, done: true, rows };
+      }
+      return { cursor: cursor!, done: false, rows };
+    });
   },
 });

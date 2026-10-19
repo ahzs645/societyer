@@ -21014,6 +21014,24 @@
     ]
   },
   {
+    "key": "convex:procurementMaintenance:acquire",
+    "surface": "convex",
+    "name": "procurementMaintenance:acquire",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementMaintenance.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementMaintenance:release",
+    "surface": "convex",
+    "name": "procurementMaintenance:release",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementMaintenance.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:procurementReview:catalog",
     "surface": "convex",
     "name": "procurementReview:catalog",

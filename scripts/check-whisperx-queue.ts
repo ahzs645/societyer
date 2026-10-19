@@ -35,6 +35,24 @@ assert.equal(first.job.size, 500 * 1024 * 1024); assert.equal(first.job.hashes.l
 assert.equal((await workerCall("claim", { workerId: "other", capabilities: {} })).busy, true);
 await assert.rejects(() => owner.query(api.meetingTranscription.page, { jobId, page: 0 }), "Partial results cannot be read");
 const lease = { jobId, lease: first.job.lease };
+// Repeated idle polls and unchanged progress should not rewrite shared rows.
+const beforeHeartbeat = await t.run(async ctx => ({
+  job: await ctx.db.get(jobId),
+  connection: await ctx.db.query("meetingTranscriptionConnections").withIndex("by_society", q => q.eq("societyId", ids.societyId)).unique(),
+}));
+await workerCall("heartbeat", { ...lease, phase: "Downloading", progress: 0 });
+assert.deepEqual(await t.run(ctx => ctx.db.get(jobId)), beforeHeartbeat.job);
+assert.deepEqual(await t.run(ctx => ctx.db.get(beforeHeartbeat.connection!._id)), beforeHeartbeat.connection);
+await workerCall("heartbeat", { ...lease, phase: "Transcribing", progress: 0.2 });
+assert.equal((await t.run(ctx => ctx.db.get(jobId)))!.progress, 0.2, "Changed progress is still immediate");
+await t.run(async ctx => {
+  await ctx.db.patch(jobId, { leaseUntil: Date.now() + 60_000 });
+  await ctx.db.patch(beforeHeartbeat.connection!._id, { heartbeatAt: Date.now() - 60_000 });
+});
+const renewalTime = Date.now();
+await workerCall("heartbeat", { ...lease, phase: "Transcribing", progress: 0.2 });
+assert.ok((await t.run(ctx => ctx.db.get(jobId)))!.leaseUntil! >= renewalTime + 119_000, "Unchanged work still renews its lease before expiry");
+assert.ok((await t.run(ctx => ctx.db.get(beforeHeartbeat.connection!._id)))!.heartbeatAt! >= renewalTime);
 await assert.rejects(() => workerCall("download", { ...lease, offset: 1 }));
 assert.equal((await workerCall("download", { ...lease, offset: 99 * 5 * 1024 * 1024 })).source._id, ids.sourceId);
 let count = 0;
@@ -49,6 +67,9 @@ await assert.rejects(() => workerCall("complete", { ...lease, pageCount: 24, seg
 await assert.rejects(() => workerCall("complete", { ...lease, pageCount: 24, segmentCount: count, durationSeconds: 1199, language: "en" }));
 const result = { ...lease, pageCount: 24, segmentCount: count, durationSeconds: 1200, language: "en" };
 assert.equal((await workerCall("complete", result)).status, "ready"); assert.equal((await workerCall("complete", result)).status, "ready");
+const idleConnection = await t.run(ctx => ctx.db.get(beforeHeartbeat.connection!._id));
+assert.equal((await workerCall("claim", { workerId: "fixture", capabilities: JSON.parse(idleConnection!.capabilities!) })).job, null);
+assert.deepEqual(await t.run(ctx => ctx.db.get(idleConnection!._id)), idleConnection, "Idle polling with unchanged capabilities does not rewrite the connection");
 const page = await owner.query(api.meetingTranscription.page, { jobId, page: 17 }); assert.equal(page.segments.length, 50); assert.equal(page.startIndex, 850);
 assert.ok(JSON.stringify(page).length < 192_000); assert.equal(page.segments[0].words.length, 1);
 assert.ok((await owner.query(api.meetingTranscription.search, { jobId, text: "Needle" })).length > 0);
