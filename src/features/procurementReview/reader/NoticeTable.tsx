@@ -6,7 +6,14 @@
  * be changed. Cells and phone cards are drawn here once for the catalog list
  * and the buyer pages alike.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { FileSearch } from "lucide-react";
 import {
   RecordTable,
@@ -22,17 +29,40 @@ import {
   type RecordTableCellRenderer,
 } from "../../../platform/record-engine/record-table";
 import { FIELD_TYPES } from "../../../platform/record-engine/types";
-import type { HydratedView, ViewFilter, ViewSort } from "../../../platform/record-engine/types";
-import { deadlineOf, shortSourceDate, sortableDate, sourceLabel, statusOf, zoneToday, type NoticeDeadline } from "../lib/notice";
+import type {
+  HydratedView,
+  ViewFilter,
+  ViewSort,
+} from "../../../platform/record-engine/types";
+import {
+  deadlineOf,
+  shortSourceDate,
+  sortableDate,
+  sourceLabel,
+  statusOf,
+  zoneToday,
+  type NoticeDeadline,
+} from "../lib/notice";
 import { DocumentsCell, DocumentsCount } from "./DocumentsCell";
 import { useReaderNavigation } from "./routes";
-import type { ListRow } from "./source";
+import { useReaderSource, type ListRow } from "./source";
+import { ServerNoticeRows } from "./ServerNoticeRows";
 
 export type NoticeKind = "opportunity" | "award";
 
 /** The opportunity list's presets ("upcoming" is the default); awards have one view, latest first. */
-export type NoticeViewId = "upcoming" | "all" | "Closed" | "Awarded" | "Cancelled" | "documents";
-export const NOTICE_VIEWS: { _id: NoticeViewId; name: string; isSystem: boolean }[] = [
+export type NoticeViewId =
+  | "upcoming"
+  | "all"
+  | "Closed"
+  | "Awarded"
+  | "Cancelled"
+  | "documents";
+export const NOTICE_VIEWS: {
+  _id: NoticeViewId;
+  name: string;
+  isSystem: boolean;
+}[] = [
   { _id: "upcoming", name: "Open, closing soonest", isSystem: false },
   { _id: "all", name: "All, latest closing first", isSystem: false },
   { _id: "Closed", name: "Closed", isSystem: false },
@@ -40,7 +70,8 @@ export const NOTICE_VIEWS: { _id: NoticeViewId; name: string; isSystem: boolean 
   { _id: "Cancelled", name: "Cancelled", isSystem: false },
   { _id: "documents", name: "With documents", isSystem: false },
 ];
-export const isNoticeView = (value: string | null): value is NoticeViewId => NOTICE_VIEWS.some((view) => view._id === value);
+export const isNoticeView = (value: string | null): value is NoticeViewId =>
+  NOTICE_VIEWS.some((view) => view._id === value);
 
 const STATUS_OPTIONS = [
   { value: "Open", label: "Open", color: "green" },
@@ -58,144 +89,235 @@ function tableFor(kind: NoticeKind) {
     labelSingular: award ? "Award" : "Opportunity",
     labelPlural: award ? "Awards" : "Opportunities",
     labelIdentifierFieldName: "title",
-    fields: award ? [
-      { name: "title", label: "Award", fieldType: FIELD_TYPES.TEXT, size: 340 },
-      { name: "organization", label: "Buyer", fieldType: FIELD_TYPES.TEXT, size: 220 },
-      { name: "supplier", label: "Supplier", fieldType: FIELD_TYPES.TEXT, size: 220 },
-      { name: "value", label: "Value", fieldType: FIELD_TYPES.NUMBER, size: 130 },
-      { name: "when", label: "Awarded", fieldType: FIELD_TYPES.DATE_TIME, size: 140 },
-      { name: "source", label: "Source", fieldType: FIELD_TYPES.TEXT, size: 130 },
-      { name: "procurementType", label: "Type", fieldType: FIELD_TYPES.TEXT, size: 180, isVisible: false },
-    ] : [
-      { name: "title", label: "Opportunity", fieldType: FIELD_TYPES.TEXT, size: 340 },
-      { name: "organization", label: "Buyer", fieldType: FIELD_TYPES.TEXT, size: 210 },
-      { name: "issuedFor", label: "Issued for", fieldType: FIELD_TYPES.TEXT, size: 200, isVisible: false },
-      { name: "source", label: "Source", fieldType: FIELD_TYPES.TEXT, size: 130 },
-      { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 110, config: { options: STATUS_OPTIONS } },
-      { name: "when", label: "Closes", fieldType: FIELD_TYPES.DATE_TIME, size: 200 },
-      { name: "documents", label: "Documents", fieldType: FIELD_TYPES.NUMBER, size: 110 },
-    ],
+    fields: award
+      ? [
+          {
+            name: "title",
+            label: "Award",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 340,
+          },
+          {
+            name: "organization",
+            label: "Buyer",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 220,
+          },
+          {
+            name: "supplier",
+            label: "Supplier",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 220,
+          },
+          {
+            name: "value",
+            label: "Value",
+            fieldType: FIELD_TYPES.NUMBER,
+            size: 130,
+          },
+          {
+            name: "when",
+            label: "Awarded",
+            fieldType: FIELD_TYPES.DATE_TIME,
+            size: 140,
+          },
+          {
+            name: "source",
+            label: "Source",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 130,
+          },
+          {
+            name: "procurementType",
+            label: "Type",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 180,
+            isVisible: false,
+          },
+        ]
+      : [
+          {
+            name: "title",
+            label: "Opportunity",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 340,
+          },
+          {
+            name: "organization",
+            label: "Buyer",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 210,
+          },
+          {
+            name: "issuedFor",
+            label: "Issued for",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 200,
+            isVisible: false,
+          },
+          {
+            name: "source",
+            label: "Source",
+            fieldType: FIELD_TYPES.TEXT,
+            size: 130,
+          },
+          {
+            name: "status",
+            label: "Status",
+            fieldType: FIELD_TYPES.SELECT,
+            size: 110,
+            config: { options: STATUS_OPTIONS },
+          },
+          {
+            name: "when",
+            label: "Closes",
+            fieldType: FIELD_TYPES.DATE_TIME,
+            size: 200,
+          },
+          {
+            name: "documents",
+            label: "Documents",
+            fieldType: FIELD_TYPES.NUMBER,
+            size: 110,
+          },
+        ],
   });
 }
-const TABLES: Record<NoticeKind, ReturnType<typeof tableFor>> = { opportunity: tableFor("opportunity"), award: tableFor("award") };
-const fieldId = (kind: NoticeKind, name: string) => `procurement-review:${kind}:field:${name}`;
+const TABLES: Record<NoticeKind, ReturnType<typeof tableFor>> = {
+  opportunity: tableFor("opportunity"),
+  award: tableFor("award"),
+};
+const fieldId = (kind: NoticeKind, name: string) =>
+  `procurement-review:${kind}:field:${name}`;
 
 /** A preset's filters and sorts, as a view the table loads (and shows as chips). */
-function presetView(kind: NoticeKind, viewId: NoticeViewId, hiddenFields: readonly string[]): HydratedView {
+function presetView(
+  kind: NoticeKind,
+  viewId: NoticeViewId,
+  hiddenFields: readonly string[],
+): HydratedView {
   const { hydratedView } = TABLES[kind];
   const field = (name: string) => fieldId(kind, name);
-  const status = (value: string): ViewFilter => ({ id: "status", fieldMetadataId: field("status"), operator: "eq", value });
-  const latest: ViewSort[] = [{ id: "when", fieldMetadataId: field("when"), direction: "desc" }];
+  const status = (value: string): ViewFilter => ({
+    id: "status",
+    fieldMetadataId: field("status"),
+    operator: "eq",
+    value,
+  });
+  const latest: ViewSort[] = [
+    { id: "when", fieldMetadataId: field("when"), direction: "desc" },
+  ];
   let filters: ViewFilter[] = [];
   let sorts = latest;
   if (kind === "opportunity") {
     if (viewId === "upcoming") {
       // "Open" is the derived status: an open notice whose deadline passed reads Closed (statusOf in lib/notice.ts).
-      filters = [status("Open"), { id: "closes", fieldMetadataId: field("when"), operator: "between", value: { preset: "custom", start: zoneToday() } }];
-      sorts = [{ id: "when", fieldMetadataId: field("when"), direction: "asc" }];
-    } else if (viewId === "documents") filters = [{ id: "documents", fieldMetadataId: field("documents"), operator: "gt", value: 0 }];
+      filters = [
+        status("Open"),
+        {
+          id: "closes",
+          fieldMetadataId: field("when"),
+          operator: "between",
+          value: { preset: "custom", start: zoneToday() },
+        },
+      ];
+      sorts = [
+        { id: "when", fieldMetadataId: field("when"), direction: "asc" },
+      ];
+    } else if (viewId === "documents")
+      filters = [
+        {
+          id: "documents",
+          fieldMetadataId: field("documents"),
+          operator: "gt",
+          value: 0,
+        },
+      ];
     else if (viewId !== "all") filters = [status(viewId)];
   }
-  const name = kind === "award" ? "All awards" : NOTICE_VIEWS.find((view) => view._id === viewId)?.name ?? "";
+  const name =
+    kind === "award"
+      ? "All awards"
+      : (NOTICE_VIEWS.find((view) => view._id === viewId)?.name ?? "");
   return {
-    view: { ...hydratedView.view, _id: `${hydratedView.view._id}:${viewId}`, name, filters, sorts },
-    columns: hydratedView.columns.map((column) => (hiddenFields.includes(column.field.name) ? { ...column, isVisible: false } : column)),
+    view: {
+      ...hydratedView.view,
+      _id: `${hydratedView.view._id}:${viewId}`,
+      name,
+      filters,
+      sorts,
+    },
+    columns: hydratedView.columns.map((column) =>
+      hiddenFields.includes(column.field.name)
+        ? { ...column, isVisible: false }
+        : column,
+    ),
   };
 }
 
-/** A list row as the table draws it. */
-type NoticeRow = {
-  _id: string;
-  kind: string;
-  title: string;
-  organization: string;
-  issuedFor: string;
-  source: string;
-  status: string;
-  /** Sortable (YYYY-MM-DDTHH:MM in the source zone; a bare day sorts at its end) or "". */
-  when: string;
-  /** What the date cell shows. */
-  whenText: string;
-  relative: string;
-  state: NoticeDeadline["state"];
-  documents: number;
-  supplier: string;
-  value: number | null;
-  currency: string;
-  procurementType: string;
-  /** Searched with the columns: the source's reference isn't one. */
-  _searchText: string;
-};
-
-/** The derived status, folded into the four the filters offer ("Expired" is closed); anything else keeps its words. */
-function statusLabel(row: ListRow, deadline: NoticeDeadline | null): string {
-  const label = statusOf(row.kind, row.status, deadline)?.label ?? "";
-  const key = label.toLowerCase();
-  if (/cancel/.test(key)) return "Cancelled";
-  if (/award/.test(key)) return "Awarded";
-  if (/closed|expired|complete/.test(key)) return "Closed";
-  return label;
-}
-
-export function toNoticeRow(row: ListRow): NoticeRow {
-  // Imports before October 18, 2026 kept the source's own text in `date`.
-  const sortable = sortableDate(row.date) || sortableDate(row.dateText);
-  const raw = sortable || row.dateText || row.date;
-  const opportunity = row.kind === "opportunity";
-  const deadline = opportunity ? deadlineOf(raw) : null;
-  return {
-    _id: row.recordKey,
-    kind: row.kind,
-    title: row.title || "Untitled notice",
-    organization: row.organization,
-    issuedFor: row.issuedFor,
-    source: sourceLabel(row.recordKey),
-    status: statusLabel(row, deadline),
-    when: !sortable ? "" : sortable.includes("T") ? sortable : `${sortable}T23:59`,
-    whenText: !raw ? (opportunity ? "No closing date" : "") : sortable ? shortSourceDate(sortable) : raw,
-    relative: deadline && deadline.state !== "closed" ? deadline.relative : "",
-    state: deadline?.state ?? (sortable ? "closed" : "unknown"),
-    documents: row.documents,
-    supplier: row.supplier,
-    value: row.value,
-    currency: row.currency,
-    procurementType: row.procurementType,
-    _searchText: row.reference,
-  };
-}
+export { toNoticeRow } from "../../../../shared/procurementNoticeRow";
+import {
+  toNoticeRow,
+  type NoticeRow,
+} from "../../../../shared/procurementNoticeRow";
 
 /** A list grows a page at a time; each row is drawn once, not again for every page that arrives after it. */
 const drawn = new WeakMap<ListRow, NoticeRow>();
 function drawnRow(row: ListRow): NoticeRow {
   let result = drawn.get(row);
-  if (!result) drawn.set(row, result = toNoticeRow(row));
+  if (!result) drawn.set(row, (result = toNoticeRow(row)));
   return result;
 }
 
 function money(value: number | null, currency: string): string {
   if (value === null) return "";
   try {
-    return new Intl.NumberFormat("en-CA", { style: "currency", currency: currency || "CAD", maximumFractionDigits: 0 }).format(value);
+    return new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency: currency || "CAD",
+      maximumFractionDigits: 0,
+    }).format(value);
   } catch {
     return `${value.toLocaleString()} ${currency}`;
   }
 }
 
-function useCells(openDocuments: (recordKey: string) => void): RecordTableCellRenderer {
-  return useMemo<RecordTableCellRenderer>(() => ({ record, field }) => {
-    const row = record as NoticeRow;
-    if (field.name === "when") {
-      return (
-        <span className="procurement-reader__when" data-state={row.kind === "award" ? undefined : row.state}>
-          <span>{row.whenText || "—"}</span>
-          {row.relative && <small>{row.relative}</small>}
-        </span>
-      );
-    }
-    if (field.name === "documents") return <DocumentsCell recordKey={row._id} documents={row.documents} onOpen={() => openDocuments(row._id)} />;
-    if (field.name === "value") return <span className="procurement-reader__value">{money(row.value, row.currency)}</span>;
-    return undefined;
-  }, [openDocuments]);
+function useCells(
+  openDocuments: (recordKey: string) => void,
+): RecordTableCellRenderer {
+  return useMemo<RecordTableCellRenderer>(
+    () =>
+      ({ record, field }) => {
+        const row = record as NoticeRow;
+        if (field.name === "when") {
+          return (
+            <span
+              className="procurement-reader__when"
+              data-state={row.kind === "award" ? undefined : row.state}
+            >
+              <span>{row.whenText || "—"}</span>
+              {row.relative && <small>{row.relative}</small>}
+            </span>
+          );
+        }
+        if (field.name === "documents")
+          return (
+            <DocumentsCell
+              recordKey={row._id}
+              documents={row.documents}
+              onOpen={() => openDocuments(row._id)}
+            />
+          );
+        if (field.name === "value")
+          return (
+            <span className="procurement-reader__value">
+              {money(row.value, row.currency)}
+            </span>
+          );
+        return undefined;
+      },
+    [openDocuments],
+  );
 }
 
 /**
@@ -203,19 +325,38 @@ function useCells(openDocuments: (recordKey: string) => void): RecordTableCellRe
  * count first (it is short, and the line truncates at its end), then the date
  * (a long buyer name would push it out of the line), then who.
  */
-const renderPhoneCard: RecordTableCardRenderer = (record, { open, field, selecting }) => {
+const renderPhoneCard: RecordTableCardRenderer = (
+  record,
+  { open, field, selecting },
+) => {
   const row = record as unknown as NoticeRow;
   const award = row.kind === "award";
-  const prefix = row.state === "unknown" || !row.whenText ? "" : award ? "Awarded " : row.state === "closed" ? "Closed " : "Closes ";
+  const prefix =
+    row.state === "unknown" || !row.whenText
+      ? ""
+      : award
+        ? "Awarded "
+        : row.state === "closed"
+          ? "Closed "
+          : "Closes ";
   return (
     <RecordTablePhoneCard
       title={row.title}
       badge={!award && row.status ? field("status") : undefined}
       meta={[
-        !award && row.documents ? <DocumentsCount documents={row.documents} /> : "",
+        !award && row.documents ? (
+          <DocumentsCount documents={row.documents} />
+        ) : (
+          ""
+        ),
         row.whenText && (
-          <span className="procurement-reader__when" data-state={award ? undefined : row.state}>
-            {prefix}{row.whenText}{row.relative && <small> · {row.relative}</small>}
+          <span
+            className="procurement-reader__when"
+            data-state={award ? undefined : row.state}
+          >
+            {prefix}
+            {row.whenText}
+            {row.relative && <small> · {row.relative}</small>}
           </span>
         ),
         award ? money(row.value, row.currency) : "",
@@ -240,6 +381,8 @@ const renderPhoneCard: RecordTableCardRenderer = (record, { open, field, selecti
 export function NoticeTable({
   kind,
   rows,
+  serverPaging = false,
+  fixedParty,
   tableId,
   view = "upcoming",
   onChangeView,
@@ -252,6 +395,8 @@ export function NoticeTable({
 }: {
   kind: NoticeKind;
   rows: ListRow[];
+  serverPaging?: boolean;
+  fixedParty?: { field: "organization" | "issuedFor"; name: string };
   tableId: string;
   view?: NoticeViewId;
   onChangeView?: (view: NoticeViewId) => void;
@@ -268,10 +413,18 @@ export function NoticeTable({
   const { objectMetadata } = TABLES[kind];
   const hidden = hiddenFields.join(",");
   // One view object per preset: a new object reloads the table's filters and sorts.
-  const hydratedView = useMemo(() => presetView(kind, view, hidden ? hidden.split(",") : []), [kind, view, hidden]);
+  const hydratedView = useMemo(
+    () => presetView(kind, view, hidden ? hidden.split(",") : []),
+    [kind, view, hidden],
+  );
   const records = useMemo(() => rows.map(drawnRow), [rows]);
   const { openNotice } = nav;
-  const renderCell = useCells(useCallback((recordKey: string) => openNotice(recordKey, "documents"), [openNotice]));
+  const renderCell = useCells(
+    useCallback(
+      (recordKey: string) => openNotice(recordKey, "documents"),
+      [openNotice],
+    ),
+  );
   const loading = progress ? !progress.done && records.length === 0 : false;
   const [filtering, setFiltering] = useState(false);
 
@@ -282,9 +435,14 @@ export function NoticeTable({
         objectMetadata={objectMetadata}
         hydratedView={hydratedView}
         records={records}
+        serverProcessed={serverPaging}
         cellPreviews={false}
         defaultDisplayMode="continuous"
-        loadingProgress={progress && !progress.done ? { loaded: progress.loaded, total: progress.total } : null}
+        loadingProgress={
+          progress && !progress.done
+            ? { loaded: progress.loaded, total: progress.total }
+            : null
+        }
         onRecordClick={(recordId) => openNotice(recordId)}
       >
         {onSearch && <SearchSync search={search ?? ""} onSearch={onSearch} />}
@@ -292,26 +450,46 @@ export function NoticeTable({
           label={label ?? objectMetadata.labelPlural}
           icon={<FileSearch size={14} />}
           onOpenFilter={() => setFiltering((open) => !open)}
-          {...(onChangeView && kind === "opportunity" ? {
-            views: NOTICE_VIEWS,
-            currentViewId: view,
-            onChangeView: (viewId: string) => { if (isNoticeView(viewId)) onChangeView(viewId); },
-          } : {})}
+          {...(onChangeView && kind === "opportunity"
+            ? {
+                views: NOTICE_VIEWS,
+                currentViewId: view,
+                onChangeView: (viewId: string) => {
+                  if (isNoticeView(viewId)) onChangeView(viewId);
+                },
+              }
+            : {})}
         />
-        <RecordTableFilterPopover open={filtering} onClose={() => setFiltering(false)} />
+        <RecordTableFilterPopover
+          open={filtering}
+          onClose={() => setFiltering(false)}
+        />
         <RecordTableFilterChips />
         <RecordTable
           loading={loading}
           showAggregateFooter={false}
           renderCell={renderCell}
           renderPhoneCard={renderPhoneCard}
-          emptyState={emptyState ?? (
-            <div className="record-table__empty">
-              <div className="record-table__empty-title">{search ? `Nothing matches “${search}”` : `No ${objectMetadata.labelPlural.toLowerCase()} here`}</div>
-              <div className="record-table__empty-desc">{search ? "Try fewer or different words." : "Choose another view, or change the filters, to see more."}</div>
-            </div>
-          )}
+          emptyState={
+            emptyState ?? (
+              <div className="record-table__empty">
+                <div className="record-table__empty-title">
+                  {search
+                    ? `Nothing matches “${search}”`
+                    : `No ${objectMetadata.labelPlural.toLowerCase()} here`}
+                </div>
+                <div className="record-table__empty-desc">
+                  {search
+                    ? "Try fewer or different words."
+                    : "Choose another view, or change the filters, to see more."}
+                </div>
+              </div>
+            )
+          }
         />
+        {serverPaging && (
+          <ServerNoticeRows kind={kind} fixedParty={fixedParty} />
+        )}
       </RecordTableScope>
     </div>
   );
@@ -323,15 +501,32 @@ export function NoticeTable({
  * first load) resets the table's search, so the term is put back after every
  * view load.
  */
-function SearchSync({ search, onSearch }: { search: string; onSearch: (value: string) => void }) {
+function SearchSync({
+  search,
+  onSearch,
+}: {
+  search: string;
+  onSearch: (value: string) => void;
+}) {
   const handle = useRecordTableStoreHandle();
   const term = useRecordTableState((s) => s.searchTerm);
   const wanted = useRef(search);
   wanted.current = search;
-  useEffect(() => { if (handle.get().searchTerm.trim() !== search) handle.get().setSearchTerm(search); }, [handle, search]);
-  useEffect(() => handle.subscribe((state, previous) => {
-    if (state.savedView !== previous.savedView && state.searchTerm.trim() !== wanted.current) state.setSearchTerm(wanted.current);
-  }), [handle]);
+  useEffect(() => {
+    if (handle.get().searchTerm.trim() !== search)
+      handle.get().setSearchTerm(search);
+  }, [handle, search]);
+  useEffect(
+    () =>
+      handle.subscribe((state, previous) => {
+        if (
+          state.savedView !== previous.savedView &&
+          state.searchTerm.trim() !== wanted.current
+        )
+          state.setSearchTerm(wanted.current);
+      }),
+    [handle],
+  );
   useEffect(() => {
     const value = term.trim();
     if (value === search || value.length > 200) return;

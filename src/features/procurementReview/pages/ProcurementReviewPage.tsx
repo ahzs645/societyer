@@ -49,7 +49,7 @@ function HostedProcurementReview() {
         {header}
         <div className="card procurement-review__state">
           <div className="card__head"><h2 className="card__title">The catalog is being prepared</h2></div>
-          <div className="card__body"><p className="muted">Procurement records haven't been imported for this workspace's folder yet. Come back once the import is complete.</p></div>
+          <div className="card__body"><p className="muted">The catalog is being imported or updated. Complete publications become available automatically; an interrupted update resumes from its checkpoint.</p></div>
         </div>
       </> : <HostedReader key={`${society._id}:${catalog.generation}`} societyId={society._id} catalog={catalog} header={header} />}
     </div>

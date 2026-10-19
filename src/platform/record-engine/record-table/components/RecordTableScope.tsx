@@ -53,6 +53,7 @@ export function RecordTableScope({
   defaultDisplayMode = "continuous",
   defaultPageSize = DEFAULT_RECORD_TABLE_PAGE_SIZE,
   loadingProgress,
+  serverProcessed = false,
   children,
 }: {
   tableId: string;
@@ -94,6 +95,7 @@ export function RecordTableScope({
    * as the first rows are in. Leave unset (or null) once everything has loaded.
    */
   loadingProgress?: { loaded: number; total: number } | null;
+  serverProcessed?: boolean;
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -118,6 +120,7 @@ export function RecordTableScope({
       // actor's filters, saved view, selection, cells or drawer record. Hydrate
       // a newly scoped store immediately from the current authorized snapshot.
       if (loadableView) next.getState().loadView(loadableView);
+      next.getState().setServerProcessed(serverProcessed);
       return next;
     },
     [tableId, objectMetadata._id, objectMetadata.labelIdentifierFieldName, actorId, hasAuthorizedView],

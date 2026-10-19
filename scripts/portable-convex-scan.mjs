@@ -22,6 +22,7 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   "procurementReview:catalog",
   "procurementReview:list",
   "procurementReview:records",
+  "procurementReview:page",
   "procurementReview:record",
   "procurementReview:documents",
   "procurementReview:evidence",

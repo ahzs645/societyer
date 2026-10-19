@@ -20,30 +20,8 @@ export type ReaderCatalog = { generation: string; publishedAt: string; counts: R
  * whole list is loaded (it is small: no notice bodies, no file contents), so
  * the shared table sorts, filters and groups the entire catalog, not a page.
  */
-export type ListRow = {
-  recordKey: string;
-  kind: string;
-  title: string;
-  /** The buyer. */
-  organization: string;
-  /** Whom the notice is issued for, when the source names someone other than the buyer; otherwise "". */
-  issuedFor: string;
-  status: string;
-  /** Sortable (YYYY-MM-DD or YYYY-MM-DDTHH:MM in the source zone) when readable; otherwise the source text. */
-  date: string;
-  dateText: string;
-  /** The source's own reference number, "" when only a synthetic key exists. */
-  reference: string;
-  /** Files Zoer downloaded and published: previewable here. */
-  documents: number;
-  /** Files the source lists that weren't downloaded. */
-  listedDocuments: number;
-  /** Awards only ("" / null for opportunities). */
-  supplier: string;
-  value: number | null;
-  currency: string;
-  procurementType: string;
-};
+export type { ListRow } from "../../../../shared/procurementListRow";
+import type { ListRow } from "../../../../shared/procurementListRow";
 /** A kind's list as it loads: rows so far, how many there are in all, and whether it's complete. */
 export type RecordList = { rows: ListRow[]; total: number; done: boolean };
 /** A published review row with the record it belongs to (for the catalog-wide insights). */
@@ -51,6 +29,8 @@ export type CatalogReviewRow = ReviewRow & { recordKey: string };
 
 export type ReaderSource = {
   catalog: ReaderCatalog;
+  /** Hosted interactive page; absent for the offline snapshot host. */
+  usePage?: (kind: string, request: string, cursor: string | null) => { page: ListRow[]; isDone: boolean; continueCursor: string; scanned: number; relevance: boolean } | undefined;
   /**
    * Every record of a kind, loaded progressively; `undefined` until the first
    * rows arrive. A kind loads the first time it is asked for and stays loaded

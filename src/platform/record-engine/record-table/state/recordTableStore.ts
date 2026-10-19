@@ -208,6 +208,8 @@ export type RecordTableState = {
   announce: (message: string) => void;
 
   /* loaded records */
+  serverProcessed: boolean;
+  setServerProcessed: (value: boolean) => void;
   records: any[];
   setRecords: (records: any[]) => void;
   /**
@@ -307,6 +309,8 @@ export function createRecordTableStore(opts: {
     editHistory: EMPTY_EDIT_HISTORY,
     gridAnnouncement: "",
     records: [],
+    serverProcessed: false,
+    setServerProcessed: (serverProcessed) => set({serverProcessed}),
     loadingProgress: null,
     pageIndex: 0,
     collapsedGroupKeys: new Set(),

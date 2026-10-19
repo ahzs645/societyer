@@ -129,3 +129,29 @@ A private full database export was CRC-verified before migration. Offline restor
 Final cleanup was independently verified with a fresh complete database export: only the compact generation remains (25,629 records/details, 2,371 document references, 91 evidence rows), plus 89,972 shared terms and one verified release registry row. Both superseded generations are absent. Serialized procurement table data, including the new complete dictionary, is 99,928,101 bytes versus 544,514,369 bytes before (81.65% smaller, excluding index storage and the tiny catalog pointer). The pre-migration backup remains protected locally; a separate compact snapshot was CRC-verified too. These export sizes must not be described as a fresh billed-GB dashboard reading.
 
 Maintenance lesson: a lost CLI response did not mean its server-side deletes stopped. Repeated unbounded reads at the beginning of a heavily deleted index range then hit Convex's system-operation budget. The final operator tool uses the verified backup as its generation inventory, bounds each range by source keys/bytes and preserves pagination cursors across deleted pages. Its range deletion, restart idempotence, cursor continuation and active-generation refusal have regression coverage. Empty-range verification was stopped after the full export had independently proved complete cleanup, avoiding redundant reads.
+
+## Incremental publications and bounded browsing
+
+Changed publications can now reuse the active storage generation. Retain the previous **successful** private export and pass it to the next verified export:
+
+```sh
+python3 scripts/procurement/export-convex.py \
+  --config /secure/sharepoint-procurement.json --society-id WORKSPACE_ID \
+  --output /secure/exports/NEW_PUBLICATION --baseline /secure/exports/LAST_SUCCESSFUL
+npx tsx scripts/procurement/apply-convex.ts --deployment DEPLOYMENT \
+  --input /secure/exports/NEW_PUBLICATION --dry-run
+npx tsx scripts/procurement/apply-convex.ts --deployment DEPLOYMENT \
+  --input /secure/exports/NEW_PUBLICATION
+```
+
+Alternatively, Zoer's `packages/plugin-site/bin/plan-review-import.ts --baseline LAST_SUCCESSFUL --input NEW_PUBLICATION` emits the same delta contract. These tools stream payloads and compare compact key/hash inventories locally; they do not read every production detail to discover changes. Full verification/projection of the published source still happens locally. This is incremental **Convex ingestion**, not incremental scraping or a claim that the whole source archive stops being published.
+
+The delta contains complete new/changed rows and their previous values. Unchanged rows are not rewritten. Original source IDs distinguish notices; URL-only deduplication is forbidden. A missing row in a complete published catalog becomes an archived row, preserving its payload. A failed/incomplete scrape must not be published as an authoritative replacement. Zoer's publisher now retains all source snapshots and their per-snapshot manifests by default, and never garbage-collects document binaries. Apply a separate reviewed retention policy only after defining recovery requirements.
+
+The importer verifies the delta's byte hash, operation count, workspace and baseline hash before starting. Internal mutations apply bounded batches with a durable sequence checkpoint. Each row's previous value is checked before replacement. Exact retries skip already committed batches. Another plan cannot acquire the same workspace while one is pending. Readers pause while a publication is incomplete, including after failure; rerun the **same command with the same private export** to resume. Do not unlock it manually or import a different plan over it. Finish verifies the resulting notice counts and taxonomy releases, then changes the publication pointer. A publication ID can differ from `storageGeneration`; retirement guards protect the latter. Keep the successful export for the next baseline and for reverse-plan recovery.
+
+The hosted list and organisation pages fetch at most 50 candidates per query, with read budgets, indexed ordering and opaque continuation cursors. Search uses Convex full-text relevance; ordinary filters apply to candidates before returning them. Sparse filters may return an empty batch with a continuation, so the interface explicitly offers Next rather than claiming the catalog has no matches. Open/upcoming dates and organisation/date browsing narrow the index range. Table grouping applies to the current page; sorting supports one indexed field at a time. The offline demo keeps its local whole-snapshot table.
+
+Opening a notice no longer silently loads an entire kind to compute the organisation badge. Complete buyer and catalog analytics remain available through an explicit load action; these still read compact metadata for the selected dataset. Precomputed aggregate/cube analytics and incremental scraping itself are follow-up work, not implemented by this release. Additional browse indexes trade some storage/write overhead for bounded interactive reads; review actual index use as the supported controls change.
+
+The design follows [Convex cursor pagination](https://docs.convex.dev/database/pagination) and the primary-key/change-tracking principles of [Airbyte incremental deduplication](https://docs.airbyte.com/platform/using-airbyte/core-concepts/sync-modes/incremental-append-deduped). We do not deploy Airbyte or Debezium; a verified snapshot diff supplies changes because these collectors do not expose a database CDC log.

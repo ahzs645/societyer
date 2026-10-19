@@ -315,6 +315,7 @@ def download(config, folder, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--generation-suffix', help='Reproject an existing snapshot into a fresh immutable generation without appending duplicate rows');
+    parser.add_argument('--baseline', help='Previous successfully applied private export; emit retry-safe changed-row delta')
     parser.add_argument('--keep-source', action='store_true', help='Retain the verified source locally for companion-only publishing; keep this directory private')
     parser.add_argument('--config', required=True); parser.add_argument('--society-id', required=True); parser.add_argument('--folder'); parser.add_argument('--output', required=True)
     args = parser.parse_args(); os.umask(0o077)
@@ -328,6 +329,9 @@ def main():
         counts = method(catalog, manifest, args.society_id, folder, output, args.generation_suffix)
     finally:
         if not args.keep_source: catalog.unlink(missing_ok=True)
+    if args.baseline:
+        from delta import plan_delta
+        plan_delta(args.baseline, output)
     print(json.dumps(dict(snapshot=manifest['snapshotId'], counts=counts, output=str(output))))
 
 if __name__ == '__main__': main()

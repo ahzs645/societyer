@@ -278,3 +278,7 @@ No schedule was installed in the DDC North rollout.
 The October 18 rollout qualified storage, permissions, the real catalog engine,
 PDF reconstruction and deployed artifact hashes. Its signed-in browser check
 remains pending; this guide preserves that distinction.
+
+### Incremental import operations
+
+For the changed-row importer, baseline retention, resumable recovery and server-side browsing limitations, follow [the incremental catalog runbook](procurement-convex-catalog.md#incremental-publications-and-bounded-browsing). Keep every successfully applied private export. The first existing v2 export is the bootstrap baseline; no duplicate production generation is needed just to adopt incremental imports. Publish complete source archives before applying their deltas. Source snapshots and binaries are retained; archived catalog removals remain recoverable. Never infer removals from a partial/failed collector run.

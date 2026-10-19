@@ -57,6 +57,9 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog)
 
   return useMemo<ReaderSource>(() => ({
     catalog,
+    usePage(kind, request, cursor) {
+      return useQuery(api.procurementReview.page, { societyId, generation, kind, request, asOf: Math.floor(Date.now()/60000)*60000, paginationOpts: { numItems: 50, cursor } }) as any;
+    },
     useList(kind: string) {
       return useProgressive(loaded.list(kind, catalog.counts[kind] ?? 0));
     },

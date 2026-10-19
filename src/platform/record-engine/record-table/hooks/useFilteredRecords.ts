@@ -33,6 +33,7 @@ const filteredCache = new WeakMap<RecordTableStore, CacheEntry<any[]>>();
  */
 export function useFilteredRecords() {
   const store = useRecordTableStoreOrThrow();
+  const serverProcessed = useStore(store, s => s.serverProcessed);
   const records = useStore(store, (s) => s.records);
   const columns = useStore(store, (s) => s.columns);
   const filters = useStore(store, (s) => s.filters);
@@ -46,7 +47,7 @@ export function useFilteredRecords() {
   return memoForStore(
     filteredCache,
     store,
-    [records, pendingEdits, columns, filters, filterGroups, sorts, searchTerm, dateContext],
-    () => filterAndSortRecords({ records: applyPendingEdits(records, pendingEdits), columns, filters, filterGroups, sorts, searchTerm, dateContext }),
+    [serverProcessed, records, pendingEdits, columns, filters, filterGroups, sorts, searchTerm, dateContext],
+    () => serverProcessed ? records : filterAndSortRecords({ records: applyPendingEdits(records, pendingEdits), columns, filters, filterGroups, sorts, searchTerm, dateContext }),
   );
 }

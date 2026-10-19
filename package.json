@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Local-first desktop and web tools for society records, documents, and operations.",
   "author": "Societyer",
-  "copyright": "Copyright © Societyer",
+  "copyright": "Copyright \u00a9 Societyer",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
@@ -69,7 +69,7 @@
     "procurement-review:demo": "tsx scripts/build-procurement-review-demo.ts",
     "test:file-preview": "tsx scripts/check-file-preview.ts",
     "test:persistent-session": "tsx scripts/check-persistent-session.ts",
-    "test:procurement-convex": "tsx scripts/check-procurement-convex.ts",
+    "test:procurement-convex": "tsx scripts/check-procurement-convex.ts && tsx scripts/check-procurement-incremental.ts",
     "test:auth-token": "tsx scripts/check-auth-token.ts",
     "test:auth-email-policy": "tsx scripts/check-auth-email-policy.ts",
     "test:microsoft-sso": "tsx scripts/check-microsoft-sso.ts",

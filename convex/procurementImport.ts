@@ -110,12 +110,12 @@ export const generations = internalQuery({
       for (let i = 0; i < 21; i++) {
         const row = await ctx.db.query(table).withIndex(index as any, (q: any) => after === undefined ? q.eq("societyId", societyId) : q.eq("societyId", societyId).gt("generation", after)).first();
         if (!row) break;
-        if (i === 20) return { active: active?.generation ?? null, generations: [...found].sort(), truncated: true };
+        if (i === 20) return { active: active?.storageGeneration ?? active?.generation ?? null, generations: [...found].sort(), truncated: true };
         found.add(row.generation); after = row.generation;
-        if (found.size > 20) return { active: active?.generation ?? null, generations: [...found].sort(), truncated: true };
+        if (found.size > 20) return { active: active?.storageGeneration ?? active?.generation ?? null, generations: [...found].sort(), truncated: true };
       }
     }
-    return { active: active?.generation ?? null, generations: [...found].sort(), truncated: false };
+    return { active: active?.storageGeneration ?? active?.generation ?? null, generations: [...found].sort(), truncated: false };
   },
 });
 
@@ -138,7 +138,9 @@ export const commit = internalMutation({
     const society = await ctx.db.get(args.societyId);
     if (!society || society.integrationSettings?.procurementReviewFolder !== args.folder) throw new Error("Workspace folder changed; activation refused.");
     const prior = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", args.societyId)).unique();
-    const { expected, ...catalog } = args;
+    if (prior?.syncRunId) throw new Error("An incremental import is in progress; resume it before activation.");
+    const { expected, ...baseCatalog } = args;
+    const catalog = prior?.generation === args.generation && prior.storageGeneration ? { ...baseCatalog, storageGeneration: prior.storageGeneration } : baseCatalog;
     // Replacement also clears compact-only metadata when deliberately rolling back a legacy import.
     if (prior) await ctx.db.replace(prior._id, catalog);
     else await ctx.db.insert("procurementCatalogs", catalog);
@@ -183,7 +185,7 @@ export const purgePage = internalMutation({
   returns: v.number(),
   handler: async (ctx, args) => {
     const active = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", args.societyId)).unique();
-    if (active?.generation === args.generation) throw new Error("Cannot purge the active generation.");
+    if ((active?.storageGeneration ?? active?.generation) === args.generation) throw new Error("Cannot purge the active generation.");
     const index = args.table === "procurementRecords" || args.table === "procurementDetails" ? "by_key" : args.table === "procurementDocuments" ? "by_record" : "by_record_source";
     const page = await ctx.db.query(args.table).withIndex(index as any, (q: any) => q.eq("societyId", args.societyId).eq("generation", args.generation))
       .paginate({ cursor: null, numItems: 1000, maximumBytesRead: 4_000_000 });
@@ -199,7 +201,7 @@ export const purgeRangePage = internalMutation({
   returns: v.object({ removed: v.number(), cursor: v.string(), done: v.boolean() }),
   handler: async (ctx, args) => {
     const active = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", args.societyId)).unique();
-    if (active?.generation === args.generation) throw new Error("Cannot purge the active generation.");
+    if ((active?.storageGeneration ?? active?.generation) === args.generation) throw new Error("Cannot purge the active generation.");
     const index = args.table === "procurementRecords" || args.table === "procurementDetails" ? "by_key" : args.table === "procurementDocuments" ? "by_record" : "by_record_source";
     const page = await ctx.db.query(args.table).withIndex(index as any, (q: any) => {
       const range = q.eq("societyId", args.societyId).eq("generation", args.generation).gte("recordKey", args.lowerKey);
