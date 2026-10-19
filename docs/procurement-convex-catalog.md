@@ -57,7 +57,7 @@ npx tsx scripts/procurement/retire-convex.ts \
   --deployment industrious-cricket-610 --workspace WORKSPACE_ID
 ```
 
-After reviewing the exact generations, add `--apply --backup PRIVATE_BACKUP.zip`; choose `--keep-previous 0` only when a verified private backup provides rollback for all earlier generations. The tool verifies ZIP integrity and that each candidate's records/details are present, prints its SHA-256, and uses bounded backend deletes that refuse the active generation on every batch. Shared taxonomy releases and all SharePoint files/source snapshots are retained. Do not remove shared content-addressed file objects while retained snapshots reference them. Backup retention is an operator decision; these scripts do not expire backups or delete source archives.
+After reviewing the exact generations, add `--apply --backup PRIVATE_BACKUP.zip`; choose `--keep-previous 0` only when a verified private backup provides rollback for all earlier generations. The tool verifies ZIP integrity and that each candidate's records/details are present, prints its SHA-256, and uses short, bounded backend action slices with progress output that refuse the active generation on every delete batch. If a CLI response is lost, inspect server completion before retrying; rerunning the retirement tool resumes from remaining inactive rows and also finds generations whose list rows were removed before their detail rows. Shared taxonomy releases and all SharePoint files/source snapshots are retained. Do not remove shared content-addressed file objects while retained snapshots reference them. Backup retention is an operator decision; these scripts do not expire backups or delete source archives.
 
 ## Updating the UI
 

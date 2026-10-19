@@ -46,7 +46,17 @@ for (const generation of retiring) if (!(covered[generation]?.procurementRecords
 const digest = createHash("sha256");
 for await (const chunk of createReadStream(backup)) digest.update(chunk);
 console.log(`Verified backup SHA-256 ${digest.digest("hex")}. Retiring only the listed inactive generations.`);
-for (const generation of retiring) run("procurementImport:purgeGeneration", { societyId, generation });
+for (const generation of retiring) {
+  for (const table of ["procurementRecords", "procurementDetails", "procurementDocuments", "procurementEvidence"]) {
+    let removed = 0;
+    for (;;) {
+      const result = run("procurementImport:purgeSlice", { societyId, generation, table }, true);
+      removed += result.removed;
+      console.log(`${generation} ${table}: ${removed} retired in this run${result.done ? " (complete)" : ""}.`);
+      if (result.done) break;
+    }
+  }
+}
 const after = run("procurementImport:generations", { societyId }, true);
 if (after.active !== plan.active || retiring.some(generation => after.generations.includes(generation))) throw new Error("Retirement verification needs operator attention.");
 console.log("Retirement complete; active generation is unchanged. Shared taxonomy terms and SharePoint files were retained.");
