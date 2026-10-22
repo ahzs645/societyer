@@ -1,0 +1,25 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Procurement analytical contract fixture</title></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import '/src/i18n';
+import '/src/theme/palette.css';
+import '/src/theme/tokens.css';
+import '/src/styles/index.scss';
+import { ProcurementAnalytics } from '/src/features/procurementReview/reader/analytics/ProcurementAnalytics';
+import { ReaderSourceContext } from '/src/features/procurementReview/reader/source';
+import { buildAnalysis } from '/shared/procurementAnalytics';
+const today = new Date().toISOString().slice(0,10);
+const base = {kind:'award', title:'Synthetic procurement award', organization:'Test City', issuedFor:'', status:'Awarded', date:'2026-01-15',dateText:'',reference:'', documents:1,listedDocuments:0,supplier:'Cedar',value:100,currency:'CAD',procurementType:'Goods'};
+const awards = Array.from({length:65},(_,i)=>({...base,recordKey:`award:${i}`,supplier:`Supplier ${String(i).padStart(2,'0')}`,value:(i+1)*100,date:i%2?'2026-02-15':'2026-01-15'}));
+const opportunities = [{...base,recordKey:'opportunity:1',kind:'opportunity',status:'Open',date:'2199-01-01'}];
+window.__analysisRequests = [];
+const source = {
+  catalog:{generation:'synthetic',publishedAt:new Date().toISOString(),counts:{award:65,opportunity:1}},
+  useAnalysis(request) { window.__analysisRequests.push(request); const rows=request.view==='opportunities'?opportunities:request.view==='decisions'||request.view==='party'?[...awards,...opportunities]:awards; return {state:'ready',result:buildAnalysis(rows,[],request,Date.now()),error:null,computedAt:Date.now(),asOf:Date.now(),metricVersion:'procurement-metrics-v2',mappingVersion:'synthetic',retry(){}}; },
+  usePage(){throw Error('Charts must not request browse pages');},
+  useList(){throw Error('Hosted charts must not load whole catalog lists');},
+  useReviews(){throw Error('Hosted charts must not download raw review histories');},
+};
+createRoot(document.getElementById('root')).render(React.createElement(BrowserRouter,null,React.createElement(ReaderSourceContext.Provider,{value:source},React.createElement('main',{className:'page procurement-review'},React.createElement(ProcurementAnalytics)))));
+</script></body></html>

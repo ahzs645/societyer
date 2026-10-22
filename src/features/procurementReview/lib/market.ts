@@ -20,13 +20,19 @@ export type MarketFilters = {
 /** CAD only, placeholder suppliers and future-dated awards left out: Zoer's defaults. */
 export const defaultFilters: MarketFilters = { from: "", to: "", buyer: "", supplier: "", type: "", currency: "CAD", includePlaceholders: false, includeFuture: false, minValue: "" };
 
-export type QualityFlag = "future" | "undated" | "currency" | "placeholder" | "value" | "negative" | "zero";
+export type QualityFlag = "future" | "undated" | "currency" | "placeholder" | "value" | "negative" | "zero" | "contract" | "justification" | "mapping";
 export type Slice = { buyer?: string; supplier?: string; type?: string; month?: string; from?: string; to?: string; min?: number; max?: number; exact?: number; quality?: QualityFlag };
 
 export type Award = {
   id: string; title: string; buyer: string; supplier: string; type: string; currencyCode: string;
   date: string | null; value: number | null; placeholder: boolean;
+  contractNumber?: string | null; justification?: string | null; buyerId?: string; hierarchy?: string[]; mappingStatus?: string; urlExcluded?: boolean;
 };
+export function analyticalFields(row: ListRow): Record<string, any> {
+  if (!row.analyticsJson) return {};
+  try { const value = JSON.parse(row.analyticsJson); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
+  catch { throw new Error(`Invalid analytical inputs for ${row.recordKey}.`); }
+}
 
 const PLACEHOLDER_SUPPLIERS = new Set(["migrated supplier"]);
 /** Collapses whitespace (including non-breaking spaces); "" reads as missing. */
@@ -50,7 +56,7 @@ export function isoDate(value: unknown): string | null {
 
 /** The list's sortable date may carry a time ("2026-10-30T14:00"); an award is dated by its day. */
 export function normalizeAwards(rows: ListRow[]): Award[] {
-  return rows.map((row) => ({
+  return rows.map((row) => { const extra = analyticalFields(row); return ({
     id: row.recordKey,
     title: row.title,
     buyer: label(row.organization, "Unknown buyer"),
@@ -60,7 +66,13 @@ export function normalizeAwards(rows: ListRow[]): Award[] {
     date: isoDate(row.date.slice(0, 10)),
     value: typeof row.value === "number" && Number.isFinite(row.value) ? row.value : null,
     placeholder: isPlaceholderSupplier(row.supplier),
-  }));
+    contractNumber: Object.hasOwn(extra, "contractNumber") ? String(extra.contractNumber ?? "").trim() : null,
+    justification: Object.hasOwn(extra, "justification") ? String(extra.justification ?? "").trim() : null,
+    buyerId: typeof extra.buyerId === "string" ? extra.buyerId : undefined,
+    hierarchy: Array.isArray(extra.buyerHierarchy) ? extra.buyerHierarchy.filter((v: unknown) => typeof v === "string") : [],
+    mappingStatus: String(extra.buyerMappingStatus ?? extra.mappingProvenance?.status ?? "Not supplied"),
+    urlExcluded: extra.urlExcluded === true,
+  }); });
 }
 
 export function validateFilters(input: Partial<MarketFilters>): MarketFilters {
@@ -73,7 +85,7 @@ export function validateFilters(input: Partial<MarketFilters>): MarketFilters {
 
 export function filterAwards(rows: Award[], input: Partial<MarketFilters>, today: string): Award[] {
   const f = validateFilters(input);
-  return rows.filter((r) => (!f.buyer || r.buyer === f.buyer) && (!f.supplier || r.supplier === f.supplier) && (!f.type || r.type === f.type)
+  return rows.filter((r) => !r.urlExcluded && (!f.buyer || r.buyer === f.buyer) && (!f.supplier || r.supplier === f.supplier) && (!f.type || r.type === f.type)
     && r.currencyCode === f.currency && (f.includePlaceholders || !r.placeholder) && (f.includeFuture || !r.date || r.date <= today)
     && (!f.from || (!!r.date && r.date >= f.from)) && (!f.to || (!!r.date && r.date <= f.to))
     && (!f.minValue || (r.value !== null && r.value >= Number(f.minValue))));
@@ -88,6 +100,9 @@ export function qualityMatch(r: Award, flag: QualityFlag, today: string): boolea
     case "value": return r.value === null;
     case "negative": return r.value !== null && r.value < 0;
     case "zero": return r.value === 0;
+    case "contract": return r.contractNumber === "";
+    case "justification": return r.justification === "";
+    case "mapping": return !r.buyerId || /not supplied|not mapped|review required/i.test(r.mappingStatus ?? "");
   }
 }
 
@@ -153,7 +168,7 @@ export function overview(rows: Award[]) {
   };
 }
 
-const QUALITY_FLAGS: QualityFlag[] = ["currency", "future", "undated", "placeholder", "value", "negative", "zero"];
+const QUALITY_FLAGS: QualityFlag[] = ["currency", "future", "undated", "placeholder", "value", "negative", "zero", "contract", "justification", "mapping"];
 /** The choices for the filters and the data-quality counts, over every award regardless of filters. */
 export function metadata(rows: Award[], today: string) {
   const distinct = (key: "buyer" | "supplier" | "type" | "currencyCode") => [...new Set(rows.map((r) => r[key]))].sort((a, b) => a.localeCompare(b));
@@ -162,6 +177,7 @@ export function metadata(rows: Award[], today: string) {
     count: rows.length, buyers: distinct("buyer"), suppliers: distinct("supplier"), types: distinct("type"), currencies: distinct("currencyCode"),
     firstDate: dates[0] ?? null, lastDate: dates.at(-1) ?? null, years: [...new Set(dates.map((d) => d.slice(0, 4)))].reverse(),
     quality: QUALITY_FLAGS.map((flag) => ({ flag, count: rows.filter((r) => qualityMatch(r, flag, today)).length })),
+    unavailable: { contractNumber: rows.filter(row => row.contractNumber === null).length, justification: rows.filter(row => row.justification === null).length },
   };
 }
 
@@ -242,6 +258,7 @@ export type Matrix = ReturnType<typeof matrix>;
 export const QUALITY_LABELS: Record<QualityFlag, string> = {
   currency: "Currency not stated", future: "Future-dated awards", undated: "Missing or invalid dates", placeholder: "Placeholder suppliers",
   value: "Missing or invalid values", negative: "Negative values", zero: "Zero values",
+  contract: "Missing contract numbers", justification: "Missing justifications", mapping: "Buyer mapping needs review",
 };
 export const QUALITY_DETAILS: Record<QualityFlag, string> = {
   currency: "Excluded from CAD totals; choose “Not stated” under Currency to see their values separately.",
@@ -251,6 +268,9 @@ export const QUALITY_DETAILS: Record<QualityFlag, string> = {
   value: "Counted as records; omitted from value statistics.",
   negative: "Included in net totals; excluded from positive-value concentration.",
   zero: "Included in counts and size statistics.",
+  contract: "Counted only where the publication supplied the contract-number field.",
+  justification: "Counted only where the publication supplied the justification field.",
+  mapping: "No canonical buyer mapping, or the source marks it for review.",
 };
 
 // ---------------------------------------------------------------------------

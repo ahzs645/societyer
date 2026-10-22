@@ -14,11 +14,13 @@ import { Badge, Banner, Skeleton } from "../../../../components/ui";
 import { count, counted, percent } from "../../lib/market";
 import {
   CLOSING_LABELS, MATCH_ORDER, READINESS_DETAIL, READINESS_TEXT, RELEVANCE_TEXT, decisionInsights, opportunityInsights,
-  type ClosingWindow, type Readiness, type Relevance,
+  type ClosingWindow, type Readiness, type Relevance, type OpportunityInsights, type DecisionInsights,
 } from "../../lib/insights";
 import { shortSourceDate } from "../../lib/notice";
 import { SECTION_PARAM, useReaderNavigation } from "../routes";
-import { useReaderSource } from "../source";
+import { useReaderSource, type RecordList } from "../source";
+import { useProcurementClock } from "../../lib/clock";
+import { currentReviewProjection } from "../../../../../shared/procurementAnalytics";
 import { LoadingLine, RankedList } from "./parts";
 
 const WINDOWS: ClosingWindow[] = ["today", "week", "twoWeeks", "later", "undated"];
@@ -26,12 +28,23 @@ const soFar = (partial: boolean, text?: string) => (partial ? [text, "so far"].f
 
 export function OpportunityAnalysis({ title }: { title: string }) {
   const source = useReaderSource();
+  return source.useAnalysis ? <ServerOpportunities title={title} /> : <LocalOpportunities title={title} />;
+}
+function ServerOpportunities({ title }: { title: string }) {
+  const source = useReaderSource(), result = source.useAnalysis!({ view: "opportunities" });
+  if (result.state === "failed") return <Banner tone="danger">{result.error} <button className="btn" onClick={result.retry}>Retry analysis</button></Banner>;
+  const data = result.result?.type === "opportunities" ? { ...result.result.data, openKeys: new Set<string>() } : opportunityInsights([]);
+  return <OpportunityContent title={title} data={data} list={result.state === "ready" ? { rows: [], total: data.total, done: true } : undefined} partial={false} />;
+}
+function LocalOpportunities({ title }: { title: string }) {
+  const source = useReaderSource(), now = useProcurementClock();
+  const list = source.useList("opportunity"), rows = useDeferredValue(list?.rows);
+  const data = useMemo(() => opportunityInsights(rows ?? [], now), [rows, now]);
+  return <OpportunityContent title={title} data={data} list={list} partial={!list?.done} />;
+}
+function OpportunityContent({ title, data, list, partial }: { title: string; data: OpportunityInsights; list: RecordList | undefined; partial: boolean }) {
   const nav = useReaderNavigation();
-  const list = source.useList("opportunity");
-  const rows = useDeferredValue(list?.rows);
-  const data = useMemo(() => opportunityInsights(rows ?? []), [rows]);
-  const partial = !list?.done;
-  const openList = () => nav.update({ [SECTION_PARAM]: null, kind: null, status: null, q: null });
+  const openList = () => nav.update({ [SECTION_PARAM]: null, kind: null, status: "Open", q: null });
   return (
     <>
       <header className="procurement-analytics__header">
@@ -115,16 +128,35 @@ const READINESS: Readiness[] = ["ready", "conditions", "blocker"];
 
 export function DecisionAnalysis({ title }: { title: string }) {
   const source = useReaderSource();
+  return source.useAnalysis ? <ServerDecisions title={title} /> : <LocalDecisions title={title} />;
+}
+function ServerDecisions({ title }: { title: string }) {
+  const source = useReaderSource(), nav = useReaderNavigation();
+  const scope = nav.params.get("scope") === "all" ? "all" : "open";
+  const result = source.useAnalysis!({ view: "decisions", scope });
+  if (result.state === "failed") return <Banner tone="danger">{result.error} <button className="btn" onClick={result.retry}>Retry analysis</button></Banner>;
+  const remote = result.result?.type === "decisions" ? result.result.data : null;
+  const data = remote ? { ...remote, fit: (relevance: Relevance, readiness: Readiness) => remote.fit.find(cell => cell.relevance === relevance && cell.readiness === readiness)?.count ?? 0 } : null;
+  return <>{remote && <p className="muted">{remote.coverage.complete ? "Verified complete current-review projection" : "Current-review projection (legacy input inventory unverified)"} of {count(remote.coverage.total)} notices: {count(remote.coverage.notReviewed)} not reviewed; {count(remote.coverage.failed)} failed; {count(remote.coverage.olderSourceRevision)} reviewed against older source revisions; {count(remote.coverage.currentInstructions)} with current versioned instructions; {count(remote.coverage.versionUnspecified)} without verified instruction versions. {count(remote.staleCount)} decisions need reconfirmation.</p>}<DecisionContent title={title} data={data} scope={scope} waiting={result.state !== "ready"} truncated={false} titles={new Map()} /></>;
+}
+function LocalDecisions({ title }: { title: string }) {
+  const source = useReaderSource();
+  const now = useProcurementClock();
   const nav = useReaderNavigation();
   const reviews = source.useReviews();
   const opportunities = source.useList("opportunity");
   const rows = useDeferredValue(opportunities?.rows);
   const scope = nav.params.get("scope") === "all" ? "all" : "open";
-  const open = useMemo(() => (scope === "open" ? opportunityInsights(rows ?? []).openKeys : undefined), [rows, scope]);
+  const open = useMemo(() => (scope === "open" ? opportunityInsights(rows ?? [], now).openKeys : undefined), [rows, scope, now]);
   const titles = useMemo(() => new Map((rows ?? []).map((row) => [row.recordKey, row.title])), [rows]);
-  const data = useMemo(() => (reviews ? decisionInsights(reviews.rows, open) : null), [reviews, open]);
+  const data = useMemo(() => (reviews ? decisionInsights(currentReviewProjection(reviews.rows), open) : null), [reviews, open]);
   // The open scope needs the whole opportunity list; until then the figures would be partial.
   const waiting = !data || (scope === "open" && !opportunities?.done);
+  return <DecisionContent title={title} data={data} scope={scope} waiting={waiting} truncated={reviews?.truncated ?? false} titles={titles} />;
+}
+function DecisionContent({ title, data, scope, waiting, truncated, titles }: { title: string; data: (DecisionInsights & { staleCount?: number }) | null; scope: "open" | "all"; waiting: boolean; truncated: boolean; titles: Map<string, string> }) {
+  const nav = useReaderNavigation();
+  const staleCount = data?.staleCount ?? data?.stale.length ?? 0;
   const unplaced = data ? data.assessed - RELEVANCE.reduce((n, relevance) => n + READINESS.reduce((m, readiness) => m + data.fit(relevance, readiness), 0), 0) : 0;
   return (
     <>
@@ -137,8 +169,8 @@ export function DecisionAnalysis({ title }: { title: string }) {
           <Segmented value={scope} onChange={(next) => nav.update({ scope: next === "open" ? null : next })} items={[{ id: "open", label: "Open opportunities" }, { id: "all", label: "All reviewed" }]} />
         </div>
       </header>
-      {scope === "open" && <LoadingLine list={opportunities} noun="opportunities" />}
-      {reviews?.truncated && <Banner tone="warn">Zoer published more review rows than the reader loads at once, so these figures leave some reviews out.</Banner>}
+
+      {truncated && <Banner tone="warn">Zoer published more review rows than the reader loads at once, so these figures leave some reviews out.</Banner>}
       {waiting || !data ? <Skeleton height={220} width="100%" radius={8} /> : data.reviewed === 0 ? (
         <section className="card"><div className="card__body"><p className="muted">No published reviews {scope === "open" ? "for open opportunities yet. Try “All reviewed”." : "yet. Zoer publishes them once someone reviews a notice."}</p></div></section>
       ) : (
@@ -146,7 +178,7 @@ export function DecisionAnalysis({ title }: { title: string }) {
           <div className="stat-grid procurement-analytics__stats">
             <StatTile label="Reviewed notices" value={count(data.reviewed)} sub={`${count(data.assessed)} with an AI assessment`} />
             <StatTile label="Decisions recorded" value={count(data.decided)} sub={data.reviewed ? `${percent(data.decided / data.reviewed)} of reviewed notices` : undefined} />
-            <StatTile label="Decisions to reconfirm" value={count(data.stale.length)} tone={data.stale.length ? "warn" : "neutral"} sub="Evidence changed after the decision" />
+            <StatTile label="Decisions to reconfirm" value={count(staleCount)} tone={staleCount ? "warn" : "neutral"} sub="Evidence changed after the decision" />
             <StatTile label="Open tasks" value={count(data.openTasks)} sub={data.unacknowledgedChanges ? `${counted(data.unacknowledgedChanges, "change")} not yet acknowledged` : "No unacknowledged changes"} />
           </div>
           <ChartCard title="Fit and readiness" subtitle={<><AiNote /> Categorical states from the current assessment, not a score or a chance of winning.</>} headingLevel={3}>
@@ -213,7 +245,7 @@ export function DecisionAnalysis({ title }: { title: string }) {
                     ))}
                   </ul>
                 )}
-                {data.stale.length > 8 && <p className="muted procurement-analytics__caption">And {count(data.stale.length - 8)} more.</p>}
+                {staleCount > 8 && <p className="muted procurement-analytics__caption">And {count(staleCount - 8)} more.</p>}
             </ChartCard>
           </div>
         </div>

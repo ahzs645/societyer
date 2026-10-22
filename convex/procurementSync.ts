@@ -9,6 +9,8 @@ import {
 } from "../shared/procurementSearchText";
 import { v } from "convex/values";
 import { internalAction, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { procurementPublicationFields } from "./tables/procurement";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
 import { requireMaintenanceLease, withMaintenanceLease } from "./procurementMaintenance";
 const table = v.union(
@@ -25,6 +27,9 @@ export const begin = internalMutation({
     targetHash: v.string(),
     planHash: v.string(),
     operations: v.number(),
+    baseInventoryHash: v.string(), targetInventoryHash: v.string(),
+    baseExpected: v.record(v.string(), v.number()), expected: v.record(v.string(), v.number()),
+    allowArchives: v.boolean(), targetGeneration: v.string(), publishedAt: v.string(), collectedAt: v.optional(v.string()),
   },
   returns: v.object({
     runId: v.id("procurementSyncRuns"),
@@ -35,13 +40,16 @@ export const begin = internalMutation({
   handler: async (ctx, a) => {
     validateWorkspaceProcurementReviewFolder(a.societyId, a.folder);
     if (
-      ![a.baseHash, a.targetHash, a.planHash].every((h) =>
+      ![a.baseHash, a.targetHash, a.planHash, a.baseInventoryHash, a.targetInventoryHash].every((h) =>
         /^[a-f0-9]{64}$/.test(h),
       ) ||
       !Number.isSafeInteger(a.operations) ||
       a.operations < 0
     )
       throw new Error("Invalid incremental plan.");
+    for (const expected of [a.baseExpected,a.expected]) {
+      if (["procurementRecords","procurementDetails","procurementDocuments","procurementEvidence"].some(table => !Number.isSafeInteger(expected[table]) || expected[table] < 0) || expected.procurementRecords !== expected.procurementDetails) throw new Error("Invalid verified table counts.");
+    }
     const c = await ctx.db
       .query("procurementCatalogs")
       .withIndex("by_society", (q) => q.eq("societyId", a.societyId))
@@ -61,10 +69,13 @@ export const begin = internalMutation({
         run.targetHash !== a.targetHash ||
         run.baseHash !== a.baseHash ||
         run.operations !== a.operations
+        || run.baseInventoryHash !== a.baseInventoryHash || run.targetInventoryHash !== a.targetInventoryHash || run.targetGeneration !== a.targetGeneration
+        || !run.expected || Object.keys(a.expected).some(table => run.expected![table] !== a.expected[table])
       )
         throw new Error(
           "Another incremental plan is in progress; resume its exact export.",
         );
+      await ctx.db.patch(run._id, { heartbeatAt: Date.now(), error: undefined });
       return {
         runId: run._id,
         applied: run.applied,
@@ -76,6 +87,8 @@ export const begin = internalMutation({
       throw new Error(
         "Stale baseline; no data changed. Use the last successful export.",
       );
+    if (c.inventoryHash && c.inventoryHash !== a.baseInventoryHash) throw new Error("Baseline inventory differs from active publication.");
+    if (Object.values(c.counts).reduce((sum,count)=>sum+count,0) !== a.baseExpected.procurementRecords || (c.expected && Object.keys(a.baseExpected).some(table=>c.expected![table]!==a.baseExpected[table]))) throw new Error("Baseline table counts differ from active publication.");
     const runId = await ctx.db.insert("procurementSyncRuns", {
       societyId: a.societyId,
       baseHash: a.baseHash,
@@ -87,6 +100,9 @@ export const begin = internalMutation({
       nextBatch: 0,
       completed: false,
       changedAt: Date.now(),
+      startedAt: Date.now(), heartbeatAt: Date.now(), baseInventoryHash: a.baseInventoryHash, targetInventoryHash: a.targetInventoryHash,
+      expected: a.expected, tableCounts: a.baseExpected, allowArchives: a.allowArchives, targetGeneration: a.targetGeneration, publishedAt: a.publishedAt,
+      ...(a.collectedAt ? {collectedAt:a.collectedAt} : {}),
     });
     await ctx.db.patch(c._id, { syncRunId: runId });
     return { runId, applied: 0, nextBatch: 0, completed: false };
@@ -118,6 +134,8 @@ export const applyBatch = internalMutation({
     const run = await ctx.db.get(a.runId);
     if (!run || run.completed || run.planHash !== a.planHash)
       throw new Error("Invalid or completed incremental run.");
+    const rawDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(a.operations)));
+    const digest = Array.from(new Uint8Array(rawDigest), byte => byte.toString(16).padStart(2,"0")).join("");
     const c = await ctx.db
       .query("procurementCatalogs")
       .withIndex("by_society", (q) => q.eq("societyId", run.societyId))
@@ -128,8 +146,12 @@ export const applyBatch = internalMutation({
       c.folder !== society?.integrationSettings?.procurementReviewFolder
     )
       throw new Error("Import lock or workspace folder changed.");
-    if (a.batch < run.nextBatch)
+    if (a.batch < run.nextBatch) {
+      const priorBatch = await ctx.db.query("procurementSyncBatches").withIndex("by_run_batch", q => q.eq("runId", run._id).eq("batch", a.batch)).unique();
+      if (!priorBatch || priorBatch.digest !== digest) throw new Error("Replayed batch differs from the exact committed batch.");
+      await ctx.db.patch(run._id, { heartbeatAt: Date.now(), error: undefined });
       return { applied: run.applied, nextBatch: run.nextBatch };
+    }
     if (
       a.batch !== run.nextBatch ||
       run.applied + a.operations.length > run.operations
@@ -137,6 +159,7 @@ export const applyBatch = internalMutation({
       throw new Error("Out-of-order incremental batch.");
     const generation = c.storageGeneration ?? c.generation;
     const counts = { ...run.counts };
+    const tableCounts = { ...run.tableCounts };
     const canonical = (value: any): string =>
       JSON.stringify(value, (_k, v) =>
         v && typeof v === "object" && !Array.isArray(v)
@@ -162,6 +185,7 @@ export const applyBatch = internalMutation({
         ),
       );
     for (const op of a.operations) {
+      if (op.row === null && !run.allowArchives) throw new Error("Archival requires complete source/window coverage.");
       const row = op.row === null ? null : JSON.parse(op.row),
         before = op.before === null ? null : JSON.parse(op.before),
         identity = row ?? before;
@@ -169,6 +193,7 @@ export const applyBatch = internalMutation({
         !identity ||
         identity.recordKey !== op.recordKey ||
         identity.societyId !== run.societyId ||
+        (before && (before.societyId !== run.societyId || before.recordKey !== op.recordKey)) ||
         (row &&
           ("_id" in row ||
             "_creationTime" in row ||
@@ -242,6 +267,7 @@ export const applyBatch = internalMutation({
         );
       if (!before && old && !old.archived)
         throw new Error("Unexpected live row at new source key.");
+      if (run.tableCounts) tableCounts[op.table] = (tableCounts[op.table] ?? 0) + (row ? 1 : 0) - (before ? 1 : 0);
       if (op.table === "procurementRecords") {
         if (before) counts[before.kind] = (counts[before.kind] ?? 0) - 1;
         if (row) counts[row.kind] = (counts[row.kind] ?? 0) + 1;
@@ -293,12 +319,14 @@ export const applyBatch = internalMutation({
       applied: run.applied + a.operations.length,
       nextBatch: run.nextBatch + 1,
     };
-    await ctx.db.patch(run._id, { ...progress, counts, changedAt: Date.now() });
+    await ctx.db.insert("procurementSyncBatches", { runId: run._id, batch: a.batch, digest });
+    await ctx.db.patch(run._id, { ...progress, counts, tableCounts, changedAt: Date.now(), heartbeatAt: Date.now(), error: undefined });
     return progress;
   },
 });
 export const finish = internalMutation({
   args: {
+    ...procurementPublicationFields,
     runId: v.id("procurementSyncRuns"),
     planHash: v.string(),
     generation: v.string(),
@@ -325,6 +353,8 @@ export const finish = internalMutation({
       throw new Error(
         "Incremental plan is incomplete; resume before activation.",
       );
+    if (run.targetGeneration !== a.generation || (a.inventoryHash && run.targetInventoryHash !== a.inventoryHash)) throw new Error("Target publication changed during import.");
+    if (!run.expected || !run.tableCounts || Object.keys(run.expected).some(table => run.expected![table] !== run.tableCounts![table])) throw new Error("Target table counts do not match applied changes.");
     const kinds = new Set([
       ...Object.keys(run.counts),
       ...Object.keys(a.counts),
@@ -358,6 +388,8 @@ export const finish = internalMutation({
         throw new Error("Taxonomy release is not verified.");
     }
     await ctx.db.patch(c._id, {
+      publicationId: a.publicationId, schemaVersion: a.schemaVersion, tables: a.tables, inventoryHash: a.inventoryHash, archives: a.archives, coverage: a.coverage, collectedAt: a.collectedAt,
+      expected: run.expected, activatedAt: Date.now(),
       storageGeneration: c.storageGeneration ?? c.generation,
       generation: a.generation,
       publishedAt: a.publishedAt,
@@ -371,7 +403,21 @@ export const finish = internalMutation({
       taxonomyCount: a.taxonomyIndexes.reduce((n, r) => n + r.count, 0),
       syncRunId: undefined,
     });
-    await ctx.db.patch(run._id, { completed: true, changedAt: Date.now() });
+    await ctx.db.patch(run._id, { completed: true, changedAt: Date.now(), heartbeatAt: Date.now(), error: undefined });
+    const job = await ctx.db.query("procurementImportJobs").withIndex("by_generation", q => q.eq("societyId",run.societyId).eq("generation",a.generation)).unique();
+    if (job) await ctx.db.patch(job._id, {phase:"ready",activatedAt:Date.now(),heartbeatAt:Date.now(),error:undefined});
+    await ctx.scheduler.runAfter(0, internal.procurementAnalytics.prepare, {societyId:run.societyId,generation:a.generation});
+    return null;
+  },
+});
+
+/** Failure never releases the read gate; only exact-plan completion can do that. */
+export const fail = internalMutation({
+  args: { runId: v.id("procurementSyncRuns"), planHash: v.string(), error: v.string() }, returns: v.null(),
+  handler: async (ctx,args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || run.planHash !== args.planHash) throw new Error("Invalid incremental run.");
+    if (!run.completed) await ctx.db.patch(run._id,{error:args.error.slice(0,2000),heartbeatAt:Date.now()});
     return null;
   },
 });

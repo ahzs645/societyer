@@ -24,6 +24,9 @@ const t = convexTest(schema, {
     "./procurementSync.js": () => import("../convex/procurementSync"),
     "./procurementImport.js": () => import("../convex/procurementImport"),
     "./procurementMaintenance.js": () => import("../convex/procurementMaintenance"),
+    "./procurementStatus.js": () => import("../convex/procurementStatus"),
+    "./procurementAnalytics.js": () => import("../convex/procurementAnalytics"),
+    "./procurementAnalyticsJobs.js": () => import("../convex/procurementAnalyticsJobs"),
   } as any),
   api: any = anyApi;
 const issuer = betterAuthIssuer(),
@@ -184,12 +187,26 @@ const begin = {
   targetHash: c,
   planHash: b,
   operations: 4,
+  baseInventoryHash: a, targetInventoryHash: c,
+  baseExpected: {procurementRecords:120,procurementDetails:120,procurementDocuments:0,procurementEvidence:0},
+  expected: {procurementRecords:119,procurementDetails:119,procurementDocuments:0,procurementEvidence:0},
+  targetGeneration: "publication-2", publishedAt: "2026-10-19", allowArchives:true,
 };
 await assert.rejects(
   t.mutation(api.procurementSync.begin, { ...begin, baseHash: "d".repeat(64) }),
   /baseline/i,
 );
 const run = await t.mutation(api.procurementSync.begin, begin);
+assert.equal((await reader.query(api.procurementStatus.get,{societyId:fixture.societyId})).state,"importing");
+await assert.rejects(t.query(api.procurementStatus.get,{societyId:fixture.societyId}),/auth|identity|sign|access/i);
+await t.mutation(api.procurementSync.fail,{runId:run.runId,planHash:b,error:"Synthetic interruption"});
+const failed=await reader.query(api.procurementStatus.get,{societyId:fixture.societyId});
+assert.equal(failed.state,"failed");assert.equal(failed.run.error,"Synthetic interruption");
+assert.equal(failed.lastSuccessful.generation,generation);assert.match(failed.recovery,/exact verified export/);
+await t.mutation(api.procurementSync.begin,begin);
+await t.run(async ctx=>{await ctx.db.patch(run.runId,{heartbeatAt:Date.now()-6*60_000})});
+assert.equal((await reader.query(api.procurementStatus.get,{societyId:fixture.societyId})).state,"stalled");
+await t.mutation(api.procurementSync.begin,begin);
 assert.equal(
   await reader.query(api.procurementReview.catalog, {
     societyId: fixture.societyId,
@@ -262,6 +279,7 @@ await assert.rejects(
   t.mutation(api.procurementSync.finish, finish),
   /incomplete/,
 );
+await assert.rejects(t.mutation(api.procurementSync.applyBatch,{...batch,operations:[op("procurementRecords",{...newRow,title:"Different replay"},old)]}),/Replayed batch differs/);
 const removed = fixture.rows[1],
   removedDetail = {
     ...detail,
@@ -289,6 +307,7 @@ const activated = await reader.query(api.procurementReview.catalog, {
   societyId: fixture.societyId,
 });
 assert.equal(activated.generation, "publication-2");
+assert.equal((await reader.query(api.procurementStatus.get,{societyId:fixture.societyId})).state,"ready");
 const rows = await reader.query(api.procurementReview.page, {
   ...pageArgs,
   generation: "publication-2",
@@ -327,6 +346,17 @@ await assert.rejects(
   }),
   /active/,
 );
+
+// An uploaded publication may fail before activation while the last completed catalog stays readable.
+const jobArgs={societyId:fixture.societyId,folder:fixture.folder,generation:"publication-3",inventoryHash:a,contentHash:b,publishedAt:"2026-10-20",complete:true};
+const jobId=await t.mutation(api.procurementImport.beginJob,jobArgs);
+assert.equal(await t.mutation(api.procurementImport.beginJob,jobArgs),jobId,"Exact publication registration is idempotent");
+await assert.rejects(t.mutation(api.procurementImport.beginJob,{...jobArgs,generation:"publication-4"}),/Another publication is pending/);
+await t.mutation(api.procurementImport.jobProgress,{jobId,phase:"failed",error:"Source uploaded; import stopped"});
+const publicationFailure=await reader.query(api.procurementStatus.get,{societyId:fixture.societyId});
+assert.equal(publicationFailure.state,"failed");assert.equal(publicationFailure.source.generation,"publication-3");
+assert.equal(publicationFailure.lastSuccessful.generation,"publication-2");
+assert.equal((await reader.query(api.procurementReview.catalog,{societyId:fixture.societyId})).generation,"publication-2");
 
 // Materialize the same candidate index used in production, then exercise exact search.
 let searchCursor:string|null=null;

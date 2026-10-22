@@ -15,7 +15,6 @@ import { StatTile } from "../../../components/StatTile";
 import {
   count,
   counted,
-  isPlaceholderSupplier,
   money,
   normalizeAwards,
   rank,
@@ -26,15 +25,13 @@ import { NoticeTable, type NoticeViewId } from "./NoticeTable";
 import { SECTION_PARAM, useReaderNavigation, type PartyField } from "./routes";
 import { useReaderSource, type ListRow, type RecordList } from "./source";
 import { LoadingLine, RankedList } from "./analytics/parts";
+import { useProcurementClock } from "../lib/clock";
+import { procurementPartyKey } from "../../../../shared/procurementAnalytics";
 
 /** Not a registered route: the header shows no icon tile beside a long organisation name. */
 const PARTY_ROUTE_KEY = "procurement-review/party";
 /** The notice page's rule for "the same organisation" (lib/notice.ts `partyCount`): case, spacing and punctuation don't matter. */
-const partyKey = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+const partyKey = procurementPartyKey;
 const plainClick = (event: MouseEvent) =>
   event.button === 0 &&
   !event.metaKey &&
@@ -74,6 +71,7 @@ export function BuyerPage({
   const navigation = useReaderNavigation();
   const [analysis, setAnalysis] = useState(false),
     [kind, setKind] = useState<"opportunity" | "award">("opportunity");
+  if (source.useAnalysis) return <ServerBuyerPage field={field} name={name} />;
   if (!source.usePage || analysis)
     return <FullBuyerPage field={field} name={name} />;
   return (
@@ -107,8 +105,32 @@ export function BuyerPage({
   );
 }
 const EMPTY_PAGE: ListRow[] = [];
+function ServerBuyerPage({ field, name }: { field: PartyField; name: string }) {
+  const source = useReaderSource(), nav = useReaderNavigation();
+  const [kind, setKind] = useState<"opportunity" | "award">("opportunity");
+  const result = source.useAnalysis!({ view: "party", party: { field, name } });
+  const data = result.result?.type === "party" ? result.result.data : null;
+  return <div className="procurement-party">
+    <button className="btn btn--ghost" onClick={nav.back}><ArrowLeft size={14} /> Back</button>
+    <PageHeader title={name} routeKey={PARTY_ROUTE_KEY} subtitle="Publication summary and notices for this organisation" />
+    {result.state === "failed" ? <p role="alert">{result.error} <button className="btn" onClick={result.retry}>Retry summary</button></p> : data ? <>
+      <div className="stat-grid procurement-analytics__stats">
+        <StatTile label="Open opportunities" value={count(data.opportunities.open)} sub={`of ${count(data.opportunities.total)} published`} />
+        <StatTile label="Closing within 7 days" value={count(data.opportunities.windows.today + data.opportunities.windows.week)} />
+        <StatTile label="Awards" value={count(data.awards.published)} />
+        <StatTile label="Recorded award value (CAD)" value={money(data.awards.overview.value, "CAD", true)} sub={`${count(data.awards.included)} included; ${count(data.awards.excluded)} excluded by currency, supplier and date rules`} />
+      </div>
+      <ChartCard title="Top suppliers" subtitle="CAD recorded values; placeholder suppliers and future awards excluded." headingLevel={3}>
+        <RankedList rows={data.awards.overview.suppliers.slice(0, 8).map(row => ({ key: row.name, label: row.name, value: Math.max(0, row.value), share: row.share, detail: counted(row.count, "award") }))} ariaLabel="Top suppliers" formatValue={v => money(v, "CAD", true)} />
+      </ChartCard>
+    </> : <p className="muted" role="status">Preparing buyer summary…</p>}
+    <div className="btn-group"><button className="btn btn--secondary" aria-pressed={kind === "opportunity"} onClick={() => setKind("opportunity")}>Opportunities</button><button className="btn btn--secondary" aria-pressed={kind === "award"} onClick={() => setKind("award")}>Awards</button></div>
+    <NoticeTable key={kind} kind={kind} rows={EMPTY_PAGE} tableId={`procurement-buyer:${field}:${name}:${kind}`} view="all" serverPaging fixedParty={{ field, name }} />
+  </div>;
+}
 function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
   const source = useReaderSource();
+  const now = useProcurementClock();
   const nav = useReaderNavigation();
   const opportunityList = source.useList("opportunity");
   const awardList = source.useList("award");
@@ -195,7 +217,7 @@ function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
   }
 
   const total = opportunities.length + awards.length;
-  const anyOpen = opportunities.some((row) => isOpenOpportunity(row));
+  const anyOpen = opportunities.some((row) => isOpenOpportunity(row, now));
   return (
     <div className="procurement-party">
       {header(
@@ -299,9 +321,10 @@ function PartySummary({
   partial: boolean;
 }) {
   const nav = useReaderNavigation();
+  const now = useProcurementClock();
   const open = useMemo(
-    () => opportunityInsights(opportunities),
-    [opportunities],
+    () => opportunityInsights(opportunities, now),
+    [opportunities, now],
   );
   const awarded = useMemo(() => {
     const normalized = normalizeAwards(awards);
@@ -313,7 +336,7 @@ function PartySummary({
       (award) => award.currencyCode === currency,
     );
     const suppliers = rank(
-      inCurrency.filter((award) => !isPlaceholderSupplier(award.supplier)),
+      inCurrency.filter((award) => !award.placeholder),
       "supplier",
     );
     const latest = normalized.reduce<string | null>(

@@ -21,4 +21,6 @@ export type ListRow = {
   value: number | null;
   currency: string;
   procurementType: string;
+  /** Versioned source provenance, canonical parties and quality inputs, when published. */
+  analyticsJson?: string;
 };

@@ -5,6 +5,7 @@ import {
   sortableDate,
   sourceLabel,
   statusOf,
+  procurementDeadlineValue,
   type NoticeDeadline,
 } from "../src/features/procurementReview/lib/notice";
 /** A list row as the table draws it. */
@@ -46,7 +47,7 @@ export function toNoticeRow(row: ListRow, now = Date.now()): NoticeRow {
   const sortable = sortableDate(row.date) || sortableDate(row.dateText);
   const raw = sortable || row.dateText || row.date;
   const opportunity = row.kind === "opportunity";
-  const deadline = opportunity ? deadlineOf(raw, now) : null;
+  const deadline = opportunity ? deadlineOf(procurementDeadlineValue(row), now) : null;
   return {
     _id: row.recordKey,
     kind: row.kind,

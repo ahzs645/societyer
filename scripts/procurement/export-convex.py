@@ -4,6 +4,8 @@ No file bytes or extracted document text are copied to Convex. See the runbook.
 """
 import argparse, concurrent.futures, datetime, gzip, hashlib, json, os, pathlib, re, sqlite3, urllib.parse, urllib.request, zipfile
 from zoneinfo import ZoneInfo
+from decimal import Decimal, InvalidOperation
+from integrity import ALL_TABLES, TABLES, canonical, seal_export, validate_export
 
 PROFILE = json.loads(pathlib.Path(__file__).with_name('review-profile.json').read_text())
 EVIDENCE_TABLES = tuple(PROFILE['evidenceTables'])
@@ -86,14 +88,37 @@ def listed_only(names, documents):
     return sum(1 for name in names if name.strip().lower() not in stored)
 
 def money_value(value):
-    """A contract value as a number when it reads as one ("$1,240,000.00", 64800); otherwise None."""
+    """Bounded 2-decimal sorting projection; raw/precise source values remain in detail/provenance.
+    No magnitudes or locale guesses. Values outside safe minor-unit bounds remain unknown.
+    """
     if isinstance(value, bool): return None
-    if isinstance(value, (int, float)): return value if value == value and value not in (float('inf'), float('-inf')) else None
-    m = MONEY.match(_text(value))
-    if not m: return None
-    number = float(m.group(2).replace(',', '') + (m.group(3) or ''))
-    number = -number if m.group(1) else number
+    if isinstance(value, (int,float)):
+        raw=str(value)
+    else:
+        m = MONEY.match(_text(value))
+        if not m: return None
+        raw=('-' if m.group(1) else '')+m.group(2).replace(',','')+(m.group(3) or '')
+    try: amount=Decimal(raw)
+    except InvalidOperation: return None
+    if not amount.is_finite() or abs(amount)>Decimal('9000000000000.00') or amount*100 != (amount*100).to_integral_value(): return None
+    number=float(amount)
     return int(number) if number.is_integer() else number
+
+def projected_money(data):
+    """A legacy permissive numeric parse may never overrule preserved source text."""
+    raw=_text(data.get('contractValueText'))
+    parsed=data.get('contractValueParsed')
+    if isinstance(parsed,dict) and parsed.get('parserVersion')=='award-money-v2' and (not raw or _text(parsed.get('raw'))==raw):
+        if parsed.get('status')!='parsed': return None
+        stated=_first(data,'currency').upper(); parsed_currency=_text(parsed.get('currency')).upper()
+        if stated and parsed_currency!=stated: return money_value(raw) if raw else None
+        scale=parsed.get('scale'); decimal=parsed.get('decimal'); minor=parsed.get('minorUnits')
+        try:
+            if type(scale) is not int or not 0<=scale<=3 or not isinstance(decimal,str) or not isinstance(minor,str) or not re.fullmatch(r'-?\d+',minor): return None
+            if Decimal(decimal)*10**scale != int(minor): return None
+            return money_value(decimal)
+        except (InvalidOperation,ValueError): return None
+    return money_value(raw) if raw else money_value(data.get('contractValue'))
 
 def project_record(row, society, generation, documents=()):
     """The list row (ListRow in src/features/procurementReview/reader/source.ts) and the notice body.
@@ -115,9 +140,14 @@ def project_record(row, society, generation, documents=()):
                 supplier=_first(data, 'successfulSupplier', 'supplier') if award else '',
                 currency=_first(data, 'currency').upper() if award else '',
                 procurementType=_first(data, 'opportunityType', 'type') if award else '')
-    value = money_value(data.get('contractValue')) if award else None
-    if award and value is None: value = money_value(data.get('contractValueText'))
+    value = projected_money(data) if award else None
     if value is not None: item['value'] = value
+    analytics_keys = ('identityKey','identityStatus','identityVersion','sourceRevision','contractValueParsed','contractValueText','contractNumber','justification','buyerId','supplierId','canonicalBuyerId','canonicalSupplierId','buyerAliases','supplierAliases','buyerHierarchy','buyerParentId','mappingVersion','partyMappingVersion','mappingProvenance','parserVersion','observedAt','collectionRunId','taxonomyReleaseId','classificationCodes','commodityClassifications','urlExcluded','urlExclusionReason','closingAt','closingDate','awardDate','issueDate','publishedAt','postedDate','datePrecision','dateTimezone','timezone','buyerDisplayName','buyerGroup','buyerOrganization','buyerOrganizationId','buyerOriginal','buyerParticipants','buyerType','contractNumberMissing','justificationMissing','sourceAwardId')
+    analytics = {key:data[key] for key in analytics_keys if data.get(key) is not None}
+    if analytics:
+        encoded = json.dumps(analytics,separators=(',',':'),ensure_ascii=False,allow_nan=False)
+        if len(encoded.encode()) > 100000: raise ValueError('Analytical provenance exceeds projection budget')
+        item['analyticsJson'] = encoded
     item['searchText'] = ' '.join(_text(item.get(k)) for k in ('title','organization','issuedFor','reference','supplier','procurementType','currency','recordKey') if _text(item.get(k)))[:4000]
     return item, dict(societyId=society, generation=generation, recordKey=row['id'], dataJson=json.dumps(notice_data(data), separators=(',', ':'), ensure_ascii=False))
 
@@ -165,7 +195,7 @@ class MetadataWriter:
     def __init__(self, manifest, society, folder, output, suffix=None):
         if suffix and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', suffix): raise ValueError('Invalid generation suffix')
         self.manifest, self.society, self.folder, self.output = manifest, society, folder, output
-        self.generation = manifest['snapshotId'] + '-' + (suffix or 'reader-v2')
+        self.generation = (manifest.get('publicationId') or manifest['snapshotId']) + '-' + (suffix or 'reader-v2')
         self.handles = {}; self.counts = {}; self.kinds = {}; self.releases = set(); self.terms = 0; self.term_hashes = {}; self.term_counts = {}
         self.fingerprint = hashlib.sha256(PROFILE['profile'].encode())
         self.files = {}; self.taxonomy = {}; self.record_keys = set(); self.term_keys = set(); self.document_keys = set()
@@ -202,9 +232,12 @@ class MetadataWriter:
     def finish(self):
         for h in self.handles.values(): h.close()
         if not sum(self.kinds.values()): raise ValueError('Refusing an empty hosted catalog')
-        expected = {k: v for k, v in self.counts.items() if k != 'procurementTaxonomyTerms'}
+        for table in ALL_TABLES: (self.output / (table + '.jsonl')).touch(exist_ok=True)
+        expected = {table: self.counts.get(table, 0) for table in TABLES}
         metadata = dict(societyId=self.society, generation=self.generation, folder=self.folder, publishedAt=self.manifest['publishedAt'], counts=self.kinds, expected=expected, profileVersion=2, contentHash=self.fingerprint.hexdigest(), sourceCounts=self.manifest['counts'], taxonomyReleases=sorted(self.releases), taxonomyCount=self.terms, taxonomyIndexes=[dict(releaseId=release, contentHash=self.term_hashes[release].hexdigest(), count=self.term_counts[release]) for release in sorted(self.releases)], sourceSnapshotId=self.manifest['snapshotId'], sourceCatalogSha256=self.manifest['catalog']['sha256'] if self.manifest.get('catalog') else '')
-        (self.output / 'activation.json').write_text(json.dumps(metadata))
+        metadata['coverage'] = self.manifest.get('coverage', dict(complete=False, sources=[]))
+        metadata['publicationId'] = self.manifest.get('publicationId') or self.manifest['snapshotId']
+        if self.manifest.get('collectedAt'): metadata['collectedAt'] = self.manifest['collectedAt']
         with zipfile.ZipFile(self.output / 'metadata.zip', 'w', compression=zipfile.ZIP_DEFLATED) as archive:
             for table in expected: archive.write(self.output / (table + '.jsonl'), table + '/documents.jsonl')
         for release in sorted(self.releases):
@@ -217,6 +250,8 @@ class MetadataWriter:
             with zipfile.ZipFile(self.output / (name + '.zip'), 'w', compression=zipfile.ZIP_DEFLATED) as archive:
                 archive.write(temporary, 'procurementTaxonomyTerms/documents.jsonl')
             temporary.unlink()
+        seal_export(self.output, metadata)
+        validate_export(self.output)
         (self.output / 'statistics.json').write_text(json.dumps(dict(profile=PROFILE['profile'], sourceCounts=self.manifest['counts'], hostedCounts=self.kinds, taxonomy=self.taxonomy, jsonlBytes={table:(self.output/(table+'.jsonl')).stat().st_size for table in self.handles})))
         return expected
 
@@ -241,7 +276,28 @@ def export(db_path, manifest, society, folder, output, generation_suffix=None):
         for h in writer.handles.values(): h.close()
         db.close()
 
+def validate_compact_source(path, review):
+    """Verify the upstream envelope inventory without reserializing its JSON numbers."""
+    if review.get('schemaVersion') is None: return # Legacy snapshots remain readable; missing coverage still blocks archival.
+    expected={'records','documents','taxonomy',*EVIDENCE_TABLES}
+    tables=review.get('tables',{})
+    if review.get('schemaVersion')!=1 or set(tables)!=expected or review.get('inventoryHash')!=hashlib.sha256(canonical(dict(schemaVersion=1,tables=tables)).encode()).hexdigest(): raise ValueError('Invalid compact source table inventory')
+    actual={table:dict(rowCount=0,bytes=0,hash=hashlib.sha256()) for table in expected}
+    with path.open('rb') as source:
+        for line in source:
+            if len(line)>800000: raise ValueError('Compact row too large')
+            entry=json.loads(line)
+            table={'record':'records','document':'documents','taxonomy':'taxonomy'}.get(entry.get('type'))
+            if entry.get('type')=='evidence': table=entry.get('source')
+            if table not in expected: raise ValueError('Unknown compact source table')
+            actual[table]['rowCount']+=1;actual[table]['bytes']+=len(line);actual[table]['hash'].update(line)
+    for table,entry in tables.items():
+        observed=actual[table]
+        if entry.get('path')!='review.jsonl.gz#'+table or type(entry.get('present')) is not bool or (not entry['present'] and observed['rowCount']) or entry.get('rowCount')!=observed['rowCount'] or entry.get('bytes')!=observed['bytes'] or entry.get('sha256')!=observed['hash'].hexdigest(): raise ValueError('Compact source table integrity mismatch: '+table)
+    if not tables['records']['present']: raise ValueError('Compact source records table is absent')
+
 def export_review(path, manifest, society, folder, output, suffix=None):
+    validate_compact_source(path,manifest['review'])
     writer = MetadataWriter(manifest, society, folder, output, suffix)
     # File availability is destination-specific. Count it from the committed manifest before projecting list rows.
     with path.open() as source:

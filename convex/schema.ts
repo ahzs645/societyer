@@ -53,6 +53,7 @@ import { agentConnectorTables } from "./tables/agentConnectors";
 import { mcpOAuthTables } from "./tables/mcpOAuth";
 
 import { procurementTables } from "./tables/procurement";
+import { procurementAnalyticsTables } from "./tables/procurementAnalytics";
 
 export default defineSchema({
   authEmailOutbox: defineTable({
@@ -63,6 +64,7 @@ export default defineSchema({
   }).index("by_recipient_createdAtMs", ["to", "createdAtMs"]),
   ...meetingTranscriptionTables,
   ...procurementTables,
+  ...procurementAnalyticsTables,
   developmentAuthEmails: defineTable({
     to: v.string(), subject: v.string(), text: v.string(),
     tag: v.union(v.literal("auth-verify-email"), v.literal("auth-reset-password")),

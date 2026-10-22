@@ -16,6 +16,7 @@ type View = AwardView | "opportunities" | "decisions";
 const VIEWS: { id: View; label: string; group: "Awards" | "Notices" }[] = [
   { id: "overview", label: "Overview", group: "Awards" },
   { id: "trends", label: "Trends", group: "Awards" },
+  { id: "compare", label: "Period comparison", group: "Awards" },
   { id: "buyers", label: "Buyers", group: "Awards" },
   { id: "suppliers", label: "Suppliers", group: "Awards" },
   { id: "sizes", label: "Award sizes", group: "Awards" },
@@ -26,12 +27,12 @@ const VIEWS: { id: View; label: string; group: "Awards" | "Notices" }[] = [
 ];
 export const ANALYSIS_PARAM = "analysis";
 /** Parameters that belong to one view; switching views drops them. */
-const VIEW_STATE = ["metric", "year", "scope", "inspect"];
+const VIEW_STATE = ["metric", "year", "scope", "inspect", "rankq", "rankpage"];
 
 export function ProcurementAnalytics() {
   const source = useReaderSource();
   const [enabled, setEnabled] = useState(false);
-  if (source.usePage && !enabled)
+  if (source.usePage && !source.useAnalysis && !enabled)
     return (
       <div className="card">
         <div className="card__body">
@@ -53,7 +54,7 @@ function LoadedProcurementAnalytics() {
   const source = useReaderSource();
   const nav = useReaderNavigation();
   const hasAwards = (source.catalog.counts.award ?? 0) > 0;
-  const views = VIEWS.filter((view) => hasAwards || view.group !== "Awards");
+  const views = VIEWS.filter((view) => (hasAwards || view.group !== "Awards") && (view.id !== "compare" || source.useAnalysis));
   const requested = nav.params.get(ANALYSIS_PARAM);
   const view = views.find((item) => item.id === requested) ?? views[0];
   const choose = (next: View) =>

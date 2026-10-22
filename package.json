@@ -370,7 +370,10 @@
     "dev:ddcnorth": "vite --host 127.0.0.1 --port 5173 --strictPort --mode ddcnorth-development",
     "dev:mail": "tsx scripts/dev-auth-outbox.ts",
     "test:development-mail": "tsx scripts/check-development-mail.ts",
-    "test:whisperx": "tsx scripts/check-whisperx-queue.ts && tsx scripts/check-whisperx-transfer.ts"
+    "test:whisperx": "tsx scripts/check-whisperx-queue.ts && tsx scripts/check-whisperx-transfer.ts",
+    "test:procurement-analytics": "tsx scripts/check-procurement-analytics.ts",
+    "test:procurement-integrity": "python3 scripts/procurement/test-export.py && python3 scripts/procurement/test-integrity.py && tsx scripts/check-procurement-publication.ts && tsx scripts/check-procurement-source-status.ts",
+    "test:procurement-browser": "playwright test --config playwright.procurement.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

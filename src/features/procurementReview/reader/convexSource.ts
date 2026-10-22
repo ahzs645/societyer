@@ -5,11 +5,14 @@
  * once (one-shot queries, large bounded pages) and kept for the life of the
  * source rather than held open as subscriptions.
  */
-import { useMemo } from "react";
-import { useConvex, useQuery } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../../lib/convexApi";
 import { readProcurementDocument } from "../lib/documents";
 import type { ReviewRow } from "../lib/review";
+import { useProcurementClock, useProcurementDeadline } from "../lib/clock";
+import { deadlineInstant, procurementDeadlineValue } from "../lib/notice";
+import { analysisIdentity, normalizeAnalysisRequest, type AnalysisRequest, type AnalysisResult } from "../../../../shared/procurementAnalytics";
 import { progressive, useProgressive, type CatalogReviewRow, type DocumentPage, type ListRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary } from "./source";
 
 /** procurementReview:list reads at most this many rows a page (fewer when it reaches its bytes bound). */
@@ -57,9 +60,35 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog)
 
   return useMemo<ReaderSource>(() => ({
     catalog,
+    useAnalysis(request: AnalysisRequest) {
+      const clock = useProcurementClock();
+      let identity = "", serialized = "", invalid = "";
+      try { identity = analysisIdentity(request, clock); serialized = JSON.stringify(normalizeAnalysisRequest(request)); }
+      catch (error) { invalid = error instanceof Error ? error.message : "Invalid analysis filters."; identity = JSON.stringify(request); }
+      const asOf = clock;
+      const enqueue = useMutation(api.procurementAnalytics.request);
+      const [failure, setFailure] = useState<{ key: string; error: string } | null>(null);
+      const args = { societyId, generation, request: serialized, asOf };
+      const result = useQuery(api.procurementAnalytics.get, invalid ? "skip" : args) as { state: "preparing" | "ready" | "failed"; resultJson: string | null; error: string | null; computedAt: number | null; asOf: number; metricVersion: string; mappingVersion: string } | undefined;
+      const retry = () => { if (invalid) return; setFailure(null); void enqueue(args).catch(error => setFailure({ key: identity, error: error instanceof Error ? error.message : "Could not prepare analysis." })); };
+      useEffect(() => {
+        if (invalid) return;
+        let live = true;
+        const timer = setTimeout(() => { void enqueue(args).catch(error => { if (live) setFailure({ key: identity, error: error instanceof Error ? error.message : "Could not prepare analysis." }); }); }, 250);
+        return () => { live = false; clearTimeout(timer); };
+      }, [identity, societyId, generation, asOf]); // eslint-disable-line react-hooks/exhaustive-deps -- identity includes every normalized input
+      const parsed = useMemo(() => result?.resultJson ? JSON.parse(result.resultJson) as AnalysisResult : null, [result?.resultJson]);
+      const boundary = parsed?.type === "opportunities" || parsed?.type === "decisions" ? parsed.data.nextBoundaryAt : parsed?.type === "party" ? parsed.data.opportunities.nextBoundaryAt : null;
+      useProcurementDeadline(boundary);
+      const error = invalid || (failure?.key === identity ? failure.error : null) || result?.error || null;
+      return { state: error ? "failed" : result?.state ?? "preparing", result: parsed, error, computedAt: result?.computedAt ?? null, asOf: result?.asOf ?? asOf, metricVersion: result?.metricVersion ?? "", mappingVersion: result?.mappingVersion ?? "", retry };
+    },
     usePage(kind, request, cursor) {
-      const asOf = useMemo(() => Date.now(), [societyId, generation, kind, request]);
-      return useQuery(api.procurementReview.page, { societyId, generation, kind, request, asOf, paginationOpts: { numItems: 50, cursor } }) as any;
+      const asOf = useProcurementClock();
+      const result = useQuery(api.procurementReview.page, { societyId, generation, kind, request, asOf, paginationOpts: { numItems: 50, cursor } }) as any;
+      const deadlines: number[] = (result?.page ?? []).map((row: ListRow) => deadlineInstant(procurementDeadlineValue(row))).filter((at: number | null): at is number => at !== null && at >= asOf);
+      useProcurementDeadline(deadlines.length ? Math.min(...deadlines) + 1 : null);
+      return result;
     },
     useList(kind: string) {
       return useProgressive(loaded.list(kind, catalog.counts[kind] ?? 0));
