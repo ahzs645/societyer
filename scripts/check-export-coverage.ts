@@ -60,6 +60,9 @@ const NON_WORKSPACE_EXPORT_TABLES = new Set([
   "procurementCatalogs", "procurementSearch", "procurementSyncRuns",
   "procurementRecords", "procurementDetails", "procurementTaxonomyReleases",
   "procurementTaxonomyTerms", "procurementDocuments", "procurementEvidence",
+  // Short-lived maintenance ownership coordinates writes on this deployment.
+  // Restoring a lease could block the destination's importer or retirement job.
+  "procurementMaintenanceLeases",
   // Working text extracted from those originals, for meeting editors only (decision A1).
   // It is untimed, so in-camera ranges can't be redacted from it. Text adopted for
   // the meeting is exported through `transcripts` with the transcript rules.

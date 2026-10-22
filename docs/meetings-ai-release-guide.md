@@ -1,8 +1,12 @@
 # Meetings, transcripts and AI: review and release guide
 
-This covers the work from 2026-10-17 and 2026-10-18. Most of it was committed in
-`0074bf0e` and deployed to DDC North (`39e145fd`, `eb7489af`). The rest is in the
-working tree (see **Not yet committed**). Decisions and assumptions are in
+This covers the work from 2026-10-17 and 2026-10-18. The initial release was
+committed in `0074bf0e` and deployed to DDC North (`39e145fd`, `eb7489af`). The
+remaining work and final QA fixes were reconciled into `main` in `e84960dc` on
+2026-10-19, retaining the newer paged transcripts, file previews and procurement
+reader. The 2026-10-22 review confirmed that the old local working changes were
+copies of that integrated work. See [the reconciliation review](releases/2026-10-22-local-reconciliation.md).
+Decisions and assumptions are in
 [decisions/2026-10-17-meetings-ai-assumptions.md](decisions/2026-10-17-meetings-ai-assumptions.md).
 
 ## What shipped
@@ -18,7 +22,7 @@ working tree (see **Not yet committed**). Decisions and assumptions are in
 | Remote connector | `POST /mcp` with personal tokens and OAuth 2.1 (claude.ai, ChatGPT, Claude Code, Codex); per-workspace opt-in, off by default | [mcp-connector.md](mcp-connector.md) |
 | Stale tabs after deploys | Lazy page chunks that no longer exist trigger one reload, then a "Societyer was updated — Reload" notice | `src/lib/staleBuild.ts` |
 
-## Live on DDC North now
+## DDC North verification on 2026-10-18
 
 - **Connector endpoints.** Verified 2026-10-18: OAuth discovery (`/.well-known/oauth-protected-resource`) and
   `/mcp` answer on `industrious-cricket-610.convex.site`, and `/mcp` returns 401 without a token. No workspace
@@ -26,7 +30,9 @@ working tree (see **Not yet committed**). Decisions and assumptions are in
 - **Transcription.** Server speech processing stays off (`MEETING_TRANSCRIPTION_*` unset).
   Use platform VTT exports or the desktop app; see the pipeline doc.
 
-## Not yet committed (working tree, 2026-10-18)
+## Remaining 2026-10-18 work, committed on 2026-10-19
+
+All items below are included in `e84960dc`; this list records the original scope.
 
 - **Stale-build recovery:** `src/lib/staleBuild.ts`, `PageErrorBoundary.tsx`, `main.tsx`, `scripts/check-stale-build.ts`.
 - **Transcript export:** `shared/transcriptExport.ts`, `TranscriptExportMenu.tsx`, `scripts/check-transcript-export.ts`.
@@ -38,10 +44,10 @@ working tree (see **Not yet committed**). Decisions and assumptions are in
   (`SegmentEditors.tsx`, `OnDeviceAiFields.tsx`).
 - **Docs:** `meeting-source-pipeline.md`, this guide, decisions doc updates.
 - **Final QA fixes (2026-10-18):** see the next section.
-- **Not from this work:** `tests/helpers/recordTableToolbar.ts` and `tests/interface-records.spec.ts` were changed
-  by another session. Review them separately.
+- **Shared table tests:** `tests/helpers/recordTableToolbar.ts` and `tests/interface-records.spec.ts` originated
+  in another session and are included in the integrated release.
 
-## Final QA fixes (2026-10-18, working tree)
+## Final QA fixes (2026-10-18, committed on 2026-10-19)
 
 | # | Change | Where | Test |
 | --- | --- | --- | --- |
