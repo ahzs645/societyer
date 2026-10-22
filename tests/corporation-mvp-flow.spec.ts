@@ -47,7 +47,7 @@ test("corporation MVP flow renders obligations, share register, registration, an
   // dashboard or in the sidebar, and no society member register in the nav.
   await navigate("/app");
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
-  await expect(page.getByText("Record directors and shareholders").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Finish setting up Northstar Browser Flow Holdings Inc.", exact: true })).toBeVisible();
   for (let i = 0; i < 15; i += 1) {
     const closedGroup = page.locator('.sidebar__group-toggle[aria-expanded="false"]').first();
     if (!(await closedGroup.count())) break;

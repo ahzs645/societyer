@@ -31,6 +31,7 @@
  * docs/entity-copy-audit.md.
  */
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { matchPath } from "react-router-dom";
 import fs from "node:fs";
 import path from "node:path";
 import { INTERFACE_ROUTES } from "./helpers/interfaceRoutes";
@@ -427,7 +428,7 @@ test.describe("entity copy sweep", () => {
     const source = fs.readFileSync(path.resolve("src/main.tsx"), "utf8");
     const appBlock = source.slice(source.indexOf('path="/app"'));
     const nested = Array.from(appBlock.matchAll(/path="([^"/*][^"]*)"/g)).map((match) => `/app/${match[1]}`);
-    const missing = nested.filter((route) => !route.includes(":") && !EXCLUDED_ROUTES.has(route) && !SWEEP_ROUTES.includes(route));
+    const missing = nested.filter((route) => !route.includes(":") && !EXCLUDED_ROUTES.has(route) && !SWEEP_ROUTES.some((path) => matchPath({ path: route, end: true }, path)));
     expect(missing, "Static routes in src/main.tsx missing from the sweep (add them to tests/helpers/interfaceRoutes.ts)").toEqual([]);
   });
 

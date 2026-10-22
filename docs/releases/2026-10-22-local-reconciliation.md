@@ -60,9 +60,21 @@ on October 19.
 
 The existing legal browser workflow failed before running its tests because
 `ubuntu-latest` now selected Ubuntu 26.04, unsupported by locked Playwright
-1.59.1's Chromium dependency installer. Earlier main commits had the same failure.
+1.59.1's Chromium dependency installer.
 The browser job is now pinned to supported Ubuntu 24.04. Dependencies and the
 non-browser legal job are unchanged.
+
+Earlier main browser runs also exposed two stale assertions, corrected without
+changing product behavior: the static-route sweep now matches wildcard patterns
+against the concrete routes it visits (including procurement `/home`), and the
+corporation smoke test checks the current setup-summary heading instead of the
+retired inline directors/shareholders task text.
+The AST route-coverage check also identified the already-shipped OAuth consent
+route missing from the interface fixture manifest; it now has an invalid-request
+fixture alongside the existing public sign-in/reset routes.
+All four corporation browser tests and the static sweep guard now pass locally;
+the AST check covers all 167 route patterns. These follow-up changes touch only
+tests, CI and this record.
 
 ## Production refresh
 

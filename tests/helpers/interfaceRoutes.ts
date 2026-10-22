@@ -42,6 +42,12 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "invalid-token"
   },
   {
+    "pattern": "/oauth/consent",
+    "path": "/demo/oauth/consent?request=interface-audit-missing",
+    "kind": "public",
+    "fixture": "invalid-token"
+  },
+  {
     "pattern": "/public",
     "path": "/demo/public",
     "kind": "public",
