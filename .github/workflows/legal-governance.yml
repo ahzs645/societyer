@@ -40,7 +40,9 @@ jobs:
   # starts its own Vite server; SOCIETYER_CHROMIUM_PATH is not set here, so the
   # configs use the Chromium that Playwright installs below.
   legal-governance-browser:
-    runs-on: ubuntu-latest
+    # The locked Playwright version supports Ubuntu 24.04; ubuntu-latest now
+    # selects 26.04, where its Chromium dependency installer refuses to run.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4

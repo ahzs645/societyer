@@ -52,3 +52,38 @@ on October 19.
   baseline report; they are not an assertion that every hosted route ran locally.
 - Convex production deployment preview completed schema validation and reported
   no index deletions.
+- Desktop and phone browser verification passed: 28 tests, four device-specific
+  skips, no failures or retries. Run with Node 24 and the matching Playwright
+  headless Chromium; the machine's Node 26/browser combination stalled.
+
+## CI runner correction
+
+The existing legal browser workflow failed before running its tests because
+`ubuntu-latest` now selected Ubuntu 26.04, unsupported by locked Playwright
+1.59.1's Chromium dependency installer. Earlier main commits had the same failure.
+The browser job is now pinned to supported Ubuntu 24.04. Dependencies and the
+non-browser legal job are unchanged.
+
+## Production refresh
+
+Application source: `1368b294` (runtime code retained from `38b52f82`). Follow-up
+changes to this record and the CI runner do not change the deployed application.
+
+- Convex: `industrious-cricket-610`, deployed successfully with TypeScript and
+  schema validation, no index deletions. All 1,412 function definitions and 40
+  HTTP route definitions match the pre-deploy metadata; no endpoints were lost.
+- Meeting transfer Worker: `societyer-ddcnorth-meeting-transfer`, version
+  `ecc4429b-cd1d-4d4c-8870-4c05dfa2376e`.
+- Cloudflare Pages production: `4838a657-4b7b-49fa-9874-b8b44515e465`, branch
+  `main`, source `1368b294`, https://societyer-ddcnorth.pages.dev.
+- Production HTML and all six entry/preload JS/CSS assets matched the reviewed
+  local build byte for byte. OAuth framing/referrer headers and discovery passed;
+  anonymous MCP and meeting-transfer requests returned HTTP 401.
+- Production authentication still allows only `ddcnorth.com`, with email
+  delivery and signup enabled. The existing signed-in browser session survived
+  reload and loaded the procurement reader's live results.
+
+The non-browser legal job and GitHub Pages deployment passed on `1368b294`.
+The corrected legal browser workflow will rerun on the follow-up commit.
+Full logs, browser results and original working-file archives are retained in
+the local `societyer-consolidation-20261022` backup directory.
