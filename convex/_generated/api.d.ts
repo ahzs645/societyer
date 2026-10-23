@@ -125,6 +125,7 @@ import type * as lib_permissions from "../lib/permissions.js";
 import type * as lib_personReference from "../lib/personReference.js";
 import type * as lib_portable from "../lib/portable.js";
 import type * as lib_privacyValidators from "../lib/privacyValidators.js";
+import type * as lib_procurementAnalyticsArtifacts from "../lib/procurementAnalyticsArtifacts.js";
 import type * as lib_serviceAuth from "../lib/serviceAuth.js";
 import type * as lib_untypedServer from "../lib/untypedServer.js";
 import type * as library from "../library.js";
@@ -422,6 +423,7 @@ declare const fullApi: ApiFromModules<{
   "lib/personReference": typeof lib_personReference;
   "lib/portable": typeof lib_portable;
   "lib/privacyValidators": typeof lib_privacyValidators;
+  "lib/procurementAnalyticsArtifacts": typeof lib_procurementAnalyticsArtifacts;
   "lib/serviceAuth": typeof lib_serviceAuth;
   "lib/untypedServer": typeof lib_untypedServer;
   library: typeof library;
