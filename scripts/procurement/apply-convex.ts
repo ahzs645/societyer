@@ -8,6 +8,7 @@ import { readFileSync, existsSync, writeFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { validateExport, validateDelta, archiveEligible } from "./verify-export";
+import { createPersistentOperator } from "./operator-client";
 const args = process.argv.slice(2);
 const value = (flag: string) => {
   const i = args.indexOf(flag);
@@ -17,7 +18,7 @@ const deployment = value("--deployment");
 const input = value("--input");
 if (!deployment || !input)
   throw new Error(
-    "Usage: npx tsx scripts/procurement/apply-convex.ts --deployment NAME --input PRIVATE_EXPORT_DIRECTORY [--dry-run|--activate-only]",
+    "Usage: npx tsx scripts/procurement/apply-convex.ts --deployment NAME --input PRIVATE_EXPORT_DIRECTORY [--dry-run|--activate-only] [--persistent-operator]",
   );
 // This entire preflight happens before the first network request or import lock.
 const verified = await validateExport(input);
@@ -31,7 +32,14 @@ if (restoreBackup) {
 }
 const archive = resolve(input, "metadata.zip");
 if (!existsSync(archive)) throw new Error("Metadata archive not found.");
-function run(command: string[], json = false): any {
+let persistentOperator: ReturnType<typeof createPersistentOperator> | undefined;
+async function run(command: string[], json = false): Promise<any> {
+  if (args.includes("--persistent-operator") && command[0] === "run") {
+    if (command.length !== 3) throw new Error("Unexpected persistent operator command.");
+    persistentOperator ??= createPersistentOperator(deployment!);
+    const result = await (await persistentOperator).run(command[1], command[2]);
+    return json ? result : undefined;
+  }
   // Pass JSON over stdin: large detail rows must not hit the OS argv limit.
   const require = createRequire(import.meta.url);
   const pkgPath = require.resolve("convex/package.json");
@@ -72,9 +80,9 @@ const receipt = (state: "ready"|"failed", served?:any, error?:string) => {
   writeFileSync(temporary,JSON.stringify({schemaVersion:1,publicationId:activation.publicationId ?? activation.sourceSnapshotId,sourceSnapshotId:activation.sourceSnapshotId,generation:activation.generation,inventoryHash:activation.inventoryHash,state,heartbeatAt:new Date().toISOString(),...(state === "ready" ? {activatedAt:new Date(served?.activatedAt ?? Date.now()).toISOString()} : {}),...(error ? {error:error.slice(0,2000)} : {})})+"\n",{mode:0o600});
   renameSync(temporary,path);
 };
-const servingState = () => run(["run","procurementImport:state",JSON.stringify({societyId:activation.societyId})],true);
+const servingState = async () => await run(["run","procurementImport:state",JSON.stringify({societyId:activation.societyId})],true);
 try {
-const prior = run(
+const prior = await run(
   [
     "run",
     "procurementImport:state",
@@ -124,24 +132,24 @@ if (delta) {
     process.exit(0);
   }
 }
-jobId = run(["run","procurementImport:beginJob",JSON.stringify({societyId:activation.societyId,folder:activation.folder,generation:activation.generation,inventoryHash:activation.inventoryHash,contentHash:activation.contentHash,publishedAt:activation.publishedAt,collectedAt:activation.collectedAt,complete:archiveEligible(activation),...(delta ? {planHash:delta.sha256} : {})})],true);
-const progressJob = (phase: "taxonomy"|"importing"|"activating",runId?:string) => run(["run","procurementImport:jobProgress",JSON.stringify({jobId,phase,...(runId ? {runId} : {})})]);
+jobId = await run(["run","procurementImport:beginJob",JSON.stringify({societyId:activation.societyId,folder:activation.folder,generation:activation.generation,inventoryHash:activation.inventoryHash,contentHash:activation.contentHash,publishedAt:activation.publishedAt,collectedAt:activation.collectedAt,complete:archiveEligible(activation),...(delta ? {planHash:delta.sha256} : {})})],true);
+const progressJob = async (phase: "taxonomy"|"importing"|"activating",runId?:string) => await run(["run","procurementImport:jobProgress",JSON.stringify({jobId,phase,...(runId ? {runId} : {})})]);
 if (unchanged && !delta) {
-  run([
+  await run([
     "run",
     "procurementImport:commit",
     JSON.stringify({ ...activation, reuseActive: true }),
   ]);
-  receipt("ready",servingState());
+  receipt("ready",await servingState());
   console.log(
     `Unchanged hosted content: reused ${prior.generation}; no row import or catalog scan.`,
   );
   process.exit(0);
 }
 for (const index of activation.taxonomyIndexes ?? []) {
-  progressJob("taxonomy");
+  await progressJob("taxonomy");
   const scope = { societyId: activation.societyId, ...index };
-  const action = run(
+  const action = await run(
     [
       "run",
       "procurementImport:beginTaxonomy",
@@ -164,9 +172,9 @@ for (const index of activation.taxonomyIndexes ?? []) {
       throw new Error("Invalid taxonomy content hash.");
     const termsArchive = resolve(input, `taxonomy-${index.contentHash}.zip`);
     if (!existsSync(termsArchive)) throw new Error("Taxonomy archive missing.");
-    run(["import", "--append", termsArchive]);
+    await run(["import", "--append", termsArchive]);
   }
-  run(["run", "procurementTaxonomy:finishTaxonomy", JSON.stringify(scope)]);
+  await run(["run", "procurementTaxonomy:finishTaxonomy", JSON.stringify(scope)]);
 }
 if (delta) {
   const scope = {
@@ -181,19 +189,19 @@ if (delta) {
     targetGeneration: activation.generation, publishedAt: activation.publishedAt, collectedAt: activation.collectedAt,
     allowArchives: archiveEligible(activation),
   };
-  let progress = run(
+  let progress = await run(
     ["run", "procurementSync:begin", JSON.stringify(scope)],
     true,
   );
   activeRun = {runId:progress.runId,planHash:delta.sha256};
-  progressJob("importing",progress.runId);
+  await progressJob("importing",progress.runId);
   let batch = 0,
     pending: any[] = [],
     bytes = 0;
-  const flush = () => {
+  const flush = async () => {
     if (!pending.length) return;
     if (batch >= progress.nextBatch) {
-      const result = run(
+      const result = await run(
         [
           "run",
           "procurementSync:applyBatch",
@@ -207,7 +215,7 @@ if (delta) {
         true,
       );
       progress = { ...progress, ...result };
-      progressJob("importing",progress.runId);
+      await progressJob("importing",progress.runId);
       console.log(
         `Incremental import: ${progress.applied}/${delta.operations} changed rows`,
       );
@@ -228,11 +236,11 @@ if (delta) {
     };
     const size = JSON.stringify(op).length;
     if (pending.length && (pending.length >= 40 || bytes + size > 900000))
-      flush();
+      await flush();
     pending.push(op);
     bytes += size;
   }
-  flush();
+  await flush();
   const {
     generation,
     publishedAt,
@@ -242,7 +250,7 @@ if (delta) {
     sourceCatalogSha256,
     taxonomyIndexes = [],
   } = activation;
-  run([
+  await run([
     "run",
     "procurementSync:finish",
     JSON.stringify({
@@ -259,21 +267,21 @@ if (delta) {
       archives: activation.archives, coverage: activation.coverage, collectedAt: activation.collectedAt,
     }),
   ]);
-  receipt("ready",servingState());
+  receipt("ready",await servingState());
   console.log(
     `Activated incremental publication ${generation}; full source archives retained.`,
   );
   process.exit(0);
 }
 if (!args.includes("--activate-only")) {
-  progressJob("importing");
+  await progressJob("importing");
   for (const table of [
     "procurementRecords",
     "procurementDetails",
     "procurementDocuments",
     "procurementEvidence",
   ]) {
-    const first = run(
+    const first = await run(
       [
         "run",
         "procurementImport:countPage",
@@ -291,25 +299,29 @@ if (!args.includes("--activate-only")) {
         `This generation already contains ${table}. Refusing to append duplicates. If its import completed, rerun with --activate-only.`,
       );
   }
-  run(["import", "--append", archive]);
+  await run(["import", "--append", archive]);
 }
-progressJob("activating");
-run(["run", "procurementImport:activate", JSON.stringify({...activation,...(restoreBackup ? {restoreFromBackup:activation.restoration.backupSha256} : {})})]);
-receipt("ready",servingState());
+await progressJob("activating");
+await run(["run", "procurementImport:activate", JSON.stringify({...activation,...(restoreBackup ? {restoreFromBackup:activation.restoration.backupSha256} : {})})]);
+receipt("ready",await servingState());
 console.log(`Activated ${activation.generation} for ${activation.societyId}.`);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   // A response may be lost after activation commits. Reconcile its durable outcome first.
   try {
-    const served = servingState();
+    const served = await servingState();
     if (served && !served.updating && served.generation === activation.generation && served.contentHash === activation.contentHash && served.inventoryHash === activation.inventoryHash) {
       receipt("ready",served);
       console.log(`Confirmed activated publication ${activation.generation} after an ambiguous response.`);
       process.exit(0);
     }
   } catch { /* A later exact retry can reconcile a temporarily unreachable server. */ }
-  if (activeRun) try { run(["run","procurementSync:fail",JSON.stringify({...activeRun,error:message.slice(0,2000)})]); } catch { /* The durable heartbeat still exposes a stalled run after network failure. */ }
-  if (jobId) try { run(["run","procurementImport:jobProgress",JSON.stringify({jobId,phase:"failed",error:message.slice(0,2000)})]); } catch { /* Preserve the primary failure and exact export for recovery. */ }
+  if (activeRun) try { await run(["run","procurementSync:fail",JSON.stringify({...activeRun,error:message.slice(0,2000)})]); } catch { /* The durable heartbeat still exposes a stalled run after network failure. */ }
+  if (jobId) try { await run(["run","procurementImport:jobProgress",JSON.stringify({jobId,phase:"failed",error:message.slice(0,2000)})]); } catch { /* Preserve the primary failure and exact export for recovery. */ }
   receipt("failed",undefined,message);
   throw error;
+} finally {
+  if (persistentOperator) {
+    try { (await persistentOperator).close(); } catch { /* Preserve the original authorization or import failure. */ }
+  }
 }

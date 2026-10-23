@@ -372,7 +372,8 @@
     "test:development-mail": "tsx scripts/check-development-mail.ts",
     "test:whisperx": "tsx scripts/check-whisperx-queue.ts && tsx scripts/check-whisperx-transfer.ts",
     "test:procurement-analytics": "tsx scripts/check-procurement-analytics.ts",
-    "test:procurement-integrity": "python3 scripts/procurement/test-export.py && python3 scripts/procurement/test-integrity.py && tsx scripts/check-procurement-publication.ts && tsx scripts/check-procurement-source-status.ts",
+    "test:procurement-integrity": "python3 scripts/procurement/test-export.py && python3 scripts/procurement/test-integrity.py && tsx scripts/check-procurement-publication.ts && tsx scripts/check-procurement-source-status.ts && tsx scripts/check-procurement-operator.ts",
+    "test:procurement-operator": "tsx scripts/check-procurement-operator.ts",
     "test:procurement-browser": "playwright test --config playwright.procurement.config.ts"
   },
   "dependencies": {
