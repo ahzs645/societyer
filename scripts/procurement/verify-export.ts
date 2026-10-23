@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, lstatSync } from "node:fs";
 import { resolve } from "node:path";
 import JSZip from "jszip";
+import { validateAnalyticsArtifacts } from "./analytics-artifacts";
 
 export const TABLES = ["procurementRecords", "procurementDetails", "procurementDocuments", "procurementEvidence"] as const;
 export const ALL_TABLES = [...TABLES, "procurementTaxonomyTerms"] as const;
@@ -37,7 +38,7 @@ function validateRow(table:string,row:any) {
   if (Object.keys(row).some(key => !allowed.has(key)) || schema.text.some(key => typeof row[key] !== "string") || (schema.optionalText ?? []).some(key => row[key] !== undefined && typeof row[key] !== "string") || (schema.numbers ?? []).some(key => !Number.isSafeInteger(row[key]) || row[key] < 0) || (schema.optionalNumbers ?? []).some(key => row[key] !== undefined && (typeof row[key] !== "number" || !Number.isFinite(row[key]))) || (schema.booleans ?? []).some(key => typeof row[key] !== "boolean") || (schema.nullableText ?? []).some(key => row[key] !== null && typeof row[key] !== "string") || (table === "procurementRecords" && !["award","opportunity"].includes(row.kind))) throw new Error(`Malformed ${table} projection row.`);
 }
 
-export async function validateExport(directory: string) {
+export async function validateExport(directory: string, options: { skipAnalytics?: boolean } = {}) {
   const activation = JSON.parse(read(directory, "activation.json").toString("utf8"));
   if (!["societyId","generation","folder","publishedAt"].every(key => typeof activation[key] === "string" && activation[key].length > 0 && activation[key].length <= 500)) throw new Error("Invalid publication scope or timestamp.");
   if (activation.profileVersion === 2 && (!activation.sourceSnapshotId || !/^[a-f0-9]{64}$/.test(activation.sourceCatalogSha256) || !/^[a-f0-9]{64}$/.test(activation.contentHash))) throw new Error("Invalid compact source provenance.");
@@ -106,12 +107,13 @@ export async function validateExport(directory: string) {
     const file = archive?.file("procurementTaxonomyTerms/documents.jsonl");
     if (!file || canonical((await file.async("string")).trimEnd().split("\n").map(line => JSON.parse(line))) !== canonical(selected)) throw new Error("Taxonomy archive differs from inventory.");
   }
-  return { activation, rows };
+  const analytics = options.skipAnalytics ? null : validateAnalyticsArtifacts(directory, { activation, rows });
+  return { activation, rows, analytics };
 }
 
 export async function validateDelta(directory: string, baselineDirectory: string, target: Awaited<ReturnType<typeof validateExport>>) {
   if (resolve(directory) === resolve(baselineDirectory)) throw new Error("Keep the previous successful export separately.");
-  const baseline = await validateExport(baselineDirectory);
+  const baseline = await validateExport(baselineDirectory, { skipAnalytics: true });
   const delta = JSON.parse(read(directory, "delta-manifest.json").toString("utf8"));
   const old = baseline.activation, current = target.activation;
   if (delta.formatVersion !== 2 || old.profileVersion !== 2 || current.profileVersion !== 2 || old.societyId !== current.societyId || old.folder !== current.folder || delta.societyId !== current.societyId || delta.folder !== current.folder || delta.baseContentHash !== old.contentHash || delta.baseGeneration !== old.generation || delta.targetContentHash !== current.contentHash || delta.targetGeneration !== current.generation || delta.baseInventoryHash !== old.inventoryHash || delta.targetInventoryHash !== current.inventoryHash) throw new Error("Delta publication or baseline binding mismatch.");

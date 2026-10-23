@@ -58,6 +58,7 @@ export const procurementTaxonomyIndexFields = {
   count: v.number(),
 };
 export const procurementPublicationFields = {
+  analytics: v.optional(v.object({ path: v.string(), bytes: v.number(), sha256: v.string() })),
   publicationId: v.optional(v.string()),
   restoration: v.optional(v.object({ backupSha256: v.string(), sourceGeneration: v.string(), preparedAt: v.string() })),
   schemaVersion: v.optional(v.number()),

@@ -34,6 +34,29 @@ def archive_eligible(activation):
     coverage = activation.get('coverage')
     return isinstance(coverage, dict) and coverage.get('complete') is True and isinstance(coverage.get('sources'), list) and all(isinstance(source, dict) and source.get('complete') is True for source in coverage['sources'])
 
+def validate_analytics(directory, activation):
+    if 'analytics' not in activation: return
+    descriptor=activation['analytics']
+    def checked(entry,name,limit):
+        if not isinstance(entry,dict) or entry.get('path')!=name or type(entry.get('bytes')) is not int or not 0<entry['bytes']<=limit or not re.fullmatch('[a-f0-9]{64}',entry.get('sha256','')): raise ValueError('Invalid analytical artifact descriptor')
+        path=directory/name
+        if not path.is_file() or path.is_symlink(): raise ValueError('Required analytical artifact missing or unsafe: '+name)
+        data=path.read_bytes()
+        if len(data)!=entry['bytes'] or digest(data)!=entry['sha256']: raise ValueError('Analytical artifact integrity mismatch: '+name)
+        return data
+    manifest=parse_json(checked(descriptor,'analytics-manifest.json',16000))
+    if manifest.get('schemaVersion')!=1 or any(manifest.get(key)!=activation.get(key) for key in ('societyId','folder','generation','publicationId','sourceSnapshotId','sourceCatalogSha256','contentHash','inventoryHash')): raise ValueError('Analytical publication lineage mismatch')
+    rows_bytes=checked(manifest.get('rows'),'analytics.jsonl',6000000)
+    entries=[parse_json(line) for line in rows_bytes.splitlines()]
+    if manifest['rows'].get('rowCount')!=10 or len(entries)!=10 or len({entry.get('request') for entry in entries})!=10 or type(manifest.get('asOf')) is not int or type(manifest.get('computedAt')) is not int or manifest['computedAt']<manifest['asOf']: raise ValueError('Invalid analytical inventory or clock')
+    for entry in entries:
+        if entry.get('asOf')!=manifest['asOf'] or type(entry.get('validUntil')) is not int or entry['validUntil']<=entry['asOf'] or not isinstance(entry.get('resultJson'),str) or len(entry['resultJson'].encode())>900000: raise ValueError('Invalid analytical entry')
+        parse_json(entry['request']);parse_json(entry['resultJson'])
+    if 'sourceMetadata' in manifest:
+        source=parse_json(checked(manifest['sourceMetadata'],'publication-source.json',8000))
+        if source!=manifest.get('sourceContract') or source.get('schemaVersion')!=1 or source.get('publicationId')!=manifest.get('publicationId') or source.get('sourceSnapshotId')!=manifest.get('sourceSnapshotId') or not re.fullmatch('[a-f0-9]{64}',source.get('sourceManifestSha256','')): raise ValueError('Analytical source contract mismatch')
+    elif 'sourceContract' in manifest: raise ValueError('Unbound analytical source contract')
+
 def validate_export(directory, require_archives=True):
     """Never interpret absent files as empty. Validate before creating any delta."""
     directory = pathlib.Path(directory)
@@ -114,4 +137,5 @@ def validate_export(directory, require_archives=True):
             with zipfile.ZipFile(directory / name) as archive:
                 actual = [parse_json(line) for line in archive.read('procurementTaxonomyTerms/documents.jsonl').splitlines()]
                 if actual != [row for row in rows['procurementTaxonomyTerms'] if row['releaseId'] == index['releaseId']]: raise ValueError('Taxonomy archive differs from inventory')
+    validate_analytics(directory,activation)
     return activation

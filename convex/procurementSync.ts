@@ -13,6 +13,7 @@ import { internal } from "./_generated/api";
 import { procurementPublicationFields } from "./tables/procurement";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
 import { requireMaintenanceLease, withMaintenanceLease } from "./procurementMaintenance";
+import { requirePreparedAnalytics } from "./lib/procurementAnalyticsArtifacts";
 const table = v.union(
   v.literal("procurementRecords"),
   v.literal("procurementDetails"),
@@ -387,8 +388,9 @@ export const finish = internalMutation({
       )
         throw new Error("Taxonomy release is not verified.");
     }
+    await requirePreparedAnalytics(ctx, { ...a, societyId: run.societyId, folder: c.folder, contentHash: run.targetHash });
     await ctx.db.patch(c._id, {
-      publicationId: a.publicationId, schemaVersion: a.schemaVersion, tables: a.tables, inventoryHash: a.inventoryHash, archives: a.archives, coverage: a.coverage, collectedAt: a.collectedAt,
+      publicationId: a.publicationId, schemaVersion: a.schemaVersion, tables: a.tables, inventoryHash: a.inventoryHash, archives: a.archives, coverage: a.coverage, collectedAt: a.collectedAt, analytics: a.analytics,
       expected: run.expected, activatedAt: Date.now(),
       storageGeneration: c.storageGeneration ?? c.generation,
       generation: a.generation,

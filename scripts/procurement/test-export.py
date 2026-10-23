@@ -127,11 +127,12 @@ class ExportTests(unittest.TestCase):
             detail=dict(scope,dataJson=source_json)
             document=dict(scope,documentKey='doc:1',name='File',mediaType='application/pdf',sha256='',sourceUrl='',status='',bytes=0.0,parts=0.0,available=False)
             with zipfile.ZipFile(backup,'w') as archive:
-                archive.writestr('procurementCatalogs/documents.jsonl',json.dumps(dict(societyId='workspace',generation='old',folder='folder',publishedAt='2026-10-22',counts={'award':1.0},sourceCounts={'award':1.0},taxonomyCount=0.0,restoration=dict(backupSha256='a'*64,sourceGeneration='original-logical',preparedAt='2026-10-21'))))
+                archive.writestr('procurementCatalogs/documents.jsonl',json.dumps(dict(societyId='workspace',generation='old',folder='folder',publishedAt='2026-10-22',counts={'award':1.0},sourceCounts={'award':1.0},taxonomyCount=0.0,analytics=dict(path='analytics-manifest.json',bytes=1,sha256='b'*64),restoration=dict(backupSha256='a'*64,sourceGeneration='original-logical',preparedAt='2026-10-21'))))
                 for table,rows in [('procurementRecords',[record]),('procurementDetails',[detail]),('procurementDocuments',[document]),('procurementEvidence',[])]:
                     archive.writestr(table+'/documents.jsonl',''.join(json.dumps(row)+'\n' for row in rows))
             restore.prepare(backup,'workspace',root/'restore')
             activation=json.loads((root/'restore'/'activation.json').read_text())
+            self.assertNotIn('analytics',activation,'Restored rows do not inherit cache pointers bound to a different generation/clock')
             self.assertIs(type(activation['counts']['award']),int)
             self.assertIs(type(activation['sourceCounts']['award']),int)
             restored=json.loads((root/'restore'/'procurementRecords.jsonl').read_text())

@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
 import { procurementPublicationFields, procurementTaxonomyIndexFields, procurementTermFields } from "./tables/procurement";
 import { requireMaintenanceLease, withMaintenanceLease } from "./procurementMaintenance";
+import { requirePreparedAnalytics } from "./lib/procurementAnalyticsArtifacts";
 
 const tables = ["procurementRecords", "procurementDetails", "procurementDocuments", "procurementEvidence"] as const;
 const tableValidator = v.union(v.literal("procurementRecords"), v.literal("procurementDetails"), v.literal("procurementDocuments"), v.literal("procurementEvidence"));
@@ -178,6 +179,7 @@ export const commit = internalMutation({
     const {reuseActive,restoreFromBackup,...metadata} = args;
     if (restoreFromBackup && (args.restoration?.backupSha256 !== restoreFromBackup || !/^[a-f0-9]{64}$/.test(restoreFromBackup))) throw new Error("Restore backup verification does not match this publication.");
     if (reuseActive && (!prior || prior.contentHash !== args.contentHash)) throw new Error("Only verified unchanged content may reuse the active storage generation.");
+    await requirePreparedAnalytics(ctx, args);
     const baseCatalog = { ...metadata, activatedAt: Date.now() };
     const catalog = reuseActive && prior ? { ...baseCatalog, storageGeneration: prior.storageGeneration ?? prior.generation } : prior?.generation === args.generation && prior.storageGeneration ? { ...baseCatalog, storageGeneration: prior.storageGeneration } : baseCatalog;
     // Replacement also clears compact-only metadata when deliberately rolling back a legacy import.

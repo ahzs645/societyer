@@ -31,7 +31,9 @@ def prepare(backup, society, output, generation=None):
         if generation is not None:
             if generation in (catalog['generation'],physical_generation): raise ValueError('Restore generation must be fresh; the original logical and physical generations are already occupied')
             catalog['generation']=generation
-        for key in ('activatedAt','tables','inventoryHash','archives','schemaVersion','searchReady'): catalog.pop(key,None)
+        # Summary bundles bind their original generation/clock and are regenerated
+        # separately; restoring source rows never carries an obsolete cache pointer.
+        for key in ('activatedAt','tables','inventoryHash','archives','schemaVersion','searchReady','analytics'): catalog.pop(key,None)
         expected={}; kinds=collections.Counter()
         with zipfile.ZipFile(output/'metadata.zip','w',compression=zipfile.ZIP_DEFLATED) as target:
             for table in TABLES:

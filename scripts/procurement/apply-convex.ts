@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { validateExport, validateDelta, archiveEligible } from "./verify-export";
 import { createPersistentOperator } from "./operator-client";
+import { assertSummariesFresh } from "../../shared/procurementAnalyticsArtifacts";
 const args = process.argv.slice(2);
 const value = (flag: string) => {
   const i = args.indexOf(flag);
@@ -23,6 +24,8 @@ if (!deployment || !input)
 // This entire preflight happens before the first network request or import lock.
 const verified = await validateExport(input);
 const activation = verified.activation;
+const assertAnalyticsFresh = () => { if (verified.analytics) assertSummariesFresh(verified.analytics.entries); };
+assertAnalyticsFresh();
 const restoreBackup = value("--restore-backup");
 if (activation.restoration && !restoreBackup) throw new Error("A deliberate restore requires --restore-backup ORIGINAL_BACKUP_ZIP; normal publications cannot silently activate a restored catalog.");
 if (restoreBackup) {
@@ -81,6 +84,13 @@ const receipt = (state: "ready"|"failed", served?:any, error?:string) => {
   renameSync(temporary,path);
 };
 const servingState = async () => await run(["run","procurementImport:state",JSON.stringify({societyId:activation.societyId})],true);
+const seedAnalytics = async () => {
+  if (!verified.analytics) return;
+  assertAnalyticsFresh();
+  const bundle = verified.analytics;
+  const result = await run(["run", "procurementAnalytics:seed", JSON.stringify({ societyId: activation.societyId, generation: activation.generation, folder: activation.folder, contentHash: activation.contentHash, inventoryHash: activation.inventoryHash, bundleSha256: bundle.sha256, manifestJson: bundle.manifestJson, rowsJson: bundle.rowsJson })], true);
+  console.log(`Precomputed analytics: ${result.state}; ${result.written} default summaries written.`);
+};
 try {
 const prior = await run(
   [
@@ -96,6 +106,7 @@ const unchanged =
   prior.folder === activation.folder &&
   prior.contentHash === activation.contentHash;
 if (prior && !prior.updating && prior.folder === activation.folder && prior.generation === activation.generation && prior.contentHash === activation.contentHash && (prior.inventoryHash === activation.inventoryHash || restoreBackup)) {
+  await seedAnalytics();
   receipt("ready",prior);
   console.log("The verified publication is already serving; no rows or activation timestamps changed.");
   process.exit(0);
@@ -122,9 +133,10 @@ if (delta) {
   if (hash.digest("hex") !== delta.sha256 || count !== delta.operations)
     throw new Error("Delta integrity failure.");
   if (
-    prior?.contentHash === delta.targetContentHash &&
+    prior?.contentHash === delta.targetContentHash && !prior.updating && prior.folder === activation.folder && prior.inventoryHash === activation.inventoryHash &&
     prior?.generation === activation.generation
   ) {
+    await seedAnalytics();
     receipt("ready",prior);
     console.log(
       "Delta already activated; no row imports or catalog scans.",
@@ -133,8 +145,10 @@ if (delta) {
   }
 }
 jobId = await run(["run","procurementImport:beginJob",JSON.stringify({societyId:activation.societyId,folder:activation.folder,generation:activation.generation,inventoryHash:activation.inventoryHash,contentHash:activation.contentHash,publishedAt:activation.publishedAt,collectedAt:activation.collectedAt,complete:archiveEligible(activation),...(delta ? {planHash:delta.sha256} : {})})],true);
+await seedAnalytics();
 const progressJob = async (phase: "taxonomy"|"importing"|"activating",runId?:string) => await run(["run","procurementImport:jobProgress",JSON.stringify({jobId,phase,...(runId ? {runId} : {})})]);
 if (unchanged && !delta) {
+  assertAnalyticsFresh();
   await run([
     "run",
     "procurementImport:commit",
@@ -250,6 +264,7 @@ if (delta) {
     sourceCatalogSha256,
     taxonomyIndexes = [],
   } = activation;
+  assertAnalyticsFresh();
   await run([
     "run",
     "procurementSync:finish",
@@ -264,6 +279,7 @@ if (delta) {
       sourceCatalogSha256,
       taxonomyIndexes,
       publicationId: activation.publicationId, schemaVersion: activation.schemaVersion, tables: activation.tables, inventoryHash: activation.inventoryHash,
+      analytics: activation.analytics,
       archives: activation.archives, coverage: activation.coverage, collectedAt: activation.collectedAt,
     }),
   ]);
@@ -302,6 +318,7 @@ if (!args.includes("--activate-only")) {
   await run(["import", "--append", archive]);
 }
 await progressJob("activating");
+assertAnalyticsFresh();
 await run(["run", "procurementImport:activate", JSON.stringify({...activation,...(restoreBackup ? {restoreFromBackup:activation.restoration.backupSha256} : {})})]);
 receipt("ready",await servingState());
 console.log(`Activated ${activation.generation} for ${activation.societyId}.`);

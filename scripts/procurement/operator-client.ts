@@ -8,6 +8,7 @@ import { jsonToConvex, type Value } from "convex/values";
 
 const alternateSettings = ["CONVEX_DEPLOY_KEY", "CONVEX_DEPLOYMENT_TOKEN", "CONVEX_OVERRIDE_ACCESS_TOKEN", "CONVEX_PROVISION_HOST", "CONVEX_SELF_HOSTED_URL", "CONVEX_SELF_HOSTED_ADMIN_KEY"];
 const functions = new Set([
+  "procurementAnalytics:seed",
   "procurementImport:state", "procurementImport:beginJob", "procurementImport:jobProgress",
   "procurementImport:beginTaxonomy", "procurementImport:countPage", "procurementImport:activate", "procurementImport:commit",
   "procurementTaxonomy:finishTaxonomy", "procurementSync:begin", "procurementSync:applyBatch", "procurementSync:finish", "procurementSync:fail",
