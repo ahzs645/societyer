@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import { scanModule } from "./portable-convex-scan.mjs";
 
 const imports = `
@@ -67,6 +68,19 @@ test("operator-only delegations and local demo variants retain hosted classifica
   const demo = scanModule(imports + `export const recordConnectionTest = internalMutation({handler: ctx => createPortable(toPortableMutationCtx(ctx))});`, "paperless")[0];
   assert.equal(demo.classification, "server-only");
   assert.equal(demo.localRuntimeVariant.handler, "paperlessFns.recordConnectionTestPortable");
+});
+
+test("procurement status and analytical preparation remain hosted-only", () => {
+  const expected = new Set(["procurementStatus:get", "procurementAnalytics:get", "procurementAnalytics:request"]);
+  for (const module of ["procurementStatus", "procurementAnalytics"]) {
+    const functions = scanModule(readFileSync(new URL(`../convex/${module}.ts`, import.meta.url), "utf8"), module);
+    for (const fn of functions.filter(fn => expected.has(fn.name))) {
+      assert.equal(fn.classification, "server-only", fn.name);
+      assert.equal(fn.localRuntimeVariant, undefined, fn.name);
+      expected.delete(fn.name);
+    }
+  }
+  assert.equal(expected.size, 0, "The reviewed hosted endpoints must still exist");
 });
 
 test("unknown exported builders and mismatched authorization wrappers fail closed", () => {

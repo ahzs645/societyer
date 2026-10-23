@@ -46,6 +46,8 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "mcpOAuth:deny",
   // Procurement review reads SharePoint through a hosted route; the local runtimes report it unavailable.
   "procurementReview:setFolder",
+  // Hosted publication-summary scheduling; snapshot readers compute their own analytics.
+  "procurementAnalytics:request",
   "financialHub:sync",
   // Meeting source files: hosted-only, behind the transfer broker and private SharePoint
   // storage. MeetingSourcesCard renders nothing in local runtimes or without

@@ -30,6 +30,11 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   "procurementReview:reviews",
 
   "procurementReview:setFolder",
+  // Publication status and prepared analytics depend on hosted import jobs,
+  // server-side caches and the scheduler; snapshot readers use their own engine.
+  "procurementStatus:get",
+  "procurementAnalytics:get",
+  "procurementAnalytics:request",
 ]);
 // These are deliberate local demo implementations, not hosted delegations.
 // Require the exact registry handler and a surviving Convex counterpart so
