@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prepare an append-only restore of a backup's active procurement generation; no network writes."""
-import argparse,collections,json,os,pathlib,zipfile,hashlib,datetime,math
+import argparse,collections,json,os,pathlib,zipfile,hashlib,datetime,math,re
 from integrity import TABLES, canonical, seal_export, validate_export
 
 def normalize_numbers(value):
@@ -14,7 +14,9 @@ def normalize_numbers(value):
     if isinstance(value,list): return [normalize_numbers(item) for item in value]
     return value
 
-def prepare(backup, society, output):
+def prepare(backup, society, output, generation=None):
+    if generation is not None and (not isinstance(generation,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}',generation)):
+        raise ValueError('Restore generation must be a 1-128 character ASCII identifier beginning with a letter or number')
     os.umask(0o077)
     output.mkdir(mode=0o700,exist_ok=False)
     with zipfile.ZipFile(backup) as source:
@@ -25,6 +27,10 @@ def prepare(backup, society, output):
         catalog=normalize_numbers({k:v for k,v in catalogs[0].items() if k not in ('_id','_creationTime')})
         if catalog.get('syncRunId'): raise ValueError('A backup captured during incremental import is not a completed publication')
         physical_generation=catalog.pop('storageGeneration',catalog['generation'])
+        source_generation=catalog.get('restoration',{}).get('sourceGeneration',catalog['generation'])
+        if generation is not None:
+            if generation in (catalog['generation'],physical_generation): raise ValueError('Restore generation must be fresh; the original logical and physical generations are already occupied')
+            catalog['generation']=generation
         for key in ('activatedAt','tables','inventoryHash','archives','schemaVersion','searchReady'): catalog.pop(key,None)
         expected={}; kinds=collections.Counter()
         with zipfile.ZipFile(output/'metadata.zip','w',compression=zipfile.ZIP_DEFLATED) as target:
@@ -33,6 +39,8 @@ def prepare(backup, society, output):
                 with source.open(table+'/documents.jsonl') as rows, target.open(table+'/documents.jsonl','w') as dest, (output/(table+'.jsonl')).open('wb') as local:
                     for line in rows:
                         row=normalize_numbers(json.loads(line))
+                        if generation is not None and row.get('societyId')==society and row.get('generation')==generation:
+                            raise ValueError('Restore generation is already occupied in the backup; choose a fresh identifier')
                         if row.get('societyId')!=society or row.get('generation')!=physical_generation or row.get('archived'): continue
                         # Imported IDs are recreated; source keys and every stored field are preserved.
                         row={k:v for k,v in row.items() if k not in ('_id','_creationTime','archived','syncKey')}
@@ -61,7 +69,7 @@ def prepare(backup, society, output):
         with pathlib.Path(backup).open('rb') as handle:
             digest=hashlib.sha256()
             while chunk:=handle.read(1024*1024): digest.update(chunk)
-        catalog['restoration']=dict(backupSha256=digest.hexdigest(),sourceGeneration=catalog['generation'],preparedAt=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        catalog['restoration']=dict(backupSha256=digest.hexdigest(),sourceGeneration=source_generation,preparedAt=datetime.datetime.now(datetime.timezone.utc).isoformat())
         activation=seal_export(output,dict(catalog,expected=expected))
         if not activation.get('contentHash'):
             activation['contentHash']=activation['inventoryHash']
@@ -72,5 +80,6 @@ def prepare(backup, society, output):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backup',required=True);parser.add_argument('--workspace',required=True);parser.add_argument('--output',required=True)
+    parser.add_argument('--generation',help='Fresh unused serving generation for rollback after an in-place import; omit when reconstructing a baseline')
     args=parser.parse_args()
-    print(json.dumps(prepare(pathlib.Path(args.backup),args.workspace,pathlib.Path(args.output))))
+    print(json.dumps(prepare(pathlib.Path(args.backup),args.workspace,pathlib.Path(args.output),args.generation)))

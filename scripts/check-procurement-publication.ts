@@ -18,7 +18,7 @@ with zipfile.ZipFile(root/'backup.zip','w') as archive:
  for table in ('procurementRecords','procurementDetails','procurementDocuments','procurementEvidence'):
   rows=[dict(json.loads(line),generation='physical') for line in (root/'target'/(table+'.jsonl')).read_text().splitlines()]
   archive.writestr(table+'/documents.jsonl',''.join(json.dumps(row)+'\\n' for row in rows))
-spec=importlib.util.spec_from_file_location('restore',pathlib.Path(sys.argv[1])/'restore-export.py');restore=importlib.util.module_from_spec(spec);spec.loader.exec_module(restore);restore.prepare(root/'backup.zip','workspace',root/'restored')
+spec=importlib.util.spec_from_file_location('restore',pathlib.Path(sys.argv[1])/'restore-export.py');restore=importlib.util.module_from_spec(spec);spec.loader.exec_module(restore);restore.prepare(root/'backup.zip','workspace',root/'restored');restore.prepare(root/'backup.zip','workspace',root/'restored-fresh','restore-fresh-20261022')
 fixture(root/'unicode-baseline',('award:\\U0001f600','award:\\ue000'));fixture(root/'unicode-target',('award:\\U0001f600',),title='Changed');plan_delta(root/'unicode-baseline',root/'unicode-target')
 `;
   const built = spawnSync("python3", ["-c", script, resolve("scripts/procurement"), directory], {encoding:"utf8"});
@@ -38,6 +38,13 @@ fixture(root/'unicode-baseline',('award:\\U0001f600','award:\\ue000'));fixture(r
   const restoredDirectory=join(directory,"restored"),backup=join(directory,"backup.zip");
   const restored=await validateExport(restoredDirectory);
   assert.equal(restored.rows.procurementRecords[0].generation,restored.activation.generation,"Restore projects the backup physical generation into its logical publication");
+  const fresh=await validateExport(join(directory,"restored-fresh"));
+  assert.equal(fresh.activation.generation,"restore-fresh-20261022");
+  assert.equal(fresh.activation.restoration.sourceGeneration,restored.activation.generation,"Fresh rollback retains the original source generation");
+  assert.equal(fresh.activation.contentHash,restored.activation.contentHash,"A fresh serving generation preserves the original content identity");
+  assert.equal(fresh.activation.sourceCatalogSha256,restored.activation.sourceCatalogSha256);
+  assert.notEqual(fresh.activation.inventoryHash,restored.activation.inventoryHash,"Remapped generation is sealed in a new exact inventory");
+  for(const table of ["procurementRecords","procurementDetails","procurementDocuments","procurementEvidence"]) assert.ok(fresh.rows[table].every(row=>row.generation===fresh.activation.generation));
   const restoreArgs=["--import","tsx","scripts/procurement/apply-convex.ts","--deployment","does-not-exist","--input",restoredDirectory,"--dry-run"];
   const missingRestoreIntent=spawnSync(process.execPath,restoreArgs,{encoding:"utf8"});
   assert.notEqual(missingRestoreIntent.status,0);assert.match(missingRestoreIntent.stderr,/requires --restore-backup/);

@@ -84,6 +84,21 @@ class ExportTests(unittest.TestCase):
                 self.assertEqual(row, {k:v for k,v in original.items() if k not in ('_id','_creationTime')})
                 self.assertEqual(archive.read('procurementDocuments/documents.jsonl'),b'')
             with self.assertRaises(FileExistsError): restore.prepare(backup,'workspace',root/'restore')
+            restore.prepare(backup,'workspace',root/'fresh-restore','restore-20261022-v1')
+            activation=json.loads((root/'fresh-restore'/'activation.json').read_text())
+            self.assertEqual(activation['generation'],'restore-20261022-v1')
+            self.assertEqual(activation['restoration']['sourceGeneration'],'old')
+            with zipfile.ZipFile(root/'fresh-restore/metadata.zip') as archive:
+                for table in ('procurementRecords','procurementDetails'):
+                    row=json.loads(archive.read(table+'/documents.jsonl'))
+                    self.assertEqual(row['generation'],'restore-20261022-v1')
+                    self.assertEqual(row['opaqueSourceField'],original['opaqueSourceField'])
+            for index,invalid in enumerate(('', '../escape', 'line\nbreak', 'with space', '-prefix', 'é', 'a'*129)):
+                destination=root/('invalid-'+str(index))
+                with self.assertRaisesRegex(ValueError,'ASCII identifier'): restore.prepare(backup,'workspace',destination,invalid)
+                self.assertFalse(destination.exists(),'Invalid identifiers fail before creating output')
+            for index,occupied in enumerate(('old','unrelated')):
+                with self.assertRaisesRegex(ValueError,'occupied'): restore.prepare(backup,'workspace',root/('occupied-'+str(index)),occupied)
 
     def test_sortable_dates(self):
         cases = {
@@ -112,7 +127,7 @@ class ExportTests(unittest.TestCase):
             detail=dict(scope,dataJson=source_json)
             document=dict(scope,documentKey='doc:1',name='File',mediaType='application/pdf',sha256='',sourceUrl='',status='',bytes=0.0,parts=0.0,available=False)
             with zipfile.ZipFile(backup,'w') as archive:
-                archive.writestr('procurementCatalogs/documents.jsonl',json.dumps(dict(societyId='workspace',generation='old',folder='folder',publishedAt='2026-10-22',counts={'award':1.0},sourceCounts={'award':1.0},taxonomyCount=0.0)))
+                archive.writestr('procurementCatalogs/documents.jsonl',json.dumps(dict(societyId='workspace',generation='old',folder='folder',publishedAt='2026-10-22',counts={'award':1.0},sourceCounts={'award':1.0},taxonomyCount=0.0,restoration=dict(backupSha256='a'*64,sourceGeneration='original-logical',preparedAt='2026-10-21'))))
                 for table,rows in [('procurementRecords',[record]),('procurementDetails',[detail]),('procurementDocuments',[document]),('procurementEvidence',[])]:
                     archive.writestr(table+'/documents.jsonl',''.join(json.dumps(row)+'\n' for row in rows))
             restore.prepare(backup,'workspace',root/'restore')
@@ -124,6 +139,9 @@ class ExportTests(unittest.TestCase):
             restored_document=json.loads((root/'restore'/'procurementDocuments.jsonl').read_text())
             self.assertIs(type(restored_document['bytes']),int);self.assertIs(type(restored_document['parts']),int)
             self.assertEqual(json.loads((root/'restore'/'procurementDetails.jsonl').read_text())['dataJson'],source_json)
+            restore.prepare(backup,'workspace',root/'restore-fresh','restore-new-generation')
+            fresh=json.loads((root/'restore-fresh'/'activation.json').read_text())
+            self.assertEqual(fresh['restoration']['sourceGeneration'],'original-logical','Nested recovery preserves original source-generation provenance')
 
     def test_projection_sorts_by_closing_and_keeps_source_text(self):
         row = dict(id='opportunity:bidsandtenders:x:1', kind='opportunity', title='Pool', updated_at='', data=json.dumps(dict(closingDate='Wed Oct 7, 2026 3:00 PM (PDT)', closingAt='2026-10-07T22:00:00.000Z', issueDate='2026-09-01')))
