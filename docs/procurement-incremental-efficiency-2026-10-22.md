@@ -2,6 +2,8 @@
 
 This handoff covers the October 22 production rollout, the follow-up checks on the local Zoer instance, measured resource use, and the remaining opportunities to reduce work. Zoer/files remains responsible for collection and normalization, SharePoint holds immutable publications and original documents, and Societyer serves bounded pages and analytical results from Convex. The immediate efficiency goal is to reuse unchanged inputs at each stage and send only verified changes downstream.
 
+The [October 23 journal and analytics rollout](procurement-journal-analytics-2026-10-23.md) implements the per-record journal, projection reuse and upstream default summaries discussed below. It records the subsequent production measurements and remaining fallback costs.
+
 Dates in execution evidence are UTC. The rollout crossed midnight into October 23 UTC while it was still October 22 in Vancouver.
 
 ## What the 51258 updates mean
