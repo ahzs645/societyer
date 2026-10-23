@@ -134,7 +134,7 @@ An exact same-source companion repeat preserves its publication ID, original pub
 | Graph writes | 0 | 0 |
 | Graph metadata/read requests | 6 | 6 |
 
-This read-only test against the existing SharePoint publication was about **85 percent faster** on repeat. Both runs verified the actual 481 MB source SHA; the repeat also hashed the roughly 10 MB local compact cache. It did not apply a new source publication or call the serving activation callback. New archive bytes or changed projection code still require preparation. A source change journal is the next way to avoid full local preparation for small source changes.
+This read-only test against the existing SharePoint publication was about **85 percent faster** on repeat. Both runs verified the actual 481 MB source SHA; the repeat also hashed the roughly 10 MB local compact cache. It did not apply a new source publication or call the serving activation callback. A fresh full-source publication still snapshots/compresses the whole SQLite catalog, and changed archive bytes or projection code currently cause all notices and taxonomy to be projected locally again. Only the changed serving rows are sent to Convex. Per-record preparation reuse needs a source change journal; it is not implemented by this cache.
 
 ### New and changed items already in the collector
 
@@ -148,6 +148,8 @@ A read-only copy of the current collector catalog was streamed directly to priva
 The new opportunities are `234981` (TA1490 Findley FSR - Morice), `235048` (Mobile MRI Rental trailer for Interior Health), and `235069` (PS-26-07). Opportunity `224427` (Team With Us - Digital Service Resources) has changed commodity/detail-capture fields. Eight opportunity-classification rows were added; all 89,972 taxonomy terms stayed unchanged. This is a comparison of records already collected, not a new source collection or a publication to Societyer.
 
 Using the same pinned normalizer and profile as production, the compact comparison needs **eight serving operations**: four list upserts and four detail upserts. Documents, evidence and taxonomy remain unchanged, and there are zero archives. The three new opportunities and one updated opportunity account for every operation. Comparison artifacts are explicitly unpublished and have no usable activation file; this test does not advance the production source pointer.
+
+Independent Python and TypeScript planners produced byte-equivalent delta manifests, and Societyer's fully local apply dry-run passed. The comparison activation file is retained as `activation.local-comparison.json` so the normal apply command cannot consume it accidentally. The publisher's 52 tests passed with 369 assertions and its scoped strict TypeScript check passed.
 
 ## Local Zoer review preparation update
 
@@ -190,6 +192,8 @@ The local/main Zoer instance is `https://zoer.k8s.overtheedgepaper.ca`, an inter
 Private source exports, database backup, immutable receipts, normalized baseline/target inventories, plugin packages, source bundle, checkpoint comparisons and recovery instructions are under `$HOME/.local/share/societyer-rollouts/20261022T235043Z` with directory mode 0700. Keep data and credentials outside Git. The successful normalized export is retained under `$HOME/.config/zoer/procurement-publication-work/2026-10-22-verified-oct18-5c5d6eb765/normalized-export-preflight` for the next verified delta.
 
 Follow-up evidence includes `incremental-followup/build-qualified.json`, `rollout.log`, `usage-dashboard.json`, `no-op-live-proof.json` and `prepare-evidence/final-verification.json`. `repeat-publication-proof-etag/real-source-repeat-proof.json` records the cold/warm Graph measurements. `current-catalog-comparison/` retains the read-only source-copy receipt, exact source-row differences and unpublished compact comparison. Source patch/bundle and test receipts are retained with the preparation evidence; the runtime source branch is `codex/procurement-observation-fingerprint`.
+
+The scoped publisher source patch and hash manifest are retained under `publisher-source-evidence/`. They include the earlier owned implementation plus the new cache and exclude unrelated shared-checkout changes. The [Zoer publishing handoff](../../zoer/docs/societyer-sharepoint-publishing.md#repeating-an-unchanged-companion) contains the publisher's cache/recovery operating details.
 
 - [Hosted catalog and operator runbook](procurement-convex-catalog.md)
 - [Procurement access and publishing operations](procurement-review-operations.md)
