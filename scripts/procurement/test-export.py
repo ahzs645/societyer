@@ -9,7 +9,7 @@ class ExportTests(unittest.TestCase):
             db.execute('CREATE TABLE records(id TEXT PRIMARY KEY,kind,title,data,updated_at)')
             db.execute('CREATE TABLE documents(id,record_id,url,name,media_type,sha256,status)')
             rows = [
-                ('opportunity:1', 'opportunity', dict(descriptionText='Notice', sourceDescriptionText='Notice', rawSourceData='RAW_SOURCE_SENTINEL', searchText='Notice City', classificationCodes=['110'], taxonomyReleaseId='release:1')),
+                ('opportunity:1', 'opportunity', dict(descriptionText='Notice', sourceDescriptionText='Notice', rawSourceData='RAW_SOURCE_SENTINEL', searchText='Notice City', classificationCodes=['110'], taxonomyReleaseId='release:1', publicationNormalization={'sourceRevisionPolicy':'normalized-source-facts-sha256-v1','version':'retained-v1'})),
                 ('taxonomy:parent', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='100', title='Parent', parentId=None, ancestors=[], definition='DEFINITION_SENTINEL')),
                 ('taxonomy:child', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='110', title='Child', parentId='taxonomy:parent', ancestors=['taxonomy:parent'])),
                 ('taxonomy:unused', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='999', title='Unused')),
@@ -23,7 +23,7 @@ class ExportTests(unittest.TestCase):
             self.assertEqual({t['key'] for t in terms}, {'taxonomy:parent', 'taxonomy:child', 'taxonomy:unused'})
             self.assertTrue(all('generation' not in t and 'definition' not in t and 'ancestors' not in t for t in terms))
             detail = json.loads(json.loads((root/'procurementDetails.jsonl').read_text())['dataJson'])
-            self.assertEqual(detail, {'sourceDescriptionText':'Notice','classificationCodes':['110'],'taxonomyReleaseId':'release:1'})
+            self.assertEqual(detail, {'sourceDescriptionText':'Notice','classificationCodes':['110'],'taxonomyReleaseId':'release:1','publicationNormalization':{'sourceRevisionPolicy':'normalized-source-facts-sha256-v1','version':'retained-v1'}})
             activation = json.loads((root/'activation.json').read_text())
             self.assertEqual(activation['counts'], {'opportunity':1}); self.assertEqual(activation['taxonomyCount'],3)
             index = activation['taxonomyIndexes'][0]

@@ -76,8 +76,15 @@ class IntegrityTests(unittest.TestCase):
             raw=(canonical(entry)+'\n').encode(); path=root/'review.jsonl';path.write_bytes(raw)
             tables={table:dict(path='review.jsonl.gz#'+table,present=True,rowCount=0,bytes=0,sha256=hashlib.sha256(b'').hexdigest()) for table in ('records','documents','taxonomy',*exporter.EVIDENCE_TABLES)}
             tables['records'].update(rowCount=1,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
-            review=dict(schemaVersion=1,tables=tables,inventoryHash=hashlib.sha256(canonical(dict(schemaVersion=1,tables=tables)).encode()).hexdigest())
+            review=dict(schemaVersion=1,profileSha256=hashlib.sha256(canonical(exporter.PROFILE).encode()).hexdigest(),tables=tables,inventoryHash=hashlib.sha256(canonical(dict(schemaVersion=1,tables=tables)).encode()).hexdigest())
             exporter.validate_compact_source(path,review)
+            for invalid in (None,'b'*64):
+                with self.assertRaisesRegex(ValueError,'source profile differs'): exporter.validate_compact_source(path,dict(review,profileSha256=invalid))
+            complete=exporter.PROFILE
+            try:
+                exporter.PROFILE=dict(complete,detailFields=[field for field in complete['detailFields'] if field!='publicationNormalization'])
+                with self.assertRaisesRegex(ValueError,'source profile differs'): exporter.validate_compact_source(path,review)
+            finally: exporter.PROFILE=complete
             tables['reviews'].update(rowCount=1,bytes=100,sha256='a'*64)
             review['inventoryHash']=hashlib.sha256(canonical(dict(schemaVersion=1,tables=tables)).encode()).hexdigest()
             with self.assertRaisesRegex(ValueError,'source table integrity mismatch: reviews'): exporter.validate_compact_source(path,review)

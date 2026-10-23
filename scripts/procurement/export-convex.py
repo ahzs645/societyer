@@ -279,6 +279,7 @@ def export(db_path, manifest, society, folder, output, generation_suffix=None):
 def validate_compact_source(path, review):
     """Verify the upstream envelope inventory without reserializing its JSON numbers."""
     if review.get('schemaVersion') is None: return # Legacy snapshots remain readable; missing coverage still blocks archival.
+    if review.get('profileSha256') != hashlib.sha256(canonical(PROFILE).encode()).hexdigest(): raise ValueError('Compact source profile differs from operator profile; update the operator tools before projecting retained fields')
     expected={'records','documents','taxonomy',*EVIDENCE_TABLES}
     tables=review.get('tables',{})
     if review.get('schemaVersion')!=1 or set(tables)!=expected or review.get('inventoryHash')!=hashlib.sha256(canonical(dict(schemaVersion=1,tables=tables)).encode()).hexdigest(): raise ValueError('Invalid compact source table inventory')

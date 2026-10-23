@@ -89,7 +89,8 @@
     "buyerParticipants",
     "contractNumberMissing",
     "justificationMissing",
-    "timezone"
+    "timezone",
+    "publicationNormalization"
   ],
   "evidenceTables": [
     "reviews",
