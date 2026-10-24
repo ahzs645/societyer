@@ -10,6 +10,7 @@ import {
   procurementSearchCorpus,
   procurementSearchMatches,
 } from "../shared/procurementSearchText";
+import { matchesProcurementParty } from "../shared/procurementAnalytics";
 import { procurementPredicate } from "../shared/procurementBrowseFilters";
 import { toNoticeRow } from "../shared/procurementNoticeRow";
 import { v } from "convex/values";
@@ -243,6 +244,7 @@ export const listRowFields = {
   value: v.union(v.number(), v.null()),
   currency: v.string(),
   procurementType: v.string(),
+  analyticsJson: v.optional(v.string()),
 };
 /** `ListRow` in src/features/procurementReview/reader/source.ts. Columns an older import lacks read as empty. */
 export function listRow(row: Doc<"procurementRecords">) {
@@ -262,6 +264,7 @@ export function listRow(row: Doc<"procurementRecords">) {
     value: row.value ?? null,
     currency: row.currency ?? "",
     procurementType: row.procurementType ?? "",
+    ...(row.analyticsJson ? { analyticsJson: row.analyticsJson } : {}),
   };
 }
 
@@ -641,19 +644,13 @@ export const page = authorizedQuery(
       : [];
     const indexed = base
       .withIndex(
-        (party && field === "date"
-          ? party.field === "organization"
-            ? "by_live_buyer_date"
-            : "by_live_issued_date"
-          : `by_live_kind_${field}`) as "by_live_kind_date",
+        `by_live_kind_${field}` as "by_live_kind_date",
         (q) => {
           let scoped: any = q
             .eq("societyId", a.societyId)
             .eq("generation", storage)
             .eq("archived", undefined)
             .eq("kind", a.kind);
-          if (party && field === "date")
-            scoped = scoped.eq(party.field, party.name);
           if (field === "date" && from) scoped = scoped.gte("date", from);
           if (numericFilters.length) {
             const lower = numericFilters.filter((f: any) => ["eq", "gt", "gte"].includes(f.operator)).sort((a: any, b: any) => b.value - a.value || Number(b.operator === "gt") - Number(a.operator === "gt"))[0];
@@ -668,7 +665,7 @@ export const page = authorizedQuery(
       .order(sorts[0]?.direction === "asc" ? "asc" : "desc");
     // Opaque cursors carry the query-plan version. A deployed index/range
     // change must not feed an older native cursor into a different query.
-    const cursorPlan = JSON.stringify([2, storage, a.societyId, a.kind, field, sorts[0]?.direction ?? "desc", party ?? null, from, numericFilters.map((f: any) => [f.operator, f.value]), active.searchReady && sorts.length === 0 ? search : ""]);
+    const cursorPlan = JSON.stringify([3, storage, a.societyId, a.kind, field, sorts[0]?.direction ?? "desc", party ?? null, from, numericFilters.map((f: any) => [f.operator, f.value]), active.searchReady && sorts.length === 0 ? search : ""]);
     let nativeCursor: string | null = null;
     let restart = false;
     if (a.paginationOpts.cursor) {
@@ -739,6 +736,7 @@ export const page = authorizedQuery(
       page: visible
         .filter(
           (r) =>
+            (!party || matchesProcurementParty(r.raw, party.field, party.name)) &&
             matches(r.drawn) &&
             (!search ||
               procurementSearchMatches(

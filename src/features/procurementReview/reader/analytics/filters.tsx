@@ -56,7 +56,7 @@ export function FilterChips({ filters, onChange }: { filters: MarketFilters; onC
 }
 
 /** Zoer's Filters dialog: a draft until Apply. */
-export function FiltersDialog({ value, meta, apply, close }: { value: MarketFilters; meta: ReturnType<typeof metadata>; apply: (next: MarketFilters) => void; close: () => void }) {
+export function FiltersDialog({ value, meta, apply, close }: { value: MarketFilters; meta: ReturnType<typeof metadata> & { choicesTruncated?: boolean }; apply: (next: MarketFilters) => void; close: () => void }) {
   const [draft, setDraft] = useState(value);
   const set = <K extends keyof MarketFilters>(key: K, next: MarketFilters[K]) => setDraft({ ...draft, [key]: next });
   let error = "";
@@ -85,6 +85,7 @@ export function FiltersDialog({ value, meta, apply, close }: { value: MarketFilt
         <Field label="Minimum award value"><input className="input" type="number" min="0" step="any" inputMode="decimal" placeholder="No minimum" value={draft.minValue} onChange={(event) => set("minValue", event.target.value)} /></Field>
       </div>
       <div className="procurement-analytics__checks">
+        {meta.choicesTruncated && <p className="muted">Suggestions show the first 200 names. The buyer and supplier directories search every party.</p>}
         <label className="procurement-analytics__check"><input type="checkbox" checked={draft.includePlaceholders} onChange={(event) => set("includePlaceholders", event.target.checked)} /> Include placeholder suppliers</label>
         <label className="procurement-analytics__check"><input type="checkbox" checked={draft.includeFuture} onChange={(event) => set("includeFuture", event.target.checked)} /> Include future-dated awards</label>
       </div>

@@ -14,6 +14,8 @@ const t = convexTest(schema, {
   "./procurementTaxonomy.js": () => import("../convex/procurementTaxonomy"),
   "./procurementImport.js": () => import("../convex/procurementImport"),
   "./procurementMaintenance.js": () => import("../convex/procurementMaintenance"),
+  "./procurementAnalytics.js": () => import("../convex/procurementAnalytics"),
+  "./procurementAnalyticsJobs.js": () => import("../convex/procurementAnalyticsJobs"),
 } as any);
 const api: any = anyApi;
 const issuer = betterAuthIssuer();
@@ -77,6 +79,10 @@ const state = await t.query(api.procurementImport.state, { societyId: ids.societ
 assert.equal(state.generation, ids.generation);
 await t.mutation(api.procurementImport.commit, { ...activation, profileVersion: 2, contentHash: "a".repeat(64), sourceCounts: { opportunity: 1300, award: 3, "taxonomy-term": 89972 }, taxonomyReleases: [term.releaseId], taxonomyCount: 1 });
 assert.equal((await t.query(api.procurementImport.state, { societyId: ids.societyId })).contentHash, "a".repeat(64));
+const restoreActivation = { ...activation, schemaVersion:1, profileVersion:2, contentHash:"b".repeat(64), sourceSnapshotId:ids.generation, sourceCatalogSha256:"c".repeat(64),taxonomyIndexes:[{releaseId:term.releaseId,contentHash:termHash,count:1}],taxonomyCount:1,coverage:{complete:false,sources:[]},restoration:{backupSha256:"d".repeat(64),sourceGeneration:ids.generation,preparedAt:"2026-10-22T00:00:00Z"} };
+await assert.rejects(t.action(api.procurementImport.activate,restoreActivation),/deliberate restore requires/);
+await t.action(api.procurementImport.activate,{...restoreActivation,restoreFromBackup:restoreActivation.restoration.backupSha256});
+assert.equal((await t.query(api.procurementImport.state,{societyId:ids.societyId})).contentHash,"b".repeat(64),"A deliberate verified-backup restore can retain honestly unknown source coverage");
 await t.mutation(api.procurementImport.commit, activation);
 assert.equal((await t.query(api.procurementImport.state, { societyId: ids.societyId })).profileVersion, undefined, "Legacy rollback clears the compact fingerprint");
 await t.run(async ctx => {

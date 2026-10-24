@@ -8,7 +8,7 @@
  * the decisions people recorded and never stand in for one.
  */
 import type { CatalogReviewRow, ListRow } from "../reader/source";
-import { deadlineOf, parseSourceDate, sourceLabel, statusOf, zoneToday } from "./notice";
+import { deadlineOf, deadlineInstant, procurementDeadlineValue, parseSourceDate, sourceLabel, statusOf, zoneToday } from "./notice";
 import { describeReview, reviewTone } from "./review";
 import { normalizeLabel } from "./market";
 import type { Tone } from "./notice";
@@ -34,10 +34,10 @@ const byOpen = (a: Counted, b: Counted) => b.open - a.open || b.count - a.count 
  * "Open" for weeks after the closing date, so the date wins.
  */
 export function isOpenOpportunity(row: ListRow, now = Date.now()): boolean {
-  const deadline = deadlineOf(row.date || row.dateText, now);
+  const deadline = deadlineOf(procurementDeadlineValue(row), now);
   const status = statusOf("opportunity", row.status, deadline);
   if (status) return status.label === "Open";
-  return !!deadline && deadline.state !== "closed";
+  return false;
 }
 
 export function opportunityInsights(rows: ListRow[], now = Date.now()) {
@@ -46,8 +46,11 @@ export function opportunityInsights(rows: ListRow[], now = Date.now()) {
   const sources = new Map<string, Counted>(), buyers = new Map<string, Counted>();
   let open = 0, withDocuments = 0, listedOnly = 0, openWithDocuments = 0;
   const openKeys = new Set<string>();
+  let nextBoundaryAt: number | null = null;
   for (const row of rows) {
     const isOpen = isOpenOpportunity(row, now);
+    const instant = deadlineInstant(procurementDeadlineValue(row));
+    if (isOpen && instant !== null && instant >= now && (nextBoundaryAt === null || instant < nextBoundaryAt)) nextBoundaryAt = instant + 1;
     tally(sources, sourceLabel(row.recordKey), isOpen);
     tally(buyers, normalizeLabel(row.organization) ?? "Unknown buyer", isOpen);
     if (row.documents > 0) withDocuments += 1;
@@ -55,12 +58,12 @@ export function opportunityInsights(rows: ListRow[], now = Date.now()) {
     if (!isOpen) continue;
     open += 1; openKeys.add(row.recordKey);
     if (row.documents > 0) openWithDocuments += 1;
-    const parsed = parseSourceDate(row.date || row.dateText);
+    const parsed = parseSourceDate(procurementDeadlineValue(row));
     const days = parsed ? dayNumber(parsed.date) - today : null;
     windows[days === null ? "undated" : days <= 0 ? "today" : days <= 7 ? "week" : days <= 14 ? "twoWeeks" : "later"] += 1;
   }
   return {
-    total: rows.length, open, openKeys, windows, withDocuments, listedOnly, openWithDocuments,
+    total: rows.length, open, openKeys, nextBoundaryAt, windows, withDocuments, listedOnly, openWithDocuments,
     sources: [...sources.values()].sort(byOpen),
     buyers: [...buyers.values()].sort(byOpen),
   };
@@ -100,7 +103,7 @@ const isTrue = (value: unknown) => value === 1 || value === true || value === "1
 /** The assessment describeReview shows: the newest current one, else the newest. */
 function currentAssessment(rows: CatalogReviewRow[]): Row | null {
   const assessments = rows.filter((row) => row.source === "procurement_assessments").map((row) => parse(row.dataJson)).filter((row): row is Row => !!row);
-  const newest = (list: Row[]) => [...list].sort((a, b) => str(b.as_of).localeCompare(str(a.as_of)))[0];
+  const newest = (list: Row[]) => [...list].sort((a, b) => str(b.as_of).localeCompare(str(a.as_of)) || str(b.id).localeCompare(str(a.id)))[0];
   return newest(assessments.filter((row) => isTrue(row.is_current))) ?? newest(assessments) ?? null;
 }
 

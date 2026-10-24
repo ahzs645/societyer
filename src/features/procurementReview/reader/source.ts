@@ -10,6 +10,7 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 import type { StoredProcurementDocument } from "../lib/documents";
 import type { ReviewRow } from "../lib/review";
+import type { AnalysisRequest, AnalysisState } from "../../../../shared/procurementAnalytics";
 
 export type RecordSummary = { recordKey: string; kind: string; title: string; organization: string; date: string; status: string; dateText?: string };
 export type DocumentPage = { page: StoredProcurementDocument[]; isDone: boolean; continueCursor: string };
@@ -29,6 +30,8 @@ export type CatalogReviewRow = ReviewRow & { recordKey: string };
 
 export type ReaderSource = {
   catalog: ReaderCatalog;
+  /** Publication metrics prepared once on the server; drill-downs return at most 50 records. */
+  useAnalysis?: (request: AnalysisRequest) => AnalysisState & { retry: () => void };
   /** Hosted interactive page; absent for the offline snapshot host. */
   usePage?: (kind: string, request: string, cursor: string | null) => { page: ListRow[]; isDone: boolean; continueCursor: string; scanned: number; relevance: boolean; restart?: boolean } | undefined;
   /**

@@ -20,7 +20,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   agreements: ["agreements"],
   financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "transactionLines", "financeTags", "payeeAliases", "invoices", "invoicePreferences", "billingDocuments", "commerceReports", "billingAutomation", "billingAutomationActions", "bills", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd", "payroll", "corporateCards", "investments", "bankAccounts", "receiptInbox", "spendBudgets", "costPlanning", "payrollCalculation", "payrollLeave", "payrollTd1", "payrollRules", "payrollRoeWorkflow", "payrollRemittance"],
   elections: ["elections"], grants: ["grants", "grantSources"],
-  documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps", "procurementReview"],
+  documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps", "procurementReview", "procurementStatus", "procurementAnalytics"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents", "aiFilterActions"],
   exports: ["exports"], audit: ["activity"], volunteers: ["volunteers"], communications: ["communications", "pendingEmails", "partyPortals", "publicPortal"],
   settings: ["apiPlatform", "aiSettings", "aiSettingsActions", "corporationSettings", "serviceProviders", "subscriptions", "programStatements", "secrets", "nameHistory", "recordLayouts", "objectMetadata", "customFields", "fieldMetadata", "views", "commandMenuItems", "importSessions", "intake", "intakeActions", "waveCache", "permissions", "transparency", "calendarFeed"],
@@ -146,6 +146,7 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (name === "society:updateIntegrationSettings" || name === "society:reset") return "settings:manage";
   // The published-snapshot folder is module configuration, which Admin or Owner may change.
   if (name === "procurementReview:setFolder") return "settings:write";
+  if (name === "procurementAnalytics:request") return "documents:read";
   if (resource === "audit") return kind === "query" ? "audit:read" : "settings:write";
   if (domain === "orgChartAssignments") return kind === "query" ? "settings:read" : "settings:write";
   if (name === "registerHistory:directorsAsOf") return "directors:read";

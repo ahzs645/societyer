@@ -6,6 +6,7 @@ import {
 } from "../../../platform/record-engine/record-table";
 import { toNoticeRow } from "../../../../shared/procurementNoticeRow";
 import { useReaderSource } from "./source";
+import { useProcurementClock } from "../lib/clock";
 export function ServerNoticeRows({
   kind,
   fixedParty,
@@ -28,21 +29,7 @@ export function ServerNoticeRows({
       JSON.stringify({
         party: fixedParty,
         columns,
-        filters: [
-          ...filters,
-          ...(fixedParty
-            ? [
-                {
-                  id: "fixed-party",
-                  fieldMetadataId: columns.find(
-                    (c) => c.field.name === fixedParty.field,
-                  )?.field._id,
-                  operator: "eq",
-                  value: fixedParty.name,
-                },
-              ]
-            : []),
-        ],
+        filters,
         filterGroups,
         sorts: sorts.slice(0, 1),
         searchTerm,
@@ -70,7 +57,8 @@ export function ServerNoticeRows({
   }, [sorts, handle]);
   // Only the current bounded page remains subscribed. Previous metadata pages
   // are retained locally; switching any query dimension discards them together.
-  const queryKey = `${source.catalog.generation}:${kind}:${debounced}`;
+  const now = useProcurementClock();
+  const queryKey = `${source.catalog.generation}:${kind}:${debounced}:${now}`;
   const [position, setPosition] = useState({ key: queryKey, cursor: null as string | null });
   const cursor = position.key === queryKey ? position.cursor : null;
   const page = source.usePage!(kind, debounced, cursor);
@@ -91,13 +79,13 @@ export function ServerNoticeRows({
       setPosition({ key: queryKey, cursor: null });
       return;
     }
-    if (page) loaded.current.pages.set(cursor, page.page.map(row => toNoticeRow(row)));
+    if (page) loaded.current.pages.set(cursor, page.page.map(row => toNoticeRow(row, now)));
     // A reactive re-delivery replaces its page, never appends duplicate records.
     const unique = new Map([...loaded.current.pages.values()].flat().map(row => [row._id, row]));
     handle.get().setRecords([...unique.values()]);
     setLoadedCount(unique.size);
     advancing.current = null;
-  }, [page, cursor, queryKey, handle]);
+  }, [page, cursor, queryKey, handle, now]);
   const pending = !page || request !== debounced;
   const loadMore = useCallback(() => {
     if (pending || !page || page.isDone || page.continueCursor === cursor || advancing.current === page.continueCursor) return;

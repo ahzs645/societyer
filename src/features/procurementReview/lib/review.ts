@@ -58,7 +58,7 @@ const list = (value: unknown): string[] => {
   const parsed = parseJson(value);
   return Array.isArray(parsed) ? parsed.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean) : [];
 };
-const newest = (rows: Row[], key: string) => [...rows].sort((a, b) => str(b[key]).localeCompare(str(a[key])));
+const newest = (rows: Row[], key: string) => [...rows].sort((a, b) => str(b[key]).localeCompare(str(a[key])) || str(b.id).localeCompare(str(a.id)));
 const isTrue = (value: unknown) => value === 1 || value === true || value === "1";
 
 const DIMENSIONS: [string, string][] = [["relevance", "Work fit"], ["eligibility", "Eligibility"], ["delivery", "Delivery"], ["response", "Response time"], ["commercial", "Commercial"]];

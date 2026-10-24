@@ -112,6 +112,18 @@ function inZone(at: number): SourceDate {
 /** Today's date in the source zone. */
 export function zoneToday(now = Date.now()): string { return inZone(now).date; }
 
+/** Only an offset-qualified source timestamp establishes an instant. */
+export function deadlineInstant(raw: unknown): number | null {
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}[Tt ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(raw.trim())) return null;
+  const at = Date.parse(raw);
+  return Number.isFinite(at) && parseSourceDate(raw) ? at : null;
+}
+/** Keep raw precision: a sortable wall-clock date cannot recover the original source zone. */
+export function procurementDeadlineValue(row: { date: string; dateText?: string; analyticsJson?: string }): string {
+  const extra = row.analyticsJson ? JSON.parse(row.analyticsJson) : {};
+  return text(extra.closingAt) || text(extra.closingDate) || (deadlineInstant(row.dateText) !== null ? row.dateText! : row.date || row.dateText || "");
+}
+
 const ISO = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*([AaPp]\.?[Mm]\.?)?\s*(Z|[+-]\d{2}:?\d{2})?)?/;
 const WORDY = /(?:^|\b)([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?:,?\s*(?:at\s+)?(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp]\.?[Mm]\.?)?)?/;
 const DAY_FIRST_WORDY = /(?:^|\b)(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})(?:,?\s*(?:at\s+)?(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp]\.?[Mm]\.?)?)?/;
@@ -198,8 +210,8 @@ export function deadlineOf(raw: unknown, now = Date.now()): NoticeDeadline | nul
   const formatted = formatSourceDate(value);
   if (days < 0) return { text: formatted, relative: days === -1 ? "yesterday" : `${-days} days ago`, state: "closed" };
   if (days === 0) {
-    const passed = parsed.time !== undefined && parsed.time <= (inZone(now).time ?? "");
-    return { text: formatted, relative: passed ? "earlier today" : "today", state: passed ? "closed" : "today" };
+    const instant = deadlineInstant(value), passed = instant !== null && instant < now;
+    return { text: formatted, relative: passed ? "earlier today" : instant === null ? "closing date today; time unverified" : "today", state: passed ? "closed" : "today" };
   }
   return { text: formatted, relative: days === 1 ? "tomorrow" : `in ${days} days`, state: days <= 7 ? "soon" : "open" };
 }
@@ -213,14 +225,15 @@ export function statusOf(kind: string, raw: unknown, deadline: NoticeDeadline | 
   const source = text(raw);
   if (kind === "award") return { label: "Awarded", tone: "info" };
   const key = source.toLowerCase();
-  if ((key === "" || key === "open" || key === "active") && deadline?.state === "closed") {
+  const openStatus = /^(open|active|published|accepting (responses|bids|submissions))$/.test(key);
+  if ((key === "" || openStatus) && deadline?.state === "closed") {
     return { label: "Closed", tone: "neutral", ...(source ? { note: `still listed as “${source}” on ${sourceName}` } : {}) };
   }
   if (!source) return null;
-  if (key === "open" || key === "active") return { label: "Open", tone: "success" };
+  if (openStatus) return { label: "Open", tone: "success", ...(deadline?.state === "today" ? { note: "Check the source closing time." } : {}) };
   if (/cancel/.test(key)) return { label: source, tone: "danger" };
   if (/award/.test(key)) return { label: source, tone: "info" };
-  if (/closed|expired|complete/.test(key)) return { label: source, tone: "neutral" };
+  if (/closed|expired|complete|withdrawn|terminated/.test(key)) return { label: source, tone: "neutral" };
   return { label: source, tone: "neutral" };
 }
 

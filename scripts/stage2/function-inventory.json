@@ -20818,6 +20818,149 @@
     "idArguments": []
   },
   {
+    "key": "convex:procurementAnalytics:compute",
+    "surface": "convex",
+    "name": "procurementAnalytics:compute",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "procurementAnalytics",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementAnalytics:finish",
+    "surface": "convex",
+    "name": "procurementAnalytics:finish",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "procurementAnalytics",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementAnalytics:get",
+    "surface": "convex",
+    "name": "procurementAnalytics:get",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementAnalytics:inputPage",
+    "surface": "convex",
+    "name": "procurementAnalytics:inputPage",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementAnalytics:job",
+    "surface": "convex",
+    "name": "procurementAnalytics:job",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "procurementAnalytics",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementAnalytics:prepare",
+    "surface": "convex",
+    "name": "procurementAnalytics:prepare",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementAnalytics:prepareDefaults",
+    "surface": "convex",
+    "name": "procurementAnalytics:prepareDefaults",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementAnalytics:prune",
+    "surface": "convex",
+    "name": "procurementAnalytics:prune",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementAnalytics:publication",
+    "surface": "convex",
+    "name": "procurementAnalytics:publication",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementAnalytics:request",
+    "surface": "convex",
+    "name": "procurementAnalytics:request",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementAnalytics:seed",
+    "surface": "convex",
+    "name": "procurementAnalytics:seed",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementAnalytics.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementAnalyticsJobs:compute",
+    "surface": "convex",
+    "name": "procurementAnalyticsJobs:compute",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/procurementAnalyticsJobs.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "procurementAnalytics",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:procurementImport:activate",
     "surface": "convex",
     "name": "procurementImport:activate",
@@ -20825,6 +20968,22 @@
     "access": "service",
     "source": "convex/procurementImport.ts",
     "idArguments": []
+  },
+  {
+    "key": "convex:procurementImport:beginJob",
+    "surface": "convex",
+    "name": "procurementImport:beginJob",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementImport.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "convex:procurementImport:beginTaxonomy",
@@ -20898,6 +21057,28 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementImport:jobProgress",
+    "surface": "convex",
+    "name": "procurementImport:jobProgress",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementImport.ts",
+    "idArguments": [
+      {
+        "path": "jobId",
+        "table": "procurementImportJobs",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "runId",
+        "table": "procurementSyncRuns",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -21208,6 +21389,38 @@
     ]
   },
   {
+    "key": "convex:procurementStatus:get",
+    "surface": "convex",
+    "name": "procurementStatus:get",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/procurementStatus.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementStatus:reportSource",
+    "surface": "convex",
+    "name": "procurementStatus:reportSource",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementStatus.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:procurementSync:applyBatch",
     "surface": "convex",
     "name": "procurementSync:applyBatch",
@@ -21234,6 +21447,22 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementSync:fail",
+    "surface": "convex",
+    "name": "procurementSync:fail",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementSync.ts",
+    "idArguments": [
+      {
+        "path": "runId",
+        "table": "procurementSyncRuns",
         "array": false,
         "optional": false
       }

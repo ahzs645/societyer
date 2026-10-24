@@ -24,9 +24,11 @@ import { formatSourceDate, zoneToday } from "../../lib/notice";
 import { useReaderNavigation } from "../routes";
 import { useReaderSource, type ListRow } from "../source";
 import { NoticeTable } from "../NoticeTable";
+import { useProcurementClock } from "../../lib/clock";
+import { ANALYSIS_PAGE_SIZE, type AnalysisRequest, type AwardAnalytics } from "../../../../../shared/procurementAnalytics";
 import { Heatmap, LoadingLine, RankedList, type RankedRow } from "./parts";
 
-export type AwardView = "overview" | "trends" | "buyers" | "suppliers" | "sizes" | "mix" | "quality";
+export type AwardView = "overview" | "trends" | "buyers" | "suppliers" | "sizes" | "mix" | "quality" | "compare";
 const UNKNOWN_BUYER = "Unknown buyer";
 
 const INSPECT_PARAM = "inspect";
@@ -42,7 +44,71 @@ function readInspection(value: string | null): Inspection | null {
   } catch { return null; }
 }
 
-export function AwardAnalysis({ view, title }: { view: AwardView; title: string }) {
+export function AwardAnalysis(props: { view: AwardView; title: string }) {
+  const source = useReaderSource();
+  return source.useAnalysis ? <ServerAwardAnalysis {...props} /> : <LocalAwardAnalysis {...props} />;
+}
+function ServerAwardAnalysis({ view, title }: { view: AwardView; title: string }) {
+  const source = useReaderSource(), nav = useReaderNavigation();
+  const filters = readFilters(nav.params), now = useProcurementClock(), today = zoneToday(now);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const buyerLevel = (nav.params.get("buyerLevel") ?? "organization") as AnalysisRequest["buyerLevel"];
+  const result = source.useAnalysis!({ view, buyerLevel, filters, year: nav.params.get("year") ?? "", search: nav.params.get("rankq") ?? "", offset: Number(nav.params.get("rankpage") ?? 0) });
+  const data = result.result?.type === "award" ? result.result.data : null;
+  const setFilters = (next: MarketFilters) => nav.update({ ...filterPatch(next), inspect: null, rankpage: null });
+  const inspect = (slice: Slice, inspectTitle: string, everything = false) => nav.update({ inspect: JSON.stringify({ title: inspectTitle, slice, ...(everything ? { all: true } : {}) }) });
+  const inspection = readInspection(nav.params.get(INSPECT_PARAM));
+  const ctx: ViewContext = { rows: [], all: [], currency: filters.currency, filters, today, partial: false, setFilters,
+    focus: (key, name) => setFilters({ ...filters, [key]: name }), inspect,
+    openBuyer: name => inspect({ buyer: name }, name), params: nav.params, update: nav.update, aggregate: data ?? undefined };
+  return <>
+    <header className="procurement-analytics__header">
+      <div className="procurement-analytics__heading"><h2>{title}</h2><p className="muted">{data ? `${counted(data.included, "award")} included; ${count(data.excluded)} excluded of ${count(data.published)} published.` : "Preparing publication metrics…"}</p></div>
+      <div className="procurement-analytics__actions">
+        {view !== "quality" && <button className="btn btn--sm" aria-label="Filters" onClick={() => setFiltersOpen(true)} disabled={!data}><SlidersHorizontal size={14} /><span className="procurement-analytics__action-label">Filters{activeCount(filters) ? ` (${activeCount(filters)})` : ""}</span></button>}
+        <button className="btn btn--sm" aria-label="Matching awards" disabled={!data} onClick={() => inspect({}, view === "quality" ? "All published awards" : "Current filters", view === "quality")}><List size={14} /><span className="procurement-analytics__action-label">Matching awards</span></button>
+      </div>
+    </header>
+    <div className="procurement-analytics__toolbar"><Select<string> size="sm" aria-label="Buyer grouping" value={buyerLevel ?? "organization"} onChange={value => nav.update({ buyerLevel: value, rankpage: null, inspect: null })} options={[{ value: "organization", label: "Organization" }, { value: "office", label: "Office" }, { value: "group", label: "Group" }, { value: "type", label: "Buyer type" }, { value: "source", label: "Source name" }]} /></div>
+    {data?.mappings.proposed && <p className="muted">Buyer groups follow proposed source-label mappings ({data.mappings.versions.join(", ")}); they are not a verified legal register.</p>}
+    {view !== "quality" && <FilterChips filters={filters} onChange={setFilters} />}
+    {result.state === "failed" ? <Banner tone="danger">{result.error} <button className="btn btn--sm" onClick={result.retry}>Retry analysis</button></Banner> : !data ? <ViewSkeleton /> : <div className="procurement-analytics__stack">
+      {view === "overview" && <OverviewView ctx={ctx} />}
+      {view === "trends" && <TrendsView ctx={ctx} />}
+      {view === "compare" && <ComparisonView data={data} currency={filters.currency} />}
+      {(view === "buyers" || view === "suppliers") && <EntityView ctx={ctx} kind={view === "buyers" ? "buyer" : "supplier"} />}
+      {view === "sizes" && <SizesView ctx={ctx} />}
+      {view === "mix" && <MixView ctx={ctx} />}
+      {view === "quality" && <QualityView ctx={ctx} meta={data.meta} />}
+    </div>}
+    {filtersOpen && data && <FiltersDialog value={filters} meta={data.meta} close={() => setFiltersOpen(false)} apply={next => { setFilters(next); setFiltersOpen(false); }} />}
+    {inspection && <ServerInspect key={JSON.stringify([inspection, filters, buyerLevel])} inspection={inspection} filters={filters} buyerLevel={buyerLevel} close={() => nav.update({ inspect: null })} hidden={Boolean(nav.params.get("notice") || nav.params.get("buyer") || nav.params.get("issuedFor"))} />}
+  </>;
+}
+
+function ServerInspect({ inspection, filters, buyerLevel, close, hidden }: { inspection: Inspection; filters: MarketFilters; buyerLevel?: AnalysisRequest["buyerLevel"]; close: () => void; hidden: boolean }) {
+  const source = useReaderSource();
+  const nav = useReaderNavigation();
+  const [offset, setOffset] = useState(0);
+  const result = source.useAnalysis!({ view: "awards", buyerLevel, filters, slice: inspection.slice, all: inspection.all, offset });
+  const data = result.result?.type === "awards" ? result.result.data : null;
+  return <Modal open={!hidden} onClose={close} title={`Awards · ${inspection.title}`} size="xl" footer={<>{inspection.slice.buyer && inspection.slice.buyer !== UNKNOWN_BUYER && <button className="btn btn--ghost" onClick={() => nav.openParty("organization", inspection.slice.buyer!)}>Open buyer profile</button>}<button className="btn" onClick={close}>Done</button></>}>
+    {result.state === "failed" ? <Banner tone="danger">{result.error}<button className="btn" onClick={result.retry}>Retry</button></Banner> : !data ? <ViewSkeleton /> : <>
+      <p className="muted">{count(data.total)} matching awards, using the chart’s publication, filters and metric definition.</p>
+      <NoticeTable kind="award" rows={data.rows} tableId="procurement-review:analysis:drilldown" view="all" label="Awards" />
+      <div className="btn-group"><button className="btn btn--sm" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - ANALYSIS_PAGE_SIZE))}>Previous</button><span className="muted">{count(data.total ? offset + 1 : 0)}–{count(offset + data.rows.length)} of {count(data.total)}</span><button className="btn btn--sm" disabled={offset + data.rows.length >= data.total} onClick={() => setOffset(offset + ANALYSIS_PAGE_SIZE)}>Next</button></div>
+    </>}
+  </Modal>;
+}
+function ComparisonView({ data, currency }: { data: AwardAnalytics; currency: string }) {
+  const comparison = data.comparison;
+  if (!comparison) return null;
+  return <ChartCard title="Equal-length period comparison" subtitle={`${comparison.current.from} to ${comparison.current.to}, compared with ${comparison.previous.from} to ${comparison.previous.to}. Same currency and inclusion rules; medians and distinct parties recomputed from each period.`} headingLevel={3}>
+    <div className="stat-grid procurement-analytics__stats"><StatTile label="Current recorded value" value={money(comparison.current.value, currency, true)} sub={counted(comparison.current.count, "award")} /><StatTile label="Previous recorded value" value={money(comparison.previous.value, currency, true)} sub={counted(comparison.previous.count, "award")} /><StatTile label="Value change" value={money(comparison.valueChange, currency, true)} sub={comparison.valuePercent === null ? "No positive comparison baseline" : percent(comparison.valuePercent)} /><StatTile label="Award count change" value={count(comparison.countChange)} /></div>
+    <p className="muted">Current median {money(comparison.current.median, currency)}; previous median {money(comparison.previous.median, currency)}. Collection coverage may differ between periods.</p>
+  </ChartCard>;
+}
+function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string }) {
   const source = useReaderSource();
   const nav = useReaderNavigation();
   const list = source.useList("award");
@@ -50,7 +116,8 @@ export function AwardAnalysis({ view, title }: { view: AwardView; title: string 
   const loaded = useDeferredValue(list?.rows);
   const all = useMemo(() => normalizeAwards(loaded ?? []), [loaded]);
   const byKey = useMemo(() => new Map((loaded ?? []).map((row) => [row.recordKey, row])), [loaded]);
-  const today = useMemo(() => zoneToday(), []);
+  const now = useProcurementClock();
+  const today = zoneToday(now);
   const filters = readFilters(nav.params);
   const filterKey = JSON.stringify(filters);
   const filtered = useMemo(() => {
@@ -126,6 +193,7 @@ type ViewContext = {
   setFilters: (next: MarketFilters) => void; focus: (key: "supplier" | "type", name: string) => void;
   inspect: (slice: Slice, title: string, everything?: boolean) => void; openBuyer: (name: string) => void;
   params: URLSearchParams; update: (patch: Record<string, string | null>) => void;
+  aggregate?: AwardAnalytics;
 };
 
 function ViewSkeleton() {
@@ -144,7 +212,7 @@ const rankedRows = (rows: Ranked[], detail: (row: Ranked) => ReactNode, limit: n
   rows.slice(0, limit).map((row) => ({ key: row.name, label: row.name, value: Math.max(0, row.value), share: row.share, detail: detail(row) }));
 
 function OverviewView({ ctx }: { ctx: ViewContext }) {
-  const data = useMemo(() => overview(ctx.rows), [ctx.rows]);
+  const data = useMemo(() => ctx.aggregate?.overview ?? overview(ctx.rows), [ctx.rows, ctx.aggregate]);
   const { currency, partial } = ctx;
   return (
     <>
@@ -169,7 +237,7 @@ function OverviewView({ ctx }: { ctx: ViewContext }) {
       <div className="procurement-analytics__columns">
         <ChartCard
           title="Leading buyers"
-          subtitle={`Top ${Math.min(8, data.buyerCount)} of ${count(data.buyerCount)} by recorded value. Open one for its notices and awards.`}
+          subtitle={`Top ${Math.min(8, data.buyerCount)} of ${count(data.buyerCount)} by recorded value. ${ctx.aggregate ? "Choose one for awards matching these filters." : "Open one for its notices and awards."}`}
           headingLevel={3}
           empty={!data.buyers.length}
           emptyMessage="No buyers match these filters."
@@ -217,8 +285,9 @@ function TrendsView({ ctx }: { ctx: ViewContext }) {
   const year = params.get("year") ?? "";
   const [normalized, setNormalized] = useState(false);
   const data = useMemo(() => {
+    if (ctx.aggregate?.trends) return ctx.aggregate.trends;
     try { return trends(ctx.rows, year, ctx.today); } catch { return trends(ctx.rows, "", ctx.today); }
-  }, [ctx.rows, ctx.today, year]);
+  }, [ctx.rows, ctx.today, year, ctx.aggregate]);
   const years = useMemo(() => yearly(data.series).reverse(), [data.series]);
   const yearChoices = useMemo(() => [...new Set([data.year, ...years.map((row) => row.year)])].sort().reverse(), [data.year, years]);
   const series: ChartSeries[] = useMemo(() => [{ key: "awards", label: metric === "value" ? "Recorded award value" : "Awards", color: "var(--dv-cat-1)", variant: "area" }], [metric]);
@@ -288,19 +357,21 @@ function TrendsView({ ctx }: { ctx: ViewContext }) {
 const PAGE = 25;
 function EntityView({ ctx, kind }: { ctx: ViewContext; kind: "buyer" | "supplier" }) {
   const { currency, partial } = ctx;
-  const data = useMemo(() => overview(ctx.rows), [ctx.rows]);
+  const data = useMemo(() => ctx.aggregate?.overview ?? overview(ctx.rows), [ctx.rows, ctx.aggregate]);
   const [search, setSearch] = useState("");
   const [limit, setLimit] = useState(PAGE);
   const all = kind === "buyer" ? data.buyers : data.suppliers;
+  const remote = ctx.aggregate?.directory;
   const term = search.trim().toLowerCase();
-  const rows = useMemo(() => (term ? all.filter((row) => row.name.toLowerCase().includes(term)) : all), [all, term]);
+  const rows = useMemo(() => remote?.rows ?? (term ? all.filter((row) => row.name.toLowerCase().includes(term)) : all), [all, term, remote]);
   const other = kind === "buyer" ? "supplier" : "buyer";
-  const reliant = all.filter((row) => row.count >= 3 && (row.dependence ?? 0) >= 0.8).length;
+  const reliant = remote?.reliant ?? all.filter((row) => row.count >= 3 && (row.dependence ?? 0) >= 0.8).length;
+  const partyCount = kind === "buyer" ? data.buyerCount : data.supplierCount;
   const leader = all[0];
   return (
     <>
       <div className="stat-grid stat-grid--3 procurement-analytics__stats">
-        <StatTile label={kind === "buyer" ? "Buyers" : "Suppliers"} value={count(all.length)} sub={soFar(partial)} />
+        <StatTile label={kind === "buyer" ? "Buyers" : "Suppliers"} value={count(partyCount)} sub={soFar(partial)} />
         <StatTile label={kind === "buyer" ? "Largest buyer" : "Largest supplier"} compact value={leader?.name ?? "—"} sub={leader ? soFar(partial, `${money(leader.value, currency, true)} · ${percent(leader.share)} of value`) : undefined} />
         {kind === "buyer"
           ? <StatTile label="Rely on one supplier" value={count(reliant)} sub={soFar(partial, "3+ awards, 80%+ of value to one supplier")} />
@@ -309,28 +380,29 @@ function EntityView({ ctx, kind }: { ctx: ViewContext; kind: "buyer" | "supplier
       <ChartCard
         title={kind === "buyer" ? "Buyer directory" : "Supplier directory"}
         subtitle={kind === "buyer"
-          ? "By recorded award value. Open a buyer for everything it has published. Shares and dependence use positive values only."
+          ? ctx.aggregate ? "By recorded award value. Choose a buyer for matching awards. Shares and dependence use positive values only." : "By recorded award value. Open a buyer for everything it has published. Shares and dependence use positive values only."
           : "Recorded winners only, not every bidder. Choose a supplier to focus the analysis on it."}
         headingLevel={3}
         table={entityTable(rows, kind === "buyer" ? "Buyer" : "Supplier", kind === "buyer" ? "Suppliers" : "Buyers", currency)}
       >
         <Field label={kind === "buyer" ? "Search buyers" : "Search suppliers"} className="procurement-analytics__search">
-          <input className="input" type="search" value={search} onChange={(event) => { setSearch(event.target.value); setLimit(PAGE); }} placeholder="Search names" />
+          <input className="input" type="search" value={remote ? ctx.params.get("rankq") ?? "" : search} onChange={(event) => { if (remote) ctx.update({ rankq: event.target.value || null, rankpage: null }); else { setSearch(event.target.value); setLimit(PAGE); } }} placeholder="Search names" />
         </Field>
-        <p className="muted procurement-analytics__caption">{count(rows.length)} of {counted(all.length, kind)}.</p>
+        <p className="muted procurement-analytics__caption">{remote ? `${count(remote.offset + 1)}–${count(remote.offset + rows.length)} of ${count(remote.total)} matching` : count(rows.length)} of {counted(partyCount, kind)}.</p>
         {rows.length === 0 ? <p className="muted procurement-analytics__empty">No {kind}s match “{search}”.</p> : (
           <RankedList
             rows={rankedRows(rows, (row) => [
               counted(row.count, "award"), counted(row.counterparties, other), `median ${money(row.median, currency, true)}`,
               row.leading && row.dependence !== null ? `top ${other} ${row.leading} (${percent(row.dependence)})` : "",
-            ].filter(Boolean).join(" · "), limit)}
+            ].filter(Boolean).join(" · "), remote ? ANALYSIS_PAGE_SIZE : limit)}
             ariaLabel={kind === "buyer" ? "Buyers by award value" : "Suppliers by award value"}
             formatValue={(v) => money(v, currency, true)}
             onSelect={(row) => (kind === "buyer" ? ctx.openBuyer(row.key) : ctx.focus("supplier", row.key))}
             selectLabel={(row) => (kind === "buyer" ? `Open buyer ${row.label}` : `Focus on ${row.label}`)}
           />
         )}
-        {rows.length > limit && <button type="button" className="btn btn--sm procurement-analytics__more" onClick={() => setLimit(limit + PAGE * 4)}>Show more ({count(rows.length - limit)} left)</button>}
+        {remote && <div className="btn-group"><button className="btn btn--sm" disabled={!remote.offset} onClick={() => ctx.update({ rankpage: String(Math.max(0, remote.offset - ANALYSIS_PAGE_SIZE)) })}>Previous</button><button className="btn btn--sm" disabled={remote.offset + rows.length >= remote.total} onClick={() => ctx.update({ rankpage: String(remote.offset + ANALYSIS_PAGE_SIZE) })}>Next</button></div>}
+        {!remote && rows.length > limit && <button type="button" className="btn btn--sm procurement-analytics__more" onClick={() => setLimit(limit + PAGE * 4)}>Show more ({count(rows.length - limit)} left)</button>}
       </ChartCard>
     </>
   );
@@ -339,7 +411,7 @@ function EntityView({ ctx, kind }: { ctx: ViewContext; kind: "buyer" | "supplier
 function SizesView({ ctx }: { ctx: ViewContext }) {
   const { currency, partial, params, update } = ctx;
   const metric = params.get("metric") === "value" ? "value" : "count";
-  const data = useMemo(() => distribution(ctx.rows), [ctx.rows]);
+  const data = useMemo(() => ctx.aggregate?.sizes ?? distribution(ctx.rows), [ctx.rows, ctx.aggregate]);
   return (
     <>
       <div className="stat-grid stat-grid--3 procurement-analytics__stats">
@@ -375,8 +447,8 @@ function MixView({ ctx }: { ctx: ViewContext }) {
   const { currency, params, update } = ctx;
   const metric = readMetric(params);
   const [normalized, setNormalized] = useState(false);
-  const types = useMemo(() => rank(ctx.rows, "type"), [ctx.rows]);
-  const data = useMemo(() => matrix(ctx.rows, "type"), [ctx.rows]);
+  const types = useMemo(() => ctx.aggregate?.overview.types ?? rank(ctx.rows, "type"), [ctx.rows, ctx.aggregate]);
+  const data = useMemo(() => ctx.aggregate?.mix ?? matrix(ctx.rows, "type"), [ctx.rows, ctx.aggregate]);
   return (
     <>
       <ChartCard
@@ -419,13 +491,13 @@ function exclusions(all: Award[], filters: MarketFilters, today: string) {
 
 function QualityView({ ctx, meta }: { ctx: ViewContext; meta: ReturnType<typeof metadata> }) {
   const { partial } = ctx;
-  const gone = useMemo(() => exclusions(ctx.all, (() => { try { return validateFilters(ctx.filters); } catch { return defaultFilters; } })(), ctx.today), [ctx.all, ctx.filters, ctx.today]);
+  const gone = useMemo(() => ctx.aggregate ? { reasons: ctx.aggregate.exclusions, left: ctx.aggregate.included, out: ctx.aggregate.excluded } : exclusions(ctx.all, (() => { try { return validateFilters(ctx.filters); } catch { return defaultFilters; } })(), ctx.today), [ctx.all, ctx.filters, ctx.today, ctx.aggregate]);
   return (
     <>
       <div className="stat-grid procurement-analytics__stats">
         <StatTile label="Published awards" value={count(meta.count)} sub={soFar(partial)} />
         <StatTile label="Date range" compact value={meta.firstDate ? `${formatSourceDate(meta.firstDate)} – ${formatSourceDate(meta.lastDate)}` : "No valid dates"} />
-        <StatTile label="Procurement types" value={count(meta.types.length)} />
+        <StatTile label="Procurement types" value={count(ctx.aggregate?.meta.typeCount ?? meta.types.length)} />
         <StatTile label="Currencies" compact value={meta.currencies.map((code) => (code === "UNSPECIFIED" ? "not stated" : code)).join(", ") || "—"} />
       </div>
       <ChartCard
@@ -449,10 +521,11 @@ function QualityView({ ctx, meta }: { ctx: ViewContext; meta: ReturnType<typeof 
           />
         ))}
       </div>
+      <p className="muted">Contract-number input unavailable for {count(meta.unavailable.contractNumber)} awards; justification input unavailable for {count(meta.unavailable.justification)}. Unavailable inputs are not counted as confirmed missing fields.</p>
       <ChartCard title="How to read these figures" headingLevel={3}>
           <ul className="procurement-analytics__signals">
             <li>Totals are recorded award amounts on their award date, not actual spend.</li>
-            <li>Buyers appear under the names the source publishes; Zoer’s proposed buyer grouping isn’t applied here.</li>
+            <li>Buyer names and proposed hierarchy follow the versioned mapping supplied with the publication.</li>
             <li>Concentration uses positive values only. Currencies are not converted.</li>
             <li>Winner records say nothing about bidder counts, win rates, or compliance.</li>
           </ul>

@@ -60,11 +60,24 @@ function summarize(row: SqlRow, data: Record<string, unknown>): RecordSummary {
 
 /** A contract value as a number when it reads as one ("$1,240,000.00", 64800); `money_value` in the exporter. */
 function moneyValue(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "number") return Number.isFinite(value) && Math.abs(value) <= 9_000_000_000_000 && Math.abs(value * 100 - Math.round(value * 100)) < .00001 ? value : null;
   const m = MONEY.exec(str(value).trim());
   if (!m) return null;
   const number = Number(m[2].replaceAll(",", "") + (m[3] ?? ""));
-  return m[1] ? -number : number;
+  return moneyValue(m[1] ? -number : number);
+}
+function projectedMoney(data: Record<string, unknown>) {
+  const raw = str(data.contractValueText).trim(), parsed = data.contractValueParsed as Record<string, unknown> | undefined;
+  if (parsed?.parserVersion === "award-money-v2" && (!raw || str(parsed.raw) === raw)) {
+    if (parsed.status !== "parsed") return null;
+    if (data.currency && str(parsed.currency).toUpperCase() !== str(data.currency).toUpperCase()) return raw ? moneyValue(raw) : null;
+    const scale = Number(parsed.scale), decimal = str(parsed.decimal), minor = str(parsed.minorUnits);
+    if (!Number.isInteger(scale) || scale < 0 || scale > 3 || !/^-?\d+$/.test(minor) || !/^-?\d+(\.\d+)?$/.test(decimal)) return null;
+    const negative = decimal.startsWith("-"), [whole, fraction = ""] = decimal.replace(/^-/, "").split(".");
+    if (fraction.length > scale || BigInt(`${negative ? "-" : ""}${whole}${fraction.padEnd(scale, "0")}`) !== BigInt(minor)) return null;
+    return moneyValue(Number(decimal));
+  }
+  return raw ? moneyValue(raw) : moneyValue(data.contractValue);
 }
 
 type StoredFile = { name: string; available: boolean };
@@ -85,9 +98,10 @@ function listRow(row: SqlRow, files: StoredFile[]): ListRow {
     documents: files.filter((file) => file.available).length,
     listedDocuments: model.attachments.filter((item) => !files.some((file) => sameName(file.name, item.name))).length,
     supplier: award ? text("successfulSupplier", "supplier") : "",
-    value: award ? moneyValue(data.contractValue) ?? moneyValue(data.contractValueText) : null,
+    value: award ? projectedMoney(data) : null,
     currency: award ? text("currency").toUpperCase() : "",
     procurementType: award ? text("opportunityType", "type") : "",
+    analyticsJson: JSON.stringify(Object.fromEntries(Object.entries(data).filter(([key]) => /^(identity|sourceRevision|contractValueParsed|contractValueText|contractNumber|justification|buyer|supplierId|mapping|parserVersion|observedAt|collectionRunId|taxonomyReleaseId|classificationCodes|commodityClassifications|urlExcluded|urlExclusionReason|closingAt|closingDate|datePrecision|dateTimezone|timezone)/.test(key)))),
   };
 }
 
@@ -131,12 +145,17 @@ export function useSnapshotReaderSource(manifest: SnapshotManifest, catalog: Cat
       }
       return store;
     };
+    // Only an explicitly absent legacy table is empty; timeouts/corruption/SQL errors propagate.
+    const optionalRows = async (statement: string, parameters: (string | number)[] = []) => {
+      try { return await rows(statement, parameters); }
+      catch (error) { if (/no such table:/i.test(error instanceof Error ? error.message : String(error))) return []; throw error; }
+    };
     const reviews = progressive<{ rows: CatalogReviewRow[]; truncated: boolean }>(async (emit) => {
       const found: CatalogReviewRow[] = [];
       for (const table of REVIEW_TABLES) {
         for (let offset = 0; found.length <= REVIEW_LIMIT; offset += BATCH) {
           // Older snapshots lack some review tables.
-          const batch = await rows(`SELECT * FROM ${table} ORDER BY rowid LIMIT 200 OFFSET ?`, [offset]).catch(() => []);
+          const batch = await optionalRows(`SELECT * FROM ${table} ORDER BY rowid LIMIT 200 OFFSET ?`, [offset]);
           for (const row of batch) found.push({ source: table, recordKey: str(row.record_id), dataJson: JSON.stringify(row) });
           if (batch.length < BATCH) break;
         }
@@ -174,7 +193,7 @@ export function useSnapshotReaderSource(manifest: SnapshotManifest, catalog: Cat
           const found: ReviewRow[] = [];
           for (const table of REVIEW_TABLES) {
             // Older snapshots lack some review tables.
-            const list = await rows(`SELECT * FROM ${table} WHERE record_id = ? LIMIT 120`, [recordKey]).catch(() => []);
+            const list = await optionalRows(`SELECT * FROM ${table} WHERE record_id = ? ORDER BY rowid DESC LIMIT 121`, [recordKey]);
             for (const row of list) found.push({ source: table, dataJson: JSON.stringify(row) });
           }
           return { rows: found.slice(0, 120), truncated: found.length > 120 };

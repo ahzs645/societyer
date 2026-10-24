@@ -24,6 +24,8 @@ export const procurementRecordFields = {
   value: v.optional(v.number()),
   currency: v.optional(v.string()),
   procurementType: v.optional(v.string()),
+  // Bounded source provenance and canonical mappings needed by server-side analytics.
+  analyticsJson: v.optional(v.string()),
   // Small list-column search text supports older open tabs; source bodies are never copied into the search corpus.
   searchText: v.optional(v.string()),
 };
@@ -55,12 +57,41 @@ export const procurementTaxonomyIndexFields = {
   contentHash: v.string(),
   count: v.number(),
 };
+export const procurementPublicationFields = {
+  analytics: v.optional(v.object({ path: v.string(), bytes: v.number(), sha256: v.string() })),
+  publicationId: v.optional(v.string()),
+  restoration: v.optional(v.object({ backupSha256: v.string(), sourceGeneration: v.string(), preparedAt: v.string() })),
+  schemaVersion: v.optional(v.number()),
+  tables: v.optional(v.record(v.string(), v.object({ path: v.string(), rowCount: v.number(), bytes: v.number(), sha256: v.string() }))),
+  archives: v.optional(v.record(v.string(), v.object({ bytes: v.number(), sha256: v.string() }))),
+  inventoryHash: v.optional(v.string()),
+  collectedAt: v.optional(v.string()),
+  coverage: v.optional(v.object({ complete: v.boolean(), sources: v.array(v.object({ source: v.string(), complete: v.boolean(), windowStart: v.optional(v.string()), windowEnd: v.optional(v.string()), collectedAt: v.optional(v.string()), error: v.optional(v.string()) })) })),
+};
 export const procurementTables = {
+  procurementSourcePublications: defineTable({
+    societyId: v.id("societies"), folder: v.string(), publicationId: v.string(), sourceSnapshotId: v.string(), generation: v.string(),
+    publishedAt: v.string(), publishedAtMs: v.number(), collectedAt: v.optional(v.string()), complete: v.boolean(), coverageJson: v.optional(v.string()),
+    state: v.union(v.literal("published"),v.literal("failed"),v.literal("ready")), phase: v.string(), error: v.optional(v.string()),
+    announcedAt: v.number(), heartbeatAt: v.number(),
+  }).index("by_identity",["societyId","folder","publicationId"]).index("by_latest",["societyId","folder","publishedAtMs","publicationId"]),
+  procurementImportJobs: defineTable({
+    societyId: v.id("societies"), folder: v.string(), generation: v.string(),
+    inventoryHash: v.string(), contentHash: v.string(), publishedAt: v.string(), collectedAt: v.optional(v.string()), complete: v.boolean(),
+    phase: v.union(v.literal("validated"), v.literal("taxonomy"), v.literal("importing"), v.literal("activating"), v.literal("failed"), v.literal("ready")),
+    startedAt: v.number(), heartbeatAt: v.number(), activatedAt: v.optional(v.number()), error: v.optional(v.string()),
+    planHash: v.optional(v.string()), runId: v.optional(v.id("procurementSyncRuns")),
+  }).index("by_society", ["societyId"]).index("by_society_folder",["societyId","folder"]).index("by_generation", ["societyId", "generation"]),
+  procurementSyncBatches: defineTable({ runId: v.id("procurementSyncRuns"), batch: v.number(), digest: v.string() })
+    .index("by_run_batch", ["runId", "batch"]),
   procurementMaintenanceLeases: defineTable({
     societyId: v.id("societies"), owner: v.string(), purpose: v.string(), expiresAt: v.number(),
   }).index("by_society", ["societyId"]),
   procurementCatalogs: defineTable({
     ...scope,
+    ...procurementPublicationFields,
+    expected: v.optional(v.record(v.string(), v.number())),
+    activatedAt: v.optional(v.number()),
     folder: v.string(),
     publishedAt: v.string(),
     counts: v.record(v.string(), v.number()),
@@ -102,6 +133,11 @@ export const procurementTables = {
     nextBatch: v.number(),
     completed: v.boolean(),
     changedAt: v.number(),
+    startedAt: v.optional(v.number()), heartbeatAt: v.optional(v.number()), error: v.optional(v.string()),
+    baseInventoryHash: v.optional(v.string()), targetInventoryHash: v.optional(v.string()),
+    expected: v.optional(v.record(v.string(), v.number())), tableCounts: v.optional(v.record(v.string(), v.number())),
+    allowArchives: v.optional(v.boolean()),
+    targetGeneration: v.optional(v.string()), publishedAt: v.optional(v.string()), collectedAt: v.optional(v.string()),
   }).index("by_society", ["societyId"]),
   procurementRecords: defineTable({
     ...procurementRecordFields,

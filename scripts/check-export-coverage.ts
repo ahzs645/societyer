@@ -60,6 +60,10 @@ const NON_WORKSPACE_EXPORT_TABLES = new Set([
   "procurementCatalogs", "procurementSearch", "procurementSyncRuns",
   "procurementRecords", "procurementDetails", "procurementTaxonomyReleases",
   "procurementTaxonomyTerms", "procurementDocuments", "procurementEvidence",
+  // Publication/import receipts and generation-bound analytical caches are
+  // rebuilt from the upstream publication, rather than restored as records.
+  "procurementSourcePublications", "procurementImportJobs", "procurementSyncBatches",
+  "procurementAnalyticsArtifacts", "procurementAnalyticsBundles", "procurementAnalytics",
   // Short-lived maintenance ownership coordinates writes on this deployment.
   // Restoring a lease could block the destination's importer or retirement job.
   "procurementMaintenanceLeases",

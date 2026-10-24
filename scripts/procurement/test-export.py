@@ -9,21 +9,21 @@ class ExportTests(unittest.TestCase):
             db.execute('CREATE TABLE records(id TEXT PRIMARY KEY,kind,title,data,updated_at)')
             db.execute('CREATE TABLE documents(id,record_id,url,name,media_type,sha256,status)')
             rows = [
-                ('opportunity:1', 'opportunity', dict(descriptionText='Notice', sourceDescriptionText='Notice', rawSourceData='RAW_SOURCE_SENTINEL', searchText='Notice City', classificationCodes=['110'], taxonomyReleaseId='release:1')),
+                ('opportunity:1', 'opportunity', dict(descriptionText='Notice', sourceDescriptionText='Notice', rawSourceData='RAW_SOURCE_SENTINEL', searchText='Notice City', classificationCodes=['110'], taxonomyReleaseId='release:1', publicationNormalization={'sourceRevisionPolicy':'normalized-source-facts-sha256-v1','version':'retained-v1'})),
                 ('taxonomy:parent', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='100', title='Parent', parentId=None, ancestors=[], definition='DEFINITION_SENTINEL')),
                 ('taxonomy:child', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='110', title='Child', parentId='taxonomy:parent', ancestors=['taxonomy:parent'])),
                 ('taxonomy:unused', 'taxonomy-term', dict(releaseId='release:1', scheme='UNSPSC', version='1', code='999', title='Unused')),
             ]
             for key, kind, data in rows: db.execute('INSERT INTO records VALUES(?,?,?,?,?)',(key,kind,key,json.dumps(data),'2026-10-18'))
             db.commit(); db.close()
-            manifest = dict(snapshotId='snapshot', publishedAt='2026-10-18', counts={'opportunity':1,'taxonomy-term':3}, files={})
+            manifest = dict(snapshotId='snapshot', publishedAt='2026-10-18', counts={'opportunity':1,'taxonomy-term':3}, files={},catalog={'sha256':'c'*64})
             counts = exporter.export(root/'catalog.sqlite', manifest, 'workspace', 'folder', root)
-            self.assertEqual(counts, dict(procurementRecords=1, procurementDetails=1))
+            self.assertEqual(counts, dict(procurementRecords=1, procurementDetails=1, procurementDocuments=0, procurementEvidence=0))
             terms = [json.loads(line) for line in (root/'procurementTaxonomyTerms.jsonl').read_text().splitlines()]
             self.assertEqual({t['key'] for t in terms}, {'taxonomy:parent', 'taxonomy:child', 'taxonomy:unused'})
             self.assertTrue(all('generation' not in t and 'definition' not in t and 'ancestors' not in t for t in terms))
             detail = json.loads(json.loads((root/'procurementDetails.jsonl').read_text())['dataJson'])
-            self.assertEqual(detail, {'sourceDescriptionText':'Notice'})
+            self.assertEqual(detail, {'sourceDescriptionText':'Notice','classificationCodes':['110'],'taxonomyReleaseId':'release:1','publicationNormalization':{'sourceRevisionPolicy':'normalized-source-facts-sha256-v1','version':'retained-v1'}})
             activation = json.loads((root/'activation.json').read_text())
             self.assertEqual(activation['counts'], {'opportunity':1}); self.assertEqual(activation['taxonomyCount'],3)
             index = activation['taxonomyIndexes'][0]
@@ -50,8 +50,8 @@ class ExportTests(unittest.TestCase):
             sha = 'a' * 64
             db.execute('INSERT INTO documents VALUES (?,?,?,?,?,?,?,?,?,?)', ('doc','opportunity:1','https://example.invalid/doc','test.pdf','application/pdf',sha,'ready',123,b'BINARY_SENTINEL','EXTRACTED_TEXT_SENTINEL'))
             db.commit(); db.close()
-            counts = exporter.export(root/'catalog.sqlite', dict(snapshotId='snapshot', publishedAt='2026-10-18', counts={'opportunity':1},files={sha:dict(bytes=123,parts=0)}), 'workspace', 'folder', root)
-            self.assertEqual(counts, dict(procurementRecords=1, procurementDetails=1, procurementDocuments=1))
+            counts = exporter.export(root/'catalog.sqlite', dict(snapshotId='snapshot', publishedAt='2026-10-18', counts={'opportunity':1},files={sha:dict(bytes=123,parts=0)},catalog={'sha256':'c'*64}), 'workspace', 'folder', root)
+            self.assertEqual(counts, dict(procurementRecords=1, procurementDetails=1, procurementDocuments=1, procurementEvidence=0))
             listed = json.loads((root/'procurementRecords.jsonl').read_text())
             self.assertEqual((listed['documents'], listed['listedDocuments']), (1, 0), 'test.pdf is stored and published')
             self.assertLessEqual(len(listed.get('searchText', '')), 4000, 'Only short list columns support already-open paged-reader tabs')
@@ -59,7 +59,7 @@ class ExportTests(unittest.TestCase):
             self.assertTrue(document['available']); self.assertEqual(document['bytes'],123)
             self.assertNotIn('content',document); self.assertNotIn('text',document)
             with zipfile.ZipFile(root/'metadata.zip') as archive:
-                self.assertEqual(len(archive.namelist()),3)
+                self.assertEqual(len(archive.namelist()),4)
                 content = b''.join(archive.read(name) for name in archive.namelist())
                 self.assertNotIn(b'BINARY_SENTINEL',content); self.assertNotIn(b'EXTRACTED_TEXT_SENTINEL',content)
             self.assertEqual(json.loads((root/'activation.json').read_text())['expected'],counts)
@@ -84,6 +84,21 @@ class ExportTests(unittest.TestCase):
                 self.assertEqual(row, {k:v for k,v in original.items() if k not in ('_id','_creationTime')})
                 self.assertEqual(archive.read('procurementDocuments/documents.jsonl'),b'')
             with self.assertRaises(FileExistsError): restore.prepare(backup,'workspace',root/'restore')
+            restore.prepare(backup,'workspace',root/'fresh-restore','restore-20261022-v1')
+            activation=json.loads((root/'fresh-restore'/'activation.json').read_text())
+            self.assertEqual(activation['generation'],'restore-20261022-v1')
+            self.assertEqual(activation['restoration']['sourceGeneration'],'old')
+            with zipfile.ZipFile(root/'fresh-restore/metadata.zip') as archive:
+                for table in ('procurementRecords','procurementDetails'):
+                    row=json.loads(archive.read(table+'/documents.jsonl'))
+                    self.assertEqual(row['generation'],'restore-20261022-v1')
+                    self.assertEqual(row['opaqueSourceField'],original['opaqueSourceField'])
+            for index,invalid in enumerate(('', '../escape', 'line\nbreak', 'with space', '-prefix', 'é', 'a'*129)):
+                destination=root/('invalid-'+str(index))
+                with self.assertRaisesRegex(ValueError,'ASCII identifier'): restore.prepare(backup,'workspace',destination,invalid)
+                self.assertFalse(destination.exists(),'Invalid identifiers fail before creating output')
+            for index,occupied in enumerate(('old','unrelated')):
+                with self.assertRaisesRegex(ValueError,'occupied'): restore.prepare(backup,'workspace',root/('occupied-'+str(index)),occupied)
 
     def test_sortable_dates(self):
         cases = {
@@ -101,6 +116,33 @@ class ExportTests(unittest.TestCase):
             'October 24, 2026 at 2:00 PM': '2026-10-24T14:00',
         }
         for raw, expected in cases.items(): self.assertEqual(exporter.sortable_date(raw), expected, raw)
+
+    def test_restore_normalizes_convex_integral_floats_without_rewriting_source_json(self):
+        restore_spec=importlib.util.spec_from_file_location('restore',pathlib.Path(__file__).with_name('restore-export.py'))
+        restore=importlib.util.module_from_spec(restore_spec);restore_spec.loader.exec_module(restore)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);backup=root/'backup.zip';scope=dict(societyId='workspace',generation='old',recordKey='award:1')
+            record=dict(scope,kind='award',title='Award',organization='',status='',date='',updatedAt='',documents=2.0,value=123.0)
+            source_json='{"contractValue":123.0,"nested":[1.0]}'
+            detail=dict(scope,dataJson=source_json)
+            document=dict(scope,documentKey='doc:1',name='File',mediaType='application/pdf',sha256='',sourceUrl='',status='',bytes=0.0,parts=0.0,available=False)
+            with zipfile.ZipFile(backup,'w') as archive:
+                archive.writestr('procurementCatalogs/documents.jsonl',json.dumps(dict(societyId='workspace',generation='old',folder='folder',publishedAt='2026-10-22',counts={'award':1.0},sourceCounts={'award':1.0},taxonomyCount=0.0,analytics=dict(path='analytics-manifest.json',bytes=1,sha256='b'*64),restoration=dict(backupSha256='a'*64,sourceGeneration='original-logical',preparedAt='2026-10-21'))))
+                for table,rows in [('procurementRecords',[record]),('procurementDetails',[detail]),('procurementDocuments',[document]),('procurementEvidence',[])]:
+                    archive.writestr(table+'/documents.jsonl',''.join(json.dumps(row)+'\n' for row in rows))
+            restore.prepare(backup,'workspace',root/'restore')
+            activation=json.loads((root/'restore'/'activation.json').read_text())
+            self.assertNotIn('analytics',activation,'Restored rows do not inherit cache pointers bound to a different generation/clock')
+            self.assertIs(type(activation['counts']['award']),int)
+            self.assertIs(type(activation['sourceCounts']['award']),int)
+            restored=json.loads((root/'restore'/'procurementRecords.jsonl').read_text())
+            self.assertIs(type(restored['documents']),int);self.assertIs(type(restored['value']),int)
+            restored_document=json.loads((root/'restore'/'procurementDocuments.jsonl').read_text())
+            self.assertIs(type(restored_document['bytes']),int);self.assertIs(type(restored_document['parts']),int)
+            self.assertEqual(json.loads((root/'restore'/'procurementDetails.jsonl').read_text())['dataJson'],source_json)
+            restore.prepare(backup,'workspace',root/'restore-fresh','restore-new-generation')
+            fresh=json.loads((root/'restore-fresh'/'activation.json').read_text())
+            self.assertEqual(fresh['restoration']['sourceGeneration'],'original-logical','Nested recovery preserves original source-generation provenance')
 
     def test_projection_sorts_by_closing_and_keeps_source_text(self):
         row = dict(id='opportunity:bidsandtenders:x:1', kind='opportunity', title='Pool', updated_at='', data=json.dumps(dict(closingDate='Wed Oct 7, 2026 3:00 PM (PDT)', closingAt='2026-10-07T22:00:00.000Z', issueDate='2026-09-01')))
@@ -136,5 +178,14 @@ class ExportTests(unittest.TestCase):
             row['data'] = json.dumps(dict(award, contractValue=raw, contractValueText=text))
             item, _ = exporter.project_record(row, 'workspace', 'g')
             self.assertEqual(item.get('value'), expected, (raw, text))
+        for raw,text in [(1.2,'1.2 million'),(1234.5,'(1,234.50)'),(123,'TBD')]:
+            row['data']=json.dumps(dict(award,contractValue=raw,contractValueText=text))
+            self.assertNotIn('value',exporter.project_record(row,'workspace','g')[0],'Unsafe legacy numeric parsing must not overrule source wording')
+        for decimal,raw,expected in [('1200000.00','1.2 million',1200000),('-1234.50','(1,234.50)',-1234.5)]:
+            parsed=dict(raw=raw,status='parsed',currency='CAD',scale=2,decimal=decimal,minorUnits=str(int(exporter.Decimal(decimal)*100)),value=expected,parserVersion='award-money-v2')
+            row['data']=json.dumps(dict(award,contractValue=1.2,contractValueText=raw,contractValueParsed=parsed))
+            self.assertEqual(exporter.project_record(row,'workspace','g')[0]['value'],expected)
+        self.assertIsNone(exporter.money_value(0.001))
+        self.assertIsNone(exporter.money_value(9000000000001))
 
 if __name__ == '__main__': unittest.main()

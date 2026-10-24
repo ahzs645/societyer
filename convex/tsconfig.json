@@ -22,6 +22,6 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["./**/*", "../shared/**/*.ts"],
+  "include": ["./**/*", "../shared/**/*.ts", "../src/vite-env.d.ts"],
   "exclude": ["./_generated"]
 }

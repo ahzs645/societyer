@@ -431,7 +431,12 @@
     "test:responsive-finance": "playwright test --config playwright.finance-responsive.config.ts",
     "test:responsive-invoices": "playwright test --config playwright.invoice-responsive.config.ts",
     "test:payroll-propagation": "playwright test --config playwright.payroll-propagation.config.ts",
-    "test:responsive": "npm run test:responsive-shell && npm run test:responsive-payroll && npm run test:responsive-roe && npm run test:responsive-remittance && npm run test:responsive-finance && npm run test:responsive-invoices && npm run test:payroll-propagation"
+    "test:responsive": "npm run test:responsive-shell && npm run test:responsive-payroll && npm run test:responsive-roe && npm run test:responsive-remittance && npm run test:responsive-finance && npm run test:responsive-invoices && npm run test:payroll-propagation",
+    "test:procurement-analytics": "tsx scripts/check-procurement-analytics.ts && tsx scripts/check-procurement-precomputed.ts",
+    "test:procurement-integrity": "python3 scripts/procurement/test-export.py && python3 scripts/procurement/test-integrity.py && tsx scripts/check-procurement-publication.ts && tsx scripts/check-procurement-source-status.ts && tsx scripts/check-procurement-operator.ts",
+    "test:procurement-operator": "tsx scripts/check-procurement-operator.ts",
+    "test:procurement-browser": "playwright test --config playwright.procurement.config.ts",
+    "test:procurement-precomputed": "tsx scripts/check-procurement-precomputed.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

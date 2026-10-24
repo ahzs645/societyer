@@ -46,6 +46,7 @@ import {
 import { DocumentsCell, DocumentsCount } from "./DocumentsCell";
 import { useReaderNavigation } from "./routes";
 import { useReaderSource, type ListRow } from "./source";
+import { useProcurementClock } from "../lib/clock";
 import { ServerNoticeRows } from "./ServerNoticeRows";
 
 export type NoticeKind = "opportunity" | "award";
@@ -53,6 +54,7 @@ export type NoticeKind = "opportunity" | "award";
 /** The opportunity list's presets ("upcoming" is the default); awards have one view, latest first. */
 export type NoticeViewId =
   | "upcoming"
+  | "Open"
   | "all"
   | "Closed"
   | "Awarded"
@@ -64,6 +66,7 @@ export const NOTICE_VIEWS: {
   isSystem: boolean;
 }[] = [
   { _id: "upcoming", name: "Open, closing soonest", isSystem: false },
+  { _id: "Open", name: "All open, including unverified closing dates", isSystem: false },
   { _id: "all", name: "All, latest closing first", isSystem: false },
   { _id: "Closed", name: "Closed", isSystem: false },
   { _id: "Awarded", name: "Awarded", isSystem: false },
@@ -201,6 +204,7 @@ function presetView(
   kind: NoticeKind,
   viewId: NoticeViewId,
   hiddenFields: readonly string[],
+  today = zoneToday(),
 ): HydratedView {
   const { hydratedView } = TABLES[kind];
   const field = (name: string) => fieldId(kind, name);
@@ -224,7 +228,7 @@ function presetView(
           id: "closes",
           fieldMetadataId: field("when"),
           operator: "between",
-          value: { preset: "custom", start: zoneToday() },
+          value: { preset: "custom", start: today },
         },
       ];
       sorts = [
@@ -268,10 +272,12 @@ import {
 } from "../../../../shared/procurementNoticeRow";
 
 /** A list grows a page at a time; each row is drawn once, not again for every page that arrives after it. */
-const drawn = new WeakMap<ListRow, NoticeRow>();
-function drawnRow(row: ListRow): NoticeRow {
-  let result = drawn.get(row);
-  if (!result) drawn.set(row, (result = toNoticeRow(row)));
+const drawn = new WeakMap<ListRow, { minute: number; result: NoticeRow }>();
+function drawnRow(row: ListRow, now: number): NoticeRow {
+  const minute = now, cached = drawn.get(row);
+  if (cached?.minute === minute) return cached.result;
+  const result = toNoticeRow(row, now);
+  drawn.set(row, { minute, result });
   return result;
 }
 
@@ -418,12 +424,14 @@ export function NoticeTable({
   const nav = useReaderNavigation();
   const { objectMetadata } = TABLES[kind];
   const hidden = hiddenFields.join(",");
+  const now = useProcurementClock();
+  const today = zoneToday(now);
   // One view object per preset: a new object reloads the table's filters and sorts.
   const hydratedView = useMemo(
-    () => presetView(kind, view, hidden ? hidden.split(",") : []),
-    [kind, view, hidden],
+    () => presetView(kind, view, hidden ? hidden.split(",") : [], today),
+    [kind, view, hidden, today],
   );
-  const records = useMemo(() => rows.map(drawnRow), [rows]);
+  const records = useMemo(() => rows.map(row => drawnRow(row, now)), [rows, now]);
   const { openNotice } = nav;
   const renderCell = useCells(
     useCallback(
