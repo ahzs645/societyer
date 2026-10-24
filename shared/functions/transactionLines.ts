@@ -27,6 +27,7 @@ import {
 } from "../transactionLines";
 import { tagRulesFor } from "./financeTags";
 import { paymentLinkRefusal } from "../reconciliationPeriods";
+import { assertNativePayrollBankPatch } from "./payrollPaymentGuard";
 import {
   assertTransactionBooksOpen,
   createTransactionBooksLock,
@@ -92,6 +93,7 @@ export async function savePortable(
   }
   const before = transactionLines(lineTransactionOf(row));
   const stored = storedLineFields(cleaned);
+  await assertNativePayrollBankPatch(ctx, row, { lines: stored.lines, category: stored.category, accountingAccountId: stored.accountingAccountId, fundRestrictionId: stored.fundRestrictionId, tagIds: stored.tagIds });
   const recoded = codingKey(before) !== codingKey(transactionLines({ amountCents: Number(row.amountCents) || 0, ...stored }));
   // A payment holds this line as one amount in Accounts payable or receivable; tags and memos may still change.
   const refusal = stored.lines ? paymentLinkRefusal(row.matchedKind, "split it") : recoded ? paymentLinkRefusal(row.matchedKind, "change its category") : null;

@@ -10,11 +10,11 @@ type Tile = { key: TileKey; label: string; value: number | null; prev: number | 
 
 const plural = (n: number, noun: string) => `${n.toLocaleString("en-CA")} ${noun}${n === 1 ? "" : "s"}`;
 
-function delta(current: number, previous: number, direction: Direction, label: string): StatTileTrend {
+function delta(current: number, previous: number, direction: Direction, label: string, currency: string): StatTileTrend {
   const diff = current - previous;
   if (diff === 0) return { value: "No change", label };
   return {
-    value: formatMoney(diff, { trimWholeCents: true, signDisplay: "always" }),
+    value: formatMoney(diff, { currency, trimWholeCents: true, signDisplay: "always" }),
     direction: diff > 0 ? "up" : "down",
     favourable: direction === "up-good" ? diff > 0 : diff < 0,
     label,
@@ -39,12 +39,14 @@ export function FinanceRangeStats({
   previousClosing,
   currentBalance,
   compareLabel = "vs previous period",
+  currency = "CAD",
   headline = false,
   more,
   children,
 }: {
   /** Extra tiles after the range tiles (e.g. figures that do not follow the range). */
   children?: ReactNode;
+  currency?: string;
   totals: FlowTotals;
   previous: FlowTotals | null;
   closingBalance: number | null;
@@ -70,15 +72,15 @@ export function FinanceRangeStats({
     prev: previous?.net,
     direction: "up-good",
     // The closing balance folds in here when it is just today's bank balance.
-    sub: closingIsBank && !headline ? <>Ends at <Money cents={closingBalance} trimWholeCents />, today's bank balance</> : undefined,
+    sub: closingIsBank && !headline ? <>Ends at <Money currency={currency} cents={closingBalance} trimWholeCents />, today's bank balance</> : undefined,
   };
 
   const render = (tile: Tile) => (
     <StatTile
       key={tile.key}
       label={tile.label}
-      value={tile.value == null ? "—" : <Money variant="hero" trimWholeCents cents={tile.value} signDisplay={tile.key === "net" ? "exceptZero" : "auto"} />}
-      trend={tile.prev != null && tile.value != null ? delta(tile.value, tile.prev, tile.direction, compareLabel) : undefined}
+      value={tile.value == null ? "—" : <Money currency={currency} variant="hero" trimWholeCents cents={tile.value} signDisplay={tile.key === "net" ? "exceptZero" : "auto"} />}
+      trend={tile.prev != null && tile.value != null ? delta(tile.value, tile.prev, tile.direction, compareLabel, currency) : undefined}
       sub={tile.sub}
       info={tile.info}
     />

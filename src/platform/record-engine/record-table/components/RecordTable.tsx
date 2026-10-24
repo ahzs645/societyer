@@ -278,6 +278,7 @@ export function RecordTable({
   renderPhoneCard,
   autoPhoneCard = true,
   inlineEdit,
+  canMoveRecord,
   onEndReached,
   fillViewport = true,
 }: {
@@ -330,6 +331,8 @@ export function RecordTable({
    * saving. See RecordTableInlineEdit. Pass a stable (memoised) object.
    */
   inlineEdit?: RecordTableInlineEdit;
+  /** Restrict kanban movement for derived/locked records without hiding them. */
+  canMoveRecord?: (record: any) => boolean;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const density = useRecordTableState((s) => s.density);
@@ -853,11 +856,12 @@ export function RecordTable({
           getItemId={(record) => String(record._id)}
           getColumnId={(record) => normalizeBoardValue(record[groupColumn.field.name])}
           canMove={canMoveBoardRecords}
+          canMoveItem={canMoveRecord}
           // Values that match no column (empty, retired options) gather in
           // their own column instead of silently dropping off the board.
           unassignedLabel={`No ${groupColumn.field.label.toLowerCase()}`}
           onMove={(record, toColumnId) => {
-            if (!onUpdate) return;
+            if (!onUpdate || (canMoveRecord && !canMoveRecord(record))) return;
             const value =
               groupColumn.field.fieldType === FIELD_TYPES.MULTI_SELECT
                 ? [toColumnId]

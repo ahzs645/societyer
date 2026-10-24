@@ -1,0 +1,197 @@
+@use "../../../styles/tokens" as *;
+
+.cost-planner {
+  &__intro {
+    max-width: 85ch;
+    color: token(text-secondary);
+    margin-block: 16px;
+  }
+  &__content {
+    display: grid;
+    gap: 20px;
+  }
+  &__panel {
+    padding: 18px;
+    margin-block: 16px;
+    min-width: 0;
+  }
+  &__content > &__panel {
+    margin-block: 0;
+  }
+  &__section-heading,
+  &__toolbar,
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  &__section-heading {
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  &__section-heading h2,
+  &__section-heading p {
+    margin-block: 0;
+  }
+  &__toolbar {
+    justify-content: space-between;
+    padding: 12px 0;
+  }
+  &__toolbar > label,
+  &__section-heading > label {
+    display: grid;
+    gap: 5px;
+    min-width: 180px;
+  }
+  &__form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  &__columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 20px;
+  }
+  &__columns > &__panel {
+    margin: 0;
+  }
+  &__stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  &__periods {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  &__period {
+    display: grid;
+    gap: 5px;
+    min-width: 190px;
+    padding: 12px 14px;
+    border: 1px solid token(border);
+    border-radius: 10px;
+    background: token(bg-panel);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  &__period.is-selected {
+    border-color: token(accent);
+    box-shadow: inset 0 0 0 1px token(accent);
+  }
+  &__period small,
+  table small,
+  &__due small {
+    display: block;
+    color: token(text-secondary);
+    font-size: 0.85em;
+    font-weight: normal;
+    margin-top: 4px;
+  }
+  &__table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  &__table-wrap table {
+    min-width: 550px;
+  }
+  & &__table-wrap > table {
+    display: table;
+    overflow: visible;
+    max-width: none;
+  }
+  &__table-wrap table[aria-label="Reusable planning costs"] {
+    min-width: 960px;
+  }
+  &__table-wrap table[aria-label="Staff planning costs"] {
+    min-width: 850px;
+  }
+  &__table-wrap table[aria-label="Monthly planning totals"] {
+    min-width: 850px;
+  }
+  &__table-wrap table[aria-label="Reusable planning costs"] th:first-child,
+  &__table-wrap table[aria-label="Staff planning costs"] th:first-child {
+    min-width: 180px;
+  }
+  &__columns &__table-wrap table {
+    min-width: 0;
+  }
+  &__table-wrap table th {
+    text-align: left;
+  }
+  &__due-list {
+    max-height: 430px;
+    overflow-y: auto;
+  }
+  &__due {
+    display: grid;
+    grid-template-columns: 110px minmax(140px, 1fr) auto;
+    align-items: start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid token(border);
+  }
+  &__due time {
+    font-size: 0.9em;
+    color: token(text-secondary);
+  }
+  &__warning,
+  &__error {
+    padding: 14px 16px;
+    border: 1px solid token(border);
+    border-radius: 8px;
+    background: token(bg-subtle);
+  }
+  &__warning ul {
+    margin-bottom: 0;
+    padding-left: 20px;
+  }
+  &__error {
+    border-color: token(danger);
+  }
+  &__actual-amount {
+    display: block;
+    font-size: 1.65rem;
+    margin-block: 12px;
+  }
+  &__import-confirm {
+    margin-top: 18px;
+    border-top: 1px solid token(border);
+    padding-top: 16px;
+  }
+  &__exports {
+    border-block: 1px solid token(border);
+    padding-block: 12px;
+  }
+  @media (max-width: 1000px) {
+    &__stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    &__columns {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  @media (max-width: 600px) {
+    &__form-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    &__panel {
+      padding: 12px;
+    }
+    &__stats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    &__period {
+      width: 100%;
+    }
+    &__due {
+      grid-template-columns: 90px minmax(100px, 1fr);
+    }
+    &__due > .money {
+      grid-column: 2;
+    }
+  }
+}

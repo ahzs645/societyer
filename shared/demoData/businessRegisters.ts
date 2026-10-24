@@ -26,7 +26,7 @@ import {
   remittancesFromPayRuns,
   slipTotalsFromPayRuns,
   splitCents,
-  type PayRunAmounts,
+  type PayRunTotals,
   type PayRunLine,
 } from "../businessRegisters";
 import { addMonthsClamped } from "../invoicing";
@@ -79,12 +79,16 @@ function nextMonthKey(monthKey: string) {
 }
 
 /** One semi-monthly run's amounts, net fixed to the deposit in the feed. */
-function runAmounts(netCents: number, monthNetCents: number, remittanceCents: number): Required<PayRunAmounts> {
+function runAmounts(netCents: number, monthNetCents: number, remittanceCents: number): PayRunTotals {
   const grossCents = Math.round((netCents * (monthNetCents + remittanceCents)) / (monthNetCents * GROSS_FACTOR));
   const cppEmployeeCents = Math.round(grossCents * CPP_RATE);
   const eiEmployeeCents = Math.round(grossCents * EI_RATE);
   return {
     grossCents,
+    cpp2EmployeeCents: 0,
+    cpp2EmployerCents: 0,
+    nonCashTaxableCents: 0,
+    nonTaxableCashCents: 0,
     cppEmployeeCents,
     eiEmployeeCents,
     incomeTaxCents: grossCents - cppEmployeeCents - eiEmployeeCents - netCents,
@@ -95,7 +99,7 @@ function runAmounts(netCents: number, monthNetCents: number, remittanceCents: nu
   };
 }
 
-function splitAcrossEmployees(run: Required<PayRunAmounts>, employees: DemoBusinessRegisterRefs["employees"]): PayRunLine[] {
+function splitAcrossEmployees(run: PayRunTotals, employees: DemoBusinessRegisterRefs["employees"]): PayRunLine[] {
   if (!employees.length) return [];
   const weights = employees.map((employee) => employee.annualSalaryCents ?? 1);
   const parts = Object.fromEntries(PAY_RUN_AMOUNT_FIELDS.map((field) => [field, splitCents(run[field], weights)])) as Record<(typeof PAY_RUN_AMOUNT_FIELDS)[number], number[]>;
@@ -128,7 +132,7 @@ export function businessRegisterDemoRows(refs: DemoBusinessRegisterRefs) {
   for (const month of months) {
     const remittanceCents = demoRemittanceCents(nextMonthKey(month));
     const monthNet = demoNetPayCents(month, 0) + demoNetPayCents(month, 1);
-    const runs: Array<{ index: number; txn: DemoFeedTransaction; amounts: Required<PayRunAmounts> }> = [];
+    const runs: Array<{ index: number; txn: DemoFeedTransaction; amounts: PayRunTotals }> = [];
     for (const index of [0, 1]) {
       const txn = feedByKey.get(`payroll-${month}-${index}`);
       if (!txn) continue;

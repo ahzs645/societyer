@@ -38,6 +38,9 @@ import {
   type RangePreset,
 } from "./series";
 import { useFinanceInsightsData } from "./useFinanceInsightsData";
+import { useFinancePermissions } from "../../../hooks/useFinancePermissions";
+import { ReportPdfDownload } from "../reports/ReportPdfDownload";
+import { financialOverviewDocument } from "./financialOverviewDocument";
 
 type Society = { _id: string; fiscalYearEnd?: string | null };
 
@@ -45,7 +48,7 @@ type Society = { _id: string; fiscalYearEnd?: string | null };
 export type FinanceMoreMetrics = { tiles: ReactNode; count: number; note?: ReactNode };
 
 /** Whole dollars for the one-line fold summaries ("$55,651"), which must fit a phone row. */
-const dollars = (cents: number, signDisplay?: "exceptZero") => formatMoney(Math.round(cents / 100) * 100, { trimWholeCents: true, signDisplay });
+const dollars = (cents: number, signDisplay?: "exceptZero", currency = "CAD") => formatMoney(Math.round(cents / 100) * 100, { currency, trimWholeCents: true, signDisplay });
 
 const BALANCE_SERIES: ChartSeries = { key: "balance", label: "Cash balance", color: "var(--dv-cat-1)", variant: "area" };
 const PREVIOUS_SERIES: ChartSeries = { key: "previous", label: "Previous period", color: "var(--dv-previous)", comparison: true };
@@ -78,7 +81,9 @@ export function FinancialInsights({
   /** Skip the budget bars (phones, where the page's budget table carries the same figures). */
   hideBudgetChart?: boolean;
 }) {
-  const data = useFinanceInsightsData(society._id);
+  const [currencyChoice, setCurrencyChoice] = useState<string | undefined>();
+  const data = useFinanceInsightsData(society._id, true, currencyChoice, society.fiscalYearEnd ?? undefined);
+  const { canExport } = useFinancePermissions();
   const isMobile = useIsMobile();
   const today = todayDateOnly();
   const [presetChoice, setPresetChoice] = useState<RangePreset | null>(null);
@@ -88,7 +93,12 @@ export function FinancialInsights({
   const preset = presetChoice ?? defaultPreset(data.txns, today);
   const range = useMemo(() => presetRange(preset, today, { earliest: data.earliest, fiscalYearEnd: society.fiscalYearEnd }), [data.earliest, preset, society.fiscalYearEnd, today]);
   const focus = selection ?? range;
-  const view = useInsightSeries(data.txns, data.currentBalance, range, focus, selection, compareMode);
+  const view = useInsightSeries(data.txns, data.currentBalance, range, focus, selection, compareMode, data.currency);
+  const overviewReport = useMemo(() => financialOverviewDocument({
+    ...view, txns: data.txns, currentBalance: data.currentBalance, range, focus, compareMode,
+    budgetRows: hideBudgetChart ? [] : data.budgetRows, truncated: data.truncated,
+    currency: data.currency, sourceCurrencies: data.sourceCurrencies,
+  }), [view, data, range, focus, compareMode, hideBudgetChart]);
 
   const notEnough = !data.loading && data.txns.length < 2;
   const showStats = !notEnough && !data.loading;
@@ -112,6 +122,7 @@ export function FinancialInsights({
 
   return (
     <section className="insights" aria-label="Financial trends">
+      <div className="row" style={{ gap: 12, marginBottom: 10, flexWrap: "wrap" }}><label>Chart currency <select className="input" aria-label="Chart currency" value={data.currency} onChange={(event) => { setCurrencyChoice(event.target.value); setSelection(null); }}>{data.availableCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><button className="btn btn--sm" onClick={data.refreshSource}>Refresh complete chart sources</button>{data.loading && <span>Loading {data.sourceProgress.toLocaleString()} records…</span>}{data.sourceError && <span role="alert" className="field__error">{data.sourceError}</span>}</div>
       <FinanceRangeBar
         preset={preset}
         onPreset={(next) => {
@@ -125,8 +136,12 @@ export function FinancialInsights({
         onClearSelection={() => setSelection(null)}
         compareNote={compareMode !== "off" && !data.loading && !view.previousCovered ? UNCOVERED_NOTE[compareMode] : undefined}
       />
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}>
+        <ReportPdfDownload societyId={society._id} report={overviewReport} filename={`financial-overview-${focus.start}-${focus.end}`} disabled={data.loading || !canExport} label="Overview PDF" />
+      </div>
       {showStats && (
         <FinanceRangeStats
+          currency={data.currency}
           totals={view.totals}
           previous={compare && view.previousCovered ? view.previousTotals : null}
           closingBalance={view.closing}
@@ -136,14 +151,14 @@ export function FinancialInsights({
           headline={isMobile}
           more={(tiles, count) => moreFold(tiles, count)}
         >
-          <OperatingReserveTile societyId={society._id} txns={data.txns} unrestrictedCents={data.unrestrictedBalance} today={today} />
+          <OperatingReserveTile currency={data.currency} societyId={society._id} txns={data.txns} unrestrictedCents={data.unrestrictedBalance} today={today} />
         </FinanceRangeStats>
       )}
       {showStats && (
         <NarrativeInsights txns={data.txns} balanceCents={data.currentBalance} range={focus} mode={compareMode === "off" ? "previous" : compareMode} today={today} />
       )}
       {/* Too little history for range tiles: the bank balance joins the page figures. */}
-      {isMobile && notEnough && moreFold(<StatTile label="Bank balance" value={<Money variant="hero" trimWholeCents cents={data.currentBalance} />} />, 1)}
+      {isMobile && notEnough && moreFold(<StatTile label="Bank balance" value={<Money currency={data.currency} variant="hero" trimWholeCents cents={data.currentBalance} />} />, 1)}
       <div className="insights__grid insights__grid--two">
         <ChartCard
           title="Cash over time"
@@ -153,6 +168,7 @@ export function FinancialInsights({
           table={view.cashTable}
         >
           <TimeSeriesChart
+            formatValue={(value) => formatMoney(value, { currency: data.currency })}
             data={view.cashRows}
             series={compareMode === "off" ? [BALANCE_SERIES] : [BALANCE_SERIES, { ...PREVIOUS_SERIES, label: compareLabel(compareMode) }]}
             curve="step"
@@ -162,7 +178,7 @@ export function FinancialInsights({
             onRangeChange={setSelection}
           />
         </ChartCard>
-        <MobileFold title="Money in vs out by month" summary={showStats ? `Net ${dollars(view.flowRows.reduce((sum, r) => sum + r.inflow - r.outflow, 0), "exceptZero")} over ${view.flowRows.length} ${view.flowRows.length === 1 ? "month" : "months"}` : undefined}>
+        <MobileFold title="Money in vs out by month" summary={showStats ? `Net ${dollars(view.flowRows.reduce((sum, r) => sum + r.inflow - r.outflow, 0), "exceptZero", data.currency)} over ${view.flowRows.length} ${view.flowRows.length === 1 ? "month" : "months"}` : undefined}>
           <ChartCard
             title="Money in vs out by month"
             subtitle={selection ? "Months outside the selected range are faded." : "Deposits above the line, payments below, with the net change."}
@@ -176,31 +192,31 @@ export function FinancialInsights({
       </div>
       {!notEnough && (
         <div className="insights__grid insights__grid--two">
-          <MobileFold title="Top payees" summary={isMobile ? largestFlowSummary(data.txns, focus, "payee") : undefined}>
-            <TopFlowsCard grouping="payee" txns={data.txns} range={focus} loading={data.loading} />
+          <MobileFold title="Top payees" summary={isMobile ? largestFlowSummary(data.txns, focus, "payee", data.currency) : undefined}>
+            <TopFlowsCard currency={data.currency} grouping="payee" txns={data.txns} range={focus} loading={data.loading} />
           </MobileFold>
-          <MobileFold title="Top categories" summary={isMobile ? largestFlowSummary(data.txns, focus, "category") : undefined}>
-            <TopFlowsCard grouping="category" txns={data.txns} range={focus} loading={data.loading} />
+          <MobileFold title="Top categories" summary={isMobile ? largestFlowSummary(data.txns, focus, "category", data.currency) : undefined}>
+            <TopFlowsCard currency={data.currency} grouping="category" txns={data.txns} range={focus} loading={data.loading} />
           </MobileFold>
         </div>
       )}
       {!notEnough && (
-        <MobileFold title="Where the money came from and went" summary={showStats ? `${dollars(view.totals.inflow)} in · ${dollars(view.totals.outflow)} out, by category` : undefined}>
-          <CashFlowSankeyCard societyId={society._id} range={focus} />
+        <MobileFold title="Where the money came from and went" summary={showStats ? `${dollars(view.totals.inflow, undefined, data.currency)} in · ${dollars(view.totals.outflow, undefined, data.currency)} out, by category` : undefined}>
+          <CashFlowSankeyCard currency={data.currency} societyId={society._id} range={focus} />
         </MobileFold>
       )}
-      {!hideBudgetChart && <BudgetVsActualCard rows={data.budgetRows} loading={data.loading} />}
+      {!hideBudgetChart && <BudgetVsActualCard currency={data.currency} rows={data.budgetRows} loading={data.loading} />}
     </section>
   );
 }
 
 /** "Biggest spend: Brightwave Payroll, $55,651" (money out, the cards' default direction). */
-function largestFlowSummary(txns: ReturnType<typeof useFinanceInsightsData>["txns"], range: DateRange, grouping: "payee" | "category"): string {
+function largestFlowSummary(txns: ReturnType<typeof useFinanceInsightsData>["txns"], range: DateRange, grouping: "payee" | "category", currency = "CAD"): string {
   const top = topFlows(txns, range, grouping, "out", 1).rows[0];
-  return top ? `Biggest spend: ${top.label}, ${dollars(top.cents)}` : "No money out in this range";
+  return top ? `Biggest spend: ${top.label}, ${dollars(top.cents, undefined, currency)}` : "No money out in this range";
 }
 
-function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"], currentBalance: number, range: DateRange, focus: DateRange, selection: DateRange | null, compareMode: CompareChoice) {
+function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"], currentBalance: number, range: DateRange, focus: DateRange, selection: DateRange | null, compareMode: CompareChoice, currency = "CAD") {
   return useMemo(() => {
     const compare = compareMode !== "off";
     // With comparison off, the (unused) comparison figures default to the previous period.
@@ -220,11 +236,11 @@ function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"
     const first = known[0];
     const last = known[known.length - 1];
     const cashSummary = last && first
-      ? `Cash balance from ${formatMonthLong(first.month)} to ${formatMonthLong(last.month)}, moving from ${formatMoney(first.value!, { trimWholeCents: true })} to ${formatMoney(last.value!, { trimWholeCents: true })}`
+      ? `Cash balance from ${formatMonthLong(first.month)} to ${formatMonthLong(last.month)}, moving from ${formatMoney(first.value!, { currency, trimWholeCents: true })} to ${formatMoney(last.value!, { currency, trimWholeCents: true })}`
       : "Cash balance over time: no transactions in this range";
     const totalIn = flowRows.reduce((sum, r) => sum + r.inflow, 0);
     const totalOut = flowRows.reduce((sum, r) => sum + r.outflow, 0);
-    const flowSummary = `Money in and out across ${flowRows.length} months: ${formatMoney(totalIn, { trimWholeCents: true })} in, ${formatMoney(totalOut, { trimWholeCents: true })} out`;
+    const flowSummary = `Money in and out across ${flowRows.length} months: ${formatMoney(totalIn, { currency, trimWholeCents: true })} in, ${formatMoney(totalOut, { currency, trimWholeCents: true })} out`;
     return {
       cashRows,
       flowRows,
@@ -242,7 +258,7 @@ function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"
           { key: "balance", label: "Closing balance", numeric: true },
           ...(compare ? [{ key: "previous", label: compareLabel(mode), numeric: true }] : []),
         ],
-        rows: months.map((m) => ({ month: formatMonthLong(m.month), balance: formatMoney(m.value), ...(compare ? { previous: formatMoney(m.previous ?? null) } : {}) })),
+        rows: months.map((m) => ({ month: formatMonthLong(m.month), balance: formatMoney(m.value, { currency }), ...(compare ? { previous: formatMoney(m.previous ?? null, { currency }) } : {}) })),
       },
       flowTable: {
         caption: "Money in and out by month",
@@ -252,20 +268,20 @@ function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"
           { key: "outflow", label: "Money out", numeric: true },
           { key: "net", label: "Net change", numeric: true },
         ],
-        rows: flowRows.map((r) => ({ month: r.tooltipLabel ?? r.label, inflow: formatMoney(r.inflow), outflow: formatMoney(r.outflow), net: formatMoney(r.inflow - r.outflow, { signDisplay: "exceptZero" }) })),
+        rows: flowRows.map((r) => ({ month: r.tooltipLabel ?? r.label, inflow: formatMoney(r.inflow, { currency }), outflow: formatMoney(r.outflow, { currency }), net: formatMoney(r.inflow - r.outflow, { currency, signDisplay: "exceptZero" }) })),
       },
     };
-  }, [compareMode, currentBalance, focus, range, selection, txns]);
+  }, [currency, compareMode, currentBalance, focus, range, selection, txns]);
 }
 
-function BudgetVsActualCard({ rows, loading }: { rows: Array<{ _id: string; category: string; fiscalYear: string; plannedCents: number; actualCents: number; kind: BudgetKind }>; loading: boolean }) {
+function BudgetVsActualCard({ rows, loading, currency = "CAD" }: { currency?: string; rows: Array<{ _id: string; category: string; fiscalYear: string; plannedCents: number; actualCents: number; kind: BudgetKind }>; loading: boolean }) {
   const latestYear = rows.reduce<string | null>((max, r) => (max == null || r.fiscalYear > max ? r.fiscalYear : max), null);
   const yearRows = rows.filter((r) => r.fiscalYear === latestYear);
   if (!loading && yearRows.length === 0) return null;
   const planned = yearRows.reduce((sum, r) => sum + r.plannedCents, 0);
   const actual = yearRows.reduce((sum, r) => sum + r.actualCents, 0);
   return (
-    <MobileFold title="Budget vs actuals" summary={loading ? undefined : `${latestYear ? `FY ${latestYear} · ` : ""}${dollars(actual)} of ${dollars(planned)} planned · ${yearRows.length} ${yearRows.length === 1 ? "category" : "categories"}`}>
+    <MobileFold title="Budget vs actuals" summary={loading ? undefined : `${latestYear ? `FY ${latestYear} · ` : ""}${dollars(actual, undefined, currency)} of ${dollars(planned, undefined, currency)} planned · ${yearRows.length} ${yearRows.length === 1 ? "category" : "categories"}`}>
       <ChartCard
         title="Budget vs actuals"
         subtitle={latestYear ? `FY ${latestYear} · actuals against plan by category` : undefined}
@@ -279,10 +295,10 @@ function BudgetVsActualCard({ rows, loading }: { rows: Array<{ _id: string; cate
             { key: "actual", label: "Actual", numeric: true },
             { key: "variance", label: "Variance", numeric: true },
           ],
-          rows: yearRows.map((r) => ({ category: r.category, planned: formatMoney(r.plannedCents), actual: formatMoney(r.actualCents), variance: formatMoney(budgetVariance(r.plannedCents, r.actualCents, r.kind).cents, { signDisplay: "exceptZero" }) })),
+          rows: yearRows.map((r) => ({ category: r.category, planned: formatMoney(r.plannedCents, { currency }), actual: formatMoney(r.actualCents, { currency }), variance: formatMoney(budgetVariance(r.plannedCents, r.actualCents, r.kind).cents, { currency, signDisplay: "exceptZero" }) })),
         }}
       >
-        <BudgetBars rows={yearRows.map((r) => ({ key: String(r._id), label: r.category, planned: r.plannedCents, actual: r.actualCents, kind: r.kind }))} ariaLabel={`Budget vs actual by category${latestYear ? ` for FY ${latestYear}` : ""}`} />
+        <BudgetBars formatValue={(value) => formatMoney(value, { currency })} rows={yearRows.map((r) => ({ key: String(r._id), label: r.category, planned: r.plannedCents, actual: r.actualCents, kind: r.kind }))} ariaLabel={`Budget vs actual by category${latestYear ? ` for FY ${latestYear}` : ""}`} />
       </ChartCard>
     </MobileFold>
   );

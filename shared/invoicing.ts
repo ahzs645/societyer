@@ -8,6 +8,9 @@
  * Money is always integer cents. Dates are `YYYY-MM-DD` calendar dates.
  */
 
+import { computeInvoiceMoneyTotals, settlementTotals, type InvoiceMoneyOptions } from "./invoiceMoney";
+export * from "./invoiceMoney";
+
 export const INVOICE_TERMS = ["due_on_receipt", "net_15", "net_30", "net_60", "custom"] as const;
 export type InvoiceTerms = (typeof INVOICE_TERMS)[number];
 
@@ -65,6 +68,19 @@ export type InvoiceLine = {
   catalogItemId?: string;
   item: string;
   description?: string;
+  sku?: string;
+  unit?: string;
+  taxMode?: "exclusive" | "inclusive";
+  rateOverridden?: boolean;
+  imageUrl?: string;
+  manufacturer?: string;
+  partNumber?: string;
+  upc?: string;
+  ean?: string;
+  isbn?: string;
+  customField?: string;
+  batchNumber?: string;
+  serialNumbers?: string[];
   quantity: number;
   unitPriceCents: number;
   /** Optional sales tax on this line, as a percentage (5 = 5%). */
@@ -78,6 +94,22 @@ export type InvoiceLine = {
 export type InvoiceDiscount = { kind: "percent" | "amount"; value: number };
 
 export type InvoicePayment = {
+  kind?: "payment" | "credit" | "write_off" | "refund";
+  idempotencyKey?: string;
+  sourcePaymentKey?: string;
+  reversedDate?: string;
+  reversedAtISO?: string;
+  reversalReason?: string;
+  reversalJournalEntryId?: string;
+  reversalCashBasisEntryId?: string;
+  restoredTransactionJournalEntryId?: string;
+  replacedTransactionEntryId?: string;
+  bankTransferJournalEntryId?: string;
+  fxRateMicros?: number;
+  fxSource?: string;
+  baseAmountCents?: number;
+  bookValueCents?: number;
+  fxGainLossCents?: number;
   key: string;
   date: string;
   amountCents: number;
@@ -94,15 +126,7 @@ export type InvoicePayment = {
   cashBasisEntryId?: string;
 };
 
-export type InvoiceTotals = {
-  /** Per line, before discount and tax. */
-  lineAmounts: number[];
-  subtotalCents: number;
-  discountCents: number;
-  taxCents: number;
-  taxes: Array<{ label: string; ratePercent: number; baseCents: number; cents: number }>;
-  totalCents: number;
-};
+export type InvoiceTotals = ReturnType<typeof computeInvoiceMoneyTotals>;
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -164,31 +188,8 @@ export function lineAmountCents(line: Pick<InvoiceLine, "quantity" | "unitPriceC
  * the shares add up exactly). Tax is computed per rate on the discounted base
  * of the lines carrying that rate, and rounded once per rate.
  */
-export function computeInvoiceTotals(lines: InvoiceLine[], discount?: InvoiceDiscount | null): InvoiceTotals {
-  const lineAmounts = lines.map(lineAmountCents);
-  const subtotalCents = lineAmounts.reduce((sum, n) => sum + n, 0);
-  let discountCents = 0;
-  if (discount && Number(discount.value) > 0 && subtotalCents > 0) {
-    discountCents = discount.kind === "percent"
-      ? roundCents((subtotalCents * Math.min(100, Number(discount.value))) / 100)
-      : Math.min(subtotalCents, Math.round(Number(discount.value)));
-  }
-  const shares = allocateProportionally(discountCents, lineAmounts);
-  const groups = new Map<string, { label: string; ratePercent: number; baseCents: number }>();
-  lines.forEach((line, index) => {
-    const rate = Number(line.taxRatePercent ?? 0);
-    if (!(rate > 0)) return;
-    const label = (line.taxLabel ?? "").trim() || "Tax";
-    const key = `${label}|${rate}`;
-    const group = groups.get(key) ?? { label, ratePercent: rate, baseCents: 0 };
-    group.baseCents += lineAmounts[index] - shares[index];
-    groups.set(key, group);
-  });
-  const taxes = [...groups.values()]
-    .map((group) => ({ ...group, cents: roundCents((group.baseCents * group.ratePercent) / 100) }))
-    .sort((a, b) => a.label.localeCompare(b.label) || a.ratePercent - b.ratePercent);
-  const taxCents = taxes.reduce((sum, tax) => sum + tax.cents, 0);
-  return { lineAmounts, subtotalCents, discountCents, taxCents, taxes, totalCents: subtotalCents - discountCents + taxCents };
+export function computeInvoiceTotals(lines: InvoiceLine[], discount?: InvoiceDiscount | null, options?: InvoiceMoneyOptions | null): InvoiceTotals {
+  return computeInvoiceMoneyTotals(lines, discount, options);
 }
 
 /** Split `total` across `weights` so the parts sum exactly to `total`. */
@@ -207,8 +208,8 @@ export function allocateProportionally(total: number, weights: number[]): number
   return floors;
 }
 
-export function paidCents(payments: Array<Pick<InvoicePayment, "amountCents">> | undefined): number {
-  return (payments ?? []).reduce((sum, payment) => sum + Math.round(Number(payment.amountCents) || 0), 0);
+export function paidCents(payments: Array<Pick<InvoicePayment, "amountCents" | "kind" | "reversedDate">> | undefined): number {
+  return settlementTotals(payments ?? []).settledCents;
 }
 
 export type StatusInput = {
@@ -295,6 +296,7 @@ export function seriesSummary(schedule: SeriesSchedule): string {
 }
 
 export type CandidateTransaction = {
+  releasedDate?: string;
   _id: string;
   date: string;
   amountCents: number;
@@ -413,4 +415,32 @@ export function validateInvoiceLines(lines: InvoiceLine[]): string | null {
     if (!Number.isFinite(rate) || rate < 0 || rate > 30) return `${label} has a tax rate outside 0–30%.`;
   }
   return null;
+}
+
+
+/** Signed cash activity uses the original and correction dates, preserving history. */
+export function invoiceCashActivity(payments: ReadonlyArray<Pick<InvoicePayment, "kind" | "date" | "amountCents" | "reversedDate">> = [], from: string, to: string) {
+  let amountCents = 0, hasActivity = false;
+  for (const payment of payments) {
+    if (payment.kind && payment.kind !== "payment" && payment.kind !== "refund") continue;
+    if (payment.date >= from && payment.date <= to) { amountCents += payment.amountCents; hasActivity = true; }
+    if (payment.reversedDate && payment.reversedDate >= from && payment.reversedDate <= to) { amountCents -= payment.amountCents; hasActivity = true; }
+  }
+  return { amountCents, hasActivity };
+}
+
+/** Totals for one currency only; callers must choose a currency before adding amounts. */
+export function invoiceCurrencySummary(rows: Array<{ currency: string; status: InvoiceStatus; balanceCents: number; totalCents: number; needsAction?: unknown[]; payments?: InvoicePayment[] }>, currency: string, today: string) {
+  const summary = { outstandingCents: 0, outstandingCount: 0, overdueCents: 0, overdueCount: 0, paidLast30Cents: 0, paidLast30Count: 0, draftCents: 0, draftCount: 0, needsActionCount: 0 };
+  const since = addDays(today, -30);
+  for (const row of rows) {
+    if (row.currency !== currency) continue;
+    if (row.needsAction?.length) summary.needsActionCount++;
+    if (isOpenStatus(row.status)) { summary.outstandingCents += row.balanceCents; summary.outstandingCount++; }
+    if (row.status === "overdue") { summary.overdueCents += row.balanceCents; summary.overdueCount++; }
+    if (row.status === "draft") { summary.draftCents += row.totalCents; summary.draftCount++; }
+    const cash = invoiceCashActivity(row.payments, since, today);
+    if (cash.hasActivity) { summary.paidLast30Count++; summary.paidLast30Cents += cash.amountCents; }
+  }
+  return summary;
 }

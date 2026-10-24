@@ -7,13 +7,14 @@ import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { Drawer, Field, InspectorNote } from "../../components/ui";
 import { DatePicker } from "../../components/DatePicker";
 import { Money } from "../../components/Money";
-import { useConfirm, usePrompt } from "../../components/Modal";
+import { usePrompt } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { formatDate, formatDateTime } from "../../lib/format";
 import { formatMoney } from "../../lib/money";
 import { BILL_PAYMENT_METHOD_LABEL, BILL_TERMS_LABEL, canPayStatus, isBillPaymentMethod, normalizeBillTerms } from "../../../shared/bills";
 import { FINANCE_EDIT_REQUIRED_REASON } from "../../../shared/expenseApprovals";
 import { BillDocumentDropZone } from "./BillDocumentDropZone";
+import { BillAdjustments } from "./BillAdjustments";
 import { BillPaymentForm } from "./BillPaymentForm";
 import { BillStatusPill } from "./BillStatusPill";
 import { TagChips } from "../financials/transactions/TagPicker";
@@ -30,6 +31,7 @@ const EVENT_DOT: Record<string, string> = {
   recalled: "recalled",
   reset: "reset",
   payment_removed: "reset",
+  payment_reversed: "reset",
 };
 
 /**
@@ -56,7 +58,6 @@ export function BillDetailDrawer({
   onOpenBill: (id: string) => void;
 }) {
   const toast = useToast();
-  const confirm = useConfirm();
   const prompt = usePrompt();
   // Approval votes are checked by the approval rules on the server, not by finance edit access alone.
   const decide = usePermissionedMutation(api.bills.decide, true);
@@ -70,9 +71,16 @@ export function BillDetailDrawer({
   const [paying, setPaying] = useState(false);
   const [scheduleDate, setScheduleDate] = useState(bill.scheduledDate ?? "");
   const [busy, setBusy] = useState(false);
+  const [reversingPayment, setReversingPayment] = useState<string | null>(null);
+  const [paymentReversalDate, setPaymentReversalDate] = useState(workspace.today);
+  const [paymentReversalReason, setPaymentReversalReason] = useState("");
+  const [paymentReversalError, setPaymentReversalError] = useState("");
   useEffect(() => {
     setPaying(false);
     setScheduleDate(bill.scheduledDate ?? "");
+    setReversingPayment(null);
+    setPaymentReversalReason("");
+    setPaymentReversalError("");
   }, [bill._id, bill.scheduledDate]);
 
   const vendor = workspace.vendors.find((row) => row._id === bill.vendorId);
@@ -116,20 +124,21 @@ export function BillDetailDrawer({
     await run("cancel the bill", () => cancel({ societyId: societyId as Id<"societies">, ids: [bill._id as Id<"bills">], reason: reason || undefined }), "Bill canceled", posted ? "A reversing entry was posted." : undefined);
   };
 
-  const undoPayment = async (key: string, linked: boolean, amountCents: number) => {
-    const ok = await confirm({
-      title: `Remove the ${formatMoney(amountCents)} payment?`,
-      message: <p>Its journal entry is voided{linked ? " and the bank transaction goes back to unmatched, with the category it had before" : ""}. Use this for a payment recorded by mistake.</p>,
-      confirmLabel: "Remove payment",
-      tone: "danger",
-    });
-    if (!ok) return;
-    await run("remove the payment", () => removePayment({ id: bill._id as Id<"bills">, paymentKey: key }), "Payment removed", linked ? "The bank transaction is unmatched again." : undefined);
+  const reversePayment = async () => {
+    if (!reversingPayment) return;
+    setBusy(true); setPaymentReversalError("");
+    try {
+      if (!paymentReversalReason.trim()) throw new Error("Explain why this payment is being reversed.");
+      await removePayment({ id: bill._id as Id<"bills">, paymentKey: reversingPayment, date: paymentReversalDate, reason: paymentReversalReason });
+      toast.success("Payment reversed", "The original payment and its dated reversal remain in the history.");
+      setReversingPayment(null);
+    } catch (error) { setPaymentReversalError(errorMessage(error, "Could not reverse the payment.")); }
+    finally { setBusy(false); }
   };
 
   const footer = (
     <>
-      {canWrite && bill.status !== "canceled" && bill.payments.length === 0 && (
+      {canWrite && bill.status !== "canceled" && !bill.payments.some((payment) => !payment.reversedDate) && (
         <button type="button" className="btn btn--ghost btn--danger-text" disabled={busy} onClick={() => void cancelBill()}>
           <Ban size={12} aria-hidden="true" /> Cancel bill
         </button>
@@ -254,33 +263,36 @@ export function BillDetailDrawer({
         )}
       </section>
 
+      <BillAdjustments key={bill._id} bill={bill} workspace={workspace} canWrite={canWrite} />
       {(payable || bill.payments.length > 0) && (
         <section className="claim-drawer__section" aria-labelledby="bill-payments">
           <h3 id="bill-payments" className="claim-drawer__section-title">Payments</h3>
           {paying && (
             <BillPaymentForm bill={bill} workspace={workspace} defaultMethod={vendor?.paymentMethod} canWrite={canWrite} onDone={() => setPaying(false)} onCancel={() => setPaying(false)} />
           )}
-          {bill.payments.length === 0 ? (
+          {bill.payments.filter((payment) => !payment.kind || payment.kind === "payment").length === 0 ? (
             !paying && <p className="muted">No payments recorded yet.</p>
           ) : (
             <ul className="bill-payments">
-              {bill.payments.map((payment) => (
+              {bill.payments.filter(payment => !payment.kind || payment.kind === "payment").map((payment) => (
                 <li key={payment.key} className="bill-payments__item">
                   <span className="bill-payments__main">
                     <strong><Money cents={payment.amountCents} currency={bill.currency} /></strong>
                     <span className="muted">
-                      {formatDate(payment.date)} · {isBillPaymentMethod(payment.method) ? BILL_PAYMENT_METHOD_LABEL[payment.method] : payment.method}
+                        {formatDate(payment.date)} · {isBillPaymentMethod(payment.method) ? BILL_PAYMENT_METHOD_LABEL[payment.method] : payment.method}
+                        {payment.reversedDate ? ` · Reversed ${formatDate(payment.reversedDate)}` : ""}
                       {payment.reference ? ` · ${payment.reference}` : ""}
                       {payment.cashAccountLabel ? ` · from ${payment.cashAccountLabel}` : ""}
                     </span>
                     {payment.transaction && (
                       <span className="bill-payments__match">
-                        <Landmark size={12} aria-hidden="true" /> Matched to {payment.transaction.description} ({formatDate(payment.transaction.date)})
+                        <Landmark size={12} aria-hidden="true" /> {payment.reversedDate ? "Previously linked to" : "Matched to"} {payment.transaction.description} ({formatDate(payment.transaction.date)})
                       </span>
                     )}
                   </span>
-                  {canWrite && (
-                    <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => void undoPayment(payment.key, Boolean(payment.financialTransactionId), payment.amountCents)}>
+                  {payment.reversalReason && <p className="muted">{payment.reversalReason}</p>}
+                  {canWrite && !payment.reversedDate && ["approved", "scheduled"].includes(bill.lifecycle) && (
+                    <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => { setReversingPayment(payment.key); setPaymentReversalDate(payment.date > workspace.today ? payment.date : workspace.today); setPaymentReversalReason(""); setPaymentReversalError(""); setPaying(false); }}>
                       <Undo2 size={12} aria-hidden="true" /> {payment.financialTransactionId ? "Remove and unmatch" : "Remove"}
                     </button>
                   )}
@@ -288,6 +300,13 @@ export function BillDetailDrawer({
               ))}
             </ul>
           )}
+          {reversingPayment && <form className="form-stack" aria-label="Reverse bill payment" onSubmit={(event) => { event.preventDefault(); void reversePayment(); }}>
+            <p className="muted">This correction posts a reversal on the selected date. The original payment stays in earlier statements. A linked bank transaction is unmatched, and its previous accounting is restored on the correction date when applicable.</p>
+            <Field label="Payment reversal date"><input className="input" type="date" value={paymentReversalDate} min={bill.payments.find((payment) => payment.key === reversingPayment)?.date} max={workspace.today} onChange={(event) => setPaymentReversalDate(event.target.value)} /></Field>
+            <Field label="Payment reversal reason"><textarea className="input textarea" maxLength={1000} value={paymentReversalReason} onChange={(event) => setPaymentReversalReason(event.target.value)} /></Field>
+            {paymentReversalError && <p className="field__error" role="alert">{paymentReversalError}</p>}
+            <div className="pay-form__actions"><button type="button" className="btn" disabled={busy} onClick={() => setReversingPayment(null)}>Cancel payment reversal</button><button type="submit" className="btn btn--accent" disabled={busy || !canWrite}>Post payment reversal</button></div>
+          </form>}
         </section>
       )}
 

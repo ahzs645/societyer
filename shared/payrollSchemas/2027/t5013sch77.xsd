@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Carbon Capture, Utilization, and Storage Investment Tax Credit (CRA Form T5013 SCH 77 E )
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: October 2024
+Users of this schema:
+-Other Levies System
+
+-->
+<xsd:schema 
+xmlns:ols77="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols77/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols77/1-0-1" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols77/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 	
+
+<!-- T5013Schedule77Data is also referenced by other schemas for importing purposes -->
+	<xsd:element name="T5013Schedule77Data" type="ols77:Schedule77DataType"/>
+	<xsd:complexType name="Schedule77DataType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:Schedule77NrcanProjectCode"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77StartUpDate"  minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols77:Schedule77ReceivedSysEvaluationFromNrcan"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 1 -->
+			<xsd:element ref="ols77:Schedule77CalculationDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols77:Schedule77ItcAllocatedFromPartnershipsAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77ItcAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 2 -->
+			<xsd:element ref="ols77:Schedule77AllocationOfCleanElectricityDetails"  minOccurs="0" maxOccurs="2000"/>
+
+			<!-- Part 3 -->
+			<xsd:element ref="ols77:Schedule77AttestationElectionDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 4 -->
+			<xsd:element ref="ols77:Schedule77LabourRequirementsDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 5 -->
+            <xsd:element ref="ols77:Schedule77ElectingToPayLabourRequirements"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77AllocationOfLabourRequirementsDetails"  minOccurs="0" maxOccurs="2000"/> 
+
+			<!-- Part 6 -->
+			<xsd:element ref="ols77:Schedule77RecaptureDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols77:Schedule77RecaptureItcAllocatedFromPartnershipsAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77RecaptureItcAmount"  minOccurs="0" maxOccurs="1"/> 
+
+			<!-- Part 7 -->
+            <xsd:element ref="ols77:Schedule77RecaptureElectingToPayCleanElectricity"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77RecaptureAllocationOfCleanElectricityDetails"  minOccurs="0" maxOccurs="2000"/> 			
+			
+			<!-- Part 8 -->			
+			<xsd:element ref="ols77:Schedule77ExpectedEmissionIntensity"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77CompliancePeriodEndDate"  minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols77:Schedule77AverageActualEmissionIntensity"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77ItcRecoveryTaxDetails"  minOccurs="0" maxOccurs="2000"/>  
+			<xsd:element ref="ols77:Schedule77ItcRecoveryTaxAllocatedFromPartnershipsAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77RecoveryItcAmount"  minOccurs="0" maxOccurs="1"/> 
+
+			<!-- Part 9 -->
+            <xsd:element ref="ols77:Schedule77RecoveryTaxElectingToPayCleanElectricity"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77RecoveryTaxAllocationOfCleanElectricityDetails"  minOccurs="0" maxOccurs="2000"/> 
+
+			<!-- Part 10 -->
+			<xsd:element ref="ols77:Schedule77AmountsAllocatedFromPartnershipDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols77:Schedule77AllocatedItcFromPartnershipsTotal"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77AllocatedLabourRequirementsFromPartnershipsTotal"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77AllocatedItcRecaptureFromPartnershipsTotal"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols77:Schedule77AllocatedRecoveryFromPartnershipsTotal"  minOccurs="0" maxOccurs="1"/>
+			
+		</xsd:sequence>
+	</xsd:complexType>	
+	
+	<xsd:element name="Schedule77NrcanProjectCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="10"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Schedule77StartUpDate" type="sdt:DateType"/>
+	<xsd:element name="Schedule77ReceivedSysEvaluationFromNrcan" type="ccms:OneTwoCodeType"/>
+
+
+	<!-- Part 1 -€“ Clean electricity ITC calculation -->
+	<xsd:element name="Schedule77CalculationDetails" type="ols77:Schedule77CalculationDetailsType"/>
+	<xsd:complexType name="Schedule77CalculationDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CECCAClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols77:CEPropDesc" minOccurs="0" />
+			<xsd:element ref="ols77:CEPropAssetCode" minOccurs="0" />	
+            <xsd:element ref="ols77:CEProvinceCode" minOccurs="0" />
+            <xsd:element ref="ols77:CEAvailableForUseDate" minOccurs="0" />           
+			<xsd:element ref="ols77:CEDesignatedWorkSite" minOccurs="0" />			
+			<xsd:element ref="ols77:CECapitalCostAmount" minOccurs="0" />			
+			<xsd:element ref="ols77:CEAdjustmentsAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CEAssistanceRepaidAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CECalculationAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CESpecifiedPercentage" minOccurs="0" />
+			<xsd:element ref="ols77:CEItcAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CEElecting" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CECCAClassNumberText" type= "sdt:NumberType"/>	
+	<xsd:element name="CEPropDesc"  type= "ccms:Character175TextType"/>  
+	<xsd:element name="CEPropAssetCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>	
+	<xsd:element name="CEProvinceCode"  type= "ccms:CanadianProvinceTerritoryCodeType"/>	
+	<xsd:element name="CEAvailableForUseDate" type="sdt:DateType"/>
+	
+	<xsd:element name="CEDualUseEquipement"  type= "ccms:OneTwoCodeType"/>	
+    <xsd:element name="CEDesignatedWorkSite"  type= "ccms:Character175TextType"/>
+	<xsd:element name="CECapitalCostAmount" type="sdt:AmountType"/>	
+	<xsd:element name="CEAdjustmentsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CEAssistanceRepaidAmount" type="sdt:AmountType"/>	
+	<xsd:element name="CECalculationAmount" type="sdt:AmountType"/>	
+	<xsd:element name="CESpecifiedPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CEItcAmount" type="sdt:AmountType"/>	
+	<xsd:element name="CEElecting" type="ccms:OneTwoCodeType"/>	
+	<xsd:element name="Schedule77ItcAllocatedFromPartnershipsAmount" type="sdt:AmountType"/>	
+	<xsd:element name="Schedule77ItcAmount" type="sdt:AmountType"/>	
+	
+	<!-- Part 2 - Allocation of clean electricity ITC to members -->
+	<xsd:element name="Schedule77AllocationOfCleanElectricityDetails" type="ols77:Schedule77AllocationOfCleanElectricityDetailsType"/>
+	<xsd:complexType name="Schedule77AllocationOfCleanElectricityDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CEAllocationMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocationAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocationProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocationAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CEAllocationMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="CEAllocationAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="CEAllocationProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CEAllocationAllocatedAmount" type="sdt:AmountType"/>
+
+	<!-- Part 3 - Attestation and election to meet labour requirements -->
+	<xsd:element name="Schedule77AttestationElectionDetails" type="ols77:Schedule77AttestationElectionDetailsType"/>
+	<xsd:complexType name="Schedule77AttestationElectionDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CEAttestationElectionLastName" minOccurs="0"/>
+			<xsd:element ref="ols77:CEAttestationElectionFirstName" minOccurs="0"/>
+			<xsd:element ref="ols77:CEAttestationElectionPositionOfficeRank" minOccurs="0"/>
+			<xsd:element ref="ols77:CEAttestationElectionDate" minOccurs="0"/>
+			<xsd:element ref="ols77:CEAttestationElectionTelephoneNumber" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CEAttestationElectionLastName" type="ccms:Character175TextType"/>
+	<xsd:element name="CEAttestationElectionFirstName" type="ccms:Character175TextType"/>
+	<xsd:element name="CEAttestationElectionPositionOfficeRank" type="ccms:Character175TextType"/>
+	<xsd:element name="CEAttestationElectionDate" type="sdt:DateType"/>
+	<xsd:element name="CEAttestationElectionTelephoneNumber" type="ccms:Character175TextType"/>	
+	
+	<!-- Part 4 - Labour requirements addition to tax -->
+	<xsd:element name="Schedule77LabourRequirementsDetails" type ="ols77:Schedule77LabourRequirementsDetailsType" />
+	<xsd:complexType name="Schedule77LabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CEElectedToMeetLabourRequirements" minOccurs="0" />
+			<xsd:element ref="ols77:CENumberOfCoveredWorkersPaidBelowWageRequirements" minOccurs="0" />
+			<xsd:element ref="ols77:CETotalNumberOfDays" minOccurs="0" />
+			<xsd:element ref="ols77:CEWageRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CETotalHoursOfLabourRequiredByApprentices" minOccurs="0" />
+			<xsd:element ref="ols77:CETotalHoursOfLabourPerformedByApprentices" minOccurs="0" />
+			<xsd:element ref="ols77:CEApprenticeshipRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CELabourRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CELabourRequirementsTotalAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CEElectedToMeetLabourRequirements" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="CENumberOfCoveredWorkersPaidBelowWageRequirements" type="sdt:QuantityType"/>
+	<xsd:element name="CETotalNumberOfDays" type="sdt:QuantityType"/>
+	<xsd:element name="CEWageRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CETotalHoursOfLabourRequiredByApprentices" type="sdt:QuantityType"/>
+	<xsd:element name="CETotalHoursOfLabourPerformedByApprentices" type="sdt:QuantityType"/>	
+	<xsd:element name="CEApprenticeshipRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CELabourRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CELabourRequirementsTotalAmount" type="sdt:AmountType"/>
+	
+	<!-- Part 5 - Allocation of labour requirements addition to tax to qualified members -->
+	
+	<xsd:element name="Schedule77ElectingToPayLabourRequirements" type="ccms:OneTwoCodeType"/>  
+	<xsd:element name="Schedule77AllocationOfLabourRequirementsDetails" type="ols77:Schedule77AllocationOfLabourRequirementsDetailsType"/>
+	<xsd:complexType name="Schedule77AllocationOfLabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CEAllocationOfLabourRequirementsMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocationOfLabourRequirementsAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocationOfLabourRequirementsProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocationOfLabourRequirementsAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CEAllocationOfLabourRequirementsMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="CEAllocationOfLabourRequirementsAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="CEAllocationOfLabourRequirementsProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CEAllocationOfLabourRequirementsAllocatedAmount" type="sdt:AmountType"/>
+	
+	<!-- Part 6 - Recapture of clean electricity ITC -->
+	
+	<xsd:element name="Schedule77RecaptureDetails" type="ols77:Schedule77RecaptureDetailsType"/>
+	<xsd:complexType name="Schedule77RecaptureDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CERecaptureCCAClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols77:CERecapturePropertyAssetCode" minOccurs="0" />
+            <xsd:element ref="ols77:CERecaptureProvinceCode" minOccurs="0" />
+            <xsd:element ref="ols77:CERecaptureAvailableForUseDate" minOccurs="0" />
+			<xsd:element ref="ols77:CERecaptureItcAmount" minOccurs="0" /> 
+			<xsd:element ref="ols77:CERecaptureTaxRecoveryAmount" minOccurs="0" />			
+			<xsd:element ref="ols77:CERecaptureProceedsOfDispositionAmount" minOccurs="0" />				
+			<xsd:element ref="ols77:CERecaptureAmountIdentification" minOccurs="0" />		
+			<xsd:element ref="ols77:CERecaptureCapitalCostAmount" minOccurs="0" />			
+			<xsd:element ref="ols77:CERecaptureAmount" minOccurs="0" />		
+			<xsd:element ref="ols77:CERecaptureItcRecaptureAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="CERecaptureCCAClassNumberText" type= "sdt:NumberType"/>	
+	<xsd:element name="CERecapturePropertyAssetCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>	
+	<xsd:element name="CERecaptureProvinceCode"  type= "ccms:CanadianProvinceTerritoryCodeType"/>	
+	<xsd:element name="CERecaptureAvailableForUseDate" type="sdt:DateType"/>
+	<xsd:element name="CERecaptureItcAmount" type="sdt:AmountType"/>
+	<xsd:element name="CERecaptureTaxRecoveryAmount" type="sdt:AmountType"/>
+	<xsd:element name="CERecaptureProceedsOfDispositionAmount" type="sdt:AmountType"/>
+	<xsd:element name="CERecaptureAmountIdentification" type= "sdt:NumberType"/>
+	<xsd:element name="CERecaptureCapitalCostAmount" type="sdt:AmountType"/>
+	<xsd:element name="CERecaptureAmount" type="sdt:AmountType"/>
+	<xsd:element name="CERecaptureItcRecaptureAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule77RecaptureItcAllocatedFromPartnershipsAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule77RecaptureItcAmount" type="sdt:AmountType"/>	
+
+	<!-- Part 7 - Allocation of clean electricity ITC recapture to members -->
+
+  	<xsd:element name="Schedule77RecaptureElectingToPayCleanElectricity" type="ccms:OneTwoCodeType"/>  	
+	<xsd:element name="Schedule77RecaptureAllocationOfCleanElectricityDetails" type="ols77:Schedule77RecaptureAllocationOfCleanElectricityDetailsType"/>
+	<xsd:complexType name="Schedule77RecaptureAllocationOfCleanElectricityDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CERecaptureMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols77:CERecaptureAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols77:CERecaptureProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols77:CERecaptureAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CERecaptureMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="CERecaptureAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="CERecaptureProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CERecaptureAllocatedAmount" type="sdt:AmountType"/>	
+	
+	<!-- Part 8 - Clean electricity ITC recovery tax -->
+
+	<xsd:element name="Schedule77ExpectedEmissionIntensity" type= "sdt:NumberType"/>
+	<xsd:element name="Schedule77CompliancePeriodEndDate" type="sdt:DateType"/>
+	<xsd:element name="Schedule77AverageActualEmissionIntensity" type= "sdt:NumberType"/>
+	<xsd:element name="Schedule77ItcRecoveryTaxDetails" type="ols77:Schedule77ItcRecoveryTaxDetailsType"/>
+	<xsd:complexType name="Schedule77ItcRecoveryTaxDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CERecoveryTaxCCAClassNumberText" minOccurs="0" />
+            <xsd:element ref="ols77:CERecoveryTaxProvinceCode" minOccurs="0" />
+			<xsd:element ref="ols77:CERecoveryTaxPreviouslyReceivedAmount" minOccurs="0" /> 
+			<xsd:element ref="ols77:CERecoveryTaxRecapturePreviouslyPaidAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CERecoveryTaxAmount" minOccurs="0" />			
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="CERecoveryTaxCCAClassNumberText" type= "sdt:NumberType"/>	
+	<xsd:element name="CERecoveryTaxProvinceCode"  type= "ccms:CanadianProvinceTerritoryCodeType"/>	
+	<xsd:element name="CERecoveryTaxPreviouslyReceivedAmount" type="sdt:AmountType"/>
+	<xsd:element name="CERecoveryTaxRecapturePreviouslyPaidAmount" type="sdt:AmountType"/>
+	<xsd:element name="CERecoveryTaxAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule77ItcRecoveryTaxAllocatedFromPartnershipsAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule77RecoveryItcAmount" type="sdt:AmountType"/>
+
+	<!-- Part 9 - Allocation of clean electricity ITC recovery tax to members -->
+
+  	<xsd:element name="Schedule77RecoveryTaxElectingToPayCleanElectricity" type="ccms:OneTwoCodeType"/>  	
+	<xsd:element name="Schedule77RecoveryTaxAllocationOfCleanElectricityDetails" type="ols77:Schedule77RecoveryTaxAllocationOfCleanElectricityDetailsType"/>
+	<xsd:complexType name="Schedule77RecoveryTaxAllocationOfCleanElectricityDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CERecoveryTaxMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols77:CERecoveryTaxAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols77:CERecoveryTaxProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols77:CERecoveryTaxAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CERecoveryTaxMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="CERecoveryTaxAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="CERecoveryTaxProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CERecoveryTaxAllocatedAmount" type="sdt:AmountType"/>
+				
+	<!-- Part 10 - Amounts allocated from partnerships  -->
+	
+	<xsd:element name="Schedule77AmountsAllocatedFromPartnershipDetails" type="ols77:Schedule77AmountsAllocatedFromPartnershipDetailsType"/>
+	<xsd:complexType name="Schedule77AmountsAllocatedFromPartnershipDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols77:CEAllocatedFromPartnershipsName" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocatedFromPartnershipsAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocatedItcFromPartnershipsAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocatedLabourRequirementsFromPartnershipsAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocatedItcRecaptureFromPartnershipsAmount" minOccurs="0" />
+			<xsd:element ref="ols77:CEAllocatedRecoveryFromPartnershipsAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CEAllocatedFromPartnershipsName"  type= "ccms:Character175TextType"/>
+	<xsd:element name="CEAllocatedFromPartnershipsAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="CEAllocatedItcFromPartnershipsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CEAllocatedLabourRequirementsFromPartnershipsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CEAllocatedItcRecaptureFromPartnershipsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CEAllocatedRecoveryFromPartnershipsAmount" type="sdt:AmountType"/>
+	
+	<!-- Totals 975 980 990 -->
+	<xsd:element name="Schedule77AllocatedItcFromPartnershipsTotal" type="sdt:AmountType"/>
+	<xsd:element name="Schedule77AllocatedLabourRequirementsFromPartnershipsTotal" type="sdt:AmountType"/>
+	<xsd:element name="Schedule77AllocatedItcRecaptureFromPartnershipsTotal" type="sdt:AmountType"/>
+	<xsd:element name="Schedule77AllocatedRecoveryFromPartnershipsTotal" type="sdt:AmountType"/>
+	
+</xsd:schema>

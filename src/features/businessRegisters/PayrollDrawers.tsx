@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { FileUp } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { Drawer, Field, InspectorNote } from "../../components/ui";
@@ -9,47 +7,47 @@ import { DatePicker } from "../../components/DatePicker";
 import { Checkbox } from "../../components/Controls";
 import { Money } from "../../components/Money";
 import { useToast } from "../../components/Toast";
-import { formatDate, pluralize } from "../../lib/format";
+import { formatDate } from "../../lib/format";
 import {
-  REMITTANCE_CADENCES,
-  REMITTANCE_CADENCE_LABEL,
-  REMITTANCE_DUE_RULES,
-  REMITTANCE_DUE_RULE_LABEL,
-  REMITTER_TYPES,
-  REMITTER_TYPE_LABEL,
+  PAY_RUN_TYPES,
+  PAY_RUN_AMOUNT_FIELDS,
+  sumPayRunLines,
+  type PayRunLine,
   ROE_REASONS,
   ROE_STATUS_LABEL,
   SLIP_STATUS_LABEL,
   SLIP_TYPES,
   SLIP_TYPE_LABEL,
-  WORKERS_COMP_CADENCES,
-  WORKERS_COMP_CADENCE_LABEL,
-  WORKERS_COMP_PROVIDERS,
   REMITTANCE_STATUS_LABEL,
   monthEnd,
   monthStart,
-  parsePayrollCsv,
   payRunDifferenceCents,
   remittableCents,
   slipFilingDeadline,
-  type PayrollCsvResult,
 } from "../../../shared/businessRegisters";
 import { centsToInput, FieldRow, inputToCents, MoneyField } from "./formHelpers";
-import type { PayRunRow, PayrollEmployee, PayrollSettings, RemittanceRow, RoeRow, SlipRow } from "./types";
+import type { PayRunRow, PayrollEmployee, RemittanceRow, RoeRow, SlipRow } from "./types";
 
 const AMOUNT_FIELDS = [
-  ["grossCents", "Gross pay"],
+  ["grossCents", "Taxable gross pay"],
+  ["nonCashTaxableCents", "Non-cash taxable benefits"],
+  ["nonTaxableCashCents", "Non-taxable cash / reimbursements"],
   ["cppEmployeeCents", "CPP withheld"],
+  ["cpp2EmployeeCents", "CPP2 withheld"],
   ["eiEmployeeCents", "EI withheld"],
-  ["incomeTaxCents", "Income tax withheld"],
+  ["incomeTaxCents", "Combined income tax withheld"],
+  ["federalTaxCents", "Federal tax (if known)"],
+  ["provincialTaxCents", "Provincial tax (if known)"],
+  ["additionalIncomeTaxCents", "Additional TD1 tax (if known)"],
   ["otherDeductionsCents", "Other deductions"],
   ["netCents", "Net pay"],
   ["cppEmployerCents", "Employer CPP"],
+  ["cpp2EmployerCents", "Employer CPP2"],
   ["eiEmployerCents", "Employer EI"],
 ] as const;
 
 type AmountKey = (typeof AMOUNT_FIELDS)[number][0];
-type LineDraft = { employeeId?: string; employeeName: string; gross: string; cpp: string; ei: string; tax: string };
+type LineDraft = { employeeId?: string; providerEmployeeId?: string; employeeName: string; amounts: Record<AmountKey, string>; persisted?: boolean };
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message.replace(/^.*Uncaught Error:\s*/, "").split("\n")[0] : "Something went wrong.";
@@ -57,218 +55,75 @@ function errorMessage(error: unknown) {
 
 /* ------------------------------------------------------------------ pay run */
 
-export function PayRunDrawer({
-  open,
-  onClose,
-  societyId,
-  run,
-  employees,
-  canWrite,
-  today,
-}: {
-  open: boolean;
-  onClose: () => void;
-  societyId: string;
-  run: PayRunRow | null;
-  employees: PayrollEmployee[] | null;
-  canWrite: boolean;
-  today: string;
+export function PayRunDrawer({ open, onClose, societyId, run, employees, canWrite, today }: {
+  open: boolean; onClose: () => void; societyId: string; run: PayRunRow | null; employees: PayrollEmployee[] | null; canWrite: boolean; today: string;
 }) {
-  const toast = useToast();
-  const save = usePermissionedMutation(api.payroll.savePayRun, canWrite);
-  const remove = usePermissionedMutation(api.payroll.removePayRun, canWrite);
+  const toast = useToast(), save = usePermissionedMutation(api.payroll.savePayRun, canWrite), remove = usePermissionedMutation(api.payroll.removePayRun, canWrite);
   const [period, setPeriod] = useState({ periodStart: "", periodEnd: "", payDate: "" });
   const [amounts, setAmounts] = useState<Record<AmountKey, string>>({} as Record<AmountKey, string>);
-  const [byEmployee, setByEmployee] = useState(false);
-  const [lines, setLines] = useState<LineDraft[]>([]);
-  const [notes, setNotes] = useState("");
-  const [busy, setBusy] = useState(false);
-  const activeEmployees = useMemo(() => (employees ?? []).filter((employee) => employee.active), [employees]);
-
+  const [byEmployee, setByEmployee] = useState(false), [lines, setLines] = useState<LineDraft[]>([]), [notes, setNotes] = useState(""), [busy, setBusy] = useState(false);
+  const [identity, setIdentity] = useState({ providerName: "", providerRunId: "", runType: "regular", correctsRunId: "", correctionOfProviderRunId: "" });
+  const activeEmployees = useMemo(() => (employees || []).filter((employee) => employee.active), [employees]);
+  const frozen = !!run?.calculationId, editable = canWrite && !frozen;
+  const draftAmounts = (value?: Record<string, unknown>) => Object.fromEntries(AMOUNT_FIELDS.map(([key]) => [key, value ? ["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"].includes(key) && value[key] === undefined ? "" : centsToInput(Number(value[key] || 0)) : ""])) as Record<AmountKey, string>;
   useEffect(() => {
     if (!open) return;
-    if (run) {
-      setPeriod({ periodStart: run.periodStart, periodEnd: run.periodEnd, payDate: run.payDate });
-      setAmounts(Object.fromEntries(AMOUNT_FIELDS.map(([key]) => [key, centsToInput((run as any)[key] ?? 0)])) as Record<AmountKey, string>);
-      setByEmployee(false);
-      setLines([]);
-      setNotes(run.notes ?? "");
-    } else {
-      const start = today.slice(8) > "15" ? `${today.slice(0, 7)}-16` : monthStart(today);
-      setPeriod({ periodStart: start, periodEnd: start.endsWith("-16") ? monthEnd(today) : `${today.slice(0, 7)}-15`, payDate: today });
-      setAmounts(Object.fromEntries(AMOUNT_FIELDS.map(([key]) => [key, ""])) as Record<AmountKey, string>);
-      setByEmployee(activeEmployees.length > 0);
-      setLines(activeEmployees.map((employee) => ({ employeeId: employee._id, employeeName: employee.name, gross: "", cpp: "", ei: "", tax: "" })));
-      setNotes("");
-    }
+    const start = today.slice(8) > "15" ? `${today.slice(0, 7)}-16` : monthStart(today);
+    setPeriod(run ? { periodStart: run.periodStart, periodEnd: run.periodEnd, payDate: run.payDate } : { periodStart: start, periodEnd: start.endsWith("-16") ? monthEnd(today) : `${today.slice(0, 7)}-15`, payDate: today });
+    setAmounts(draftAmounts(run as unknown as Record<string, unknown>));
+    setByEmployee(run ? run.lines.length > 0 : activeEmployees.length > 0);
+    setLines(run ? run.lines.map((line) => ({ employeeId: line.employeeId, providerEmployeeId: line.providerEmployeeId, employeeName: line.employeeName, persisted: true, amounts: draftAmounts(line as unknown as Record<string, unknown>) })) : activeEmployees.map((employee) => ({ employeeId: employee._id, providerEmployeeId: employee.providerEmployeeId || employee.employeeNumber, employeeName: employee.name, amounts: draftAmounts() })));
+    setNotes(run?.notes || "");
+    setIdentity({ providerName: run?.providerName || "", providerRunId: run?.providerRunId || "", runType: run?.runType || "regular", correctsRunId: run?.correctsRunId || "", correctionOfProviderRunId: run?.correctionOfProviderRunId || "" });
   }, [open, run, today, activeEmployees]);
-
   const lineTotals = useMemo(() => {
-    const parsed = lines.map((line) => {
-      const gross = inputToCents(line.gross) ?? 0;
-      const cpp = inputToCents(line.cpp) ?? 0;
-      const ei = inputToCents(line.ei) ?? 0;
-      const tax = inputToCents(line.tax) ?? 0;
-      return {
-        employeeId: line.employeeId,
-        employeeName: line.employeeName,
-        grossCents: gross,
-        cppEmployeeCents: cpp,
-        eiEmployeeCents: ei,
-        incomeTaxCents: tax,
-        cppEmployerCents: cpp,
-        eiEmployerCents: Math.round(ei * 1.4),
-        netCents: gross - cpp - ei - tax,
-      };
-    }).filter((line) => line.grossCents > 0);
-    const sum = (key: keyof (typeof parsed)[number]) => parsed.reduce((total, line) => total + Number(line[key] ?? 0), 0);
-    return {
-      lines: parsed,
-      grossCents: sum("grossCents"),
-      cppEmployeeCents: sum("cppEmployeeCents"),
-      eiEmployeeCents: sum("eiEmployeeCents"),
-      incomeTaxCents: sum("incomeTaxCents"),
-      otherDeductionsCents: 0,
-      cppEmployerCents: sum("cppEmployerCents"),
-      eiEmployerCents: sum("eiEmployerCents"),
-      netCents: sum("netCents"),
-    };
+    const parsed = lines.map((line) => ({ employeeId: line.employeeId, providerEmployeeId: line.providerEmployeeId, employeeName: line.employeeName, ...Object.fromEntries(AMOUNT_FIELDS.filter(([key]) => !["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"].includes(key) || line.amounts[key]?.trim()).map(([key]) => [key, inputToCents(line.amounts[key]) || 0])) } as PayRunLine)).filter((line, index) => lines[index].persisted || PAY_RUN_AMOUNT_FIELDS.some((field) => Number(line[field]) !== 0));
+    return { ...sumPayRunLines(parsed), lines: parsed };
   }, [lines]);
-
-  const totals = byEmployee
-    ? lineTotals
-    : (Object.fromEntries(AMOUNT_FIELDS.map(([key]) => [key, inputToCents(amounts[key]) ?? 0])) as Record<AmountKey, number>);
-  const difference = payRunDifferenceCents(totals);
-  const owed = remittableCents(totals);
-
+  const totals = byEmployee ? lineTotals : Object.fromEntries(AMOUNT_FIELDS.filter(([key]) => !["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"].includes(key) || amounts[key]?.trim()).map(([key]) => [key, inputToCents(amounts[key]) || 0])) as Record<AmountKey, number>;
+  const updateLine = (index: number, patch: Partial<LineDraft>) => setLines((previous) => previous.map((line, i) => i === index ? { ...line, ...patch } : line));
+  const estimateStandard = (index: number) => {
+    const line = lines[index], cpp = inputToCents(line.amounts.cppEmployeeCents) || 0, cpp2 = inputToCents(line.amounts.cpp2EmployeeCents) || 0, ei = inputToCents(line.amounts.eiEmployeeCents) || 0;
+    const net = (inputToCents(line.amounts.grossCents) || 0) - (inputToCents(line.amounts.nonCashTaxableCents) || 0) + (inputToCents(line.amounts.nonTaxableCashCents) || 0) - cpp - cpp2 - ei - (inputToCents(line.amounts.incomeTaxCents) || 0) - (inputToCents(line.amounts.otherDeductionsCents) || 0);
+    updateLine(index, { amounts: { ...line.amounts, cppEmployerCents: centsToInput(cpp), cpp2EmployerCents: centsToInput(cpp2), eiEmployerCents: centsToInput(Math.round(ei * 1.4)), netCents: centsToInput(net) } });
+  };
   const submit = async () => {
     if (!canWrite) return;
     setBusy(true);
     try {
-      await save({
-        ...(run ? { id: run._id } : {}),
-        societyId,
-        ...period,
-        ...(byEmployee
-          ? { lines: lineTotals.lines.map((line) => (line.employeeId ? line : { ...line, employeeId: undefined })) }
-          : Object.fromEntries(AMOUNT_FIELDS.map(([key]) => [key, totals[key]]))),
-        notes: notes || undefined,
-      });
-      toast.success(run ? "Pay run saved" : "Pay run added", "Remittances and deadlines are up to date.");
-      onClose();
-    } catch (error) {
-      toast.error("Couldn't save the pay run", errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
+      const drafts = byEmployee ? lines.map((line) => line.amounts) : [amounts];
+      if (!frozen && drafts.some((draft) => AMOUNT_FIELDS.some(([key]) => draft[key]?.trim() && inputToCents(draft[key]) === undefined))) throw new Error("Enter valid monetary amounts before saving.");
+      await save({ ...(run ? { id: run._id } : {}), societyId, ...period,
+        ...(!frozen ? { ...identity, ...(byEmployee ? { lines: lineTotals.lines } : { ...totals, ...(run?.lines.length ? { clearLines: true } : {}) }) } : {}), notes: notes || undefined });
+      toast.success(run ? "Pay run saved" : "Pay run added", "Employee detail, remittances and deadlines are up to date."); onClose();
+    } catch (error) { toast.error("Couldn't save the pay run", errorMessage(error)); } finally { setBusy(false); }
   };
-
   const del = async () => {
-    if (!run || !canWrite) return;
+    if (!run || !editable) return;
     setBusy(true);
-    try {
-      await remove({ id: run._id });
-      toast.success("Pay run removed");
-      onClose();
-    } catch (error) {
-      toast.error("Couldn't remove the pay run", errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
+    try { await remove({ id: run._id }); toast.success("Pay run removed"); onClose(); } catch (error) { toast.error("Couldn't remove the pay run", errorMessage(error)); } finally { setBusy(false); }
   };
-
-  return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title={run ? "Pay run" : "New pay run"}
-      size="wide"
-      footer={
-        <>
-          {run && canWrite && <button className="btn btn--ghost btn--danger-text" onClick={del} disabled={busy}>Remove</button>}
-          <span className="register-drawer__spacer" />
-          <button className="btn" onClick={onClose}>{canWrite ? "Cancel" : "Close"}</button>
-          {canWrite && <button className="btn btn--accent" onClick={submit} disabled={busy}>Save</button>}
-        </>
-      }
-    >
-      <InspectorNote title="Records only">
-        Run payroll with your provider. Record each run here so remittances, year-end slips and deadlines follow from it.
-      </InspectorNote>
-      <FieldRow>
-        <Field label="Period start" required><DatePicker value={period.periodStart} onChange={(value) => setPeriod({ ...period, periodStart: value })} disabled={!canWrite} /></Field>
-        <Field label="Period end" required><DatePicker value={period.periodEnd} onChange={(value) => setPeriod({ ...period, periodEnd: value })} disabled={!canWrite} /></Field>
-        <Field label="Pay date" required hint="Decides the remittance month."><DatePicker value={period.payDate} onChange={(value) => setPeriod({ ...period, payDate: value })} disabled={!canWrite} /></Field>
-      </FieldRow>
-
-      {!run && activeEmployees.length > 0 && (
-        <Checkbox checked={byEmployee} onChange={setByEmployee} label="Enter amounts by employee" hint="Needed to prepare T4 slips from the pay runs." disabled={!canWrite} />
-      )}
-
-      {run && run.lines.length > 0 && (
-        <section className="register-section">
-          <h3 className="register-section__title">By employee</h3>
-          <div className="register-lines" role="table" aria-label="Pay run lines">
-            <div className="register-lines__row register-lines__row--head" role="row">
-              <span role="columnheader">Employee</span>
-              <span role="columnheader" className="num">Gross</span>
-              <span role="columnheader" className="num">Deductions</span>
-              <span role="columnheader" className="num">Net</span>
-            </div>
-            {run.lines.map((line, index) => (
-              <div className="register-lines__row" role="row" key={`${line.employeeName}-${index}`}>
-                <span role="cell">{line.employeeName}</span>
-                <span role="cell" className="num"><Money cents={line.grossCents} /></span>
-                <span role="cell" className="num"><Money cents={line.cppEmployeeCents + line.eiEmployeeCents + line.incomeTaxCents + (line.otherDeductionsCents ?? 0)} /></span>
-                <span role="cell" className="num"><Money cents={line.netCents} /></span>
-              </div>
-            ))}
-          </div>
-          <p className="register-hint">Imported lines are kept as the provider sent them. Edit the totals below if the provider corrected the run.</p>
-        </section>
-      )}
-
-      {byEmployee ? (
-        <section className="register-section">
-          <h3 className="register-section__title">By employee</h3>
-          {lines.map((line, index) => (
-            <fieldset className="register-employee" key={line.employeeId ?? index}>
-              <legend>{line.employeeName}</legend>
-              <FieldRow>
-                <MoneyField label="Gross pay" value={line.gross} onChange={(value) => setLines(lines.map((row, i) => (i === index ? { ...row, gross: value } : row)))} disabled={!canWrite} />
-                <MoneyField label="CPP" value={line.cpp} onChange={(value) => setLines(lines.map((row, i) => (i === index ? { ...row, cpp: value } : row)))} disabled={!canWrite} />
-                <MoneyField label="EI" value={line.ei} onChange={(value) => setLines(lines.map((row, i) => (i === index ? { ...row, ei: value } : row)))} disabled={!canWrite} />
-                <MoneyField label="Income tax" value={line.tax} onChange={(value) => setLines(lines.map((row, i) => (i === index ? { ...row, tax: value } : row)))} disabled={!canWrite} />
-              </FieldRow>
-            </fieldset>
-          ))}
-          <p className="register-hint">Employer CPP matches the employee's; employer EI is 1.4 times the employee's. Net pay is gross less the deductions.</p>
-        </section>
-      ) : (
-        <section className="register-section">
-          <h3 className="register-section__title">Run totals</h3>
-          <div className="register-money-grid">
-            {AMOUNT_FIELDS.map(([key, label]) => (
-              <MoneyField key={key} label={label} value={amounts[key] ?? ""} onChange={(value) => setAmounts({ ...amounts, [key]: value })} disabled={!canWrite} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <dl className="register-summary">
-        <div><dt>Gross pay</dt><dd><Money cents={totals.grossCents} /></dd></div>
-        <div><dt>Net pay</dt><dd><Money cents={totals.netCents} /></dd></div>
-        <div><dt>Owed to the CRA</dt><dd><Money cents={owed} /></dd></div>
-      </dl>
-      {difference !== 0 && totals.grossCents > 0 && (
-        <InspectorNote tone="warn" title="The amounts don't add up">
-          Gross pay less the deductions is <Money cents={totals.netCents + difference} />, but net pay is <Money cents={totals.netCents} />. Check the provider's register before saving.
-        </InspectorNote>
-      )}
-      <Field label="Notes"><textarea className="textarea" rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!canWrite} /></Field>
-      {run?.transactionId && <p className="register-hint">Matched to the net-pay line in the bank feed.</p>}
-    </Drawer>
-  );
+  return <Drawer open={open} onClose={onClose} title={run ? "Pay run" : "New pay run"} size="wide" footer={<>
+    {run && editable && <button className="btn btn--ghost btn--danger-text" onClick={del} disabled={busy}>Remove</button>}<span className="register-drawer__spacer" /><button className="btn" onClick={onClose}>{canWrite ? "Cancel" : "Close"}</button>{canWrite && <button className="btn btn--accent" onClick={submit} disabled={busy}>Save</button>}
+  </>}>
+    <InspectorNote title={frozen ? "Finalized calculation" : "Payroll register"}>{frozen ? "Financial fields are frozen. Notes can be updated; corrections use a new calculation linked to this run." : "Record manual or provider payroll here. Employee detail is preserved on later edits. Use payroll calculations for native calculated earnings and deductions."}</InspectorNote>
+    <FieldRow>{([['periodStart', 'Period start'], ['periodEnd', 'Period end'], ['payDate', 'Pay date']] as const).map(([key, label]) => <Field key={key} label={label} required><DatePicker value={period[key]} onChange={(value) => setPeriod({ ...period, [key]: value })} disabled={!editable} /></Field>)}</FieldRow>
+    <FieldRow><Field label="Payroll provider"><input className="input" value={identity.providerName} onChange={(event) => setIdentity({ ...identity, providerName: event.target.value })} disabled={!editable} /></Field><Field label="Provider run ID"><input className="input" value={identity.providerRunId} onChange={(event) => setIdentity({ ...identity, providerRunId: event.target.value })} disabled={!editable} /></Field><Field label="Run type"><Select value={identity.runType} onChange={(runType) => setIdentity({ ...identity, runType })} options={PAY_RUN_TYPES.map((value) => ({ value, label: value.replace(/_/g, ' ') }))} disabled={!editable} /></Field></FieldRow>
+    {['correction', 'reversal'].includes(identity.runType) && <FieldRow><Field label="Original pay run ID"><input className="input" value={identity.correctsRunId} onChange={(event) => setIdentity({ ...identity, correctsRunId: event.target.value })} disabled={!editable} /></Field><Field label="Or original provider run ID"><input className="input" value={identity.correctionOfProviderRunId} onChange={(event) => setIdentity({ ...identity, correctionOfProviderRunId: event.target.value })} disabled={!editable} /></Field></FieldRow>}
+    <Checkbox checked={byEmployee} onChange={(value) => { if (!value) setAmounts(draftAmounts(lineTotals)); setByEmployee(value); }} label={run?.lines.length ? "Keep employee detail (turn off to replace it with aggregate totals)" : "Enter amounts by employee"} disabled={!editable} />
+    {byEmployee ? <section className="register-section"><h3 className="register-section__title">By employee</h3>{lines.map((line, index) => <fieldset className="register-employee" key={`${index}-${line.employeeId || line.providerEmployeeId || 'manual'}`}><legend>{line.employeeName || `Employee ${index + 1}`}</legend>
+      <FieldRow>{employees?.length ? <Field label="Linked employee"><Select value={line.employeeId || ''} onChange={(employeeId) => updateLine(index, { employeeId: employeeId || undefined, employeeName: employees.find((employee) => employee._id === employeeId)?.name || line.employeeName })} options={employees.map((employee) => ({ value: employee._id, label: employee.name }))} clearable clearLabel="Unlinked provider employee" disabled={!editable} /></Field> : null}<Field label="Employee name"><input className="input" value={line.employeeName} onChange={(event) => updateLine(index, { employeeName: event.target.value })} disabled={!editable} /></Field><Field label="Provider employee ID"><input className="input" value={line.providerEmployeeId || ''} onChange={(event) => updateLine(index, { providerEmployeeId: event.target.value || undefined })} disabled={!editable} /></Field></FieldRow>
+      <div className="register-money-grid">{AMOUNT_FIELDS.map(([key, label]) => <MoneyField key={key} label={label} value={line.amounts[key] || ''} onChange={(value) => updateLine(index, { amounts: { ...line.amounts, [key]: value } })} disabled={!editable} />)}</div>
+      {editable && <button className="btn btn--sm" onClick={() => estimateStandard(index)}>Fill standard employer shares and net</button>}
+      {editable && lines.length > 1 && <button className="btn btn--sm btn--ghost btn--danger-text" onClick={() => setLines((previous) => previous.filter((_, i) => i !== index))}>Remove employee line</button>}
+    </fieldset>)}{editable && <button className="btn btn--sm" onClick={() => setLines([...lines, { employeeName: '', amounts: draftAmounts() }])}>Add employee line</button>}<p className="register-hint">Standard shares fill matching CPP/CPP2 and 1.4× EI only when selected. Keep actual provider amounts, including any approved reduced EI multiplier.</p></section>
+      : <section className="register-section"><h3 className="register-section__title">Run totals</h3><div className="register-money-grid">{AMOUNT_FIELDS.map(([key, label]) => <MoneyField key={key} label={label} value={amounts[key] || ''} onChange={(value) => setAmounts({ ...amounts, [key]: value })} disabled={!editable} />)}</div></section>}
+    <dl className="register-summary"><div><dt>Taxable gross</dt><dd><Money cents={totals.grossCents} /></dd></div><div><dt>Net cash pay</dt><dd><Money cents={totals.netCents} /></dd></div><div><dt>Owed to the CRA, including CPP2</dt><dd><Money cents={remittableCents(totals)} /></dd></div></dl>
+    {payRunDifferenceCents(totals) !== 0 && <InspectorNote tone="warn" title="The amounts don't add up">Taxable gross, less non-cash benefits, plus non-taxable cash, less employee deductions differs from the recorded net cash by <Money cents={payRunDifferenceCents(totals)} />.</InspectorNote>}
+    {run?.sourceMissingFields?.length ? <p className="register-hint">Import fields explicitly confirmed as zero: {run.sourceMissingFields.join(', ')}.</p> : null}
+    <Field label="Notes"><textarea className="textarea" rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!canWrite} /></Field>
+    {run?.transactionId && <p className="register-hint">Matched to the net-pay line in the bank feed.</p>}
+  </Drawer>;
 }
 
 /* --------------------------------------------------------------- remittance */
@@ -375,6 +230,7 @@ export function SlipDrawer({
       recipientName: slip?.recipientName ?? "",
       income: centsToInput(slip?.employmentIncomeCents),
       cpp: centsToInput(slip?.cppCents),
+      cpp2: centsToInput(slip?.cpp2Cents),
       ei: centsToInput(slip?.eiCents),
       tax: centsToInput(slip?.incomeTaxCents),
       status: slip?.status ?? "draft",
@@ -399,6 +255,7 @@ export function SlipDrawer({
         recipientName: form.recipientName || employee?.name || "",
         employmentIncomeCents: inputToCents(form.income) ?? 0,
         cppCents: inputToCents(form.cpp) ?? 0,
+        cpp2Cents: inputToCents(form.cpp2) ?? 0,
         eiCents: inputToCents(form.ei) ?? 0,
         incomeTaxCents: inputToCents(form.tax) ?? 0,
         status: form.status,
@@ -444,7 +301,7 @@ export function SlipDrawer({
       }
     >
       <InspectorNote title={`Due ${formatDate(slipFilingDeadline(year))}`}>
-        Slips and the summary for {year} are due on the last day of February {year + 1}. File them with your payroll provider or the CRA, then mark them filed here.
+        Slips and the summary for {year} are due at the end of February {year + 1}, adjusted to the next CRA business day. File them with your payroll provider or the CRA, then mark them filed here.
       </InspectorNote>
       <FieldRow>
         <Field label="Tax year"><input className="input" inputMode="numeric" value={form.year ?? ""} onChange={(event) => setForm({ ...form, year: event.target.value.replace(/\D/g, "").slice(0, 4) })} disabled={!canWrite} /></Field>
@@ -469,7 +326,8 @@ export function SlipDrawer({
       )}
       <div className="register-money-grid">
         <MoneyField label={form.slipType === "T4A" ? "Income" : "Employment income"} value={form.income ?? ""} onChange={(income) => setForm({ ...form, income })} disabled={!canWrite} />
-        <MoneyField label="CPP" value={form.cpp ?? ""} onChange={(cpp) => setForm({ ...form, cpp })} disabled={!canWrite} />
+        <MoneyField label="CPP (T4 box 16)" value={form.cpp ?? ""} onChange={(cpp) => setForm({ ...form, cpp })} disabled={!canWrite} />
+        <MoneyField label="CPP2 (T4 box 16A)" value={form.cpp2 ?? ""} onChange={(cpp2) => setForm({ ...form, cpp2 })} disabled={!canWrite} />
         <MoneyField label="EI" value={form.ei ?? ""} onChange={(ei) => setForm({ ...form, ei })} disabled={!canWrite} />
         <MoneyField label="Income tax" value={form.tax ?? ""} onChange={(tax) => setForm({ ...form, tax })} disabled={!canWrite} />
       </div>
@@ -605,237 +463,8 @@ export function RoeDrawer({
 
 /* ----------------------------------------------------------------- settings */
 
-export function PayrollSettingsDrawer({ open, onClose, societyId, settings, canWrite }: { open: boolean; onClose: () => void; societyId: string; settings: PayrollSettings; canWrite: boolean }) {
-  const toast = useToast();
-  const save = usePermissionedMutation(api.payroll.saveSettings, canWrite);
-  const [form, setForm] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    setForm({
-      remitterType: settings.remitterType ?? "regular",
-      cadence: settings.cadence ?? "monthly",
-      dueRule: settings.dueRule ?? "day_of_next_month",
-      dueValue: settings.dueValue ? String(settings.dueValue) : "",
-      payrollAccountNumber: settings.payrollAccountNumber ?? "",
-      providerName: settings.providerName ?? "",
-      workersCompProvider: settings.workersCompProvider ?? "",
-      workersCompAccount: settings.workersCompAccount ?? "",
-      workersCompCadence: settings.workersCompCadence ?? "",
-      workersCompFirstDueDate: settings.workersCompFirstDueDate ?? "",
-    });
-  }, [open, settings]);
-  const regular = form.remitterType === "regular";
-  const submit = async () => {
-    setBusy(true);
-    try {
-      await save({
-        societyId,
-        remitterType: form.remitterType,
-        cadence: regular ? undefined : form.cadence,
-        dueRule: regular ? undefined : form.dueRule,
-        dueValue: regular ? undefined : Number(form.dueValue),
-        payrollAccountNumber: form.payrollAccountNumber || undefined,
-        providerName: form.providerName || undefined,
-        workersCompProvider: form.workersCompProvider || undefined,
-        workersCompAccount: form.workersCompAccount || undefined,
-        workersCompCadence: form.workersCompCadence || undefined,
-        workersCompFirstDueDate: form.workersCompCadence ? form.workersCompFirstDueDate || undefined : undefined,
-      });
-      toast.success("Payroll settings saved", "Remittance due dates and deadlines were recalculated.");
-      onClose();
-    } catch (error) {
-      toast.error("Couldn't save the settings", errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title="Payroll settings"
-      footer={
-        <>
-          <span className="register-drawer__spacer" />
-          <button className="btn" onClick={onClose}>{canWrite ? "Cancel" : "Close"}</button>
-          {canWrite && <button className="btn btn--accent" onClick={submit} disabled={busy}>Save</button>}
-        </>
-      }
-    >
-      <section className="register-section">
-        <h3 className="register-section__title">CRA remittances</h3>
-        <Field label="Remitter type">
-          <Select value={form.remitterType ?? "regular"} onChange={(remitterType) => setForm({ ...form, remitterType })} options={REMITTER_TYPES.map((value) => ({ value, label: REMITTER_TYPE_LABEL[value] }))} disabled={!canWrite} />
-        </Field>
-        {regular ? (
-          <p className="register-hint">Deductions are due on the 15th of the month after the employees are paid.</p>
-        ) : (
-          <>
-            <InspectorNote tone="warn" title="Use the schedule on your CRA notice">
-              Quarterly and accelerated remitters have their own periods and due dates. Enter them as the CRA gave them to you; Societyer doesn't work them out.
-            </InspectorNote>
-            <FieldRow>
-              <Field label="Remit">
-                <Select value={form.cadence ?? "monthly"} onChange={(cadence) => setForm({ ...form, cadence })} options={REMITTANCE_CADENCES.map((value) => ({ value, label: REMITTANCE_CADENCE_LABEL[value] }))} disabled={!canWrite} />
-              </Field>
-              <Field label="Due">
-                <Select value={form.dueRule ?? "day_of_next_month"} onChange={(dueRule) => setForm({ ...form, dueRule })} options={REMITTANCE_DUE_RULES.map((value) => ({ value, label: REMITTANCE_DUE_RULE_LABEL[value] }))} disabled={!canWrite} />
-              </Field>
-              <Field label={form.dueRule === "days_after_period_end" ? "Days" : "Day"} required>
-                <input className="input" inputMode="numeric" value={form.dueValue ?? ""} onChange={(event) => setForm({ ...form, dueValue: event.target.value.replace(/\D/g, "").slice(0, 3) })} disabled={!canWrite} />
-              </Field>
-            </FieldRow>
-          </>
-        )}
-        <FieldRow>
-          <Field label="CRA payroll account" hint="The RP program account number."><input className="input" value={form.payrollAccountNumber ?? ""} onChange={(event) => setForm({ ...form, payrollAccountNumber: event.target.value })} disabled={!canWrite} /></Field>
-          <Field label="Payroll provider"><input className="input" value={form.providerName ?? ""} onChange={(event) => setForm({ ...form, providerName: event.target.value })} disabled={!canWrite} /></Field>
-        </FieldRow>
-      </section>
-      <section className="register-section">
-        <h3 className="register-section__title">Workers' compensation (optional)</h3>
-        <FieldRow>
-          <Field label="Board">
-            <Select value={form.workersCompProvider ?? ""} onChange={(workersCompProvider) => setForm({ ...form, workersCompProvider })} options={WORKERS_COMP_PROVIDERS.map((value) => ({ value, label: value }))} clearable clearLabel="None" disabled={!canWrite} />
-          </Field>
-          <Field label="Account"><input className="input" value={form.workersCompAccount ?? ""} onChange={(event) => setForm({ ...form, workersCompAccount: event.target.value })} disabled={!canWrite} /></Field>
-        </FieldRow>
-        <FieldRow>
-          <Field label="Report and pay">
-            <Select value={form.workersCompCadence ?? ""} onChange={(workersCompCadence) => setForm({ ...form, workersCompCadence })} options={WORKERS_COMP_CADENCES.map((value) => ({ value, label: WORKERS_COMP_CADENCE_LABEL[value] }))} clearable clearLabel="No reminder" disabled={!canWrite} />
-          </Field>
-          {form.workersCompCadence && <Field label="Next due" required><DatePicker value={form.workersCompFirstDueDate ?? ""} onChange={(workersCompFirstDueDate) => setForm({ ...form, workersCompFirstDueDate })} disabled={!canWrite} /></Field>}
-        </FieldRow>
-        <p className="register-hint">The reminder goes on the Deadlines page. Completing it there brings up the next one.</p>
-      </section>
-    </Drawer>
-  );
-}
+export { PayrollSettingsDrawer } from "./PayrollSettingsDrawer";
 
 /* ------------------------------------------------------------------ import */
 
-const SAMPLE_CSV = [
-  "Period start,Period end,Pay date,Employee,Gross,CPP,EI,Income tax,Net",
-  "2026-01-01,2026-01-15,2026-01-15,Sample Employee,2500.00,141.80,40.75,312.40,2005.05",
-].join("\n");
-
-export function PayrollImportDrawer({ open, onClose, societyId, canWrite, defaultProvider }: { open: boolean; onClose: () => void; societyId: string; canWrite: boolean; defaultProvider?: string }) {
-  const toast = useToast();
-  const importRuns = usePermissionedMutation(api.payroll.importPayRuns, canWrite);
-  const [result, setResult] = useState<PayrollCsvResult | null>(null);
-  const [fileName, setFileName] = useState("");
-  const [provider, setProvider] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    setResult(null);
-    setFileName("");
-    setProvider(defaultProvider ?? "");
-  }, [open, defaultProvider]);
-
-  const read = async (file: File | undefined) => {
-    if (!file) return;
-    setFileName(file.name);
-    setResult(parsePayrollCsv(await file.text()));
-  };
-  const sampleHref = useMemo(() => `data:text/csv;charset=utf-8,${encodeURIComponent(SAMPLE_CSV)}`, []);
-  const submit = async () => {
-    if (!result?.runs.length) return;
-    setBusy(true);
-    try {
-      const outcome = await importRuns({
-        societyId,
-        providerName: provider || undefined,
-        runs: result.runs.map((run) => ({
-          periodStart: run.periodStart,
-          periodEnd: run.periodEnd,
-          payDate: run.payDate,
-          grossCents: run.grossCents,
-          cppEmployeeCents: run.cppEmployeeCents,
-          eiEmployeeCents: run.eiEmployeeCents,
-          incomeTaxCents: run.incomeTaxCents,
-          otherDeductionsCents: run.otherDeductionsCents,
-          cppEmployerCents: run.cppEmployerCents,
-          eiEmployerCents: run.eiEmployerCents,
-          netCents: run.netCents,
-          lines: run.lines.length
-            ? run.lines.map((line) => ({
-                employeeName: line.employeeName,
-                grossCents: line.grossCents,
-                cppEmployeeCents: line.cppEmployeeCents,
-                eiEmployeeCents: line.eiEmployeeCents,
-                incomeTaxCents: line.incomeTaxCents,
-                otherDeductionsCents: line.otherDeductionsCents,
-                cppEmployerCents: line.cppEmployerCents,
-                eiEmployerCents: line.eiEmployerCents,
-                netCents: line.netCents,
-              }))
-            : undefined,
-        })),
-      });
-      toast.success(`Imported ${pluralize(outcome.created, "pay run")}`, outcome.skipped ? `${pluralize(outcome.skipped, "run")} already recorded were skipped.` : undefined);
-      onClose();
-    } catch (error) {
-      toast.error("Couldn't import the pay runs", errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title="Import pay runs"
-      footer={
-        <>
-          <span className="register-drawer__spacer" />
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn--accent" onClick={submit} disabled={busy || !canWrite || !result?.runs.length}>
-            {result?.runs.length ? `Import ${pluralize(result.runs.length, "pay run")}` : "Import"}
-          </button>
-        </>
-      }
-    >
-      <p className="register-hint">
-        Export the payroll register from your provider as CSV: one row per employee per pay run, or one row per run. We read the pay
-        date, period, employee, gross, CPP, EI, income tax, other deductions, employer CPP and EI, and net pay. Dates must be YYYY-MM-DD.
-        Runs already recorded for the same period and pay date are skipped. <a href={sampleHref} download="payroll-sample.csv">Download a sample file</a>.
-      </p>
-      <label className="register-file">
-        <FileUp size={16} aria-hidden="true" />
-        <span>{fileName || "Choose a CSV file"}</span>
-        <input type="file" accept=".csv,text/csv" onChange={(event) => void read(event.target.files?.[0])} disabled={!canWrite} />
-      </label>
-      <Field label="Payroll provider"><input className="input" value={provider} onChange={(event) => setProvider(event.target.value)} /></Field>
-      {result && result.errors.length > 0 && (
-        <InspectorNote tone="warn" title={`${pluralize(result.errors.length, "row")} couldn't be read`}>
-          <ul className="register-errors">
-            {result.errors.slice(0, 6).map((error) => <li key={error}>{error}</li>)}
-          </ul>
-        </InspectorNote>
-      )}
-      {result && result.runs.length > 0 && (
-        <div className="register-lines" role="table" aria-label="Pay runs in the file">
-          <div className="register-lines__row register-lines__row--head" role="row">
-            <span role="columnheader">Pay date</span>
-            <span role="columnheader" className="num">Gross</span>
-            <span role="columnheader" className="num">Net</span>
-            <span role="columnheader" className="num">Employees</span>
-          </div>
-          {result.runs.slice(0, 24).map((run) => (
-            <div className="register-lines__row" role="row" key={`${run.periodStart}-${run.payDate}`}>
-              <span role="cell">{formatDate(run.payDate)}</span>
-              <span role="cell" className="num"><Money cents={run.grossCents} /></span>
-              <span role="cell" className="num"><Money cents={run.netCents} /></span>
-              <span role="cell" className="num">{run.lines.length || "—"}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      <p className="register-hint">Names are matched to the <Link to="/app/employees">Employees</Link> page so slips can be prepared from the runs.</p>
-    </Drawer>
-  );
-}
-
+export { PayrollImportDrawer } from "./PayrollImportDrawer";

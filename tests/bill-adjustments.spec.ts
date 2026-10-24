@@ -1,0 +1,107 @@
+import { test, expect, type Locator, type Page } from "@playwright/test";
+
+async function select(page: Page, scope: Locator, label: string, option: string) {
+  await scope.getByLabel(label, { exact: true }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
+test("vendor credits, write-offs, refunds and dated reversals survive reload and stay distinct from cash payments", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/app/bills?bill=static_bill_janitorial_march");
+  let drawer = page.getByRole("dialog");
+  await expect(drawer).toContainText("HJ-2291");
+  await expect(drawer.getByRole("heading", { name: "Vendor credits and refunds", exact: true })).toBeVisible();
+  await drawer.getByRole("button", { name: "Add vendor adjustment", exact: true }).click();
+  let form = drawer.getByRole("form", { name: "Record vendor adjustment", exact: true });
+  await form.getByLabel("Adjustment amount", { exact: true }).fill("10.00");
+  await form.getByLabel("Adjustment reference", { exact: true }).fill("CN-BROWSER-001");
+  await form.getByLabel("Adjustment reason", { exact: true }).fill("Browser vendor credit for service correction");
+  await form.getByRole("button", { name: "Record adjustment", exact: true }).click();
+  let credit = drawer.getByTestId("bill-adjustment").filter({ hasText: "Browser vendor credit for service correction" });
+  await expect(credit).toContainText("Vendor credit");
+  await expect(credit).toContainText("CN-BROWSER-001");
+  const payments = drawer.getByRole("region", { name: "Payments", exact: true });
+  await expect(payments).toContainText("No payments recorded yet.");
+  await expect(payments.locator(".bill-payments__item")).toHaveCount(0);
+
+  await drawer.getByRole("button", { name: "Record payment", exact: true }).click();
+  const paymentForm = drawer.getByRole("form", { name: /^Record a payment for/ });
+  await paymentForm.getByLabel("Amount", { exact: true }).fill("25.00");
+  await paymentForm.getByLabel("Reference", { exact: true }).fill("PAY-BROWSER-001");
+  await paymentForm.getByRole("button", { name: /^Record \$25\.00$/ }).click();
+  await expect(payments.locator(".bill-payments__item")).toHaveCount(1);
+  await expect(payments).toContainText("PAY-BROWSER-001");
+
+  await drawer.getByRole("button", { name: "Add vendor adjustment", exact: true }).click();
+  form = drawer.getByRole("form", { name: "Record vendor adjustment", exact: true });
+  await select(page, form, "Adjustment type", "Vendor refund");
+  await expect(form).toContainText("Available to refund: $25.00");
+  await form.getByLabel("Adjustment amount", { exact: true }).fill("25.01");
+  await form.getByLabel("Adjustment reason", { exact: true }).fill("Refuse refund above original payment");
+  await form.getByRole("button", { name: "Record adjustment", exact: true }).click();
+  await expect(drawer.getByRole("alert")).toContainText("remaining amount");
+  await expect(drawer.getByTestId("bill-adjustment")).toHaveCount(1);
+  await form.getByLabel("Adjustment amount", { exact: true }).fill("5.00");
+  await form.getByLabel("Adjustment reference", { exact: true }).fill("RF-BROWSER-001");
+  await form.getByLabel("Adjustment reason", { exact: true }).fill("Browser vendor returned part of the payment");
+  await form.getByRole("button", { name: "Record adjustment", exact: true }).click();
+  let refund = drawer.getByTestId("bill-adjustment").filter({ hasText: "Browser vendor returned part of the payment" });
+  await expect(refund).toContainText("Vendor refund");
+  await expect(refund).toContainText("received into");
+  await expect(payments.locator(".bill-payments__item")).toHaveCount(1);
+
+  await page.reload();
+  drawer = page.getByRole("dialog");
+  refund = drawer.getByTestId("bill-adjustment").filter({ hasText: "Browser vendor returned part of the payment" });
+  await expect(refund).toContainText("RF-BROWSER-001");
+  await refund.getByRole("button", { name: "Reverse adjustment", exact: true }).click();
+  let reversal = drawer.getByRole("form", { name: "Reverse vendor adjustment", exact: true });
+  await reversal.getByLabel("Reversal reason", { exact: true }).fill("Browser reversal preserves original vendor refund");
+  await reversal.getByRole("button", { name: "Post reversal", exact: true }).click();
+  await expect(refund).toContainText("Reversed");
+  credit = drawer.getByTestId("bill-adjustment").filter({ hasText: "Browser vendor credit for service correction" });
+  await credit.getByRole("button", { name: "Reverse adjustment", exact: true }).click();
+  reversal = drawer.getByRole("form", { name: "Reverse vendor adjustment", exact: true });
+  await reversal.getByLabel("Reversal reason", { exact: true }).fill("Browser reversal preserves original vendor credit");
+  await reversal.getByRole("button", { name: "Post reversal", exact: true }).click();
+  await expect(credit).toContainText("Reversed");
+
+  await drawer.getByRole("button", { name: "Add vendor adjustment", exact: true }).click();
+  form = drawer.getByRole("form", { name: "Record vendor adjustment", exact: true });
+  await select(page, form, "Adjustment type", "Write-off");
+  await form.getByLabel("Adjustment amount", { exact: true }).fill("1.00");
+  await form.getByLabel("Adjustment reason", { exact: true }).fill("Browser small balance write-off");
+  await form.getByRole("button", { name: "Record adjustment", exact: true }).click();
+  const writeOff = drawer.getByTestId("bill-adjustment").filter({ hasText: "Browser small balance write-off" });
+  await expect(writeOff).toContainText("Write-off");
+  await writeOff.getByRole("button", { name: "Reverse adjustment", exact: true }).click();
+  reversal = drawer.getByRole("form", { name: "Reverse vendor adjustment", exact: true });
+  await reversal.getByLabel("Reversal reason", { exact: true }).fill("Browser restore written-off balance");
+  await reversal.getByRole("button", { name: "Post reversal", exact: true }).click();
+  await expect(writeOff).toContainText("Reversed");
+  await page.reload();
+  drawer = page.getByRole("dialog");
+  await expect(drawer.getByTestId("bill-adjustment")).toHaveCount(3);
+  await expect(drawer.getByTestId("bill-adjustment").filter({ hasText: "Reversed" })).toHaveCount(3);
+  await expect(drawer.locator(".claim-drawer__hero")).toContainText("$605.00");
+  await expect(drawer.locator(".bill-payments__item")).toHaveCount(1);
+  await expect(drawer).toContainText("Browser restore written-off balance");
+  await drawer.locator(".bill-payments__item").getByRole("button", { name: "Remove", exact: true }).click();
+  const paymentReversal = drawer.getByRole("form", { name: "Reverse bill payment", exact: true });
+  await expect(paymentReversal.getByLabel("Payment reversal date", { exact: true })).not.toHaveValue("");
+  await paymentReversal.getByLabel("Payment reversal reason", { exact: true }).fill("Browser correction retains original cash payment");
+  await paymentReversal.getByRole("button", { name: "Post payment reversal", exact: true }).click();
+  await expect(drawer.locator(".bill-payments__item")).toContainText("Reversed");
+  await expect(drawer.locator(".bill-payments__item")).toContainText("Browser correction retains original cash payment");
+  await expect(drawer.locator(".claim-drawer__hero")).toContainText("$630.00");
+  await page.reload();
+  drawer = page.getByRole("dialog");
+  await expect(drawer.locator(".bill-payments__item")).toHaveCount(1);
+  await expect(drawer.locator(".bill-payments__item")).toContainText("PAY-BROWSER-001");
+  await expect(drawer.locator(".bill-payments__item")).toContainText("Browser correction retains original cash payment");
+  await expect(drawer.locator(".bill-payments__item").getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+  await expect(drawer.locator(".claim-drawer__hero")).toContainText("$630.00");
+  await expect(drawer.getByTestId("bill-adjustment").filter({ hasText: "Reversed" })).toHaveCount(3);
+  expect(errors).toEqual([]);
+});

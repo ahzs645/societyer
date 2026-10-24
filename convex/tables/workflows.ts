@@ -52,6 +52,12 @@ export const workflowTables = {
   // human to send the message from their own inbox.
   pendingEmails: defineTable({
     societyId: v.id("societies"),
+    automationRunId: v.optional(v.id("billingAutomationRuns")),
+    automationScheduleId: v.optional(v.id("billingAutomationSchedules")),
+    providerState: v.optional(v.string()),
+    providerMessageId: v.optional(v.string()),
+    automationPdfStorageId: v.optional(v.id("_storage")),
+    automationPdfFileName: v.optional(v.string()),
     workflowId: v.optional(v.id("workflows")),
     workflowRunId: v.optional(v.id("workflowRuns")),
     nodeKey: v.optional(v.string()),

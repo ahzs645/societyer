@@ -41,6 +41,10 @@ export const billLinkedTransactionSnapshotValidator = v.object({
 });
 
 export const billPaymentValidator = v.object({
+  kind: v.optional(v.union(v.literal("payment"), v.literal("credit"), v.literal("write_off"), v.literal("refund"))),
+  idempotencyKey: v.optional(v.string()), sourcePaymentKey: v.optional(v.string()), adjustmentAccountId: v.optional(v.id("financialAccounts")),
+  reversedDate: v.optional(v.string()), reversalJournalEntryId: v.optional(v.id("journalEntries")), cashBasisReversalJournalEntryId: v.optional(v.id("journalEntries")),
+  reversedAtISO: v.optional(v.string()), reversalReason: v.optional(v.string()), restoredTransactionJournalEntryId: v.optional(v.id("journalEntries")),
   key: v.string(),
   date: v.string(),
   amountCents: v.number(),
@@ -56,8 +60,10 @@ export const billPaymentValidator = v.object({
   cashBasisJournalEntryId: v.optional(v.id("journalEntries")),
   cashBasisShares: v.optional(v.array(v.object({ key: v.string(), amountCents: v.number() }))),
   // The bank line's own "Backfill imports" entry, voided while this payment
-  // holds the line so it isn't in the books twice; posted again on removal.
+  // holds the line. Removal posts a new restoration on its correction date.
   voidedTransactionEntryId: v.optional(v.id("journalEntries")),
+  replacedTransactionEntryId: v.optional(v.id("journalEntries")),
+  bankTransferJournalEntryId: v.optional(v.id("journalEntries")),
   note: v.optional(v.string()),
   recordedAtISO: v.string(),
   recordedByName: v.optional(v.string()),

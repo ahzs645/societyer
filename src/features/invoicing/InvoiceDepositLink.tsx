@@ -26,10 +26,12 @@ export function InvoiceDepositLink({ invoice, payment, transactions, onDone }: P
   const linkDeposit = useMutation(api.invoices.linkDeposit);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const available = useMemo(() => transactions.filter((txn) => !txn.matchedElsewhere && (!txn.linkedInvoiceId || txn._id === payment.financialTransactionId)), [transactions, payment.financialTransactionId]);
+  const baseCurrency = invoice.money?.fx?.baseCurrency ?? invoice.currency;
+  const baseAmountCents = payment.baseAmountCents ?? payment.amountCents;
+  const available = useMemo(() => transactions.filter((txn) => !txn.matchedElsewhere && (txn.currency ?? "CAD") === baseCurrency && (!txn.releasedDate || txn.releasedDate <= payment.date) && (!txn.linkedInvoiceId || txn._id === payment.financialTransactionId)), [transactions, payment.financialTransactionId, payment.date, baseCurrency]);
   const suggestions = useMemo(
-    () => suggestPaymentTransactions({ ...invoice, issueDate: invoice.issueDate, balanceCents: payment.amountCents, totalCents: payment.amountCents }, available.filter((txn) => txn._id !== payment.financialTransactionId)),
-    [invoice, payment.amountCents, payment.financialTransactionId, available],
+    () => suggestPaymentTransactions({ ...invoice, issueDate: invoice.issueDate, balanceCents: baseAmountCents, totalCents: baseAmountCents }, available.filter((txn) => txn._id !== payment.financialTransactionId)),
+    [invoice, baseAmountCents, payment.financialTransactionId, available],
   );
   const options = available
     .filter((txn) => txn._id !== payment.financialTransactionId)

@@ -28,7 +28,7 @@
  *
  * Money is integer cents. Dates are `YYYY-MM-DD`. Pure TypeScript.
  */
-import { allocateProportionally, computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine } from "./invoicing";
+import { convertInvoiceCents, allocateMoney, type InvoiceMoneyOptions, type InvoicePayment, allocateProportionally, computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine } from "./invoicing";
 
 /* ---------------------------------------------------------------- sources */
 
@@ -37,6 +37,17 @@ export const INVOICE_POSTINGS = {
   accrualReversal: { source: "invoice_accrual", basis: "accrual-only" },
   payment: { source: "invoice_payment", basis: "both" },
   cashBasis: { source: "invoice_cash_basis", basis: "cash-only" },
+  credit: { source: "invoice_credit", basis: "accrual-only" },
+  writeOff: { source: "invoice_write_off", basis: "accrual-only" },
+  refund: { source: "invoice_refund", basis: "both" },
+  refundCash: { source: "invoice_refund_cash", basis: "cash-only" },
+  revaluation: { source: "invoice_fx_revaluation", basis: "accrual-only" },
+  revaluationReversal: { source: "invoice_fx_revaluation_reversal", basis: "accrual-only" },
+  settlementReversal: { source: "invoice_settlement_reversal", basis: "both" },
+  adjustmentReversal: { source: "invoice_adjustment_reversal", basis: "accrual-only" },
+  cashReversal: { source: "invoice_cash_reversal", basis: "cash-only" },
+  bankRestoration: { source: "invoice_bank_restoration", basis: "both" },
+  bankTransfer: { source: "invoice_bank_transfer", basis: "both" },
 } as const;
 
 export type InvoicePostingKind = keyof typeof INVOICE_POSTINGS;
@@ -123,6 +134,13 @@ export type InvoiceLedgerLine = {
   description?: string;
   tagIds?: string[];
   financialTransactionId?: string;
+  programCode?: string;
+  counterpartyId?: string;
+  grantId?: string;
+  fundRestrictionId?: string;
+  documentIds?: string[];
+  sourceExternalId?: string;
+  rawJson?: string;
 };
 
 export type InvoiceForPosting = {
@@ -130,6 +148,7 @@ export type InvoiceForPosting = {
   billToName: string;
   lines: InvoiceLine[];
   discount?: InvoiceDiscount | null;
+  money?: InvoiceMoneyOptions;
 };
 
 export function invoiceLabel(invoice: Pick<InvoiceForPosting, "number" | "billToName">): string {
@@ -153,10 +172,10 @@ function ledgerLineKey(line: { accountId: string; tagIds?: readonly string[] }):
 export function accrualPostingLines(
   invoice: InvoiceForPosting,
   revenueFor: (line: InvoiceLine, index: number) => string | null,
-  accounts: { receivableAccountId: string; taxPayableAccountId?: string | null },
+  accounts: { receivableAccountId: string; taxPayableAccountId?: string | null; withholdingAccountId?: string; shippingRevenueAccountId?: string },
 ): InvoiceLedgerLine[] {
-  const totals = computeInvoiceTotals(invoice.lines, invoice.discount);
-  if (!(totals.totalCents > 0)) throw new Error("Only invoices with a total above zero go into the books.");
+  const totals = computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money);
+  if (!(totals.grossTotalCents > 0)) throw new Error("Only invoices with a gross total above zero go into the books.");
   const shares = allocateProportionally(totals.discountCents, totals.lineAmounts);
   const nets = new Map<string, { accountId: string; tagIds?: string[]; descriptions: string[]; signedCents: number }>();
   const add = (accountId: string, signedCents: number, description: string, tagIds?: readonly string[]) => {
@@ -167,12 +186,17 @@ export function accrualPostingLines(
     nets.set(key, row);
   };
   invoice.lines.forEach((line, index) => {
-    const amountCents = totals.lineAmounts[index] - shares[index];
+    const amountCents = totals.lineNetCents[index];
     if (amountCents === 0) return;
     const accountId = revenueFor(line, index);
     if (!accountId) throw new Error(`Line ${index + 1} (${line.item}) has no revenue account. Map it under Edit GL account mapping.`);
     add(accountId, amountCents, line.item, line.tagIds);
   });
+  if (totals.shippingCents) {
+    const accountId = accounts.shippingRevenueAccountId ?? revenueFor(invoice.lines[0], 0);
+    if (!accountId) throw new Error("Choose a shipping revenue account.");
+    add(accountId, totals.shippingCents, "Shipping charges");
+  }
   for (const tax of totals.taxes) {
     if (!tax.cents) continue;
     if (!accounts.taxPayableAccountId) throw new Error("Choose the account sales tax is collected to under Edit GL account mapping.");
@@ -189,7 +213,12 @@ export function accrualPostingLines(
       ...(row.tagIds?.length ? { tagIds: row.tagIds } : {}),
     });
   }
-  return [{ accountId: accounts.receivableAccountId, side: "debit", amountCents: totals.totalCents, description: `Accounts receivable: ${invoiceLabel(invoice)}` }, ...credits];
+  const debit: InvoiceLedgerLine[] = [{ accountId: accounts.receivableAccountId, side: "debit", amountCents: totals.totalCents, description: `Accounts receivable: ${invoiceLabel(invoice)}` }];
+  if (totals.withholdingCents) {
+    if (!accounts.withholdingAccountId) throw new Error("Choose a withholding tax receivable account.");
+    debit.push({ accountId: accounts.withholdingAccountId, side: "debit", amountCents: totals.withholdingCents, description: "Tax withheld by customer" });
+  }
+  return convertPostingLines([...debit, ...credits], invoice.money?.fx?.rateMicros ?? 1_000_000);
 }
 
 /** The payment: Dr the deposit account / Cr receivable, both lines carrying a linked bank line. */
@@ -380,6 +409,7 @@ export type NeedsActionInput = {
   unmappedItems: ReadonlyArray<string>;
   /** The accrual is posted: what keeps an invoice out of the books no longer applies. */
   accrualPosted?: boolean;
+  fxQuoteAvailable?: boolean;
 };
 
 function centsText(cents: number) {
@@ -394,11 +424,11 @@ export function invoiceNeedsAction(invoice: NeedsActionInput, context: { workspa
   if (invoice.lifecycle !== "sent") return [];
   const flags: NeedsActionFlag[] = [];
   const currency = String(invoice.currency || context.workspaceCurrency).toUpperCase();
-  if (currency !== context.workspaceCurrency.toUpperCase() && !invoice.accrualPosted) {
+  if (currency !== context.workspaceCurrency.toUpperCase() && !invoice.accrualPosted && !invoice.fxQuoteAvailable) {
     flags.push({
       code: "foreign_currency",
       title: `Invoiced in ${currency}`,
-      detail: `The books are kept in ${context.workspaceCurrency}, so this invoice isn't posted automatically. Record it with a manual journal entry at the exchange rate you received.`,
+      detail: `The books are kept in ${context.workspaceCurrency}, so this invoice needs an explicit, dated FX quote before it can post automatically.`,
       fix: "record_manually",
       fixLabel: "Open journal entries",
     });
@@ -487,4 +517,32 @@ export const ACCRUAL_BLOCKING_CODES: ReadonlySet<NeedsActionCode> = new Set(["fo
 export function foreignCurrencySummary(invoices: ReadonlyArray<{ lifecycle: string; currency: string }>, workspaceCurrency: string) {
   const rows = invoices.filter((invoice) => invoice.lifecycle !== "void" && String(invoice.currency || workspaceCurrency).toUpperCase() !== workspaceCurrency.toUpperCase());
   return { count: rows.length, currencies: [...new Set(rows.map((invoice) => String(invoice.currency).toUpperCase()))].sort() };
+}
+
+
+/** Translate both balanced sides using the same rounded base total. */
+export function convertPostingLines(lines: InvoiceLedgerLine[], rateMicros: number): InvoiceLedgerLine[] {
+  if (rateMicros === 1_000_000) return lines.filter((line) => line.amountCents > 0);
+  const debits = lines.filter((line) => line.side === "debit"), credits = lines.filter((line) => line.side === "credit");
+  const total = debits.reduce((sum, line) => sum + line.amountCents, 0);
+  if (total !== credits.reduce((sum, line) => sum + line.amountCents, 0)) throw new Error("The source posting is not balanced.");
+  const baseTotal = convertInvoiceCents(total, rateMicros);
+  const amounts = new Map<InvoiceLedgerLine, number>();
+  for (const side of [debits, credits]) {
+    if(side===debits&&side.length>1){const first=convertInvoiceCents(side[0].amountCents,rateMicros);amounts.set(side[0],first);allocateMoney(baseTotal-first,side.slice(1).map(line=>line.amountCents)).forEach((amount,index)=>amounts.set(side[index+1],amount));}
+    else allocateMoney(baseTotal, side.map((line) => line.amountCents)).forEach((amount, index) => amounts.set(side[index], amount));
+  }
+  return lines.map((line) => ({ ...line, amountCents: amounts.get(line)! })).filter((line) => line.amountCents > 0);
+}
+export function fxSettlementPostingLines(input: { amountCents: number; baseAmountCents: number; bookValueCents: number; financialTransactionId?: string; kind?: InvoicePayment["kind"] }, accounts: { receivableAccountId: string; depositAccountId: string; gainAccountId: string; lossAccountId: string }, description: string): InvoiceLedgerLine[] {
+  const refund = input.amountCents < 0;
+  const cash = Math.abs(input.baseAmountCents), book = Math.abs(input.bookValueCents);
+  const link = input.financialTransactionId ? { financialTransactionId: input.financialTransactionId } : {};
+  const lines: InvoiceLedgerLine[] = [
+    { accountId: accounts.depositAccountId, side: refund ? "credit" : "debit", amountCents: cash, description, ...link },
+    { accountId: accounts.receivableAccountId, side: refund ? "debit" : "credit", amountCents: book, description, ...link },
+  ];
+  const gain = (cash - book) * (refund ? -1 : 1);
+  if (gain) lines.push({ accountId: gain > 0 ? accounts.gainAccountId : accounts.lossAccountId, side: gain > 0 ? "credit" : "debit", amountCents: Math.abs(gain), description: "Realized foreign exchange difference" });
+  return lines.filter((line) => line.amountCents > 0);
 }

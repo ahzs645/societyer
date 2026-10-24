@@ -3,11 +3,12 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { SkeletonRows } from "../../../components/ui";
 import { formatDate } from "../../../lib/format";
-import type { AccountingBasis, ReportLine, ReportLineFilter } from "../../../../shared/booksReports";
+import { reportDrillLines, type AccountingBasis, type ReportLine, type ReportLineFilter } from "../../../../shared/booksReports";
 import { FinanceDrilldownDrawer } from "../components/FinanceDrilldownDrawer";
 import { ledgerLineToDrilldownItem } from "../components/TrialBalanceReport";
 import { BASIS_LABELS } from "./reportFilters";
 import { formatPeriodRange } from "./reportPeriods";
+import type { CompleteBooks } from "./useCompleteBooks";
 import type { ReportContext } from "./types";
 
 export type DrillScope = "balance" | "period" | "cash";
@@ -37,6 +38,7 @@ function scopeText(target: DrillTarget) {
  */
 export function ReportDrilldown({
   context,
+  books,
   target,
   basis,
   filter,
@@ -45,6 +47,7 @@ export function ReportDrilldown({
   onClose,
 }: {
   context: ReportContext;
+  books?: CompleteBooks;
   target: DrillTarget | null;
   basis: AccountingBasis;
   filter: ReportLineFilter | undefined;
@@ -52,9 +55,9 @@ export function ReportDrilldown({
   currency: string;
   onClose: () => void;
 }) {
-  const lines = useQuery(
+  const queriedLines = useQuery(
     api.accounting.booksReportLines,
-    target
+    target && !books
       ? {
           societyId: context.societyId,
           accountIds: target.accountIds,
@@ -68,6 +71,7 @@ export function ReportDrilldown({
       : "skip",
   ) as ReportLine[] | undefined;
 
+  const lines = useMemo(() => books && target ? reportDrillLines({ ...books, basis, currency, filter, accountIds: target.accountIds, scope: target.scope, start: target.from, end: target.to }) : queriedLines, [books, target, basis, currency, filter, queriedLines]);
   const items = useMemo(() => (lines ?? []).map((line) => ledgerLineToDrilldownItem(line, context.fundNames)), [lines, context.fundNames]);
 
   return (

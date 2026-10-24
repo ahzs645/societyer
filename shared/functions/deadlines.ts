@@ -9,8 +9,13 @@
  * shared by the mutations.
  */
 
+import { isPayrollRoeDeadline } from "../payrollDeadline";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+
+function assertEditableDeadline(row: Record<string, unknown>) {
+  if (isPayrollRoeDeadline(row)) throw new Error("This deadline follows a protected ROE case. Record actual issuance, changes and follow-ups in the payroll ROE workflow.");
+}
 
 function deriveStatus(doc: any): "open" | "complete" | "closed" {
   if (doc?.status === "open" || doc?.status === "complete" || doc?.status === "closed") {
@@ -187,6 +192,7 @@ export async function setStatusPortable(
   if (!candidate) throw new Error("deadlines not found.");
   await requireSocietyMembership(ctx, String(candidate.societyId));
   await getOwned(ctx, "deadlines", id, String(candidate.societyId));
+  assertEditableDeadline(candidate);
   return applyStatusTransition(ctx, id, status);
 }
 
@@ -198,6 +204,7 @@ export async function toggleDonePortable(
   if (!candidate) throw new Error("deadlines not found.");
   await requireSocietyMembership(ctx, String(candidate.societyId));
   await getOwned(ctx, "deadlines", id, String(candidate.societyId));
+  assertEditableDeadline(candidate);
   return applyStatusTransition(ctx, id, done ? "complete" : "open");
 }
 
@@ -225,6 +232,7 @@ export async function updatePortable(
   if (!candidate) throw new Error("deadlines not found.");
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const before = await getOwned(ctx, "deadlines", id, String(candidate.societyId));
+  assertEditableDeadline(before);
   if (patch.linkedFilingId) {
     await getOwned(ctx, "filings", patch.linkedFilingId, String(candidate.societyId));
   }
@@ -250,6 +258,7 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   if (!candidate) return;
   await requireSocietyMembership(ctx, String(candidate.societyId));
   await getOwned(ctx, "deadlines", id, String(candidate.societyId));
+  assertEditableDeadline(candidate);
   await ctx.db.delete(id);
 }
 
@@ -264,6 +273,7 @@ export async function backfillStatusPortable(
     .collect();
   let updated = 0;
   for (const row of rows) {
+    if (isPayrollRoeDeadline(row)) continue;
     if (row.status === "open" || row.status === "complete" || row.status === "closed") continue;
     const status = row.done ? "complete" : "open";
     await ctx.db.patch(row._id, { status, done: status === "complete" });

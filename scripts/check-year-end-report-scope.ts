@@ -1,0 +1,122 @@
+import assert from "node:assert/strict";
+import { MemoryDb } from "../shared/portable/memoryDb";
+import { makeCapabilities } from "../shared/portable/capabilities";
+import { tables, society } from "../src/lib/staticConvexFixtures";
+import { annualStatementPortable, orgRevenueExpensePortable, restrictedFundStatementPortable } from "../shared/functions/yearEnd";
+import { yearEndCurrencyScope } from "../shared/yearEndCurrency";
+
+const seed: Record<string, any[]> = JSON.parse(JSON.stringify(tables));
+seed.users = seed.users.map((user) => ({ ...user, status: "Active", authIssuer: "https://issuer.test", authSubject: `sub-${user._id}` }));
+seed.societies = [JSON.parse(JSON.stringify(society))];
+for (const table of ["financials", "budgets", "financialTransactions", "financialAccounts", "journalEntries", "journalLines", "accountingCounterparties", "grants", "grantTransactions", "invoiceSettings"]) seed[table] = [];
+const societyId = seed.users[0].societyId;
+seed.financialAccounts = [
+  { _id: "scope-bank", societyId, name: "Bank", accountType: "Bank", currency: "CAD" },
+  { _id: "scope-income", societyId, name: "Revenue", accountType: "Income", currency: "CAD" },
+  { _id: "scope-expense", societyId, name: "Expense", accountType: "Expense", currency: "CAD" },
+];
+seed.budgets = [{ _id: "scope-budget", societyId, fiscalYear: "2026", category: "Services", plannedCents: 5000 }];
+seed.financialTransactions = [
+  { _id: "scope-prior-bank", societyId, accountId: "scope-bank", date: "2025-06-01", amountCents: 900000, category: "Services" },
+  { _id: "scope-foreign-bank", societyId: "foreign-workspace", accountId: "scope-bank", date: "2026-06-01", amountCents: 800000, category: "Services" },
+];
+seed.accountingCounterparties = [{ _id: "scope-customer", societyId, name: "Current customer" }];
+seed.grants = [{ _id: "scope-grant", societyId, title: "Current grant" }];
+seed.journalEntries = [{ _id: "scope-prior-entry", societyId, status: "posted", date: "2025-06-01", fiscalYear: "2025" }];
+seed.journalLines = [{ _id: "scope-prior-line", societyId, journalEntryId: "scope-prior-entry", accountId: "scope-income", amountCents: 900000, side: "credit", counterpartyId: "scope-customer", grantId: "scope-grant" }];
+const db = new MemoryDb({ seed });
+const ctx: any = { db, principal: { kind: "user", runtime: "test", assurance: "trusted-workspace", subject: `sub-${seed.users[0]._id}`, issuer: "https://issuer.test", userId: seed.users[0]._id, societyId }, capabilities: makeCapabilities({}) };
+const empty = await annualStatementPortable(ctx, { societyId, fiscalYear: "2026" });
+assert.equal(empty.revenueCents, 0, "another year's bank revenue is not substituted for an empty year");
+assert.equal(empty.expensesCents, 0);
+assert.deepEqual(empty.incomeByCategory, []);
+assert.deepEqual(empty.expenseByCategory, []);
+assert.deepEqual(empty.byCounterparty, [], "another year's journal lines are not substituted for an empty year");
+assert.deepEqual(empty.byGrant, []);
+assert.equal(empty.budgets[0].actualCents, 0);
+const emptyOrg = await orgRevenueExpensePortable(ctx, { societyId, fiscalYear: "2026" });
+assert.equal(emptyOrg.revenueTotals.totalCents, 0, "organization statement also keeps an empty selected year empty");
+assert.equal(emptyOrg.expenseTotals.totalCents, 0);
+await db.insert("financialTransactions", { societyId, accountId: "scope-bank", date: "2026-03-01", amountCents: 30000, category: "Services" });
+await db.insert("financialTransactions", { societyId, accountId: "scope-bank", date: "2026-04-01", amountCents: -10000, category: "Supplies" });
+const postedId = await db.insert("journalEntries", { societyId, status: "posted", date: "2026-03-01", fiscalYear: "2026" });
+const draftId = await db.insert("journalEntries", { societyId, status: "draft", date: "2026-03-01", fiscalYear: "2026" });
+const voidId = await db.insert("journalEntries", { societyId, status: "void", date: "2026-03-01", fiscalYear: "2026" });
+for (const journalEntryId of [postedId, draftId, voidId]) await db.insert("journalLines", { societyId, journalEntryId, accountId: "scope-income", amountCents: 30000, side: "credit", counterpartyId: "scope-customer", grantId: "scope-grant" });
+const selected = await annualStatementPortable(ctx, { societyId, fiscalYear: "2026" });
+assert.equal(selected.revenueCents, 30000);
+assert.equal(selected.expensesCents, 10000);
+assert.equal(selected.surplusCents, 20000);
+assert.deepEqual(selected.incomeByCategory, [{ category: "Services", cents: 30000 }]);
+assert.deepEqual(selected.expenseByCategory, [{ category: "Supplies", cents: 10000 }]);
+assert.equal(selected.byCounterparty[0].incomeCents, 30000, "only selected-year posted journal lines populate counterparty breakdowns");
+assert.equal(selected.byGrant[0].incomeCents, 30000);
+const selectedOrg = await orgRevenueExpensePortable(ctx, { societyId, fiscalYear: "2026" });
+assert.equal(selectedOrg.revenueTotals.totalCents, 30000);
+assert.equal(selectedOrg.expenseTotals.totalCents, 10000);
+await db.insert("financials", { societyId, fiscalYear: "2026", periodEnd: "2026-12-31", revenueCents: 99000, expensesCents: 44000 });
+await db.insert("financials", { societyId, fiscalYear: "2025", periodEnd: "2025-12-31", revenueCents: 999999, expensesCents: 0 });
+const recorded = await annualStatementPortable(ctx, { societyId, fiscalYear: "2026" });
+assert.equal(recorded.revenueCents, 99000, "recorded selected-year statement remains authoritative for headline totals");
+assert.equal(recorded.expensesCents, 44000);
+assert.equal(recorded.incomeByCategory[0].cents, 30000, "bank-derived breakdown retains its separate source");
+assert.equal(recorded.byGrant[0].incomeCents, 30000);
+
+// Currency is a source filter, including each independent statement section.
+const usdBank = await db.insert("financialAccounts", { societyId, name: "USD Bank", accountType: "Bank", currency: "USD", isRestricted: true });
+const usdIncome = await db.insert("financialAccounts", { societyId, name: "USD Revenue", accountType: "Income", currency: "USD" });
+const usdReceipt = await db.insert("financialTransactions", { societyId, accountId: usdBank, date: "2026-07-01", amountCents: 10000, category: "USD Services" });
+await db.insert("financialTransactions", { societyId, accountId: usdBank, date: "2026-07-02", amountCents: -2500, category: "USD Supplies" });
+const cadReceipt = await db.insert("financialTransactions", { societyId, accountId: "scope-bank", date: "2026-07-01", amountCents: 7000, category: "CAD only" });
+await db.insert("budgets", { societyId, fiscalYear: "2026", category: "USD Services", currency: "USD", plannedCents: 7000 });
+await db.insert("budgets", { societyId, fiscalYear: "2026", category: "USD Supplies", accountId: usdBank, plannedCents: 2000 });
+const usdPosted = await db.insert("journalEntries", { societyId, date: "2026-07-01", fiscalYear: "2026", status: "posted" });
+const usdCashOnly = await db.insert("journalEntries", { societyId, date: "2026-07-01", fiscalYear: "2026", status: "posted", basis: "cash-only" });
+for (const journalEntryId of [usdPosted, usdCashOnly]) await db.insert("journalLines", { societyId, journalEntryId, accountId: usdIncome, amountCents: 10000, side: "credit", counterpartyId: "scope-customer", grantId: "scope-grant" });
+const usd = await annualStatementPortable(ctx, { societyId, fiscalYear: "2026", currency: "usd" });
+assert.equal(usd.currency, "USD");
+assert.equal(usd.baseCurrency, "CAD");
+assert.equal(usd.financial, null, "unlabelled CAD financial statements do not override USD source totals");
+assert.equal(usd.revenueCents, 10000);
+assert.equal(usd.expensesCents, 2500);
+assert.equal(usd.surplusCents, 7500);
+assert.equal(usd.netAssetsCents, null, "base-currency balance disclosures are not relabelled USD");
+assert.equal(usd.remunerationDisclosures.length, 0);
+assert.deepEqual(usd.budgets.map((row) => [row.category, row.actualCents, row.varianceCents]), [["USD Services", 10000, 3000], ["USD Supplies", 2500, 500]]);
+assert.equal(usd.byGrant[0].incomeCents, 10000, "tagged currency and accrual basis exclude CAD and cash-only copies");
+assert.equal(usd.byCounterparty[0].incomeCents, 10000);
+const cad = await annualStatementPortable(ctx, { societyId, fiscalYear: "2026", currency: "CAD" });
+assert.equal(cad.revenueCents, 99000, "the CAD recorded summary remains authoritative only for CAD");
+assert.equal(cad.budgets.length, 1);
+assert.equal(cad.incomeByCategory.some((row) => row.category.includes("USD")), false);
+const usdOrg = await orgRevenueExpensePortable(ctx, { societyId, fiscalYear: "2026", currency: "USD" });
+assert.equal(usdOrg.currency, "USD");
+assert.equal(usdOrg.revenueTotals.restrictedCents, 10000);
+assert.equal(usdOrg.revenueTotals.generalCents, 0);
+assert.equal(usdOrg.expenseTotals.totalCents, 2500);
+assert.equal((await orgRevenueExpensePortable(ctx, { societyId, fiscalYear: "2026", currency: "EUR" })).empty, true, "a currency without activity is empty rather than substituted");
+await assert.rejects(() => annualStatementPortable(ctx, { societyId, fiscalYear: "2026", currency: "USD;CAD" }), /three-letter/);
+assert.equal(yearEndCurrencyScope([{ _id: "cad", accountType: "Bank", currency: "CAD" }, { _id: "ar", accountType: "Asset", currency: "EUR" }], { receivableAccountId: "ar" }).baseCurrency, "EUR", "configured receivable denomination matches workspace document defaults");
+
+await db.patch("scope-grant", { restrictedPurpose: "CAD repairs", status: "Active", linkedFinancialAccountId: "scope-bank", amountAwardedCents: 40000 });
+const usdGrant = await db.insert("grants", { societyId, title: "USD restricted grant", funder: "USD funder", restrictedPurpose: "USD repairs", status: "Awarded", linkedFinancialAccountId: usdBank, amountAwardedCents: 60000 });
+const cadGrantIn = await db.insert("grantTransactions", { societyId, grantId: "scope-grant", date: "2026-07-01", direction: "inflow", amountCents: 5000, description: "CAD grant receipt" });
+const cadGrantUsdIn = await db.insert("grantTransactions", { societyId, grantId: "scope-grant", financialTransactionId: usdReceipt, date: "2026-07-01", direction: "inflow", amountCents: 1500, description: "USD linked receipt" });
+const usdGrantIn = await db.insert("grantTransactions", { societyId, grantId: usdGrant, date: "2026-07-01", direction: "inflow", amountCents: 20000, description: "USD grant receipt" });
+const usdGrantOut = await db.insert("grantTransactions", { societyId, grantId: usdGrant, date: "2026-07-02", direction: "outflow", amountCents: 5000, description: "USD grant payment" });
+const usdGrantCadIn = await db.insert("grantTransactions", { societyId, grantId: usdGrant, financialTransactionId: cadReceipt, date: "2026-07-01", direction: "inflow", amountCents: 7000, description: "CAD linked receipt" });
+const usdFunds = await restrictedFundStatementPortable(ctx, { societyId, currency: "USD" });
+assert.equal(usdFunds.currency, "USD");
+assert.equal(usdFunds.totals.receiptsCents, 21500);
+assert.equal(usdFunds.totals.disbursementsCents, 5000);
+assert.equal(usdFunds.totals.closingCents, 16500);
+assert.deepEqual(usdFunds.funds.find((fund) => fund.grantId === usdGrant)?.transactionIds, [usdGrantIn, usdGrantOut], "foreign linked transactions are absent from same-result drilldown IDs");
+assert.equal(usdFunds.funds.find((fund) => fund.grantId === "scope-grant")?.awardedCents, 0, "CAD grant awards are never relabelled USD");
+const cadFunds = await restrictedFundStatementPortable(ctx, { societyId, currency: "CAD" });
+assert.equal(cadFunds.totals.receiptsCents, 12000);
+assert.deepEqual(cadFunds.funds.find((fund) => fund.grantId === usdGrant)?.transactionIds, [usdGrantCadIn]);
+assert.deepEqual(cadFunds.programGrantScopes.find((scope) => scope.grantId === "scope-grant")?.transactionIds, [cadGrantIn], "CAD program prefills exclude USD-linked transactions");
+assert.deepEqual(cadFunds.programGrantScopes.find((scope) => scope.grantId === usdGrant)?.transactionIds, [usdGrantIn, usdGrantOut]);
+assert.ok(!cadFunds.programGrantScopes.find((scope) => scope.grantId === "scope-grant")?.transactionIds.includes(cadGrantUsdIn));
+export const currencyFixtures = { annual: usd, organization: usdOrg, restricted: usdFunds };
+console.log("Year-end report scope checks passed: empty fiscal years, tenant/date/status/basis scope, CAD/USD statements and budgets, tagged ledger currency, configured base currency, currency-separated restricted funds and exact program/drilldown source IDs.");

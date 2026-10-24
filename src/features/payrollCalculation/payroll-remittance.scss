@@ -1,0 +1,30 @@
+.payroll-remittance {
+  // Keep the wrapper as the single horizontal scroll surface. The general
+  // mobile table fallback creates a second scroll box and traps touch pans.
+  .payroll-calculator__table-wrap {
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
+    > table {
+      display: table;
+      overflow: visible;
+      overscroll-behavior-x: auto;
+      max-width: none;
+    }
+  }
+  .payroll-remittance__table-hint {
+    display: none;
+  }
+  @media (max-width: 650px) {
+    .payroll-remittance__table-hint {
+      display: block;
+      margin-block: 10px 0;
+      font-size: 13px;
+    }
+    .payroll-calculator__table-wrap td:first-child {
+      white-space: nowrap;
+    }
+  }
+}

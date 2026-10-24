@@ -9,7 +9,7 @@ import { Money } from "../../components/Money";
 import { useToast } from "../../components/Toast";
 import { formatDate } from "../../lib/format";
 import { formatMoney, parseMoneyInput } from "../../lib/money";
-import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL, suggestPaymentTransactions } from "../../../shared/invoicing";
+import { convertInvoiceCents, PAYMENT_METHODS, PAYMENT_METHOD_LABEL, suggestPaymentTransactions } from "../../../shared/invoicing";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { InvoiceRow, LedgerAccountOption, MoneyInTransaction } from "./types";
 
@@ -28,10 +28,16 @@ type Props = {
 export function RecordPaymentForm({ invoice, transactions, today, depositAccounts, defaultDepositLabel, onDone, onCancel }: Props) {
   const recordPayment = useMutation(api.invoices.recordPayment);
   const toast = useToast();
-  const unlinked = useMemo(() => transactions.filter((txn) => !txn.linkedInvoiceId && !txn.matchedElsewhere), [transactions]);
-  const suggestions = useMemo(() => suggestPaymentTransactions(invoice, unlinked), [invoice, unlinked]);
+  const baseCurrency=invoice.money?.fx?.baseCurrency??invoice.currency;
+  const foreign=baseCurrency!==invoice.currency;
+  const [fxInput,setFxInput]=useState(invoice.money?.fx?String(invoice.money.fx.rateMicros/1_000_000):"1");
+  const [fxSource,setFxSource]=useState("");
+  const [requestKey]=useState(()=>crypto.randomUUID());
+  const rateMicros=Math.round(Number(fxInput)*1_000_000);
+  const unlinked = useMemo(() => transactions.filter((txn) => !txn.linkedInvoiceId && !txn.matchedElsewhere && (txn.currency ?? "CAD") === baseCurrency), [transactions, baseCurrency]);
+  const suggestions = useMemo(() => suggestPaymentTransactions({...invoice,balanceCents:foreign&&rateMicros>0?convertInvoiceCents(invoice.balanceCents,rateMicros):invoice.balanceCents}, unlinked), [invoice, unlinked, foreign, rateMicros]);
   const [amountInput, setAmountInput] = useState((invoice.balanceCents / 100).toFixed(2));
-  const [date, setDate] = useState(suggestions[0]?.date && suggestions[0].exact ? suggestions[0].date : today);
+  const [date, setDate] = useState(suggestions[0]?.date && suggestions[0].exact ? [suggestions[0].date, suggestions[0].releasedDate ?? ""].sort().at(-1)! : today);
   const [method, setMethod] = useState<string>("e_transfer");
   const [reference, setReference] = useState("");
   const [txnId, setTxnId] = useState<string>(suggestions[0]?.exact ? suggestions[0]._id : "");
@@ -49,15 +55,16 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
   const pick = (txn: MoneyInTransaction | undefined) => {
     setTxnId(txn?._id ?? "");
     if (txn) {
-      setDate(txn.date);
-      if (txn.amountCents <= invoice.balanceCents) setAmountInput((txn.amountCents / 100).toFixed(2));
+      setDate([txn.date, txn.releasedDate ?? ""].sort().at(-1)!);
+      if (!foreign && txn.amountCents <= invoice.balanceCents) setAmountInput((txn.amountCents / 100).toFixed(2));
     }
   };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!amountCents || amountCents <= 0) return setError("Enter an amount above zero.");
-    if (amountCents > invoice.balanceCents) return setError(`That's more than the ${formatMoney(invoice.balanceCents)} balance.`);
+    if (amountCents > invoice.balanceCents) return setError(`That's more than the ${formatMoney(invoice.balanceCents, { currency: invoice.currency })} balance.`);
+    if(foreign&&(!Number.isSafeInteger(rateMicros)||rateMicros<=0||!fxSource.trim()))return setError("Enter the actual settlement exchange rate and source.");
     setBusy(true);
     setError(null);
     try {
@@ -65,13 +72,13 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
         id: invoice._id as any,
         date,
         amountCents,
-        method,
+        method, idempotencyKey:requestKey, ...(foreign?{fxRateMicros:rateMicros,fxSource}:{}),
         reference: reference || undefined,
         financialTransactionId: txnId ? (txnId as Id<"financialTransactions">) : undefined,
         depositAccountId: !txnId && depositAccountId ? (depositAccountId as Id<"financialAccounts">) : undefined,
       });
       const remaining = invoice.balanceCents - amountCents;
-      toast.success(remaining <= 0 ? `${invoice.number} paid in full` : `Payment of ${formatMoney(amountCents)} recorded`, remaining > 0 ? `${formatMoney(remaining)} still due.` : undefined);
+      toast.success(remaining <= 0 ? `${invoice.number} paid in full` : `Payment of ${formatMoney(amountCents, { currency: invoice.currency })} recorded`, remaining > 0 ? `${formatMoney(remaining, { currency: invoice.currency })} still due.` : undefined);
       onDone();
     } catch (err: any) {
       setError(err?.message ?? "Could not record the payment.");
@@ -83,7 +90,7 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
   return (
     <form className="pay-form" onSubmit={submit} aria-label={`Record a payment for ${invoice.number}`}>
       <div className="pay-form__row">
-        <Field label="Amount" hint={`Balance ${formatMoney(invoice.balanceCents)}. Partial payments are fine.`}>
+        <Field label="Amount" hint={`Balance ${formatMoney(invoice.balanceCents, { currency: invoice.currency })}. Partial payments are fine.`}>
           <input className="input num" inputMode="decimal" value={amountInput} onChange={(e) => setAmountInput(e.target.value)} aria-invalid={amountCents == null || undefined} />
         </Field>
         <Field label="Date received">
@@ -97,6 +104,7 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
         </Field>
       </div>
 
+      {foreign&&<div className="pay-form__row"><Field label={`1 ${invoice.currency} in ${baseCurrency}`}><input className="input" inputMode="decimal" value={fxInput} onChange={event=>setFxInput(event.target.value)}/></Field><Field label="Settlement FX source"><input className="input" value={fxSource} maxLength={200} placeholder="Actual bank conversion or agreed rate" onChange={event=>setFxSource(event.target.value)}/></Field><p>{amountCents&&rateMicros>0?`${formatMoney(convertInvoiceCents(amountCents,rateMicros),{currency:baseCurrency})} received in the books currency`:"Enter a positive rate."}</p></div>}
       <fieldset className="pay-form__bank">
         <legend><Landmark size={14} aria-hidden="true" /> Link a bank deposit <span className="muted">(optional)</span></legend>
         {suggestions.length > 0 ? (
@@ -135,7 +143,7 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
             <Select
               value={depositAccountId}
               onChange={setDepositAccountId}
-              options={depositAccounts.map((account) => ({ value: account._id, label: account.label }))}
+              options={depositAccounts.filter((account) => (account.currency ?? "CAD") === baseCurrency).map((account) => ({ value: account._id, label: account.label }))}
               placeholder={defaultDepositLabel}
               clearable
               clearLabel={defaultDepositLabel}
@@ -148,7 +156,7 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
       <div className="pay-form__actions">
         <button type="button" className="btn btn--sm" onClick={onCancel}>Cancel</button>
         <button type="submit" className="btn btn--sm btn--accent" disabled={busy}>
-          Record {amountCents ? formatMoney(amountCents) : "payment"}
+          Record {amountCents ? formatMoney(amountCents, { currency: invoice.currency }) : "payment"}
         </button>
       </div>
     </form>

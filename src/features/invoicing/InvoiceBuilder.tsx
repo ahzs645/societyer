@@ -1,9 +1,17 @@
-import { useMemo, useState } from "react";
-import { useMutation } from "convex/react";
-import { ArrowLeft, Copy, Eye, MoreHorizontal, Pencil, Printer, Repeat, Save, Send, Trash2 } from "lucide-react";
+import { DocumentExtrasFields } from "./DocumentExtrasFields";
+import { InvoiceMoneyFields } from "./InvoiceMoneyFields";
+import { cleanInvoiceMoney, type InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
+import { assignedPriceList, quantityCatalogRate, type BillingPricingWorkspace } from "../../../shared/billingPricing";
+import { partyKey as billingPartyKey } from "../../../shared/invoicing";
+import type { DocumentExtras } from "../../../shared/documentExtras";
+import { cleanInvoiceLineDetails } from "../../../shared/invoiceLineDetails";
+import { INVOICE_CURRENCIES, catalogRate, cleanInvoiceTemplate, resolveDocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowLeft, Download, Copy, Eye, MoreHorizontal, Pencil, Printer, Repeat, Save, Send, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { Banner, Field } from "../../components/ui";
-import { Checkbox, Toggle } from "../../components/Controls";
+import { Banner, Drawer, Field } from "../../components/ui";
+import { Toggle } from "../../components/Controls";
 import { Select } from "../../components/Select";
 import { DatePicker } from "../../components/DatePicker";
 import { Menu } from "../../components/Menu";
@@ -30,13 +38,20 @@ import { useFinanceTags } from "../financials/transactions/useFinanceTags";
 import { findLikelyDuplicate } from "../../../shared/expensePolicy";
 import { appRouteHref } from "../../lib/appRouteHref";
 import type { InvoiceRow, InvoiceWorkspace } from "./types";
+import { BillingScheduleForm } from "./BillingReportScheduleForm";
 
-type RepeatDraft = { enabled: boolean; frequency: string; endKind: string; endAfterCount: string; endDate: string; autoSend: boolean };
+type RepeatDraft = { enabled: boolean; frequency: string; endKind: string; endAfterCount: string; endDate: string };
 type Draft = BillToValue & {
+  currency: string;
+  money?: InvoiceMoneyOptions; documentExtras?: DocumentExtras;
+  priceListId: string;
+  documentTemplate: InvoiceTemplate;
   issueDate: string;
   terms: string;
   dueDate: string;
   reference: string;
+  shipToName: string;
+  shipToAddress: string;
   lines: LineDraft[];
   discountKind: "percent" | "amount";
   discountInput: string;
@@ -45,9 +60,10 @@ type Draft = BillToValue & {
 };
 
 function initialDraft(workspace: InvoiceWorkspace, invoice?: InvoiceRow | null, prefill?: BillToValue | null): Draft {
-  const repeat: RepeatDraft = { enabled: false, frequency: "monthly", endKind: "never", endAfterCount: "12", endDate: "", autoSend: false };
+  const repeat: RepeatDraft = { enabled: false, frequency: "monthly", endKind: "never", endAfterCount: "12", endDate: "" };
   if (invoice) {
     return {
+      currency: invoice.currency, money: invoice.money, documentExtras: invoice.documentExtras, priceListId: invoice.priceListId ?? "", documentTemplate: cleanInvoiceTemplate(invoice.documentTemplate),
       partyKind: invoice.partyKind,
       memberId: invoice.memberId,
       counterpartyId: invoice.counterpartyId,
@@ -58,6 +74,8 @@ function initialDraft(workspace: InvoiceWorkspace, invoice?: InvoiceRow | null, 
       terms: invoice.terms,
       dueDate: invoice.dueDate,
       reference: invoice.reference ?? "",
+      shipToName: invoice.shipToName ?? "",
+      shipToAddress: invoice.shipToAddress ?? "",
       lines: invoice.lines.map(toLineDraft),
       discountKind: invoice.discount?.kind ?? "percent",
       discountInput: invoice.discount ? (invoice.discount.kind === "amount" ? (invoice.discount.value / 100).toFixed(2) : String(invoice.discount.value)) : "",
@@ -67,6 +85,7 @@ function initialDraft(workspace: InvoiceWorkspace, invoice?: InvoiceRow | null, 
   }
   const terms = workspace.settings.defaultTerms || "net_30";
   return {
+    currency: workspace.ledger.workspaceCurrency, priceListId: "", documentTemplate: cleanInvoiceTemplate(workspace.templates?.find((t) => t._id === workspace.settings.defaultTemplateId && t.active)?.config),
     partyKind: "custom",
     billToName: "",
     ...(prefill ?? {}),
@@ -74,6 +93,8 @@ function initialDraft(workspace: InvoiceWorkspace, invoice?: InvoiceRow | null, 
     terms,
     dueDate: dueDateForTerms(workspace.today, terms),
     reference: "",
+    shipToName: "",
+    shipToAddress: "",
     lines: [blankLine()],
     discountKind: "percent",
     discountInput: "",
@@ -86,6 +107,7 @@ function cleanLines(lines: LineDraft[]): InvoiceLine[] {
   return lines.map(({ qtyInput: _q, priceInput: _p, ...line }) => {
     const out: InvoiceLine = { ...line };
     if (!out.description) delete out.description;
+    if (!out.sku) delete out.sku;
     if (!out.taxRatePercent) {
       delete out.taxRatePercent;
       delete out.taxLabel;
@@ -115,6 +137,7 @@ type Props = {
   logoUrl?: string | null;
   showMembers: boolean;
   canWrite: boolean;
+  canExport: boolean;
   onClose: () => void;
   /** Called after the first save so the URL can point at the saved invoice. */
   onSaved: (id: string) => void;
@@ -122,8 +145,9 @@ type Props = {
 };
 
 /** Full-page invoice builder with a live, printable preview. */
-export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl, showMembers, canWrite, onClose, onSaved, onOpenBuilder }: Props) {
+export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl, showMembers, canWrite, canExport, onClose, onSaved, onOpenBuilder }: Props) {
   const upsert = useMutation(api.invoices.upsert);
+  const saveCatalogItem = useMutation(api.invoices.upsertCatalogItem);
   const markSent = useMutation(api.invoices.markSent);
   const duplicate = useMutation(api.invoices.duplicate);
   const remove = useMutation(api.invoices.remove);
@@ -132,9 +156,13 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const toast = useToast();
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Draft>(() => initialDraft(workspace, invoice, prefill));
+  const pricing = useQuery(api.invoicePreferences.workspace, {societyId}) as (BillingPricingWorkspace & Record<string,unknown>) | undefined;
+  const [priceListManual,setPriceListManual] = useState(Boolean(invoice?.priceListId));
+  const [pricingChanged,setPricingChanged] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
   // Soft duplicate check for a new invoice: same customer and total within 14 days.
   const [duplicateOk, setDuplicateOk] = useState(false);
@@ -142,18 +170,34 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
 
   const readOnly = !canWrite || invoice?.lifecycle === "void";
   const update = (patch: Partial<Draft>) => {
-    setDraft((current) => ({ ...current, ...patch }));
+    const repricing = ["issueDate","priceListId","currency","partyKind","memberId","counterpartyId","billToName"].some(key=>Object.prototype.hasOwnProperty.call(patch,key));
+    if(repricing)setPricingChanged(true);
+    setDraft((current) => {
+      const next = {...current,...patch};
+      if(repricing&&pricing){
+        if(!priceListManual&&!Object.prototype.hasOwnProperty.call(patch,"priceListId"))next.priceListId=assignedPriceList(workspace.priceLists??[],pricing,billingPartyKey(next),next.currency,next.issueDate)?._id??"";
+        const list=workspace.priceLists?.find(value=>value._id===next.priceListId);
+        next.lines=next.lines.map(line=>{if(line.rateOverridden||!line.catalogItemId)return line;const item=workspace.catalog.find(value=>value._id===line.catalogItemId);const rate=item?quantityCatalogRate(item,line.quantity,next.currency,next.issueDate,list,pricing,workspace.ledger.workspaceCurrency):null;return rate===null?line:{...line,unitPriceCents:rate,priceInput:(rate/100).toFixed(2)};});
+      }
+      if(next.currency===workspace.ledger.workspaceCurrency&&next.money?.fx)next.money={...next.money,fx:undefined};
+      return next;
+    });
     setDirty(true);
     setError(null);
   };
 
+  useEffect(()=>{if(!invoice&&pricing&&!priceListManual&&!draft.priceListId&&draft.billToName.trim()){const assigned=assignedPriceList(workspace.priceLists??[],pricing,billingPartyKey(draft),draft.currency,draft.issueDate);if(assigned)update({priceListId:assigned._id});}},[pricing,priceListManual]);
   const lines = useMemo(() => cleanLines(draft.lines), [draft.lines]);
   const financeTags = useFinanceTags(societyId);
   const discount = discountFrom(draft);
-  const totals = computeInvoiceTotals(lines, discount);
+  const totals = computeInvoiceTotals(lines, discount, draft.money);
   const dueDate = draft.terms === "custom" ? draft.dueDate || draft.issueDate : dueDateForTerms(draft.issueDate, draft.terms);
   const number = invoice?.number ?? workspace.settings.nextNumberPreview;
-  const activeCatalog = workspace.catalog.filter((item) => item.active);
+  const priceList = workspace.priceLists?.find((list) => list._id === draft.priceListId);
+  const activeCatalog = workspace.catalog.filter((item) => item.active).flatMap((item) => {
+    const rate = quantityCatalogRate(item,1,draft.currency,draft.issueDate,priceList,pricing??{profiles:[],assignments:[]},workspace.ledger.workspaceCurrency);
+    return rate === null ? [] : [{ ...item, unitPriceCents: rate }];
+  });
   const hasTax = totals.taxes.length > 0;
 
   const previewData = {
@@ -162,10 +206,14 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     dueDate,
     terms: draft.terms,
     reference: draft.reference || undefined,
-    currency: invoice?.currency ?? "CAD",
+    currency: draft.currency,
+    documentTemplate: draft.documentTemplate,
+    money: draft.money, documentExtras: draft.documentExtras,
     billToName: draft.billToName,
     billToEmail: draft.billToEmail,
     billToAddress: draft.billToAddress,
+    shipToName: draft.shipToName || undefined,
+    shipToAddress: draft.shipToAddress || undefined,
     lines,
     discount,
     memo: draft.memo || undefined,
@@ -189,7 +237,9 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     if (!draft.billToName.trim()) return "Choose who to bill.";
     const problem = validateInvoiceLines(lines);
     if (problem) return problem;
-    if (totals.totalCents < 0) return "The discount is larger than the invoice.";
+    if (totals.totalCents < 0) return "Withholding cannot exceed the invoice total.";
+    try{cleanInvoiceMoney(draft.money,draft.currency,workspace.ledger.workspaceCurrency);}catch(error){return error instanceof Error?error.message:"Check the invoice charges.";}
+    if((!invoice||pricingChanged)&&pricing&&lines.some(line=>line.catalogItemId&&!line.rateOverridden&&quantityCatalogRate(workspace.catalog.find(item=>item._id===line.catalogItemId)!,line.quantity,draft.currency,draft.issueDate,priceList,pricing,workspace.ledger.workspaceCurrency)===null))return "A catalog rate is not effective for this currency and date. Choose an active list or enter an explicit rate.";
     if (draft.repeat.enabled && draft.repeat.endKind === "on_date" && !draft.repeat.endDate) return "Choose when the series ends.";
     return null;
   };
@@ -211,10 +261,13 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         billToName: draft.billToName,
         billToEmail: draft.billToEmail || undefined,
         billToAddress: draft.billToAddress || undefined,
+        shipToName: draft.shipToName || undefined,
+        shipToAddress: draft.shipToAddress || undefined,
         issueDate: draft.issueDate,
         terms: draft.terms,
         dueDate: draft.terms === "custom" ? draft.dueDate : undefined,
         reference: draft.reference || undefined,
+        currency: draft.currency, documentTemplate: draft.documentTemplate, money: draft.money, documentExtras:draft.documentExtras, priceListId: draft.priceListId || null, repairJobId: invoice?.repairJobId,
         lines,
         discount,
         memo: draft.memo || undefined,
@@ -224,17 +277,20 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
           societyId: societyId as any,
           name: `${draft.billToName} · ${lines[0]?.item ?? "Invoice"}`.slice(0, 200),
           frequency: draft.repeat.frequency,
+          currency: draft.currency,
           startDate: draft.issueDate,
           endKind: draft.repeat.endKind,
           endAfterCount: draft.repeat.endKind === "after_count" ? Number(draft.repeat.endAfterCount) : undefined,
           endDate: draft.repeat.endKind === "on_date" ? draft.repeat.endDate : undefined,
-          autoSend: draft.repeat.autoSend,
+          autoSend: false,
           partyKind: draft.partyKind,
           memberId: draft.partyKind === "member" ? (draft.memberId as any) : undefined,
           counterpartyId: draft.partyKind === "organization" ? (draft.counterpartyId as any) : undefined,
           billToName: draft.billToName,
           billToEmail: draft.billToEmail || undefined,
           billToAddress: draft.billToAddress || undefined,
+          shipToName: draft.shipToName || undefined,
+          shipToAddress: draft.shipToAddress || undefined,
           terms: draft.terms === "custom" ? "net_30" : draft.terms,
           reference: draft.reference || undefined,
           lines,
@@ -322,6 +378,21 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
       }
     : undefined;
 
+  const downloadPdf = async () => {
+    if (!canExport) return;
+    setBusy(true);
+    try { const { downloadInvoicePdf } = await import("./invoicePdf"); await downloadInvoicePdf(previewData, organization, workspace.settings.paymentInstructions); }
+    catch (e) { toast.error("Could not generate PDF", e instanceof Error ? e.message : undefined); }
+    finally { setBusy(false); }
+  };
+  const saveItem = async (line: LineDraft) => {
+    try {
+      const {rateOverridden:_override,...catalogDetails}=cleanInvoiceLineDetails(line);
+      const id: string = await saveCatalogItem({ societyId, name: line.item, ...catalogDetails, description: line.description, sku: line.sku, unit: line.unit ?? "each", currency: draft.currency, unitPriceCents: line.unitPriceCents, taxRatePercent: line.taxRatePercent, taxLabel: line.taxLabel });
+      update({ lines: draft.lines.map((row) => row.key === line.key ? { ...row, catalogItemId: id } : row) });
+      toast.success("Item saved to catalog");
+    } catch (e) { toast.error("Could not save item", e instanceof Error ? e.message : undefined); }
+  };
   const title = invoice ? `${invoice.lifecycle === "draft" ? "Edit draft" : "Edit invoice"} ${invoice.number}` : `New invoice ${number}`;
 
   return (
@@ -356,7 +427,8 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
               {
                 id: "main",
                 items: [
-                  { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, onSelect: () => window.print() },
+                  { id: "download-pdf", label: "Download PDF", icon: <Download size={14} />, disabled: busy || !canExport, onSelect: () => void downloadPdf() },
+                  { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: !canExport, onSelect: () => window.print() },
                   ...(!readOnly && (!invoice || invoice.lifecycle === "draft")
                     ? [{ id: "send-email", label: "Mark as sent and draft email", icon: <Send size={14} />, disabled: !draft.billToEmail, hint: draft.billToEmail ? "Outbox" : "Needs an email", onSelect: () => void sendNow(true) }]
                     : []),
@@ -384,7 +456,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         <div className="invoice-builder__form">
           {invoice?.lifecycle === "void" && <Banner tone="warn" title="This invoice is void">Restore it from the invoice panel to make changes.</Banner>}
           {invoice && invoice.payments.length > 0 && invoice.lifecycle !== "void" && (
-            <Banner tone="info" title="Payments recorded">The total can't drop below the <Money cents={invoice.paidCents} /> already paid.</Banner>
+            <Banner tone="info" title="Payments recorded">The total can't drop below the <Money cents={invoice.paidCents} currency={draft.currency} /> already paid.</Banner>
           )}
           {error && <Banner tone="danger" title="Check the invoice">{error}</Banner>}
           {duplicateRetry && likelyDuplicate && (
@@ -408,6 +480,13 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
               onCreateOrganization={createOrganization}
               disabled={readOnly}
             />
+            <details style={{ marginTop: 12 }} open={draft.shipToName || draft.shipToAddress ? true : undefined}>
+              <summary>Shipping details</summary>
+              <div className="invoice-builder__row" style={{ marginTop: 8 }}>
+                <Field label="Ship-to name"><input className="input" value={draft.shipToName} disabled={readOnly} onChange={(e) => update({ shipToName: e.target.value })} /></Field>
+                <Field label="Ship-to address" hint="Enable the ship-to block in your document template to show these details."><textarea className="input textarea" value={draft.shipToAddress} disabled={readOnly} onChange={(e) => update({ shipToAddress: e.target.value })} /></Field>
+              </div>
+            </details>
           </section>
 
           <section className="invoice-builder__section invoice-builder__dates" aria-labelledby="ib-dates">
@@ -440,12 +519,25 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
             </div>
           </section>
 
+          <section className="invoice-builder__section" aria-labelledby="ib-design">
+            <h2 id="ib-design" className="invoice-builder__heading">Design and pricing</h2>
+            <div className="invoice-builder__row">
+              <Field label="Template"><Select value={workspace.templates?.find((t) => JSON.stringify(t.config) === JSON.stringify(draft.documentTemplate))?._id ?? "snapshot"} disabled={readOnly} onChange={(id) => { const template = workspace.templates?.find((t) => t._id === id); if (template) update({ documentTemplate: template.config }); }} options={[{ value: "snapshot", label: draft.documentTemplate.name + " (current design)" }, ...(workspace.templates ?? []).filter((t) => t.active).map((t) => ({ value: t._id, label: t.config.name }))]} /></Field>
+              <Field label="Currency" hint="Remove lines before changing currency. Saved rates are never converted automatically."><Select value={draft.currency} disabled={readOnly || draft.lines.some((line) => line.item.trim() || line.unitPriceCents) || Boolean(invoice?.payments.length || invoice?.journalEntryId)} onChange={(currency) => update({ currency, priceListId: "" })} options={INVOICE_CURRENCIES.map((value) => ({ value, label: value }))} /></Field>
+              <Field label="Price list" hint="Uses effective dates and quantity tiers. Edited rates are preserved."><Select value={draft.priceListId} disabled={readOnly} onChange={(priceListId) => {setPriceListManual(true);update({ priceListId });}} options={[{ value: "", label: "Catalog rates" }, ...(workspace.priceLists ?? []).filter((list) => list.active && list.currency === draft.currency).map((list) => ({ value: list._id, label: `${list.name} (${list.currency})` }))]} /></Field>
+            </div>
+          </section>
+          <InvoiceMoneyFields value={draft.money} onChange={money=>update({money})} currency={draft.currency} baseCurrency={workspace.ledger.workspaceCurrency} date={draft.issueDate} disabled={readOnly} fxLocked={Boolean(invoice&&invoice.lifecycle!=="draft")}/>
+          <DocumentExtrasFields value={draft.documentExtras} disabled={readOnly} onChange={documentExtras=>{const design=resolveDocumentDesign(draft.documentTemplate),advanced=design.advanced!;update({documentExtras,documentTemplate:{...draft.documentTemplate,design:{...design,advanced:{...advanced,terms:{...advanced.terms,enabled:Boolean(documentExtras.termsAndConditions)||advanced.terms.enabled},bank:{...advanced.bank,enabled:Boolean(documentExtras.bankDetails?.length)||advanced.bank.enabled},onlinePayment:{...advanced.onlinePayment,enabled:Boolean(documentExtras.paymentUrl)||advanced.onlinePayment.enabled},annexures:{...advanced.annexures,enabled:Boolean(documentExtras.annexures?.length||documentExtras.attachments?.length)||advanced.annexures.enabled}}}}});}}/>
           <LineItemsEditor
             lines={draft.lines}
             onChange={(next) => update({ lines: next })}
             catalog={activeCatalog}
             readOnly={readOnly}
             gstHint={hasTax && !workspace.organization.gstNumber}
+            currency={draft.currency}
+            getCatalogRate={(line,quantity)=>{const item=workspace.catalog.find(item=>item._id===line.catalogItemId);return item?quantityCatalogRate(item,quantity,draft.currency,draft.issueDate,priceList,pricing??{profiles:[],assignments:[]},workspace.ledger.workspaceCurrency):null;}}
+            onSaveItem={saveItem}
             tags={financeTags}
           />
 
@@ -473,12 +565,14 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
               </Field>
             </div>
             <dl className="invoice-builder__totals" aria-live="polite">
-              <div><dt>Subtotal</dt><dd><Money cents={totals.subtotalCents} /></dd></div>
-              {totals.discountCents > 0 && <div><dt>Discount</dt><dd><Money cents={-totals.discountCents} /></dd></div>}
+              <div><dt>Subtotal</dt><dd><Money cents={totals.subtotalCents} currency={draft.currency} /></dd></div>
+              {totals.discountCents > 0 && <div><dt>Discount</dt><dd><Money cents={-totals.discountCents} currency={draft.currency} /></dd></div>}
+              {totals.shippingCents>0&&<div><dt>Shipping</dt><dd><Money cents={totals.shippingCents} currency={draft.currency}/></dd></div>}
+              {totals.withholdingCents>0&&<div><dt>Tax withheld</dt><dd><Money cents={-totals.withholdingCents} currency={draft.currency}/></dd></div>}
               {totals.taxes.map((tax) => (
-                <div key={`${tax.label}-${tax.ratePercent}`}><dt>{tax.label} {tax.ratePercent}%</dt><dd><Money cents={tax.cents} /></dd></div>
+                <div key={`${tax.label}-${tax.ratePercent}`}><dt>{tax.label} {tax.ratePercent}%</dt><dd><Money cents={tax.cents} currency={draft.currency} /></dd></div>
               ))}
-              <div className="invoice-builder__total"><dt>Total</dt><dd><Money cents={totals.totalCents} /></dd></div>
+              <div className="invoice-builder__total"><dt>Total {draft.currency}</dt><dd><Money cents={totals.totalCents} currency={draft.currency} /></dd></div>
             </dl>
           </section>
 
@@ -520,14 +614,18 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
                       <DatePicker value={draft.repeat.endDate} min={draft.issueDate} onChange={(value) => update({ repeat: { ...draft.repeat, endDate: value } })} />
                     </Field>
                   )}
-                  <div className="invoice-builder__autosend">
-                    <Checkbox checked={draft.repeat.autoSend} onChange={(autoSend) => update({ repeat: { ...draft.repeat, autoSend } })} label="Send automatically once email sending is connected" hint="Until then each invoice waits as a draft for you to mark as sent." />
-                  </div>
                   <p className="invoice-builder__hint">
-                    This invoice is the first in the series. Later invoices are created as drafts on their issue date from the Recurring tab, ready for you to review and mark as sent.
+                    Save this invoice to create the recurring series. You can then configure automatic delivery with recipients, a PDF template and delivery settings. New delivery schedules start paused. You can also create each next draft yourself from the Recurring tab.
                   </p>
                 </div>
               )}
+            </section>
+          )}
+          {!readOnly && invoice?.seriesId && (
+            <section className="invoice-builder__section" aria-label="Recurring invoice delivery">
+              <h2 className="invoice-builder__heading"><Repeat size={14} aria-hidden="true" /> Recurring series</h2>
+              <p className="invoice-builder__hint">{invoice.seriesName ?? "This invoice belongs to a recurring series."} Automatic delivery uses its own schedule with confirmed recipients. New delivery schedules start paused.</p>
+              <button type="button" className="btn btn--sm" onClick={() => setDeliveryOpen(true)}>Configure automatic delivery</button>
             </section>
           )}
         </div>
@@ -535,7 +633,8 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         <aside className="invoice-builder__preview" aria-label="Invoice preview">
           <div className="invoice-builder__preview-head">
             <span>Preview</span>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => window.print()}>
+            <button type="button" className="btn btn--ghost btn--sm" disabled={busy || !canExport} onClick={() => void downloadPdf()}><Download size={14} aria-hidden="true" /> Download PDF</button>
+            <button type="button" className="btn btn--ghost btn--sm" disabled={!canExport} onClick={() => window.print()}>
               <Printer size={14} aria-hidden="true" /> Print / Save as PDF
             </button>
           </div>
@@ -545,6 +644,11 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         </aside>
       </div>
       <InvoicePrintPortal invoice={previewData} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
+      <Drawer open={deliveryOpen && Boolean(invoice?.seriesId)} title="Configure automatic delivery" onClose={() => setDeliveryOpen(false)}>
+        {deliveryOpen && invoice?.seriesId && <BillingScheduleForm key={invoice.seriesId} societyId={societyId}
+          schedule={{ kind: "recurring_invoice", sourceId: invoice.seriesId, name: `${invoice.seriesName ?? `${invoice.billToName} recurring invoice`} delivery`, recipients: invoice.billToEmail ? [invoice.billToEmail] : [], active: false, recipientsConfirmed: false }}
+          onSaved={() => setDeliveryOpen(false)} onCancel={() => setDeliveryOpen(false)} />}
+      </Drawer>
     </div>
   );
 }

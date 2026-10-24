@@ -62,7 +62,10 @@ export function isCapabilityUnavailable(value: unknown): value is CapabilityErro
 
 /** Narrow, plain-data capability surfaces. Implementations return data or throw. */
 export interface EmailCapability {
-  sendEmail(input: { to: string; subject: string; html?: string; text?: string; tag?: string }): Promise<{ id: string; accepted: boolean }>;
+  /** Required by durable billing delivery; old adapters cannot silently discard PDFs. */
+  supportsAttachments?: boolean;
+  supportsIdempotency?: boolean;
+  sendEmail(input: { to: string; subject: string; html?: string; text?: string; tag?: string; from?: string; replyTo?: string; idempotencyKey?: string; attachments?: Array<{ filename: string; contentType: string; contentBase64: string }> }): Promise<{ id: string; accepted: boolean }>;
 }
 export interface SmsCapability {
   sendSms(input: { to: string; body: string; tag?: string }): Promise<{ id: string; accepted: boolean }>;

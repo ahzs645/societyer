@@ -14,12 +14,13 @@
  *   so the deposit is never in the books twice.
  */
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { assertPeriodOpen, postedJournalForTransaction, TRANSACTION_BACKFILL_SOURCE } from "./accounting";
+import { assertPeriodOpen, postedJournalForTransaction, TRANSACTION_BACKFILL_SOURCE, BILL_BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE } from "./accounting";
+import { journalBasisOf, type JournalBasis } from "../booksReports";
 import { assertBooksOpen, booksSettingsRow } from "./booksLock";
 import { cashLedgerAccountId } from "./bankAccounts";
 import { validateBalancedJournalLines } from "../accountingCore";
 import { openingBalanceDate } from "../accountingBackfill";
-import { computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine, type InvoicePayment } from "../invoicing";
+import { explicitFxQuote, convertInvoiceCents, allocateMoney, paidCents, type InvoiceMoneyOptions, computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine, type InvoicePayment } from "../invoicing";
 import {
   INVOICE_POSTINGS,
   INVOICE_POSTING_SOURCES,
@@ -34,6 +35,7 @@ import {
   mirrorLines,
   paymentEntryKey,
   paymentPostingLines,
+  fxSettlementPostingLines,
   resolveLineRevenue,
   sameLedgerNet,
   type BooksStart,
@@ -115,6 +117,8 @@ export type StoredInvoice = {
   currency: string;
   lines: InvoiceLine[];
   discount?: InvoiceDiscount;
+  money?: InvoiceMoneyOptions;
+  fxRevaluations?: Array<{ key: string; date: string; rateMicros: number; invoiceBalanceCents: number; baseBalanceCents: number; adjustmentCents: number; journalEntryId?: string; reversedDate?: string; reversalJournalEntryId?: string }>;
   source?: string;
   payments: StoredInvoicePayment[];
   journalEntryId?: string;
@@ -134,9 +138,16 @@ export type InvoiceSettingsRow = {
 
 /* -------------------------------------------------------------- accounts */
 
-export type LedgerAccountKind = "receivable" | "taxPayable" | "undeposited";
+export type LedgerAccountKind = "receivable" | "taxPayable" | "undeposited" | "withholding" | "shippingRevenue" | "badDebt" | "fxGain" | "fxLoss" | "fxUnrealizedGain" | "fxUnrealizedLoss";
 
 const TEMPLATES: Record<LedgerAccountKind, { codes: string[]; name: string; accountType: string; subtype: string; normalBalance: string }> = {
+  withholding: { codes: ["1180", "1181"], name: "Withholding tax receivable", accountType: "Asset", subtype: "withholding_tax_receivable", normalBalance: "debit" },
+  shippingRevenue: { codes: ["4900", "4901"], name: "Shipping revenue", accountType: "Income", subtype: "shipping_revenue", normalBalance: "credit" },
+  badDebt: { codes: ["6900", "6901"], name: "Bad debt expense", accountType: "Expense", subtype: "bad_debt", normalBalance: "debit" },
+  fxGain: { codes: ["4950", "4951"], name: "Realized foreign exchange gains", accountType: "Income", subtype: "fx_realized_gain", normalBalance: "credit" },
+  fxLoss: { codes: ["6950", "6951"], name: "Realized foreign exchange losses", accountType: "Expense", subtype: "fx_realized_loss", normalBalance: "debit" },
+  fxUnrealizedGain: { codes: ["4960", "4961"], name: "Unrealized foreign exchange gains", accountType: "Income", subtype: "fx_unrealized_gain", normalBalance: "credit" },
+  fxUnrealizedLoss: { codes: ["6960", "6961"], name: "Unrealized foreign exchange losses", accountType: "Expense", subtype: "fx_unrealized_loss", normalBalance: "debit" },
   receivable: { codes: ["1100", "1110", "1150"], name: "Accounts receivable", accountType: "Asset", subtype: "receivable", normalBalance: "debit" },
   taxPayable: { codes: ["2300", "2310", "2350"], name: "GST/HST payable", accountType: "Liability", subtype: "sales_tax_payable", normalBalance: "credit" },
   undeposited: { codes: ["1050", "1060", "1090"], name: "Undeposited funds", accountType: "Asset", subtype: "undeposited_funds", normalBalance: "debit" },
@@ -155,6 +166,7 @@ export function findLedgerAccount(kind: LedgerAccountKind, accounts: readonly Le
     return ofType.find((account) => account.subtype === "sales_tax_payable")
       ?? ofType.find((account) => /\b(gst|hst|pst|qst|sales tax)\b/i.test(account.name));
   }
+  if (kind !== "undeposited") return ofType.find((account) => account.subtype === template.subtype);
   return ofType.find((account) => account.subtype === "undeposited_funds") ?? ofType.find((account) => /undeposited/i.test(account.name));
 }
 
@@ -163,9 +175,9 @@ export async function loadLedgerAccounts(ctx: PortableQueryCtx, societyId: strin
 }
 
 /** The account of this kind, created on first use when the chart has none. */
-export async function ensureLedgerAccount(ctx: PortableMutationCtx, societyId: string, kind: LedgerAccountKind): Promise<LedgerAccount> {
+export async function ensureLedgerAccount(ctx: PortableMutationCtx, societyId: string, kind: LedgerAccountKind, currency?: string): Promise<LedgerAccount> {
   const accounts = await loadLedgerAccounts(ctx, societyId);
-  const existing = findLedgerAccount(kind, accounts);
+  const existing = findLedgerAccount(kind, currency ? accounts.filter((account) => (account.currency ?? "CAD") === currency) : accounts);
   if (existing) return existing;
   const template = TEMPLATES[kind];
   const connections = await ctx.db.query("financialConnections").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
@@ -189,7 +201,7 @@ export async function ensureLedgerAccount(ctx: PortableMutationCtx, societyId: s
     externalId: `societyer:${template.codes[0]}`,
     ...(code ? { code } : {}),
     name: template.name,
-    currency: accounts.find((account) => account.currency)?.currency ?? "CAD",
+    currency: currency ?? accounts.find((account) => account.currency)?.currency ?? "CAD",
     accountType: template.accountType,
     subtype: template.subtype,
     balanceCents: 0,
@@ -262,8 +274,8 @@ export function dateBlock(lctx: InvoiceLedgerContext, date: string): string | nu
 }
 
 /** Item names of the invoice's lines with an amount and no revenue account. */
-export function unmappedItems(invoice: Pick<StoredInvoice, "lines" | "discount" | "source">, lctx: InvoiceLedgerContext): string[] {
-  const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount);
+export function unmappedItems(invoice: Pick<StoredInvoice, "lines" | "discount" | "source" | "money">, lctx: InvoiceLedgerContext): string[] {
+  const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money);
   return (invoice.lines ?? [])
     .filter((line, index) => totals.lineAmounts[index] !== 0 && !resolveLineRevenue(line, { mapping: lctx.mapping, catalogById: lctx.catalogById, invoiceSource: invoice.source, accountIds: lctx.accountIds }))
     .map((line) => line.item);
@@ -272,8 +284,18 @@ export function unmappedItems(invoice: Pick<StoredInvoice, "lines" | "discount" 
 /** Why the invoice itself can't go into the books (beyond the posting date), empty when it can. */
 export function accrualBlockers(invoice: StoredInvoice, lctx: InvoiceLedgerContext): string[] {
   const reasons: string[] = [];
-  if (String(invoice.currency || lctx.workspaceCurrency).toUpperCase() !== lctx.workspaceCurrency) reasons.push(`Invoiced in ${invoice.currency}; the books are kept in ${lctx.workspaceCurrency}.`);
+  if (String(invoice.currency || lctx.workspaceCurrency).toUpperCase() !== lctx.workspaceCurrency) {
+    try { if (!explicitFxQuote(invoice.money?.fx, invoice.currency, lctx.workspaceCurrency)) reasons.push(`Invoiced in ${invoice.currency}; record an explicit FX quote to ${lctx.workspaceCurrency}.`); }
+    catch (error) { reasons.push(error instanceof Error ? error.message : "Invalid FX quote."); }
+  }
   const unmapped = unmappedItems(invoice, lctx);
+  for (const line of invoice.lines) {
+    const mapped = resolveLineRevenue(line, { mapping: lctx.mapping, catalogById: lctx.catalogById, invoiceSource: invoice.source, accountIds: lctx.accountIds });
+    const account = mapped && lctx.accountsById.get(mapped.accountId);
+    if (account?.currency && account.currency !== lctx.workspaceCurrency) reasons.push(`Revenue account ${account.name} must use books currency ${lctx.workspaceCurrency}.`);
+  }
+  const taxAccount = lctx.mapping.taxPayableAccountId && lctx.accountsById.get(lctx.mapping.taxPayableAccountId);
+  if (taxAccount && taxAccount.currency && taxAccount.currency !== lctx.workspaceCurrency && computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money).taxes.some(tax => tax.cents !== 0)) reasons.push(`Tax account ${taxAccount.name} must use books currency ${lctx.workspaceCurrency}.`);
   if (unmapped.length) reasons.push(`No revenue account for ${[...new Set(unmapped)].join(", ")}.`);
   const start = booksStartLabel(lctx.booksStart);
   if (start && isBeforeBooksStart(invoice.issueDate, lctx.booksStart)) reasons.push(`Issued before ${start}.`);
@@ -319,6 +341,7 @@ type PostArgs = {
   lines: InvoiceLedgerLine[];
   counterpartyId?: string;
   createdByUserId?: string;
+  basis?: JournalBasis;
 };
 
 /**
@@ -327,7 +350,8 @@ type PostArgs = {
  * or on or before the books close date.
  */
 export async function postLedgerEntry(ctx: PortableMutationCtx, args: PostArgs): Promise<string> {
-  const { source, basis } = INVOICE_POSTINGS[args.kind];
+  const { source, basis: defaultBasis } = INVOICE_POSTINGS[args.kind];
+  const basis = args.basis ?? defaultBasis;
   const existing = await ctx.db
     .query<LedgerEntry>("journalEntries")
     .withIndex("by_society_source_external", (q) => q.eq("societyId", args.societyId).eq("source", source).eq("sourceExternalId", args.key))
@@ -368,7 +392,13 @@ async function insertLines(ctx: PortableMutationCtx, societyId: string, entryId:
       ...(line.description ? { description: line.description } : {}),
       ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
       ...(line.financialTransactionId ? { financialTransactionId: line.financialTransactionId } : {}),
-      ...(counterpartyId ? { counterpartyId } : {}),
+      ...(line.counterpartyId || counterpartyId ? { counterpartyId: line.counterpartyId ?? counterpartyId } : {}),
+      ...(line.programCode ? { programCode: line.programCode } : {}),
+      ...(line.grantId ? { grantId: line.grantId } : {}),
+      ...(line.fundRestrictionId ? { fundRestrictionId: line.fundRestrictionId } : {}),
+      ...(line.documentIds?.length ? { documentIds: line.documentIds } : {}),
+      ...(line.sourceExternalId ? { sourceExternalId: line.sourceExternalId } : {}),
+      ...(line.rawJson ? { rawJson: line.rawJson } : {}),
       createdAtISO: at,
       updatedAtISO: at,
     });
@@ -411,6 +441,24 @@ export async function claimDeposit(ctx: PortableMutationCtx, societyId: string, 
   return voided;
 }
 
+/** Reclassify an earlier bank posting on the receipt date without removing earlier cash history. */
+async function claimPaymentDeposit(ctx: PortableMutationCtx, invoice: StoredInvoice, payment: StoredInvoicePayment, createdByUserId?: string) {
+  const entries = await claimableDepositEntries(ctx, payment.financialTransactionId!);
+  if (entries.length > 1) throw new Error("This bank transaction has multiple current journal entries. Review them before linking a receipt.");
+  const entry = entries[0];
+  if (!entry) return {};
+  if (entry.date > payment.date) throw new Error("The receipt date must be on or after the bank transaction's current posting date.");
+  if (entry.date === payment.date) return { voidedTransactionEntryId: await claimDeposit(ctx, invoice.societyId, payment.financialTransactionId!) };
+  const lines = mirrorLines(await entryLines(ctx, entry._id)).map(line => ({ ...line, financialTransactionId: undefined }));
+  validateBalancedJournalLines(lines);
+  const bankTransferJournalEntryId = await postLedgerEntry(ctx, { societyId: invoice.societyId, kind: "bankTransfer", key: `${paymentEntryKey(invoice._id, payment.key)}:bank-transfer`, date: payment.date, memo: `Reclassify earlier bank transaction to invoice receipt: ${invoice.number}`, basis: journalBasisOf(entry), lines, createdByUserId });
+  const txn = await ctx.db.get(payment.financialTransactionId!, "financialTransactions");
+  if (!txn || txn.societyId !== invoice.societyId) throw new Error("The linked bank transaction is missing.");
+  const previous = txn.invoicePaymentRelease;
+  await ctx.db.patch(txn._id, { invoicePaymentRelease: { date: previous && previous.date > payment.date ? previous.date : payment.date, journalEntryIds: [...new Set([...(previous?.journalEntryIds ?? []), entry._id])] } });
+  return { replacedTransactionEntryId: entry._id, bankTransferJournalEntryId };
+}
+
 /**
  * The deposit's own "Backfill imports" entries an invoice payment would void;
  * throws when an entry posted another way (a sync, a manual entry) has it.
@@ -420,11 +468,11 @@ export async function claimableDepositEntries(ctx: PortableQueryCtx, transaction
   const { entries } = await postedJournalForTransaction(ctx, transactionId);
   const claimable: LedgerEntry[] = [];
   for (const entry of entries as LedgerEntry[]) {
-    if (INVOICE_POSTING_SOURCES.includes(String(entry.source))) continue;
-    if (entry.source === TRANSACTION_BACKFILL_SOURCE && entry.status === "posted") {
+    if ([TRANSACTION_BACKFILL_SOURCE, BILL_BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE].includes(String(entry.source)) && entry.status === "posted") {
       claimable.push(entry);
       continue;
     }
+    if (INVOICE_POSTING_SOURCES.includes(String(entry.source))) continue;
     throw new Error(`That deposit is already in the books (a ${entry.source} entry dated ${entry.date}). Void that entry, or link a different deposit.`);
   }
   return claimable;
@@ -448,10 +496,13 @@ function revenueResolver(invoice: StoredInvoice, lctx: InvoiceLedgerContext) {
 
 async function accountsForAccrual(ctx: PortableMutationCtx, invoice: StoredInvoice, lctx: InvoiceLedgerContext) {
   const mapped = (id: string | null | undefined) => (id && lctx.accountIds.has(id) ? id : undefined);
-  const receivableAccountId = mapped(lctx.mapping.receivableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "receivable"))._id;
-  const taxed = computeInvoiceTotals(invoice.lines ?? [], invoice.discount).taxes.some((tax) => tax.cents !== 0);
-  const taxPayableAccountId = taxed ? mapped(lctx.mapping.taxPayableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "taxPayable"))._id : undefined;
-  return { receivableAccountId, taxPayableAccountId };
+  const receivableAccountId = mapped(lctx.mapping.receivableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "receivable", lctx.workspaceCurrency))._id;
+  const taxed = computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money).taxes.some((tax) => tax.cents !== 0);
+  const taxPayableAccountId = taxed ? mapped(lctx.mapping.taxPayableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "taxPayable", lctx.workspaceCurrency))._id : undefined;
+  const totals = computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money);
+  const withholdingAccountId = totals.withholdingCents ? (await ensureLedgerAccount(ctx, invoice.societyId, "withholding", lctx.workspaceCurrency))._id : undefined;
+  const shippingRevenueAccountId = totals.shippingCents ? (await ensureLedgerAccount(ctx, invoice.societyId, "shippingRevenue", lctx.workspaceCurrency))._id : undefined;
+  return { receivableAccountId, taxPayableAccountId, withholdingAccountId, shippingRevenueAccountId };
 }
 
 export type AccrualOutcome = { entryId?: string; skipped?: string; changed: boolean };
@@ -465,8 +516,8 @@ export type AccrualOutcome = { entryId?: string; skipped?: string; changed: bool
  */
 export async function syncAccrual(ctx: PortableMutationCtx, invoice: StoredInvoice, lctx: InvoiceLedgerContext, createdByUserId?: string): Promise<AccrualOutcome> {
   if (invoice.status !== "sent") return { skipped: "Only sent invoices are in the books.", changed: false };
-  const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount);
-  if (!(totals.totalCents > 0)) return { skipped: "Nothing to post: the total is zero.", changed: false };
+  const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money);
+  if (!(totals.grossTotalCents > 0)) return { skipped: "Nothing to post: the gross total is zero.", changed: false };
   const blockers = accrualBlockers(invoice, lctx);
   const current = await postedEntry(ctx, invoice.societyId, invoice.journalEntryId);
   if (blockers.length) {
@@ -480,7 +531,7 @@ export async function syncAccrual(ctx: PortableMutationCtx, invoice: StoredInvoi
     const stored = await entryLines(ctx, current._id);
     // Compared net per account, so an entry posted before lines were netted still counts as the same.
     if (current.date === invoice.issueDate && sameLedgerNet(stored, lines)) return { entryId: current._id, changed: false };
-    if ((invoice.payments ?? []).some((payment) => payment.cashBasisEntryId)) {
+    if ((invoice.payments ?? []).some((payment) => !payment.reversedDate && payment.cashBasisEntryId)) {
       throw new Error(`${invoice.number} has payments recognised in the books. Remove them before changing amounts, items or the issue date.`);
     }
     await assertBooksOpen(ctx, invoice.societyId, [current.date, invoice.issueDate], "edited");
@@ -533,7 +584,10 @@ export type PaymentPosting = {
   cashBasisEntryId?: string;
   depositAccountId?: string;
   voidedTransactionEntryId?: string;
+  replacedTransactionEntryId?: string;
+  bankTransferJournalEntryId?: string;
   skipped?: string;
+  baseAmountCents?: number; bookValueCents?: number; fxGainLossCents?: number;
 };
 
 /**
@@ -544,78 +598,143 @@ export type PaymentPosting = {
  * for this payment, else the mapping's, else Undeposited funds.
  */
 export async function postPayment(
-  ctx: PortableMutationCtx,
-  invoice: StoredInvoice,
-  payment: StoredInvoicePayment,
-  lctx: InvoiceLedgerContext,
-  createdByUserId?: string,
+  ctx: PortableMutationCtx, invoice: StoredInvoice, payment: StoredInvoicePayment,
+  lctx: InvoiceLedgerContext, createdByUserId?: string,
 ): Promise<PaymentPosting> {
+  if (payment.reversedDate) return { skipped: "This settlement was reversed." };
   const accrual = await postedEntry(ctx, invoice.societyId, invoice.journalEntryId);
   if (!accrual) return { skipped: "The invoice isn't in the books yet." };
-  const start = booksStartLabel(lctx.booksStart);
-  if (start && isBeforeBooksStart(payment.date, lctx.booksStart)) return { skipped: `Paid before ${start}.` };
+  const block = paymentBlock(payment, lctx);
+  if (block) throw new Error(block);
   const accrualLines = await entryLines(ctx, accrual._id);
-  const receivableAccountId = accrualLines.find((line) => line.side === "debit")?.accountId;
-  if (!receivableAccountId) return { skipped: "The invoice's entry has no receivable line." };
-  let depositAccountId: string;
-  let voidedTransactionEntryId = payment.voidedTransactionEntryId;
-  if (payment.financialTransactionId) {
-    const txn = await ctx.db.get(payment.financialTransactionId, "financialTransactions");
-    if (!txn || txn.societyId !== invoice.societyId) return { skipped: "The linked deposit is missing." };
-    depositAccountId = await cashLedgerAccountId(ctx, invoice.societyId, String(txn.accountId));
-    voidedTransactionEntryId = (await claimDeposit(ctx, invoice.societyId, String(txn._id))) ?? voidedTransactionEntryId;
+  const receivableAccountId = accrualLines[0]?.accountId;
+  if (!receivableAccountId) throw new Error("The invoice has no receivable line.");
+  const kind = payment.kind ?? "payment", adjustment = kind === "credit" || kind === "write_off";
+  const foreign = invoice.currency !== lctx.workspaceCurrency;
+  if (foreign && !adjustment && (!payment.fxRateMicros || !payment.fxSource?.trim())) throw new Error("Record the actual payment FX rate and source.");
+  const previous = (invoice.payments ?? []).filter((row) => row.key !== payment.key && !row.reversedDate);
+  const total = computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money).totalCents;
+  const remaining = total - paidCents(previous);
+  const originalBase = accrualLines[0].amountCents;
+  const remainingBase = originalBase - previous.reduce((sum, row) => sum + (row.bookValueCents ?? row.amountCents), 0);
+  let book = payment.bookValueCents;
+  if (book === undefined) {
+    if (payment.amountCents < 0) {
+      const original = previous.find((row) => row.key === payment.sourcePaymentKey && (row.kind ?? "payment") === "payment");
+      if (!original) throw new Error("Select the original payment to refund.");
+      const refunds = previous.filter((row) => row.kind === "refund" && row.sourcePaymentKey === original.key);
+      const refundableCents = original.amountCents + refunds.reduce((sum, row) => sum + row.amountCents, 0);
+      const refundableBook = (original.bookValueCents ?? original.amountCents) + refunds.reduce((sum, row) => sum + (row.bookValueCents ?? row.amountCents), 0);
+      const returnedCents = Math.abs(payment.amountCents);
+      // Each partial refund allocates from the remaining carrying value. The last
+      // refund consumes its exact remainder, including prior rounding pennies.
+      book = -(returnedCents === refundableCents ? refundableBook : Math.round(returnedCents * refundableBook / refundableCents));
+    } else book = remaining > 0 ? (payment.amountCents === remaining ? remainingBase : Math.round(remainingBase * payment.amountCents / remaining)) : convertInvoiceCents(payment.amountCents, invoice.money?.fx?.rateMicros ?? 1_000_000);
+  }
+  const base = adjustment ? book : convertInvoiceCents(payment.amountCents, foreign ? payment.fxRateMicros! : 1_000_000);
+  let depositAccountId: string | undefined;
+  let bankClaim = { voidedTransactionEntryId: payment.voidedTransactionEntryId, replacedTransactionEntryId: payment.replacedTransactionEntryId, bankTransferJournalEntryId: payment.bankTransferJournalEntryId };
+  let posting: InvoiceLedgerLine[], postingKind: InvoicePostingKind = kind === "refund" ? "refund" : "payment";
+  if (kind === "credit") {
+    const credited: LedgerLineRow[] = [];
+    for (const other of previous.filter((row) => row.kind === "credit")) { const entry = await postedEntry(ctx, invoice.societyId, other.journalEntryId); if (entry) credited.push(...mirrorLines(await entryLines(ctx, entry._id)) as LedgerLineRow[]); }
+    posting = mirrorLines(cashBasisPostingLines(accrualLines, { paymentCents: Math.abs(book), receivableAccountId, recognised: credited }, `Credit: ${invoice.number}`));
+    postingKind = "credit";
+  } else if (kind === "write_off") {
+    const expense = await ensureLedgerAccount(ctx, invoice.societyId, "badDebt", lctx.workspaceCurrency);
+    posting = [{ accountId: expense._id, side: "debit", amountCents: book, description: payment.note || "Invoice written off" }, { accountId: receivableAccountId, side: "credit", amountCents: book }];
+    postingKind = "writeOff";
   } else {
-    const chosen = [payment.depositAccountId, lctx.mapping.depositAccountId].find((id): id is string => Boolean(id && lctx.accountIds.has(id)));
-    depositAccountId = chosen ?? (await ensureLedgerAccount(ctx, invoice.societyId, "undeposited"))._id;
+    if (payment.financialTransactionId) {
+      const txn = await ctx.db.get(payment.financialTransactionId, "financialTransactions");
+      if (!txn || txn.societyId !== invoice.societyId) throw new Error("The linked bank transaction is missing.");
+      depositAccountId = await cashLedgerAccountId(ctx, invoice.societyId, String(txn.accountId));
+    } else depositAccountId = [payment.depositAccountId, lctx.mapping.depositAccountId].find((id): id is string => Boolean(id && lctx.accountIds.has(id))) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "undeposited", lctx.workspaceCurrency))._id;
+    const deposit = await ctx.db.get(depositAccountId, "financialAccounts");
+    if (!deposit || deposit.societyId !== invoice.societyId || (deposit.currency ?? "CAD") !== lctx.workspaceCurrency) throw new Error(`The settlement deposit account must use books currency ${lctx.workspaceCurrency}.`);
+    if (payment.financialTransactionId) bankClaim = { ...bankClaim, ...await claimPaymentDeposit(ctx, invoice, payment, createdByUserId) };
+    const gain = await ensureLedgerAccount(ctx, invoice.societyId, "fxGain", lctx.workspaceCurrency), loss = await ensureLedgerAccount(ctx, invoice.societyId, "fxLoss", lctx.workspaceCurrency);
+    posting = fxSettlementPostingLines({ ...payment, baseAmountCents: base, bookValueCents: book }, { receivableAccountId, depositAccountId, gainAccountId: gain._id, lossAccountId: loss._id }, `${kind === "refund" ? "Refund" : "Payment"}: ${invoiceLabel(invoice)}`);
   }
-  const label = `Payment: ${invoiceLabel(invoice)}`;
-  const journalEntryId = await postLedgerEntry(ctx, {
-    societyId: invoice.societyId,
-    kind: "payment",
-    key: paymentEntryKey(invoice._id, payment.key),
-    date: payment.date,
-    memo: `Invoice payment: ${invoiceLabel(invoice)}`,
-    lines: paymentPostingLines({ amountCents: payment.amountCents, financialTransactionId: payment.financialTransactionId, reference: payment.reference }, { depositAccountId, receivableAccountId }, label),
-    counterpartyId: invoice.counterpartyId,
-    createdByUserId,
-  });
-  // Each payment recognises a share of what the invoice's other live cash-basis entries haven't.
-  const recognised: LedgerLineRow[] = [];
-  for (const other of invoice.payments ?? []) {
-    if (other.key === payment.key) continue;
-    const entry = await postedEntry(ctx, invoice.societyId, other.cashBasisEntryId);
-    if (entry) recognised.push(...(await entryLines(ctx, entry._id)));
+  if (!posting.length) throw new Error("This settlement has no remaining amount to post.");
+  const journalEntryId = await postLedgerEntry(ctx, { societyId: invoice.societyId, kind: postingKind, key: paymentEntryKey(invoice._id, payment.key), date: payment.date, memo: `${kind}: ${invoiceLabel(invoice)}`, lines: posting, counterpartyId: invoice.counterpartyId, createdByUserId });
+  let cashBasisEntryId: string | undefined;
+  if (!adjustment) {
+    const recognised: LedgerLineRow[] = [];
+    for (const other of previous) { const entry = await postedEntry(ctx, invoice.societyId, other.cashBasisEntryId); if (entry) recognised.push(...await entryLines(ctx, entry._id)); }
+    let cashLines: InvoiceLedgerLine[];
+    if (kind === "refund") {
+      const source = previous.find((row) => row.key === payment.sourcePaymentKey)!;
+      const sourceEntry = await postedEntry(ctx, invoice.societyId, source.cashBasisEntryId);
+      const sourceLines = sourceEntry ? await entryLines(ctx, sourceEntry._id) : [];
+      const alreadyRefunded: LedgerLineRow[] = [];
+      for (const other of previous.filter((row) => row.kind === "refund" && row.sourcePaymentKey === payment.sourcePaymentKey)) { const entry = await postedEntry(ctx, invoice.societyId, other.cashBasisEntryId); if (entry) alreadyRefunded.push(...mirrorLines(await entryLines(ctx, entry._id)) as LedgerLineRow[]); }
+      cashLines = mirrorLines(cashBasisPostingLines(sourceLines, { paymentCents: Math.abs(book), receivableAccountId, recognised: alreadyRefunded }, "Refunded revenue"));
+    } else cashLines = cashBasisPostingLines(accrualLines, { paymentCents: Math.abs(book), receivableAccountId, recognised }, `Revenue received: ${invoiceLabel(invoice)}`);
+    if (cashLines.length) cashBasisEntryId = await postLedgerEntry(ctx, { societyId: invoice.societyId, kind: kind === "refund" ? "refundCash" : "cashBasis", key: cashBasisKey(invoice._id, payment.key), date: payment.date, memo: `Cash basis ${kind}: ${invoiceLabel(invoice)}`, lines: cashLines, counterpartyId: invoice.counterpartyId, createdByUserId });
   }
-  const cashLines = cashBasisPostingLines(accrualLines, { paymentCents: payment.amountCents, receivableAccountId, recognised }, `Revenue received: ${invoiceLabel(invoice)}`);
-  const cashBasisEntryId = cashLines.length
-    ? await postLedgerEntry(ctx, {
-      societyId: invoice.societyId,
-      kind: "cashBasis",
-      key: cashBasisKey(invoice._id, payment.key),
-      date: payment.date,
-      memo: `Cash basis: ${invoiceLabel(invoice)} paid`,
-      lines: cashLines,
-      counterpartyId: invoice.counterpartyId,
-      createdByUserId,
-    })
-    : undefined;
-  return { journalEntryId, cashBasisEntryId, depositAccountId, voidedTransactionEntryId };
+  return { journalEntryId, cashBasisEntryId, depositAccountId, ...bankClaim, baseAmountCents: base, bookValueCents: book, fxGainLossCents: adjustment ? 0 : (base - book) };
 }
 
 /** Void a payment's entries (refused in a closed period or closed books); its bank line is freed. */
 export async function unpostPayment(ctx: PortableMutationCtx, societyId: string, payment: StoredInvoicePayment) {
   await voidLedgerEntry(ctx, societyId, payment.cashBasisEntryId);
   await voidLedgerEntry(ctx, societyId, payment.journalEntryId, { freeTransactions: true });
+  await voidLedgerEntry(ctx, societyId, payment.bankTransferJournalEntryId);
 }
 
 /** Stored payment fields after a posting (posting refs replaced, nothing else touched). */
 export function withPosting(payment: StoredInvoicePayment, posting: PaymentPosting): StoredInvoicePayment {
-  const { journalEntryId: _entry, cashBasisEntryId: _cash, voidedTransactionEntryId: _voided, ...rest } = payment;
+  const { journalEntryId: _entry, cashBasisEntryId: _cash, voidedTransactionEntryId: _voided, replacedTransactionEntryId: _replaced, bankTransferJournalEntryId: _transfer, ...rest } = payment;
   return {
     ...rest,
+    ...(posting.baseAmountCents !== undefined ? { baseAmountCents: posting.baseAmountCents, bookValueCents: posting.bookValueCents, fxGainLossCents: posting.fxGainLossCents } : {}),
     ...(posting.journalEntryId ? { journalEntryId: posting.journalEntryId } : {}),
     ...(posting.cashBasisEntryId ? { cashBasisEntryId: posting.cashBasisEntryId } : {}),
     ...(posting.voidedTransactionEntryId ? { voidedTransactionEntryId: posting.voidedTransactionEntryId } : {}),
+    ...(posting.replacedTransactionEntryId ? { replacedTransactionEntryId: posting.replacedTransactionEntryId } : {}),
+    ...(posting.bankTransferJournalEntryId ? { bankTransferJournalEntryId: posting.bankTransferJournalEntryId } : {}),
     ...(posting.depositAccountId && !payment.financialTransactionId ? { depositAccountId: posting.depositAccountId } : {}),
   };
+}
+
+/** Validate every original before a dated correction writes any mirrors. */
+export async function prepareSettlementReversal(ctx: PortableQueryCtx, invoice: StoredInvoice, payment: StoredInvoicePayment, date: string) {
+  await assertBooksOpen(ctx, invoice.societyId, [date], "reversed");
+  await assertPeriodOpen(ctx, { societyId: invoice.societyId, date });
+  const prepared: Array<{ field: "journalEntryId" | "cashBasisEntryId"; output: "reversalJournalEntryId" | "reversalCashBasisEntryId"; lines: InvoiceLedgerLine[] }> = [];
+  for (const [field, output] of [["journalEntryId", "reversalJournalEntryId"], ["cashBasisEntryId", "reversalCashBasisEntryId"]] as const) {
+    if (!payment[field]) continue;
+    const entry = await postedEntry(ctx, invoice.societyId, payment[field]);
+    const postingKind = payment.kind === "refund" ? (field === "cashBasisEntryId" ? "refundCash" : "refund") : field === "cashBasisEntryId" ? "cashBasis" : payment.kind === "credit" ? "credit" : payment.kind === "write_off" ? "writeOff" : "payment";
+    if (!entry || entry.source !== INVOICE_POSTINGS[postingKind].source || entry.sourceExternalId !== (field === "cashBasisEntryId" ? cashBasisKey(invoice._id, payment.key) : paymentEntryKey(invoice._id, payment.key))) throw new Error("The original settlement journal does not match this posted invoice settlement.");
+    const lines = mirrorLines(await entryLines(ctx, entry._id)).map((line) => ({ ...line, financialTransactionId: undefined }));
+    validateBalancedJournalLines(lines);
+    prepared.push({ field, output, lines });
+  }
+  return prepared;
+}
+
+/** Reverse, rather than erase, a settlement so historical statements remain reproducible. */
+export async function reverseSettlementPosting(ctx: PortableMutationCtx, invoice: StoredInvoice, payment: StoredInvoicePayment, date: string, createdByUserId?: string, prepared = undefined as Awaited<ReturnType<typeof prepareSettlementReversal>> | undefined) {
+  const result: { reversalJournalEntryId?: string; reversalCashBasisEntryId?: string } = {};
+  prepared ??= await prepareSettlementReversal(ctx, invoice, payment, date);
+  for (const { field, output, lines } of prepared) {
+    result[output] = await postLedgerEntry(ctx, { societyId: invoice.societyId, kind: field === "cashBasisEntryId" ? "cashReversal" : payment.kind === "credit" || payment.kind === "write_off" ? "adjustmentReversal" : "settlementReversal", key: `${paymentEntryKey(invoice._id, payment.key)}:reversal:${field}`, date, memo: `Reversal: ${payment.kind ?? "payment"} ${invoice.number}`, lines, counterpartyId: invoice.counterpartyId, createdByUserId });
+  }
+  return result;
+}
+
+/** Realize subsequent settlements at historical cost; the prior unrealized mark is reversed explicitly. */
+export async function reverseOpenInvoiceRevaluations(ctx: PortableMutationCtx, invoice: StoredInvoice, date: string, createdByUserId?: string) {
+  const values = [...(invoice.fxRevaluations ?? [])];
+  for (let index = 0; index < values.length; index++) {
+    const value = values[index];
+    if (value.reversedDate) continue;
+    if (value.date > date) throw new Error("The settlement date is before the latest FX revaluation. Reverse or correct that revaluation first.");
+    const entry = await postedEntry(ctx, invoice.societyId, value.journalEntryId);
+    const reversalJournalEntryId = entry ? await postLedgerEntry(ctx, { societyId: invoice.societyId, kind: "revaluationReversal", key: `invoice:${invoice._id}:fx:${value.key}:reversal`, date, memo: `Reverse unrealized FX: ${invoice.number}`, lines: mirrorLines(await entryLines(ctx, entry._id)), counterpartyId: invoice.counterpartyId, createdByUserId }) : undefined;
+    values[index] = { ...value, reversedDate: date, ...(reversalJournalEntryId ? { reversalJournalEntryId } : {}) };
+  }
+  return values;
 }

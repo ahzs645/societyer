@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts6="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts6/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts6/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part6Data" type="olT661Parts6:Part6DataType"/>
+	<xsd:complexType name="Part6DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts6:Part6TableData" minOccurs="0" maxOccurs="200"/>
+			<xsd:element ref="olT661Parts6:Part6CapExpTableData" minOccurs="0" maxOccurs="200"/>
+			<xsd:element ref="olT661Parts6:Part6SharedTableData" minOccurs="0" maxOccurs="200"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="Part6TableData" type="olT661Parts6:Part6TableData1"/>	
+	<xsd:complexType name="Part6TableData1">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table data for Part 6 - Project costs
+				Enter each Project Title, salaries, Materials Cost, and Expenditures for fields 750 through 759
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts6:ProjectTitle" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:Salary" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:CostOfMaterials" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:Expenditures" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:Overhead" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:LeaseExpenditures" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="ProjectTitle" type="ccms:Name175CharacterType" />
+	<xsd:element name="Salary" type="sdt:AmountType" />
+	<xsd:element name="CostOfMaterials" type="sdt:AmountType" />
+	<xsd:element name="Expenditures" type="sdt:AmountType" />
+	<xsd:element name="Overhead" type="sdt:AmountType" />	
+	<xsd:element name="LeaseExpenditures" type="sdt:AmountType" />
+	
+	
+	
+	<xsd:element name="Part6CapExpTableData" type="olT661Parts6:Part6CapExpTableData1"/>	
+	<xsd:complexType name="Part6CapExpTableData1">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table data for Part 6 - Capital Expenditures
+				Enter each sred capital property, capital expenditure amount, and project numbers for fields 780,782, and 786
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts6:SredProperty" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:CapitalExpenditure" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:ProjectNumbers" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+    <xsd:element name="SredProperty" type="ccms:Name175CharacterType" />
+	<xsd:element name="CapitalExpenditure" type="sdt:AmountType" />	
+	<xsd:element name="ProjectNumbers" type="sdt:AmountType" />
+	
+	
+	
+	<xsd:element name="Part6SharedTableData" type="olT661Parts6:Part6SharedTableData1"/>	
+	<xsd:complexType name="Part6SharedTableData1">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table data for Part 6 - Shared use equipment
+				Enter each Name of SRED property acquired, purchase date, 25% of the capital cost of the property, first/second term SUE,project numbers for fields 788,790,792,794, and 796
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts6:SharedSredProperty" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:PurchaseDate" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:CapitalCost" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:SueTerm" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts6:SharedProjectNumbers" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+    <xsd:element name="SharedSredProperty" type="ccms:Name175CharacterType" />	
+	<xsd:element name="PurchaseDate" type="sdt:DateType"/>	
+	
+	<xsd:element name="CapitalCost" type="sdt:AmountType" />
+	
+	<xsd:element name="SueTerm" type="sdt:AmountType" />
+	
+	<xsd:element name="SharedProjectNumbers" type="sdt:AmountType" />
+
+
+</xsd:schema> 

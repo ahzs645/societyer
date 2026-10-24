@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { Select } from "../components/Select";
+import { InvoiceTemplatesPanel } from "../features/invoicing/InvoiceTemplatesPanel";
+import { PriceListsPanel } from "../features/invoicing/PriceListsPanel";
+import { QuotesPanel } from "../features/invoicing/QuotesPanel";
+import { CustomerStatementsPanel } from "../features/invoicing/CustomerStatementsPanel";
+import { BillingAutomationPanel } from "../features/invoicing/BillingAutomationPanel";
+import { RepairJobsPanel } from "../features/invoicing/RepairJobsPanel";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
 import { ArrowDown, ArrowUp, Ban, Bell, BookCheck, Download, FileSpreadsheet, FileText, Landmark, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
@@ -17,7 +24,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatDate, pluralize } from "../lib/format";
 import { downloadTableExport, readLastExportFormat, rememberExportFormat, type TableExportFormat } from "../lib/tableExport";
-import { addDays, isOpenStatus, partyKey, type CustomerSummary } from "../../shared/invoicing";
+import { addDays, isOpenStatus, partyKey, invoiceCurrencySummary, invoiceCashActivity, summarizeCustomers, type CustomerSummary } from "../../shared/invoicing";
 import { isSociety } from "../../shared/organizationDomain";
 import { InvoiceStatusPill, NeedsActionPill } from "../features/invoicing/InvoiceStatusPill";
 import { InvoiceGlMappingDrawer } from "../features/invoicing/InvoiceGlMappingDrawer";
@@ -33,7 +40,18 @@ import type { BillToValue } from "../features/invoicing/BillToPicker";
 import type { InvoiceRow, InvoiceTab, InvoiceWorkspace } from "../features/invoicing/types";
 import { invoiceExportSheet, invoiceExportTextRows } from "../features/invoicing/invoiceExport";
 
-const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "needs_action", "recurring", "customers", "catalog"];
+import { useInvoiceCollections } from "../features/invoicing/useInvoiceCollections";
+import { InvoiceViewControls } from "../features/invoicing/InvoiceViewControls";
+import { InvoiceListTable } from "../features/invoicing/InvoiceListTable";
+import { DEFAULT_INVOICE_LIST_VIEW, cleanInvoiceListView, type InvoiceListView } from "../../shared/billingPricing";
+import "../features/invoicing/invoiceViews.css";
+
+function readView(params: URLSearchParams): InvoiceListView {
+  try { const raw = params.get("view"); return cleanInvoiceListView(raw ? JSON.parse(raw) : DEFAULT_INVOICE_LIST_VIEW); }
+  catch { return cleanInvoiceListView(DEFAULT_INVOICE_LIST_VIEW); }
+}
+
+const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "needs_action", "recurring", "customers", "catalog", "templates", "price_lists", "repairs", "quotes", "statements", "automation"];
 const LIST_TABS = new Set<InvoiceTab>(["all", "drafts", "outstanding", "overdue", "paid", "needs_action"]);
 type SortKey = "number" | "customer" | "issueDate" | "dueDate" | "total" | "balance";
 
@@ -66,29 +84,42 @@ const EMPTY: Record<string, { title: string; description: string }> = {
 export function InvoicesPage() {
   const society = useSociety();
   const { canWrite, canExport, canManageIntegration } = useFinancePermissions();
-  const workspace = useQuery(api.invoices.workspace, society ? { societyId: society._id } : "skip") as InvoiceWorkspace | undefined;
+  const initialWorkspace = useQuery(api.invoices.workspace, society ? { societyId: society._id } : "skip") as InvoiceWorkspace | undefined;
+  const collections = useInvoiceCollections(initialWorkspace,society?._id);
+  const queriedWorkspace = collections.workspace;
+  const [params, setParams] = useSearchParams();
+  const [initialView] = useState(() => readView(params));
+  const [advancedView, setAdvancedView] = useState(initialView);
+  const [currencyFilter, setCurrencyFilter] = useState(initialView.currency);
+  const currency = currencyFilter || queriedWorkspace?.ledger.workspaceCurrency || "CAD";
+  const workspace = useMemo(() => queriedWorkspace ? { ...queriedWorkspace,
+    invoices: queriedWorkspace.invoices.filter((row) => row.currency === currency),
+    summary: invoiceCurrencySummary(queriedWorkspace.invoices, currency, queriedWorkspace.today),
+    customers: summarizeCustomers(queriedWorkspace.invoices.filter((row) => row.currency === currency)),
+  } : undefined, [queriedWorkspace, currency]);
   const markSent = useMutation(api.invoices.markSent);
   const sendReminders = useMutation(api.invoices.sendReminders);
   const voidInvoices = useMutation(api.invoices.voidInvoices);
   const confirm = useConfirm();
   const toast = useToast();
-  const [params, setParams] = useSearchParams();
   const rawTab = params.get("tab") as InvoiceTab | null;
   const tab: InvoiceTab = rawTab && TABS.includes(rawTab) ? rawTab : "all";
   const openId = params.get("invoice");
   const builder = params.get("builder");
+  const [readyBuilder,setReadyBuilder]=useState<string|null>(null);
+  useEffect(()=>{if(!builder)setReadyBuilder(null);else if(collections.ready)setReadyBuilder(builder);},[builder,collections.ready]);
   const duesOpen = params.get("dues") === "1";
-  const [recentOnly, setRecentOnly] = useState(false);
-  const [customerFilter, setCustomerFilter] = useState<{ key: string; name: string } | null>(null);
-  const [seriesFilter, setSeriesFilter] = useState<{ id: string; name: string } | null>(null);
+  const [recentOnly, setRecentOnly] = useState(initialView.recentOnly);
+  const [customerFilter, setCustomerFilter] = useState<{ key: string; name: string } | null>(initialView.customerKey ? { key: initialView.customerKey, name: "Customer" } : null);
+  const [seriesFilter, setSeriesFilter] = useState<{ id: string; name: string } | null>(initialView.seriesId ? { id: initialView.seriesId, name: "Recurring series" } : null);
   const [focusSeriesId, setFocusSeriesId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialView.search);
   // Phones: search is an icon beside the tabs until it's opened (or in use).
   const isPhone = useIsBottomSheet();
   const [searchOpen, setSearchOpen] = useState(false);
   const phoneSearchShown = searchOpen || search.length > 0;
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "issueDate", dir: "desc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: initialView.sortKey, dir: initialView.sortDirection });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -116,14 +147,30 @@ export function InvoicesPage() {
     }
   };
 
+  const listView: InvoiceListView = { ...advancedView, tab: LIST_TABS.has(tab) ? tab as InvoiceListView["tab"] : "all", currency: currencyFilter, search, customerKey: customerFilter?.key ?? "", seriesId: seriesFilter?.id ?? "", recentOnly, sortKey: sort.key, sortDirection: sort.dir };
+  const viewJson = JSON.stringify(listView);
+  useEffect(() => {
+    setParams(previous => {
+      if (previous.get("view") === viewJson) return previous;
+      const next = new URLSearchParams(previous); next.set("view", viewJson); return next;
+    }, { replace: true });
+  }, [viewJson, setParams]);
+  const applyView = (value: InvoiceListView) => {
+    setAdvancedView(value); setCurrencyFilter(value.currency); setSearch(value.search); setRecentOnly(value.recentOnly);
+    setCustomerFilter(value.customerKey ? { key: value.customerKey, name: queriedWorkspace?.customers.find(c => c.key === value.customerKey)?.name ?? "Customer" } : null);
+    setSeriesFilter(value.seriesId ? { id: value.seriesId, name: queriedWorkspace?.series.find(s => s._id === value.seriesId)?.name ?? "Recurring series" } : null);
+    setSort({ key: value.sortKey, dir: value.sortDirection }); setParam({ tab: value.tab === "all" ? null : value.tab }); setSelected(new Set());
+  };
+
   const rows = useMemo(() => {
     if (!workspace) return [];
     const since = addDays(workspace.today, -30);
     const q = search.trim().toLowerCase();
     let list = rowsForTab(workspace.invoices, tab);
-    if (recentOnly) list = list.filter((row) => row.payments.some((payment) => payment.date >= since));
+    if (recentOnly) list = list.filter((row) => invoiceCashActivity(row.payments, since, workspace.today).hasActivity);
     if (customerFilter) list = list.filter((row) => partyKey(row) === customerFilter.key);
     if (seriesFilter) list = list.filter((row) => row.seriesId === seriesFilter.id);
+    list = list.filter(row => (!advancedView.fromDate || row.issueDate >= advancedView.fromDate) && (!advancedView.toDate || row.issueDate <= advancedView.toDate) && (!advancedView.dueFrom || row.dueDate >= advancedView.dueFrom) && (!advancedView.dueTo || row.dueDate <= advancedView.dueTo) && (advancedView.minimumBalanceCents == null || (row.status === "void" ? 0 : row.balanceCents) >= advancedView.minimumBalanceCents) && (advancedView.maximumBalanceCents == null || (row.status === "void" ? 0 : row.balanceCents) <= advancedView.maximumBalanceCents));
     if (q) list = list.filter((row) => `${row.number} ${row.billToName} ${row.billToEmail ?? ""} ${row.reference ?? ""} ${row.lines.map((l) => l.item).join(" ")}`.toLowerCase().includes(q));
     const value = (row: InvoiceRow): string | number => {
       switch (sort.key) {
@@ -141,14 +188,14 @@ export function InvoicesPage() {
       const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
       return sort.dir === "asc" ? cmp : -cmp;
     });
-  }, [workspace, tab, recentOnly, customerFilter, seriesFilter, search, sort]);
+  }, [workspace, tab, recentOnly, customerFilter, seriesFilter, search, sort, advancedView]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const societyLike = isSociety(society as any);
   const showMembers = societyLike && (workspace?.parties.members.length ?? 0) > 0;
-  const openInvoice = workspace?.invoices.find((row) => row._id === openId) ?? null;
+  const openInvoice = queriedWorkspace?.invoices.find((row) => row._id === openId) ?? null;
   const selectedRows = rows.filter((row) => selected.has(row._id));
   const selectedTotal = selectedRows.reduce((sum, row) => sum + (row.status === "void" ? 0 : row.balanceCents), 0);
   const monthLabel = workspace ? new Intl.DateTimeFormat("en-CA", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${workspace.today}T12:00:00Z`)) : "";
@@ -162,8 +209,11 @@ export function InvoicesPage() {
     setParam({ builder: null });
   };
 
+  if (builder && readyBuilder !== builder && !collections.ready) {
+    return collections.error ? <div className="page"><Banner tone="warn" title="Invoice lists could not load">{collections.error}<button className="btn" onClick={collections.retry}>Retry loading lists</button><button className="btn" onClick={closeBuilder}>Back to invoices</button></Banner></div> : <PageLoading />;
+  }
   if (builder && workspace) {
-    const invoice = builder === "new" ? null : workspace.invoices.find((row) => row._id === builder) ?? null;
+    const invoice = builder === "new" ? null : queriedWorkspace?.invoices.find((row) => row._id === builder) ?? null;
     if (builder !== "new" && !invoice) {
       return (
         <div className="page">
@@ -175,13 +225,14 @@ export function InvoicesPage() {
       <div className="page page--invoice-builder">
         <InvoiceBuilder
           key={builder}
-          workspace={workspace}
+          workspace={queriedWorkspace!}
           invoice={invoice}
           prefill={prefill}
           societyId={society._id}
           logoUrl={(society as any).logoUrl ?? null}
           showMembers={showMembers}
           canWrite={canWrite}
+          canExport={canExport}
           onClose={closeBuilder}
           onSaved={(id) => setParam({ builder: id })}
           onOpenBuilder={(id) => openBuilder(id)}
@@ -202,8 +253,8 @@ export function InvoicesPage() {
     try {
       const fileName = await downloadTableExport(`Invoices - ${label} ${workspace?.today ?? ""}`, format, {
         title: `Invoices - ${label}`,
-        textRows: () => invoiceExportTextRows(list),
-        sheet: () => invoiceExportSheet(list),
+        textRows: () => invoiceExportTextRows(list, listView.columns),
+        sheet: () => invoiceExportSheet(list, listView.columns),
       });
       rememberExportFormat(format);
       toast.success(`Exported ${pluralize(list.length, "invoice")}`, fileName);
@@ -279,22 +330,6 @@ export function InvoicesPage() {
     setCustomerFilter({ key: customer.key, name: customer.name });
   };
 
-  const sortHeader = (key: SortKey, label: string, numeric = false) => {
-    const active = sort.key === key;
-    return (
-      <th className={numeric ? "num" : undefined} aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
-        <button
-          type="button"
-          className={`invoice-sort${active ? " is-active" : ""}`}
-          onClick={() => setSort({ key, dir: active && sort.dir === "desc" ? "asc" : active ? "desc" : key === "customer" || key === "number" ? "asc" : "desc" })}
-        >
-          {label}
-          {active && (sort.dir === "asc" ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />)}
-        </button>
-      </th>
-    );
-  };
-
   const summary = workspace?.summary;
   const counts = workspace
     ? {
@@ -306,6 +341,7 @@ export function InvoicesPage() {
         needs_action: workspace.summary.needsActionCount,
         recurring: workspace.series.length,
         customers: workspace.customers.length,
+        templates: workspace.templates?.filter((t) => t.active).length ?? 0, price_lists: workspace.priceLists?.length ?? 0, repairs: workspace.repairJobs?.filter((job) => !["completed", "cancelled"].includes(job.status)).length ?? 0,
         catalog: workspace.catalog.filter((item) => item.active).length,
       }
     : null;
@@ -325,7 +361,13 @@ export function InvoicesPage() {
         { id: "needs_action", label: "Needs action", count: counts?.needs_action ?? null },
         { id: "recurring", label: "Recurring", count: counts?.recurring ?? null },
         { id: "customers", label: "Customers", count: counts?.customers ?? null },
-        { id: "catalog", label: "Catalog", count: counts?.catalog ?? null },
+        { id: "catalog", label: "Items & services", count: counts?.catalog ?? null },
+        { id: "price_lists", label: "Price lists", count: counts?.price_lists ?? null },
+        { id: "templates", label: "Templates", count: counts?.templates ?? null },
+        { id: "repairs", label: "Repairs", count: counts?.repairs ?? null },
+        { id: "quotes", label: "Quotes" },
+        { id: "statements", label: "Statements" },
+        { id: "automation", label: "Automation" },
       ]}
     />
   );
@@ -345,11 +387,12 @@ export function InvoicesPage() {
         }
         actions={
           <>
+            <Select aria-label="Invoice list currency" value={currency} onChange={setCurrencyFilter} options={[...new Set([queriedWorkspace?.ledger.workspaceCurrency ?? "CAD", ...(queriedWorkspace?.invoices ?? []).map((row) => row.currency)])].map((value) => ({ value, label: value }))} />
             <MoreActionsMenu
               items={[
                 ...(societyLike && workspace?.plans.length ? [{ id: "dues", label: "Generate dues invoices", hint: duesCount ? `${duesCount} this month` : undefined, icon: <Users size={14} />, disabled: !canWrite, onSelect: () => setParam({ dues: "1" }) }] : []),
-                { id: "export-xlsx", label: "Export to Excel", icon: <FileSpreadsheet size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(rows.length ? rows : workspace.invoices, tab, "xlsx") },
-                { id: "export-csv", label: "Export to CSV", icon: <Download size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(rows.length ? rows : workspace.invoices, tab, "csv") },
+                { id: "export-xlsx", label: "Export to Excel", icon: <FileSpreadsheet size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(LIST_TABS.has(tab) ? rows : workspace.invoices, tab, "xlsx") },
+                { id: "export-csv", label: "Export to CSV", icon: <Download size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(LIST_TABS.has(tab) ? rows : workspace.invoices, tab, "csv") },
                 { id: "gl-mapping", label: "Edit GL account mapping", icon: <Landmark size={14} />, disabled: !workspace, onSelect: () => setGlMappingOpen(true) },
                 { id: "post-existing", label: "Post existing invoices to the ledger", hint: workspace?.ledger.readyCount ? `${workspace.ledger.readyCount} ready` : undefined, icon: <BookCheck size={14} />, disabled: !workspace, onSelect: () => setPostExistingOpen(true) },
                 { id: "settings", label: "Invoice settings", icon: <Settings2 size={14} />, onSelect: () => setSettingsOpen(true) },
@@ -365,7 +408,7 @@ export function InvoicesPage() {
       <StatStrip className="invoice-stats" ariaLabel="Invoice summary">
         <StatTile
           label="Outstanding"
-          value={<Money cents={summary?.outstandingCents ?? null} variant="hero" />}
+          value={<Money currency={currency} cents={summary?.outstandingCents ?? null} variant="hero" />}
           sub={summary ? pluralize(summary.outstandingCount, "open invoice") : undefined}
           onClick={() => setTab("outstanding")}
           pressed={tab === "outstanding"}
@@ -373,7 +416,7 @@ export function InvoicesPage() {
         />
         <StatTile
           label="Overdue"
-          value={<Money cents={summary?.overdueCents ?? null} variant="hero" />}
+          value={<Money currency={currency} cents={summary?.overdueCents ?? null} variant="hero" />}
           tone={summary?.overdueCount ? "warn" : "neutral"}
           sub={summary ? (summary.overdueCount ? pluralize(summary.overdueCount, "invoice") + " past due" : "Nothing past due") : undefined}
           subTone={summary?.overdueCount ? "warn" : undefined}
@@ -382,16 +425,16 @@ export function InvoicesPage() {
           actionLabel="Show overdue invoices"
         />
         <StatTile
-          label="Paid, last 30 days"
-          value={<Money cents={summary?.paidLast30Cents ?? null} variant="hero" />}
+          label="Net received, last 30 days"
+          value={<Money currency={currency} cents={summary?.paidLast30Cents ?? null} variant="hero" />}
           sub={summary ? pluralize(summary.paidLast30Count, "invoice") : undefined}
           onClick={() => { setTab("all"); setRecentOnly(true); }}
           pressed={tab === "all" && recentOnly}
-          actionLabel="Show invoices paid in the last 30 days"
+          actionLabel="Show invoices with cash activity in the last 30 days"
         />
         <StatTile
           label="Drafts"
-          value={<Money cents={summary?.draftCents ?? null} variant="hero" />}
+          value={<Money currency={currency} cents={summary?.draftCents ?? null} variant="hero" />}
           sub={summary ? pluralize(summary.draftCount, "draft") : undefined}
           onClick={() => setTab("drafts")}
           pressed={tab === "drafts"}
@@ -400,9 +443,8 @@ export function InvoicesPage() {
       </StatStrip>
 
       {workspace && workspace.ledger.foreignCurrency.count > 0 && (
-        <Banner tone="warn" className="invoice-banner" title={`${pluralize(workspace.ledger.foreignCurrency.count, "invoice")} in ${workspace.ledger.foreignCurrency.currencies.join(", ")} won't sync to the books`}>
-          The books are kept in {workspace.ledger.workspaceCurrency}, so these invoices aren't posted automatically. Record each one with a manual
-          journal entry at the exchange rate you received.{" "}
+        <Banner tone="warn" className="invoice-banner" title={`${pluralize(workspace.ledger.foreignCurrency.count, "invoice")} in ${workspace.ledger.foreignCurrency.currencies.join(", ")}`}>
+          The books are kept in {workspace.ledger.workspaceCurrency}. Set an explicit invoice exchange rate and settlement rate to post foreign invoices and their exchange differences.{" "}
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setTab("needs_action")}>Show them</button>
         </Banner>
       )}
@@ -434,6 +476,8 @@ export function InvoicesPage() {
         </div>
       ) : invoiceTabs}
 
+      {collections.loading && <p className="muted" role="status">Loading complete template, pricing and repair lists…</p>}
+      {collections.error && <Banner tone="warn" title="Complete invoice lists could not load">{collections.error} <button className="btn btn--sm" onClick={collections.retry}>Retry loading lists</button></Banner>}
       {workspace === undefined ? (
         <div className="card"><div className="card__body"><div className="record-table__loading">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="record-table__loading-row" />)}</div></div></div>
       ) : tab === "recurring" ? (
@@ -448,9 +492,11 @@ export function InvoicesPage() {
         />
       ) : tab === "customers" ? (
         <CustomersPanel
+          currency={currency}
           customers={workspace.customers}
           canWrite={canWrite}
           onShowInvoices={showCustomer}
+          onStatement={customer => setParam({ tab: "statements", statementCustomer: customer.key })}
           onNewInvoice={(customer) => openBuilder("new", {
             partyKind: customer.partyKind as BillToValue["partyKind"],
             memberId: customer.memberId,
@@ -460,10 +506,23 @@ export function InvoicesPage() {
             billToAddress: workspace.invoices.find((row) => partyKey(row) === customer.key && row.billToAddress)?.billToAddress,
           })}
         />
+      ) : tab === "quotes" ? (
+        <QuotesPanel workspace={queriedWorkspace!} societyId={society._id} canWrite={canWrite} canExport={canExport} onOpenInvoice={id => setParam({ tab: null, invoice: id, builder: null })} />
+      ) : tab === "statements" ? (
+        <CustomerStatementsPanel key={`${params.get("statementCustomer") ?? ""}:${currency}`} workspace={queriedWorkspace!} societyId={society._id} canExport={canExport} initialCustomerKey={params.get("statementCustomer") ?? undefined} initialCurrency={currency} />
+      ) : tab === "automation" ? (
+        <BillingAutomationPanel societyId={society._id} canWrite={canWrite} />
+      ) : tab === "templates" ? (
+        <InvoiceTemplatesPanel workspace={workspace} societyId={society._id} canWrite={canWrite} logoUrl={(society as any).logoUrl ?? null} />
+      ) : tab === "price_lists" ? (
+        <PriceListsPanel workspace={workspace} societyId={society._id} canWrite={canWrite} />
+      ) : tab === "repairs" ? (
+        <RepairJobsPanel key={params.get("repair")} workspace={workspace} societyId={society._id} canWrite={canWrite} canExport={canExport} logoUrl={(society as any).logoUrl ?? null} focusId={params.get("repair")} onOpenInvoice={(id) => setParam({ invoice: id, builder: null })} />
       ) : tab === "catalog" ? (
         <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} />
       ) : LIST_TABS.has(tab) ? (
         <div className="card invoice-card">
+          <InvoiceViewControls societyId={society._id} value={listView} onChange={applyView} />
           {(!isPhone || phoneSearchShown || recentOnly || customerFilter || seriesFilter) && (
           <div className="invoice-toolbar">
             {(!isPhone || phoneSearchShown) && (
@@ -474,7 +533,7 @@ export function InvoicesPage() {
             </label>
             )}
             <div className="invoice-chips">
-              {recentOnly && <FilterChip label="Paid in the last 30 days" onClear={() => setRecentOnly(false)} />}
+              {recentOnly && <FilterChip label="Cash activity in the last 30 days" onClear={() => setRecentOnly(false)} />}
               {customerFilter && <FilterChip label={customerFilter.name} onClear={() => setCustomerFilter(null)} />}
               {seriesFilter && (
                 <FilterChip
@@ -484,14 +543,14 @@ export function InvoicesPage() {
               )}
             </div>
             <span className="muted invoice-toolbar__count">
-              {pluralize(rows.length, "invoice")} · <Money cents={rows.reduce((sum, row) => sum + (row.status === "void" ? 0 : row.balanceCents), 0)} /> due
+              {pluralize(rows.length, "invoice")} · <Money currency={currency} cents={rows.reduce((sum, row) => sum + (row.status === "void" ? 0 : row.balanceCents), 0)} /> due
             </span>
           </div>
           )}
 
           {selectedRows.length > 0 && (
             <div className="invoice-bulkbar" role="region" aria-label="Bulk actions">
-              <span><strong>{selectedRows.length}</strong> selected · <Money cents={selectedTotal} /> due</span>
+              <span><strong>{selectedRows.length}</strong> selected · <Money currency={currency} cents={selectedTotal} /> due</span>
               <div className="invoice-bulkbar__actions">
                 <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkRemind()}>
                   <Bell size={12} aria-hidden="true" /> Send reminder
@@ -525,61 +584,7 @@ export function InvoicesPage() {
               )}
             </div>
           ) : (
-            <table className="table table--comfortable invoice-table invoice-table--list">
-              <thead>
-                <tr>
-                  <th className="invoice-table__check">
-                    <Checkbox bare checked={allSelected} indeterminate={selectedRows.length > 0 && !allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((row) => row._id)))} ariaLabel="Select every invoice in this view" />
-                  </th>
-                  {sortHeader("number", "Number")}
-                  {sortHeader("customer", "Customer")}
-                  {sortHeader("issueDate", "Issued")}
-                  {sortHeader("dueDate", "Due")}
-                  {sortHeader("total", "Amount", true)}
-                  {sortHeader("balance", "Balance due", true)}
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={row._id}
-                    className={[selected.has(row._id) ? "is-selected" : "", row._id === openId ? "is-open" : "", row.status === "void" ? "is-void" : ""].filter(Boolean).join(" ") || undefined}
-                    // Phone cards show one amount when the balance due is the
-                    // whole total (or nothing is owed), and label both when
-                    // part has been paid.
-                    data-amounts={row.status !== "void" && row.status !== "paid" && row.balanceCents !== row.totalCents ? "split" : "single"}
-                    onClick={() => setParam({ invoice: row._id })}
-                  >
-                    <td className="invoice-table__check" onClick={(event) => event.stopPropagation()}>
-                      <Checkbox bare checked={selected.has(row._id)} onChange={() => toggle(row._id)} ariaLabel={`Select ${row.number}`} />
-                    </td>
-                    <td data-label="Number" className="invoice-table__number">
-                      <button type="button" className="invoice-table__link" onClick={(event) => { event.stopPropagation(); setParam({ invoice: row._id }); }}>
-                        {row.number}
-                      </button>
-                      {row.seriesId && <span className="invoice-table__tag" title={row.seriesName}>Recurring</span>}
-                    </td>
-                    <td data-label="Customer" className="invoice-table__customer">
-                      <span className="invoice-table__name">{row.billToName}</span>
-                      <span className="muted invoice-table__sub">{row.lines[0]?.item}{row.lines.length > 1 ? ` +${row.lines.length - 1}` : ""}</span>
-                    </td>
-                    <td data-label="Issued">{formatDate(row.issueDate)}</td>
-                    <td data-label="Due" className={row.status === "overdue" ? "invoice-table__due--overdue" : undefined}>{formatDate(row.dueDate)}</td>
-                    <td data-label="Amount" className="num"><Money cents={row.totalCents} currency={row.currency} struck={row.status === "void"} /></td>
-                    <td data-label="Balance due" className="num">
-                      {row.status === "void" || row.status === "paid" ? <span className="muted">—</span> : <Money cents={row.balanceCents} currency={row.currency} />}
-                    </td>
-                    <td data-label="Status">
-                      <span className="invoice-status-cell">
-                        <InvoiceStatusPill status={row.status} daysOverdue={row.daysOverdue} partial={row.paidCents > 0} />
-                        <NeedsActionPill flags={row.needsAction} />
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <InvoiceListTable rows={rows} columns={listView.columns} sort={sort} selected={selected} openId={openId} onSort={key => setSort({ key, dir: sort.key === key ? sort.dir === "desc" ? "asc" : "desc" : key === "customer" || key === "number" ? "asc" : "desc" })} onToggle={toggle} onSelectAll={() => setSelected(allSelected ? new Set() : new Set(rows.map(row => row._id)))} onOpen={id => setParam({ invoice: id })} />
           )}
         </div>
       ) : null}
@@ -588,13 +593,14 @@ export function InvoicesPage() {
         <InvoiceDetailDrawer
           key={openInvoice._id}
           invoice={openInvoice}
-          workspace={workspace}
+          workspace={queriedWorkspace!}
           logoUrl={(society as any).logoUrl ?? null}
           canWrite={canWrite}
           onClose={() => setParam({ invoice: null })}
           onEdit={(id) => openBuilder(id)}
           onOpenSeries={(seriesId) => { setFocusSeriesId(seriesId); setParam({ invoice: null, tab: "recurring" }); }}
           onEditMapping={() => setGlMappingOpen(true)}
+          canExport={canExport}
           canPost={canManageIntegration}
         />
       )}

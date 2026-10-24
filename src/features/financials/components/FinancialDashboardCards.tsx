@@ -37,6 +37,7 @@ export function OperatingSubscriptionsCard({
           Recurring software, services, and operating subscriptions converted to monthly equivalents.
         </span>
         <div style={{ marginLeft: "auto" }}>
+          <Link className="btn-action" to="/app/financials/planning">Plan period costs</Link>
           <button className="btn-action" onClick={onNew}>
             <PlusCircle size={12} /> Add subscription
           </button>

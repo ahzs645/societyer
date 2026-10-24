@@ -1,3 +1,7 @@
+import { payrollRemittanceTables } from "./tables/payrollRemittance";
+import { payrollRoeWorkflowTables } from "./tables/payrollRoeWorkflow";
+import { payrollRuleTables } from "./tables/payrollRules";
+import { payrollTd1Tables } from "./tables/payrollTd1";
 import { meetingTranscriptionTables } from "./tables/meetingTranscription";
 import { privacyAssessmentValidators } from "./lib/privacyValidators";
 import {personHistoryTables} from './tables/personHistory';
@@ -45,10 +49,17 @@ import { agreementTables } from "./tables/agreements";
 import { financeWorkflowTables } from "./tables/financeWorkflows";
 import { financeTagTables } from "./tables/financeTags";
 import { invoiceTables } from "./tables/invoices";
+import { commerceReportTables } from "./tables/commerceReports";
+import { invoicePreferenceTables } from "./tables/invoicePreferences";
+import { billingDocumentTables } from "./tables/billingDocuments";
+import { billingAutomationTables } from "./tables/billingAutomation";
 import { billTables } from "./tables/bills";
 import { businessRegisterTables } from "./tables/businessRegisters";
 import { expensePolicyTables } from "./tables/expensePolicies";
 import { bankingTables } from "./tables/banking";
+import { costPlanningTables } from "./tables/costPlanning";
+import { payrollCalculationTables } from "./tables/payrollCalculation";
+import { payrollLeaveTables } from "./tables/payrollLeave";
 import { agentConnectorTables } from "./tables/agentConnectors";
 import { mcpOAuthTables } from "./tables/mcpOAuth";
 
@@ -77,10 +88,21 @@ export default defineSchema({
   ...financeWorkflowTables,
   ...financeTagTables,
   ...invoiceTables,
+  ...invoicePreferenceTables,
+  ...commerceReportTables,
+  ...billingDocumentTables,
+  ...billingAutomationTables,
   ...billTables,
   ...businessRegisterTables,
   ...expensePolicyTables,
   ...bankingTables,
+  ...costPlanningTables,
+  ...payrollCalculationTables,
+  ...payrollLeaveTables,
+  ...payrollRemittanceTables,
+  ...payrollRoeWorkflowTables,
+  ...payrollRuleTables,
+  ...payrollTd1Tables,
   ...agentConnectorTables,
   ...mcpOAuthTables,
   societies: defineTable({

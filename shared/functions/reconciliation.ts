@@ -35,6 +35,7 @@ import {
   type AutoReconcileReadiness,
 } from "../reconciliationMonths";
 import { bankAccountBalanceCents } from "../bankAccounts";
+import { assertNativePayrollBankPatch } from "./payrollPaymentGuard";
 
 /**
  * Returns every bank transaction with reconciliation status, plus a candidate
@@ -150,6 +151,12 @@ export async function matchPortable(
   await getOwned(ctx, "financialTransactions", args.txnId, candidate.societyId);
   const refusal = paymentLinkRefusal(candidate.matchedKind, "match it to something else");
   if (refusal) throw new Error(refusal);
+  await assertNativePayrollBankPatch(ctx, candidate, { matchedKind: args.matchedKind, matchedId: args.matchedId });
+  if (args.matchedKind === "payroll_remittance") throw new Error("Record a CRA settlement through the approved payroll remittance plan so the obligation, bank outflow and ledger are reconciled together.");
+  if (args.matchedKind === "payroll") {
+    const target = await ctx.db.get(args.matchedId, "payRuns");
+    if (target?.calculationId && target.societyId === candidate.societyId) throw new Error("Record a finalized payroll bank payment from its saved payroll calculation so its method, amount and journal stay together.");
+  }
   if (isPaymentLinkKind(args.matchedKind)) throw new Error(`Link a bank transaction to ${args.matchedKind === "bill" ? "a bill" : "an invoice"} by recording the payment on the ${args.matchedKind}.`);
   const principalId = await principalUserId(ctx, candidate.societyId);
   const principal = await getOwned(ctx, "users", principalId, candidate.societyId);
@@ -181,6 +188,7 @@ export async function markManualPortable(
   await getOwned(ctx, "financialTransactions", txnId, candidate.societyId);
   const refusal = paymentLinkRefusal(candidate.matchedKind, "match it to something else");
   if (refusal) throw new Error(refusal);
+  await assertNativePayrollBankPatch(ctx, candidate, { matchedKind: "manual", matchedId: "manual" });
   const principalId = await principalUserId(ctx, candidate.societyId);
   const principal = await getOwned(ctx, "users", principalId, candidate.societyId);
   await ctx.db.patch(txnId, {
@@ -274,6 +282,7 @@ export async function unmatchPortable(ctx: PortableMutationCtx, { txnId }: { txn
   await getOwned(ctx, "financialTransactions", txnId, candidate.societyId);
   const refusal = paymentLinkRefusal(candidate.matchedKind, "unmatch it");
   if (refusal) throw new Error(refusal);
+  await assertNativePayrollBankPatch(ctx, candidate, { matchedKind: undefined, matchedId: undefined });
   await ctx.db.patch(txnId, {
     reconciledAtISO: undefined,
     reconciledByName: undefined,

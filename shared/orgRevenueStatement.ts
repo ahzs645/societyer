@@ -14,6 +14,7 @@
  */
 
 import { isInternalTransfer } from "./transferCategories";
+import { yearEndCurrencyScope, yearEndRowCurrency } from "./yearEndCurrency";
 
 export type OrgStatementLine = {
   label: string;
@@ -25,6 +26,10 @@ export type OrgStatementColumnTotals = { generalCents: number; restrictedCents: 
 
 export type OrgRevenueStatement = {
   organizationName: string;
+  currency?: string;
+  baseCurrency?: string;
+  currencies?: string[];
+  sourceWarnings?: string[];
   fiscalYearLabel: string;
   /** e.g. "April 1, 2024 to March 31, 2025". */
   periodLabel?: string;
@@ -59,8 +64,9 @@ type LedgerTransaction = {
   amountCents?: number;
   category?: string;
   accountId?: string;
+  currency?: string;
 };
-type LedgerAccount = { _id?: string; isRestricted?: boolean };
+type LedgerAccount = { _id?: string; isRestricted?: boolean; currency?: string; accountType?: string };
 
 function sumColumns(lines: OrgStatementLine[]): OrgStatementColumnTotals {
   return lines.reduce(
@@ -77,8 +83,7 @@ function sumColumns(lines: OrgStatementLine[]): OrgStatementColumnTotals {
  * Build the statement from raw ledger rows. Revenues are positive flows,
  * expenses negative; each is grouped by category and split General vs Restricted
  * by the transaction account's `isRestricted` flag. Transactions outside the
- * fiscal range are excluded, unless none fall inside it (a sparsely-dated demo),
- * in which case all rows are used so the statement is never blank for no reason.
+ * fiscal range are excluded. A year without activity produces an empty statement.
  */
 export function buildOrgRevenueStatement(input: {
   organizationName: string;
@@ -86,13 +91,18 @@ export function buildOrgRevenueStatement(input: {
   periodLabel?: string;
   transactions: LedgerTransaction[];
   accounts: LedgerAccount[];
+  currency?: string;
+  baseCurrency?: string;
 }): OrgRevenueStatement {
+  const scope = yearEndCurrencyScope(input.accounts, { requested: input.currency, organizationCurrency: input.baseCurrency });
+  const baseCurrency = input.baseCurrency ?? scope.baseCurrency;
+  const currency = input.currency ? scope.currency : input.baseCurrency ?? scope.currency;
+  const accountsById = new Map(input.accounts.map((account) => [String(account._id), account]));
   const restrictedById = new Map<string, boolean>(
     input.accounts.map((a) => [String(a._id), Boolean(a.isRestricted)]),
   );
   const { start, end } = deriveFiscalRange(input.fiscalYearLabel);
-  const inRange = input.transactions.filter((t) => (t.date ?? "") >= start && (t.date ?? "") <= end);
-  const rows = inRange.length > 0 ? inRange : input.transactions;
+  const rows = input.transactions.filter((t) => (t.date ?? "") >= start && (t.date ?? "") <= end && yearEndRowCurrency(t, accountsById, baseCurrency) === currency);
 
   const revenueByCategory = new Map<string, OrgStatementLine>();
   const expenseByCategory = new Map<string, OrgStatementLine>();
@@ -117,6 +127,10 @@ export function buildOrgRevenueStatement(input: {
 
   return {
     organizationName: input.organizationName,
+    currency,
+    baseCurrency,
+    currencies: scope.currencies,
+    sourceWarnings: [`Only ${currency} source transactions are included; no currency conversion is performed. Transactions without an account denomination or currency are recorded in ${baseCurrency}.`],
     fiscalYearLabel: input.fiscalYearLabel,
     periodLabel: input.periodLabel,
     revenues,

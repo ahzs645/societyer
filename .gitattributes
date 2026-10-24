@@ -1,0 +1,11 @@
+# Preserve archived CRA/Service Canada source bytes for SHA-256 verification.
+# Their upstream whitespace is intentional evidence, not application formatting.
+shared/payrollRates/**/*.csv -text -whitespace
+shared/payrollRates/**/*.html -text -whitespace
+shared/payrollRates/cpp-eligibility.html -text -whitespace
+shared/payrollRates/vacation-pay.html -text -whitespace
+shared/payrollSchemas/**/*.xsd -text -whitespace
+
+# Preserve the upstream font license, including its generated embedded copy.
+src/assets/invoice-branding/SpaceMono-OFL.txt whitespace=-blank-at-eol
+convex/lib/billingDocumentFonts.ts whitespace=-blank-at-eol

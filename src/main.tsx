@@ -60,6 +60,8 @@ const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => (
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
 const AccountingWorkbenchPage = React.lazy(() => import("./features/financials/pages/AccountingWorkbenchPage").then((m) => ({ default: m.AccountingWorkbenchPage })));
 const FinancialYearDetailPage = React.lazy(() => import("./features/financials/pages/FinancialYearDetailPage").then((m) => ({ default: m.FinancialYearDetailPage })));
+const CommerceReportsPage = React.lazy(() => import("./features/financials/reports/CommerceReportsPage").then(m => ({ default: m.CommerceReportsPage })));
+const CostPlanningPage = React.lazy(() => import("./pages/CostPlanning").then(m => ({ default: m.CostPlanningPage })));
 const BooksReportsPage = React.lazy(() => import("./features/financials/pages/BooksReportsPage").then((m) => ({ default: m.BooksReportsPage })));
 const JournalEntriesPage = React.lazy(() => import("./features/financials/pages/JournalEntriesPage").then((m) => ({ default: m.JournalEntriesPage })));
 const ChartOfAccountsPage = React.lazy(() => import("./features/financials/pages/ChartOfAccountsPage").then((m) => ({ default: m.ChartOfAccountsPage })));
@@ -97,6 +99,7 @@ const InvoicesPage = React.lazy(() => import("./pages/Invoices").then((m) => ({ 
 const BillsPage = React.lazy(() => import("./pages/Bills").then((m) => ({ default: m.BillsPage })));
 const BillVendorsPage = React.lazy(() => import("./pages/BillVendors").then((m) => ({ default: m.BillVendorsPage })));
 const PayrollPage = React.lazy(() => import("./pages/Payroll").then((m) => ({ default: m.PayrollPage })));
+const PayrollCalculatorPage = React.lazy(() => import("./pages/PayrollCalculator").then((m) => ({ default: m.PayrollCalculatorPage })));
 const CorporateCardsPage = React.lazy(() => import("./pages/CorporateCards").then((m) => ({ default: m.CorporateCardsPage })));
 const InvestmentsPage = React.lazy(() => import("./pages/Investments").then((m) => ({ default: m.InvestmentsPage })));
 const ProcurementReviewPage = React.lazy(() => import("./features/procurementReview/pages/ProcurementReviewPage").then((m) => ({ default: m.ProcurementReviewPage })));
@@ -484,7 +487,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="financials/accounting" element={<AccountingWorkbenchPage />} />
+            <Route path="financials/planning" element={<CostPlanningPage />} />
             <Route path="financials/reports" element={<Navigate to="/app/financials/reports/balance-sheet" replace />} />
+            <Route path="financials/reports/catalog" element={<CommerceReportsPage />} />
             <Route path="financials/reports/:report" element={<BooksReportsPage />} />
             <Route path="financials/journal-entries" element={<JournalEntriesPage />} />
             <Route path="financials/chart-of-accounts" element={<ChartOfAccountsPage />} />
@@ -550,6 +555,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="bills" element={withModule("bills", <BillsPage />)} />
             <Route path="bills/vendors" element={withModule("bills", <BillVendorsPage />)} />
             <Route path="payroll" element={withModule("payroll", <PayrollPage />)} />
+            <Route path="payroll/calculator" element={withModule("payroll", <PayrollCalculatorPage />)} />
             <Route path="corporate-cards" element={withModule("cards", <CorporateCardsPage />)} />
             <Route path="investments" element={withModule("investments", <InvestmentsPage />)} />
             <Route

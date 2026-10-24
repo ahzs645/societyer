@@ -1,0 +1,98 @@
+[
+  {
+    "file": "2026-01/cpp.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/cpp-qpp-ttl-01-26e.csv",
+    "sha256": "a8254ad90584f10a92f11fe5d34c9c6c42c856b686a8bc26c632886387e9ece4",
+    "bytes": 503
+  },
+  {
+    "file": "2026-01/cpp-base.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/cpp-qpp-br-01-26e.csv",
+    "sha256": "7d4f0f487f408590e2cbbb95ea65a5b5dd7052ae536da071a424ea147b3a5b87",
+    "bytes": 328
+  },
+  {
+    "file": "2026-01/cpp-additional.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/cpp-qpp-addntl-01-26e.csv",
+    "sha256": "1362c4ca838bc9cab262eb6829904379adcd41fdd9ef5354496995d05aac9485",
+    "bytes": 347
+  },
+  {
+    "file": "2026-01/cpp2.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/cpp-qpp-scnd-addntl-01-26e.csv",
+    "sha256": "aeeb9f2c042c11bb80ff744aa59edab56de43e523ef11109dd7985124a84448b",
+    "bytes": 520
+  },
+  {
+    "file": "2026-01/ei.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/ei-01-26e.csv",
+    "sha256": "524162a6e1e62a7b2bdfe304a29f337273d03277519521a3cd380ec8e2fb0d1f",
+    "bytes": 336
+  },
+  {
+    "file": "2026-07/rates.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jul/rates-income-thresholds-constants-26e.csv",
+    "sha256": "e3a690ccf861c14654279d89cdeca8ec018506edbfc950027518bf16bf728090",
+    "bytes": 1832
+  },
+  {
+    "file": "2026-07/amounts.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jul/other-rates-amounts-26e.csv",
+    "sha256": "d395b439d0e48846a05e5c578555d9a35e36aef58adbbf88b2eae2fcc2068bf8",
+    "bytes": 668
+  },
+  {
+    "file": "2026-01/rates.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/rtsncmtrshldcnstnt-01-26e.csv",
+    "sha256": "3e708bcc916d37c6c4a0ccf37b651df615d5d7ca1651ad655e962013c369eb39",
+    "bytes": 1815
+  },
+  {
+    "file": "2026-01/amounts.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/thrrtsmnts-01-26e.csv",
+    "sha256": "9f4d29d8a3ccf01c5c96b720e848ad779311e9fefdd50a10f6f514c4315f9b59",
+    "bytes": 652
+  },
+  {
+    "file": "2026-01/federal-claims.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/cc-fd-01-26e.csv",
+    "sha256": "ed623d2b41f1879b08ef55ae0076c52d40ec51858026ad6f82ea978105ce373a",
+    "bytes": 690
+  },
+  {
+    "file": "2026-01/bc-claims.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/cc-bc-01-26e.csv",
+    "sha256": "4f0f66a0fe16e63eec4b0cc374fb05e0e10f1edc83c1f47482302eb7afab4c96",
+    "bytes": 669
+  },
+  {
+    "file": "2026-07/bc-claims.csv",
+    "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jul/cc-bc-07-26e.csv",
+    "sha256": "754c27fc1f99616bbb842533a5287ff95b89a6bde7020afe8bc0e7cd93b6544e",
+    "bytes": 684
+  },
+  {
+    "file": "2026-01/t4127.html",
+    "url": "https://www.canada.ca/en/revenue-agency/services/forms-publications/payroll/t4127-payroll-deductions-formulas/t4127-jan/t4127-jan-payroll-deductions-formulas-computer-programs.html",
+    "sha256": "61dc0402e72a92b74b093cd6f0805917b99d894d7ca7b7666d23ba37a9ee1e21",
+    "bytes": 324079
+  },
+  {
+    "file": "2026-07/t4127.html",
+    "url": "https://www.canada.ca/en/revenue-agency/services/forms-publications/payroll/t4127-payroll-deductions-formulas/t4127-jul/t4127-jul-payroll-deductions-formulas.html",
+    "sha256": "b61b53a67a06c0ebe5b354ad36c2109430819711c9595a099012e7c717aca627",
+    "bytes": 92685
+  },
+  {
+    "file": "cpp-eligibility.html",
+    "url": "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/canada-pension-plan-cpp/starting-stopping-cpp-deductions.html",
+    "sha256": "a2ac02ddd10505b40e220dd2290609e605262d71949e65fdb6dd63adb27a3de9",
+    "bytes": 32469
+  },
+  {
+    "file": "vacation-pay.html",
+    "url": "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/special-payments/vacation-pay-public-holidays.html",
+    "sha256": "e9acfeb63e6be7512012836f29e3c2d9a79651cd5053a2b585b5b1280e1d4227",
+    "bytes": 31406
+  }
+]

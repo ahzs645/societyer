@@ -17,7 +17,8 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
+import { cleanRemittanceRp } from "../payrollRemittance";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import {
@@ -26,6 +27,9 @@ import {
   INVESTMENT_KIND_LABEL,
   MATURITY_REMINDER_DAYS,
   PAY_RUN_AMOUNT_FIELDS,
+  PAY_RUN_TYPES,
+  payRunImportKey,
+  type PayRunType,
   REMITTANCE_CADENCES,
   REMITTANCE_DUE_RULES,
   REMITTER_TYPES,
@@ -47,6 +51,7 @@ import {
   periodLabel,
   registerDeadlines,
   remittancesFromPayRuns,
+  remittanceRule,
   payRunDifferenceCents,
   reconcileStatement,
   remittableCents,
@@ -140,7 +145,7 @@ async function loadSettings(ctx: PortableQueryCtx, societyId: string): Promise<R
 
 function scheduleOf(settings: Row | null): RemittanceSchedule {
   if (!settings) return { remitterType: "regular" };
-  return { remitterType: settings.remitterType, cadence: settings.cadence, dueRule: settings.dueRule, dueValue: settings.dueValue };
+  return { remitterType: settings.remitterType, cadence: settings.cadence, dueRule: settings.dueRule, dueValue: settings.dueValue, province: settings.province || "BC", remittanceBaseline: settings.remittanceBaseline, remittanceScheduleHistory: settings.remittanceScheduleHistory };
 }
 
 /**
@@ -149,39 +154,33 @@ function scheduleOf(settings: Row | null): RemittanceSchedule {
  * Rows that recorded a payment are kept even when their runs are gone.
  */
 async function rebuildRemittances(ctx: PortableMutationCtx, societyId: string) {
-  const schedule = scheduleOf(await loadSettings(ctx, societyId));
-  const wanted = new Map(remittancesFromPayRuns((await rows(ctx, "payRuns", societyId)) as any, schedule).map((item) => [`${item.periodStart}|${item.periodEnd}`, item]));
-  const existing = await rows(ctx, "payrollRemittances", societyId);
+  const schedule = scheduleOf(await loadSettings(ctx, societyId)), runs = await rows(ctx, "payRuns", societyId), existing = await rows(ctx, "payrollRemittances", societyId);
+  const protectedRows = existing.filter((row) => row.paidOn || Number(row.paidCents || 0) > 0);
+  for (const [index, row] of protectedRows.entries()) if (protectedRows.slice(index + 1).some((other) => row.periodStart <= other.periodEnd && row.periodEnd >= other.periodStart)) throw new Error("Recorded paid remittance periods overlap. Reconcile those records before rebuilding the schedule.");
+  const wanted = new Map(remittancesFromPayRuns(runs.filter((run) => !protectedRows.some((row) => run.payDate >= row.periodStart && run.payDate <= row.periodEnd)) as any, schedule).map((item) => [`${item.periodStart}|${item.periodEnd}`, item]));
+  for (const row of protectedRows) {
+    const covered = runs.filter((run) => run.payDate >= row.periodStart && run.payDate <= row.periodEnd);
+    wanted.set(`${row.periodStart}|${row.periodEnd}`, { periodStart: row.periodStart, periodEnd: row.periodEnd, dueDate: row.dueDate || null, amountDueCents: covered.length ? covered.reduce((sum, run) => sum + remittableCents(run as any), 0) : row.amountDueCents, payRunCount: covered.length, schedule: row.schedule || schedule.remittanceBaseline || remittanceRule(schedule) });
+  }
   const seen = new Set<string>();
   for (const row of existing) {
-    const key = `${row.periodStart}|${row.periodEnd}`;
-    const item = wanted.get(key);
+    const key = `${row.periodStart}|${row.periodEnd}`, item = wanted.get(key);
     if (item && !seen.has(key)) {
       seen.add(key);
       const dueDate = item.dueDate ?? undefined;
-      if (row.amountDueCents !== item.amountDueCents || row.dueDate !== dueDate) {
-        await ctx.db.patch(row._id, { amountDueCents: item.amountDueCents, dueDate, updatedAtISO: nowISO() });
-      }
+      if (row.amountDueCents !== item.amountDueCents || row.dueDate !== dueDate || JSON.stringify(row.schedule) !== JSON.stringify(item.schedule)) await ctx.db.patch(row._id, { amountDueCents: item.amountDueCents, dueDate, ...(item.schedule ? { schedule: item.schedule } : {}), updatedAtISO: nowISO() });
       continue;
     }
-    if (row.paidOn || (row.paidCents ?? 0) > 0) {
-      if (row.amountDueCents !== 0) await ctx.db.patch(row._id, { amountDueCents: 0, updatedAtISO: nowISO() });
-      continue;
-    }
+    if (row.paidOn || Number(row.paidCents || 0) > 0) continue;
     await ctx.db.delete(row._id);
   }
-  for (const [key, item] of wanted) {
-    if (seen.has(key)) continue;
-    await ctx.db.insert("payrollRemittances", compact({
-      societyId,
-      periodStart: item.periodStart,
-      periodEnd: item.periodEnd,
-      dueDate: item.dueDate ?? undefined,
-      amountDueCents: item.amountDueCents,
-      createdAtISO: nowISO(),
-      updatedAtISO: nowISO(),
-    }));
-  }
+  for (const [key, item] of wanted) if (!seen.has(key)) await ctx.db.insert("payrollRemittances", compact({ societyId, periodStart: item.periodStart, periodEnd: item.periodEnd, dueDate: item.dueDate ?? undefined, schedule: item.schedule, amountDueCents: item.amountDueCents, createdAtISO: nowISO(), updatedAtISO: nowISO() }));
+}
+
+/** Native payroll finalization calls this after atomically writing its immutable run. */
+export async function refreshPayrollRegister(ctx: PortableMutationCtx, societyId: string) {
+  await rebuildRemittances(ctx, societyId);
+  return syncRegisterDeadlines(ctx, societyId);
 }
 
 function formatDollars(centsValue: number) {
@@ -300,12 +299,12 @@ export async function payrollWorkspacePortable(ctx: PortableQueryCtx, { societyI
     })
     .sort((a, b) => b.periodStart.localeCompare(a.periodStart));
   const slips = (await rows(ctx, "payrollSlips", societyId))
-    .map((row) => ({ ...row, filingDeadline: slipFilingDeadline(row.year) }))
+    .map((row) => ({ ...row, cpp2Cents: row.cpp2Cents || 0, filingDeadline: slipFilingDeadline(row.year, settings?.province || "BC") }))
     .sort((a, b) => b.year - a.year || a.slipType.localeCompare(b.slipType) || a.recipientName.localeCompare(b.recipientName));
   const roes = (await rows(ctx, "recordsOfEmployment", societyId)).sort((a, b) => String(b.lastDayPaid).localeCompare(String(a.lastDayPaid)));
   const employees = (await canRead(ctx, societyId, "employees:read"))
     ? (await rows(ctx, "employees", societyId))
-        .map((row) => ({ _id: row._id, name: `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim(), role: row.role, active: !row.endDate || row.endDate >= today, annualSalaryCents: row.annualSalaryCents, province: row.province }))
+        .map((row) => ({ _id: row._id, name: `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim(), providerEmployeeId: row.providerEmployeeId, employeeNumber: row.employeeNumber, role: row.role, active: !row.endDate || row.endDate >= today, annualSalaryCents: row.annualSalaryCents, province: row.province }))
         .sort((a, b) => a.name.localeCompare(b.name))
     : null;
   const year = Number(today.slice(0, 4));
@@ -327,13 +326,15 @@ export async function payrollWorkspacePortable(ctx: PortableQueryCtx, { societyI
       year,
       ytdGrossCents: ytd.reduce((sum, run) => sum + run.grossCents, 0),
       ytdRemittableCents: ytd.reduce((sum, run) => sum + run.remittableCents, 0),
+      ytdCpp2EmployeeCents: ytd.reduce((sum, run) => sum + Number(run.cpp2EmployeeCents || 0), 0),
+      ytdCpp2EmployerCents: ytd.reduce((sum, run) => sum + Number(run.cpp2EmployerCents || 0), 0),
       ytdRunCount: ytd.length,
       openRemittanceCount: open.length,
       overdueRemittanceCount: open.filter((row) => row.status === "overdue").length,
       outstandingCents: open.reduce((sum, row) => sum + row.outstandingCents, 0),
       nextRemittance: nextDue ? { dueDate: nextDue.dueDate, amountCents: nextDue.outstandingCents, period: nextDue.period, status: nextDue.status } : null,
       slipYear: lastYear,
-      slipDeadline: slipFilingDeadline(lastYear),
+      slipDeadline: slipFilingDeadline(lastYear, settings?.province || "BC"),
       slipCount: lastYearSlips.length,
       slipsFiled: lastYearSlips.filter((slip) => slip.status === "filed").length,
       roesToIssue: roes.filter((roe) => roe.status !== "issued").length,
@@ -344,131 +345,193 @@ export async function payrollWorkspacePortable(ctx: PortableQueryCtx, { societyI
 
 export async function payrollSaveSettingsPortable(
   ctx: PortableMutationCtx,
-  args: { societyId: string; remitterType: string; cadence?: string; dueRule?: string; dueValue?: number; payrollAccountNumber?: string; providerName?: string; workersCompProvider?: string; workersCompAccount?: string; workersCompCadence?: string; workersCompFirstDueDate?: string },
+  args: { societyId: string; remitterType: string; province?: string; cadence?: string; dueRule?: string; dueValue?: number; remittanceEffectiveFrom?: string; remittanceNoticeReference?: string; payrollAccountNumber?: string; providerName?: string; workersCompProvider?: string; workersCompAccount?: string; workersCompCadence?: string; workersCompFirstDueDate?: string },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
-  const remitterType = oneOf(args.remitterType, REMITTER_TYPES, "Remitter type");
-  const regular = remitterType === "regular";
+  const existing = await loadSettings(ctx, args.societyId), remitterType = oneOf(args.remitterType, REMITTER_TYPES, "Remitter type");
+  const legacyQuarterly = existing?.remitterType === "quarterly" && remitterType === "quarterly" && existing.dueRule && args.cadence === undefined && args.dueRule === undefined && args.dueValue === undefined;
+  const custom = remitterType === "accelerated" || legacyQuarterly;
   const fields = {
-    remitterType,
-    cadence: regular ? undefined : oneOf(args.cadence, REMITTANCE_CADENCES, "Remittance cadence"),
-    dueRule: regular ? undefined : oneOf(args.dueRule, REMITTANCE_DUE_RULES, "Due date rule"),
-    dueValue: regular ? undefined : Math.round(Number(args.dueValue)),
-    payrollAccountNumber: cleanText(args.payrollAccountNumber, 40),
-    providerName: cleanText(args.providerName, 120),
-    workersCompProvider: cleanText(args.workersCompProvider, 60),
-    workersCompAccount: cleanText(args.workersCompAccount, 60),
+    remitterType, province: oneOf(args.province || existing?.province || "BC", ["BC"], "Reviewed remittance holiday calendar (B.C. and CRA federal holidays)"),
+    cadence: !custom ? undefined : oneOf(args.cadence ?? (legacyQuarterly ? existing.cadence : undefined), REMITTANCE_CADENCES, "Remittance cadence"),
+    dueRule: !custom ? undefined : oneOf(args.dueRule ?? (legacyQuarterly ? existing.dueRule : undefined), REMITTANCE_DUE_RULES, "Due date rule"),
+    dueValue: !custom ? undefined : Math.round(Number(args.dueValue ?? (legacyQuarterly ? existing.dueValue : undefined))),
+    payrollAccountNumber: args.payrollAccountNumber === undefined ? existing?.payrollAccountNumber : cleanText(args.payrollAccountNumber, 40), providerName: cleanText(args.providerName, 120), workersCompProvider: cleanText(args.workersCompProvider, 60), workersCompAccount: cleanText(args.workersCompAccount, 60),
     workersCompCadence: args.workersCompCadence ? oneOf(args.workersCompCadence, WORKERS_COMP_CADENCES, "Workers' compensation cadence") : undefined,
-    workersCompFirstDueDate: optionalDate(args.workersCompFirstDueDate, "Workers' compensation due date"),
-    updatedAtISO: nowISO(),
+    workersCompFirstDueDate: optionalDate(args.workersCompFirstDueDate, "Workers' compensation due date"), updatedAtISO: nowISO(),
   };
-  if (!regular && !scheduleIsComplete(fields)) {
-    throw new Error(fields.dueRule === "day_of_next_month" ? "Due day: enter a day from 1 to 31." : "Due days: enter 1 to 120 days after the period ends.");
-  }
+  if (!scheduleIsComplete(fields)) throw new Error("Enter a complete remittance schedule with a valid day or interval.");
   if (fields.workersCompCadence && !fields.workersCompFirstDueDate) throw new Error("Workers' compensation: enter the next due date.");
-  const existing = await loadSettings(ctx, args.societyId);
-  if (existing) await ctx.db.patch(existing._id, fields);
-  else await ctx.db.insert("payrollSettings", compact({ societyId: args.societyId, ...fields }));
-  await rebuildRemittances(ctx, args.societyId);
-  await syncRegisterDeadlines(ctx, args.societyId);
+  const rpIdentity = (value: unknown) => typeof value === "string" ? value.replace(/\s/g, "").toUpperCase() : "";
+  if (rpIdentity(fields.payrollAccountNumber) !== rpIdentity(existing?.payrollAccountNumber)) {
+    const accountHistory = await ctx.db.query("payrollRemittances").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).take(1001);
+    if (accountHistory.length > 1000) throw new Error("This payroll register has more than 1000 remittance obligations. Complete an explicit historical CRA account review before changing the RP account; this bounded safety check cannot verify the full history.");
+    const unattributed = accountHistory.some((row) => (row.paidOn || Number(row.paidCents || 0) > 0) && !row.payrollAccountNumber);
+    if (unattributed) throw new Error("Confirm the actual historical CRA RP account for every paid legacy remittance before changing the payroll account in settings. Review the original payment evidence; current settings cannot identify an earlier payment's account.");
+  }
+  const previous = remittanceRule(scheduleOf(existing)), next = remittanceRule(fields), changed = JSON.stringify(previous) !== JSON.stringify(next);
+  const history = [...existing?.remittanceScheduleHistory || []];
+  if (changed) {
+    const effectiveFrom = requireDate(args.remittanceEffectiveFrom, "CRA remitter change effective date"), noticeReference = cleanText(args.remittanceNoticeReference, 1000);
+    if (!noticeReference) throw new Error("Retain the CRA notice or account reference for this remitter change.");
+    if (history.some((change) => change.effectiveFrom === effectiveFrom)) throw new Error("A remitter change already exists on that effective date. Preserve the original notice and record the next actual transition separately.");
+    if (history.some((change) => change.effectiveFrom > effectiveFrom)) throw new Error("Record remitter transitions in effective-date order; preserve the already recorded later notice.");
+    const remittances = await rows(ctx, "payrollRemittances", args.societyId);
+    if (remittances.some((row) => (row.paidOn || Number(row.paidCents || 0) > 0) && row.periodStart < effectiveFrom && row.periodEnd >= effectiveFrom)) throw new Error("The effective date falls inside a paid or partially paid remittance period. Reconcile that obligation before changing its coverage.");
+    history.push({ ...next, effectiveFrom, noticeReference }); history.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+    if (history.length > 100) throw new Error("Keep at most 100 documented remitter transitions in this register.");
+  }
+  const scheduleFields = changed ? { remittanceBaseline: existing?.remittanceBaseline || previous, remittanceScheduleHistory: history } : {};
+  if (existing) await ctx.db.patch(existing._id, { ...fields, ...scheduleFields });
+  else await ctx.db.insert("payrollSettings", compact({ societyId: args.societyId, ...fields, ...scheduleFields }));
+  await rebuildRemittances(ctx, args.societyId); await syncRegisterDeadlines(ctx, args.societyId);
 }
 
-type PayRunInput = {
-  periodStart: string;
-  periodEnd: string;
-  payDate: string;
-  grossCents?: number;
-  cppEmployeeCents?: number;
-  eiEmployeeCents?: number;
-  incomeTaxCents?: number;
-  otherDeductionsCents?: number;
-  cppEmployerCents?: number;
-  eiEmployerCents?: number;
-  netCents?: number;
-  lines?: Array<Record<string, any>>;
-  providerName?: string;
-  transactionId?: string;
-  notes?: string;
+export type PayRunInput = {
+  periodStart: string; periodEnd: string; payDate: string;
+  grossCents?: number; nonCashTaxableCents?: number; nonTaxableCashCents?: number;
+  cppEmployeeCents?: number; cpp2EmployeeCents?: number; eiEmployeeCents?: number; incomeTaxCents?: number; otherDeductionsCents?: number;
+  federalTaxCents?: number; provincialTaxCents?: number; additionalIncomeTaxCents?: number;
+  cppEmployerCents?: number; cpp2EmployerCents?: number; eiEmployerCents?: number; netCents?: number;
+  lines?: Array<Record<string, any>>; clearLines?: boolean;
+  providerName?: string; providerRunId?: string; runType?: string; correctsRunId?: string; correctionOfProviderRunId?: string;
+  sourceMissingFields?: string[]; missingValuesConfirmed?: boolean;
+  transactionId?: string; notes?: string;
 };
 
 async function normalizePayRun(ctx: PortableQueryCtx, societyId: string, input: PayRunInput) {
-  const periodStart = requireDate(input.periodStart, "Period start");
-  const periodEnd = requireDate(input.periodEnd, "Period end");
-  const payDate = requireDate(input.payDate, "Pay date");
+  const periodStart = requireDate(input.periodStart, "Period start"), periodEnd = requireDate(input.periodEnd, "Period end"), payDate = requireDate(input.payDate, "Pay date");
   if (periodEnd < periodStart) throw new Error("Period end: pick a date on or after the period start.");
+  const runType = oneOf(input.runType || "regular", PAY_RUN_TYPES, "Run type"), adjustment = runType === "correction" || runType === "reversal";
+  const providerName = cleanText(input.providerName, 120), providerRunId = cleanText(input.providerRunId, 160), correctionOfProviderRunId = cleanText(input.correctionOfProviderRunId, 160);
+  if (providerRunId && !providerName) throw new Error("Enter the payroll provider name for a provider run ID.");
+  let correctsRunId = input.correctsRunId;
+  if (adjustment && !correctsRunId && correctionOfProviderRunId) {
+    const original = (await rows(ctx, "payRuns", societyId)).find((row) => row.providerRunId === correctionOfProviderRunId && String(row.providerName || "").toLowerCase() === String(providerName || "").toLowerCase());
+    if (!original) throw new Error("The original provider run is not recorded. Import it before its correction.");
+    correctsRunId = String(original._id);
+  }
+  if (correctsRunId) { const original = await getOwned(ctx, "payRuns", correctsRunId, societyId); if (original.calculationId) throw new Error("Use the payroll calculation correction workflow for a calculated pay run."); }
+  if (adjustment && !correctsRunId) throw new Error("Corrections and reversals must identify the original pay run.");
+  if (input.sourceMissingFields?.length && !input.missingValuesConfirmed) throw new Error("Review missing CSV amounts and explicitly confirm zero values before importing.");
+  if ((input.sourceMissingFields?.length || 0) > 40) throw new Error("The import has too many missing amount fields.");
   const lines: Array<Record<string, unknown>> = [];
+  if ((input.lines?.length || 0) > 5000) throw new Error("Use at most 5,000 employee lines per run.");
   for (const [index, line] of (input.lines ?? []).entries()) {
-    const employeeName = cleanText(line.employeeName, 120);
+    const employeeName = cleanText(line.employeeName, 120), providerEmployeeId = cleanText(line.providerEmployeeId, 120);
     if (!employeeName) throw new Error(`Line ${index + 1}: name the employee.`);
     assertNoCardNumber(employeeName, `Line ${index + 1}`);
     if (line.employeeId) await getOwned(ctx, "employees", String(line.employeeId), societyId);
     const amounts: Record<string, number> = {};
-    for (const field of PAY_RUN_AMOUNT_FIELDS) amounts[field] = cents(line[field], `Line ${index + 1}`);
-    lines.push(compact({ employeeId: line.employeeId ? String(line.employeeId) : undefined, employeeName, ...amounts }));
+    for (const field of PAY_RUN_AMOUNT_FIELDS) amounts[field] = cents(line[field], `Line ${index + 1}`, { allowNegative: adjustment });
+    for (const field of ["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"] as const) if (line[field] !== undefined) amounts[field] = cents(line[field], field, { allowNegative: adjustment });
+    if (["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"].every((field) => amounts[field] !== undefined) && amounts.federalTaxCents + amounts.provincialTaxCents + amounts.additionalIncomeTaxCents !== amounts.incomeTaxCents) throw new Error("Combined income tax must equal federal, provincial and additional TD1 tax when all components are supplied.");
+    const exactObject = (value: unknown, fields: string[]) => {
+      if (value === undefined) return undefined;
+      if (!value || typeof value !== "object") throw new Error("Choose valid payroll classification balances.");
+      return Object.fromEntries(fields.map((field) => { const raw = (value as any)[field]; if (!Number.isSafeInteger(raw)) throw new Error(`Payroll ${field} must contain integer cents.`); return [field, cents(raw, field, { allowNegative: adjustment })]; }));
+    };
+    const deductionYtdDelta = exactObject(line.deductionYtdDelta, ["regularTaxableCents", "regularPensionableCents", "regularInsurableCents", "bonusTaxableCents", "bonusPensionableCents", "bonusInsurableCents", "cppCents", "cpp2Cents", "eiCents", "employerEiCents", "bonusCppCents", "bonusEiCents", "cppAdditionalRegularCents", "cppAdditionalBonusCents", "registeredPlanCents", "unionDuesCents", "maintenanceCents", "bonusRegisteredPlanCents", "regularTaxCents", "bonusTaxCents", "additionalTaxCents"]);
+    if (deductionYtdDelta) for (const field of ["regularFederalTaxCents", "regularProvincialTaxCents", "bonusFederalTaxCents", "bonusProvincialTaxCents"]) if (line.deductionYtdDelta[field] !== undefined) deductionYtdDelta[field] = cents(line.deductionYtdDelta[field], field, { allowNegative: adjustment });
+    const classifiedBases = exactObject(line.classifiedBases, ["cashCents", "taxableCents", "pensionableCents", "insurableCents", "vacationableCents", "ehtCents", "workSafeCents"]);
+    const regularClassifiedBases = exactObject(line.regularClassifiedBases, ["cashCents", "taxableCents", "pensionableCents", "insurableCents", "vacationableCents", "ehtCents", "workSafeCents"]);
+    const bonusClassifiedBases = exactObject(line.bonusClassifiedBases, ["cashCents", "taxableCents", "pensionableCents", "insurableCents", "vacationableCents", "ehtCents", "workSafeCents"]);
+    if (line.insurableHours !== undefined && (!Number.isFinite(line.insurableHours) || !adjustment && line.insurableHours < 0)) throw new Error("Choose valid insurable hours.");
+    const leave: Record<string, number> = {};
+    for (const field of ["vacationAccruedCents", "vacationPaidCents", "sickPaidDaysUsed", "sickUnpaidDaysUsed"]) if (line[field] !== undefined) { if (!Number.isSafeInteger(line[field])) throw new Error(`${field} must contain an integer.`); leave[field] = cents(line[field], field, { allowNegative: adjustment }); }
+    const provinceOfEmployment = line.provinceOfEmployment === undefined ? undefined : oneOf(String(line.provinceOfEmployment).toUpperCase(), ["BC", "AB", "SK", "MB", "ON", "QC", "NB", "NS", "PE", "NL", "YT", "NT", "NU"], "Province of employment");
+    const ehtLocationId = cleanText(line.ehtLocationId, 1000), ehtAttributionEvidence = cleanText(line.ehtAttributionEvidence, 4000), ehtAttributionBasis = line.ehtAttributionBasis === undefined ? undefined : oneOf(line.ehtAttributionBasis, ["primary_reporting", "reasonable_allocation"], "EHT attribution basis");
+    lines.push(compact({ employeeId: line.employeeId ? String(line.employeeId) : undefined, providerEmployeeId, employeeName, provinceOfEmployment, ehtLocationId, ehtAttributionBasis, ehtAttributionEvidence, ...amounts, ...leave, deductionYtdDelta, classifiedBases, regularClassifiedBases, bonusClassifiedBases, insurableHours: line.insurableHours }));
   }
-  const totals = lines.length
-    ? sumPayRunLines(lines as any)
-    : Object.fromEntries(PAY_RUN_AMOUNT_FIELDS.map((field) => [field, cents((input as any)[field], "Amounts")])) as Record<string, number>;
-  if (!(totals.grossCents > 0)) throw new Error("Gross pay: enter the run's gross pay.");
+  const totals = lines.length ? sumPayRunLines(lines as any) : Object.fromEntries(PAY_RUN_AMOUNT_FIELDS.map((field) => [field, cents((input as any)[field], "Amounts", { allowNegative: adjustment })])) as Record<string, number>;
+  if (!lines.length) for (const field of ["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"] as const) if (input[field] !== undefined) totals[field] = cents(input[field], field, { allowNegative: adjustment });
+  if (!adjustment && !(totals.grossCents > 0)) throw new Error("Gross pay: enter the run's gross pay.");
+  if (adjustment && !PAY_RUN_AMOUNT_FIELDS.some((field) => totals[field] !== 0)) throw new Error("A correction must contain an actual amount adjustment.");
+  if (runType === "reversal" && PAY_RUN_AMOUNT_FIELDS.some((field) => totals[field] > 0)) throw new Error("A reversal uses negative amounts to offset the original run.");
   if (input.transactionId) await getOwned(ctx, "financialTransactions", input.transactionId, societyId);
   assertNoCardNumber(input.notes, "Notes");
-  return compact({
-    periodStart,
-    periodEnd,
-    payDate,
-    ...totals,
-    otherDeductionsCents: totals.otherDeductionsCents || undefined,
-    lines: lines.length ? lines : undefined,
-    providerName: cleanText(input.providerName, 120),
-    transactionId: input.transactionId || undefined,
-    notes: cleanText(input.notes, 2000),
-  });
+  return compact({ periodStart, periodEnd, payDate, ...totals, lines: lines.length ? lines : undefined, providerName, providerRunId, runType, correctsRunId, correctionOfProviderRunId,
+    sourceMissingFields: input.sourceMissingFields?.length ? [...new Set(input.sourceMissingFields)].map((value) => String(value).slice(0, 80)) : undefined,
+    missingValuesConfirmed: input.sourceMissingFields?.length ? !!input.missingValuesConfirmed : undefined,
+    transactionId: input.transactionId || undefined, notes: cleanText(input.notes, 2000) });
 }
 
+/** Omitted lines preserve detail. Replacing detail with totals requires an explicit clearLines action. */
 export async function payrollSavePayRunPortable(ctx: PortableMutationCtx, args: PayRunInput & { id?: string; societyId: string }) {
   await requireSocietyMembership(ctx, args.societyId);
-  const fields = await normalizePayRun(ctx, args.societyId, args);
-  let id = args.id;
-  if (id) {
-    const before = await getOwned(ctx, "payRuns", id, args.societyId);
-    await ctx.db.patch(id, { ...fields, lines: fields.lines, otherDeductionsCents: fields.otherDeductionsCents, transactionId: fields.transactionId, notes: fields.notes, providerName: fields.providerName, source: before.source ?? "manual", updatedAtISO: nowISO() });
-  } else {
-    id = await ctx.db.insert("payRuns", { societyId: args.societyId, ...fields, source: "manual", createdAtISO: nowISO(), updatedAtISO: nowISO() });
+  const before = args.id ? await getOwned(ctx, "payRuns", args.id, args.societyId) : undefined;
+  if (before?.calculationId) {
+    const immutable = ["periodStart", "periodEnd", "payDate", "providerName", "providerRunId", "runType", "correctsRunId", "correctionOfProviderRunId", "federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents", ...PAY_RUN_AMOUNT_FIELDS];
+    if (args.clearLines || args.lines !== undefined && JSON.stringify(args.lines) !== JSON.stringify(before.lines || []) || immutable.some((field) => (args as any)[field] !== undefined && (args as any)[field] !== before[field])) throw new Error("Calculated pay runs are immutable. Create a correction calculation instead.");
+    if (args.transactionId) await getOwned(ctx, "financialTransactions", args.transactionId, args.societyId);
+    await ctx.db.patch(args.id!, { notes: cleanText(args.notes, 2000), ...(Object.hasOwn(args, "transactionId") ? { transactionId: args.transactionId || undefined } : {}), updatedAtISO: nowISO() });
+    return args.id;
   }
-  await rebuildRemittances(ctx, args.societyId);
-  await syncRegisterDeadlines(ctx, args.societyId);
+  if (before?.lines?.length && !args.clearLines && args.lines === undefined) {
+    for (const field of PAY_RUN_AMOUNT_FIELDS) if ((args as any)[field] !== undefined && Number((args as any)[field]) !== Number(before[field] || 0)) throw new Error("Edit the employee lines, or explicitly replace them with aggregate totals, to change this detailed run.");
+  }
+  if (before?.lines?.length && args.lines?.length === 0 && !args.clearLines) throw new Error("Explicitly choose aggregate totals before removing employee detail.");
+  const submittedLines = args.clearLines ? [] : args.lines?.map((line) => {
+    const previous = (before?.lines || []).find((old: any) => line.employeeId ? old.employeeId === line.employeeId : line.providerEmployeeId ? old.providerEmployeeId === line.providerEmployeeId : old.employeeName === line.employeeName);
+    return { ...previous, ...line };
+  }) ?? before?.lines;
+  const fields = await normalizePayRun(ctx, args.societyId, { ...before, ...args, lines: submittedLines });
+  if (fields.correctsRunId && fields.correctsRunId === args.id) throw new Error("A pay run cannot correct itself.");
+  if (fields.providerRunId && (await rows(ctx, "payRuns", args.societyId)).some((row) => row._id !== args.id && payRunImportKey(row) === payRunImportKey(fields as any))) throw new Error("This provider run ID is already recorded. Use a distinct correction run ID.");
+  let id = args.id;
+  if (id) await ctx.db.patch(id, { ...fields, lines: fields.lines, transactionId: fields.transactionId, notes: fields.notes, providerName: fields.providerName, source: before?.source || "manual", updatedAtISO: nowISO() });
+  else id = await ctx.db.insert("payRuns", { societyId: args.societyId, ...fields, source: "manual", createdAtISO: nowISO(), updatedAtISO: nowISO() });
+  await rebuildRemittances(ctx, args.societyId); await syncRegisterDeadlines(ctx, args.societyId);
   return id;
 }
 
-/** Add pay runs read from a payroll provider's export. A run with the same period and pay date is skipped, not duplicated. */
+/** Provider/run identities distinguish regular, additional, correction and reversal payrolls. */
 export async function payrollImportPayRunsPortable(ctx: PortableMutationCtx, args: { societyId: string; providerName?: string; runs: PayRunInput[] }) {
   await requireSocietyMembership(ctx, args.societyId);
   if (!Array.isArray(args.runs) || !args.runs.length) throw new Error("Choose a file with at least one pay run.");
   if (args.runs.length > 500) throw new Error("Import up to 500 pay runs at a time.");
-  const existing = await rows(ctx, "payRuns", args.societyId);
-  const keys = new Set(existing.map((run) => `${run.periodStart}|${run.periodEnd}|${run.payDate}`));
+  const existing = await rows(ctx, "payRuns", args.societyId), byKey = new Map(existing.map((run) => [payRunImportKey(run), run]));
   const employees = await rows(ctx, "employees", args.societyId);
-  const byName = new Map(employees.map((row) => [`${row.firstName ?? ""} ${row.lastName ?? ""}`.trim().toLowerCase(), row._id]));
+  const matchEmployee = (line: Record<string, any>, provider: string) => {
+    if (line.employeeId) return line;
+    if (line.providerEmployeeId) {
+      const candidates = employees.filter((employee) => [employee.providerEmployeeId, employee.employeeNumber].includes(line.providerEmployeeId));
+      const known = existing.filter((run) => String(run.providerName || "").toLowerCase() === provider.toLowerCase()).flatMap((run) => run.lines || []).filter((row: any) => row.providerEmployeeId === line.providerEmployeeId && row.employeeId);
+      const ids = [...new Set([...candidates.map((employee) => String(employee._id)), ...known.map((row: any) => String(row.employeeId))])];
+      if (ids.length > 1) throw new Error(`Employee ID ${line.providerEmployeeId} matches more than one employee. Resolve the mapping before importing.`);
+      const employee = employees.find((row) => String(row._id) === ids[0]);
+      return { ...line, ...(employee ? { employeeId: String(employee._id), employeeName: `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || line.employeeName } : {}) };
+    }
+    const candidates = employees.filter((row) => `${row.firstName || ""} ${row.lastName || ""}`.trim().toLowerCase() === String(line.employeeName || "").trim().toLowerCase());
+    if (candidates.length > 1) throw new Error(`Employee ${line.employeeName} is ambiguous. Map a stable employee ID instead.`);
+    return { ...line, ...(candidates[0] ? { employeeId: String(candidates[0]._id) } : {}) };
+  };
   let created = 0, skipped = 0;
   for (const input of args.runs) {
-    const key = `${input.periodStart}|${input.periodEnd}|${input.payDate}`;
-    if (keys.has(key)) { skipped += 1; continue; }
-    const lines = (input.lines ?? []).map((line) => ({ ...line, employeeId: line.employeeId ?? byName.get(String(line.employeeName ?? "").trim().toLowerCase()) }));
-    const fields = await normalizePayRun(ctx, args.societyId, { ...input, lines, providerName: input.providerName ?? args.providerName });
-    await ctx.db.insert("payRuns", { societyId: args.societyId, ...fields, source: "import", createdAtISO: nowISO(), updatedAtISO: nowISO() });
-    keys.add(key);
-    created += 1;
+    const providerName = cleanText(input.providerName || args.providerName, 120), identity = { ...input, providerName, runType: (input.runType || "regular") as PayRunType };
+    if (identity.runType !== "regular" && !input.providerRunId) throw new Error("Additional payroll and correction imports require a provider run ID.");
+    const key = payRunImportKey(identity), duplicate = byKey.get(key);
+    const lines = (input.lines || []).map((line) => matchEmployee(line, providerName || ""));
+    if (duplicate) {
+      const totals = lines.length ? sumPayRunLines(lines) : input;
+      const lineKey = (line: Record<string, any>) => line.employeeId ? `id:${line.employeeId}` : line.providerEmployeeId ? `provider:${line.providerEmployeeId}` : `name:${String(line.employeeName || "").toLowerCase()}`;
+      const detail = (items: Array<Record<string, any>>) => JSON.stringify(items.map((line) => [lineKey(line), ...PAY_RUN_AMOUNT_FIELDS.map((field) => Number(line[field] || 0)), ...["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"].map((field) => line[field] ?? null)]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+      if (["periodStart", "periodEnd", "payDate"].some((field) => (input as any)[field] !== duplicate[field]) || PAY_RUN_AMOUNT_FIELDS.some((field) => Number((totals as any)[field] || 0) !== Number(duplicate[field] || 0)) || ["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"].some((field) => (totals as any)[field] !== undefined && (totals as any)[field] !== duplicate[field]) || lines.length > 0 && detail(lines) !== detail(duplicate.lines || [])) throw new Error("This provider run ID already has different dates, amounts or employee allocations. Import a separate correction run instead of replacing history.");
+      skipped++; continue;
+    }
+    const fields = await normalizePayRun(ctx, args.societyId, { ...input, lines, providerName });
+    const id = await ctx.db.insert("payRuns", { societyId: args.societyId, ...fields, source: "import", createdAtISO: nowISO(), updatedAtISO: nowISO() });
+    const inserted = { _id: id, ...fields }; existing.push(inserted); byKey.set(key, inserted); created++;
   }
-  await rebuildRemittances(ctx, args.societyId);
-  await syncRegisterDeadlines(ctx, args.societyId);
+  await rebuildRemittances(ctx, args.societyId); await syncRegisterDeadlines(ctx, args.societyId);
   return { created, skipped };
 }
 
 export async function payrollRemovePayRunPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const run = await requireOwnedRow(ctx, "payRuns", id);
-  await ctx.db.delete(id);
-  await rebuildRemittances(ctx, run.societyId);
-  await syncRegisterDeadlines(ctx, run.societyId);
+  if (run.calculationId) throw new Error("Calculated pay runs are immutable. Create a reversal calculation instead.");
+  if ((await rows(ctx, "payRuns", run.societyId)).some((row) => String(row.correctsRunId) === id)) throw new Error("Keep the original run while a correction references it.");
+  await ctx.db.delete(id); await rebuildRemittances(ctx, run.societyId); await syncRegisterDeadlines(ctx, run.societyId);
 }
 
 /** Record (or clear) the payment of a remittance. Societyer records it; the payment itself is made in the CRA's or the bank's systems. */
@@ -477,17 +540,31 @@ export async function payrollRecordRemittancePortable(
   args: { id: string; paidCents?: number; paidOn?: string; confirmationNumber?: string; transactionId?: string; notes?: string; clear?: boolean },
 ) {
   const row = await requireOwnedRow(ctx, "payrollRemittances", args.id);
+  const reconciled = await ctx.db.query("payrollRemittanceSettlements").withIndex("by_society_obligation", q => q.eq("societyId", row.societyId).eq("obligationId", row._id)).first();
+  if (reconciled) throw new Error("This remittance has retained reconciled settlements. Review or correct it through the payroll remittance settlement flow; legacy payment edits or clearing cannot change those bank-backed amounts.");
+  const plans = await ctx.db.query("payrollRemittancePlans").withIndex("by_society_obligation", q => q.eq("societyId", row.societyId).eq("obligationId", row._id)).take(101);
+  if (plans.length > 100) throw new Error("This obligation has more than 100 remittance plans. Review the complete retained plan history before recording or clearing a legacy payment; this bounded safety check cannot verify every external instruction.");
+  if (plans.some((plan) => ["approved", "exported", "manual_submitted"].includes(String(plan.status)))) throw new Error("This obligation has an approved or externally instructed remittance plan. Record its actual payment or correction through the approved remittance plan; legacy edits or clearing cannot diverge from those retained instructions.");
+  if (!row.payrollAccountNumber && (row.paidOn || Number(row.paidCents || 0) > 0)) throw new Error("Confirm this retained legacy payment's actual historical CRA RP account in the remittance review before editing or clearing it. Current settings must not be used to infer its original account.");
   if (args.clear) {
     await ctx.db.patch(args.id, { paidCents: undefined, paidOn: undefined, confirmationNumber: undefined, transactionId: undefined, updatedAtISO: nowISO() });
   } else {
     if (args.transactionId) await getOwned(ctx, "financialTransactions", args.transactionId, row.societyId);
     assertNoCardNumber(args.notes, "Notes");
+    const payrollAccountNumber = cleanRemittanceRp(row.payrollAccountNumber || (await loadSettings(ctx, row.societyId))?.payrollAccountNumber);
+    const confirmationNumber = cleanText(args.confirmationNumber, 60), notes = cleanText(args.notes, 2000);
+    const rpAccountEvidence = row.rpAccountEvidence || (confirmationNumber ? `Recorded payment confirmation: ${confirmationNumber}${notes ? `. ${notes}` : ""}` : notes);
+    if (!rpAccountEvidence) throw new Error("Retain the actual payment confirmation or reviewed payment notes before recording a remittance against this CRA RP account.");
     await ctx.db.patch(args.id, {
       paidCents: cents(args.paidCents ?? row.amountDueCents, "Amount paid"),
       paidOn: requireDate(args.paidOn, "Paid on"),
-      confirmationNumber: cleanText(args.confirmationNumber, 60),
+      confirmationNumber,
       transactionId: args.transactionId || undefined,
-      notes: cleanText(args.notes, 2000),
+      notes,
+      payrollAccountNumber,
+      rpAccountEvidence,
+      rpAccountConfirmedAtISO: row.rpAccountConfirmedAtISO || nowISO(),
+      rpAccountConfirmedByUserId: row.rpAccountConfirmedByUserId || await principalUserId(ctx, row.societyId),
       updatedAtISO: nowISO(),
     });
   }
@@ -508,9 +585,12 @@ async function normalizeSlip(ctx: PortableQueryCtx, societyId: string, args: Rec
     year,
     slipType: oneOf(args.slipType, SLIP_TYPES, "Slip type"),
     employeeId: args.employeeId || undefined,
+    providerEmployeeId: cleanText(args.providerEmployeeId, 120),
+    providerName: cleanText(args.providerName, 120),
     recipientName,
     employmentIncomeCents: cents(args.employmentIncomeCents, "Income"),
     cppCents: cents(args.cppCents, "CPP"),
+    cpp2Cents: cents(args.cpp2Cents, "CPP2 (T4 box 16A)"),
     eiCents: cents(args.eiCents, "EI"),
     incomeTaxCents: cents(args.incomeTaxCents, "Income tax"),
     otherIncomeCents: args.otherIncomeCents ? cents(args.otherIncomeCents, "Other income") : undefined,
@@ -525,7 +605,8 @@ async function normalizeSlip(ctx: PortableQueryCtx, societyId: string, args: Rec
 
 export async function payrollSaveSlipPortable(ctx: PortableMutationCtx, args: Record<string, any> & { id?: string; societyId: string }) {
   await requireSocietyMembership(ctx, args.societyId);
-  const fields = await normalizeSlip(ctx, args.societyId, args);
+  const before = args.id ? await getOwned(ctx, "payrollSlips", args.id, args.societyId) : undefined;
+  const fields = await normalizeSlip(ctx, args.societyId, { ...before, ...args, cpp2Cents: args.cpp2Cents ?? before?.cpp2Cents });
   let id = args.id;
   if (id) {
     await getOwned(ctx, "payrollSlips", id, args.societyId);
@@ -548,15 +629,15 @@ export async function payrollGenerateSlipsPortable(ctx: PortableMutationCtx, { s
   const slips = (await rows(ctx, "payrollSlips", societyId)).filter((slip) => slip.year === taxYear && slip.slipType === "T4");
   let created = 0, updated = 0, kept = 0;
   for (const entry of totals.values()) {
-    const match = slips.find((slip) => (entry.employeeId && slip.employeeId === entry.employeeId) || slip.recipientName.toLowerCase() === entry.employeeName.toLowerCase());
-    const amounts = { employmentIncomeCents: entry.employmentIncomeCents, cppCents: entry.cppCents, eiCents: entry.eiCents, incomeTaxCents: entry.incomeTaxCents };
+    const match = slips.find((slip) => entry.employeeId ? slip.employeeId === entry.employeeId : entry.providerEmployeeId ? slip.providerEmployeeId === entry.providerEmployeeId && String(slip.providerName || "").trim().toLowerCase() === String(entry.providerName || "").trim().toLowerCase() : !slip.employeeId && !slip.providerEmployeeId && slip.recipientName.toLowerCase() === entry.employeeName.toLowerCase());
+    const amounts = { employmentIncomeCents: entry.employmentIncomeCents, cppCents: entry.cppCents, cpp2Cents: entry.cpp2Cents, eiCents: entry.eiCents, incomeTaxCents: entry.incomeTaxCents };
     if (match) {
       if (match.status !== "draft") { kept += 1; continue; }
       await ctx.db.patch(match._id, { ...amounts, updatedAtISO: nowISO() });
       updated += 1;
       continue;
     }
-    await ctx.db.insert("payrollSlips", compact({ societyId, year: taxYear, slipType: "T4", employeeId: entry.employeeId, recipientName: entry.employeeName, ...amounts, status: "draft", createdAtISO: nowISO(), updatedAtISO: nowISO() }));
+    await ctx.db.insert("payrollSlips", compact({ societyId, year: taxYear, slipType: "T4", employeeId: entry.employeeId, providerEmployeeId: entry.providerEmployeeId, providerName: entry.providerName, recipientName: entry.employeeName, ...amounts, status: "draft", createdAtISO: nowISO(), updatedAtISO: nowISO() }));
     created += 1;
   }
   await syncRegisterDeadlines(ctx, societyId);
@@ -593,6 +674,7 @@ export async function payrollSaveRoePortable(ctx: PortableMutationCtx, args: Rec
   let id = args.id;
   if (id) {
     await getOwned(ctx, "recordsOfEmployment", id, args.societyId);
+    if (await ctx.db.query("payrollRoeWorkflowCases").withIndex("by_society_register", q => q.eq("societyId", args.societyId).eq("registerId", id!)).first()) throw new Error("This ROE has a guided case. Record changes and actual issuance through its ROE workflow so the register, evidence and follow-ups remain consistent.");
     await ctx.db.patch(id, { ...fields, employeeId: fields.employeeId, dueDate: fields.dueDate, issuedOn: fields.issuedOn, serialNumber: fields.serialNumber, notes: fields.notes, updatedAtISO: nowISO() });
   } else {
     id = await ctx.db.insert("recordsOfEmployment", { societyId: args.societyId, ...fields, createdAtISO: nowISO(), updatedAtISO: nowISO() });
@@ -603,6 +685,7 @@ export async function payrollSaveRoePortable(ctx: PortableMutationCtx, args: Rec
 
 export async function payrollRemoveRoePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const roe = await requireOwnedRow(ctx, "recordsOfEmployment", id);
+  if (await ctx.db.query("payrollRoeWorkflowCases").withIndex("by_society_register", q => q.eq("societyId", roe.societyId).eq("registerId", id)).first()) throw new Error("This ROE is retained with a guided case. Resolve it through the ROE workflow rather than deleting its register obligation.");
   await ctx.db.delete(id);
   await syncRegisterDeadlines(ctx, roe.societyId);
 }

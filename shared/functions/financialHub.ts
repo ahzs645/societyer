@@ -23,6 +23,7 @@ import { categoryAmounts, isSplitTransaction } from "../transactionLines";
 import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync, patchTransactionWithJournal } from "./accounting";
 import { requireBudgetForTransaction } from "./spendBudgets";
 import { releaseInboxMatches } from "./receiptInbox";
+import { assertNativePayrollBankPatch } from "./payrollPaymentGuard";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -555,6 +556,7 @@ export async function updateTransactionPortable(
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
   await getOwned(ctx, "financialTransactions", id, String(row.societyId));
   const { receiptDocumentId, memo, spendBudgetId, ...rest } = patch;
+  await assertNativePayrollBankPatch(ctx, row, patch);
   if (patch.category !== undefined && patch.category !== row.category && isSplitTransaction({ lines: row.lines })) {
     throw new Error("This transaction is split into lines. Change the categories on its lines in the transaction panel.");
   }

@@ -23,7 +23,7 @@ function orgLineRow(line: OrgStatementLine, kind: "revenue" | "expense"): Report
 }
 
 /** In-app Statement of Revenues & Expenses (General / Restricted / Total), matching the exported document. */
-export function OrgStatementTable({ statement }: { statement: OrgRevenueStatement }) {
+export function OrgStatementTable({ statement, currency = statement.currency ?? "CAD" }: { statement: OrgRevenueStatement; currency?: string }) {
   const [drill, setDrill] = useState<{ meta: OrgMeta; columnId: string } | null>(null);
   const rows: ReportRow<OrgMeta>[] = [
     {
@@ -71,8 +71,8 @@ export function OrgStatementTable({ statement }: { statement: OrgRevenueStatemen
         “{meta.line.label}” {meta.kind === "revenue" ? "revenue" : "expenses"} for {statement.periodLabel ?? `fiscal year ${statement.fiscalYearLabel}`}:
       </p>
       <p>
-        General Fund {formatMoney(meta.line.generalCents)} + Restricted Funds {formatMoney(meta.line.restrictedCents)} = Total{" "}
-        {formatMoney(lineTotalCents(meta.line))}.
+        General Fund {formatMoney(meta.line.generalCents, { currency })} + Restricted Funds {formatMoney(meta.line.restrictedCents, { currency })} = Total{" "}
+        {formatMoney(lineTotalCents(meta.line), { currency })}.
       </p>
       <p>
         Each figure sums the synced bank transactions in this category (cash basis), split by whether the transaction’s account is flagged as
@@ -84,11 +84,12 @@ export function OrgStatementTable({ statement }: { statement: OrgRevenueStatemen
     <>
       <ReportTable<OrgMeta>
         ariaLabel="Statement of revenues and expenses"
+        currency={currency}
         labelHeader="Line"
         download={{
           fileName: `Statement of revenues and expenses ${statement.periodLabel ?? `FY ${statement.fiscalYearLabel}`}`,
           sheetName: "Revenues and expenses",
-          title: ["Statement of revenues and expenses", statement.periodLabel ?? `Fiscal year ${statement.fiscalYearLabel}`],
+          title: ["Statement of revenues and expenses", statement.periodLabel ?? `Fiscal year ${statement.fiscalYearLabel}`, `Currency: ${currency}`],
         }}
         columns={ORG_COLUMNS}
         rows={rows}
@@ -97,6 +98,7 @@ export function OrgStatementTable({ statement }: { statement: OrgRevenueStatemen
         maxHeight="none"
       />
       <FinanceDrilldownDrawer
+        currency={currency}
         open={Boolean(drill)}
         onClose={() => setDrill(null)}
         title={meta ? `${meta.line.label} · ${columnLabel}` : "Line"}
@@ -108,7 +110,7 @@ export function OrgStatementTable({ statement }: { statement: OrgRevenueStatemen
   );
 }
 
-type FundRow = { grantId: string; title: string; funder?: string; purpose?: string; openingCents: number; receiptsCents: number; disbursementsCents: number; closingCents: number };
+type FundRow = { grantId: string; title: string; funder?: string; purpose?: string; transactionIds?: string[]; openingCents: number; receiptsCents: number; disbursementsCents: number; closingCents: number };
 type FundMeta = { fund: FundRow };
 
 const FUND_COLUMNS: ReportColumn[] = [
@@ -122,9 +124,11 @@ const FUND_COLUMNS: ReportColumn[] = [
 export function RestrictedFundsTable({
   data,
   grantTransactions,
+  currency = data.currency ?? "CAD",
 }: {
-  data: { funds: FundRow[]; totals: { openingCents: number; receiptsCents: number; disbursementsCents: number; closingCents: number } };
+  data: { currency?: string; funds: FundRow[]; totals: { openingCents: number; receiptsCents: number; disbursementsCents: number; closingCents: number } };
   grantTransactions: any[] | undefined;
+  currency?: string;
 }) {
   const [drill, setDrill] = useState<{ fund: FundRow; columnId: string } | null>(null);
   const rows: ReportRow<FundMeta>[] = [
@@ -148,6 +152,7 @@ export function RestrictedFundsTable({
     const direction = drill.columnId === "receipts" ? "inflow" : drill.columnId === "disbursements" ? "outflow" : null;
     return grantTransactions
       .filter((txn) => String(txn.grantId) === String(drill.fund.grantId))
+      .filter((txn) => !drill.fund.transactionIds || drill.fund.transactionIds.includes(String(txn._id)))
       .filter((txn) => (direction ? txn.direction === direction : txn.direction === "inflow" || txn.direction === "outflow"))
       .sort((a, b) => String(a.date).localeCompare(String(b.date)))
       .map((txn) => ({
@@ -163,8 +168,9 @@ export function RestrictedFundsTable({
     <>
       <ReportTable<FundMeta>
         ariaLabel="Statement of restricted funds"
+        currency={currency}
         labelHeader="Fund"
-        download={{ fileName: "Statement of restricted funds", sheetName: "Restricted funds", title: ["Statement of restricted funds"] }}
+        download={{ fileName: `Statement of restricted funds ${currency}`, sheetName: "Restricted funds", title: ["Statement of restricted funds", `Currency: ${currency}`] }}
         columns={FUND_COLUMNS}
         rows={rows}
         drillColumn="closing"
@@ -173,6 +179,7 @@ export function RestrictedFundsTable({
         maxHeight="none"
       />
       <FinanceDrilldownDrawer
+        currency={currency}
         open={Boolean(drill)}
         onClose={() => setDrill(null)}
         title={drill ? `${drill.fund.title} · ${FUND_COLUMNS.find((column) => column.id === drill.columnId)?.title ?? ""}` : "Fund"}

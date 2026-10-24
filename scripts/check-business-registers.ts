@@ -64,10 +64,10 @@ eq(remittancePeriodFor("2026-05-10", twice), { start: "2026-05-01", end: "2026-0
 eq(remittancePeriodFor("2026-05-20", twice), { start: "2026-05-16", end: "2026-05-31" }, "twice monthly: 16th to month end");
 eq(remittanceDueDate({ start: "2026-05-01", end: "2026-05-15" }, twice), "2026-05-25", "days after period end");
 eq(remittanceDueDate({ start: "2026-05-16", end: "2026-05-31" }, twice), "2026-06-10", "days after period end crosses the month");
-eq(remittanceDueDate({ start: "2026-01-01", end: "2026-01-31" }, { remitterType: "accelerated", cadence: "monthly", dueRule: "day_of_next_month", dueValue: 31 }), "2026-02-28", "a due day past month end is clamped");
-eq(scheduleIsComplete({ remitterType: "quarterly" }), false, "quarterly and accelerated remitters must set their schedule");
-eq(scheduleIsComplete({ remitterType: "quarterly", cadence: "quarterly", dueRule: "day_of_next_month", dueValue: 40 }), false, "a due day over 31 is refused");
-eq(remittanceDueDate({ start: "2026-04-01", end: "2026-06-30" }, { remitterType: "quarterly" }), null, "no due date without a schedule (never guessed)");
+eq(remittanceDueDate({ start: "2026-01-01", end: "2026-01-31" }, { remitterType: "accelerated", cadence: "monthly", dueRule: "day_of_next_month", dueValue: 31 }), "2026-03-02", "a due day past month end is clamped, then adjusted for the weekend");
+eq(scheduleIsComplete({ remitterType: "quarterly" }), true, "the official quarterly schedule is complete without custom settings");
+eq(scheduleIsComplete({ remitterType: "accelerated", cadence: "quarterly", dueRule: "day_of_next_month", dueValue: 40 }), false, "a due day over 31 is refused");
+eq(remittanceDueDate({ start: "2026-04-01", end: "2026-06-30" }, { remitterType: "quarterly" }), "2026-07-15", "quarterly follows the published CRA schedule");
 eq(remittanceStatus({ amountDueCents: 1000, dueDate: "2026-04-15" }, "2026-04-15"), "due", "due on the due date itself");
 eq(remittanceStatus({ amountDueCents: 1000, dueDate: "2026-04-15" }, "2026-04-16"), "overdue", "overdue the day after");
 eq(remittanceStatus({ amountDueCents: 1000, paidCents: 400, dueDate: "2026-04-15" }, "2026-04-10"), "partial", "part paid");
@@ -89,7 +89,7 @@ eq(
 
 /* ------------------------------------------------------ slip deadlines */
 
-eq(slipFilingDeadline(2025), "2026-02-28", "T4/T4A/RL-1 for 2025 are due the last day of February 2026");
+eq(slipFilingDeadline(2025), "2026-03-02", "2025 filing deadline moves from Saturday to the next CRA business day");
 eq(slipFilingDeadline(2027), "2028-02-29", "a leap-year February ends on the 29th");
 const slipRuns = [
   { payDate: "2025-12-31", lines: [{ employeeId: "e1", employeeName: "A", grossCents: 100, cppEmployeeCents: 5, eiEmployeeCents: 2, incomeTaxCents: 10, netCents: 83, cppEmployerCents: 5, eiEmployerCents: 3 }] },
@@ -127,7 +127,7 @@ eq(keys, [
   "payroll:workers-comp:2026-02-28",
 ].sort(), "only open work becomes a deadline: no paid remittance, filed year, issued ROE, matured or redeemed holding, or long-past year without slips");
 eq(wanted.find((row) => row.sourceKey === "payroll:remit:2026-09-01")?.dueDate, "2026-10-15", "the remittance deadline carries the CRA due date");
-eq(wanted.find((row) => row.sourceKey === "payroll:slips:T4:2026")?.dueDate, "2027-02-28", "the slip deadline is the last day of February");
+eq(wanted.find((row) => row.sourceKey === "payroll:slips:T4:2026")?.dueDate, "2027-03-01", "the slip deadline is the first business day after Sunday February 28");
 eq(wanted.find((row) => row.sourceKey === "investments:maturity:h1:30")?.dueDate, "2026-10-29", "maturity reminder date");
 ok(wanted.every((row) => !row.done), "nothing done is created");
 const withOpen = registerDeadlines(input, "2026-10-14", [{ sourceKey: "payroll:remit:2026-08-01", status: "open" }]);
@@ -199,7 +199,7 @@ const csv = [
   "2026-01-30,2026-01-16,2026-01-31,Amara Okonkwo,3833.33,216.04,62.87,520.10,3034.32",
   "30/01/2026,2026-01-16,2026-01-31,Bad Row,1,0,0,0,1",
 ].join("\r\n");
-const parsed = parsePayrollCsv(csv);
+const parsed = parsePayrollCsv(csv, { standardEmployerShares: true });
 eq(parsed.runs.length, 2, "rows with the same period and pay date form one run");
 eq(parsed.runs[0].lines.length, 2, "one line per employee");
 eq(parsed.runs[0].grossCents, 383333 + 325000, "amounts with thousands separators");
@@ -265,7 +265,8 @@ const remit = (await db.query("payrollRemittances").collect()).find((row: any) =
 eq([remit?.dueDate, remit?.amountDueCents], ["2031-04-15", remittableCents(marchA)], "saving a pay run creates its remittance with the CRA due date");
 const remitDeadline = (await generated()).find((row: any) => row.sourceKey === `payroll:remit:${month}-01`);
 eq([remitDeadline?.dueDate, remitDeadline?.status, remitDeadline?.category], ["2031-04-15", "open", "Payroll"], "and an open Payroll deadline");
-ok((await generated()).some((row: any) => row.sourceKey === "payroll:slips:T4:2031" && row.dueDate === "2032-02-29"), "and the year's slip filing deadline");
+ok((await generated()).some((row: any) => row.sourceKey === "payroll:slips:T4:2031" && row.dueDate === "2032-03-01"), "and the year's slip filing deadline");
+await db.patch((await db.query("payrollSettings").collect()).find((row: any) => row.societyId === societyId)!._id, { payrollAccountNumber: "123456789RP0001" }); // Explicit synthetic account for this newly recorded test payment.
 await fns.payrollRecordRemittancePortable(ctx, { id: remit._id, paidOn: "2031-04-14", confirmationNumber: "CRA-1" });
 eq((await db.get(remitDeadline._id)).status, "complete", "recording the payment completes the deadline");
 eq(await fns.payrollSyncDeadlinesPortable(ctx, { societyId }), { created: 0, updated: 0, removed: 0, completed: 0 }, "a second sync changes nothing");

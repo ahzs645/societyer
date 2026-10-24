@@ -100,4 +100,7 @@ crons.interval(
 // Durable fallback for temporal material/committee grants and operator maintenance.
 crons.interval("offline meeting authorization repair", { minutes: 1 }, internal.offlineMeetings.repairDownloads, {});
 
+// Timezone-aware billing schedules keep their next UTC occurrence on each row.
+crons.interval("billing automatic delivery", { minutes: 5 }, (internal as any).billingAutomationActions.scan, {});
+
 export default crons;

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CalendarClock, ClipboardCheck, FileText, FileUp, Landmark, Plus, Settings2, Users, Wallet } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { ObjectRecordTable, RecordTableEmpty } from "@/platform/record-engine";
@@ -20,6 +20,7 @@ import { periodLabel, REMITTANCE_STATUS_LABEL, ROE_REASONS, ROE_STATUS_LABEL, SL
 import { PayrollImportDrawer, PayRunDrawer, PayrollSettingsDrawer, RemittanceDrawer, RoeDrawer, SlipDrawer } from "../features/businessRegisters/PayrollDrawers";
 import { useOnceWhen } from "../features/businessRegisters/formHelpers";
 import type { PayrollWorkspace } from "../features/businessRegisters/types";
+import { PayrollSetupPanel } from "../features/financials/planning/PayrollSetupPanel";
 
 const TABS = ["runs", "remittances", "slips", "roes"] as const;
 type PayrollTab = (typeof TABS)[number];
@@ -50,7 +51,8 @@ export function PayrollPage() {
   const generateSlips = usePermissionedMutation(api.payroll.generateSlips, canWrite);
   const syncDeadlines = useMutation(api.payroll.syncDeadlines);
   const [tab, setTab] = useUrlTab(TABS, "runs");
-  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [drawer, setDrawer] = useState<DrawerState>(() => searchParams.get("setup") === "1" ? { kind: "settings" } : null);
 
   const runSync = useCallback(() => {
     if (society) void syncDeadlines({ societyId: society._id }).catch(() => undefined);
@@ -60,8 +62,8 @@ export function PayrollPage() {
   const runRecords = useMemo(() => (workspace?.runs ?? []).map((run) => ({
     ...run,
     period: periodLabel(run.periodStart, run.periodEnd),
-    deductionsCents: run.cppEmployeeCents + run.eiEmployeeCents + run.incomeTaxCents + (run.otherDeductionsCents ?? 0),
-    employerCents: run.cppEmployerCents + run.eiEmployerCents,
+    deductionsCents: run.cppEmployeeCents + (run.cpp2EmployeeCents ?? 0) + run.eiEmployeeCents + run.incomeTaxCents + (run.otherDeductionsCents ?? 0),
+    employerCents: run.cppEmployerCents + (run.cpp2EmployerCents ?? 0) + run.eiEmployerCents,
     balanced: run.differenceCents === 0,
   })), [workspace?.runs]);
   const slipRecords = workspace?.slips ?? [];
@@ -79,7 +81,10 @@ export function PayrollPage() {
   const currentYear = summary?.year ?? slipYear + 1;
   // In January and February the slips being prepared are last year's.
   const prepYear = workspace && Number(workspace.today.slice(5, 7)) <= 2 ? currentYear - 1 : currentYear;
-  const close = () => setDrawer(null);
+  const close = () => {
+    setDrawer(null);
+    if (searchParams.has("setup")) { const nextParams = new URLSearchParams(searchParams); nextParams.delete("setup"); setSearchParams(nextParams, { replace: true }); }
+  };
 
   const generate = async (year: number) => {
     try {
@@ -112,7 +117,7 @@ export function PayrollPage() {
         info={
           <>
             <p>
-              Payroll records, not a payroll service: run payroll with your provider and pay the CRA through your bank or My Business Account, then record both here.
+              Calculate supported B.C. payroll in the payroll calculator, or record and reconcile pay runs from your provider here. Make payments and CRA remittances through your bank or My Business Account and record them here.
               Remittances, slip filing and records of employment show on the Deadlines page.
             </p>
             <p>
@@ -123,6 +128,9 @@ export function PayrollPage() {
         }
         actions={
           <>
+            <Link className="btn btn--sm" to="/app/payroll/calculator">Payroll calculator</Link>
+            <Link className="btn btn--sm" to="/app/payroll/calculator?tab=tools">Payroll tools</Link>
+            <Link className="btn btn--sm" to="/app/financials/planning"><CalendarClock size={14} aria-hidden="true" />Semester cost planner</Link>
             <MoreActionsMenu
               items={[
                 { id: "import", label: "Import pay runs from CSV", icon: <FileUp size={14} />, disabled: !canWrite, onSelect: () => setDrawer({ kind: "import" }) },
@@ -170,10 +178,19 @@ export function PayrollPage() {
           actionLabel="Show year-end slips"
         />
         <StatTile
-          label="Remitted this year"
+          label={`Source deductions, ${currentYear}`}
           icon={<CalendarClock size={14} />}
           value={<Money variant="hero" trimWholeCents cents={summary ? summary.ytdRemittableCents : null} />}
-          sub="CPP, EI and income tax"
+          sub="CPP, CPP2, EI and income tax"
+        />
+        <StatTile
+          label={`CPP2, ${currentYear}`}
+          icon={<Landmark size={14} />}
+          value={<Money variant="hero" trimWholeCents cents={summary ? summary.ytdCpp2EmployeeCents + summary.ytdCpp2EmployerCents : null} />}
+          sub="Employee and employer additional CPP"
+          onClick={() => setTab("runs")}
+          pressed={tab === "runs"}
+          actionLabel="Show CPP2 pay run amounts"
         />
       </div>
 
@@ -182,6 +199,8 @@ export function PayrollPage() {
           <Users size={14} aria-hidden="true" /> Add staff on the <Link to="/app/employees">Employees</Link> page to split pay runs by employee and prepare T4 slips.
         </p>
       )}
+
+      <PayrollSetupPanel societyId={society._id} onOpenSettings={() => setDrawer({ kind: "settings" })} />
 
       <Tabs<PayrollTab>
         value={tab}

@@ -40,9 +40,9 @@ export const JOURNAL_BASES = ["both", "accrual-only", "cash-only"] as const;
 export type JournalBasis = (typeof JOURNAL_BASES)[number];
 
 /** Entry sources that are accrual-only when the entry carries no explicit `basis`. */
-export const ACCRUAL_ONLY_SOURCES: readonly string[] = ["invoice", "bill", "invoice_accrual", "bill_accrual"];
+export const ACCRUAL_ONLY_SOURCES: readonly string[] = ["invoice", "bill", "invoice_accrual", "bill_accrual", "invoice_credit", "invoice_write_off", "invoice_fx_revaluation", "invoice_fx_revaluation_reversal", "invoice_adjustment_reversal"];
 /** Entry sources that are cash-only (recognition on payment) when the entry carries no explicit `basis`. */
-export const CASH_ONLY_SOURCES: readonly string[] = ["invoice_cash_basis", "bill_cash_basis"];
+export const CASH_ONLY_SOURCES: readonly string[] = ["invoice_cash_basis", "bill_cash_basis", "invoice_refund_cash", "invoice_cash_reversal", "bill_adjustment_cash"];
 
 export function isJournalBasis(value: unknown): value is JournalBasis {
   return typeof value === "string" && (JOURNAL_BASES as readonly string[]).includes(value);

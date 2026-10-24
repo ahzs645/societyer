@@ -25,6 +25,8 @@ import { OrgStatementTable, RestrictedFundsTable } from "../components/YearEndSt
 import { Tabs } from "../../../components/primitives";
 import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { exportWordDocx } from "../../../lib/docx";
+import { ReportPdfDownload, type BrandedReportData } from "../reports/ReportPdfDownload";
+import { annualReportDocument, organizationReportDocument, programReportDocument, readinessReportDocument, restrictedReportDocument } from "../reports/yearEndReportDocuments";
 import {
   EXPENSE_CATEGORIES,
   REVENUE_CATEGORIES,
@@ -114,16 +116,17 @@ function ToneBadge({ tone }: { tone: string }) {
   return <Badge tone="warn">Needs attention</Badge>;
 }
 
-function ReportActions({ title, filenameBase, bodyHtml }: { title: string; filenameBase: string; bodyHtml: string }) {
+function ReportActions({ title, filenameBase, bodyHtml, report }: { title: string; filenameBase: string; bodyHtml: string; report?: BrandedReportData }) {
   const { canExport } = useFinancePermissions();
+  const society = useSociety();
   return (
     <div className="row" style={{ gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
       <button className="btn-action btn-action--primary" onClick={() => void exportWordDocx({ filename: `${filenameBase}.docx`, title, bodyHtml })} disabled={!canExport}>
         <FileDown size={12} /> Export Word
       </button>
-      <button className="btn-action" onClick={() => void exportPdfDownload({ filename: `${filenameBase}.pdf`, title, bodyHtml })} disabled={!canExport}>
+      {report && society ? <ReportPdfDownload societyId={society._id} report={report} filename={filenameBase} disabled={!canExport} /> : <button className="btn-action" onClick={() => void exportPdfDownload({ filename: `${filenameBase}.pdf`, title, bodyHtml })} disabled={!canExport}>
         <FileDown size={12} /> Download PDF
-      </button>
+      </button>}
       <button className="btn-action" onClick={() => void printPdfDocument({ title, bodyHtml })} disabled={!canExport}>
         <Printer size={12} /> Print
       </button>
@@ -135,7 +138,7 @@ function ReportActions({ title, filenameBase, bodyHtml }: { title: string; filen
 function DocumentPreview({ bodyHtml }: { bodyHtml: string }) {
   return (
     <details className="year-end-preview">
-      <summary>Preview the exported document</summary>
+      <summary>Preview Word and print layout</summary>
       <PreviewBox bodyHtml={bodyHtml} />
     </details>
   );
@@ -156,6 +159,10 @@ export function YearEndReportsPage() {
   const society = useSociety();
   const [tab, setTab] = useState<TabId>("readiness");
   const financials = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
+  const branding = useQuery(api.invoices.documentTemplates, society ? { societyId: society._id } : "skip") as { currency: string; currencies: string[] } | undefined;
+  const [selectedCurrency, setSelectedCurrency] = useState<string | null>(null);
+  const baseCurrency = branding?.currency ?? "CAD";
+  const currency = selectedCurrency && branding?.currencies.includes(selectedCurrency) ? selectedCurrency : baseCurrency;
 
   const fiscalYears = useMemo(() => {
     const years = new Set<string>((financials ?? []).map((f: any) => String(f.fiscalYear)).filter(Boolean));
@@ -166,15 +173,15 @@ export function YearEndReportsPage() {
   const fiscalYear = selectedYear ?? fiscalYears[0];
 
   const readiness = useQuery(api.yearEnd.readiness, society && fiscalYear ? { societyId: society._id, fiscalYear } : "skip");
-  const annual = useQuery(api.yearEnd.annualStatement, society && fiscalYear ? { societyId: society._id, fiscalYear } : "skip");
-  const restricted = useQuery(api.yearEnd.restrictedFundStatement, society ? { societyId: society._id } : "skip");
+  const annual = useQuery(api.yearEnd.annualStatement, society && fiscalYear && branding ? { societyId: society._id, fiscalYear, currency } : "skip");
+  const restricted = useQuery(api.yearEnd.restrictedFundStatement, society && branding ? { societyId: society._id, currency } : "skip");
   const statements = useQuery(api.programStatements.list, society ? { societyId: society._id } : "skip");
   const grants = useQuery(api.grants.list, society ? { societyId: society._id } : "skip");
   const grantTxns = useQuery(api.grants.transactions, society ? { societyId: society._id } : "skip");
 
   const orgStatement = useQuery(
     api.yearEnd.orgRevenueExpense,
-    society && fiscalYear ? { societyId: society._id, fiscalYear } : "skip",
+    society && fiscalYear && branding ? { societyId: society._id, fiscalYear, currency } : "skip",
   );
 
   const createStatement = useMutation(api.programStatements.create);
@@ -204,9 +211,10 @@ export function YearEndReportsPage() {
 
   const startFromGrant = (grantId: string) => {
     const grant = (grants ?? []).find((g: any) => String(g._id) === grantId);
-    if (!grant) return;
-    const txns = (grantTxns ?? []).filter((t: any) => String(t.grantId) === grantId);
-    const built = buildStatementFromGrant(grant, txns, { priorFiscalYearLabel: priorLabel, currentFiscalYearLabel: currentLabel });
+    const scope = restricted?.programGrantScopes?.find((row: any) => row.grantId === grantId);
+    if (!grant || !scope || scope.currency !== baseCurrency) return;
+    const txns = (grantTxns ?? []).filter((t: any) => String(t.grantId) === grantId && scope.transactionIds.includes(String(t._id)));
+    const built = buildStatementFromGrant(grant, txns, { priorFiscalYearLabel: priorLabel, currentFiscalYearLabel: currentLabel, currency: baseCurrency });
     built.grantId = grantId;
     setEdit(editFromStatement(built));
   };
@@ -312,6 +320,12 @@ export function YearEndReportsPage() {
             ))}
           </select>
         </Field>
+        {(tab === "annual" || tab === "org" || tab === "restricted") && <Field label="Report currency">
+          <select className="input" aria-label="Report currency" value={currency} onChange={(event) => setSelectedCurrency(event.target.value)} disabled={!branding}>
+            {(branding?.currencies ?? [baseCurrency]).map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </Field>}
+        {(tab === "annual" || tab === "org" || tab === "restricted") && <p className="meta">Only {currency} source amounts are included. No currency conversion.</p>}
       </div>
 
       <div className="financials-tabs">
@@ -336,6 +350,7 @@ export function YearEndReportsPage() {
                   title="Year-End Readiness Checklist"
                   filenameBase={`year-end-readiness-${fiscalYear}`}
                   bodyHtml={renderReadinessHtml(readiness, society, fiscalYear)}
+                  report={readinessReportDocument(readiness, fiscalYear, currency)}
                 />
               </div>
               <div className="col year-end-checklist">
@@ -378,17 +393,18 @@ export function YearEndReportsPage() {
           ) : (
             <>
               <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Revenue, expense, and net totals use a manually-recorded, approved financial statement for this
+                Revenue, expense, and net totals use a recorded financial statement for this
                 fiscal year when one exists on <Link to="/app/financials">Financials</Link>; otherwise they're
                 summed from synced bank transactions (the same source as{" "}
                 <Link to="/app/treasurer">Treasurer</Link>). Either way, this is not the posted-ledger figure.
               </p>
               <ReportActions
                 title="Annual Financial Statement"
-                filenameBase={`annual-statement-${fiscalYear}`}
-                bodyHtml={renderAnnualStatementHtml(annual, society, fiscalYear)}
+                filenameBase={`annual-statement-${fiscalYear}-${currency}`}
+                bodyHtml={renderAnnualStatementHtml(annual, society, fiscalYear, currency)}
+                report={annualReportDocument(annual, fiscalYear, currency)}
               />
-              <PreviewBox bodyHtml={renderAnnualStatementHtml(annual, society, fiscalYear)} />
+              <PreviewBox bodyHtml={renderAnnualStatementHtml(annual, society, fiscalYear, currency)} />
             </>
           )}
         </div>
@@ -406,11 +422,12 @@ export function YearEndReportsPage() {
               </p>
               <ReportActions
                 title="Statement of Restricted Funds"
-                filenameBase={`restricted-funds-${fiscalYear}`}
-                bodyHtml={renderRestrictedFundsHtml(restricted, society)}
+                filenameBase={`restricted-funds-${currency}`}
+                bodyHtml={renderRestrictedFundsHtml(restricted, society, currency)}
+                report={restrictedReportDocument(restricted, currency)}
               />
-              <RestrictedFundsTable data={restricted as any} grantTransactions={grantTxns as any[] | undefined} />
-              <DocumentPreview bodyHtml={renderRestrictedFundsHtml(restricted, society)} />
+              <RestrictedFundsTable data={restricted as any} grantTransactions={grantTxns as any[] | undefined} currency={currency} />
+              <DocumentPreview bodyHtml={renderRestrictedFundsHtml(restricted, society, currency)} />
             </>
           )}
         </div>
@@ -429,20 +446,20 @@ export function YearEndReportsPage() {
           </p>
           {orgStatement === undefined ? (
             <p className="muted">Loading…</p>
-          ) : orgStatement.empty ? (
-            <p className="muted">
-              No transactions found for {fiscalYear}. Add categorized transactions in{" "}
-              <Link to="/app/financials">Financials</Link> and they'll appear here automatically.
-            </p>
           ) : (
             <>
+              {orgStatement.empty && <p className="muted">
+                No {currency} transactions found for {fiscalYear}. Add categorized transactions in{" "}
+                <Link to="/app/financials">Financials</Link> and they'll appear here automatically.
+              </p>}
               <ReportActions
                 title="Organization Revenue and Expense Statement"
-                filenameBase={`organization-revenue-expenses-${fiscalYear}`}
-                bodyHtml={renderOrgStatementHtml(orgStatement, society)}
+                filenameBase={`organization-revenue-expenses-${fiscalYear}-${currency}`}
+                bodyHtml={renderOrgStatementHtml(orgStatement, society, currency)}
+                report={organizationReportDocument(orgStatement, currency)}
               />
-              <OrgStatementTable statement={orgStatement} />
-              <DocumentPreview bodyHtml={renderOrgStatementHtml(orgStatement, society)} />
+              <OrgStatementTable statement={orgStatement} currency={currency} />
+              <DocumentPreview bodyHtml={renderOrgStatementHtml(orgStatement, society, currency)} />
             </>
           )}
         </div>
@@ -450,6 +467,7 @@ export function YearEndReportsPage() {
 
       {tab === "programs" && (
         <div className="col" style={{ gap: 12 }}>
+          <p className="meta">Program forms are recorded in the workspace base currency ({baseCurrency}). Grant prefills include only {baseCurrency} grants and their matching source transactions.</p>
           {!edit ? (
             <>
               <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -460,13 +478,14 @@ export function YearEndReportsPage() {
                   <select
                     className="input"
                     value={grantPick}
+                    disabled={!restricted || !grantTxns}
                     onChange={(e) => {
                       setGrantPick(e.target.value);
                       if (e.target.value) startFromGrant(e.target.value);
                     }}
                   >
                     <option value="">Select a grant…</option>
-                    {(grants ?? []).map((g: any) => (
+                    {(grants ?? []).filter((grant: any) => restricted?.programGrantScopes?.some((scope: any) => scope.grantId === String(grant._id) && scope.currency === baseCurrency)).map((g: any) => (
                       <option key={g._id} value={g._id}>
                         {g.title} — {g.funder}
                       </option>
@@ -495,8 +514,8 @@ export function YearEndReportsPage() {
                               {s.funderName ? `${s.funderName} · ` : ""}Actuals {s.priorFiscalYearLabel} · Budget {s.currentFiscalYearLabel}
                             </span>
                             <span className="meta">
-                              Revenues {formatMoney(totals.revenueActualCents)} · Expenses {formatMoney(totals.expenseActualCents)} · Surplus/Deficit{" "}
-                              {formatMoney(totals.surplusActualCents)}
+                              Revenues {formatMoney(totals.revenueActualCents, { currency: baseCurrency })} · Expenses {formatMoney(totals.expenseActualCents, { currency: baseCurrency })} · Surplus/Deficit{" "}
+                              {formatMoney(totals.surplusActualCents, { currency: baseCurrency })}
                             </span>
                           </div>
                           <div className="row" style={{ gap: 6 }}>
@@ -519,6 +538,7 @@ export function YearEndReportsPage() {
             <ProgramStatementEditor
               edit={edit}
               society={society}
+              currency={baseCurrency}
               onField={(patch) => setEdit((prev) => (prev ? { ...prev, ...patch } : prev))}
               onLine={updateLine}
               onAddLine={addOtherLine}
@@ -612,6 +632,7 @@ function LineEditor({
 function ProgramStatementEditor({
   edit,
   society,
+  currency,
   onField,
   onLine,
   onAddLine,
@@ -621,6 +642,7 @@ function ProgramStatementEditor({
 }: {
   edit: EditState;
   society: any;
+  currency: string;
   onField: (patch: Partial<EditState>) => void;
   onLine: (kind: "revenues" | "expenses", index: number, patch: Partial<EditLine>) => void;
   onAddLine: (kind: "revenues" | "expenses") => void;
@@ -631,7 +653,7 @@ function ProgramStatementEditor({
   const { canEditSettings } = useFinancePermissions();
   const statement = statementFromEdit(edit);
   const totals = computeStatementTotals(statement);
-  const bodyHtml = renderProgramStatementHtml(statement, society);
+  const bodyHtml = renderProgramStatementHtml(statement, society, currency);
   const filenameBase = `program-actuals-budget-${(edit.programName || "program").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
 
   return (
@@ -707,18 +729,18 @@ function ProgramStatementEditor({
       <div className="card" style={{ padding: 12 }}>
         <div className="row" style={{ gap: 16, flexWrap: "wrap" }}>
           <span>
-            Total Revenues: <strong>{formatMoney(totals.revenueActualCents)}</strong> / {formatMoney(totals.revenueBudgetCents)}
+            Total Revenues: <strong>{formatMoney(totals.revenueActualCents, { currency })}</strong> / {formatMoney(totals.revenueBudgetCents, { currency })}
           </span>
           <span>
-            Total Expenses: <strong>{formatMoney(totals.expenseActualCents)}</strong> / {formatMoney(totals.expenseBudgetCents)}
+            Total Expenses: <strong>{formatMoney(totals.expenseActualCents, { currency })}</strong> / {formatMoney(totals.expenseBudgetCents, { currency })}
           </span>
           <span>
-            Surplus / Deficit: <strong>{formatMoney(totals.surplusActualCents)}</strong> / {formatMoney(totals.surplusBudgetCents)}
+            Surplus / Deficit: <strong>{formatMoney(totals.surplusActualCents, { currency })}</strong> / {formatMoney(totals.surplusBudgetCents, { currency })}
           </span>
         </div>
       </div>
 
-      <ReportActions title="Program Actual Revenue and Expenses and Budget" filenameBase={filenameBase} bodyHtml={bodyHtml} />
+      <ReportActions title="Program Actual Revenue and Expenses and Budget" filenameBase={filenameBase} bodyHtml={bodyHtml} report={programReportDocument(statement, currency)} />
       <PreviewBox bodyHtml={bodyHtml} />
     </div>
   );

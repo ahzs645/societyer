@@ -1,10 +1,12 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Tabs } from "../../../components/primitives";
 
-type BooksArea = "accounting" | "reports" | "journal-entries" | "chart-of-accounts" | "books-settings";
+type BooksArea = "accounting" | "reports" | "journal-entries" | "chart-of-accounts" | "books-settings" | "report-catalog" | "planning";
 
 const AREAS: Array<{ id: BooksArea; label: string; to: string }> = [
   { id: "accounting", label: "Workbench", to: "/app/financials/accounting" },
+  { id: "planning", label: "Cost planning", to: "/app/financials/planning" },
+  { id: "report-catalog", label: "Report builder", to: "/app/financials/reports/catalog" },
   { id: "reports", label: "Reports", to: "/app/financials/reports/balance-sheet" },
   { id: "journal-entries", label: "Journal entries", to: "/app/financials/journal-entries" },
   { id: "chart-of-accounts", label: "Chart of accounts", to: "/app/financials/chart-of-accounts" },
@@ -19,7 +21,7 @@ const AREAS: Array<{ id: BooksArea; label: string; to: string }> = [
 export function BooksNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const current = AREAS.find((area) => pathname.includes(`/financials/${area.id}`))?.id ?? "accounting";
+  const current = pathname.endsWith("/reports/catalog") ? "report-catalog" : AREAS.find((area) => pathname.includes(`/financials/${area.id}`))?.id ?? "accounting";
   return (
     <nav className="books-nav" aria-label="Books">
       <Tabs<BooksArea> value={current} onChange={(id) => navigate(AREAS.find((area) => area.id === id)?.to ?? "/app/financials/accounting")} items={AREAS.map(({ id, label }) => ({ id, label }))} />

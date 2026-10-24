@@ -1,13 +1,14 @@
+import { InvoiceAdjustmentsPanel } from "./InvoiceAdjustmentsPanel";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Ban, Bell, BookCheck, CheckCircle2, CircleDashed, Copy, Eye, FilePlus2, Landmark, Link2, MoreHorizontal, Pencil, Printer, Repeat, RotateCcw, Send, Trash2, Undo2, Wallet } from "lucide-react";
+import { AlertTriangle, Ban, Bell, BookCheck, CheckCircle2, CircleDashed, Copy, Download, Eye, FilePlus2, Landmark, Link2, MoreHorizontal, Pencil, Printer, Repeat, RotateCcw, Send, Trash2, Undo2, Wallet } from "lucide-react";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "@/lib/convexApi";
 import { Drawer } from "../../components/ui";
 import { Menu } from "../../components/Menu";
 import { Money } from "../../components/Money";
-import { useConfirm, usePrompt } from "../../components/Modal";
+import { Modal, useConfirm, usePrompt } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { formatDate, formatDateTime } from "../../lib/format";
 import { formatMoney } from "../../lib/money";
@@ -16,6 +17,8 @@ import { InvoiceDocument, InvoicePrintPortal } from "./InvoiceDocument";
 import { InvoiceStatusPill, NeedsActionPill } from "./InvoiceStatusPill";
 import { RecordPaymentForm } from "./RecordPaymentForm";
 import { InvoiceDepositLink } from "./InvoiceDepositLink";
+import { BillingDocumentPreview } from "./BillingDocumentPreview";
+import { paymentReceiptDocument } from "./billingDocuments";
 import type { NeedsActionFlag } from "../../../shared/invoiceLedger";
 import type { InvoiceRow, InvoiceWorkspace } from "./types";
 
@@ -40,6 +43,7 @@ type Props = {
   workspace: InvoiceWorkspace;
   logoUrl?: string | null;
   canWrite: boolean;
+  canExport: boolean;
   onClose: () => void;
   onEdit: (id: string) => void;
   onOpenSeries: (seriesId: string) => void;
@@ -49,7 +53,7 @@ type Props = {
 };
 
 /** Invoice panel: balance, actions, payments (with bank links), timeline and a preview. */
-export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onClose, onEdit, onOpenSeries, onEditMapping, canPost }: Props) {
+export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, canExport, onClose, onEdit, onOpenSeries, onEditMapping, canPost }: Props) {
   const markSent = useMutation(api.invoices.markSent);
   const voidInvoices = useMutation(api.invoices.voidInvoices);
   const restoreVoided = useMutation(api.invoices.restoreVoided);
@@ -65,6 +69,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
   const [paying, setPaying] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [linkingKey, setLinkingKey] = useState<string | null>(null);
+  const [receiptKey, setReceiptKey] = useState<string | null>(null);
   const depositLabel = (id: string | undefined) => workspace.ledger.accounts.deposit.find((account) => account._id === id)?.label;
   const defaultDeposit = depositLabel(workspace.settings.depositAccountId) ?? workspace.ledger.defaults.deposit?.label ?? "Undeposited funds";
 
@@ -83,6 +88,12 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
 
   const open = isOpenStatus(invoice.status);
   const organization = { ...workspace.organization, logoUrl };
+  let receipt: ReturnType<typeof paymentReceiptDocument> | undefined;
+  let receiptError = "";
+  if (receiptKey) {
+    try { receipt = paymentReceiptDocument(invoice, receiptKey, workspace); }
+    catch (failure) { receiptError = failure instanceof Error ? failure.message : "This receipt is no longer available."; }
+  }
   const run = async (action: () => Promise<unknown>, success: string, description?: string) => {
     try {
       await action();
@@ -128,7 +139,8 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
 
   const moreItems = [
     { id: "preview", label: showPreview ? "Hide preview" : "Preview invoice", icon: <Eye size={14} />, onSelect: () => setShowPreview((v) => !v) },
-    { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, onSelect: () => window.print() },
+    { id: "download-pdf", label: "Download PDF", icon: <Download size={14} />, disabled: !canExport, onSelect: () => void run(async () => { const { downloadInvoicePdf } = await import("./invoicePdf"); await downloadInvoicePdf(invoice, organization, workspace.settings.paymentInstructions); }, "PDF downloaded") },
+    { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: !canExport, onSelect: () => window.print() },
     { id: "duplicate", label: "Duplicate", icon: <Copy size={14} />, disabled: !canWrite, onSelect: () => void duplicate({ id: invoice._id as any }).then((id: string) => { toast.success(`Duplicated ${invoice.number}`); onEdit(id); }).catch((err: any) => toast.error("Could not duplicate", err?.message)) },
     ...(invoice.seriesId ? [{ id: "series", label: `Open series${invoice.seriesName ? ` · ${invoice.seriesName}` : ""}`, icon: <Repeat size={14} />, onSelect: () => onOpenSeries(invoice.seriesId!) }] : []),
     ...(invoice.payments.length ? [{ id: "revert", label: "Revert to unpaid", icon: <RotateCcw size={14} />, disabled: !canWrite, onSelect: () => void doRevert() }] : []),
@@ -242,6 +254,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
         </p>
       )}
 
+      {invoice.repairJobId && <p className="invoice-drawer__note"><Link to={`/app/invoices?tab=repairs&repair=${encodeURIComponent(invoice.repairJobId)}`}>View linked repair {workspace.repairJobs?.find((job) => job._id === invoice.repairJobId)?.number}</Link></p>}
       {paying && (
         <RecordPaymentForm
           invoice={invoice}
@@ -254,6 +267,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
         />
       )}
 
+      <InvoiceAdjustmentsPanel invoice={invoice} workspace={workspace} canWrite={canWrite}/>
       <section className="invoice-drawer__section" aria-labelledby="inv-payments">
         <h3 id="inv-payments" className="invoice-drawer__heading">Payments</h3>
         {invoice.payments.length === 0 ? (
@@ -264,21 +278,22 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
               <li key={payment.key} className="invoice-payments__row">
                 <span className="invoice-payments__icon" aria-hidden="true"><CheckCircle2 size={14} /></span>
                 <span className="invoice-payments__main">
-                  <span>{formatDate(payment.date)} · {PAYMENT_METHOD_LABEL[payment.method as PaymentMethod] ?? payment.method}{payment.reference ? ` · ${payment.reference}` : ""}</span>
+                  <span>{formatDate(payment.date)} · {payment.kind&&payment.kind!=="payment"?({credit:"Credit note",write_off:"Write-off",refund:"Refund"})[payment.kind]:PAYMENT_METHOD_LABEL[payment.method as PaymentMethod] ?? payment.method}{payment.reversedDate?` · reversed ${payment.reversedDate}`:""}{payment.reference ? ` · ${payment.reference}` : ""}</span>
                   {payment.transaction ? (
-                    <span className="invoice-bank-chip" title="Linked bank deposit">
+                    <Link className="invoice-bank-chip" to={`/app/financials?tab=transactions&transaction=${encodeURIComponent(payment.transaction._id)}`} title="Linked bank deposit">
                       <Landmark size={12} aria-hidden="true" />
-                      <span className="invoice-bank-chip__text">{payment.transaction.description ?? "Bank deposit"} · {formatDate(payment.transaction.date)}</span>
-                    </span>
-                  ) : payment.journalEntryId ? (
-                    <span className="muted invoice-payments__deposit">In {depositLabel(payment.depositAccountId) ?? defaultDeposit}</span>
-                  ) : null}
+                      <span className="invoice-bank-chip__text">{payment.transaction.description ?? "Bank deposit"} · {formatDate(payment.transaction.date)} · {workspace.transactions.find((txn) => txn._id === payment.transaction?._id)?.accountLabel ?? depositLabel(payment.depositAccountId) ?? defaultDeposit}</span>
+                    </Link>
+                  ) : (
+                    <span className="muted invoice-payments__deposit">{payment.kind==="credit"||payment.kind==="write_off"?"Noncash adjustment · ":"Destination: "}{payment.kind==="credit"||payment.kind==="write_off"?payment.note:depositLabel(payment.depositAccountId) ?? (payment.journalEntryId ? defaultDeposit : "Not recorded")}</span>
+                  )}
                   {linkingKey === payment.key && (
                     <InvoiceDepositLink invoice={invoice} payment={payment} transactions={workspace.transactions} onDone={() => setLinkingKey(null)} />
                   )}
                 </span>
                 <Money cents={payment.amountCents} currency={invoice.currency} tone="in" />
-                {canWrite && linkingKey !== payment.key && (
+                {invoice.lifecycle === "sent" && !payment.reversedDate && (payment.kind??"payment")==="payment" && payment.amountCents>0 && <button type="button" className="btn btn--ghost btn--sm" aria-label={`Preview receipt for payment ${payment.key}`} onClick={() => setReceiptKey(payment.key)}><Eye size={14} aria-hidden="true" />Receipt</button>}
+                {canWrite && !payment.reversedDate && (payment.kind??"payment")==="payment" && linkingKey !== payment.key && (
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm btn--icon"
@@ -289,14 +304,14 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
                     <Link2 size={14} />
                   </button>
                 )}
-                {canWrite && (
+                {canWrite && !payment.reversedDate && (
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label={`Remove the ${formatMoney(payment.amountCents)} payment from ${formatDate(payment.date)}`}
                     onClick={async () => {
-                      const ok = await confirm({ title: "Remove this payment?", message: `${formatMoney(payment.amountCents)} received ${formatDate(payment.date)}${payment.transaction ? " (its bank deposit is unlinked, not deleted)" : ""}.`, confirmLabel: "Remove payment", tone: "warn" });
-                      if (ok) await run(() => removePayment({ id: invoice._id as any, paymentKey: payment.key }), "Payment removed");
+                      const ok = await confirm({ title: "Reverse this settlement?", message: `${formatMoney(payment.amountCents)} received ${formatDate(payment.date)}${payment.transaction ? " (its bank deposit is unlinked, not deleted)" : ""}.`, confirmLabel: "Record reversal", tone: "warn" });
+                      if (ok) await run(() => removePayment({ id: invoice._id as any, paymentKey: payment.key }), "Settlement reversed");
                     }}
                   >
                     <Trash2 size={14} />
@@ -334,6 +349,8 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, onC
         </section>
       )}
       <InvoicePrintPortal invoice={invoice} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
+      {receiptKey && receipt && <BillingDocumentPreview title={`Receipt ${invoice.number} · ${invoice.payments.find((payment) => payment.key === receiptKey)?.date}`} document={receipt} organization={organization} downloadLabel="Download receipt PDF" canExport={canExport} onClose={() => setReceiptKey(null)} />}
+      {receiptKey && receiptError && <Modal open title="Receipt unavailable" onClose={() => setReceiptKey(null)} footer={<button className="btn" onClick={() => setReceiptKey(null)}>Close</button>}><p className="field__error" role="alert">{receiptError}</p></Modal>}
     </Drawer>
   );
 }

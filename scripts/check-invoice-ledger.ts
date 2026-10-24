@@ -302,22 +302,29 @@ assert.equal((await get(first.journalEntryId!)).status, "void", "the old payment
 const depositLines = await linesOf(relinked.journalEntryId!);
 assert.equal(depositLines[0].accountId, deposit.accountId, "the payment now deposits into the bank line's account");
 assert.ok(depositLines.every((item) => item.financialTransactionId === deposit._id));
-const ownEntry = (await entries()).find((entry) => entry.source === "financialTransactionBackfill" && entry._id === relinked.voidedTransactionEntryId);
-assert.equal(ownEntry?.status, "void", "the deposit's backfill entry is voided so it isn't in the books twice");
+const replacedBankId = relinked.replacedTransactionEntryId ?? relinked.voidedTransactionEntryId;
+const ownEntry = (await entries()).find((entry) => entry.source === "financialTransactionBackfill" && entry._id === replacedBankId);
+assert.equal(ownEntry?.status, relinked.replacedTransactionEntryId ? "posted" : "void", "an earlier bank posting stays immutable; a same-day posting can be replaced");
+if (relinked.bankTransferJournalEntryId) {
+  const transfer = await get(relinked.bankTransferJournalEntryId);
+  assert.deepEqual([transfer.source, transfer.date, transfer.status], ["invoice_bank_transfer", relinked.date, "posted"]);
+  assert.ok(ledgerBalance(await linesOf(transfer._id)).balanced, "the dated bank reclassification keeps the new receipt from duplicating cash");
+}
 let txn = await get(deposit._id);
 assert.deepEqual([txn.matchedKind, txn.matchedId, txn.accountingAccountId, txn.lines], ["invoice", id, AR, undefined]);
 assert.ok(row.needsAction.some((flag) => flag.code === "deposit_mismatch"), "a deposit of a different amount is flagged");
 await inv.linkDepositPortable(ctx, { id, paymentKey: firstKey });
 txn = await get(deposit._id);
 assert.deepEqual([txn.matchedKind, txn.accountingAccountId], [deposit.matchedKind, deposit.accountingAccountId], "unlinking puts the bank line back");
-assert.equal((await get(relinked.voidedTransactionEntryId!)).status, "posted", "and its backfill entry");
+assert.equal((await get(replacedBankId!)).status, "posted", "and its backfill entry");
+if (relinked.bankTransferJournalEntryId) assert.equal((await get(relinked.bankTransferJournalEntryId)).status, "void", "unlinking an open receipt also cancels its dated bank transfer");
 
 // Removing a payment voids its entries; reverting voids the rest.
 await inv.removePaymentPortable(ctx, { id, paymentKey: firstKey });
 assert.equal((await get(first.cashBasisEntryId!)).status, "void");
 await inv.revertToUnpaidPortable(ctx, { id });
 assert.equal(await balance(AR), arBefore, "receivables are back to the full invoice");
-assert.ok((await invoiceRow(id)).payments.length === 0);
+assert.ok((await invoiceRow(id)).payments.every((payment) => payment.reversedDate), "reverted payments remain as historical audit records with reversal dates");
 
 // Linking a deposit on the payment itself: matched to the invoice and categorised to AR, restored on removal.
 const noorTxn = await get("static_tx_invoice_noor");
@@ -353,7 +360,7 @@ await db.patch(period._id, { status: "closed" });
 await assert.rejects(() => inv.markSentPortable(ctx, { societyId: S, ids: [draftId] }), /Fiscal period .* is closed/);
 assert.equal((await get(draftId)).status, "draft", "nothing changed");
 await assert.rejects(() => inv.recordPaymentPortable(ctx, { id, date: today, amountCents: 1000, method: "cash" }), /Fiscal period .* is closed/);
-assert.equal((await get(id)).payments.length, 0);
+assert.equal((await get(id)).payments.filter((payment: any) => !payment.reversedDate).length, 0);
 await assert.rejects(() => inv.voidInvoicesPortable(ctx, { societyId: S, ids: [id] }), /Fiscal period .* is closed/);
 await db.patch(period._id, { status: "open" });
 const books = (await db.query("booksSettings").collect()).find((item) => item.societyId === S)!;
@@ -414,7 +421,8 @@ await inv.recordPaymentPortable(ctx, { id: creditInvoice, date: today, amountCen
 const creditCash = await linesOf((await invoiceRow(creditInvoice)).payments[0].cashBasisEntryId!);
 assert.deepEqual(creditCash.map((item) => [item.accountId, item.side, item.amountCents]), [[AR, "debit", 8950], [PROGRAM, "credit", 9000], [GST, "debit", 50]], "the cash basis recognises the netted revenue and tax");
 
-// "Post existing invoices" checks everything before writing: a deposit whose own entry is in closed books leaves no partial state.
+// "Post existing invoices" refuses a closed new posting date before any writes.
+// An older closed bank posting can remain immutable under a dated transfer.
 {
   const depositId = deposit._id;
   const imported = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Imported Payer", issueDate: today, terms: "net_15", lines: [{ item: "Room", quantity: 1, unitPriceCents: 4000 }] });
@@ -423,23 +431,28 @@ assert.deepEqual(creditCash.map((item) => [item.accountId, item.side, item.amoun
   await db.patch(depositId, { categorizedBy: "rule", ruleApplication: ruleRun });
   const untouched = await get(depositId);
   assert.ok(String(untouched.date) < today, "the deposit predates today");
-  await db.patch(books._id, { closeDate: String(untouched.date) });
+  await db.patch(books._id, { closeDate: today });
   const refused = await inv.postExistingPortable(ctx, { societyId: S, ids: [imported] });
-  assert.equal(refused.failed.length, 1, "the invoice is reported as failed");
-  assert.match(refused.failed[0].error, /books are closed through/);
+  assert.deepEqual([refused.failed.length, refused.blocked], [0, 1], "the invoice is reported as blocked before any writes");
+  assert.match((await inv.postingPreviewPortable(ctx, { societyId: S })).blocked.find(item => item.invoiceId === imported)!.reasons.join(" "), /books are closed through/);
   assert.equal(refused.postedInvoices, 0, "and its accrual isn't posted on its own");
   assert.deepEqual(await get(depositId), untouched, "the deposit is left exactly as it was");
   assert.equal((await get(imported)).journalEntryId, undefined);
   assert.equal((await entries()).filter((entry) => entry.sourceExternalId === accrualKey(imported)).length, 0, "nothing was posted for it");
-  await db.patch(books._id, { closeDate: undefined });
+  await db.patch(books._id, { closeDate: String(untouched.date) });
   const accepted = await inv.postExistingPortable(ctx, { societyId: S, ids: [imported] });
-  assert.deepEqual([accepted.postedInvoices, accepted.postedPayments, accepted.failed.length], [1, 1, 0], "once the books open it posts the invoice and its payment");
+  assert.deepEqual([accepted.postedInvoices, accepted.postedPayments, accepted.failed.length], [1, 1, 0], "an open current date can post the invoice and receipt while the original bank date stays closed");
+  const importedPayment = (await get(imported)).payments[0];
+  assert.ok(importedPayment.bankTransferJournalEntryId);
+  assert.equal((await get(importedPayment.replacedTransactionEntryId)).status, "posted");
+  assert.equal((await get(importedPayment.bankTransferJournalEntryId)).date, today);
   const linked = await get(depositId);
   assert.deepEqual([linked.matchedKind, linked.matchedId, linked.ruleApplication], ["invoice", imported, undefined], "the deposit is matched once its payment is in the books");
   assert.deepEqual((await get(imported)).payments[0].transactionBefore.ruleApplication, ruleRun, "the rule run the link cleared is kept");
   await inv.linkDepositPortable(ctx, { id: imported, paymentKey: "p_imported" });
   const released = await get(depositId);
   assert.deepEqual([released.matchedKind, released.categorizedBy, released.ruleApplication], [untouched.matchedKind, "rule", ruleRun], "unlinking restores the rule history, so the rule's Undo still works");
+  await db.patch(books._id, { closeDate: undefined });
 }
 
 // Idempotent posting looks its key up on the (society, source, sourceExternalId) index, not every entry of the source.

@@ -16,16 +16,16 @@ type SocietyLike = { name?: string } | null | undefined;
 
 // Always two decimals so columns line up cleanly in the exported statement;
 // negatives use accounting parentheses like the in-app statements.
-function fmtMoney(cents?: number): string {
-  return formatMoney(cents ?? 0, { negativeStyle: "parentheses" });
+function fmtMoney(cents: number | undefined, currency: string): string {
+  return formatMoney(cents ?? 0, { negativeStyle: "parentheses", currency });
 }
 
 type CellOpts = { bold?: boolean; rule?: "top" | "header"; width?: string };
 
-function moneyCell(cents: number, opts: CellOpts = {}): string {
+function moneyCellInCurrency(currency: string, cents: number, opts: CellOpts = {}): string {
   const width = opts.width ? `;width:${opts.width}` : "";
   const rule = opts.rule ? ` data-rule="${opts.rule}"` : "";
-  const inner = opts.bold ? `<strong>${escapeHtml(fmtMoney(cents))}</strong>` : escapeHtml(fmtMoney(cents));
+  const inner = opts.bold ? `<strong>${escapeHtml(fmtMoney(cents, currency))}</strong>` : escapeHtml(fmtMoney(cents, currency));
   return `<td${rule} style="text-align:right${width}">${inner}</td>`;
 }
 function labelCell(html: string, opts: { rule?: "top" | "header"; bold?: boolean; em?: boolean } = {}): string {
@@ -45,7 +45,8 @@ function blankCells(n: number): string {
  * current-year budget), itemized revenues and expenses, totals, and
  * surplus/deficit, with the form's footnotes.
  */
-export function renderProgramStatementHtml(statement: ProgramStatement, society?: SocietyLike): string {
+export function renderProgramStatementHtml(statement: ProgramStatement, society?: SocietyLike, currency = "CAD"): string {
+  const moneyCell = (cents: number, opts?: CellOpts) => moneyCellInCurrency(currency, cents, opts);
   const totals = computeStatementTotals(statement);
   const W = "26%";
   const lineRows = (lines: ProgramStatementLine[]) =>
@@ -59,6 +60,7 @@ export function renderProgramStatementHtml(statement: ProgramStatement, society?
       .join("");
   return `
     <h1>Program Actual Revenue and Expenses and Budget</h1>
+    <p class="meta">Currency: ${escapeHtml(currency)}</p>
     <p class="meta">${escapeHtml(statement.programName || "[Program Name]")}${society?.name ? ` · ${escapeHtml(society.name)}` : ""}${statement.funderName ? ` · ${escapeHtml(statement.funderName)}` : ""}</p>
     <table data-variant="statement">
       <thead>
@@ -90,7 +92,8 @@ export function renderProgramStatementHtml(statement: ProgramStatement, society?
  * Restricted Funds / Total, with itemized revenues and expenses, totals, and
  * "Excess of Revenues over Expenses" per fund.
  */
-export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?: SocietyLike): string {
+export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?: SocietyLike, currency = statement.currency ?? "CAD"): string {
+  const moneyCell = (cents: number, opts?: CellOpts) => moneyCellInCurrency(currency, cents, opts);
   const W = "20%";
   const lineRows = (lines: OrgStatementLine[]) =>
     lines
@@ -103,6 +106,7 @@ export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?:
     `<tr>${labelCell(escapeHtml(label), { bold: !em, em, rule: "top" })}${moneyCell(c.generalCents, { bold: true, rule: "top", width: W })}${moneyCell(c.restrictedCents, { bold: true, rule: "top", width: W })}${moneyCell(c.totalCents, { bold: true, rule: "top", width: W })}</tr>`;
   return `
     <h1>Statement of Revenues &amp; Expenses</h1>
+    <p class="meta">Currency: ${escapeHtml(currency)} · Source transactions only; no currency conversion.</p>
     <p class="meta">${escapeHtml(statement.organizationName || society?.name || "[Name of Organization]")}${statement.periodLabel ? ` · ${escapeHtml(statement.periodLabel)}` : ` · Fiscal year ${escapeHtml(statement.fiscalYearLabel)}`}</p>
     <table data-variant="statement">
       <thead>
@@ -122,7 +126,8 @@ export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?:
   `;
 }
 
-export function renderAnnualStatementHtml(data: any, society: SocietyLike, fiscalYear: string): string {
+export function renderAnnualStatementHtml(data: any, society: SocietyLike, fiscalYear: string, currency = data.currency ?? "CAD"): string {
+  const moneyCell = (cents: number, opts?: CellOpts) => moneyCellInCurrency(currency, cents, opts);
   const W = "26%";
   const categoryTable = (title: string, rows: Array<{ category: string; cents: number }>) =>
     rows.length
@@ -152,6 +157,8 @@ export function renderAnnualStatementHtml(data: any, society: SocietyLike, fisca
 
   return `
     <h1>Annual Financial Statement</h1>
+    <p class="meta">Currency: ${escapeHtml(currency)} · Source transactions only; no currency conversion.</p>
+    ${(data.sourceWarnings ?? []).map((warning: string) => `<p class="meta">${escapeHtml(warning)}</p>`).join("")}
     <p class="meta">${escapeHtml(society?.name ?? "")} · Fiscal year ${escapeHtml(fiscalYear)}${data.approvedByBoardAt ? ` · Approved by the board ${escapeHtml(data.approvedByBoardAt)}` : ""}</p>
     <h2>Statement of Operations</h2>
     <table data-variant="statement">
@@ -173,7 +180,8 @@ export function renderAnnualStatementHtml(data: any, society: SocietyLike, fisca
   `;
 }
 
-export function renderRestrictedFundsHtml(data: any, society: SocietyLike): string {
+export function renderRestrictedFundsHtml(data: any, society: SocietyLike, currency = data.currency ?? "CAD"): string {
+  const moneyCell = (cents: number, opts?: CellOpts) => moneyCellInCurrency(currency, cents, opts);
   const W = "15%";
   const rows = (data.funds ?? [])
     .map(
@@ -184,6 +192,8 @@ export function renderRestrictedFundsHtml(data: any, society: SocietyLike): stri
   const t = data.totals ?? { openingCents: 0, receiptsCents: 0, disbursementsCents: 0, closingCents: 0 };
   return `
     <h1>Statement of Restricted Funds</h1>
+    <p class="meta">Currency: ${escapeHtml(currency)} · Source grant transactions only; no currency conversion.</p>
+    ${(data.sourceWarnings ?? []).map((warning: string) => `<p class="meta">${escapeHtml(warning)}</p>`).join("")}
     <p class="meta">${escapeHtml(society?.name ?? "")}</p>
     <table data-variant="statement">
       <thead>
@@ -194,7 +204,7 @@ export function renderRestrictedFundsHtml(data: any, society: SocietyLike): stri
         <tr>${labelCell("Total", { bold: true, rule: "top" })}${moneyCell(t.openingCents, { bold: true, rule: "top", width: W })}${moneyCell(t.receiptsCents, { bold: true, rule: "top", width: W })}${moneyCell(t.disbursementsCents, { bold: true, rule: "top", width: W })}${moneyCell(t.closingCents, { bold: true, rule: "top", width: W })}</tr>
       </tbody>
     </table>
-    <p class="meta">Opening balances are tracked per period; funds opening at zero show their full-period activity.</p>
+    <p class="meta">Opening balances are not tracked per period. Funds open at zero and show their full recorded activity.</p>
   `;
 }
 

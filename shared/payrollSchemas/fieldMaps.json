@@ -1,0 +1,1059 @@
+{
+  "2026": {
+    "t4": {
+      "30": {
+        "tag": "hm_brd_lodg_amt",
+        "type": "decimal9Type",
+        "label": "Housing, board and lodging amount"
+      },
+      "31": {
+        "tag": "spcl_wrk_site_amt",
+        "type": "decimal9Type",
+        "label": "Special work site amount"
+      },
+      "32": {
+        "tag": "prscb_zn_trvl_amt",
+        "type": "decimal9Type",
+        "label": "Travel in a prescribed zone amount"
+      },
+      "33": {
+        "tag": "med_trvl_amt",
+        "type": "decimal9Type",
+        "label": "Medical travel amount"
+      },
+      "34": {
+        "tag": "prsnl_vhcl_amt",
+        "type": "decimal9Type",
+        "label": "Personal use of employer automobile amount"
+      },
+      "35": {
+        "tag": "rsn_per_km_amt",
+        "type": "decimal9Type",
+        "label": "Total Reasonable Per-Kilometre Allowance amount"
+      },
+      "36": {
+        "tag": "low_int_loan_amt",
+        "type": "decimal9Type",
+        "label": "Interest-free and low-interest loan amount"
+      },
+      "37": {
+        "tag": "empe_hm_loan_amt",
+        "type": "decimal9Type",
+        "label": "Employee home-relocation loan deduction amount"
+      },
+      "97": {
+        "tag": "stok_opt_ben_amt",
+        "type": "decimal9Type",
+        "label": "Stock option benefit amount before February 28, 2000",
+        "maxTaxYear": 2000
+      },
+      "38": {
+        "tag": "sob_a00_feb_amt",
+        "type": "decimal9Type",
+        "label": "Security options benefits"
+      },
+      "98": {
+        "tag": "shr_opt_d_ben_amt",
+        "type": "decimal9Type",
+        "label": "Stock option and share deduction 110(1) (d) amount before February 28, 2000",
+        "maxTaxYear": 2000
+      },
+      "39": {
+        "tag": "sod_d_a00_feb_amt",
+        "type": "decimal9Type",
+        "label": "Security options deductions 110(1)(d)"
+      },
+      "40": {
+        "tag": "oth_tx_ben_amt",
+        "type": "decimal9Type",
+        "label": "Other taxable allowance and benefits"
+      },
+      "99": {
+        "tag": "shr_opt_d1_ben_amt",
+        "type": "decimal9Type",
+        "label": "Stock option and share deduction 110(1) (d.1) amount before February 28, 2000",
+        "maxTaxYear": 2000
+      },
+      "41": {
+        "tag": "sod_d1_a00_feb_amt",
+        "type": "decimal9Type",
+        "label": "Security options deduction 110(1)(d.1)"
+      },
+      "42": {
+        "tag": "empt_cmsn_amt",
+        "type": "decimal9Type",
+        "label": "Employment commissions"
+      },
+      "43": {
+        "tag": "cfppa_amt",
+        "type": "decimal9Type",
+        "label": "."
+      },
+      "53": {
+        "tag": "dfr_sob_amt",
+        "type": "decimal9Type",
+        "label": "Deferred security option benefits"
+      },
+      "66": {
+        "tag": "elg_rtir_amt",
+        "type": "decimal9Type",
+        "label": "Eligible retiring allowances"
+      },
+      "67": {
+        "tag": "nelg_rtir_amt",
+        "type": "decimal9Type",
+        "label": "Non-eligible retiring allowances"
+      },
+      "69": {
+        "tag": "indn_nelg_rtir_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Non-eligible retiring allowances"
+      },
+      "71": {
+        "tag": "indn_empe_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Employment"
+      },
+      "72": {
+        "tag": "oc_incamt",
+        "type": "decimal9Type",
+        "label": "Outside of Canada employment income amount- Section 122.3"
+      },
+      "73": {
+        "tag": "oc_dy_cnt",
+        "type": "dayJulianType",
+        "label": "Employment outside of Canada Day Count"
+      },
+      "74": {
+        "tag": "pr_90_cntrbr_amt",
+        "type": "decimal9Type",
+        "label": "Pre-1990 past service contributions while a contributor"
+      },
+      "75": {
+        "tag": "pr_90_ncntrbr_amt",
+        "type": "decimal9Type",
+        "label": "Pre-1990 past service contributions while not a contributor"
+      },
+      "77": {
+        "tag": "cmpn_rpay_empr_amt",
+        "type": "decimal9Type",
+        "label": "Workers’ compensation benefit repaid to the employer amount"
+      },
+      "78": {
+        "tag": "fish_gro_ern_amt",
+        "type": "decimal9Type",
+        "label": "Fishers - Gross earnings"
+      },
+      "79": {
+        "tag": "fish_net_ptnr_amt",
+        "type": "decimal9Type",
+        "label": "Fishers - Net Partnership Amount"
+      },
+      "80": {
+        "tag": "fish_shr_prsn_amt",
+        "type": "decimal9Type",
+        "label": "Fishers - Shareperson Amount"
+      },
+      "81": {
+        "tag": "plcmt_emp_agcy_amt",
+        "type": "decimal9Type",
+        "label": "Placement or employment agency"
+      },
+      "82": {
+        "tag": "drvr_taxis_oth_amt",
+        "type": "decimal9Type",
+        "label": "Driver of taxi or other passenger-carrying vehicle"
+      },
+      "83": {
+        "tag": "brbr_hrdrssr_amt",
+        "type": "decimal9Type",
+        "label": "Barber or hairdresser"
+      },
+      "84": {
+        "tag": "pub_trnst_pass_amt",
+        "type": "decimal9Type",
+        "label": "Public transit pass"
+      },
+      "85": {
+        "tag": "epaid_hlth_pln_amt",
+        "type": "decimal9Type",
+        "label": "Employee-paid premiums for private health services plans"
+      },
+      "86": {
+        "tag": "stok_opt_csh_out_eamt",
+        "type": "decimal9Type",
+        "label": "Stock option cash-out expense"
+      },
+      "87": {
+        "tag": "vlntr_emergencyworker_xmpt_amt",
+        "type": "decimal9Type",
+        "label": "Emergency services volunteer exempt amount"
+      },
+      "88": {
+        "tag": "indn_txmpt_sei_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Self-employment"
+      },
+      "57": {
+        "tag": "empt_inc_amt_covid_prd1",
+        "type": "decimal9Type",
+        "label": "Employment income – March 15 to May 9 – 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "58": {
+        "tag": "empt_inc_amt_covid_prd2",
+        "type": "decimal9Type",
+        "label": "Employment income – May 10 to July 4– 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "59": {
+        "tag": "empt_inc_amt_covid_prd3",
+        "type": "decimal9Type",
+        "label": "Employment income – July 5 to August 29– 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "60": {
+        "tag": "empt_inc_amt_covid_prd4",
+        "type": "decimal9Type",
+        "label": "Employment income – August 30 to September 26– 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "94": {
+        "tag": "indn_xmpt_rpp_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – RPP contributions"
+      },
+      "95": {
+        "tag": "indn_xmpt_unn_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Union dues"
+      },
+      "90": {
+        "tag": "sob_after_jun2024_amt",
+        "type": "decimal9Type",
+        "label": "Security options benefits",
+        "reservedForCra": true
+      },
+      "91": {
+        "tag": "sod_d_after_jun2024_amt",
+        "type": "decimal9Type",
+        "label": "Security options deduction 110(1)(d)"
+      },
+      "92": {
+        "tag": "sod_d1_after_jun2024_amt",
+        "type": "decimal9Type",
+        "label": "Security options deduction 110(1)(d.1)"
+      }
+    },
+    "t4a": {
+      "026": {
+        "tag": "elg_rtir_amt",
+        "type": "decimal11Type",
+        "label": "Eligible retiring allowances",
+        "maxTaxYear": 2009
+      },
+      "027": {
+        "tag": "nelg_rtir_amt",
+        "type": "decimal11Type",
+        "label": "Non-eligible retiring allowances",
+        "maxTaxYear": 2009
+      },
+      "028": {
+        "tag": "oth_incamt",
+        "type": "decimal11Type",
+        "label": "Other income"
+      },
+      "030": {
+        "tag": "ptrng_aloc_amt",
+        "type": "decimal11Type",
+        "label": "Patronage allocations"
+      },
+      "032": {
+        "tag": "rpp_past_srvc_amt",
+        "type": "decimal11Type",
+        "label": "Registered pension plan contributions (past service)"
+      },
+      "034": {
+        "tag": "padj_amt",
+        "type": "decimal11Type",
+        "label": "Pension adjustment"
+      },
+      "040": {
+        "tag": "resp_aip_amt",
+        "type": "decimal11Type",
+        "label": "RESP accumulated income payments"
+      },
+      "042": {
+        "tag": "resp_educt_ast_amt",
+        "type": "decimal11Type",
+        "label": "RESP educational assistance payments"
+      },
+      "046": {
+        "tag": "chrty_dons_amt",
+        "type": "decimal11Type",
+        "label": "Charitable donations"
+      },
+      "102": {
+        "tag": "nr_lsp_trnsf_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments - non-resident services transferred under paragraph 60(j)"
+      },
+      "104": {
+        "tag": "rsch_grnt_amt",
+        "type": "decimal11Type",
+        "label": "Research grants"
+      },
+      "105": {
+        "tag": "brsy_amt",
+        "type": "decimal11Type",
+        "label": "Scholarships, fellowships, or bursaries"
+      },
+      "106": {
+        "tag": "dth_ben_amt",
+        "type": "decimal11Type",
+        "label": "Death benefits"
+      },
+      "107": {
+        "tag": "wag_ls_incamt",
+        "type": "decimal11Type",
+        "label": "Income from wage loss replacement plans, not fully funded by employee premiums"
+      },
+      "108": {
+        "tag": "lsp_rpp_nelg_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments out of an RPP - not eligible for transfer"
+      },
+      "109": {
+        "tag": "nrgst_ppln_amt",
+        "type": "decimal11Type",
+        "label": "Unregistered pension plan"
+      },
+      "110": {
+        "tag": "pr_71_acr_lsp_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments accrued to December 31, 1971"
+      },
+      "111": {
+        "tag": "inc_avg_annty_amt",
+        "type": "decimal11Type",
+        "label": "IAAC annuities"
+      },
+      "115": {
+        "tag": "dpsp_ins_pay_amt",
+        "type": "decimal11Type",
+        "label": "Installment or annuity payments under a DPSP"
+      },
+      "116": {
+        "tag": "med_trvl_amt",
+        "type": "decimal11Type",
+        "label": "Medical travel"
+      },
+      "117": {
+        "tag": "loan_ben_amt",
+        "type": "decimal11Type",
+        "label": "Loan benefit under subsection 80.4(2)"
+      },
+      "118": {
+        "tag": "med_prem_ben_amt",
+        "type": "decimal11Type",
+        "label": "Medical premium benefit"
+      },
+      "119": {
+        "tag": "grp_trm_life_amt",
+        "type": "decimal11Type",
+        "label": "Group term life insurance benefit"
+      },
+      "122": {
+        "tag": "resp_aip_oth_amt",
+        "type": "decimal11Type",
+        "label": "RESP accumulated income payments to other"
+      },
+      "123": {
+        "tag": "ins_rvk_dpsp_amt",
+        "type": "decimal11Type",
+        "label": "Instalment or annuity payments under a revoked DPSP"
+      },
+      "124": {
+        "tag": "brd_wrk_site_amt",
+        "type": "decimal11Type",
+        "label": "Board and lodging at special work sites"
+      },
+      "125": {
+        "tag": "dsblt_ben_amt",
+        "type": "decimal11Type",
+        "label": "Disability benefits"
+      },
+      "126": {
+        "tag": "cntrbr_prr_pspp_cnamt",
+        "type": "decimal11Type",
+        "label": "- Contributor RPP Past Service pre-1990 contributions"
+      },
+      "127": {
+        "tag": "vtrn_ben_amt",
+        "type": "decimal11Type",
+        "label": "Veteran’s benefit"
+      },
+      "129": {
+        "tag": "tx_dfr_ptrng_dvamt",
+        "type": "decimal11Type",
+        "label": "Tax deferred patronage dividends"
+      },
+      "130": {
+        "tag": "atp_inctv_grnt_amt",
+        "type": "decimal11Type",
+        "label": "Apprenticeship Incentive Grant/Apprenticeship Incentive Grant for Women/Apprenticeship Completion Grant"
+      },
+      "131": {
+        "tag": "rdsp_amt",
+        "type": "decimal11Type",
+        "label": "Registered Disability Savings Plan"
+      },
+      "132": {
+        "tag": "wag_ptct_pgm_amt",
+        "type": "decimal11Type",
+        "label": "Wage Earner Protection Program"
+      },
+      "133": {
+        "tag": "var_pens_ben_amt",
+        "type": "decimal11Type",
+        "label": "Variable Pension Benefits"
+      },
+      "134": {
+        "tag": "tfsa_tax_amt",
+        "type": "decimal11Type",
+        "label": "Tax-free savings account (TFSA) taxable amount or taxable FHSA amount for a qualified donee"
+      },
+      "135": {
+        "tag": "rcpnt_pay_prem_phsp_amt",
+        "type": "decimal11Type",
+        "label": "Recipient-paid premiums for private health services plans"
+      },
+      "136": {
+        "tag": "pmmc_isg_amt",
+        "type": "decimal11Type",
+        "label": "Parents of Murdered or Missing Children/Parents of Young Victims of Crimes (PYVC)"
+      },
+      "144": {
+        "tag": "indn_oth_incamt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) - Other income"
+      },
+      "146": {
+        "tag": "indn_xmpt_pens_amt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) - Pension or superannuation"
+      },
+      "148": {
+        "tag": "indn_xmpt_lsp_amt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) - Lump-sum payments"
+      },
+      "150": {
+        "tag": "lbr_adj_ben_aprpt_act_amt",
+        "type": "decimal11Type",
+        "label": "Labour Adjustment Benefits Act and Appropriation Act"
+      },
+      "152": {
+        "tag": "subp_qlf_amt",
+        "type": "decimal11Type",
+        "label": "SUBP qualified under the Income Tax Act"
+      },
+      "154": {
+        "tag": "csh_awrd_pze_payr_amt",
+        "type": "decimal11Type",
+        "label": "Cash award or prize from payer"
+      },
+      "156": {
+        "tag": "bkcy_sttl_amt",
+        "type": "decimal11Type",
+        "label": "Bankruptcy settlement"
+      },
+      "158": {
+        "tag": "lsp_nelg_trnsf_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments - not eligible for transfer"
+      },
+      "180": {
+        "tag": "lsp_dpsp_nelg_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments out of a DPSP - not eligible for transfer"
+      },
+      "190": {
+        "tag": "lsp_nrgst_pens_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments - unregistered pension benefits"
+      },
+      "194": {
+        "tag": "prpp_tx_inc_pamt",
+        "type": "decimal11Type",
+        "label": "PRPP payments"
+      },
+      "195": {
+        "tag": "prpp_txmpt_inc_pamt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) – PRPP payments"
+      },
+      "196": {
+        "tag": "abe_tuit_ast_amt",
+        "type": "decimal11Type",
+        "label": "Adult basic education tuition assistance"
+      },
+      "037": {
+        "tag": "alda_amt",
+        "type": "signedDecimal11Type",
+        "label": "Advanced life deferred annuity purchase"
+      },
+      "200": {
+        "tag": "prov_trty_emrg_ben_amt",
+        "type": "decimal11Type",
+        "label": "Provincial/Territorial COVID-19 financial assistance payments"
+      },
+      "201": {
+        "tag": "repmt_covid_fncl_asstnc",
+        "type": "decimal11Type",
+        "label": "Repayment of COVID-19 financial assistance"
+      },
+      "205": {
+        "tag": "oas_lump_sum_pamt",
+        "type": "decimal11Type",
+        "label": "One-time payment for older seniors"
+      },
+      "210": {
+        "tag": "pst_dctrl_fshp_amt",
+        "type": "decimal11Type",
+        "label": "Postdoctoral fellowship income amount"
+      }
+    }
+  },
+  "2027": {
+    "t4": {
+      "30": {
+        "tag": "hm_brd_lodg_amt",
+        "type": "decimal9Type",
+        "label": "Housing, board and lodging amount"
+      },
+      "31": {
+        "tag": "spcl_wrk_site_amt",
+        "type": "decimal9Type",
+        "label": "Special work site amount"
+      },
+      "32": {
+        "tag": "prscb_zn_trvl_amt",
+        "type": "decimal9Type",
+        "label": "Travel in a prescribed zone amount"
+      },
+      "33": {
+        "tag": "med_trvl_amt",
+        "type": "decimal9Type",
+        "label": "Medical travel amount"
+      },
+      "34": {
+        "tag": "prsnl_vhcl_amt",
+        "type": "decimal9Type",
+        "label": "Personal use of employer automobile amount"
+      },
+      "35": {
+        "tag": "rsn_per_km_amt",
+        "type": "decimal9Type",
+        "label": "Total Reasonable Per-Kilometre Allowance amount"
+      },
+      "36": {
+        "tag": "low_int_loan_amt",
+        "type": "decimal9Type",
+        "label": "Interest-free and low-interest loan amount"
+      },
+      "37": {
+        "tag": "empe_hm_loan_amt",
+        "type": "decimal9Type",
+        "label": "Employee home-relocation loan deduction amount"
+      },
+      "97": {
+        "tag": "stok_opt_ben_amt",
+        "type": "decimal9Type",
+        "label": "Stock option benefit amount before February 28, 2000",
+        "maxTaxYear": 2000
+      },
+      "38": {
+        "tag": "sob_a00_feb_amt",
+        "type": "decimal9Type",
+        "label": "Security options benefits"
+      },
+      "98": {
+        "tag": "shr_opt_d_ben_amt",
+        "type": "decimal9Type",
+        "label": "Stock option and share deduction 110(1) (d) amount before February 28, 2000",
+        "maxTaxYear": 2000
+      },
+      "39": {
+        "tag": "sod_d_a00_feb_amt",
+        "type": "decimal9Type",
+        "label": "Security options deductions 110(1)(d)"
+      },
+      "40": {
+        "tag": "oth_tx_ben_amt",
+        "type": "decimal9Type",
+        "label": "Other taxable allowance and benefits"
+      },
+      "99": {
+        "tag": "shr_opt_d1_ben_amt",
+        "type": "decimal9Type",
+        "label": "Stock option and share deduction 110(1) (d.1) amount before February 28, 2000",
+        "maxTaxYear": 2000
+      },
+      "41": {
+        "tag": "sod_d1_a00_feb_amt",
+        "type": "decimal9Type",
+        "label": "Security options deduction 110(1)(d.1)"
+      },
+      "42": {
+        "tag": "empt_cmsn_amt",
+        "type": "decimal9Type",
+        "label": "Employment commissions"
+      },
+      "43": {
+        "tag": "cfppa_amt",
+        "type": "decimal9Type",
+        "label": "."
+      },
+      "53": {
+        "tag": "dfr_sob_amt",
+        "type": "decimal9Type",
+        "label": "Deferred security option benefits"
+      },
+      "66": {
+        "tag": "elg_rtir_amt",
+        "type": "decimal9Type",
+        "label": "Eligible retiring allowances"
+      },
+      "67": {
+        "tag": "nelg_rtir_amt",
+        "type": "decimal9Type",
+        "label": "Non-eligible retiring allowances"
+      },
+      "69": {
+        "tag": "indn_nelg_rtir_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Non-eligible retiring allowances"
+      },
+      "71": {
+        "tag": "indn_empe_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Employment"
+      },
+      "72": {
+        "tag": "oc_incamt",
+        "type": "decimal9Type",
+        "label": "Outside of Canada employment income amount- Section 122.3"
+      },
+      "73": {
+        "tag": "oc_dy_cnt",
+        "type": "dayJulianType",
+        "label": "Employment outside of Canada Day Count"
+      },
+      "74": {
+        "tag": "pr_90_cntrbr_amt",
+        "type": "decimal9Type",
+        "label": "Pre-1990 past service contributions while a contributor"
+      },
+      "75": {
+        "tag": "pr_90_ncntrbr_amt",
+        "type": "decimal9Type",
+        "label": "Pre-1990 past service contributions while not a contributor"
+      },
+      "77": {
+        "tag": "cmpn_rpay_empr_amt",
+        "type": "decimal9Type",
+        "label": "Workers’ compensation benefit repaid to the employer amount"
+      },
+      "78": {
+        "tag": "fish_gro_ern_amt",
+        "type": "decimal9Type",
+        "label": "Fishers - Gross earnings"
+      },
+      "79": {
+        "tag": "fish_net_ptnr_amt",
+        "type": "decimal9Type",
+        "label": "Fishers - Net Partnership Amount"
+      },
+      "80": {
+        "tag": "fish_shr_prsn_amt",
+        "type": "decimal9Type",
+        "label": "Fishers - Shareperson Amount"
+      },
+      "81": {
+        "tag": "plcmt_emp_agcy_amt",
+        "type": "decimal9Type",
+        "label": "Placement or employment agency"
+      },
+      "82": {
+        "tag": "drvr_taxis_oth_amt",
+        "type": "decimal9Type",
+        "label": "Driver of taxi or other passenger-carrying vehicle"
+      },
+      "83": {
+        "tag": "brbr_hrdrssr_amt",
+        "type": "decimal9Type",
+        "label": "Barber or hairdresser"
+      },
+      "84": {
+        "tag": "pub_trnst_pass_amt",
+        "type": "decimal9Type",
+        "label": "Public transit pass"
+      },
+      "85": {
+        "tag": "epaid_hlth_pln_amt",
+        "type": "decimal9Type",
+        "label": "Employee-paid premiums for private health services plans"
+      },
+      "86": {
+        "tag": "stok_opt_csh_out_eamt",
+        "type": "decimal9Type",
+        "label": "Stock option cash-out expense"
+      },
+      "87": {
+        "tag": "vlntr_emergencyworker_xmpt_amt",
+        "type": "decimal9Type",
+        "label": "Emergency services volunteer exempt amount"
+      },
+      "88": {
+        "tag": "indn_txmpt_sei_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Self-employment"
+      },
+      "57": {
+        "tag": "empt_inc_amt_covid_prd1",
+        "type": "decimal9Type",
+        "label": "Employment income – March 15 to May 9 – 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "58": {
+        "tag": "empt_inc_amt_covid_prd2",
+        "type": "decimal9Type",
+        "label": "Employment income – May 10 to July 4– 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "59": {
+        "tag": "empt_inc_amt_covid_prd3",
+        "type": "decimal9Type",
+        "label": "Employment income – July 5 to August 29– 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "60": {
+        "tag": "empt_inc_amt_covid_prd4",
+        "type": "decimal9Type",
+        "label": "Employment income – August 30 to September 26– 2020 tax year only",
+        "onlyTaxYear": 2020
+      },
+      "94": {
+        "tag": "indn_xmpt_rpp_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – RPP contributions"
+      },
+      "95": {
+        "tag": "indn_xmpt_unn_amt",
+        "type": "decimal9Type",
+        "label": "Indian (exempt income) – Union dues"
+      },
+      "90": {
+        "tag": "sob_after_jun2024_amt",
+        "type": "decimal9Type",
+        "label": "Security options benefits",
+        "reservedForCra": true
+      },
+      "91": {
+        "tag": "sod_d_after_jun2024_amt",
+        "type": "decimal9Type",
+        "label": "Security options deduction 110(1)(d)"
+      },
+      "92": {
+        "tag": "sod_d1_after_jun2024_amt",
+        "type": "decimal9Type",
+        "label": "Security options deduction 110(1)(d.1)"
+      },
+      "96": {
+        "tag": "elg_prsnl_spprt_wrkr_inc_amt",
+        "type": "decimal9Type",
+        "label": "Eligible PSW income"
+      }
+    },
+    "t4a": {
+      "026": {
+        "tag": "elg_rtir_amt",
+        "type": "decimal11Type",
+        "label": "Eligible retiring allowances",
+        "maxTaxYear": 2009
+      },
+      "027": {
+        "tag": "nelg_rtir_amt",
+        "type": "decimal11Type",
+        "label": "Non-eligible retiring allowances",
+        "maxTaxYear": 2009
+      },
+      "028": {
+        "tag": "oth_incamt",
+        "type": "decimal11Type",
+        "label": "Other income"
+      },
+      "030": {
+        "tag": "ptrng_aloc_amt",
+        "type": "decimal11Type",
+        "label": "Patronage allocations"
+      },
+      "032": {
+        "tag": "rpp_past_srvc_amt",
+        "type": "decimal11Type",
+        "label": "Registered pension plan contributions (past service)"
+      },
+      "034": {
+        "tag": "padj_amt",
+        "type": "decimal11Type",
+        "label": "Pension adjustment"
+      },
+      "040": {
+        "tag": "resp_aip_amt",
+        "type": "decimal11Type",
+        "label": "RESP accumulated income payments"
+      },
+      "042": {
+        "tag": "resp_educt_ast_amt",
+        "type": "decimal11Type",
+        "label": "RESP educational assistance payments"
+      },
+      "046": {
+        "tag": "chrty_dons_amt",
+        "type": "decimal11Type",
+        "label": "Charitable donations"
+      },
+      "102": {
+        "tag": "nr_lsp_trnsf_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments - non-resident services transferred under paragraph 60(j)"
+      },
+      "104": {
+        "tag": "rsch_grnt_amt",
+        "type": "decimal11Type",
+        "label": "Research grants"
+      },
+      "105": {
+        "tag": "brsy_amt",
+        "type": "decimal11Type",
+        "label": "Scholarships, fellowships, or bursaries"
+      },
+      "106": {
+        "tag": "dth_ben_amt",
+        "type": "decimal11Type",
+        "label": "Death benefits"
+      },
+      "107": {
+        "tag": "wag_ls_incamt",
+        "type": "decimal11Type",
+        "label": "Income from wage loss replacement plans, not fully funded by employee premiums"
+      },
+      "108": {
+        "tag": "lsp_rpp_nelg_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments out of an RPP - not eligible for transfer"
+      },
+      "109": {
+        "tag": "nrgst_ppln_amt",
+        "type": "decimal11Type",
+        "label": "Unregistered pension plan"
+      },
+      "110": {
+        "tag": "pr_71_acr_lsp_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments accrued to December 31, 1971"
+      },
+      "111": {
+        "tag": "inc_avg_annty_amt",
+        "type": "decimal11Type",
+        "label": "IAAC annuities"
+      },
+      "115": {
+        "tag": "dpsp_ins_pay_amt",
+        "type": "decimal11Type",
+        "label": "Installment or annuity payments under a DPSP"
+      },
+      "116": {
+        "tag": "med_trvl_amt",
+        "type": "decimal11Type",
+        "label": "Medical travel"
+      },
+      "117": {
+        "tag": "loan_ben_amt",
+        "type": "decimal11Type",
+        "label": "Loan benefit under subsection 80.4(2)"
+      },
+      "118": {
+        "tag": "med_prem_ben_amt",
+        "type": "decimal11Type",
+        "label": "Medical premium benefit"
+      },
+      "119": {
+        "tag": "grp_trm_life_amt",
+        "type": "decimal11Type",
+        "label": "Group term life insurance benefit"
+      },
+      "122": {
+        "tag": "resp_aip_oth_amt",
+        "type": "decimal11Type",
+        "label": "RESP accumulated income payments to other"
+      },
+      "123": {
+        "tag": "ins_rvk_dpsp_amt",
+        "type": "decimal11Type",
+        "label": "Instalment or annuity payments under a revoked DPSP"
+      },
+      "124": {
+        "tag": "brd_wrk_site_amt",
+        "type": "decimal11Type",
+        "label": "Board and lodging at special work sites"
+      },
+      "125": {
+        "tag": "dsblt_ben_amt",
+        "type": "decimal11Type",
+        "label": "Disability benefits"
+      },
+      "126": {
+        "tag": "cntrbr_prr_pspp_cnamt",
+        "type": "decimal11Type",
+        "label": "- Contributor RPP Past Service pre-1990 contributions"
+      },
+      "127": {
+        "tag": "vtrn_ben_amt",
+        "type": "decimal11Type",
+        "label": "Veteran’s benefit"
+      },
+      "129": {
+        "tag": "tx_dfr_ptrng_dvamt",
+        "type": "decimal11Type",
+        "label": "Tax deferred patronage dividends"
+      },
+      "130": {
+        "tag": "atp_inctv_grnt_amt",
+        "type": "decimal11Type",
+        "label": "Apprenticeship Incentive Grant/Apprenticeship Incentive Grant for Women/Apprenticeship Completion Grant"
+      },
+      "131": {
+        "tag": "rdsp_amt",
+        "type": "decimal11Type",
+        "label": "Registered Disability Savings Plan"
+      },
+      "132": {
+        "tag": "wag_ptct_pgm_amt",
+        "type": "decimal11Type",
+        "label": "Wage Earner Protection Program"
+      },
+      "133": {
+        "tag": "var_pens_ben_amt",
+        "type": "decimal11Type",
+        "label": "Variable Pension Benefits"
+      },
+      "134": {
+        "tag": "tfsa_tax_amt",
+        "type": "decimal11Type",
+        "label": "Tax-free savings account (TFSA) taxable amount or taxable FHSA amount for a qualified donee"
+      },
+      "135": {
+        "tag": "rcpnt_pay_prem_phsp_amt",
+        "type": "decimal11Type",
+        "label": "Recipient-paid premiums for private health services plans"
+      },
+      "136": {
+        "tag": "pmmc_isg_amt",
+        "type": "decimal11Type",
+        "label": "Parents of Murdered or Missing Children/Parents of Young Victims of Crimes (PYVC)"
+      },
+      "144": {
+        "tag": "indn_oth_incamt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) - Other income"
+      },
+      "146": {
+        "tag": "indn_xmpt_pens_amt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) - Pension or superannuation"
+      },
+      "148": {
+        "tag": "indn_xmpt_lsp_amt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) - Lump-sum payments"
+      },
+      "150": {
+        "tag": "lbr_adj_ben_aprpt_act_amt",
+        "type": "decimal11Type",
+        "label": "Labour Adjustment Benefits Act and Appropriation Act"
+      },
+      "152": {
+        "tag": "subp_qlf_amt",
+        "type": "decimal11Type",
+        "label": "SUBP qualified under the Income Tax Act"
+      },
+      "154": {
+        "tag": "csh_awrd_pze_payr_amt",
+        "type": "decimal11Type",
+        "label": "Cash award or prize from payer"
+      },
+      "156": {
+        "tag": "bkcy_sttl_amt",
+        "type": "decimal11Type",
+        "label": "Bankruptcy settlement"
+      },
+      "158": {
+        "tag": "lsp_nelg_trnsf_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments - not eligible for transfer"
+      },
+      "180": {
+        "tag": "lsp_dpsp_nelg_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments out of a DPSP - not eligible for transfer"
+      },
+      "190": {
+        "tag": "lsp_nrgst_pens_amt",
+        "type": "decimal11Type",
+        "label": "Lump-sum payments - unregistered pension benefits"
+      },
+      "194": {
+        "tag": "prpp_tx_inc_pamt",
+        "type": "decimal11Type",
+        "label": "PRPP payments"
+      },
+      "195": {
+        "tag": "prpp_txmpt_inc_pamt",
+        "type": "decimal11Type",
+        "label": "Indian Act (exempt income) – PRPP payments"
+      },
+      "196": {
+        "tag": "abe_tuit_ast_amt",
+        "type": "decimal11Type",
+        "label": "Adult basic education tuition assistance"
+      },
+      "037": {
+        "tag": "alda_amt",
+        "type": "signedDecimal11Type",
+        "label": "Advanced life deferred annuity purchase"
+      },
+      "200": {
+        "tag": "prov_trty_emrg_ben_amt",
+        "type": "decimal11Type",
+        "label": "Provincial/Territorial COVID-19 financial assistance payments"
+      },
+      "201": {
+        "tag": "repmt_covid_fncl_asstnc",
+        "type": "decimal11Type",
+        "label": "Repayment of COVID-19 financial assistance"
+      },
+      "205": {
+        "tag": "oas_lump_sum_pamt",
+        "type": "decimal11Type",
+        "label": "One-time payment for older seniors"
+      },
+      "210": {
+        "tag": "pst_dctrl_fshp_amt",
+        "type": "decimal11Type",
+        "label": "Postdoctoral fellowship income amount"
+      }
+    }
+  }
+}

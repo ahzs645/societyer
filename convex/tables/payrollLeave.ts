@@ -1,0 +1,11 @@
+import { defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export const payrollVacationPeriodFields = { serviceYear: v.number(), provinceOfEmployment: v.literal("BC"), normalWeeklyMinutes: v.number(), normalDailyMinutes: v.number(), openingThroughDate: v.string(), openingUsedMinutes: v.number(), openingCarryoverMinutes: v.number(), openingReviewed: v.boolean(), openingEvidence: v.string(), additionalEntitlementMinutes: v.number(), policyEvidence: v.optional(v.string()), notes: v.optional(v.string()) };
+export const payrollVacationRequestFields = { label: v.string(), days: v.array(v.object({ date: v.string(), minutes: v.number(), payrollWorkDayId: v.optional(v.id("payrollWorkDays")) })), employeeRequestedShortPeriod: v.boolean(), advanceAgreementConfirmed: v.boolean(), statutoryHolidaysExcluded: v.boolean(), evidence: v.string(), lateUseEvidence: v.optional(v.string()), notes: v.optional(v.string()) };
+const audit = v.array(v.object({ atISO: v.string(), actorUserId: v.string(), action: v.string(), reason: v.optional(v.string()), previousVersion: v.number() }));
+const metadata = { societyId: v.id("societies"), employeeId: v.id("employees"), version: v.number(), history: audit, createdAtISO: v.string(), updatedAtISO: v.string() };
+export const payrollLeaveTables = {
+  payrollVacationPeriods: defineTable({ ...metadata, ...payrollVacationPeriodFields, employmentStartDate: v.string(), accrualStart: v.string(), earnedOn: v.string(), takeBy: v.string(), statutoryWeeks: v.number(), statutoryMinutes: v.number() }).index("by_society_employee_service", ["societyId", "employeeId", "serviceYear"]).index("by_society", ["societyId"]),
+  payrollVacationRequests: defineTable({ ...metadata, ...payrollVacationRequestFields, periodId: v.id("payrollVacationPeriods"), startDate: v.string(), endDate: v.string(), minutes: v.number(), status: v.union(v.literal("requested"), v.literal("approved"), v.literal("taken"), v.literal("cancelled"), v.literal("rejected")), payrollPayoutCalculationId: v.optional(v.id("payrollCalculations")), reversedPayrollPayoutCalculationIds: v.optional(v.array(v.id("payrollCalculations"))) }).index("by_society_employee_start", ["societyId", "employeeId", "startDate"]).index("by_society_period", ["societyId", "periodId"]).index("by_society", ["societyId"]),
+};

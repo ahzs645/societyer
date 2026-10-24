@@ -1,0 +1,55 @@
+@font-face { font-family: "Noto Serif"; src: url("../../assets/pdf-fonts/NotoSerif-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Noto Serif"; src: url("../../assets/pdf-fonts/NotoSerif-Bold.ttf") format("truetype"); font-weight: 600 800; font-display: swap; }
+.document-preview { line-height: 1.4; overflow-wrap: anywhere; }
+.document-preview p { margin: 3pt 0; white-space: pre-line; }
+.document-preview__header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14pt; border-bottom: 1pt solid var(--invoice-accent); padding-bottom: 14pt; margin-bottom: 18pt; }
+.document-preview__logo-area { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4pt; }
+.document-preview__logo-area img { max-width: 100%; height: auto; box-sizing: border-box; }
+.document-preview__heading { min-width: 125pt; text-align: right; }
+.document-preview__heading h1 { font: inherit; font-size: 1em; margin: 0 0 4pt; }
+.document-preview dl { margin: 5pt 0; }
+.document-preview dl > div { display: flex; justify-content: space-between; gap: 10pt; }
+.document-preview dd { margin: 0; white-space: pre-line; }
+.document-preview__parties { display: flex; flex-wrap: wrap; gap: 18pt; margin-bottom: 20pt; }
+.document-preview__parties > div { flex: 1; min-width: 100pt; }
+.document-preview__details { width: 100%; }
+.document-preview__table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 12pt; }
+.document-preview__table th { font-weight: 600; }
+.document-preview__table td { border-bottom: .5pt solid #d4d4d8; vertical-align: top; white-space: pre-line; }
+.document-preview__totals { display: flex; justify-content: flex-end; margin-top: 12pt; }
+.document-preview__totals dl { width: 50%; min-width: 160pt; }
+.document-preview__totals dl > div { padding: 3pt 0; }
+.document-preview__total { font-weight: bold; border-top: 1pt solid #d4d4d8; }
+.document-preview__notes { margin-top: 16pt; }
+.document-preview__signature { margin-top: 35pt; width: 180pt; }
+.document-preview__signature > div { border-bottom: .5pt solid #888; padding-bottom: 6pt; min-height: 20pt; }
+.document-preview__footer { margin-top: 28pt; border-top: .5pt solid #d4d4d8; padding-top: 10pt; white-space: pre-line; }
+.document-preview__footer > span { display: block; text-align: right; }
+.document-preview__band { white-space: pre-line; margin-bottom: 12pt; }
+@media print {
+  .document-preview__table thead { display: table-header-group; }
+  .document-preview__table tr, .document-preview__totals, .document-preview__signature { break-inside: avoid; }
+  .document-preview { max-width: none !important; }
+}
+
+.document-preview__heading > span, .document-preview__heading dl { font-size: .5em; }
+
+.document-preview--modern .document-preview__header { background: #f2f4f7; padding: 10pt; border-top: 3pt solid var(--invoice-accent); }
+.document-preview--compact .document-preview__header { padding-bottom: 8pt; margin-bottom: 12pt; }
+
+@font-face { font-family: "Invoice Open Sans"; src: url("../../assets/invoice-branding/OpenSans-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Invoice Open Sans"; src: url("../../assets/invoice-branding/OpenSans-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Invoice Liberation Serif"; src: url("../../assets/invoice-branding/LiberationSerif-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Invoice Liberation Serif"; src: url("../../assets/invoice-branding/LiberationSerif-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+.document-preview__artwork { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.document-preview > :not(.document-preview__artwork), .document-preview__header > :not(.document-preview__artwork), .document-preview__footer > :not(.document-preview__artwork) { position: relative; }
+.document-preview__header, .document-preview__footer { position: relative; }
+.document-preview__status { display: inline-block; align-self: flex-end; margin: 10pt 0; border: 1pt solid; padding: 4pt 8pt; font-weight: 700; }
+.document-preview__stub { margin-top: 20pt; padding-top: 10pt; border-top: 1pt dashed #888; }
+.document-preview__appendix { break-before: page; margin-top: 40pt; }
+.document-preview__totals dd small { display: block; font-size: .85em; margin-top: 3pt; }
+.document-rich-content { position: relative; white-space: normal; }
+.document-rich-content img { max-width: 100%; }
+.document-rich-content p { margin: 0 0 4pt; }
+.document-rich-content table { border-collapse: collapse; width: 100%; }
+.document-rich-content td, .document-rich-content th { padding: 3pt; border-bottom: .4pt solid #ddd; }

@@ -145,7 +145,7 @@ export function buildStatementFromGrant(
     useOfFunds?: Array<{ label: string; amountCents?: number; notes?: string }>;
   },
   transactions: Array<{ direction?: string; amountCents?: number }> = [],
-  input?: { priorFiscalYearLabel?: string; currentFiscalYearLabel?: string },
+  input?: { priorFiscalYearLabel?: string; currentFiscalYearLabel?: string; currency?: string },
 ): ProgramStatement {
   const inflowCents = transactions
     .filter((t) => t.direction === "inflow")
@@ -183,7 +183,7 @@ export function buildStatementFromGrant(
 
   if (outflowCents > 0) {
     statement.narrative =
-      `Recorded grant spending to date totals ${(outflowCents / 100).toLocaleString("en-CA", { style: "currency", currency: "CAD" })}. ` +
+      `Recorded grant spending to date totals ${(outflowCents / 100).toLocaleString("en-CA", { style: "currency", currency: input?.currency ?? "CAD" })}. ` +
       `Allocate these actuals across the expense categories before submitting.`;
   }
 

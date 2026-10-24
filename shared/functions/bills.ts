@@ -20,11 +20,12 @@
  * recognises the paid share of the expense lines on the payment date
  * (docs/accounting-shape.md, "Accounting basis"). A payment linked to a
  * money-out bank line marks that line matched (`matchedKind: "bill"`) and
- * categorised to Accounts payable; a line "Backfill imports" already posted
- * has that entry voided so it is never in the books twice (a line posted any
- * other way, or whose entry is locked, can't be linked). Removing a payment
- * voids both its entries, posts the bank line's own entry again and puts the
- * line back as it was; canceling an approved bill posts the
+ * categorised to Accounts payable. An earlier bank posting stays in history
+ * and receives a dated offset when the payment takes over; same-day bank
+ * entries are voided and replaced. Reversing a payment
+ * retains its original entries and posts dated mirrors, restores any replaced
+ * bank accounting at the correction date and puts the bank match back as it
+ * was; canceling an approved bill posts the
  * mirror of the approval entry (accrual-only too). Every posting and void
  * goes through the fiscal-period check and the books close date
  * (`assertBooksOpen`), so a closed period or locked date refuses it.
@@ -34,11 +35,13 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
-import { assertPeriodOpen, postedJournalForTransaction, TRANSACTION_BACKFILL_SOURCE } from "./accounting";
+import { assertPeriodOpen, BILL_BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE, postedJournalForTransaction, TRANSACTION_BACKFILL_SOURCE } from "./accounting";
 import { cashLedgerAccountId } from "./bankAccounts";
 import { assertBooksOpen } from "./booksLock";
 import { documentAccessPredicate, requireDocumentAccess } from "./documents";
 import { actorFor, approverAccessFor, loadApprovalPolicy, ruleFor } from "./expenseReports";
+import { requireFunctionAction } from "./actionPolicy";
+import { loadInvoiceLedgerContext } from "./invoiceLedger";
 import { flagChangedPeriods } from "./reconciliation";
 import { validateBalancedJournalLines } from "../accountingCore";
 import type { JournalBasis } from "../booksReports";
@@ -49,6 +52,7 @@ import {
   addDays,
   approvalPostingLines,
   billPaidCents,
+  billPaidCentsAsOf,
   billSubmitProblem,
   billTotalCents,
   canPayStatus,
@@ -93,6 +97,10 @@ type Snapshot = {
 };
 
 type StoredPayment = {
+  kind?: "payment" | "credit" | "write_off" | "refund";
+  idempotencyKey?: string; sourcePaymentKey?: string; adjustmentAccountId?: string;
+  reversedDate?: string; reversalJournalEntryId?: string; cashBasisReversalJournalEntryId?: string;
+  reversedAtISO?: string; reversalReason?: string; restoredTransactionJournalEntryId?: string;
   key: string;
   date: string;
   amountCents: number;
@@ -106,6 +114,9 @@ type StoredPayment = {
   cashBasisShares?: BillCashShare[];
   /** The bank line's own "Backfill imports" entry, voided while this payment holds the line (restored on removal). */
   voidedTransactionEntryId?: string;
+  /** Earlier bank posting retained, then offset on this payment's date. */
+  replacedTransactionEntryId?: string;
+  bankTransferJournalEntryId?: string;
   note?: string;
   recordedAtISO: string;
   recordedByName?: string;
@@ -203,10 +214,12 @@ type TransactionRow = {
   matchedKind?: string;
   matchedId?: string;
   reconciliationNote?: string;
+  billPaymentRelease?: { date: string; journalEntryIds: string[] };
+  invoicePaymentRelease?: { date: string; journalEntryIds: string[] };
 };
 
 type JournalEntryRow = { _id: string; societyId: string; source: string; sourceExternalId?: string; status: string; date: string; fiscalPeriodId?: string };
-type JournalLineRow = { _id: string; societyId: string; journalEntryId: string; accountId: string; amountCents: number; side: string; description?: string; fundRestrictionId?: string; financialTransactionId?: string; counterpartyId?: string; tagIds?: string[]; lineOrder: number };
+type JournalLineRow = { _id: string; societyId: string; journalEntryId: string; accountId: string; amountCents: number; side: string; description?: string; fundRestrictionId?: string; financialTransactionId?: string; counterpartyId?: string; tagIds?: string[]; programCode?: string; grantId?: string; documentIds?: string[]; lineOrder: number };
 type FundRow = { _id: string; societyId: string; name: string; status: string };
 type DocumentRow = { _id: string; societyId: string; title?: string; fileName?: string };
 
@@ -215,6 +228,7 @@ type Actor = Awaited<ReturnType<typeof actorFor>>;
 const MONEY_ACCOUNT_TYPES = new Set(["Bank", "Credit"]);
 const CASH_SUBTYPES = new Set(["cash", "restricted_cash"]);
 const MATCHABLE_KINDS = new Set([undefined, "", "manual", "bill"]);
+const BANK_RESTORATION_SOURCE = BILL_BANK_RESTORATION_SOURCE;
 
 function nowISO() {
   return new Date().toISOString();
@@ -290,7 +304,7 @@ function findPayablesAccount(accounts: readonly AccountRow[]): AccountRow | unde
  * payable" created on first use (workspaces seeded before bills, or whose
  * imported chart has no payables account). Never renames or moves anything.
  */
-async function ensurePayablesAccount(ctx: PortableMutationCtx, societyId: string): Promise<AccountRow> {
+async function ensurePayablesAccount(ctx: PortableMutationCtx, societyId: string, preferredCurrency?: string): Promise<AccountRow> {
   const accounts = await loadAccounts(ctx, societyId);
   const existing = findPayablesAccount(accounts);
   if (existing) return existing;
@@ -309,7 +323,7 @@ async function ensurePayablesAccount(ctx: PortableMutationCtx, societyId: string
   );
   const usedCodes = new Set(accounts.map((account) => account.code).filter(Boolean));
   const code = ["2000", "2010", "2050"].find((candidate) => !usedCodes.has(candidate));
-  const currency = accounts.find((account) => account.currency)?.currency ?? "CAD";
+  const currency = preferredCurrency ?? accounts.find((account) => account.currency)?.currency ?? "CAD";
   const doc = {
     societyId,
     connectionId,
@@ -376,8 +390,10 @@ async function postEntry(
       ...(line.fundRestrictionId ? { fundRestrictionId: line.fundRestrictionId } : {}),
       ...(line.financialTransactionId ? { financialTransactionId: line.financialTransactionId } : {}),
       ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
-      ...(args.counterpartyId ? { counterpartyId: args.counterpartyId } : {}),
-      ...(documentIds ? { documentIds } : {}),
+      ...(line.programCode ? { programCode: line.programCode } : {}),
+      ...(line.grantId ? { grantId: line.grantId } : {}),
+      ...(line.counterpartyId || args.counterpartyId ? { counterpartyId: line.counterpartyId ?? args.counterpartyId } : {}),
+      ...(line.documentIds?.length || documentIds ? { documentIds: line.documentIds?.length ? line.documentIds : documentIds } : {}),
       createdAtISO: at,
       updatedAtISO: at,
     });
@@ -503,9 +519,11 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
   rows.sort((a, b) => b.billDate.localeCompare(a.billDate) || b.createdAtISO.localeCompare(a.createdAtISO));
 
   const linked = new Map<string, { billId: string; label: string }>();
+  const released = new Map<string, string>();
   for (const bill of bills) {
     for (const payment of bill.payments ?? []) {
-      if (payment.financialTransactionId) linked.set(payment.financialTransactionId, { billId: bill._id, label: billLabel(bill) });
+      if (!payment.reversedDate && payment.financialTransactionId) linked.set(payment.financialTransactionId, { billId: bill._id, label: billLabel(bill) });
+      if (payment.reversedDate && payment.financialTransactionId && (released.get(payment.financialTransactionId) ?? "") < payment.reversedDate) released.set(payment.financialTransactionId, payment.reversedDate);
     }
   }
   const since = addDays(today, -400);
@@ -520,6 +538,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       accountId: txn.accountId,
       accountLabel: accountLabel(accountsById.get(txn.accountId)),
       category: txn.category,
+      previousReversalDate: released.get(txn._id),
       // Matched to something other than a bill (a payroll run, a filing…): not offered.
       matchedElsewhere: !MATCHABLE_KINDS.has(txn.matchedKind),
       linkedBillId: linked.get(txn._id)?.billId,
@@ -563,11 +582,15 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     accounts: {
       expense: accounts
         .filter((account) => account.accountType === "Expense" || (account.accountType === "Asset" && !CASH_SUBTYPES.has(String(account.subtype)) && account.subtype !== "receivable"))
-        .map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType }))
+        .map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType, currency: account.currency }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+      adjustment: accounts
+        .filter((account) => ["Expense", "Income", "Revenue", "Asset"].includes(account.accountType) && !CASH_SUBTYPES.has(String(account.subtype)) && account.subtype !== "receivable")
+        .map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType, currency: account.currency }))
         .sort((a, b) => a.label.localeCompare(b.label)),
       payment: accounts
         .filter((account) => MONEY_ACCOUNT_TYPES.has(account.accountType) || (account.accountType === "Asset" && CASH_SUBTYPES.has(String(account.subtype))))
-        .map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType }))
+        .map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType, currency: account.currency }))
         .sort((a, b) => Number(b.accountType === "Bank") - Number(a.accountType === "Bank") || a.label.localeCompare(b.label)),
       payables: payables ? { _id: payables._id, label: accountLabel(payables)! } : null,
     },
@@ -892,10 +915,16 @@ async function payOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor, arg
     if (!(txn.amountCents < 0)) throw new Error("Only money-out bank transactions can be linked to a bill payment.");
     if (-txn.amountCents !== amountCents) throw new Error(`The payment must match the bank transaction (${money(-txn.amountCents)}).`);
     const all = await loadBills(ctx, bill.societyId);
-    if (all.some((other) => (other.payments ?? []).some((payment) => payment.financialTransactionId === txn!._id))) {
+    if (all.some((other) => (other.payments ?? []).some((payment) => !payment.reversedDate && payment.financialTransactionId === txn!._id))) {
       throw new Error("That bank transaction is already linked to a bill payment.");
     }
+    const previousReversal = [...all.flatMap((other) => other.payments ?? []).filter((payment) => payment.financialTransactionId === txn!._id && payment.reversedDate).map((payment) => payment.reversedDate!), txn.billPaymentRelease?.date, txn.invoicePaymentRelease?.date].filter((date): date is string => Boolean(date)).sort().at(-1);
+    if (previousReversal && args.date < previousReversal) throw new Error(`Relinking this bank transaction requires a payment date on or after its previous reversal (${previousReversal}).`);
     if (!MATCHABLE_KINDS.has(txn.matchedKind)) throw new Error(`That bank transaction is already matched to a ${txn.matchedKind} record.`);
+  }
+  const settlementDates = new Set([args.date, ...(bill.payments ?? []).flatMap((payment) => [payment.date, ...(payment.reversedDate ? [payment.reversedDate] : [])]).filter((date) => date >= args.date)]);
+  if ([...settlementDates].some((date) => billPaidCentsAsOf(bill.payments, date) + amountCents > total)) {
+    throw new Error("That payment date overlaps earlier settled amounts. Choose a date on or after the applicable reversal, or reduce the payment.");
   }
   // A linked bank line pays from its account's ledger account (the account itself unless linked to another).
   const cashAccountId = txn ? await cashLedgerAccountId(ctx, bill.societyId, txn.accountId) : args.cashAccountId;
@@ -905,7 +934,15 @@ async function payOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor, arg
     throw new Error(`${cashAccount.name} isn't a bank, cash or card account.`);
   }
   // Checked before anything is posted, so a refusal changes nothing.
-  const claimed = txn ? await claimableBankEntries(ctx, bill.societyId, txn._id) : [];
+  const claimed = txn ? await claimableBankEntries(ctx, bill.societyId, txn._id, args.date) : [];
+  const bankTransfers: Array<{ entry: JournalEntryRow; lines: PostingLine[]; basis: JournalBasis }> = [];
+  for (const entry of claimed) if (entry.date < args.date) {
+    const original = await entryLines(ctx, entry._id);
+    if (!original.some((line) => line.financialTransactionId === txn!._id)) throw new Error("The bank posting does not belong to this transaction.");
+    const lines = reversalLines(original).map((line) => ({ ...line, financialTransactionId: undefined }));
+    validateBalancedJournalLines(lines);
+    bankTransfers.push({ entry, lines, basis: (entry as JournalEntryRow & { basis?: JournalBasis }).basis ?? "both" });
+  }
   const method = isBillPaymentMethod(args.method) ? args.method : "other";
   const reference = cleanText(args.reference, 100);
   const payables = await ensurePayablesAccount(ctx, bill.societyId);
@@ -940,11 +977,19 @@ async function payOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor, arg
   const note = cleanText(args.note, 500);
   if (note) payment.note = note;
   if (txn) {
-    // The payment entry now carries the bank line; its own backfill entry would count it twice.
+    // Transfer an earlier bank posting on this payment's date. Its original
+    // history remains posted, including periods now closed. Same-day entries
+    // can still use the original void-and-replace path without changing cutoffs.
     for (const entry of claimed) {
-      const at = nowISO();
-      await ctx.db.patch(entry._id, { status: "void", voidedAtISO: at, updatedAtISO: at });
-      payment.voidedTransactionEntryId = entry._id;
+      const transfer = bankTransfers.find((row) => row.entry._id === entry._id);
+      if (transfer) {
+        payment.replacedTransactionEntryId = entry._id;
+        payment.bankTransferJournalEntryId = await postEntry(ctx, { societyId: bill.societyId, date: args.date, memo: `Transfer bank transaction to bill payment: ${billLabel(bill)}`, source: "bill_bank_transfer", sourceExternalId: `bill:${bill._id}:payment:${key}:bank-transfer`, basis: transfer.basis, lines: transfer.lines, createdByUserId: actor.id });
+      } else {
+        const at = nowISO();
+        await ctx.db.patch(entry._id, { status: "void", voidedAtISO: at, updatedAtISO: at });
+        payment.voidedTransactionEntryId = entry._id;
+      }
     }
     payment.financialTransactionId = txn._id;
     payment.transactionBefore = snapshotOf(txn);
@@ -959,6 +1004,7 @@ async function payOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor, arg
       matchedKind: "bill",
       matchedId: bill._id,
       reconciliationNote: `Paid ${billLabel(bill)}`,
+      ...(bankTransfers.length ? { billPaymentRelease: { date: args.date, journalEntryIds: [...new Set([...(txn.billPaymentRelease?.journalEntryIds ?? []), ...bankTransfers.map((row) => row.entry._id)])] } } : {}),
     });
     await flagChangedPeriods(ctx, txn.accountId, txn.date);
   }
@@ -990,19 +1036,26 @@ const ENTRY_SOURCE_LABELS: Record<string, string> = { manual: "manual journal", 
 
 /**
  * The bank line's own "Backfill imports" entries a linked payment takes over
- * (voided on link, restored when the payment is removed), all checked to be
- * voidable. Refuses the link when the line is in the books another way (a
- * manual journal, a Wave sync, an invoice) or its entry is in a closed period
- * or on or before the books close date. Read-only.
+ * (offset on a later payment date, or voided on a same-day link). Refuses
+ * unsupported current postings, dates before the bank posting, and locked
+ * dates that would actually be changed. Read-only.
  */
-async function claimableBankEntries(ctx: PortableQueryCtx, societyId: string, transactionId: string): Promise<JournalEntryRow[]> {
+async function claimableBankEntries(ctx: PortableQueryCtx, societyId: string, transactionId: string, paymentDate: string): Promise<JournalEntryRow[]> {
   const { entries } = await postedJournalForTransaction(ctx, transactionId);
+  if (entries.length > 1) throw new Error("This bank transaction has multiple current journal entries. Reconcile them before linking the bill payment.");
   const claimable: JournalEntryRow[] = [];
   for (const raw of entries) {
     const entry = raw as unknown as JournalEntryRow;
-    if (entry.source !== TRANSACTION_BACKFILL_SOURCE || entry.status !== "posted") {
+    if (![TRANSACTION_BACKFILL_SOURCE, BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE].includes(entry.source) || entry.status !== "posted") {
       const label = ENTRY_SOURCE_LABELS[entry.source] ?? `${entry.source} entry`;
       throw new Error(`That bank transaction is already in the books (a ${label} dated ${entry.date}). Void that entry, or record the payment without linking the bank transaction.`);
+    }
+    if (entry.date > paymentDate) throw new Error(`The bill payment date must be on or after the current bank posting (${entry.date}).`);
+    if (entry.date < paymentDate) {
+      await assertPeriodOpen(ctx, { societyId, date: paymentDate });
+      await assertBooksOpen(ctx, societyId, [paymentDate], "posted");
+      claimable.push(entry);
+      continue;
     }
     try {
       await assertPeriodOpen(ctx, { societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
@@ -1025,72 +1078,84 @@ export async function recordPaymentPortable(ctx: PortableMutationCtx, args: Paym
   return payOne(ctx, bill, actor, payment, today);
 }
 
-// The payment is addressed by its key inside the bill (named `paymentKey`, not an id: it is not a row).
-/**
- * Remove a payment recorded in error: its journal entry and its cash-only
- * entry are voided (refused when either date is in a closed period or on or
- * before the books close date), a linked bank line is put back as it was
- * before the link, and the bank line's own entry the link voided is posted
- * again.
- */
-export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paymentKey }: { id: string; paymentKey: string }) {
-  const bill = await requireOwnedRow<BillRow>(ctx, "bills", id);
-  const actor = await actorFor(ctx, bill.societyId);
+// The payment is addressed by its key inside the bill, not by a row id.
+/** Corrections append dated mirrors and retain the original payment for historical AP and cash reports. */
+export async function removePaymentPortable(ctx: PortableMutationCtx, args: { id: string; paymentKey: string; date?: string; reason?: string }) {
+  await requireFunctionAction(ctx, "bills:removePayment", "mutation", args);
+  const { id, paymentKey } = args;
+  const bill = await requireOwnedRow<BillRow>(ctx, "bills", id), actor = await actorFor(ctx, bill.societyId);
   const payment = (bill.payments ?? []).find((entry) => entry.key === paymentKey);
   if (!payment) throw new Error("That payment is no longer on this bill.");
-  const entries: JournalEntryRow[] = [];
-  for (const entryId of [payment.journalEntryId, payment.cashBasisJournalEntryId]) {
+  if (payment.kind && payment.kind !== "payment") throw new Error("Reverse the adjustment using a dated reversal.");
+  const requestedReason = args.reason === undefined ? undefined : cleanText(args.reason, 1000);
+  if (payment.reversedDate) {
+    if (args.date && args.date !== payment.reversedDate || args.reason !== undefined && requestedReason !== payment.reversalReason) throw new Error("That payment was already reversed with different details.");
+    return id;
+  }
+  if (!["approved", "scheduled"].includes(bill.status)) throw new Error("Reversing a payment requires an approved bill.");
+  if ((bill.payments ?? []).some((row) => !row.reversedDate && row.sourcePaymentKey === payment.key)) throw new Error("Reverse the linked refund before removing its payment.");
+  const today = await organizationToday(ctx, bill.societyId), date = args.date ?? today;
+  const reason = args.reason === undefined ? "Recorded in error" : requestedReason;
+  if (!isCalendarDate(date) || date < payment.date || date > today) throw new Error("Choose a reversal date between the original payment and today.");
+  if (!reason) throw new Error("Explain why the payment is being reversed.");
+  await assertPeriodOpen(ctx, { societyId: bill.societyId, date });
+  await assertBooksOpen(ctx, bill.societyId, [date], "reversed");
+  const prepared: Array<{ cash: boolean; lines: PostingLine[]; basis: JournalBasis }> = [];
+  for (const [entryId, cash] of [[payment.journalEntryId, false], [payment.cashBasisJournalEntryId, true]] as const) {
     if (!entryId) continue;
-    const entry = await ctx.db.get<JournalEntryRow>(entryId, "journalEntries");
-    if (entry && entry.societyId === bill.societyId && entry.status === "posted") entries.push(entry);
+    const entry = await getOwned<JournalEntryRow & { basis?: JournalBasis }>(ctx, "journalEntries", entryId, bill.societyId);
+    if (entry.status !== "posted" || entry.source !== (cash ? "bill_cash_basis" : "bill_payment") || entry.sourceExternalId !== `bill:${bill._id}:payment:${payment.key}${cash ? ":cash" : ""}`) throw new Error("The original payment journal does not match this posted bill payment.");
+    const lines = reversalLines(await entryLines(ctx, entryId)).map((line) => ({ ...line, financialTransactionId: undefined }));
+    validateBalancedJournalLines(lines);
+    prepared.push({ cash, lines, basis: cash ? "cash-only" : "both" });
   }
-  // The bank line's own entry the payment voided comes back.
-  const voided = payment.voidedTransactionEntryId ? await ctx.db.get<JournalEntryRow>(payment.voidedTransactionEntryId, "journalEntries") : null;
-  const restore = voided && voided.societyId === bill.societyId && voided.status === "void" ? voided : null;
-  // Check every entry before voiding any, so a refusal changes nothing.
-  for (const entry of entries) {
-    await assertPeriodOpen(ctx, { societyId: bill.societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
-    await assertBooksOpen(ctx, bill.societyId, [entry.date], "voided");
-  }
-  if (restore) {
-    await assertPeriodOpen(ctx, { societyId: bill.societyId, date: restore.date, fiscalPeriodId: restore.fiscalPeriodId });
-    await assertBooksOpen(ctx, bill.societyId, [restore.date], "posted");
-  }
-  for (const entry of entries) {
-    const at = nowISO();
-    await ctx.db.patch(entry._id, { status: "void", voidedAtISO: at, updatedAtISO: at });
-    // Free the bank line for other postings (the backfill skips lines already in an entry).
-    for (const line of await entryLines(ctx, entry._id)) {
-      if (line.financialTransactionId) await ctx.db.patch(line._id, { financialTransactionId: undefined, updatedAtISO: at });
-    }
-  }
-  if (restore) await ctx.db.patch(restore._id, { status: "posted", voidedAtISO: undefined, updatedAtISO: nowISO() });
+  let transaction: TransactionRow | null = null;
   if (payment.financialTransactionId) {
-    const txn = await ctx.db.get<TransactionRow>(payment.financialTransactionId, "financialTransactions");
-    if (txn && txn.societyId === bill.societyId && txn.matchedKind === "bill" && txn.matchedId === bill._id) {
-      const before = payment.transactionBefore ?? {};
-      await ctx.db.patch(txn._id, {
-        category: before.category,
-        accountingAccountId: before.accountingAccountId,
-        categorizedBy: before.categorizedBy,
-        ruleId: before.ruleId,
-        ruleApplication: before.ruleApplication,
-        reconciledAtISO: before.reconciledAtISO,
-        reconciledByName: before.reconciledByName,
-        matchedKind: before.matchedKind,
-        matchedId: before.matchedId,
-        reconciliationNote: before.reconciliationNote,
-      });
-      await flagChangedPeriods(ctx, txn.accountId, txn.date);
-    }
+    transaction = await getOwned<TransactionRow>(ctx, "financialTransactions", payment.financialTransactionId, bill.societyId);
+    if (transaction.matchedKind !== "bill" || transaction.matchedId !== bill._id) throw new Error("The linked bank match changed; review it before reversing this payment.");
   }
-  const payments = (bill.payments ?? []).filter((entry) => entry.key !== paymentKey);
-  await ctx.db.patch(id, {
-    payments,
-    paidCents: billPaidCents(payments),
-    updatedAtISO: nowISO(),
-    timeline: withEvents(bill, event("payment_removed", payment.financialTransactionId ? "Payment removed and bank transaction unlinked" : "Payment removed", actor, payment.amountCents)),
-  });
+  let restore: { lines: PostingLine[]; basis: JournalBasis } | undefined;
+  if (payment.voidedTransactionEntryId) {
+    const entry = await getOwned<JournalEntryRow & { basis?: JournalBasis }>(ctx, "journalEntries", payment.voidedTransactionEntryId, bill.societyId);
+    if (![TRANSACTION_BACKFILL_SOURCE, BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE].includes(entry.source)) throw new Error("The bank restoration reference does not belong to a supported transaction entry.");
+    if (entry.status === "void") {
+      const lines = (await entryLines(ctx, entry._id)).map((line): PostingLine => ({ ...line, side: line.side as "debit" | "credit" }));
+      if (!transaction || !lines.some((line) => line.financialTransactionId === transaction!._id)) throw new Error("The bank restoration journal does not belong to this linked bank transaction.");
+      validateBalancedJournalLines(lines);
+      restore = { lines, basis: entry.basis ?? "both" };
+    } else throw new Error("The replaced bank journal changed; review it before reversing this payment.");
+  }
+  if (payment.replacedTransactionEntryId || payment.bankTransferJournalEntryId) {
+    if (!payment.replacedTransactionEntryId || !payment.bankTransferJournalEntryId || payment.voidedTransactionEntryId) throw new Error("The retained bank transfer references are incomplete.");
+    const original = await getOwned<JournalEntryRow & { basis?: JournalBasis }>(ctx, "journalEntries", payment.replacedTransactionEntryId, bill.societyId);
+    const transfer = await getOwned<JournalEntryRow & { basis?: JournalBasis }>(ctx, "journalEntries", payment.bankTransferJournalEntryId, bill.societyId);
+    if (original.status !== "posted" || original.date >= payment.date || ![TRANSACTION_BACKFILL_SOURCE, BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE].includes(original.source) || transfer.status !== "posted" || transfer.source !== "bill_bank_transfer" || transfer.sourceExternalId !== `bill:${bill._id}:payment:${payment.key}:bank-transfer` || transfer.date !== payment.date || (transfer.basis ?? "both") !== (original.basis ?? "both")) throw new Error("The retained bank transfer journals changed; review them before reversing this payment.");
+    const lines = (await entryLines(ctx, original._id)).map((line): PostingLine => ({ ...line, side: line.side as "debit" | "credit" }));
+    if (!transaction || !lines.some((line) => line.financialTransactionId === transaction!._id)) throw new Error("The retained bank journal does not belong to this linked transaction.");
+    validateBalancedJournalLines(lines);
+    const actualTransfer = await entryLines(ctx, transfer._id);
+    const signature = (rows: PostingLine[]) => JSON.stringify(rows.map((line) => [line.accountId, line.side, line.amountCents, line.fundRestrictionId, line.programCode, line.grantId, line.counterpartyId, [...(line.tagIds ?? [])].sort(), [...(line.documentIds ?? [])].sort()]));
+    if (actualTransfer.some((line) => line.financialTransactionId) || signature(actualTransfer as PostingLine[]) !== signature(reversalLines(lines))) throw new Error("The retained bank transfer lines changed; review them before reversing this payment.");
+    restore = { lines, basis: original.basis ?? "both" };
+  }
+  // All references and both journals are checked before any writes. Old postings remain immutable.
+  let reversalJournalEntryId: string | undefined, cashBasisReversalJournalEntryId: string | undefined;
+  for (const entry of prepared) {
+    const reversal = await postEntry(ctx, { societyId: bill.societyId, date, memo: `Reverse bill payment: ${billLabel(bill)} · ${reason}`, source: "bill_payment_reversal", sourceExternalId: `bill:${bill._id}:payment:${payment.key}:reversal:${entry.cash ? "cash" : "main"}`, basis: entry.basis, lines: entry.lines, counterpartyId: bill.vendorId, createdByUserId: actor.id });
+    if (entry.cash) cashBasisReversalJournalEntryId = reversal; else reversalJournalEntryId = reversal;
+  }
+  // Re-post the bank's previous accounting at the correction date rather than changing a closed historical entry.
+  const restoredTransactionJournalEntryId = restore ? await postEntry(ctx, { societyId: bill.societyId, date, memo: `Restore bank transaction after payment reversal: ${billLabel(bill)}`, source: BANK_RESTORATION_SOURCE, sourceExternalId: `bill:${bill._id}:payment:${payment.key}:bank-restored`, basis: restore.basis, lines: restore.lines, createdByUserId: actor.id }) : undefined;
+  if (transaction) {
+    const before = payment.transactionBefore ?? {};
+    const previousRelease = transaction.billPaymentRelease;
+    const billPaymentRelease = { date: previousRelease && previousRelease.date > date ? previousRelease.date : date, journalEntryIds: [...new Set([...(previousRelease?.journalEntryIds ?? []), ...(payment.journalEntryId ? [payment.journalEntryId] : [])])] };
+    await ctx.db.patch(transaction._id, { category: before.category, accountingAccountId: before.accountingAccountId, categorizedBy: before.categorizedBy, ruleId: before.ruleId, ruleApplication: before.ruleApplication, reconciledAtISO: before.reconciledAtISO, reconciledByName: before.reconciledByName, matchedKind: before.matchedKind, matchedId: before.matchedId, reconciliationNote: before.reconciliationNote, billPaymentRelease });
+    await flagChangedPeriods(ctx, transaction.accountId, transaction.date);
+  }
+  const payments = bill.payments.map((row) => row.key === payment.key ? { ...row, reversedDate: date, reversedAtISO: nowISO(), reversalReason: reason, reversalJournalEntryId, cashBasisReversalJournalEntryId, restoredTransactionJournalEntryId } : row);
+  await ctx.db.patch(id, { payments, paidCents: billPaidCents(payments), updatedAtISO: nowISO(), timeline: withEvents(bill, event("payment_reversed", `Payment reversed effective ${date}${transaction ? " and bank transaction unlinked" : ""} · ${reason}`, actor, -payment.amountCents)) });
+  return id;
 }
 
 /** Pay the whole balance of several approved bills on one date from one account. */
@@ -1123,9 +1188,8 @@ export async function markPaidPortable(
  * Cancel bills. Drafts and bills waiting for approval simply close; an
  * approved bill gets a reversing entry (dated today, so a closed period or a
  * close date on or after today refuses it), accrual-only like the entry it
- * mirrors; bills with payments are skipped until the payments are removed
- * (removing a payment voids its cash-only entry, so a canceled bill never
- * keeps cash-basis expense).
+ * mirrors; bills with active settlements are skipped until those settlements
+ * have dated reversals. Retained payment history remains available on both bases.
  */
 export async function cancelPortable(ctx: PortableMutationCtx, { societyId, ids, reason }: { societyId: string; ids: string[]; reason?: string }) {
   const bills = await ownedBills(ctx, societyId, ids);
@@ -1138,7 +1202,7 @@ export async function cancelPortable(ctx: PortableMutationCtx, { societyId, ids,
   let skipped = 0;
   for (const bill of bills) {
     if (bill.status === "canceled") { skipped += 1; continue; }
-    if ((bill.payments ?? []).length) { skippedPaid += 1; continue; }
+    if ((bill.payments ?? []).some((payment) => !payment.reversedDate)) { skippedPaid += 1; continue; }
     const at = nowISO();
     const patch: Record<string, unknown> = { status: "canceled", canceledAtISO: at, cancelReason: why, approvals: bill.status === "awaiting_approval" ? [] : bill.approvals, updatedAtISO: at };
     const events = [event("canceled", why ? `Canceled: ${why}` : "Canceled", actor)];
@@ -1264,3 +1328,123 @@ export async function upsertVendorPortable(ctx: PortableMutationCtx, args: Vendo
 
 export type BillsWorkspace = Awaited<ReturnType<typeof workspacePortable>>;
 export type BillStatusValue = BillStatus;
+
+/** A vendor credit/write-off settles AP without pretending cash moved. Refunds reverse a named cash settlement. */
+export async function recordAdjustmentPortable(ctx: PortableMutationCtx, args: {
+  id: string; kind: "credit" | "write_off" | "refund"; date: string; amountCents: number; reason: string; idempotencyKey: string;
+  adjustmentAccountId?: string; sourcePaymentKey?: string; cashAccountId?: string; reference?: string;
+}) {
+  await requireFunctionAction(ctx, "bills:recordAdjustment", "mutation", args);
+  const bill = await requireOwnedRow<BillRow>(ctx, "bills", args.id);
+  const actor = await actorFor(ctx, bill.societyId);
+  if (!["approved", "scheduled"].includes(bill.status)) throw new Error("Adjustments require an approved bill.");
+  if (!["credit", "write_off", "refund"].includes(args.kind)) throw new Error("Choose a supported adjustment.");
+  const reason = cleanText(args.reason, 1000), idempotencyKey = cleanText(args.idempotencyKey, 100), reference = cleanText(args.reference, 100);
+  if (!reason || !idempotencyKey) throw new Error("Supply a reason and unique adjustment key.");
+  if (typeof args.idempotencyKey !== "string" || args.idempotencyKey.trim().length > 100) throw new Error("Use a unique adjustment key of at most 100 characters.");
+  const isRefund = args.kind === "refund";
+  if (isRefund ? Boolean(args.adjustmentAccountId) : Boolean(args.sourcePaymentKey || args.cashAccountId)) throw new Error("Supply only the accounts and source payment appropriate to this adjustment.");
+  const payments = bill.payments ?? [];
+  const duplicate = payments.find((payment) => payment.idempotencyKey === idempotencyKey);
+  if (duplicate) {
+    if (duplicate.kind !== args.kind || duplicate.date !== args.date || Math.abs(duplicate.amountCents) !== args.amountCents || duplicate.note !== reason || duplicate.reference !== reference || duplicate.adjustmentAccountId !== args.adjustmentAccountId || duplicate.sourcePaymentKey !== args.sourcePaymentKey || (args.cashAccountId && duplicate.cashAccountId !== args.cashAccountId)) throw new Error("That adjustment key was already used for different details.");
+    return duplicate.key;
+  }
+  if (!isCalendarDate(args.date) || args.date < bill.billDate) throw new Error("Choose an adjustment date on or after the bill date.");
+  if (!Number.isSafeInteger(args.amountCents) || args.amountCents <= 0) throw new Error("Enter an adjustment above zero in integer cents.");
+  const amount = args.amountCents;
+  const sourceIndex = isRefund ? payments.findIndex((payment) => payment.key === args.sourcePaymentKey && !payment.reversedDate && (!payment.kind || payment.kind === "payment")) : -1;
+  const source = sourceIndex >= 0 ? payments[sourceIndex] : undefined;
+  let cashAccount: AccountRow | undefined, adjustmentAccount: AccountRow | undefined, refundShares: BillCashShare[] = [];
+  if (isRefund) {
+    if (!source || args.date < source.date) throw new Error("Choose an active payment on or before the refund date.");
+    const refunds = payments.filter((payment) => payment.kind === "refund" && payment.sourcePaymentKey === source.key && !payment.reversedDate);
+    const available = source.amountCents + refunds.reduce((sum, payment) => sum + payment.amountCents, 0);
+    if (amount > available) throw new Error("The refund exceeds the remaining amount of that payment.");
+    const cashId = args.cashAccountId ?? source.cashAccountId;
+    if (!cashId) throw new Error("Choose the account receiving the vendor refund.");
+    cashAccount = await getOwned<AccountRow>(ctx, "financialAccounts", cashId, bill.societyId);
+    if (!MONEY_ACCOUNT_TYPES.has(cashAccount.accountType) && !CASH_SUBTYPES.has(String(cashAccount.subtype))) throw new Error("Refunds must go to a bank, cash or card account.");
+    const refundedShares = new Map<string, number>();
+    for (const refund of refunds) for (const share of refund.cashBasisShares ?? []) refundedShares.set(share.key, (refundedShares.get(share.key) ?? 0) - share.amountCents);
+    // Legacy payments without stored shares use the allocation in effect when that payment was recorded.
+    const sourceShares = source.cashBasisShares ?? cashBasisShares(bill.lines, recognizedCashShares(bill.lines, payments.slice(0, sourceIndex)), source.amountCents);
+    refundShares = cashBasisShares(sourceShares, refundedShares, amount);
+    if (refundShares.reduce((sum, share) => sum + share.amountCents, 0) !== amount) throw new Error("The source payment does not have enough cash-basis expense to refund.");
+  } else {
+    if (amount > billTotalCents(bill.lines) - billPaidCents(payments)) throw new Error("The adjustment exceeds the bill's open balance.");
+    if (!args.adjustmentAccountId) throw new Error("Choose the expense or income account for this adjustment.");
+    adjustmentAccount = await getOwned<AccountRow>(ctx, "financialAccounts", args.adjustmentAccountId, bill.societyId);
+    if (!["Expense", "Income", "Revenue", "Asset"].includes(adjustmentAccount.accountType) || CASH_SUBTYPES.has(String(adjustmentAccount.subtype)) || adjustmentAccount.subtype === "receivable") throw new Error("Choose an expense, income or non-cash asset adjustment account.");
+  }
+  const ledger = await loadInvoiceLedgerContext(ctx, bill.societyId), currency = ledger.workspaceCurrency;
+  const existingPayables = findPayablesAccount(ledger.accounts as AccountRow[]);
+  if (bill.currency !== currency || cashAccount?.currency && cashAccount.currency !== currency || adjustmentAccount?.currency && adjustmentAccount.currency !== currency || existingPayables?.currency && existingPayables.currency !== currency) throw new Error("Record vendor adjustments in the workspace currency; foreign bills require a separately approved FX journal.");
+  await assertPeriodOpen(ctx, { societyId: bill.societyId, date: args.date });
+  await assertBooksOpen(ctx, bill.societyId, [args.date], "posted");
+  // Prepare and validate both entries before the first write, including in portable test contexts.
+  const payablesId = existingPayables?._id ?? "new-payables-account";
+  const mainLines: PostingLine[] = isRefund
+    ? [{ accountId: cashAccount!._id, side: "debit", amountCents: amount }, { accountId: payablesId, side: "credit", amountCents: amount }]
+    : [{ accountId: payablesId, side: "debit", amountCents: amount }, { accountId: adjustmentAccount!._id, side: "credit", amountCents: amount }];
+  const cashLines = isRefund ? reversalLines(cashBasisPostingLines(bill, refundShares, payablesId)) : undefined;
+  validateBalancedJournalLines(mainLines);
+  if (cashLines) validateBalancedJournalLines(cashLines);
+  const payables = existingPayables ?? await ensurePayablesAccount(ctx, bill.societyId, currency), paymentKey = randomKey("adj");
+  const actualLines = (lines: PostingLine[]) => lines.map((line) => line.accountId === payablesId ? { ...line, accountId: payables._id } : line);
+  const journalEntryId = await postEntry(ctx, {
+    societyId: bill.societyId, date: args.date, memo: `Vendor ${args.kind}: ${billLabel(bill)} · ${reason}`, source: "bill_adjustment", sourceExternalId: `bill:${bill._id}:adjustment:${idempotencyKey}`, basis: isRefund ? "both" : "accrual-only", counterpartyId: bill.vendorId, createdByUserId: actor.id, lines: actualLines(mainLines),
+  });
+  const cashBasisJournalEntryId = cashLines ? await postEntry(ctx, {
+    societyId: bill.societyId, date: args.date, memo: `Vendor refund cash basis: ${billLabel(bill)}`, source: "bill_adjustment_cash", sourceExternalId: `bill:${bill._id}:adjustment:${idempotencyKey}:cash`, basis: "cash-only", counterpartyId: bill.vendorId, createdByUserId: actor.id, lines: actualLines(cashLines),
+  }) : undefined;
+  const payment: StoredPayment = {
+    key: paymentKey, kind: args.kind, date: args.date, amountCents: isRefund ? -amount : amount, method: args.kind, reference, note: reason, idempotencyKey, journalEntryId, recordedAtISO: nowISO(), recordedByName: actor.name,
+    ...(isRefund ? { sourcePaymentKey: source!.key, cashAccountId: cashAccount!._id, cashBasisJournalEntryId, cashBasisShares: refundShares.map((share) => ({ ...share, amountCents: -share.amountCents })) } : { adjustmentAccountId: adjustmentAccount!._id }),
+  };
+  const updated = [...payments, payment];
+  await ctx.db.patch(bill._id, { payments: updated, paidCents: billPaidCents(updated), updatedAtISO: nowISO(), timeline: withEvents(bill, event(args.kind, `Vendor ${args.kind.replace("_", " ")} · ${reason}`, actor, payment.amountCents)) });
+  return paymentKey;
+}
+
+/** Reverse an adjustment on a chosen date; original and reversal remain in the audit trail and as-of balances. */
+export async function reverseAdjustmentPortable(ctx: PortableMutationCtx, args: { id: string; paymentKey: string; date: string; reason: string }) {
+  await requireFunctionAction(ctx, "bills:reverseAdjustment", "mutation", args);
+  const bill = await requireOwnedRow<BillRow>(ctx, "bills", args.id), actor = await actorFor(ctx, bill.societyId);
+  const payment = bill.payments.find((row) => row.key === args.paymentKey);
+  if (!payment || !payment.kind || payment.kind === "payment") throw new Error("Choose a vendor adjustment.");
+  if (payment.reversedDate) {
+    if (payment.reversedDate !== args.date) throw new Error(`This adjustment was already reversed on ${payment.reversedDate}.`);
+    return payment.key;
+  }
+  if (!["approved", "scheduled"].includes(bill.status)) throw new Error("Reversing adjustments requires an approved bill.");
+  const reason = cleanText(args.reason, 1000);
+  if (!reason || !isCalendarDate(args.date) || args.date < payment.date) throw new Error("Supply a reason and reversal date on or after the adjustment.");
+  const remainingPaid = billPaidCents(bill.payments) - payment.amountCents;
+  if (remainingPaid < 0 || remainingPaid > billTotalCents(bill.lines)) throw new Error("Reverse subsequent settlements before this adjustment.");
+  if (!payment.journalEntryId) throw new Error("The adjustment's original journal entry is missing.");
+  if (payment.kind === "refund" && !payment.cashBasisJournalEntryId) throw new Error("The refund's original cash-basis journal entry is missing.");
+  await assertPeriodOpen(ctx, { societyId: bill.societyId, date: args.date });
+  await assertBooksOpen(ctx, bill.societyId, [args.date], "posted");
+  const original: Array<{ cash: boolean; basis: JournalBasis; lines: PostingLine[] }> = [];
+  for (const [entryId, cash] of [[payment.journalEntryId, false], [payment.cashBasisJournalEntryId, true]] as const) {
+    if (!entryId) continue;
+    const entry = await getOwned<JournalEntryRow & { basis?: JournalBasis }>(ctx, "journalEntries", entryId, bill.societyId);
+    const expectedSource = cash ? "bill_adjustment_cash" : "bill_adjustment";
+    const expectedExternalId = `bill:${bill._id}:adjustment:${payment.idempotencyKey}${cash ? ":cash" : ""}`;
+    if (entry.status !== "posted" || entry.source !== expectedSource || payment.idempotencyKey && entry.sourceExternalId !== expectedExternalId) throw new Error("The adjustment's original journal entry is not posted or does not match this bill.");
+    const basis: JournalBasis = cash ? "cash-only" : payment.kind === "refund" ? "both" : "accrual-only";
+    if (entry.basis && entry.basis !== basis) throw new Error("The adjustment journal uses an unexpected accounting basis.");
+    const lines = reversalLines(await entryLines(ctx, entryId));
+    validateBalancedJournalLines(lines);
+    original.push({ cash, basis, lines });
+  }
+  let reversalJournalEntryId: string | undefined, cashBasisReversalJournalEntryId: string | undefined;
+  for (const entry of original) {
+    const id = await postEntry(ctx, { societyId: bill.societyId, date: args.date, memo: `Reverse vendor adjustment: ${billLabel(bill)} · ${reason}`, source: "bill_adjustment_reversal", sourceExternalId: `bill:${bill._id}:adjustment:${payment.key}:reverse:${entry.cash ? "cash" : "main"}`, basis: entry.basis, createdByUserId: actor.id, counterpartyId: bill.vendorId, lines: entry.lines });
+    if (entry.cash) cashBasisReversalJournalEntryId = id; else reversalJournalEntryId = id;
+  }
+  const payments = bill.payments.map((row) => row.key === payment.key ? { ...row, reversedDate: args.date, reversalJournalEntryId, cashBasisReversalJournalEntryId } : row);
+  await ctx.db.patch(bill._id, { payments, paidCents: billPaidCents(payments), updatedAtISO: nowISO(), timeline: withEvents(bill, event("adjustment_reversed", `Vendor adjustment reversed · ${reason}`, actor, -payment.amountCents)) });
+  return payment.key;
+}

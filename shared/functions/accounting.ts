@@ -35,6 +35,7 @@ import { accountParentError } from "../accountHierarchy";
 import { requirePermissionPortable } from "./permissions";
 import { assertBooksOpen, booksAccountingBasis, booksCloseDate, booksSettingsRow } from "./booksLock";
 import { cashLedgerAccounts } from "./bankAccounts";
+import { assertNativePayrollBankAccountPatch, assertNativePayrollBankPatch } from "./payrollPaymentGuard";
 import {
   ACCOUNTING_BASES,
   BOOKS_REPORT_KINDS,
@@ -1114,6 +1115,9 @@ export async function postTransactionCandidateAllocationPortable(
 
 /** Journal entries a bank transaction posts (backfill, and re-posting after an edit). */
 export const TRANSACTION_BACKFILL_SOURCE = "financialTransactionBackfill";
+/** Bank money released by a dated bill correction is restored on that correction date. */
+export const BILL_BANK_RESTORATION_SOURCE = "bill_bank_restoration";
+export const INVOICE_BANK_RESTORATION_SOURCE = "invoice_bank_restoration";
 
 type BackfillOptions = {
   categoryChoices?: Array<{ category: string; accountId: string }>;
@@ -1132,15 +1136,38 @@ async function loadBackfillPlan(ctx: PortableQueryCtx, societyId: string, option
     ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "void")).collect(),
     cashLedgerAccounts(ctx, societyId),
   ]);
-  // Lines of a voided entry no longer count as posting their transaction.
+  // Dated reversals retain original bank links for historical reports, but release
+  // them for current matching. A new bank posting must start at the release date:
+  // posting it back at the import date would duplicate cash before the correction.
+  const released = new Set<string>();
+  const correctionDates = new Map<string, string>();
+  const correctionSources = new Map<string, string>();
+  for (const transaction of transactions) {
+    for (const [release, source] of [[transaction.billPaymentRelease, BILL_BANK_RESTORATION_SOURCE], [transaction.invoicePaymentRelease, INVOICE_BANK_RESTORATION_SOURCE]] as const) {
+      if (!release) continue;
+      for (const id of release.journalEntryIds) released.add(String(id));
+      if (!correctionDates.has(String(transaction._id)) || correctionDates.get(String(transaction._id))! <= release.date) {
+        correctionDates.set(String(transaction._id), release.date);
+        correctionSources.set(String(transaction._id), source);
+      }
+    }
+  }
+  const accountingTransactions = transactions.map((transaction) => {
+    const correctionDate = correctionDates.get(String(transaction._id));
+    return correctionDate && transaction.date < correctionDate
+      ? { ...transaction, date: correctionDate, originalTransactionDate: transaction.date, bankRestorationSource: correctionSources.get(String(transaction._id)) }
+      : transaction;
+  });
+  // Lines of voided entries and released historical associations no longer count
+  // as currently posting their transaction. Their actual ledger rows stay intact.
   const voided = new Set(voidEntries.map((entry: any) => String(entry._id)));
-  const existingLines = allLines.filter((line: any) => !voided.has(String(line.journalEntryId)));
+  const existingLines = allLines.filter((line: any) => !voided.has(String(line.journalEntryId)) && !released.has(String(line.journalEntryId)));
   const accountIds = new Set(accounts.map((account: any) => String(account._id)));
   for (const choice of options.categoryChoices ?? []) {
     if (!accountIds.has(String(choice.accountId))) throw new Error("Record not found.");
   }
   const plan = planTransactionBackfill({
-    transactions: transactions as any,
+    transactions: accountingTransactions as any,
     accounts: accounts as any,
     mappings: mappings as any,
     postedTransactionIds: existingLines.map((line: any) => String(line.financialTransactionId ?? "")).filter(Boolean),
@@ -1151,7 +1178,7 @@ async function loadBackfillPlan(ctx: PortableQueryCtx, societyId: string, option
     transactionIds: options.transactionIds,
     cashAccountByFeed,
   });
-  return { plan, transactions, accounts };
+  return { plan, transactions: accountingTransactions, accounts };
 }
 
 /**
@@ -1273,7 +1300,7 @@ export async function backfillFinancialTransactionsToJournalPortable(
       memo: row.beforeOpening
         ? `[Before opening balances ${plan.openingBalanceDate}] ${transaction.description}`
         : transaction.description,
-      source: TRANSACTION_BACKFILL_SOURCE,
+      source: transaction.originalTransactionDate ? transaction.bankRestorationSource ?? BILL_BANK_RESTORATION_SOURCE : TRANSACTION_BACKFILL_SOURCE,
       sourceExternalId: transaction.externalId,
       status: "posted",
       fiscalYear: fiscalYear ?? period?.fiscalYear,
@@ -1596,13 +1623,32 @@ function planOneTransaction(context: JournalPlanContext, transaction: BackfillTr
 
 /** The live (not void) entries that posted this transaction, and their lines. */
 export async function postedJournalForTransaction(ctx: PortableQueryCtx, transactionId: string) {
+  const transaction = await ctx.db.get(transactionId, "financialTransactions");
+  const releasedEntryIds = new Set<string>([...(transaction?.billPaymentRelease?.journalEntryIds ?? []), ...(transaction?.invoicePaymentRelease?.journalEntryIds ?? [])].map(String));
   const lines = await ctx.db
     .query("journalLines")
     .withIndex("by_financial_transaction", (q) => q.eq("financialTransactionId", transactionId))
     .collect();
   const entryIds = [...new Set(lines.map((line) => String(line.journalEntryId)))];
   const found = await Promise.all(entryIds.map((id) => ctx.db.get(id, "journalEntries")));
-  const entries = found.filter((entry): entry is PortableDoc => Boolean(entry) && entry?.status !== "void");
+  const candidates = found.filter((entry): entry is PortableDoc => Boolean(entry) && entry?.status !== "void");
+  // Dated bill-payment corrections preserve original journal lines for historical reports.
+  // Their old bank association is released for current matching once the retained payment is reversed.
+  const released = await Promise.all(candidates.map(async (entry) => {
+    if (entry.societyId === transaction?.societyId && releasedEntryIds.has(String(entry._id))) return true;
+    if (["invoice_payment", "invoice_refund"].includes(String(entry.source))) {
+      const invoiceId = String(entry.sourceExternalId ?? "").match(/^invoice:(.*):payment:[^:]+$/)?.[1];
+      if (!invoiceId) return false;
+      const invoice = await ctx.db.get(invoiceId, "invoices");
+      return Boolean(invoice && invoice.societyId === entry.societyId && (invoice.payments ?? []).some((payment: { journalEntryId?: string; reversedDate?: string }) => payment.journalEntryId === entry._id && Boolean(payment.reversedDate)));
+    }
+    if (entry.source !== "bill_payment") return false;
+    const billId = String(entry.sourceExternalId ?? "").match(/^bill:(.*):payment:[^:]+$/)?.[1];
+    if (!billId) return false;
+    const bill = await ctx.db.get(billId, "bills");
+    return Boolean(bill && bill.societyId === entry.societyId && (bill.payments ?? []).some((payment: { journalEntryId?: string; reversedDate?: string }) => payment.journalEntryId === entry._id && Boolean(payment.reversedDate)));
+  }));
+  const entries = candidates.filter((_, index) => !released[index]);
   const live = new Set(entries.map((entry) => String(entry._id)));
   return { entries, lines: lines.filter((line) => live.has(String(line.journalEntryId))) };
 }
@@ -1770,6 +1816,8 @@ export async function patchTransactionWithJournal(
   patch: Record<string, unknown>,
   options: { onLocked?: "throw" | "skip" } = {},
 ): Promise<boolean> {
+  try { await assertNativePayrollBankPatch(ctx, row, patch); }
+  catch (error) { if (options.onLocked === "throw") throw error; return false; }
   const revert = () => ctx.db.patch(row._id, Object.fromEntries(Object.keys(patch).map((field) => [field, row[field] ?? undefined])));
   await ctx.db.patch(row._id, patch);
   try {
@@ -1826,7 +1874,11 @@ export async function booksSettingsPortable(ctx: PortableQueryCtx, { societyId }
     booksSettingsRow(ctx, societyId),
     ctx.db.get(societyId),
     ctx.db.query("accountingFiscalPeriods").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
+    // Hosted storage orders by this index. Local stores intentionally order by creation,
+    // so calculate their minimum locally instead of relying on an index-name hint.
+    ctx.principal.runtime === "convex-hosted"
+      ? ctx.db.query("journalEntries").withIndex("by_society_status_date", (q) => q.eq("societyId", societyId).eq("status", "posted")).order("asc").take(1)
+      : ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
   ]);
   const setBy = settings?.closeDateSetByUserId ? await ctx.db.get(settings.closeDateSetByUserId, "users") : null;
   const closedPeriods = periods.filter((period) => period.status === "closed").sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
@@ -2009,6 +2061,7 @@ export async function upsertChartAccountPortable(
     throw new Error(`Account code ${code} is already used.`);
   }
   const currency = args.currency?.trim().toUpperCase() || existing?.currency || accounts.find((account) => account.currency)?.currency || "CAD";
+  if (existing) await assertNativePayrollBankAccountPatch(ctx, existing, { currency, accountType: args.accountType });
   if (existing && accountSection(existing.accountType) !== accountSection(args.accountType)) {
     const posted = await ctx.db.query("journalLines").withIndex("by_account", (q) => q.eq("accountId", args.id)).first();
     if (posted) throw new Error("This account has journal lines, so it stays in its statement section. Create a new account and move the balance with a journal entry.");

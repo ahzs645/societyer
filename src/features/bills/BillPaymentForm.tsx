@@ -35,7 +35,7 @@ export function BillPaymentForm({ bill, workspace, defaultMethod, canWrite, onDo
   const suggestions = useMemo(() => suggestBillPayments(bill, available), [bill, available]);
   const top = suggestions[0]?.exact ? suggestions[0] : undefined;
   const [amountInput, setAmountInput] = useState(((top ? -top.amountCents : bill.balanceCents) / 100).toFixed(2));
-  const [date, setDate] = useState(top?.date ?? workspace.today);
+  const [date, setDate] = useState(top ? top.previousReversalDate && top.previousReversalDate > top.date ? top.previousReversalDate : top.date : workspace.today);
   const [method, setMethod] = useState<BillPaymentMethod>(isBillPaymentMethod(defaultMethod) ? defaultMethod : "eft");
   const [reference, setReference] = useState("");
   const [cashAccountId, setCashAccountId] = useState(workspace.accounts.payment[0]?._id ?? "");
@@ -53,7 +53,7 @@ export function BillPaymentForm({ bill, workspace, defaultMethod, canWrite, onDo
   const pick = (txn: MoneyOutTransaction | undefined) => {
     setTxnId(txn?._id ?? "");
     if (txn) {
-      setDate(txn.date);
+      setDate(txn.previousReversalDate && txn.previousReversalDate > txn.date ? txn.previousReversalDate : txn.date);
       setAmountInput((-txn.amountCents / 100).toFixed(2));
     }
   };
@@ -92,7 +92,7 @@ export function BillPaymentForm({ bill, workspace, defaultMethod, canWrite, onDo
         <Field label="Amount" hint={`Balance ${formatMoney(bill.balanceCents)}. Partial payments are fine.`}>
           <input className="input input--money" inputMode="decimal" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} aria-invalid={amountCents == null || undefined} />
         </Field>
-        <Field label="Date paid">
+        <Field label="Date paid" hint={linked?.previousReversalDate ? `A previous match was reversed on ${formatDate(linked.previousReversalDate)}. This payment must be dated on or after that correction.` : undefined}>
           <DatePicker value={date} clearable={false} onChange={(value) => value && setDate(value)} />
         </Field>
         <Field label="Method">

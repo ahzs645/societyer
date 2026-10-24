@@ -7,11 +7,11 @@ import { Select } from "../../components/Select";
 import { DatePicker } from "../../components/DatePicker";
 import { Menu } from "../../components/Menu";
 import { Money } from "../../components/Money";
-import { Checkbox } from "../../components/Controls";
 import { useToast } from "../../components/Toast";
 import { formatDate } from "../../lib/format";
 import { SERIES_FREQUENCIES, SERIES_FREQUENCY_LABEL, seriesSummary } from "../../../shared/invoicing";
 import type { InvoiceSeriesRow } from "./types";
+import { BillingScheduleForm } from "./BillingReportScheduleForm";
 
 type Props = {
   series: InvoiceSeriesRow[];
@@ -32,6 +32,7 @@ export function SeriesPanel({ series, societyId, today, canWrite, focusId, onSho
   const upsertSeries = useMutation(api.invoices.upsertSeries);
   const toast = useToast();
   const [schedule, setSchedule] = useState<ScheduleDraft | null>(null);
+  const [deliverySeries, setDeliverySeries] = useState<InvoiceSeriesRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const issueNext = async (row: InvoiceSeriesRow) => {
@@ -84,7 +85,7 @@ export function SeriesPanel({ series, societyId, today, canWrite, focusId, onSho
           <EmptyState
             icon={<Repeat size={20} />}
             title="No recurring invoices"
-            description="Turn on Repeat in the invoice builder for rentals, retainers or monthly dues. Each invoice is created as a draft on its date for you to review."
+            description="Turn on Repeat in the invoice builder for rentals, retainers or monthly dues. Create each next draft yourself or configure automatic delivery for the saved series."
           />
         </div>
       </div>
@@ -130,8 +131,9 @@ export function SeriesPanel({ series, societyId, today, canWrite, focusId, onSho
           <div className="series-card__foot">
             <span className="muted series-card__note">
               <CalendarClock size={12} aria-hidden="true" />
-              {row.autoSend ? " Set to send automatically once email sending is connected; until then invoices wait as drafts." : " Invoices are created as drafts for you to review and mark as sent."}
+              Manual issuance creates drafts. An automatic delivery schedule sends PDFs after sender and recipient setup.
             </span>
+            <button type="button" className="btn btn--sm" disabled={!canWrite} onClick={() => setDeliverySeries(row)}>Configure automatic delivery</button>
             {row.status !== "ended" && (
               <button type="button" className={`btn btn--sm${row.due ? " btn--accent" : ""}`} disabled={!canWrite || row.status === "paused" || !row.nextIssueDate} onClick={() => void issueNext(row)}>
                 <FilePlus2 size={14} aria-hidden="true" /> {row.nextIssueDate && row.nextIssueDate > today ? `Create early (${formatDate(row.nextIssueDate)})` : "Create next invoice"}
@@ -155,7 +157,7 @@ export function SeriesPanel({ series, societyId, today, canWrite, focusId, onSho
         {schedule && (
           <div>
             {error && <p className="field__error" role="alert">{error}</p>}
-            <p className="muted">{schedule.row.name} · {schedule.row.invoiceCount} issued so far. Line items and the customer follow the most recent invoice you edit from the builder.</p>
+            <p className="muted">{schedule.row.name} · {schedule.row.invoiceCount} issued so far. These changes set future issue dates. Issued invoices keep their saved customer, rates and document.</p>
             <Field label="Every">
               <Select value={schedule.frequency} onChange={(frequency) => setSchedule({ ...schedule, frequency })} options={SERIES_FREQUENCIES.map((f) => ({ value: f, label: SERIES_FREQUENCY_LABEL[f] }))} />
             </Field>
@@ -179,9 +181,14 @@ export function SeriesPanel({ series, societyId, today, canWrite, focusId, onSho
                 <DatePicker value={schedule.endDate} onChange={(endDate) => setSchedule({ ...schedule, endDate })} />
               </Field>
             )}
-            <Checkbox checked={schedule.autoSend} onChange={(autoSend) => setSchedule({ ...schedule, autoSend })} label="Send automatically once email sending is connected" />
+            <p><button type="button" className="btn btn--sm" disabled={!canWrite} onClick={() => setDeliverySeries(schedule.row)}>Configure automatic delivery</button></p>
           </div>
         )}
+      </Drawer>
+      <Drawer open={Boolean(deliverySeries)} title="Configure automatic delivery" onClose={() => setDeliverySeries(null)}>
+        {deliverySeries && <BillingScheduleForm key={deliverySeries._id} societyId={societyId}
+          schedule={{ kind: "recurring_invoice", sourceId: deliverySeries._id, name: `${deliverySeries.name} delivery`, recipients: deliverySeries.billToEmail ? [deliverySeries.billToEmail] : [], active: false, recipientsConfirmed: false }}
+          onSaved={() => setDeliverySeries(null)} onCancel={() => setDeliverySeries(null)} />}
       </Drawer>
     </div>
   );

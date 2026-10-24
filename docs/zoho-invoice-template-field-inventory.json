@@ -1,0 +1,1072 @@
+{
+  "source": "User-supplied Archive 2.zip, Zoho Books HAR response /api/v3/settings/templates/editpage",
+  "topLevelPropertyCount": 263,
+  "includesValues": false,
+  "fields": {
+    "additional_signature_image_file_id": {
+      "type": "string"
+    },
+    "additional_signature_label": {
+      "type": "string"
+    },
+    "additional_signature_text": {
+      "type": "string"
+    },
+    "address_positions": {
+      "type": "object",
+      "fields": {
+        "billto_x_adjustment": {
+          "type": "number"
+        },
+        "billto_y_adjustment": {
+          "type": "number"
+        },
+        "shipto_x_adjustment": {
+          "type": "number"
+        },
+        "shipto_y_adjustment": {
+          "type": "number"
+        }
+      }
+    },
+    "advanced_inventory_tracking_annex": {
+      "type": "object",
+      "fields": {
+        "ait_annex_batch_in_serial_label": {
+          "type": "string"
+        },
+        "ait_annex_batch_in_serial_required": {
+          "type": "boolean"
+        },
+        "ait_annex_batch_number_label": {
+          "type": "string"
+        },
+        "ait_annex_batch_number_required": {
+          "type": "boolean"
+        },
+        "ait_annex_batch_required": {
+          "type": "boolean"
+        },
+        "ait_annex_expiry_date_label": {
+          "type": "string"
+        },
+        "ait_annex_expiry_date_required": {
+          "type": "boolean"
+        },
+        "ait_annex_mfg_batch_number_label": {
+          "type": "string"
+        },
+        "ait_annex_mfg_batch_number_required": {
+          "type": "boolean"
+        },
+        "ait_annex_mfg_date_label": {
+          "type": "string"
+        },
+        "ait_annex_mfg_date_required": {
+          "type": "boolean"
+        },
+        "ait_annex_quantity_label": {
+          "type": "string"
+        },
+        "ait_annex_quantity_required": {
+          "type": "boolean"
+        },
+        "ait_annex_required": {
+          "type": "boolean"
+        },
+        "ait_annex_serial_grid_columns": {
+          "type": "number"
+        },
+        "ait_annex_serial_number_label": {
+          "type": "string"
+        },
+        "ait_annex_serial_required": {
+          "type": "boolean"
+        },
+        "ait_annex_serial_view": {
+          "type": "string"
+        },
+        "ait_annex_title_label": {
+          "type": "string"
+        }
+      }
+    },
+    "alternate_item_row_bg_color": {
+      "type": "string"
+    },
+    "alternate_item_row_font_color": {
+      "type": "string"
+    },
+    "amount_enclosed_label": {
+      "type": "string"
+    },
+    "amount_label": {
+      "type": "string"
+    },
+    "annexure_document_file_id": {
+      "type": "string"
+    },
+    "annexure_html": {
+      "type": "string"
+    },
+    "attention_content": {
+      "type": "string"
+    },
+    "balance_bg_color": {
+      "type": "string"
+    },
+    "balance_due_label": {
+      "type": "string"
+    },
+    "balance_font_color": {
+      "type": "string"
+    },
+    "balance_font_size": {
+      "type": "number"
+    },
+    "bank_information_html": {
+      "type": "string"
+    },
+    "bcy_amount_label": {
+      "type": "string"
+    },
+    "bcy_item_tax_amount_label": {
+      "type": "string"
+    },
+    "bcy_rate_label": {
+      "type": "string"
+    },
+    "bill_to_label": {
+      "type": "string"
+    },
+    "body_bg_color": {
+      "type": "string"
+    },
+    "body_bg_image_file_id": {
+      "type": "string"
+    },
+    "body_bg_image_opacity": {
+      "type": "number"
+    },
+    "body_bg_image_position": {
+      "type": "string"
+    },
+    "body_bg_image_position_formatted": {
+      "type": "string"
+    },
+    "body_font_color": {
+      "type": "string"
+    },
+    "body_font_size": {
+      "type": "number"
+    },
+    "body_html": {
+      "type": "string"
+    },
+    "brand_label": {
+      "type": "string"
+    },
+    "can_allow_to_edit_item_table": {
+      "type": "boolean"
+    },
+    "can_show_amount_with_tax": {
+      "type": "boolean"
+    },
+    "can_show_components_in_description": {
+      "type": "boolean"
+    },
+    "can_show_kit_and_components": {
+      "type": "boolean"
+    },
+    "can_show_mrp": {
+      "type": "boolean"
+    },
+    "can_show_tax_exemption_reason": {
+      "type": "boolean"
+    },
+    "can_show_tax_exemption_summary": {
+      "type": "boolean"
+    },
+    "can_show_taxable_amount_in_item_table": {
+      "type": "boolean"
+    },
+    "can_show_txn_posting_date": {
+      "type": "boolean"
+    },
+    "can_skip_components": {
+      "type": "boolean"
+    },
+    "contact_vat_no_label": {
+      "type": "string"
+    },
+    "credits_applied_label": {
+      "type": "string"
+    },
+    "custom_footer_html": {
+      "type": "string"
+    },
+    "custom_footer_html_for_other_pages": {
+      "type": "string"
+    },
+    "custom_header_html": {
+      "type": "string"
+    },
+    "custom_header_html_for_other_pages": {
+      "type": "string"
+    },
+    "customer_address_format": {
+      "type": "string"
+    },
+    "customer_address_position": {
+      "type": "string"
+    },
+    "customer_name_font_color": {
+      "type": "string"
+    },
+    "customer_name_font_size": {
+      "type": "number"
+    },
+    "customer_shipping_address_format": {
+      "type": "string"
+    },
+    "date_label": {
+      "type": "string"
+    },
+    "description_label": {
+      "type": "string"
+    },
+    "discount_label": {
+      "type": "string"
+    },
+    "document_title": {
+      "type": "string"
+    },
+    "due_date_label": {
+      "type": "string"
+    },
+    "ean_label": {
+      "type": "string"
+    },
+    "email_label": {
+      "type": "string"
+    },
+    "fax_label": {
+      "type": "string"
+    },
+    "font": {
+      "type": "string"
+    },
+    "font_formatted": {
+      "type": "string"
+    },
+    "footer_bg_color": {
+      "type": "string"
+    },
+    "footer_bg_image_file_id": {
+      "type": "string"
+    },
+    "footer_bg_image_opacity": {
+      "type": "number"
+    },
+    "footer_bg_image_position": {
+      "type": "string"
+    },
+    "footer_bg_image_position_formatted": {
+      "type": "string"
+    },
+    "footer_font_color": {
+      "type": "string"
+    },
+    "footer_font_size": {
+      "type": "number"
+    },
+    "footer_html": {
+      "type": "string"
+    },
+    "header_bg_color": {
+      "type": "string"
+    },
+    "header_bg_image_file_id": {
+      "type": "string"
+    },
+    "header_bg_image_opacity": {
+      "type": "number"
+    },
+    "header_bg_image_position": {
+      "type": "string"
+    },
+    "header_bg_image_position_formatted": {
+      "type": "string"
+    },
+    "header_font_color": {
+      "type": "string"
+    },
+    "header_font_size": {
+      "type": "number"
+    },
+    "header_height_for_first_page": {
+      "type": "number"
+    },
+    "header_html": {
+      "type": "string"
+    },
+    "header_html_for_other_pages": {
+      "type": "string"
+    },
+    "invoice_logo_size": {
+      "type": "object",
+      "fields": {
+        "height": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      }
+    },
+    "is_active": {
+      "type": "boolean"
+    },
+    "is_additional_signature_required": {
+      "type": "boolean"
+    },
+    "is_alternate_item_row_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_amount_required": {
+      "type": "boolean"
+    },
+    "is_amount_with_tax_enabled": {
+      "type": "boolean"
+    },
+    "is_annexure_on_same_page": {
+      "type": "boolean"
+    },
+    "is_balance_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_balance_due_required_in_header": {
+      "type": "boolean"
+    },
+    "is_bcy_amount_required": {
+      "type": "boolean"
+    },
+    "is_bcy_item_tax_amount_required": {
+      "type": "boolean"
+    },
+    "is_bcy_rate_required": {
+      "type": "boolean"
+    },
+    "is_billto_required": {
+      "type": "boolean"
+    },
+    "is_body_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_brand_required": {
+      "type": "boolean"
+    },
+    "is_contact_vat_no_required": {
+      "type": "boolean"
+    },
+    "is_description_required": {
+      "type": "boolean"
+    },
+    "is_discount_required": {
+      "type": "boolean"
+    },
+    "is_due_date_required": {
+      "type": "boolean"
+    },
+    "is_ean_required": {
+      "type": "boolean"
+    },
+    "is_entitylevel_discount_required": {
+      "type": "boolean"
+    },
+    "is_footer_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_header_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_isbn_required": {
+      "type": "boolean"
+    },
+    "is_item_cf_required": {
+      "type": "boolean"
+    },
+    "is_item_image_required": {
+      "type": "boolean"
+    },
+    "is_item_name_required": {
+      "type": "boolean"
+    },
+    "is_item_row_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_item_tax_amount_required": {
+      "type": "boolean"
+    },
+    "is_item_tax_rate_required": {
+      "type": "boolean"
+    },
+    "is_item_transferred_qty_required": {
+      "type": "boolean"
+    },
+    "is_line_item_number_required": {
+      "type": "boolean"
+    },
+    "is_logo_required": {
+      "type": "boolean"
+    },
+    "is_manufacturer_required": {
+      "type": "boolean"
+    },
+    "is_new_editor": {
+      "type": "string"
+    },
+    "is_notes_required": {
+      "type": "boolean"
+    },
+    "is_org_address_required": {
+      "type": "boolean"
+    },
+    "is_org_name_required": {
+      "type": "boolean"
+    },
+    "is_original_item_required": {
+      "type": "boolean"
+    },
+    "is_part_number_required": {
+      "type": "boolean"
+    },
+    "is_payment_link_required": {
+      "type": "boolean"
+    },
+    "is_payment_stub_required": {
+      "type": "boolean"
+    },
+    "is_payment_terms_required": {
+      "type": "boolean"
+    },
+    "is_payments_made_required": {
+      "type": "boolean"
+    },
+    "is_project_details_required": {
+      "type": "boolean"
+    },
+    "is_qty_required": {
+      "type": "boolean"
+    },
+    "is_rate_required": {
+      "type": "boolean"
+    },
+    "is_ref_field_required": {
+      "type": "boolean"
+    },
+    "is_rtl_orientation_supported": {
+      "type": "boolean"
+    },
+    "is_rtl_pdf_with_ltr_orientation": {
+      "type": "boolean"
+    },
+    "is_sales_order_date_required": {
+      "type": "boolean"
+    },
+    "is_sales_order_number_required": {
+      "type": "boolean"
+    },
+    "is_sales_order_ref_number_required": {
+      "type": "boolean"
+    },
+    "is_sales_person_required": {
+      "type": "boolean"
+    },
+    "is_ship_to_required": {
+      "type": "boolean"
+    },
+    "is_show_bank_details_below_notes": {
+      "type": "boolean"
+    },
+    "is_show_page_number": {
+      "type": "boolean"
+    },
+    "is_signature_required": {
+      "type": "boolean"
+    },
+    "is_special_transaction_type_required": {
+      "type": "boolean"
+    },
+    "is_status_stamp_required": {
+      "type": "boolean"
+    },
+    "is_subtotal_required": {
+      "type": "boolean"
+    },
+    "is_table_border_color_required": {
+      "type": "boolean"
+    },
+    "is_table_header_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_tax_summary_required": {
+      "type": "boolean"
+    },
+    "is_tax_summary_tax_amount_required": {
+      "type": "boolean"
+    },
+    "is_tax_summary_taxable_amount_required": {
+      "type": "boolean"
+    },
+    "is_tax_summary_total_amount_required": {
+      "type": "boolean"
+    },
+    "is_taxable_amount_required": {
+      "type": "boolean"
+    },
+    "is_termsandconditions_required": {
+      "type": "boolean"
+    },
+    "is_title_required": {
+      "type": "boolean"
+    },
+    "is_total_required": {
+      "type": "boolean"
+    },
+    "is_total_tax_required": {
+      "type": "boolean"
+    },
+    "is_totals_bg_color_required": {
+      "type": "boolean"
+    },
+    "is_transaction_date_required": {
+      "type": "boolean"
+    },
+    "is_transaction_number_required": {
+      "type": "boolean"
+    },
+    "is_units_required": {
+      "type": "boolean"
+    },
+    "is_upc_required": {
+      "type": "boolean"
+    },
+    "isbn_label": {
+      "type": "string"
+    },
+    "item_description_font_color": {
+      "type": "string"
+    },
+    "item_description_font_size": {
+      "type": "number"
+    },
+    "item_name_html_content": {
+      "type": "string"
+    },
+    "item_name_label": {
+      "type": "string"
+    },
+    "item_row_bg_color": {
+      "type": "string"
+    },
+    "item_row_font_color": {
+      "type": "string"
+    },
+    "item_row_font_size": {
+      "type": "number"
+    },
+    "item_table_width": {
+      "type": "object",
+      "fields": {
+        "account_name": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "amount_received": {
+          "type": "string"
+        },
+        "bcy_amount": {
+          "type": "string"
+        },
+        "bcy_rate": {
+          "type": "string"
+        },
+        "bcy_tax_amount": {
+          "type": "string"
+        },
+        "brand": {
+          "type": "string"
+        },
+        "cost_price": {
+          "type": "string"
+        },
+        "custom_fields": {
+          "type": "string"
+        },
+        "discount": {
+          "type": "string"
+        },
+        "ean": {
+          "type": "string"
+        },
+        "hsn_sac": {
+          "type": "string"
+        },
+        "isbn": {
+          "type": "string"
+        },
+        "item_batch_number": {
+          "type": "string"
+        },
+        "item_batch_quantity": {
+          "type": "string"
+        },
+        "item_destination_batch_number": {
+          "type": "string"
+        },
+        "item_destination_storage_name": {
+          "type": "string"
+        },
+        "item_destination_storage_quantity": {
+          "type": "string"
+        },
+        "item_expiry_date": {
+          "type": "string"
+        },
+        "item_manufactured_date": {
+          "type": "string"
+        },
+        "item_mfgbatch_number": {
+          "type": "string"
+        },
+        "item_name": {
+          "type": "string"
+        },
+        "item_source_batch_number": {
+          "type": "string"
+        },
+        "item_source_storage_name": {
+          "type": "string"
+        },
+        "item_source_storage_quantity": {
+          "type": "string"
+        },
+        "item_storage_name": {
+          "type": "string"
+        },
+        "item_storage_quantity": {
+          "type": "string"
+        },
+        "item_transferred_quantity": {
+          "type": "string"
+        },
+        "line_item_location": {
+          "type": "string"
+        },
+        "manufacturer": {
+          "type": "string"
+        },
+        "new_stock_on_hand": {
+          "type": "string"
+        },
+        "original_item": {
+          "type": "string"
+        },
+        "part_number": {
+          "type": "string"
+        },
+        "qty": {
+          "type": "string"
+        },
+        "qty_adjusted": {
+          "type": "string"
+        },
+        "qty_backordered": {
+          "type": "string"
+        },
+        "qty_cancelled": {
+          "type": "string"
+        },
+        "qty_consumed": {
+          "type": "string"
+        },
+        "qty_credit_only": {
+          "type": "string"
+        },
+        "qty_forcefulfilled": {
+          "type": "string"
+        },
+        "qty_packed": {
+          "type": "string"
+        },
+        "qty_returned": {
+          "type": "string"
+        },
+        "qty_shipped": {
+          "type": "string"
+        },
+        "qty_unshipped": {
+          "type": "string"
+        },
+        "quantity_received": {
+          "type": "string"
+        },
+        "rate": {
+          "type": "string"
+        },
+        "rate_tax": {
+          "type": "string"
+        },
+        "reimburse_label": {
+          "type": "string"
+        },
+        "sales_order_date": {
+          "type": "string"
+        },
+        "sales_order_number": {
+          "type": "string"
+        },
+        "sales_order_ref_number": {
+          "type": "string"
+        },
+        "sno": {
+          "type": "string"
+        },
+        "tax_amount": {
+          "type": "string"
+        },
+        "tax_percent": {
+          "type": "string"
+        },
+        "taxable_amount": {
+          "type": "string"
+        },
+        "total_qty_consumed": {
+          "type": "string"
+        },
+        "upc": {
+          "type": "string"
+        },
+        "warehouse": {
+          "type": "string"
+        }
+      }
+    },
+    "item_tax_amount_label": {
+      "type": "string"
+    },
+    "item_tax_rate_label": {
+      "type": "string"
+    },
+    "item_total_label": {
+      "type": "string"
+    },
+    "item_transferred_quantity_label": {
+      "type": "string"
+    },
+    "labels_font_color": {
+      "type": "string"
+    },
+    "layout_style": {
+      "type": "string"
+    },
+    "line_item_number_label": {
+      "type": "string"
+    },
+    "manufacturer_label": {
+      "type": "string"
+    },
+    "margin_bottom": {
+      "type": "number"
+    },
+    "margin_left": {
+      "type": "number"
+    },
+    "margin_right": {
+      "type": "number"
+    },
+    "margin_top": {
+      "type": "number"
+    },
+    "notes_font_size": {
+      "type": "number"
+    },
+    "notes_label": {
+      "type": "string"
+    },
+    "online_payment_label": {
+      "type": "string"
+    },
+    "org_name_font_color": {
+      "type": "string"
+    },
+    "org_name_font_size": {
+      "type": "number"
+    },
+    "organization_address_format": {
+      "type": "string"
+    },
+    "orientation": {
+      "type": "string"
+    },
+    "orientation_formatted": {
+      "type": "string"
+    },
+    "original_item_label": {
+      "type": "string"
+    },
+    "page_height": {
+      "type": "string"
+    },
+    "page_width": {
+      "type": "string"
+    },
+    "pagination_format": {
+      "type": "string"
+    },
+    "pagination_position": {
+      "type": "string"
+    },
+    "paper_size": {
+      "type": "string"
+    },
+    "paper_size_formatted": {
+      "type": "string"
+    },
+    "part_number_label": {
+      "type": "string"
+    },
+    "payment_made_label": {
+      "type": "string"
+    },
+    "payment_stub_label": {
+      "type": "string"
+    },
+    "payment_terms_label": {
+      "type": "string"
+    },
+    "pdf_source": {
+      "type": "string"
+    },
+    "pdf_source_formatted": {
+      "type": "string"
+    },
+    "phone_label": {
+      "type": "string"
+    },
+    "placeholder": {
+      "type": "string"
+    },
+    "posting_date_label": {
+      "type": "string"
+    },
+    "project_days_qty_text": {
+      "type": "string"
+    },
+    "project_description_label": {
+      "type": "string"
+    },
+    "project_item_name_label": {
+      "type": "string"
+    },
+    "project_name_label": {
+      "type": "string"
+    },
+    "project_quantity_label": {
+      "type": "string"
+    },
+    "quantity_label": {
+      "type": "string"
+    },
+    "rate_label": {
+      "type": "string"
+    },
+    "rate_tax_incexc_preference": {
+      "type": "object",
+      "fields": {
+        "is_required": {
+          "type": "boolean"
+        },
+        "tax_exclu_pref_value": {
+          "type": "string"
+        },
+        "tax_inclu_pref_value": {
+          "type": "string"
+        }
+      }
+    },
+    "reference_field_label": {
+      "type": "string"
+    },
+    "sales_order_date_label": {
+      "type": "string"
+    },
+    "sales_order_number_label": {
+      "type": "string"
+    },
+    "sales_order_ref_number_label": {
+      "type": "string"
+    },
+    "sales_person_label": {
+      "type": "string"
+    },
+    "ship_to_label": {
+      "type": "string"
+    },
+    "shipping_charge_label": {
+      "type": "string"
+    },
+    "show_amount_in_words": {
+      "type": "boolean"
+    },
+    "show_currency_after_amount": {
+      "type": "boolean"
+    },
+    "show_footer_only_on_first_page": {
+      "type": "string"
+    },
+    "show_header_only_on_first_page": {
+      "type": "boolean"
+    },
+    "show_qr_code": {
+      "type": "boolean"
+    },
+    "show_stub_on_first_page": {
+      "type": "boolean"
+    },
+    "show_total_items": {
+      "type": "boolean"
+    },
+    "signature_image_file_id": {
+      "type": "string"
+    },
+    "signature_label": {
+      "type": "string"
+    },
+    "signature_text": {
+      "type": "string"
+    },
+    "special_transaction_type_label": {
+      "type": "string"
+    },
+    "sub_total_label": {
+      "type": "string"
+    },
+    "subject_preference": {
+      "type": "object",
+      "fields": {
+        "is_required": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "table_border_color": {
+      "type": "string"
+    },
+    "table_header_bg_color": {
+      "type": "string"
+    },
+    "table_header_font_color": {
+      "type": "string"
+    },
+    "table_header_font_size": {
+      "type": "number"
+    },
+    "tax_amount_withheld_label": {
+      "type": "string"
+    },
+    "tax_summary_tax_amount": {
+      "type": "string"
+    },
+    "tax_summary_tax_details": {
+      "type": "string"
+    },
+    "tax_summary_taxable_amount": {
+      "type": "string"
+    },
+    "tax_summary_title": {
+      "type": "string"
+    },
+    "tax_summary_total": {
+      "type": "string"
+    },
+    "tax_summary_total_amount": {
+      "type": "string"
+    },
+    "taxable_amount_label": {
+      "type": "string"
+    },
+    "template_css": {
+      "type": "string"
+    },
+    "template_description": {
+      "type": "string"
+    },
+    "template_group": {
+      "type": "string"
+    },
+    "template_group_formatted": {
+      "type": "string"
+    },
+    "template_name": {
+      "type": "string"
+    },
+    "template_type": {
+      "type": "string"
+    },
+    "template_type_formatted": {
+      "type": "string"
+    },
+    "terms_and_conditions_label": {
+      "type": "string"
+    },
+    "terms_font_size": {
+      "type": "number"
+    },
+    "title_font_color": {
+      "type": "string"
+    },
+    "title_font_size": {
+      "type": "number"
+    },
+    "total_hours_label": {
+      "type": "string"
+    },
+    "total_items_label": {
+      "type": "string"
+    },
+    "total_label": {
+      "type": "string"
+    },
+    "total_taxable_amount_label": {
+      "type": "string"
+    },
+    "totals_bg_color": {
+      "type": "string"
+    },
+    "totals_font_color": {
+      "type": "string"
+    },
+    "totals_font_size": {
+      "type": "number"
+    },
+    "transaction_number_label": {
+      "type": "string"
+    },
+    "upc_label": {
+      "type": "string"
+    },
+    "website_label": {
+      "type": "string"
+    },
+    "write_off_amount_label": {
+      "type": "string"
+    }
+  }
+}

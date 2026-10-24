@@ -45,6 +45,7 @@ export function RecordTableScope({
   records,
   onRecordClick,
   onUpdate,
+  canEditRecord,
   onCreate,
   onReorder,
   recordPreview = false,
@@ -62,6 +63,7 @@ export function RecordTableScope({
   records: any[];
   onRecordClick?: RecordTableContextValue["onRecordClick"];
   onUpdate?: RecordTableContextValue["onUpdate"];
+  canEditRecord?: RecordTableContextValue["canEditRecord"];
   onCreate?: RecordTableContextValue["onCreate"];
   onReorder?: RecordTableContextValue["onReorder"];
   /**
@@ -258,12 +260,13 @@ export function RecordTableScope({
       objectMetadata,
       onRecordClick: onRecordClick || recordPreview ? handleRecordClick : undefined,
       onUpdate,
+      canEditRecord,
       onCreate,
       onReorder,
       cellPreview: cellPreviews ? cellPreview : undefined,
       displayDefaults: { mode: defaultDisplayMode, pageSize: normalizedPageSize },
     }),
-    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
+    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, canEditRecord, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
   );
 
   const currentSidePanelRecord = activeSidePanelRecord
@@ -294,7 +297,7 @@ export function RecordTableScope({
             record={currentSidePanelRecord}
             objectMetadata={objectMetadata}
             onClose={closeSidePanel}
-            onUpdate={onUpdate}
+            onUpdate={!canEditRecord || canEditRecord(currentSidePanelRecord) ? onUpdate : undefined}
             stack={panelStack}
             onOpenRecord={onRecordClick ? () =>
               handleRecordClick(activeSidePanelRecord.recordId, currentSidePanelRecord, {

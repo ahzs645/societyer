@@ -2,14 +2,16 @@ import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
+  upsertTemplatePortable, upsertPriceListPortable, upsertRepairJobPortable, setRepairStatusPortable, invoiceRepairJobPortable,
   workspacePortable,
+  documentTemplatesPortable,
   upsertPortable,
   markSentPortable,
   voidInvoicesPortable,
   restoreVoidedPortable,
   duplicatePortable,
   removePortable,
-  recordPaymentPortable,
+  recordPaymentPortable, recordAdjustmentPortable, reverseAdjustmentPortable, revaluePortable,
   removePaymentPortable,
   revertToUnpaidPortable,
   sendRemindersPortable,
@@ -29,7 +31,8 @@ import {
   postExistingPortable,
 } from "../shared/functions/invoices";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
-import { invoiceDiscountValidator } from "./tables/invoices";
+import { invoiceMoneyValidator, invoiceDocumentExtrasValidator, invoiceTaxModeValidator } from "./tables/invoiceMoney";
+import { invoiceTemplateValidator, invoicePriceEntryValidator, repairStatusValidator, invoiceDiscountValidator } from "./tables/invoices";
 
 // Lines arrive from the builder; the handler normalises and validates them.
 const clientLineValidator = v.object({
@@ -37,6 +40,10 @@ const clientLineValidator = v.object({
   catalogItemId: v.optional(v.id("invoiceCatalogItems")),
   item: v.string(),
   description: v.optional(v.string()),
+  sku: v.optional(v.string()),
+  taxMode: v.optional(invoiceTaxModeValidator), rateOverridden: v.optional(v.boolean()),
+  imageUrl: v.optional(v.string()), manufacturer: v.optional(v.string()), partNumber: v.optional(v.string()), upc: v.optional(v.string()), ean: v.optional(v.string()), isbn: v.optional(v.string()), customField: v.optional(v.string()), batchNumber: v.optional(v.string()), serialNumbers: v.optional(v.array(v.string())),
+  unit: v.optional(v.string()),
   quantity: v.number(),
   unitPriceCents: v.number(),
   taxRatePercent: v.optional(v.number()),
@@ -59,11 +66,23 @@ export const workspace = authorizedQuery("invoices:workspace", query)({
   handler: async (ctx, args) => workspacePortable(await toPortableQueryCtx(ctx), args),
 });
 
+export const documentTemplates = authorizedQuery("invoices:documentTemplates", query)({
+  args: { societyId: v.id("societies"), templateId: v.optional(v.id("invoiceTemplates")) },
+  returns: v.any(),
+  handler: async (ctx, args) => documentTemplatesPortable(await toPortableQueryCtx(ctx), args),
+});
+
 export const upsert = authorizedMutation("invoices:upsert", mutation)({
   args: {
     id: v.optional(v.id("invoices")),
     societyId: v.id("societies"),
     ...partyArgs,
+    shipToName: v.optional(v.string()),
+    shipToAddress: v.optional(v.string()),
+    documentTemplate: v.optional(invoiceTemplateValidator),
+    money: v.optional(invoiceMoneyValidator), documentExtras: v.optional(invoiceDocumentExtrasValidator),
+    priceListId: v.optional(v.union(v.id("invoicePriceLists"), v.null())),
+    repairJobId: v.optional(v.id("repairJobs")),
     issueDate: v.string(),
     terms: v.string(),
     dueDate: v.optional(v.string()),
@@ -114,6 +133,7 @@ export const recordPayment = authorizedMutation("invoices:recordPayment", mutati
     date: v.string(),
     amountCents: v.number(),
     method: v.string(),
+    idempotencyKey: v.optional(v.string()), fxRateMicros: v.optional(v.number()), fxSource: v.optional(v.string()),
     reference: v.optional(v.string()),
     note: v.optional(v.string()),
     financialTransactionId: v.optional(v.id("financialTransactions")),
@@ -123,8 +143,19 @@ export const recordPayment = authorizedMutation("invoices:recordPayment", mutati
   handler: async (ctx, args) => recordPaymentPortable(await toPortableMutationCtx(ctx), args),
 });
 
+export const recordAdjustment = authorizedMutation("invoices:recordAdjustment", mutation)({
+  args: { id: v.id("invoices"), kind: v.union(v.literal("credit"), v.literal("write_off"), v.literal("refund")), date: v.string(), amountCents: v.number(), method: v.optional(v.string()), note: v.string(), reference: v.optional(v.string()), idempotencyKey: v.string(), sourcePaymentKey: v.optional(v.string()), fxRateMicros: v.optional(v.number()), fxSource: v.optional(v.string()), financialTransactionId: v.optional(v.id("financialTransactions")), depositAccountId: v.optional(v.id("financialAccounts")) },
+  returns: v.any(), handler: async (ctx, args) => recordAdjustmentPortable(await toPortableMutationCtx(ctx), args),
+});
+export const reverseAdjustment = authorizedMutation("invoices:reverseAdjustment", mutation)({
+  args: { id: v.id("invoices"), paymentKey: v.string(), date: v.optional(v.string()), reason: v.optional(v.string()) }, returns: v.any(), handler: async (ctx, args) => reverseAdjustmentPortable(await toPortableMutationCtx(ctx), args),
+});
+export const revalue = authorizedMutation("invoices:revalue", mutation)({
+  args: { id: v.id("invoices"), date: v.string(), rateMicros: v.number(), source: v.string(), idempotencyKey: v.string() }, returns: v.any(), handler: async (ctx, args) => revaluePortable(await toPortableMutationCtx(ctx), args),
+});
+
 export const removePayment = authorizedMutation("invoices:removePayment", mutation)({
-  args: { id: v.id("invoices"), paymentKey: v.string() },
+  args: { id: v.id("invoices"), paymentKey: v.string(), date: v.optional(v.string()), reason: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => removePaymentPortable(await toPortableMutationCtx(ctx), args),
 });
@@ -166,6 +197,10 @@ export const upsertCatalogItem = authorizedMutation("invoices:upsertCatalogItem"
     societyId: v.id("societies"),
     name: v.string(),
     description: v.optional(v.string()),
+    kind: v.optional(v.union(v.literal("item"), v.literal("service"))),
+    sku: v.optional(v.string()),
+    taxMode: v.optional(invoiceTaxModeValidator),
+    imageUrl: v.optional(v.string()), manufacturer: v.optional(v.string()), partNumber: v.optional(v.string()), upc: v.optional(v.string()), ean: v.optional(v.string()), isbn: v.optional(v.string()), customField: v.optional(v.string()), batchNumber: v.optional(v.string()), serialNumbers: v.optional(v.array(v.string())), unit: v.optional(v.string()), currency: v.optional(v.string()),
     unitPriceCents: v.number(),
     taxRatePercent: v.optional(v.number()),
     taxLabel: v.optional(v.string()),
@@ -275,4 +310,25 @@ export const postExisting = authorizedMutation("invoices:postExisting", mutation
   args: { societyId: v.id("societies"), ids: v.optional(v.array(v.id("invoices"))), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => postExistingPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const upsertTemplate = authorizedMutation("invoices:upsertTemplate", mutation)({
+  args: { societyId: v.id("societies"), id: v.optional(v.id("invoiceTemplates")), config: invoiceTemplateValidator, active: v.optional(v.boolean()), makeDefault: v.optional(v.boolean()) },
+  returns: v.any(), handler: async (ctx, args) => upsertTemplatePortable(await toPortableMutationCtx(ctx), args),
+});
+export const upsertPriceList = authorizedMutation("invoices:upsertPriceList", mutation)({
+  args: { societyId: v.id("societies"), id: v.optional(v.id("invoicePriceLists")), name: v.string(), currency: v.string(), active: v.optional(v.boolean()), entries: v.array(invoicePriceEntryValidator) },
+  returns: v.any(), handler: async (ctx, args) => upsertPriceListPortable(await toPortableMutationCtx(ctx), args),
+});
+export const upsertRepairJob = authorizedMutation("invoices:upsertRepairJob", mutation)({
+  args: { societyId: v.id("societies"), id: v.optional(v.id("repairJobs")), ...partyArgs, asset: v.string(), serialNumber: v.optional(v.string()), problem: v.string(), notes: v.optional(v.string()), receivedDate: v.string(), targetDate: v.optional(v.string()), currency: v.string(), lines: v.array(clientLineValidator) },
+  returns: v.any(), handler: async (ctx, args) => upsertRepairJobPortable(await toPortableMutationCtx(ctx), args),
+});
+export const setRepairStatus = authorizedMutation("invoices:setRepairStatus", mutation)({
+  args: { id: v.id("repairJobs"), status: repairStatusValidator },
+  returns: v.any(), handler: async (ctx, args) => setRepairStatusPortable(await toPortableMutationCtx(ctx), args),
+});
+export const invoiceRepairJob = authorizedMutation("invoices:invoiceRepairJob", mutation)({
+  args: { id: v.id("repairJobs") }, returns: v.any(),
+  handler: async (ctx, args) => invoiceRepairJobPortable(await toPortableMutationCtx(ctx), args),
 });

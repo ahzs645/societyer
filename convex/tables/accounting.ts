@@ -40,6 +40,8 @@ export const accountingTables = {
     .index("by_society", ["societyId"])
     .index("by_connection", ["connectionId"])
     .index("by_society_code", ["societyId", "code"])
+    .index("by_society_type", ["societyId", "accountType"])
+    .index("by_society_type_subtype", ["societyId", "accountType", "subtype"])
     .index("by_society_external", ["societyId", "externalId"]),
 
   accountingFiscalPeriods: defineTable({
@@ -151,6 +153,7 @@ export const accountingTables = {
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "date"])
     .index("by_society_status", ["societyId", "status"])
+    .index("by_society_status_date", ["societyId", "status", "date"])
     .index("by_society_source", ["societyId", "source"])
     // Idempotent posting: one live entry per source and source key (invoices, bills).
     .index("by_society_source_external", ["societyId", "source", "sourceExternalId"])
@@ -220,6 +223,10 @@ export const accountingTables = {
     reconciledAtISO: v.optional(v.string()),
     reconciledByName: v.optional(v.string()),
     matchedKind: v.optional(v.string()), // filing | receipt | payroll | manual
+    // Retained historical payment associations released by dated AP corrections.
+    billPaymentRelease: v.optional(v.object({ date: v.string(), journalEntryIds: v.array(v.id("journalEntries")) })),
+    // Retained historical invoice receipts released by a dated AR correction.
+    invoicePaymentRelease: v.optional(v.object({ date: v.string(), journalEntryIds: v.array(v.id("journalEntries")) })),
     matchedId: v.optional(v.string()),
     reconciliationNote: v.optional(v.string()),
     // Categorisation provenance: how the category was set (rule | suggestion |
@@ -251,8 +258,10 @@ export const accountingTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])
+    .index("by_account_match", ["accountId", "matchedKind"])
     .index("by_society_date", ["societyId", "date"])
     .index("by_society_counterparty_external", ["societyId", "counterpartyExternalId"])
+    .index("by_society_budget_date", ["societyId", "spendBudgetId", "date"])
     .index("by_society_counterparty_external_type", ["societyId", "counterpartyExternalId", "counterpartyResourceType"])
     .index("by_society_category_account_external", ["societyId", "categoryAccountExternalId"])
     .index("by_society_category", ["societyId", "category"]),

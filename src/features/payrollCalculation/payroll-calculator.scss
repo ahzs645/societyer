@@ -1,0 +1,204 @@
+@use "../../styles/tokens" as *;
+.payroll-calculator {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  fieldset {
+    min-width: 0;
+    max-width: 100%;
+  }
+  &__heading,
+  &__actions,
+  &__toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  &__heading {
+    justify-content: space-between;
+    margin-block: 16px;
+  }
+  &__heading h2,
+  &__heading p {
+    margin-block: 4px;
+  }
+  &__panel {
+    padding: 18px;
+    margin-block: 16px;
+    min-width: 0;
+  }
+  &__form-grid,
+  &__columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  &__form-grid .field {
+    min-width: 0;
+  }
+  &__form-grid > *,
+  &__columns > * {
+    min-width: 0;
+  }
+  &__stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  &__table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    margin-block: 16px;
+  }
+  &__td1-evidence {
+    overflow-wrap: anywhere;
+    dd {
+      margin-inline: 12px 0;
+    }
+  }
+  &__table-wrap table {
+    min-width: 650px;
+  }
+  &__table-wrap small {
+    display: block;
+    color: token(text-secondary);
+    font-weight: normal;
+  }
+  &__blockers,
+  &__notice {
+    border: 1px solid token(border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-block: 12px;
+    background: token(bg-subtle);
+  }
+  &__blockers {
+    border-color: token(danger);
+  }
+  &__status {
+    text-transform: capitalize;
+  }
+  &__amounts > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 7px;
+  }
+  &__amounts dd {
+    margin: 0;
+  }
+  &__total {
+    border-top: 1px solid token(border);
+    font-weight: 700;
+  }
+  &__result > section {
+    margin-top: 20px;
+  }
+  &__fingerprint {
+    overflow-wrap: anywhere;
+    font-family: token(font-mono);
+    font-size: 12px;
+  }
+  &__employee-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+    max-height: 280px;
+    overflow: auto;
+    padding: 10px;
+    border: 1px solid token(border);
+    border-radius: 8px;
+  }
+  &__tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-block: 16px;
+  }
+  &__tabs button[aria-pressed="true"] {
+    border-color: token(accent);
+    color: token(accent-text);
+    background: token(accent-soft);
+  }
+  &__fieldset {
+    border: 1px solid token(border);
+    border-radius: 8px;
+    margin: 0;
+    padding: 14px;
+    min-width: 0;
+  }
+  &__fieldset legend {
+    padding-inline: 6px;
+    font-weight: 600;
+  }
+  &__view-section {
+    min-width: 0;
+    > summary {
+      cursor: pointer;
+      padding: 12px 14px;
+      border: 1px solid token(border);
+      border-radius: 8px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    > div {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+      > * {
+        min-width: 0;
+        max-width: 100%;
+      }
+    }
+  }
+  &__record {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid token(border);
+  }
+  @media (max-width: 1000px) {
+    &__stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 760px) {
+    &__table-wrap > table.table {
+      display: table;
+      overflow: visible;
+      max-width: none;
+    }
+  }
+  @media (max-width: 650px) {
+    &__form-grid,
+    &__columns,
+    &__stats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    &__panel {
+      padding: 12px;
+    }
+    &__amounts > div {
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+    }
+  }
+}
+@media (pointer: coarse) {
+  .payroll-calculator :is(.btn, .input, summary),
+  .payroll-calculator__panel :is(.btn, .input, summary),
+  .payroll-calculator .field input.input:not([type="checkbox"]),
+  .payroll-calculator__panel .field input.input:not([type="checkbox"]) {
+    min-height: 44px;
+  }
+  .payroll-calculator .btn,
+  .payroll-calculator__panel .btn {
+    max-width: 100%;
+    white-space: normal;
+  }
+}

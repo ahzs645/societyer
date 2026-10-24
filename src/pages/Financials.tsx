@@ -88,6 +88,7 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
+import { useCompleteFinanceSummary } from "../features/financials/reports/useCompleteFinanceSummary";
 import { FinancialInsightsLazy } from "../features/financials/insights/lazy";
 import type { FinanceMoreMetrics } from "../features/financials/insights/FinancialInsights";
 import { TransactionLinkFilters } from "../features/financials/insights/TransactionLinkFilters";
@@ -107,18 +108,12 @@ export function FinancialsPage() {
     api.financialHub.connections,
     society ? { societyId: society._id } : "skip",
   );
-  const hub = useQuery(
-    api.financialHub.summary,
-    society ? { societyId: society._id } : "skip",
-  );
-  const accounts = useQuery(
-    api.financialHub.accounts,
-    society ? { societyId: society._id } : "skip",
-  );
-  const transactions = useQuery(
-    api.financialHub.transactions,
-    society ? { societyId: society._id, limit: 1000 } : "skip",
-  );
+  const [overviewCurrency, setOverviewCurrency] = useState<string | undefined>();
+  const completeTransactions = useCompleteFinanceSummary(society?._id, society?.fiscalYearEnd, overviewCurrency);
+  const hub = completeTransactions.summary;
+  const accounts = completeTransactions.allAccounts;
+  const transactions = completeTransactions.allTransactions;
+
   const trialBalance = useQuery(
     api.accounting.trialBalance,
     society ? { societyId: society._id } : "skip",
@@ -507,6 +502,7 @@ export function FinancialsPage() {
               <MoreActionsMenu
                 items={[
                   { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
+                  { id: "planning", label: "Semester cost planning", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/planning") },
                   {
                     id: "sync",
                     label: "Sync",
@@ -551,6 +547,7 @@ export function FinancialsPage() {
               <MoreActionsMenu
                 items={[
                   { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
+                  { id: "planning", label: "Semester cost planning", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/planning") },
                   { id: "check", label: "Check", icon: <ShieldCheck size={14} />, disabled: !canEditSettings || (busy || waveHealthBusy), onSelect: runWaveHealthCheck },
                 ]}
               />
@@ -585,6 +582,7 @@ export function FinancialsPage() {
       {tab === "transactions" && <TransactionRulesBar societyId={society._id} />}
       {tab === "transactions" && <MatchReceiptsButton societyId={society._id} />}
 
+      {(tab === "transactions" || tab === "overview") && <div className="books-report__note" role="status">{transactions ? `Complete transaction snapshot: ${transactions.length.toLocaleString()} records. Summary currency: ${completeTransactions.currency}.` : `Loading complete transaction history: ${completeTransactions.progress.toLocaleString()} records…`} <select className="input" style={{ width: 100 }} aria-label="Summary currency" value={completeTransactions.currency} onChange={(event) => setOverviewCurrency(event.target.value)}>{completeTransactions.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select><button className="btn btn--sm" onClick={completeTransactions.refresh}>Refresh complete transactions</button>{completeTransactions.error && <span className="field__error">{completeTransactions.error}</span>}</div>}
       {tab === "transactions" && (accounts ?? []).length > 0 && (
         <BankCsvImportCard
           societyId={society._id}

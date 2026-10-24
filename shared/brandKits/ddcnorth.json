@@ -1,0 +1,280 @@
+{
+  "id": "ddcnorth",
+  "name": "ddcnorth",
+  "version": "2.3-data-design-connection",
+  "colours": {
+    "black": "#000000",
+    "off-white": "#F7F6F3",
+    "graphite": "#4B4F56",
+    "midnight": "#0B2B4A",
+    "ice": "#C8D7E8",
+    "white": "#FFFFFF"
+  },
+  "roles": {
+    "ink": "black",
+    "paper": "off-white",
+    "muted": "graphite",
+    "primary": "midnight",
+    "light": "ice",
+    "reverse": "white",
+    "line": "#D9DCDF",
+    "rule": "#CFD2D4"
+  },
+  "symbol": {
+    "name": "six-dot",
+    "viewBox": [
+      0,
+      0,
+      256,
+      256
+    ],
+    "radius": 40,
+    "microRadius": 36,
+    "centres": [
+      [
+        40,
+        40
+      ],
+      [
+        128,
+        40
+      ],
+      [
+        216,
+        40
+      ],
+      [
+        128,
+        128
+      ],
+      [
+        216,
+        128
+      ],
+      [
+        216,
+        216
+      ]
+    ],
+    "columns": [
+      1,
+      2,
+      3
+    ],
+    "rows": [
+      3,
+      2,
+      1
+    ],
+    "orientation": "Three top dots; two right-aligned middle dots; one bottom-right dot.",
+    "horizontalPitch": 88,
+    "verticalPitch": 88,
+    "horizontalGap": 8,
+    "verticalGap": 8,
+    "title": "six-dot symbol",
+    "masterTitle": "six-dot geometric master",
+    "microDescription": "Optical micro variant: same six centres, radius 36. For favicons and symbols below 32 pixels in height only."
+  },
+  "wordmark": {
+    "height": 82.5,
+    "left": -0.5,
+    "glyphs": {
+      "d": "M66.5 0H48V31.7C42.5 25 36 21.8 27 21.8C10.8 21.8 -0.5 34.3 -0.5 52.5C-0.5 71 10.5 82.5 26.5 82.5C35.6 82.5 42.6 79.2 48 71V81.3H66.5ZM32.5 35.3C23.2 35.3 17.6 41.8 17.6 52C17.6 62.3 23.2 68 32.6 68C42.1 68 48.1 61.8 48.1 52C48.1 41.8 42.1 35.3 32.5 35.3Z",
+      "c": "M62.5 45H44.7C43.1 37.5 38.7 34.8 32.6 34.8C23.5 34.8 17.8 41.4 17.8 52.5C17.8 63.5 23.6 69.4 32.6 69.4C38.8 69.4 43.4 65.9 44.7 59H62.5C60.8 74.3 49.5 82.5 32 82.5C11.7 82.5 -0.4 71.2 -0.4 52.4C-0.4 33.7 11.7 21.5 32.5 21.5C50.9 21.5 61.1 29.5 62.5 45Z",
+      "north": "M9.26354029062087 47.51651254953764C9.26354029062087 35.90984147952443 16.020475561426686 31.060105680317037 24.41215323645971 31.060105680317037C33.02179656538969 31.060105680317037 38.03500660501981 36.12780713342139 38.03500660501981 46.09973579920739V81.19220607661822H47.29854689564068V45.445838837516504C47.29854689564068 30.133751651254947 37.76254953764861 22.55944517833553 26.1558784676354 22.55944517833553C18.854029062087186 22.55944517833553 13.02344782034346 25.556472919418752 9.04557463672391 32.0954425363276V23.649273447820335H0.0V81.19220607661822H9.26354029062087ZM83.00306472919418 82.49999999999999C98.96904887714663 82.49999999999999 109.70385733157198 70.07595772787317 109.70385733157198 52.52972258916776C109.70385733157198 34.874504623513864 98.96904887714663 22.34147952443857 83.00306472919418 22.34147952443857C67.03708058124174 22.34147952443857 56.302272126816376 34.874504623513864 56.302272126816376 52.52972258916776C56.302272126816376 70.07595772787317 67.03708058124174 82.49999999999999 83.00306472919418 82.49999999999999ZM83.00306472919418 74.10832232496696C72.1047820343461 74.10832232496696 65.67479524438573 65.60766182298546 65.67479524438573 52.52972258916776C65.67479524438573 39.342800528401575 72.15927344782034 30.73315719947159 83.00306472919418 30.73315719947159C93.84685601056802 30.73315719947159 100.33133421400262 39.39729194187582 100.33133421400262 52.52972258916776C100.33133421400262 65.55317040951122 93.90134742404226 74.10832232496696 83.00306472919418 74.10832232496696ZM118.70758256274767 81.19220607661822H127.97112285336854V45.77278731836195C127.97112285336854 36.018824306472915 133.47475561426683 31.71400264200792 139.85025099075295 31.71400264200792C142.52033025099075 31.71400264200792 144.7544782034346 32.14993394980184 145.51735799207398 32.3678996036988V23.10435931307793C144.7544782034346 22.99537648612945 143.28321003963012 22.77741083223249 141.59397622192864 22.77741083223249C134.4011096433289 22.77741083223249 129.87832232496697 26.75528401585204 127.75315719947159 32.69484808454425H127.53519154557463V23.649273447820335H118.70758256274767ZM178.00688243064727 23.649273447820335H166.34571994715984V7.955746367239101H157.08217965653895V23.649273447820335H146.83779392338175V31.605019815059435H157.08217965653895V68.223249669749C157.08217965653895 76.88738441215322 161.93191545574635 81.19220607661822 171.79486129458388 81.19220607661822H178.00688243064727V73.23645970937912H172.6667239101717C167.9259709379128 73.23645970937912 166.34571994715984 71.71070013210038 166.34571994715984 67.24240422721267V31.605019815059435H178.00688243064727ZM195.07533685601055 47.51651254953764C195.07533685601055 35.90984147952443 201.83227212681638 31.060105680317037 210.2239498018494 31.060105680317037C218.83359313077938 31.060105680317037 223.8468031704095 36.12780713342139 223.8468031704095 46.09973579920739V81.19220607661822H233.11034346103037V45.445838837516504C233.11034346103037 30.133751651254947 223.5743461030383 22.55944517833553 211.9676750330251 22.55944517833553C204.8292998678996 22.55944517833553 199.0532100396301 25.447490092470268 195.07533685601055 31.71400264200792V0.0H185.8117965653897V81.19220607661822H195.07533685601055Z"
+    },
+    "variants": {
+      "ddcnorth": {
+        "width": 438.910343,
+        "parts": [
+          {
+            "glyph": "d",
+            "x": 0,
+            "attrs": {
+              "data-letter": "d"
+            },
+            "fillRule": "evenodd"
+          },
+          {
+            "glyph": "d",
+            "x": 70,
+            "attrs": {
+              "data-letter": "d"
+            },
+            "fillRule": "evenodd"
+          },
+          {
+            "glyph": "c",
+            "x": 140,
+            "attrs": {
+              "data-letter": "c"
+            }
+          },
+          {
+            "glyph": "north",
+            "x": 205.8,
+            "attrs": {
+              "data-word": "north"
+            }
+          }
+        ]
+      },
+      "ddc": {
+        "width": 203,
+        "parts": [
+          {
+            "glyph": "d",
+            "x": 0,
+            "attrs": {
+              "data-letter": "d"
+            },
+            "fillRule": "evenodd"
+          },
+          {
+            "glyph": "d",
+            "x": 70,
+            "attrs": {
+              "data-letter": "d"
+            },
+            "fillRule": "evenodd"
+          },
+          {
+            "glyph": "c",
+            "x": 140,
+            "attrs": {
+              "data-letter": "c"
+            }
+          }
+        ]
+      }
+    },
+    "editable": {
+      "hybrid": {
+        "family": "ddcnorth",
+        "wrap": true,
+        "title": "{name} / hybrid / font-dependent approximation",
+        "parts": [
+          {
+            "glyph": "d",
+            "x": 0,
+            "attrs": {
+              "data-letter": "d"
+            },
+            "fillRule": "evenodd"
+          },
+          {
+            "glyph": "d",
+            "x": 70,
+            "attrs": {
+              "data-letter": "d"
+            },
+            "fillRule": "evenodd"
+          },
+          {
+            "glyph": "c",
+            "x": 140,
+            "attrs": {
+              "data-letter": "c"
+            }
+          },
+          {
+            "element": "text",
+            "attrs": {
+              "x": 198.934082,
+              "y": 81.192206,
+              "font-family": "Inter Display, Inter, sans-serif",
+              "font-size": 111.598415,
+              "font-weight": "400",
+              "letter-spacing": -1.78557464
+            },
+            "content": "north"
+          }
+        ]
+      },
+      "text": {
+        "family": "ddcnorth",
+        "wrap": false,
+        "title": "{name} / text / font-dependent approximation",
+        "parts": [
+          {
+            "element": "text",
+            "attrs": {
+              "fill": "{colour}",
+              "x": "0",
+              "y": 81.192206,
+              "font-family": "Inter Display, Inter, sans-serif",
+              "font-size": 111.598415,
+              "letter-spacing": "-3.5",
+              "font-weight": "800"
+            },
+            "content": "ddc"
+          },
+          {
+            "element": "text",
+            "attrs": {
+              "fill": "{colour}",
+              "x": 198.934082,
+              "y": 81.192206,
+              "font-family": "Inter Display, Inter, sans-serif",
+              "font-size": 111.598415,
+              "font-weight": "400",
+              "letter-spacing": -1.78557464
+            },
+            "content": "north"
+          }
+        ]
+      }
+    },
+    "provenance": {
+      "north": {
+        "font": "Inter Display Regular",
+        "version": "4.001;git-9221beed3",
+        "fontSize": 111.598415,
+        "textX": 198.934082,
+        "baseline": 81.192206,
+        "trackingEm": -0.016
+      },
+      "liveDDCWeight": 800,
+      "liveApproximationOnly": true
+    }
+  },
+  "lockup": {
+    "iconHeight": 120,
+    "iconGap": 8,
+    "stackedIconHeight": 128,
+    "stackedTypeHeight": 88,
+    "stackedGap": 28,
+    "canvasPadding": 16,
+    "wordmarkHeight": 120,
+    "clearspaceRecommendation": "At least one dot diameter around the visible artwork.",
+    "minimumSymbolHeightPx": 32,
+    "minimumHorizontalWidthPx": 220,
+    "minimumSymbolHeightMm": 8,
+    "minimumHorizontalWidthMm": 55
+  },
+  "copy": {
+    "svgDescription": "ddcnorth v2.1 six-dot identity with equal horizontal and vertical dot spacing. Original v1 wordmark outlines retained. Self-contained vector artwork.",
+    "templateDescription": "Updated ddcnorth application using the six-dot symbol and the original outlined wordmark. Application text is live and editable. No embedded raster image, external asset, or font binary.",
+    "logoLabel": "ddcnorth outlined logo",
+    "motifLabel": "Six-dot brand motif",
+    "tagline": "Built for what’s next.",
+    "descriptor": "Data · Design · Connection"
+  },
+  "typography": {
+    "headlines": {
+      "family": "Inter Display",
+      "weight": 500,
+      "trackingEm": -0.04
+    },
+    "body": {
+      "family": "Inter",
+      "weight": 400
+    },
+    "labels": {
+      "family": "Space Mono",
+      "weight": 400,
+      "trackingEm": 0.12
+    },
+    "note": "Inter / Space Mono are labelled in source panel 09, with \"or similar\" qualifiers. The original wordmark typeface is unverified. ddc is a custom-drawn logo, not a font."
+  }
+}

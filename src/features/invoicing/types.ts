@@ -1,3 +1,6 @@
+import type { InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
+import type { DocumentExtras } from "../../../shared/documentExtras";
+import type { InvoiceTemplate, InvoicePriceList, RepairStatus } from "../../../shared/invoiceCommerce";
 import type { CustomerSummary, InvoiceLine, InvoicePayment, InvoiceStatus, InvoiceTotals } from "../../../shared/invoicing";
 import type { BooksStart, CategoryAccount, NeedsActionFlag } from "../../../shared/invoiceLedger";
 
@@ -21,10 +24,18 @@ export type InvoiceRow = {
   billToName: string;
   billToEmail?: string;
   billToAddress?: string;
+  shipToName?: string;
+  shipToAddress?: string;
   issueDate: string;
   terms: string;
   dueDate: string;
   reference?: string;
+  documentTemplate?: InvoiceTemplate;
+  money?: InvoiceMoneyOptions; documentExtras?: DocumentExtras;
+  cashPaidCents?: number; creditCents?: number; writeOffCents?: number; refundCents?: number;
+  fxRevaluations?: Array<{key:string;date:string;rateMicros:number;source?:string;invoiceBalanceCents:number;baseBalanceCents:number;adjustmentCents:number;journalEntryId?:string;reversedDate?:string;reversalJournalEntryId?:string}>;
+  priceListId?: string;
+  repairJobId?: string;
   currency: string;
   lines: InvoiceLine[];
   discount?: { kind: "percent" | "amount"; value: number };
@@ -59,10 +70,14 @@ export type InvoiceLedgerState = {
   paymentsToPost: number;
 };
 
-export type CatalogItem = {
+export type CatalogItem = Partial<Pick<InvoiceLine, "taxMode" | "imageUrl" | "manufacturer" | "partNumber" | "upc" | "ean" | "isbn" | "customField" | "batchNumber" | "serialNumbers">> & {
   _id: string;
   name: string;
   description?: string;
+  kind?: "item" | "service";
+  sku?: string;
+  unit?: string;
+  currency?: string;
   unitPriceCents: number;
   taxRatePercent?: number;
   taxLabel?: string;
@@ -89,6 +104,8 @@ export type InvoiceSeriesRow = {
   billToName: string;
   billToEmail?: string;
   billToAddress?: string;
+  shipToName?: string;
+  shipToAddress?: string;
   terms: string;
   reference?: string;
   currency: string;
@@ -103,6 +120,8 @@ export type InvoiceSeriesRow = {
 };
 
 export type MoneyInTransaction = {
+  releasedDate?: string;
+  currency?: string;
   _id: string;
   date: string;
   amountCents: number;
@@ -132,6 +151,7 @@ export type DuesCandidate = {
 
 export type InvoiceSettings = {
   _id?: string;
+  defaultTemplateId?: string;
   prefix: string;
   nextNumber: number;
   nextNumberPreview: string;
@@ -146,7 +166,7 @@ export type InvoiceSettings = {
   categoryAccounts?: CategoryAccount[];
 };
 
-export type LedgerAccountOption = { _id: string; label: string; accountType: string };
+export type LedgerAccountOption = { currency?: string; _id: string; label: string; accountType: string };
 
 /** The books side of the workspace: mapping, choosable accounts and what blocks posting. */
 export type InvoiceLedgerView = {
@@ -173,6 +193,7 @@ export type InvoicePostingPreview = {
 
 export type InvoiceOrganization = {
   name?: string;
+  logoUrl?: string | null;
   entityType?: string;
   address?: string;
   registrationNumber?: string;
@@ -187,6 +208,9 @@ export type InvoiceWorkspace = {
   settings: InvoiceSettings;
   organization: InvoiceOrganization;
   invoices: InvoiceRow[];
+  templates?: Array<{ _id: string; config: InvoiceTemplate; active: boolean }>;
+  priceLists?: InvoicePriceList[];
+  repairJobs?: RepairJob[];
   catalog: CatalogItem[];
   series: InvoiceSeriesRow[];
   parties: { members: PartyOption[]; organizations: PartyOption[] };
@@ -208,4 +232,11 @@ export type InvoiceWorkspace = {
   ledger: InvoiceLedgerView;
 };
 
-export type InvoiceTab = "all" | "drafts" | "outstanding" | "overdue" | "paid" | "needs_action" | "recurring" | "customers" | "catalog";
+export type InvoiceTab = "all" | "drafts" | "outstanding" | "overdue" | "paid" | "needs_action" | "recurring" | "customers" | "catalog" | "templates" | "price_lists" | "repairs" | "quotes" | "statements" | "automation";
+
+export type RepairJob = {
+  _id: string; number: string; partyKind: "member" | "organization" | "custom"; memberId?: string; counterpartyId?: string;
+  billToName: string; billToEmail?: string; billToAddress?: string; asset: string; serialNumber?: string;
+  problem: string; notes?: string; receivedDate: string; targetDate?: string; currency: string; status: RepairStatus;
+  lines: InvoiceLine[]; totalCents: number; timeline: InvoiceTimelineEvent[]; invoice?: InvoiceRow | null;
+};

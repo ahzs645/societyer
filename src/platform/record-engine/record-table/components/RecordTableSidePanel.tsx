@@ -371,6 +371,7 @@ function SidePanelField({
 
   const commitEdit = async (nextValue: unknown) => {
     setIsEditing(false);
+    if (!canEdit) return;
     if (Object.is(nextValue, value)) return;
     await onUpdate?.({ recordId, fieldName: field.name, value: nextValue });
   };
@@ -379,7 +380,7 @@ function SidePanelField({
   // getBoundingClientRect) drifts away from the row when the on-screen
   // keyboard pans the viewport. Render the editor inline in the value slot
   // instead, so it always sits exactly where the value is displayed.
-  if (isMobile && isEditing) {
+  if (isMobile && isEditing && canEdit) {
     return (
       <div className="record-side-panel__field record-side-panel__field--editing">
         <span className="record-side-panel__field-icon" aria-hidden="true">
@@ -441,7 +442,7 @@ function SidePanelField({
       ) : (
         <span aria-hidden="true" />
       )}
-      {isEditing ? (
+      {isEditing && canEdit ? (
         <RecordTableFloatingCellEditor
           anchorRef={valueAnchorRef}
           value={value}

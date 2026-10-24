@@ -1,0 +1,3 @@
+{
+  "node": { "externalPackages": ["@formepdf/core", "@formepdf/react", "react"] }
+}

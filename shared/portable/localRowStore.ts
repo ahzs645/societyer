@@ -31,6 +31,7 @@ import type {
   PortableDoc,
   PortableGetOptions,
   PortableQuery,
+  PaginationOptions,
   SearchFilterBuilder,
   TableName,
 } from "./ctx";
@@ -198,7 +199,7 @@ class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
     if (rows.length > 1) throw new Error("unique() found more than one matching document");
     return rows[0] ? (await this.output([rows[0]]))[0] : null;
   }
-  async paginate(opts: { numItems: number; cursor: string | null }) {
+  async paginate(opts: PaginationOptions) {
     const rows = await this.run();
     const start = opts.cursor ? Number(opts.cursor) : 0;
     const page = await this.output(rows.slice(start, start + opts.numItems));
@@ -316,7 +317,9 @@ export class LocalStoreDb implements PortableDbWriter {
       const fields: string[] = [];
       const values: unknown[] = [];
       for (const constraint of constraints) {
-        if (constraint.op !== "eq" || fields.includes(constraint.field)) continue;
+        // Local secondary caches contain top-level fields. Nested Convex index
+        // paths must be evaluated by matchesConstraints after candidate lookup.
+        if (constraint.op !== "eq" || constraint.field.includes(".") || fields.includes(constraint.field)) continue;
         fields.push(constraint.field);
         values.push(constraint.value);
       }

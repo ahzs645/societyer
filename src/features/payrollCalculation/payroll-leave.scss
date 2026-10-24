@@ -1,0 +1,37 @@
+.payroll-leave {
+  display: grid;
+  gap: 1rem;
+  &__day {
+    display: grid;
+    grid-template-columns: minmax(10rem, 1fr) minmax(8rem, 1fr) minmax(
+        14rem,
+        2fr
+      ) auto;
+    gap: 0.75rem;
+    align-items: end;
+    margin-block: 0.75rem;
+  }
+  &__request {
+    margin-block: 0.75rem;
+  }
+  &__history {
+    margin-block: 0.75rem;
+    ol {
+      padding-inline-start: 1.25rem;
+    }
+    li + li {
+      margin-block-start: 0.5rem;
+    }
+  }
+  &__details {
+    padding-block: 0.25rem;
+  }
+  &__stats {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+  @media (max-width: 760px) {
+    &__day {
+      grid-template-columns: 1fr;
+    }
+  }
+}

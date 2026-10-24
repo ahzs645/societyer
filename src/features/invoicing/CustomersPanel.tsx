@@ -1,20 +1,22 @@
-import { FilePlus2, Users } from "lucide-react";
+import { FilePlus2, FileText, Users } from "lucide-react";
 import { EmptyState } from "../../components/ui";
 import { Money } from "../../components/Money";
 import { formatDate } from "../../lib/format";
 import type { CustomerSummary } from "../../../shared/invoicing";
 
 type Props = {
+  currency?: string;
   customers: CustomerSummary[];
   canWrite: boolean;
   onShowInvoices: (customer: CustomerSummary) => void;
   onNewInvoice: (customer: CustomerSummary) => void;
+  onStatement?: (customer: CustomerSummary) => void;
 };
 
 const KIND_LABEL: Record<string, string> = { member: "Member", organization: "Customer", custom: "One-off" };
 
 /** Everyone who has been billed, with what they owe. */
-export function CustomersPanel({ customers, canWrite, onShowInvoices, onNewInvoice }: Props) {
+export function CustomersPanel({ currency = "CAD", customers, canWrite, onShowInvoices, onNewInvoice, onStatement }: Props) {
   return (
     <div className="card invoice-card">
       <div className="card__head">
@@ -47,13 +49,14 @@ export function CustomersPanel({ customers, canWrite, onShowInvoices, onNewInvoi
                   <span className="muted invoice-table__sub">{[KIND_LABEL[customer.partyKind] ?? "Customer", customer.email].filter(Boolean).join(" · ")}</span>
                 </td>
                 <td data-label="Invoices" className="num">{customer.invoiceCount}</td>
-                <td data-label="Billed" className="num"><Money cents={customer.billedCents} /></td>
+                <td data-label="Billed" className="num"><Money cents={customer.billedCents} currency={currency} /></td>
                 <td data-label="Outstanding" className="num">
-                  {customer.outstandingCents > 0 ? <Money cents={customer.outstandingCents} /> : <span className="muted">—</span>}
-                  {customer.overdueCents > 0 && <span className="invoice-table__overdue"><Money cents={customer.overdueCents} /> overdue</span>}
+                  {customer.outstandingCents > 0 ? <Money cents={customer.outstandingCents} currency={currency} /> : <span className="muted">—</span>}
+                  {customer.overdueCents > 0 && <span className="invoice-table__overdue"><Money cents={customer.overdueCents} currency={currency} /> overdue</span>}
                 </td>
                 <td data-label="Last invoice">{customer.lastIssueDate ? formatDate(customer.lastIssueDate) : "—"}</td>
                 <td className="invoice-table__actions">
+                  {onStatement && <button type="button" className="btn btn--ghost btn--sm" onClick={() => onStatement(customer)}><FileText size={14} aria-hidden="true" />Statement</button>}
                   <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => onNewInvoice(customer)}>
                     <FilePlus2 size={14} aria-hidden="true" /> Invoice
                   </button>

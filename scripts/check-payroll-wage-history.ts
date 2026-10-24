@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import { calculateBcEarnings, bcStatutoryHolidayPay, type BcEarningsInput } from '../shared/payrollEarnings';
+import { deriveBcWageHistory } from '../shared/payrollWageHistory';
+
+const base = (patch: Partial<BcEarningsInput> = {}): BcEarningsInput => ({ periodStart: '2026-06-07', periodEnd: '2026-06-13', payDate: '2026-06-19', employmentStartDate: '2020-01-01', policy: 'ordinary_bc', restPeriodsConfirmed: true, context: { from: '2026-06-07', to: '2026-06-13', complete: true }, workDays: [{date:'2026-06-08',minutes:600,hourlyRateCents:2500}], vacation:{mode:'accrue'}, ...patch });
+const derive = (input: BcEarningsInput) => {
+  const earnings=calculateBcEarnings(input); assert.deepEqual(earnings.blockers,[]);
+  return {earnings,...deriveBcWageHistory(input,earnings)};
+};
+const hourly=derive(base());
+assert.equal(hourly.earnings.bases.cashCents,27500);
+assert.deepEqual(hourly.history,[{date:'2026-06-08',nonOvertimeWagesCents:20000,workedOrEarned:true}]);
+const continuousInput=base({periodStart:'2026-06-08',periodEnd:'2026-06-14',context:{from:'2026-06-07',to:'2026-06-20',complete:true},vacation:{mode:'pay_each_cheque',eachChequeAgreementConfirmed:true}});
+const continuous=derive(continuousInput);
+assert.equal(continuous.history.length,1);assert.equal(continuous.history[0].nonOvertimeWagesCents,21650,'per-cheque vacation earned on ordinary and overtime wages stays on its actual earned Monday');
+const legacyVacation={...continuous.earnings,lines:continuous.earnings.lines.map(line=>line.code==='VACATION_PAID'?{...line,date:'2026-06-14'}:line)};
+const legacyDaily=deriveBcWageHistory(continuousInput,legacyVacation);
+assert.deepEqual(legacyDaily.unknownDates,['2026-06-14']);assert.ok(!legacyDaily.history.some(day=>day.date==='2026-06-14'),'a payment-date-only vacation lump never invents an earned Sunday');
+assert.deepEqual(derive(base({workDays:[{date:'2026-06-08',minutes:480,hourlyRateCents:2500,restPremiumMinutes:120}]})).unknownDates,['2026-06-08'],'legacy mixed s36 rest/s40 overtime lines need reviewed distinct averaging bases');
+const week=Array.from({length:6},(_,i)=>({date:`2026-06-${String(i+8).padStart(2,'0')}`,minutes:480,hourlyRateCents:2500}));
+const partial=derive(base({periodStart:'2026-06-13',workDays:week}));
+assert.deepEqual(partial.history,[{date:'2026-06-13',nonOvertimeWagesCents:0,workedOrEarned:true}],'a fully weekly-overtime day counts as worked but its full wages are excluded');
+for (const normalWeeklyMinutes of [2400,2700]) {
+  const salary=derive(base({salary:{basis:'annual',amountCents:normalWeeklyMinutes===2400?5200000:5850000,normalWeeklyMinutes,averageWeeklyMinutes:normalWeeklyMinutes,periodSalaryCents:normalWeeklyMinutes===2400?100000:112500,coveredStraightTimeMinutes:normalWeeklyMinutes},workDays:week.slice(0,5).map(day=>({...day,minutes:540,hourlyRateCents:0}))}));
+  assert.equal(salary.history.reduce((n,day)=>n+day.nonOvertimeWagesCents,0),100000,'exclude all salary-covered overtime, including the embedded 1x wage');
+  assert.ok(salary.history.every(day=>day.nonOvertimeWagesCents===20000));
+}
+const exactSalary=derive(base({salary:{basis:'annual',amountCents:5500000,normalWeeklyMinutes:2700,averageWeeklyMinutes:2700,periodSalaryCents:105770,coveredStraightTimeMinutes:2700},workDays:week.slice(0,5).map(day=>({...day,minutes:540,hourlyRateCents:0}))}));
+assert.equal(exactSalary.history.reduce((n,day)=>n+day.nonOvertimeWagesCents,0),94018,'frozen exact salary rate removes11752c of underlyingOT, without rounding its hourly displayrate');
+assert.equal(exactSalary.unknownDates,undefined);
+const salaryLeave=derive(base({salary:{basis:'annual',amountCents:5200000,normalWeeklyMinutes:2400,averageWeeklyMinutes:2400,periodSalaryCents:100000,coveredStraightTimeMinutes:2400},workDays:week.slice(0,5).map(day=>({...day,minutes:0,hourlyRateCents:0,paidVacationMinutes:480,salaryVacationSourceReference:'Approved ordinary annualleave'})),salaryVacationLiability:{availableAccruedCents:100000,sourceEvidence:'Reviewed opening'}}));
+assert.equal(salaryLeave.history.reduce((n,day)=>n+day.nonOvertimeWagesCents,0),100000,'actual paid annual leave wages stay in the average');
+const priorDates=['2026-08-17','2026-08-18','2026-08-19','2026-08-20','2026-08-21','2026-08-24','2026-08-25','2026-08-26','2026-08-27','2026-08-28','2026-08-31'];
+const prior=derive(base({periodStart:'2026-08-16',periodEnd:'2026-08-31',payDate:'2026-09-07',context:{from:'2026-08-16',to:'2026-09-05',complete:true},workDays:priorDates.map((date,index)=>({date,minutes:index?480:600,hourlyRateCents:2500}))}));
+assert.equal(prior.history.length,11); assert.ok(prior.history.every(day=>day.nonOvertimeWagesCents===20000));
+const currentDates=['2026-09-01','2026-09-02','2026-09-03','2026-09-04'];
+const currentInput=base({periodStart:'2026-09-01',periodEnd:'2026-09-07',payDate:'2026-09-14',context:{from:'2026-08-30',to:'2026-09-12',complete:true},historyCompleteFrom:'2026-08-08',workDays:[{date:'2026-08-31',minutes:480,hourlyRateCents:2500},...currentDates.map(date=>({date,minutes:480,hourlyRateCents:2500})),{date:'2026-09-07',minutes:0,hourlyRateCents:2500}],history:[...prior.history,...currentDates.map(date=>({date,nonOvertimeWagesCents:0,workedOrEarned:true}))]});
+const preliminary=derive(currentInput);
+const actualHistory=[...prior.history,...preliminary.history.filter(day=>day.date<'2026-09-07')];
+const settled=derive({...currentInput,history:actualHistory});
+assert.equal(settled.earnings.lines.find(line=>line.code==='STAT_AVERAGE')?.amountCents,20000,'15 actual native earned days spanning runs give the exact holiday average with no manual history');
+assert.equal(bcStatutoryHolidayPay({date:'2026-09-07',employmentStartDate:'2020-01-01',history:actualHistory,historyCompleteFrom:'2026-08-08'}).holidayPayCents,20000);
+assert.equal(derive({...currentInput,history:actualHistory}).history.find(day=>day.date==='2026-09-07')?.nonOvertimeWagesCents,20000);
+const holidayWorked=derive({...currentInput,history:actualHistory,workDays:currentInput.workDays.map(day=>day.date==='2026-09-07'?{...day,minutes:780}:day)});
+assert.equal(holidayWorked.history.find(day=>day.date==='2026-09-07')?.nonOvertimeWagesCents,70000,'statutory holiday wages under s46 stay in the average; overtime wages are s37/s40');
+const holidaySalary=derive(base({periodStart:'2026-10-12',periodEnd:'2026-10-12',payDate:'2026-10-16',context:{from:'2026-10-11',to:'2026-10-17',complete:true},historyCompleteFrom:'2026-09-12',history:Array.from({length:15},(_,i)=>({date:`2026-09-${String(i+15).padStart(2,'0')}`,nonOvertimeWagesCents:20000,workedOrEarned:true})),salary:{basis:'annual',amountCents:5200000,normalWeeklyMinutes:2400,averageWeeklyMinutes:2400,periodSalaryCents:32500,coveredStraightTimeMinutes:780},workDays:[{date:'2026-10-12',minutes:780,hourlyRateCents:0,salaryIncludedHolidayCents:0}]}));
+assert.equal(holidaySalary.earnings.bases.cashCents,70000);
+assert.equal(holidaySalary.history[0].nonOvertimeWagesCents,70000,'salary-covered holiday doubletime retains both its embedded1x and additional1x under s46');
+const custom=base({additionalEarnings:[{date:'2026-06-08',code:'EXTERNAL',label:'Unknown ESA wage classification',kind:'bonus',amountCents:10000,cash:true,taxable:true,pensionable:true,insurable:true,vacationable:true,eht:true,workSafe:true}]});
+assert.deepEqual(derive(custom).unknownDates,['2026-06-08']);
+const blockedInput=base({restPeriodsConfirmed:false});
+assert.deepEqual(deriveBcWageHistory(blockedInput,calculateBcEarnings(blockedInput)).history,[]);
+assert.deepEqual(deriveBcWageHistory(blockedInput,calculateBcEarnings(blockedInput)).unknownDates,['2026-06-08']);
+assert.deepEqual(deriveBcWageHistory(base(),{...hourly.earnings,lines:[]}).unknownDates,['2026-06-08'],'missing frozen wages cannot turn into a worked day with invented zero wages');
+console.log('Native daily non-overtime wage history, exact salary coverage, paid leave and cross-period holiday checks passed');

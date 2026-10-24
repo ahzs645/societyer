@@ -18,7 +18,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", "continuity"],
   commitments: ["commitments", "goals"],
   agreements: ["agreements"],
-  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "transactionLines", "financeTags", "payeeAliases", "invoices", "bills", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd", "payroll", "corporateCards", "investments", "bankAccounts", "receiptInbox", "spendBudgets"],
+  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "transactionLines", "financeTags", "payeeAliases", "invoices", "invoicePreferences", "billingDocuments", "commerceReports", "billingAutomation", "billingAutomationActions", "bills", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd", "payroll", "corporateCards", "investments", "bankAccounts", "receiptInbox", "spendBudgets", "costPlanning", "payrollCalculation", "payrollLeave", "payrollTd1", "payrollRules", "payrollRoeWorkflow", "payrollRemittance"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps", "procurementReview"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents", "aiFilterActions"],
@@ -54,6 +54,12 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   payRuns: "payroll", payrollRemittances: "payroll", payrollSlips: "payroll", recordsOfEmployment: "payroll",
   cardStatements: "corporateCards", investmentHoldings: "investments",
   billVendors: "bills",
+  costPlanningPeriods: "costPlanning", costPlanningItems: "costPlanning", staffCostPlans: "costPlanning",
+  payrollEmployerProfiles: "payrollCalculation", payrollEmployeeProfiles: "payrollCalculation", payrollEarningCodes: "payrollCalculation",
+  payrollWorkDays: "payrollCalculation", payrollOpeningBalances: "payrollCalculation", payrollCalculations: "payrollCalculation",
+  payrollTd1Declarations: "payrollTd1", payrollRuleEditions: "payrollRules", payrollRoeWorkflowCases: "payrollRoeWorkflow",
+  payrollRemittancePlans: "payrollRemittance", payrollRemittanceSettlements: "payrollRemittance", payrollRemittanceReadiness: "payrollRemittance",
+  payrollVacationPeriods: "payrollLeave", payrollVacationRequests: "payrollLeave",
   journalEntries: "accounting", financialAccounts: "accounting",
 };
 const HANDLER_POLICIES = new Set([
@@ -81,6 +87,9 @@ const PUBLIC_HANDLERS = new Set(["http:authCapabilities", "http:deploymentCapabi
 // references. Keep the exceptions endpoint-specific: targetId and other row
 // references in the same request still require workspace ownership.
 const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
+  "payrollRules:saveDraft": ["baseOfficialId"],
+  // Provider run/worker identities are retained text, not local table IDs.
+  "payroll:savePayRun": ["providerRunId", "correctionOfProviderRunId", "providerEmployeeId"],
   // Observation keys live within a minutes record; both minutes IDs remain owned references.
   "minutes:carryForwardAction": ["sourceEntryId"],
   // Task handlers validate known source-correlation keys or actual completion IDs.
@@ -147,6 +156,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (name === "files:generateLogoUploadUrl") return "society:write";
   if (name === "calendarFeed:getFeedToken") return "settings:write";
   if (name === "documents:recordOpen") return "documents:read";
+  // Readers may save their own presentation preferences. Handlers enforce user ownership.
+  if (["invoicePreferences:saveView", "invoicePreferences:removeView"].includes(name)) return "financials:read";
   if (name === "workflows:generatedDocumentPreflight") return "tasks:write";
   if (["documentVersions:getDownloadTarget", "documentVersions:getDownloadUrl", "workflows:inspectPdfTemplate"].includes(name)) return "documents:read";
   if (name === "minutes:approve") return "minutes:approve";

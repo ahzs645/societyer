@@ -113,7 +113,9 @@ function compare(a: unknown, b: unknown): number {
 
 export function matchesConstraints(doc: PortableDoc, constraints: Constraint[]): boolean {
   for (const c of constraints) {
-    const v = doc[c.field];
+    // Convex indexes can target nested object fields (for example,
+    // fields.validUntil). Match the same path in both local query adapters.
+    const v = c.field.split(".").reduce<unknown>((value, part) => value && typeof value === "object" ? (value as Record<string, unknown>)[part] : undefined, doc);
     if (c.op === "eq" && v !== c.value) return false;
     if (c.op === "gt" && !(compare(v, c.value) > 0)) return false;
     if (c.op === "gte" && !(compare(v, c.value) >= 0)) return false;

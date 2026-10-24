@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChartCard, RankedBars, formatRange, type DateRange, type RankedBarRow } from "../../../components/charts";
-import { formatMoney } from "../../../lib/money";
+import { formatMoney as baseFormatMoney, type MoneyFormatOptions } from "../../../lib/money";
 import type { FinanceTxn } from "./series";
 import { topFlows, type FlowDirection, type FlowGrouping } from "./topFlows";
 import { transactionFilterHref } from "./transactionFilterLink";
@@ -22,7 +22,8 @@ const count = (n: number, one: string, many: string) => `${n.toLocaleString("en-
  * chosen above the charts. Each row opens the Transactions tab filtered to
  * it, with the same dates and direction.
  */
-export function TopFlowsCard({ grouping, txns, range, loading }: { grouping: FlowGrouping; txns: FinanceTxn[]; range: DateRange; loading: boolean }) {
+export function TopFlowsCard({ grouping, txns, range, loading, currency = "CAD" }: { currency?: string; grouping: FlowGrouping; txns: FinanceTxn[]; range: DateRange; loading: boolean }) {
+  const formatMoney = (value: number, options?: MoneyFormatOptions) => baseFormatMoney(value, { ...options, currency });
   const [direction, setDirection] = useState<FlowDirection>("out");
   const copy = COPY[grouping];
   const flows = useMemo(() => topFlows(txns, range, grouping, direction), [direction, grouping, range, txns]);
@@ -83,6 +84,7 @@ export function TopFlowsCard({ grouping, txns, range, loading }: { grouping: Flo
       ) : undefined}
     >
       <RankedBars
+        formatValue={(value) => formatMoney(value)}
         rows={rows}
         tone={direction}
         ariaLabel={`${copy.title} by ${directionWords}`}

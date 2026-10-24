@@ -22,6 +22,7 @@ import type {
   PortableMutationCtx,
   PortableQuery,
   PortableQueryCtx,
+  PaginationOptions,
   SearchFilterBuilder,
   TransactionalDb,
 } from "../../shared/portable/ctx";
@@ -99,7 +100,7 @@ class ConvexPortableQuery<T extends PortableDoc> implements PortableQuery<T> {
     return this.project(rows[0] ?? null);
   }
 
-  async paginate(opts: { numItems: number; cursor: string | null }) {
+  async paginate(opts: PaginationOptions) {
     if (!this.predicates.length) {
       const res = await this.inner.paginate(opts);
       return { page: (res.page as T[]).map((row) => this.project(row)), isDone: res.isDone as boolean, continueCursor: res.continueCursor as string };

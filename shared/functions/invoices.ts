@@ -1,3 +1,8 @@
+import { cleanInvoiceMoney, convertInvoiceCents, settlementTotals, explicitFxQuote, type InvoiceMoneyOptions } from "../invoiceMoney";
+import { cleanDocumentExtras, type DocumentExtras } from "../documentExtras";
+import { cleanInvoiceLineDetails } from "../invoiceLineDetails";
+import { assertRepairBillablePortable, assertRepairApprovalPortable } from "./repairOperationsGuard";
+import { cleanInvoiceTemplate, invoiceCurrency, REPAIR_TRANSITIONS, REPAIR_STATUS_LABEL, type InvoiceTemplate, type RepairStatus } from "../invoiceCommerce";
 /**
  * PORTABLE FUNCTIONS: invoicing (receivables).
  *
@@ -29,7 +34,8 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireOwnedRow, requireRolePortable, requireSocietyMembership } from "./access";
 import { flagChangedPeriods } from "./reconciliation";
-import { assertPeriodOpen } from "./accounting";
+import { assertPeriodOpen, TRANSACTION_BACKFILL_SOURCE, BILL_BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE } from "./accounting";
+import { journalBasisOf, type JournalBasis } from "../booksReports";
 import { assertBooksOpen } from "./booksLock";
 import {
   accrualBlockers,
@@ -47,6 +53,7 @@ import {
   syncAccrual,
   unmappedItems,
   unpostPayment,
+  prepareSettlementReversal, reverseSettlementPosting, reverseOpenInvoiceRevaluations, postLedgerEntry, entryLines, postedEntry,
   withPosting,
   type InvoiceLedgerContext,
   type LedgerAccount,
@@ -64,6 +71,7 @@ import {
   invoiceNeedsAction,
   normalizeRevenueCategory,
   paymentPostingLines,
+  type InvoiceLedgerLine,
   type NeedsActionFlag,
 } from "../invoiceLedger";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
@@ -79,6 +87,7 @@ import {
   formatInvoiceNumber,
   isCalendarDate,
   isOpenStatus,
+  invoiceCashActivity,
   monthBounds,
   nextInvoiceSequence,
   normalizeInvoicePrefix,
@@ -138,6 +147,7 @@ function settingsView(row: Row | null, invoices: Row[]) {
     paymentInstructions: row?.paymentInstructions,
     defaultMemo: row?.defaultMemo,
     replyToEmail: row?.replyToEmail,
+    defaultTemplateId: row?.defaultTemplateId,
     ...mappingOf(row),
   };
 }
@@ -160,11 +170,14 @@ function cleanText(value: unknown, max = 2000): string | undefined {
 function cleanLines(lines: any[]): InvoiceLine[] {
   return (lines ?? []).slice(0, 100).map((raw, index) => {
     const line: InvoiceLine = {
+      ...cleanInvoiceLineDetails(raw ?? {}),
       key: cleanText(raw?.key, 60) ?? `line_${index + 1}`,
       item: String(raw?.item ?? "").trim().slice(0, 200),
       quantity: Math.round(Number(raw?.quantity) * 1000) / 1000,
       unitPriceCents: Math.round(Number(raw?.unitPriceCents)),
     };
+    if (raw?.unit) line.unit = cleanText(raw.unit, 30);
+    if (raw?.sku) line.sku = cleanText(raw.sku, 100);
     const description = cleanText(raw?.description, 1000);
     if (description) line.description = description;
     if (raw?.catalogItemId) line.catalogItemId = String(raw.catalogItemId);
@@ -234,7 +247,7 @@ async function cleanParty(ctx: PortableQueryCtx, societyId: string, args: PartyA
   if (!billToName) throw new Error("Add who the invoice is for.");
   const billToEmail = cleanText(args.billToEmail, 200);
   if (billToEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billToEmail)) throw new Error("The email address doesn't look right.");
-  return { ...party, billToName, billToEmail, billToAddress: cleanText(args.billToAddress, 500) };
+  return { partyKind, memberId: party.memberId as string | undefined, counterpartyId: party.counterpartyId as string | undefined, billToName, billToEmail, billToAddress: cleanText(args.billToAddress, 500) };
 }
 
 async function assertCatalogRefs(ctx: PortableQueryCtx, societyId: string, lines: InvoiceLine[]) {
@@ -254,7 +267,7 @@ function event(kind: string, label: string, actor?: string, amountCents?: number
 type DecoratedInvoice = Row & { status: InvoiceStatus; totalCents: number; paidCents: number; balanceCents: number; issueDate: string; sequence: number; number: string; billToName: string };
 
 function decorate(row: Row, today: string, seriesById: Map<string, Row>, txnById: Map<string, Row>): DecoratedInvoice {
-  const totals = computeInvoiceTotals(row.lines ?? [], row.discount);
+  const totals = computeInvoiceTotals(row.lines ?? [], row.discount, row.money);
   const paid = sumPaid(row.payments);
   const status = deriveInvoiceStatus({ status: row.status, dueDate: row.dueDate, totalCents: totals.totalCents, payments: row.payments }, today);
   const balanceCents = row.status === "void" ? 0 : totals.totalCents - paid;
@@ -263,6 +276,7 @@ function decorate(row: Row, today: string, seriesById: Map<string, Row>, txnById
     lifecycle: row.status,
     status,
     totals,
+    ...settlementTotals(row.payments ?? []),
     totalCents: totals.totalCents,
     paidCents: paid,
     balanceCents,
@@ -302,10 +316,10 @@ function invoiceLedgerState(row: Row, lctx: InvoiceLedgerContext, postedIds: Rea
   const invoice = asStored(row);
   const posted = (id: string | undefined) => Boolean(id && postedIds.has(id));
   const accrualPosted = posted(invoice.journalEntryId);
-  if (invoice.status !== "sent" || computeInvoiceTotals(invoice.lines ?? [], invoice.discount).totalCents <= 0) {
+  if (invoice.status !== "sent" || computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money).totalCents <= 0) {
     return { state: accrualPosted && !invoice.reversalJournalEntryId ? "posted" : "none", entryId: accrualPosted ? invoice.journalEntryId : undefined, reasons: [], paymentsToPost: 0 };
   }
-  const payments = invoice.payments ?? [];
+  const payments = (invoice.payments ?? []).filter(payment=>!payment.reversedDate);
   if (!accrualPosted) {
     const reasons = accrualBlockers(invoice, lctx);
     const block = dateBlock(lctx, invoice.issueDate);
@@ -321,7 +335,7 @@ function invoiceLedgerState(row: Row, lctx: InvoiceLedgerContext, postedIds: Rea
 
 function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<string, Row>, postedIds: ReadonlySet<string>): NeedsActionFlag[] {
   const invoice = asStored(row);
-  const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount);
+  const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money);
   return invoiceNeedsAction(
     {
       lifecycle: invoice.status,
@@ -329,14 +343,15 @@ function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<strin
       paidCents: sumPaid(invoice.payments),
       currency: invoice.currency,
       issueDate: invoice.issueDate,
-      payments: (invoice.payments ?? []).map((payment) => ({
+      payments: (invoice.payments ?? []).filter((payment) => !payment.reversedDate && (!payment.kind || payment.kind === "payment")).map((payment) => ({
         key: payment.key,
         date: payment.date,
         amountCents: payment.amountCents,
         financialTransactionId: payment.financialTransactionId,
-        transactionAmountCents: payment.financialTransactionId ? (txnById.has(payment.financialTransactionId) ? Number(txnById.get(payment.financialTransactionId)!.amountCents) : null) : undefined,
+        transactionAmountCents: payment.financialTransactionId ? (txnById.has(payment.financialTransactionId) ? (payment.baseAmountCents != null && payment.amountCents ? Math.round(Number(txnById.get(payment.financialTransactionId)!.amountCents) * payment.amountCents / payment.baseAmountCents) : Number(txnById.get(payment.financialTransactionId)!.amountCents)) : null) : undefined,
       })),
       unmappedItems: unmappedItems(invoice, lctx),
+      fxQuoteAvailable: Boolean(invoice.money?.fx),
       accrualPosted: Boolean(invoice.journalEntryId && postedIds.has(invoice.journalEntryId)),
     },
     { workspaceCurrency: lctx.workspaceCurrency, booksStart: lctx.booksStart },
@@ -346,7 +361,7 @@ function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<strin
 /** The GL account mapping drawer: the mapping, the accounts to choose from and what is used when unset. */
 function ledgerView(lctx: InvoiceLedgerContext, catalog: Row[]) {
   const options = (filter: (account: LedgerAccount) => boolean) =>
-    lctx.accounts.filter(filter).map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType })).sort((a, b) => a.label.localeCompare(b.label));
+    lctx.accounts.filter(filter).map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType, currency: account.currency ?? lctx.workspaceCurrency })).sort((a, b) => a.label.localeCompare(b.label));
   const fallback = (account: LedgerAccount | undefined) => (account ? { _id: account._id, label: accountLabel(account)! } : null);
   const categories = [...new Map(
     [...catalog.map((item) => String(item.category ?? "").trim()).filter(Boolean), DUES_REVENUE_CATEGORY, ...(lctx.mapping.categoryAccounts ?? []).map((row) => row.category)]
@@ -372,11 +387,52 @@ function ledgerView(lctx: InvoiceLedgerContext, catalog: Row[]) {
   };
 }
 
+/** Branding and reusable designs only: report pages do not need billing/bank records. */
+export async function documentTemplatesPortable(ctx: PortableQueryCtx, { societyId, templateId }: { societyId: string; templateId?: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const [organization, templates, settings, identifiers, accounts] = await Promise.all([
+    ctx.db.get(societyId, "societies"),
+    ctx.db.query("invoiceTemplates").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(4),
+    loadSettings(ctx, societyId),
+    ctx.db.query("organizationIdentifiers").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(100),
+    ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(2000),
+  ]);
+  const requestedIds = [...new Set([templateId, settings?.defaultTemplateId].filter((id): id is string => Boolean(id)))];
+  const selectedTemplates = await Promise.all(requestedIds.map((id) => getOwned(ctx, "invoiceTemplates", id, societyId)));
+  const availableTemplates = [...new Map([...templates, ...selectedTemplates].filter((template) => template?.active).map((template) => [String(template!._id), template!])).values()];
+  const selectedTemplate = selectedTemplates.find((template) => String(template?._id) === (templateId ?? settings?.defaultTemplateId)) ?? null;
+  const gst = identifiers.find((row) => row.kind === "gst" && row.status !== "inactive");
+  const logoUrl = organization?.logoStorageId
+    ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(organization.logoStorageId) })).url ?? undefined
+    : undefined;
+  const receivable = accounts.find((account) => account._id === settings?.receivableAccountId)
+    ?? findLedgerAccount("receivable", accounts as LedgerAccount[]);
+  const bank = accounts.find((account) => account.accountType === "Bank");
+  const currency = String(receivable?.currency ?? bank?.currency ?? organization?.currency ?? "CAD").toUpperCase();
+  const currencies = [...new Set([currency, ...accounts.map((account) => String(account.currency ?? currency).toUpperCase())])].sort();
+  return {
+    organization: {
+      name: organization?.name,
+      entityType: organization?.entityType,
+      address: organization?.mailingAddress ?? organization?.registeredOfficeAddress,
+      registrationNumber: organization?.incorporationNumber,
+      email: organization?.publicContactEmail ?? organization?.officialEmail ?? organization?.primaryContactEmail,
+      gstNumber: gst?.number,
+      logoUrl,
+    },
+    templates: availableTemplates,
+    selectedTemplate: templateId || selectedTemplate?.active ? selectedTemplate : null,
+    defaultTemplateId: settings?.defaultTemplateId ?? null,
+    currency,
+    currencies,
+  };
+}
+
 /** Everything the Invoices page needs in one read. */
 export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
   const today = await organizationToday(ctx, societyId);
-  const [organization, invoices, settings, catalog, series, members, counterparties, transactions, subscriptions, plans, feePeriods, identifiers, lctx, postedEntries] = await Promise.all([
+  const [organization, invoices, settings, catalog, series, members, counterparties, transactions, subscriptions, plans, feePeriods, identifiers, lctx, postedEntries, templates, priceLists, repairJobs] = await Promise.all([
     ctx.db.get(societyId, "societies"),
     loadInvoices(ctx, societyId),
     loadSettings(ctx, societyId),
@@ -391,6 +447,11 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     ctx.db.query("organizationIdentifiers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     loadInvoiceLedgerContext(ctx, societyId),
     postedInvoiceEntries(ctx, societyId),
+    // The invoice page subscribes to every collectionPage before opening a builder.
+    // Keep bootstrap artwork bounded as well as the subsequent collection reads.
+    ctx.db.query("invoiceTemplates").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(4),
+    ctx.db.query("invoicePriceLists").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(4),
+    ctx.db.query("repairJobs").withIndex("by_society", (q) => q.eq("societyId", societyId)).order("desc").take(4),
   ]);
   const seriesById = new Map((series as Row[]).map((row) => [row._id, row]));
   const txnById = new Map((transactions as Row[]).map((row) => [row._id, row]));
@@ -405,7 +466,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
   const linked = new Map<string, { invoiceId: string; number: string }>();
   for (const invoice of decorated) {
     for (const payment of invoice.payments ?? []) {
-      if (payment.financialTransactionId) linked.set(payment.financialTransactionId, { invoiceId: invoice._id, number: invoice.number });
+      if (!payment.reversedDate && payment.financialTransactionId) linked.set(payment.financialTransactionId, { invoiceId: invoice._id, number: invoice.number });
     }
   }
   const since = addDays(today, -400);
@@ -420,6 +481,8 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       category: txn.category,
       accountId: txn.accountId,
       accountLabel: accountLabel(lctx.accountsById.get(String(txn.accountId))),
+      currency: txn.currency ?? lctx.accountsById.get(String(txn.accountId))?.currency ?? lctx.workspaceCurrency,
+      releasedDate: [txn.billPaymentRelease?.date, txn.invoicePaymentRelease?.date].filter(Boolean).sort().at(-1),
       // Matched to something other than an invoice (a grant, a filing…): not offered.
       matchedElsewhere: !MATCHABLE_KINDS.has(txn.matchedKind),
       linkedInvoiceId: linked.get(txn._id)?.invoiceId,
@@ -443,13 +506,8 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       summary.draftCents += invoice.totalCents;
       summary.draftCount += 1;
     }
-    if (invoice.status !== "void") {
-      const recent = (invoice.payments ?? []).filter((payment: any) => payment.date >= paidSince && payment.date <= today);
-      if (recent.length) {
-        summary.paidLast30Cents += recent.reduce((sum: number, payment: any) => sum + payment.amountCents, 0);
-        summary.paidLast30Count += 1;
-      }
-    }
+    const cash = invoiceCashActivity(invoice.payments, paidSince, today);
+    if (cash.hasActivity) { summary.paidLast30Cents += cash.amountCents; summary.paidLast30Count += 1; }
   }
   const activePlans = (plans as Row[]).filter((plan) => plan.active !== false);
   const duesCandidates = buildDuesCandidates(today, subscriptions as Row[], activePlans, feePeriods as Row[], members as Row[], decorated);
@@ -467,6 +525,10 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       email: (organization as any)?.publicContactEmail ?? (organization as any)?.officialEmail ?? (organization as any)?.primaryContactEmail,
       gstNumber: gst?.number,
     },
+    templates,
+    priceLists,
+    repairJobs: repairJobs.map((job) => ({ ...job, totalCents: computeInvoiceTotals(job.lines ?? []).totalCents,
+      invoice: decorated.find((invoice) => invoice.repairJobId === job._id && invoice.lifecycle !== "void") ?? null })),
     invoices: decorated,
     catalog: (catalog as Row[]).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)),
     series: (series as Row[])
@@ -474,7 +536,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
         const issued = decorated.filter((invoice) => invoice.seriesId === row._id);
         return {
           ...row,
-          totalCents: computeInvoiceTotals(row.lines ?? [], row.discount).totalCents,
+          totalCents: computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents,
           invoiceCount: issued.length,
           outstandingCents: issued.filter((invoice) => isOpenStatus(invoice.status)).reduce((sum, invoice) => sum + invoice.balanceCents, 0),
           lastInvoiceId: issued[0]?._id,
@@ -561,6 +623,8 @@ function buildDuesCandidates(today: string, subscriptions: Row[], plans: Row[], 
 }
 
 type InvoiceArgs = PartyArgs & {
+  shipToName?: string;
+  shipToAddress?: string;
   id?: string;
   societyId: string;
   issueDate: string;
@@ -568,6 +632,11 @@ type InvoiceArgs = PartyArgs & {
   dueDate?: string;
   reference?: string;
   currency?: string;
+  documentTemplate?: InvoiceTemplate;
+  money?: InvoiceMoneyOptions;
+  documentExtras?: DocumentExtras;
+  priceListId?: string | null;
+  repairJobId?: string;
   lines: any[];
   discount?: any;
   memo?: string;
@@ -584,27 +653,63 @@ async function invoiceFields(ctx: PortableQueryCtx, args: InvoiceArgs) {
   if (problem) throw new Error(problem);
   await assertCatalogRefs(ctx, args.societyId, lines);
   const discount = cleanDiscount(args.discount);
-  const totals = computeInvoiceTotals(lines, discount);
+  const totals = computeInvoiceTotals(lines, discount, args.money);
+  if (JSON.stringify({ lines, documentExtras: args.documentExtras }).length > 850000) throw new Error("This invoice contains too much inline artwork or attachments. Keep it below 850 KB.");
   if (totals.totalCents < 0) throw new Error("The discount is larger than the invoice.");
   const party = await cleanParty(ctx, args.societyId, args);
-  return {
+  const organization: any = await ctx.db.get(args.societyId, "societies");
+  const currency = invoiceCurrency(args.currency, organization?.currency ?? "CAD");
+  if (args.priceListId) {
+    const list = await getOwned<Row>(ctx, "invoicePriceLists", args.priceListId, args.societyId);
+    if (list.currency !== currency) throw new Error("The price list currency must match the invoice.");
+  }
+  if (args.repairJobId) {
+    await assertRepairBillablePortable(ctx, args.repairJobId);
+    const job = await getOwned<Row>(ctx, "repairJobs", args.repairJobId, args.societyId);
+    if (job.currency !== currency || job.billToName !== party.billToName || job.partyKind !== party.partyKind || job.memberId !== party.memberId || job.counterpartyId !== party.counterpartyId) throw new Error("The repair customer and currency must match the invoice.");
+    if (job.status === "cancelled") throw new Error("A cancelled repair cannot be invoiced.");
+    const siblings = await ctx.db.query("invoices").withIndex("by_repair_job", (q) => q.eq("repairJobId", args.repairJobId)).take(100);
+    if (siblings.some((row) => row._id !== args.id && row.status !== "void")) throw new Error("This repair already has an invoice.");
+  }
+  const settings = await loadSettings(ctx, args.societyId);
+  const defaultTemplate = settings?.defaultTemplateId ? await getOwned<Row>(ctx, "invoiceTemplates", settings.defaultTemplateId, args.societyId) : null;
+  const fields = {
     ...party,
     issueDate: args.issueDate,
     terms,
     dueDate,
     reference: cleanText(args.reference, 100),
-    currency: (cleanText(args.currency, 3) ?? "CAD").toUpperCase(),
+    shipToName: cleanText(args.shipToName, 200),
+    shipToAddress: cleanText(args.shipToAddress, 1000),
+    currency,
+    money: cleanInvoiceMoney(args.money, currency, (await loadInvoiceLedgerContext(ctx, args.societyId)).workspaceCurrency),
+    documentExtras: args.documentExtras ? cleanDocumentExtras(args.documentExtras) : undefined,
+    documentTemplate: cleanInvoiceTemplate(args.documentTemplate ?? (defaultTemplate?.active ? defaultTemplate.config : undefined)),
+    priceListId: args.priceListId || undefined,
+    repairJobId: args.repairJobId,
     lines,
     discount,
     memo: cleanText(args.memo, 4000),
     totalCents: totals.totalCents,
   };
+  if(new TextEncoder().encode(JSON.stringify(fields)).byteLength>900000)throw new Error("This invoice exceeds 900 KB. Reduce template artwork, item images or attachments before saving.");
+  return fields;
 }
 
 /** Create a draft or save changes. Returns the invoice id. */
 export async function upsertPortable(ctx: PortableMutationCtx, args: InvoiceArgs & { actingUserId?: string }) {
   await requireSocietyMembership(ctx, args.societyId);
-  const fields = await invoiceFields(ctx, args);
+  const original = args.id ? await getOwned<Row>(ctx, "invoices", args.id, args.societyId) : null;
+  const fields = await invoiceFields(ctx, { ...args, currency: args.currency ?? original?.currency,
+    shipToName: args.shipToName === undefined ? original?.shipToName : args.shipToName,
+    shipToAddress: args.shipToAddress === undefined ? original?.shipToAddress : args.shipToAddress,
+    documentTemplate: args.documentTemplate ?? original?.documentTemplate,
+    money: args.money === undefined ? original?.money : args.money,
+    documentExtras: args.documentExtras === undefined ? original?.documentExtras : args.documentExtras,
+    repairJobId: args.repairJobId ?? original?.repairJobId, priceListId: args.priceListId === undefined ? original?.priceListId : args.priceListId });
+  if (original && original.currency !== fields.currency && ((original.payments ?? []).length || original.journalEntryId)) throw new Error("Currency cannot change after payments or ledger posting.");
+  if (original && (original.journalEntryId || original.status !== "draft") && JSON.stringify(original.money?.fx) !== JSON.stringify(fields.money?.fx)) throw new Error("The invoice FX quote is immutable after issue. Void and replace the invoice to change it.");
+  if(new TextEncoder().encode(JSON.stringify({...original,...fields})).byteLength>900000)throw new Error("This invoice exceeds 900 KB. Reduce artwork or attachments before saving.");
   const actor = await actorName(ctx, args.societyId);
   const at = nowISO();
   if (args.id) {
@@ -647,7 +752,7 @@ async function ownedInvoices(ctx: PortableQueryCtx, societyId: string, ids: stri
 }
 
 function outboxBody(invoice: Row, organizationName: string, kind: "invoice" | "reminder", balanceCents: number, paymentInstructions?: string) {
-  const amount = `$${(balanceCents / 100).toFixed(2)}`;
+  const amount = `${invoice.currency} ${(balanceCents / 100).toFixed(2)}`;
   const lines = [
     `Hello ${invoice.billToName},`,
     "",
@@ -754,11 +859,47 @@ async function releaseDeposit(ctx: PortableMutationCtx, invoice: Row, payment: S
         matchedId: before.matchedId,
         reconciliationNote: before.reconciliationNote,
         lines: before.lines,
+        ...(payment.replacedTransactionEntryId && txn.invoicePaymentRelease ? { invoicePaymentRelease: { ...txn.invoicePaymentRelease, journalEntryIds: txn.invoicePaymentRelease.journalEntryIds.filter((id: string) => id !== payment.replacedTransactionEntryId) } } : {}),
       });
       await flagChangedPeriods(ctx, txn.accountId, txn.date);
     }
   }
   await restoreDepositEntry(ctx, invoice.societyId, payment.voidedTransactionEntryId);
+}
+
+type CorrectedDepositRelease = { transaction: Row | null; restoration?: { lines: InvoiceLedgerLine[]; basis: JournalBasis } };
+
+/** A correction retains historical payment entries and restores bank accounting only on its effective date. */
+async function prepareCorrectedDepositRelease(ctx: PortableQueryCtx, invoice: Row, payment: StoredInvoicePayment): Promise<CorrectedDepositRelease> {
+  const transaction = payment.financialTransactionId ? await getOwned<Row>(ctx, "financialTransactions", payment.financialTransactionId, invoice.societyId) : null;
+  if (transaction && (transaction.matchedKind !== "invoice" || transaction.matchedId !== invoice._id)) throw new Error("The linked bank match changed; review it before reversing this settlement.");
+  const originalId = payment.replacedTransactionEntryId ?? payment.voidedTransactionEntryId;
+  if (!originalId) return { transaction };
+  const entry = await getOwned<Row>(ctx, "journalEntries", originalId, invoice.societyId);
+  if (![TRANSACTION_BACKFILL_SOURCE, BILL_BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE].includes(entry.source)) throw new Error("The bank restoration reference is not a supported transaction entry.");
+  if (entry.status !== (payment.replacedTransactionEntryId ? "posted" : "void")) throw new Error("The replaced bank journal changed; review it before reversing this settlement.");
+  if (payment.replacedTransactionEntryId) {
+    const transfer = payment.bankTransferJournalEntryId ? await getOwned<Row>(ctx, "journalEntries", payment.bankTransferJournalEntryId, invoice.societyId) : null;
+    if (!transfer || transfer.status !== "posted" || transfer.source !== "invoice_bank_transfer" || transfer.sourceExternalId !== `invoice:${invoice._id}:payment:${payment.key}:bank-transfer`) throw new Error("The original bank transfer journal changed; review it before reversing this settlement.");
+    validateBalancedJournalLines(await entryLines(ctx, transfer._id));
+  }
+  const lines = (await entryLines(ctx, entry._id)).map(line => ({ ...line, side: line.side as "debit" | "credit" }));
+  if (!transaction || !lines.some(line => line.financialTransactionId === transaction._id)) throw new Error("The bank restoration journal does not belong to this linked bank transaction.");
+  validateBalancedJournalLines(lines);
+  return { transaction, restoration: { lines, basis: journalBasisOf({ basis: entry.basis, source: entry.source }) } };
+}
+
+async function releaseCorrectedDeposit(ctx: PortableMutationCtx, invoice: Row, payment: StoredInvoicePayment, date: string, prepared: CorrectedDepositRelease, userId?: string) {
+  const restoredTransactionJournalEntryId = prepared.restoration ? await postLedgerEntry(ctx, { societyId: invoice.societyId, kind: "bankRestoration", key: `invoice:${invoice._id}:payment:${payment.key}:bank-restored`, date, memo: `Restore bank transaction after invoice settlement reversal: ${invoice.number}`, basis: prepared.restoration.basis, lines: prepared.restoration.lines, createdByUserId: userId }) : undefined;
+  const txn = prepared.transaction;
+  if (txn) {
+    const before = payment.transactionBefore ?? {};
+    const previous = txn.invoicePaymentRelease;
+    const invoicePaymentRelease = { date: previous && previous.date > date ? previous.date : date, journalEntryIds: [...new Set([...(previous?.journalEntryIds ?? []), ...(payment.journalEntryId ? [payment.journalEntryId] : [])])] };
+    await ctx.db.patch(txn._id, { category: before.category, accountingAccountId: before.accountingAccountId, categorizedBy: before.categorizedBy, ruleId: before.ruleId, ruleApplication: before.ruleApplication, reconciledAtISO: before.reconciledAtISO, reconciledByName: before.reconciledByName, matchedKind: before.matchedKind, matchedId: before.matchedId, reconciliationNote: before.reconciliationNote, lines: before.lines, invoicePaymentRelease });
+    await flagChangedPeriods(ctx, txn.accountId, txn.date);
+  }
+  return restoredTransactionJournalEntryId;
 }
 
 /** Take a payment out of the books and unlink its deposit (refused in a closed period or closed books). */
@@ -787,7 +928,7 @@ export async function markSentPortable(ctx: PortableMutationCtx, { societyId, id
     const outcome = await syncAccrual(ctx, asStored({ ...row, status: "sent" }), lctx, userId);
     const at = nowISO();
     const events = [event("sent", draftEmail && row.billToEmail ? "Marked as sent · email drafted in Outbox" : "Marked as sent", actor)];
-    if (outcome.entryId) events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount).totalCents), actor));
+    if (outcome.entryId) events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents), actor));
     await ctx.db.patch(row._id, { status: "sent", sentAtISO: at, updatedAtISO: at, ...(outcome.entryId ? { journalEntryId: outcome.entryId } : {}), timeline: [...(row.timeline ?? []), ...events] });
     sent += 1;
     if (outcome.entryId) posted += 1;
@@ -812,12 +953,15 @@ export async function voidInvoicesPortable(ctx: PortableMutationCtx, { societyId
   for (const row of rows) {
     if (row.status === "void") { skipped += 1; continue; }
     if (sumPaid(row.payments) > 0) { skippedPaid += 1; continue; }
+    if((row.payments??[]).some((payment:StoredInvoicePayment)=>!payment.reversedDate)) { skippedPaid += 1; continue; }
+    const revaluations=await reverseOpenInvoiceRevaluations(ctx,asStored(row),today,userId);
+    if(revaluations.length)await ctx.db.patch(row._id,{fxRevaluations:revaluations});
     const at = nowISO();
     const why = cleanText(reason, 300);
     const events = [event("voided", why ? `Voided: ${why}` : "Voided", actor)];
     const reversalId = await reverseAccrual(ctx, asStored(row), today > row.issueDate ? today : row.issueDate, userId);
     if (reversalId) {
-      events.push(event("reversed", "Reversing entry posted", actor, computeInvoiceTotals(row.lines ?? [], row.discount).totalCents));
+      events.push(event("reversed", "Reversing entry posted", actor, computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents));
       reversed += 1;
     }
     await ctx.db.patch(row._id, { status: "void", voidedAtISO: at, voidReason: why, ...(reversalId ? { reversalJournalEntryId: reversalId } : {}), updatedAtISO: at, timeline: [...(row.timeline ?? []), ...events] });
@@ -830,6 +974,10 @@ export async function voidInvoicesPortable(ctx: PortableMutationCtx, { societyId
 export async function restoreVoidedPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
   if (row.status !== "void") return id;
+  if (row.repairJobId) {
+    const siblings = await ctx.db.query("invoices").withIndex("by_repair_job", (q) => q.eq("repairJobId", row.repairJobId)).take(100);
+    if (siblings.some((other) => other._id !== id && other.status !== "void")) throw new Error("This repair already has an active invoice.");
+  }
   const actor = await actorName(ctx, row.societyId);
   const status = row.sentAtISO ? "sent" : "draft";
   const reposting = Boolean(row.reversalJournalEntryId);
@@ -842,7 +990,7 @@ export async function restoreVoidedPortable(ctx: PortableMutationCtx, { id }: { 
     const outcome = await syncAccrual(ctx, asStored(next), await loadInvoiceLedgerContext(ctx, row.societyId), await actingUser(ctx, row.societyId));
     if (outcome.entryId) {
       journalEntryId = outcome.entryId;
-      events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount).totalCents), actor));
+      events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents), actor));
     }
   }
   await ctx.db.patch(id, {
@@ -876,15 +1024,20 @@ export async function duplicatePortable(ctx: PortableMutationCtx, { id }: { id: 
     billToName: row.billToName,
     billToEmail: row.billToEmail,
     billToAddress: row.billToAddress,
+    shipToName: row.shipToName,
+    shipToAddress: row.shipToAddress,
     issueDate: today,
     terms,
     dueDate: dueDateForTerms(today, terms),
     reference: row.reference,
     currency: row.currency,
+    documentTemplate: row.documentTemplate,
+    money: row.money, documentExtras: row.documentExtras,
+    priceListId: row.priceListId,
     lines: (row.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line") })),
     discount: row.discount,
     memo: row.memo,
-    totalCents: computeInvoiceTotals(row.lines ?? [], row.discount).totalCents,
+    totalCents: computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents,
     paidCents: 0,
     payments: [],
     timeline: [event("duplicated", `Duplicated from ${row.number}`, actor)],
@@ -902,20 +1055,36 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
 }
 
 /** A money-in bank line this invoice may link: this workspace's, not linked to another payment, not matched elsewhere. */
-async function linkableDeposit(ctx: PortableQueryCtx, invoice: Row, transactionId: string): Promise<Row> {
+async function linkableDeposit(ctx: PortableQueryCtx, invoice: Row, transactionId: string, paymentDate?: string): Promise<Row> {
   const txn = await getOwned<Row>(ctx, "financialTransactions", transactionId, invoice.societyId);
   if (!(Number(txn.amountCents) > 0)) throw new Error("Only money-in bank transactions can be linked to a payment.");
+  const account = txn.accountId ? await getOwned<LedgerAccount>(ctx, "financialAccounts", txn.accountId, invoice.societyId) : null;
+  const lctx = await loadInvoiceLedgerContext(ctx, invoice.societyId);
+  if ((txn.currency ?? account?.currency ?? lctx.workspaceCurrency) !== invoice.currency) throw new Error("The bank deposit currency must match the invoice. Record currency exchange separately in the books.");
   const invoices = await loadInvoices(ctx, invoice.societyId);
-  const alreadyLinked = invoices.some((other) => (other.payments ?? []).some((payment: StoredInvoicePayment) => payment.financialTransactionId === transactionId));
+  const alreadyLinked = invoices.some((other) => (other.payments ?? []).some((payment: StoredInvoicePayment) => !payment.reversedDate && payment.financialTransactionId === transactionId));
   if (alreadyLinked) throw new Error("That bank transaction is already linked to an invoice payment.");
   if (!MATCHABLE_KINDS.has(txn.matchedKind)) throw new Error(`That bank transaction is already matched to a ${txn.matchedKind} record.`);
-  await assertDepositClaimable(ctx, invoice.societyId, transactionId);
+  await assertDepositClaimable(ctx, invoice.societyId, transactionId, paymentDate);
   return txn;
 }
 
+function assertReleasedBankDate(transaction: Row, date: string) {
+  const latest = [transaction.billPaymentRelease?.date, transaction.invoicePaymentRelease?.date].filter(Boolean).sort().at(-1);
+  if (latest && date < latest) throw new Error(`Record a payment linked to this bank transaction on or after its previous reversal (${latest}).`);
+}
+
 /** A deposit another kind of entry already posted can't be taken over, nor one whose own entry is in closed books (read-only). */
-async function assertDepositClaimable(ctx: PortableQueryCtx, societyId: string, transactionId: string) {
-  for (const entry of await claimableDepositEntries(ctx, transactionId)) {
+async function assertDepositClaimable(ctx: PortableQueryCtx, societyId: string, transactionId: string, paymentDate?: string) {
+  const entries = await claimableDepositEntries(ctx, transactionId);
+  if (entries.length > 1) throw new Error("This bank transaction has multiple current journal entries. Review them before linking a receipt.");
+  for (const entry of entries) {
+    if (paymentDate && entry.date > paymentDate) throw new Error("The receipt date must be on or after the bank transaction's current posting date.");
+    if (paymentDate && entry.date < paymentDate) {
+      validateBalancedJournalLines(await entryLines(ctx, entry._id));
+      await assertPostableDates(ctx, societyId, [paymentDate]);
+      continue;
+    }
     await assertBooksOpen(ctx, societyId, [entry.date], "voided");
     await assertPeriodOpen(ctx, { societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
   }
@@ -927,7 +1096,7 @@ async function assertDepositClaimable(ctx: PortableQueryCtx, societyId: string, 
  * another way, lines that don't balance), so a failure leaves no partial state.
  */
 async function assertInvoicePostable(ctx: PortableQueryCtx, row: Row, lctx: InvoiceLedgerContext, postAccrual: boolean, payments: StoredInvoicePayment[]) {
-  if (postAccrual && computeInvoiceTotals(row.lines ?? [], row.discount).totalCents > 0) {
+  if (postAccrual && computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents > 0) {
     await assertPostableDates(ctx, row.societyId, [row.issueDate]);
     const placeholder = { receivableAccountId: "receivable", taxPayableAccountId: "tax" };
     validateBalancedJournalLines(accrualPostingLines(asStored(row), () => "revenue", placeholder));
@@ -937,104 +1106,157 @@ async function assertInvoicePostable(ctx: PortableQueryCtx, row: Row, lctx: Invo
     validateBalancedJournalLines(paymentPostingLines(payment, { depositAccountId: "deposit", receivableAccountId: "receivable" }));
     if (!payment.financialTransactionId) continue;
     const txn = (await ctx.db.get(payment.financialTransactionId, "financialTransactions")) as Row | null;
-    if (txn && txn.societyId === row.societyId) await assertDepositClaimable(ctx, row.societyId, txn._id);
+    if (txn && txn.societyId === row.societyId) await assertDepositClaimable(ctx, row.societyId, txn._id, payment.date);
   }
 }
 
-async function assertDepositAccount(ctx: PortableQueryCtx, societyId: string, accountId: string) {
+async function assertDepositAccount(ctx: PortableQueryCtx, societyId: string, accountId: string, currency?: string) {
   const account = await getOwned<LedgerAccount>(ctx, "financialAccounts", accountId, societyId);
   if (!MONEY_ACCOUNT_TYPES.has(account.accountType) && !(account.accountType === "Asset" && CASH_SUBTYPES.has(String(account.subtype)))) {
     throw new Error(`${account.name} isn't a bank, cash or undeposited funds account.`);
   }
+  if (currency && (account.currency ?? "CAD") !== currency) throw new Error("The deposit account currency must match the invoice.");
 }
 
-export async function recordPaymentPortable(
-  ctx: PortableMutationCtx,
-  args: { id: string; date: string; amountCents: number; method: string; reference?: string; note?: string; financialTransactionId?: string; depositAccountId?: string },
-) {
+type SettlementArgs = { id: string; date: string; amountCents: number; method?: string; reference?: string; note?: string; financialTransactionId?: string; depositAccountId?: string; idempotencyKey?: string; fxRateMicros?: number; fxSource?: string; sourcePaymentKey?: string };
+async function recordSettlement(ctx: PortableMutationCtx, args: SettlementArgs, kind: "payment" | "credit" | "write_off" | "refund") {
   const row = await requireOwnedRow<Row>(ctx, "invoices", args.id);
-  if (row.status === "void") throw new Error("A void invoice can't take payments.");
-  if (!isCalendarDate(args.date)) throw new Error("Choose the payment date.");
-  const amountCents = Math.round(Number(args.amountCents));
-  if (!(amountCents > 0)) throw new Error("Enter an amount above zero.");
-  const total = computeInvoiceTotals(row.lines ?? [], row.discount).totalCents;
-  const balance = total - sumPaid(row.payments);
-  if (amountCents > balance) throw new Error(`That's more than the ${(balance / 100).toFixed(2)} balance.`);
-  const txn = args.financialTransactionId ? await linkableDeposit(ctx, row, args.financialTransactionId) : null;
-  if (args.depositAccountId && !txn) await assertDepositAccount(ctx, row.societyId, args.depositAccountId);
-  const actor = await actorName(ctx, row.societyId);
-  const userId = await actingUser(ctx, row.societyId);
-  const method = (PAYMENT_METHODS as readonly string[]).includes(args.method) ? args.method : "other";
-  let payment: StoredInvoicePayment = { key: randomKey("pay"), date: args.date, amountCents, method, recordedAtISO: nowISO() };
-  const reference = cleanText(args.reference, 100);
-  const note = cleanText(args.note, 500);
-  if (reference) payment.reference = reference;
-  if (note) payment.note = note;
-  if (txn) payment.financialTransactionId = txn._id;
-  else if (args.depositAccountId) payment.depositAccountId = args.depositAccountId;
-  if (actor) payment.recordedByName = actor;
-  const payments = [...(row.payments ?? []), payment];
-  const remaining = total - sumPaid(payments);
-  const at = nowISO();
-  const timeline = [...(row.timeline ?? [])];
-  if (row.status === "draft") timeline.push(event("sent", "Marked as sent", actor));
-  timeline.push(event("payment", `${remaining <= 0 ? "Paid in full" : "Partial payment recorded"}${txn ? " · linked to the bank deposit" : ""}`, actor, amountCents));
-
-  // The books: refuse a closed period before writing anything, then post the
-  // accrual (a draft is sent by its first payment) and the payment.
-  const lctx = await loadInvoiceLedgerContext(ctx, row.societyId);
-  let next: Row = { ...row, status: "sent", payments };
-  const postable = !accrualBlockers(asStored(next), lctx).length;
-  if (postable && !paymentBlock(payment, lctx)) await assertPostableDates(ctx, row.societyId, row.status === "draft" ? [row.issueDate, args.date] : [args.date]);
-  if (row.status === "draft") {
-    const outcome = await syncAccrual(ctx, asStored(next), lctx, userId);
-    if (outcome.entryId) {
-      next = { ...next, journalEntryId: outcome.entryId };
-      timeline.push(event("posted", postedLabel(total), actor));
-    }
+  if (row.status === "void") throw new Error("A void invoice cannot take settlements.");
+  if (!isCalendarDate(args.date) || args.date > await organizationToday(ctx, row.societyId)) throw new Error("Choose a valid settlement date on or before today.");
+  if (!Number.isSafeInteger(args.amountCents) || args.amountCents <= 0) throw new Error("Enter positive integer cents.");
+  const amountCents = kind === "refund" ? -args.amountCents : args.amountCents;
+  const idempotencyKey = args.idempotencyKey?.trim();
+  if(args.idempotencyKey!==undefined&&(!idempotencyKey||args.idempotencyKey.length>100))throw new Error("Use an idempotency key of 1–100 characters.");
+  const previous = row.payments ?? [];
+  const method = kind === "credit" || kind === "write_off" ? "other" : (PAYMENT_METHODS as readonly string[]).includes(args.method ?? "") ? args.method! : "other";
+  const retry = idempotencyKey && previous.find((payment: StoredInvoicePayment) => payment.idempotencyKey === idempotencyKey);
+  if (retry) {
+    if ((retry.kind ?? "payment") !== kind || retry.amountCents !== amountCents || retry.date !== args.date || retry.method !== method
+      || retry.reference !== cleanText(args.reference, 100) || retry.note !== cleanText(args.note, 1000)
+      || retry.sourcePaymentKey !== args.sourcePaymentKey || retry.financialTransactionId !== args.financialTransactionId
+      || (args.depositAccountId !== undefined && retry.depositAccountId !== args.depositAccountId)
+      || retry.fxRateMicros !== args.fxRateMicros || retry.fxSource !== cleanText(args.fxSource, 200)) throw new Error("That idempotency key already belongs to a different settlement.");
+    return retry.key;
   }
+  const active = previous.filter((payment: StoredInvoicePayment) => !payment.reversedDate);
+  const total = computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents;
+  const summary = settlementTotals(active), balance = total - summary.settledCents;
+  if ((kind === "payment" || kind === "write_off") && args.amountCents > Math.max(0, balance)) throw new Error(`That's more than the ${(Math.max(0, balance) / 100).toFixed(2)} balance.`);
+  if (kind === "payment" || kind === "write_off") {
+    const dates = new Set<string>([args.date, ...previous.flatMap((payment: StoredInvoicePayment) => [payment.date, ...(payment.reversedDate ? [payment.reversedDate] : [])]).filter((date: string) => date >= args.date)]);
+    if ([...dates].some(date => previous.filter((payment: StoredInvoicePayment) => payment.date <= date && (!payment.reversedDate || payment.reversedDate > date)).reduce((sum: number, payment: StoredInvoicePayment) => sum + payment.amountCents, 0) + args.amountCents > total)) throw new Error("That settlement date overlaps earlier settled amounts. Choose a date on or after the applicable reversal, or reduce the amount.");
+  }
+  if (kind === "credit" && summary.creditCents + args.amountCents > total) throw new Error("Credits cannot exceed the invoice's collectible total.");
+  if (kind !== "payment" && !args.note?.trim()) throw new Error("Record the reason for this credit, write-off or refund.");
+  if (kind === "refund") {
+    const original = active.find((payment: StoredInvoicePayment) => payment.key === args.sourcePaymentKey && (payment.kind ?? "payment") === "payment");
+    const refunded = -active.filter((payment: StoredInvoicePayment) => payment.kind === "refund" && payment.sourcePaymentKey === args.sourcePaymentKey).reduce((sum: number, payment: StoredInvoicePayment) => sum + payment.amountCents, 0);
+    if (!original || args.amountCents + refunded > original.amountCents) throw new Error("Refunds cannot exceed the selected original cash payment.");
+    if (args.date < original.date) throw new Error("Choose a refund date on or after the original cash payment.");
+  }
+  const lctx = await loadInvoiceLedgerContext(ctx, row.societyId);
+  const foreign = row.currency !== lctx.workspaceCurrency, noncash = kind === "credit" || kind === "write_off";
+  let fxRateMicros: number | undefined;
+  if (foreign && !noncash) {
+    if (!args.fxRateMicros || !args.fxSource?.trim()) throw new Error("Record an explicit foreign-currency settlement FX rate and source.");
+    fxRateMicros = explicitFxQuote({ baseCurrency: lctx.workspaceCurrency, rateMicros: args.fxRateMicros, asOfDate: args.date, source: args.fxSource }, row.currency, lctx.workspaceCurrency)!.rateMicros;
+  }
+  const expectedBase = noncash ? undefined : convertInvoiceCents(amountCents, fxRateMicros ?? 1_000_000);
+  let txn: Row | null = null;
+  if (args.financialTransactionId) {
+    if (noncash) throw new Error("A noncash credit or write-off cannot claim a bank transaction.");
+    txn = await getOwned<Row>(ctx, "financialTransactions", args.financialTransactionId, row.societyId);
+    assertReleasedBankDate(txn, args.date);
+    const account = await getOwned<Row>(ctx, "financialAccounts", txn.accountId, row.societyId);
+    if (active.some((payment: StoredInvoicePayment) => payment.financialTransactionId === txn!._id)) throw new Error("That bank transaction is already linked to a payment.");
+    const invoices = await loadInvoices(ctx, row.societyId);
+    if (invoices.some((invoice) => invoice._id !== row._id && (invoice.payments ?? []).some((payment: StoredInvoicePayment) => !payment.reversedDate && payment.financialTransactionId === txn!._id))) throw new Error("That bank transaction is already linked to another invoice.");
+    if ((account.currency ?? lctx.workspaceCurrency) !== lctx.workspaceCurrency || ((foreign || kind === "refund") && Number(txn.amountCents) !== expectedBase) || (kind === "payment" && Number(txn.amountCents) <= 0)) throw new Error("The bank transaction must match the explicit settlement amount in the books currency.");
+    await assertDepositClaimable(ctx, row.societyId, txn._id, args.date);
+  } else if (!noncash) {
+    const depositAccountId = args.depositAccountId || lctx.mapping.depositAccountId;
+    if (depositAccountId) await assertDepositAccount(ctx, row.societyId, depositAccountId, lctx.workspaceCurrency);
+  }
+  const actor = await actorName(ctx, row.societyId), userId = await actingUser(ctx, row.societyId), at = nowISO();
+  let payment: StoredInvoicePayment = { key: randomKey("settlement"), kind, date: args.date, amountCents, method, recordedAtISO: at, ...(idempotencyKey ? { idempotencyKey } : {}), ...(args.sourcePaymentKey ? { sourcePaymentKey: args.sourcePaymentKey } : {}), ...(fxRateMicros ? { fxRateMicros, fxSource: cleanText(args.fxSource, 200) } : {}), ...(args.reference ? { reference: cleanText(args.reference, 100) } : {}), ...(args.note ? { note: cleanText(args.note, 1000) } : {}), ...(actor ? { recordedByName: actor } : {}), ...(txn ? { financialTransactionId: txn._id } : args.depositAccountId && !noncash ? { depositAccountId: args.depositAccountId } : {}) };
+  if(new TextEncoder().encode(JSON.stringify({...row,payments:[...previous,payment]})).byteLength>900000)throw new Error("This invoice is too large for another settlement record. Export the audit history and reduce inline attachments.");
+  let next = { ...row, status: "sent", payments: [...previous, payment] } as Row;
+  await assertPostableDates(ctx, row.societyId, row.status === "draft" ? [row.issueDate, args.date] : [args.date]);
+  const blockers = accrualBlockers(asStored(next), lctx);
+  if (noncash && blockers.length) throw new Error(`Post the invoice before recording a credit or write-off: ${blockers.join(" ")}`);
+  if (row.status === "draft" || !row.journalEntryId) { const outcome = await syncAccrual(ctx, asStored(next), lctx, userId); if (outcome.entryId) next.journalEntryId = outcome.entryId; }
+  const fxRevaluations = await reverseOpenInvoiceRevaluations(ctx, asStored(next), args.date, userId);
+  next.fxRevaluations = fxRevaluations;
   if (txn) payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
-  payment = withPosting(payment, await postPayment(ctx, asStored({ ...next, payments: [...(row.payments ?? []), payment] }), payment, lctx, userId));
-  await ctx.db.patch(row._id, {
-    status: "sent",
-    sentAtISO: row.sentAtISO ?? at,
-    ...(next.journalEntryId ? { journalEntryId: next.journalEntryId } : {}),
-    payments: [...(row.payments ?? []), payment],
-    paidCents: sumPaid(payments),
-    totalCents: total,
-    updatedAtISO: at,
-    timeline,
-  });
+  payment = withPosting(payment, await postPayment(ctx, asStored(next), payment, lctx, userId));
+  await ctx.db.patch(row._id, { status: "sent", sentAtISO: row.sentAtISO ?? at, ...(next.journalEntryId ? { journalEntryId: next.journalEntryId } : {}), fxRevaluations, payments: [...previous, payment], paidCents: sumPaid([...previous, payment]), totalCents: total, updatedAtISO: at, timeline: [...(row.timeline ?? []), event(kind, `${kind === "payment" ? "Payment" : kind === "write_off" ? "Write-off" : kind === "credit" ? "Credit" : "Refund"} recorded`, actor, amountCents)] });
   return payment.key;
 }
+export async function recordPaymentPortable(ctx: PortableMutationCtx, args: SettlementArgs) { return recordSettlement(ctx, args, "payment"); }
+export async function recordAdjustmentPortable(ctx: PortableMutationCtx, args: SettlementArgs & { kind: "credit" | "write_off" | "refund" }) { return recordSettlement(ctx, args, args.kind); }
 
-// The payment is addressed by its key inside the invoice (named `paymentKey`, not an id: it is not a row).
-/** Remove a payment recorded in error: its entries are voided and a linked deposit goes back as it was. */
-export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paymentKey }: { id: string; paymentKey: string }) {
+/** Corrections append reversals; the original settlement remains available to historical statements. */
+export async function removePaymentPortable(ctx: PortableMutationCtx, args: { id: string; paymentKey: string; date?: string; reason?: string }) {
+  const { id, paymentKey } = args;
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
   const payment = (row.payments ?? []).find((entry: StoredInvoicePayment) => entry.key === paymentKey) as StoredInvoicePayment | undefined;
-  if (!payment) throw new Error("That payment is no longer on this invoice.");
-  await unwindPayment(ctx, row, payment);
-  const payments = (row.payments ?? []).filter((entry: StoredInvoicePayment) => entry.key !== paymentKey);
-  const actor = await actorName(ctx, row.societyId);
-  await ctx.db.patch(id, { payments, paidCents: sumPaid(payments), updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("payment_removed", payment.financialTransactionId ? "Payment removed and bank deposit unlinked" : "Payment removed", actor, payment.amountCents)] });
-}
-
-/** Remove every payment: their entries are voided and linked deposits go back as they were. */
-export async function revertToUnpaidPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const row = await requireOwnedRow<Row>(ctx, "invoices", id);
-  if (!(row.payments ?? []).length) return id;
-  for (const payment of row.payments as StoredInvoicePayment[]) await unwindPayment(ctx, row, payment);
-  const actor = await actorName(ctx, row.societyId);
-  await ctx.db.patch(id, { payments: [], paidCents: 0, updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("reverted", "Reverted to unpaid", actor, sumPaid(row.payments))] });
+  if (!payment) throw new Error("That settlement is no longer on this invoice.");
+  const requestedReason = args.reason === undefined ? undefined : cleanText(args.reason, 1000);
+  if (payment.reversedDate) {
+    if (args.date && args.date !== payment.reversedDate || args.reason !== undefined && requestedReason !== payment.reversalReason) throw new Error("That settlement was already reversed with different details.");
+    return id;
+  }
+  if ((row.payments ?? []).some((entry: StoredInvoicePayment) => !entry.reversedDate && entry.sourcePaymentKey === payment.key)) throw new Error("Reverse this payment's refunds first.");
+  const today = await organizationToday(ctx, row.societyId), date = args.date ?? today, userId = await actingUser(ctx, row.societyId);
+  const reason = args.reason === undefined ? "Recorded in error" : requestedReason;
+  if (!isCalendarDate(date) || date < payment.date || date > today) throw new Error("Choose a reversal date between the original settlement and today.");
+  if (!reason) throw new Error("Explain why the settlement is being reversed.");
+  const depositRelease = await prepareCorrectedDepositRelease(ctx, row, payment);
+  const prepared = await prepareSettlementReversal(ctx, asStored(row), payment, date);
+  const fxRevaluations = await reverseOpenInvoiceRevaluations(ctx, asStored(row), date, userId);
+  const reversals = await reverseSettlementPosting(ctx, asStored(row), payment, date, userId, prepared);
+  const restoredTransactionJournalEntryId = await releaseCorrectedDeposit(ctx, row, payment, date, depositRelease, userId);
+  const payments = row.payments.map((entry: StoredInvoicePayment) => entry.key === paymentKey ? { ...entry, ...reversals, ...(restoredTransactionJournalEntryId ? { restoredTransactionJournalEntryId } : {}), reversedDate: date, reversedAtISO: nowISO(), reversalReason: reason } : entry);
+  await ctx.db.patch(id, { payments, fxRevaluations, paidCents: sumPaid(payments), updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("settlement_reversed", "Settlement reversed; original retained for audit", await actorName(ctx, row.societyId), payment.amountCents)] });
   return id;
 }
+export async function revertToUnpaidPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const row = await requireOwnedRow<Row>(ctx, "invoices", id);
+  const active = (row.payments ?? []).filter((payment: StoredInvoicePayment) => !payment.reversedDate);
+  for (const payment of [...active].sort((a: StoredInvoicePayment, b: StoredInvoicePayment) => Number(a.kind !== "refund") - Number(b.kind !== "refund"))) await removePaymentPortable(ctx, { id, paymentKey: payment.key });
+  return id;
+}
+export const reverseAdjustmentPortable = removePaymentPortable;
 
-/**
- * Link a recorded payment to its bank deposit, move it to another deposit,
- * or (no `financialTransactionId`) unlink it. The payment's entries are
- * posted again against the new deposit account.
- */
+/** Dated, explicit period-end mark. Subsequent settlements reverse unrealized marks before realizing FX. */
+export async function revaluePortable(ctx: PortableMutationCtx, args: { id: string; date: string; rateMicros: number; source: string; idempotencyKey: string }) {
+  if(!args.idempotencyKey?.trim()||args.idempotencyKey.length>100)throw new Error("Use an idempotency key of 1–100 characters.");
+  const idempotencyKey = args.idempotencyKey.trim();
+  const row = await requireOwnedRow<Row>(ctx, "invoices", args.id);
+  const lctx = await loadInvoiceLedgerContext(ctx, row.societyId);
+  if (row.status !== "sent" || !row.journalEntryId || !row.money?.fx || row.currency === lctx.workspaceCurrency) throw new Error("Revaluation requires a posted foreign-currency invoice.");
+  const retry = (row.fxRevaluations ?? []).find((value: any) => value.key === idempotencyKey);
+  if (retry) { if (retry.date !== args.date || retry.rateMicros !== args.rateMicros || retry.source !== args.source.trim()) throw new Error("That key belongs to another FX revaluation."); return retry.journalEntryId ?? null; }
+  if (!isCalendarDate(args.date) || args.date < row.issueDate || args.date > await organizationToday(ctx, row.societyId)) throw new Error("Choose a revaluation date between issue and today.");
+  if ((row.payments ?? []).some((payment: StoredInvoicePayment) => !payment.reversedDate && payment.date > args.date) || (row.fxRevaluations ?? []).some((value: any) => value.date > args.date)) throw new Error("Revaluation must follow the invoice's existing settlements and revaluations.");
+  const source = explicitFxQuote({ baseCurrency: lctx.workspaceCurrency, rateMicros: args.rateMicros, asOfDate: args.date, source: args.source }, row.currency, lctx.workspaceCurrency)!.source;
+  await assertPostableDates(ctx, row.societyId, [args.date]);
+  const total = computeInvoiceTotals(row.lines, row.discount, row.money).totalCents, invoiceBalanceCents = total - sumPaid(row.payments);
+  if (invoiceBalanceCents <= 0) throw new Error("Only a positive outstanding receivable can be revalued.");
+  const accrual = await entryLines(ctx, row.journalEntryId);
+  const carrying = accrual[0].amountCents - (row.payments ?? []).filter((payment: StoredInvoicePayment) => !payment.reversedDate).reduce((sum: number, payment: StoredInvoicePayment) => sum + (payment.bookValueCents ?? payment.amountCents), 0) + (row.fxRevaluations ?? []).filter((value: any) => !value.reversedDate).reduce((sum: number, value: any) => sum + value.adjustmentCents, 0);
+  const baseBalanceCents = convertInvoiceCents(invoiceBalanceCents, args.rateMicros), adjustmentCents = baseBalanceCents - carrying;
+  const mark = { key: idempotencyKey, date: args.date, rateMicros: args.rateMicros, source, invoiceBalanceCents, baseBalanceCents, adjustmentCents };
+  if (new TextEncoder().encode(JSON.stringify({ ...row, fxRevaluations: [...(row.fxRevaluations ?? []), mark] })).byteLength > 900000) throw new Error("This invoice is too large for another revaluation record. Reduce inline artwork or attachments.");
+  let journalEntryId: string | undefined;
+  if (adjustmentCents) {
+    const account = await ensureLedgerAccount(ctx, row.societyId, adjustmentCents > 0 ? "fxUnrealizedGain" : "fxUnrealizedLoss", lctx.workspaceCurrency);
+    journalEntryId = await postLedgerEntry(ctx, { societyId: row.societyId, kind: "revaluation", key: `invoice:${row._id}:fx:${idempotencyKey}`, date: args.date, memo: `FX revaluation ${row.number}: ${source}`, lines: [{ accountId: accrual[0].accountId, side: adjustmentCents > 0 ? "debit" : "credit", amountCents: Math.abs(adjustmentCents) }, { accountId: account._id, side: adjustmentCents > 0 ? "credit" : "debit", amountCents: Math.abs(adjustmentCents) }], counterpartyId: row.counterpartyId, createdByUserId: await actingUser(ctx, row.societyId) });
+  }
+  await ctx.db.patch(row._id, { fxRevaluations: [...(row.fxRevaluations ?? []), { ...mark, ...(journalEntryId ? { journalEntryId } : {}) }], updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("fx_revaluation", `FX revaluation: ${source}`, await actorName(ctx, row.societyId), adjustmentCents)] });
+  return journalEntryId ?? null;
+}
+
 export async function linkDepositPortable(
   ctx: PortableMutationCtx,
   { id, paymentKey, financialTransactionId, depositAccountId }: { id: string; paymentKey: string; financialTransactionId?: string; depositAccountId?: string },
@@ -1043,17 +1265,22 @@ export async function linkDepositPortable(
   const index = (row.payments ?? []).findIndex((entry: StoredInvoicePayment) => entry.key === paymentKey);
   if (index < 0) throw new Error("That payment is no longer on this invoice.");
   const current = row.payments[index] as StoredInvoicePayment;
+  if(current.reversedDate||(current.kind&&current.kind!=="payment"))throw new Error("Only active cash payments can link a bank deposit.");
   if (financialTransactionId && current.financialTransactionId === financialTransactionId) return paymentKey;
-  const txn = financialTransactionId ? await linkableDeposit(ctx, row, financialTransactionId) : null;
-  if (depositAccountId && !txn) await assertDepositAccount(ctx, row.societyId, depositAccountId);
+  const txn = financialTransactionId ? await linkableDeposit(ctx, {...row,currency:row.money?.fx?.baseCurrency??row.currency}, financialTransactionId, current.date) : null;
+  if (txn) assertReleasedBankDate(txn, current.date);
+  if (depositAccountId && !txn) await assertDepositAccount(ctx, row.societyId, depositAccountId, row.money?.fx?.baseCurrency??row.currency);
   const lctx = await loadInvoiceLedgerContext(ctx, row.societyId);
   if (current.journalEntryId && !paymentBlock(current, lctx)) await assertPostableDates(ctx, row.societyId, [current.date]);
+  if(txn&&row.money?.fx&&Number(txn.amountCents)!==current.baseAmountCents)throw new Error("The deposit must match the recorded base-currency settlement amount.");
   const actor = await actorName(ctx, row.societyId);
   await unwindPayment(ctx, row, current);
   const {
     financialTransactionId: _txn,
     transactionBefore: _before,
     voidedTransactionEntryId: _voided,
+    replacedTransactionEntryId: _replaced,
+    bankTransferJournalEntryId: _transfer,
     journalEntryId: _entry,
     cashBasisEntryId: _cash,
     depositAccountId: _deposit,
@@ -1082,7 +1309,7 @@ export async function sendRemindersPortable(ctx: PortableMutationCtx, { societyI
   let skippedNoEmail = 0;
   let skippedNotOpen = 0;
   for (const row of rows) {
-    const total = computeInvoiceTotals(row.lines ?? [], row.discount).totalCents;
+    const total = computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents;
     const status = deriveInvoiceStatus({ status: row.status, dueDate: row.dueDate, totalCents: total, payments: row.payments }, today);
     if (!isOpenStatus(status)) { skippedNotOpen += 1; continue; }
     if (!row.billToEmail) { skippedNoEmail += 1; continue; }
@@ -1222,7 +1449,7 @@ export async function undoDuesBatchPortable(ctx: PortableMutationCtx, { societyI
 
 export async function upsertCatalogItemPortable(
   ctx: PortableMutationCtx,
-  args: { id?: string; societyId: string; name: string; description?: string; unitPriceCents: number; taxRatePercent?: number; taxLabel?: string; category?: string; accountingAccountId?: string; active?: boolean },
+  args: Partial<InvoiceLine> & { id?: string; societyId: string; name: string; description?: string; kind?: "item" | "service"; sku?: string; unit?: string; currency?: string; unitPriceCents: number; taxRatePercent?: number; taxLabel?: string; category?: string; accountingAccountId?: string; active?: boolean },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   const name = cleanText(args.name, 200);
@@ -1232,9 +1459,14 @@ export async function upsertCatalogItemPortable(
   const rate = Number(args.taxRatePercent ?? 0);
   if (!Number.isFinite(rate) || rate < 0 || rate > 30) throw new Error("Tax rate must be between 0 and 30%.");
   if (args.accountingAccountId) await requireAccountOfKind(ctx, args.societyId, args.accountingAccountId, "revenue");
+  const {rateOverridden:_override,...details}=cleanInvoiceLineDetails(args);
   const fields = {
+    ...details,
+    imageUrl:details.imageUrl,manufacturer:details.manufacturer,partNumber:details.partNumber,upc:details.upc,ean:details.ean,isbn:details.isbn,customField:details.customField,batchNumber:details.batchNumber,serialNumbers:details.serialNumbers,taxMode:details.taxMode,
     name,
     description: cleanText(args.description, 1000),
+    kind: args.kind === "service" ? "service" : "item", sku: cleanText(args.sku, 80), unit: cleanText(args.unit, 30) ?? "each",
+    currency: invoiceCurrency(args.currency),
     unitPriceCents,
     taxRatePercent: rate > 0 ? rate : undefined,
     taxLabel: rate > 0 ? cleanText(args.taxLabel, 20) ?? "Tax" : undefined,
@@ -1257,7 +1489,14 @@ export async function setCatalogItemActivePortable(ctx: PortableMutationCtx, { i
 }
 
 export async function removeCatalogItemPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "invoiceCatalogItems", id);
+  const item = await requireOwnedRow<Row>(ctx, "invoiceCatalogItems", id);
+  const [invoices, series, lists, repairs] = await Promise.all([
+    loadInvoices(ctx, item.societyId),
+    ctx.db.query("invoiceSeries").withIndex("by_society", (q) => q.eq("societyId", item.societyId)).take(1000),
+    ctx.db.query("invoicePriceLists").withIndex("by_society", (q) => q.eq("societyId", item.societyId)).take(200),
+    ctx.db.query("repairJobs").withIndex("by_society", (q) => q.eq("societyId", item.societyId)).take(1000),
+  ]);
+  if ([...invoices, ...series, ...repairs].some((row) => (row.lines ?? []).some((line: InvoiceLine) => line.catalogItemId === id)) || lists.some((list) => list.entries.some((entry: any) => entry.catalogItemId === id))) throw new Error("This item is in use. Mark it inactive to preserve its billing history.");
   await ctx.db.delete(id);
 }
 
@@ -1321,7 +1560,11 @@ export async function upsertSeriesPortable(ctx: PortableMutationCtx, args: Serie
     ...party,
     terms,
     reference: cleanText(args.reference, 100),
-    currency: (cleanText(args.currency, 3) ?? "CAD").toUpperCase(),
+    currency: invoiceCurrency(args.currency ?? existing?.currency ?? source?.currency),
+    documentTemplate: source?.documentTemplate ?? existing?.documentTemplate,
+    money: source?.money ?? existing?.money, documentExtras: source?.documentExtras ?? existing?.documentExtras,
+    shipToName: source?.shipToName ?? existing?.shipToName,
+    shipToAddress: source?.shipToAddress ?? existing?.shipToAddress,
     lines,
     discount: cleanDiscount(args.discount),
     memo: cleanText(args.memo, 4000),
@@ -1360,15 +1603,19 @@ export async function issueFromSeriesPortable(ctx: PortableMutationCtx, { id }: 
     billToName: series.billToName,
     billToEmail: series.billToEmail,
     billToAddress: series.billToAddress,
+    shipToName: series.shipToName,
+    shipToAddress: series.shipToAddress,
     issueDate,
     terms: series.terms,
     dueDate: dueDateForTerms(issueDate, series.terms),
     reference: series.reference,
     currency: series.currency,
+    documentTemplate: series.documentTemplate,
+    money: series.money, documentExtras: series.documentExtras,
     lines: (series.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line") })),
     discount: series.discount,
     memo: series.memo,
-    totalCents: computeInvoiceTotals(series.lines ?? [], series.discount).totalCents,
+    totalCents: computeInvoiceTotals(series.lines ?? [], series.discount, series.money).totalCents,
     paidCents: 0,
     payments: [],
     timeline: [event("issued_from_series", `Issued from ${series.name}`, actor)],
@@ -1489,14 +1736,14 @@ export async function postingPreviewPortable(ctx: PortableQueryCtx, { societyId 
   const preview = { invoiceCount: 0, invoiceCents: 0, paymentCount: 0, paymentCents: 0, postedCount: 0, blocked: [] as Array<{ invoiceId: string; number: string; billToName: string; totalCents: number; reasons: string[] }> };
   for (const row of invoices.sort((a, b) => a.sequence - b.sequence)) {
     const state = invoiceLedgerState(row, lctx, postedIds);
-    const totalCents = computeInvoiceTotals(row.lines ?? [], row.discount).totalCents;
+    const totalCents = computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents;
     if (state.state === "posted" || (state.state === "ready" && state.entryId)) preview.postedCount += 1;
     if (state.state === "ready") {
       if (!state.entryId) {
         preview.invoiceCount += 1;
         preview.invoiceCents += totalCents;
       }
-      const pending = (row.payments ?? []).filter((payment: StoredInvoicePayment) => !(payment.journalEntryId && postedIds.has(payment.journalEntryId)) && !paymentBlock(payment, lctx));
+      const pending = (row.payments ?? []).filter((payment: StoredInvoicePayment) => !payment.reversedDate && !(payment.journalEntryId && postedIds.has(payment.journalEntryId)) && !paymentBlock(payment, lctx));
       preview.paymentCount += pending.length;
       preview.paymentCents += sumPaid(pending);
     }
@@ -1529,7 +1776,7 @@ export async function postExistingPortable(ctx: PortableMutationCtx, { societyId
     if (state.state === "blocked") result.blocked += 1;
     if (state.state !== "ready") continue;
     try {
-      const pending = ((row.payments ?? []) as StoredInvoicePayment[]).filter((payment) => !((payment.journalEntryId && postedIds.has(payment.journalEntryId)) || paymentBlock(payment, lctx)));
+      const pending = ((row.payments ?? []) as StoredInvoicePayment[]).filter((payment) => !payment.reversedDate && !((payment.journalEntryId && postedIds.has(payment.journalEntryId)) || paymentBlock(payment, lctx)));
       await assertInvoicePostable(ctx, row, lctx, !state.entryId, pending);
       let current: Row = row;
       const events: Array<ReturnType<typeof event>> = [];
@@ -1538,14 +1785,14 @@ export async function postExistingPortable(ctx: PortableMutationCtx, { societyId
         if (!outcome.entryId) continue;
         current = { ...row, journalEntryId: outcome.entryId };
         await ctx.db.patch(row._id, { journalEntryId: outcome.entryId });
-        const total = computeInvoiceTotals(row.lines ?? [], row.discount).totalCents;
+        const total = computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents;
         events.push(event("posted", postedLabel(total), actor));
         result.postedInvoices += 1;
         result.postedCents += total;
       }
       const payments = [...(current.payments ?? [])] as StoredInvoicePayment[];
       for (const [index, original] of payments.entries()) {
-        if ((original.journalEntryId && postedIds.has(original.journalEntryId)) || paymentBlock(original, lctx)) continue;
+        if (original.reversedDate || (original.journalEntryId && postedIds.has(original.journalEntryId)) || paymentBlock(original, lctx)) continue;
         const txn = original.financialTransactionId ? ((await ctx.db.get(original.financialTransactionId, "financialTransactions")) as Row | null) : null;
         // Post first: the deposit is only matched (and its snapshot kept) once its payment is in the books.
         const posting = await postPayment(ctx, asStored({ ...current, payments }), original, lctx, userId);
@@ -1563,4 +1810,89 @@ export async function postExistingPortable(ctx: PortableMutationCtx, { societyId
     }
   }
   return result;
+}
+
+
+/** Reusable presentation. Each invoice snapshots its config so later design edits are safe. */
+export async function upsertTemplatePortable(ctx: PortableMutationCtx, args: { societyId: string; id?: string; config: InvoiceTemplate; active?: boolean; makeDefault?: boolean }) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "invoiceTemplates", args.id, args.societyId);
+  const fields = { config: cleanInvoiceTemplate(args.config), active: args.active ?? true, updatedAtISO: nowISO() };
+  if (args.makeDefault && !fields.active) throw new Error("The default template must be active.");
+  const id = args.id ?? await ctx.db.insert("invoiceTemplates", { societyId: args.societyId, ...fields, createdAtISO: nowISO() });
+  if (args.id) await ctx.db.patch(id, fields);
+  const settings = await loadSettings(ctx, args.societyId);
+  if (args.makeDefault) {
+    if (settings) await ctx.db.patch(settings._id, { defaultTemplateId: id, updatedAtISO: nowISO() });
+    else await ctx.db.insert("invoiceSettings", { societyId: args.societyId, prefix: "INV-", nextNumber: 1, defaultTerms: DEFAULT_TERMS, defaultTemplateId: id, updatedAtISO: nowISO() });
+  } else if (settings?.defaultTemplateId === id && (!fields.active || args.makeDefault === false)) await ctx.db.patch(settings._id, { defaultTemplateId: undefined });
+  return id;
+}
+
+export async function upsertPriceListPortable(ctx: PortableMutationCtx, args: { societyId: string; id?: string; name: string; currency: string; active?: boolean; entries: Array<{ catalogItemId: string; unitPriceCents: number }> }) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "invoicePriceLists", args.id, args.societyId);
+  const name = cleanText(args.name, 100);
+  if (!name) throw new Error("Give the price list a name.");
+  if (args.entries.length > 500) throw new Error("A price list can hold up to 500 rates.");
+  const seen = new Set<string>();
+  for (const entry of args.entries) {
+    await getOwned(ctx, "invoiceCatalogItems", entry.catalogItemId, args.societyId);
+    if (seen.has(entry.catalogItemId)) throw new Error("An item can only appear once in a price list.");
+    seen.add(entry.catalogItemId);
+    if (!Number.isSafeInteger(entry.unitPriceCents) || entry.unitPriceCents < 0) throw new Error("Rates must be non-negative integer cents.");
+  }
+  const fields = { name, currency: invoiceCurrency(args.currency), active: args.active ?? true, entries: args.entries, updatedAtISO: nowISO() };
+  if (args.id) { await ctx.db.patch(args.id, fields); return args.id; }
+  return ctx.db.insert("invoicePriceLists", { societyId: args.societyId, ...fields, createdAtISO: nowISO() });
+}
+
+type RepairArgs = PartyArgs & { id?: string; societyId: string; asset: string; serialNumber?: string; problem: string; notes?: string; receivedDate: string; targetDate?: string; currency: string; lines: any[] };
+export async function upsertRepairJobPortable(ctx: PortableMutationCtx, args: RepairArgs) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const existing = args.id ? await getOwned<Row>(ctx, "repairJobs", args.id, args.societyId) : null;
+  const party = await cleanParty(ctx, args.societyId, args);
+  const asset = cleanText(args.asset, 200), problem = cleanText(args.problem, 2000);
+  if (!asset || !problem) throw new Error("Describe the item and the repair needed.");
+  if (!isCalendarDate(args.receivedDate) || (args.targetDate && (!isCalendarDate(args.targetDate) || args.targetDate < args.receivedDate))) throw new Error("Choose valid received and target dates.");
+  const lines = cleanLines(args.lines);
+  if (lines.length) { const error = validateInvoiceLines(lines); if (error) throw new Error(error); }
+  await assertCatalogRefs(ctx, args.societyId, lines);
+  const currency = invoiceCurrency(args.currency);
+  if (existing) {
+    const invoice = await ctx.db.query("invoices").withIndex("by_repair_job", (q) => q.eq("repairJobId", args.id)).take(100);
+    if (invoice.some((row) => row.status !== "void") && (JSON.stringify(existing.lines) !== JSON.stringify(lines) || existing.currency !== currency || existing.billToName !== party.billToName || existing.partyKind !== party.partyKind || existing.memberId !== party.memberId || existing.counterpartyId !== party.counterpartyId)) throw new Error("This repair is invoiced. Edit billing on the linked invoice.");
+  }
+  const fields = { ...party, asset, problem, serialNumber: cleanText(args.serialNumber, 100), notes: cleanText(args.notes, 4000), receivedDate: args.receivedDate, targetDate: args.targetDate || undefined, currency, lines, updatedAtISO: nowISO() };
+  if (args.id) { await ctx.db.patch(args.id, fields); return args.id; }
+  const id = await ctx.db.insert("repairJobs", { societyId: args.societyId, ...fields, number: "", status: "received", timeline: [event("created", "Repair received", await actorName(ctx, args.societyId))], createdAtISO: nowISO() });
+  await ctx.db.patch(id, { number: `REP-${id.slice(-8).toUpperCase()}` });
+  return id;
+}
+
+export async function setRepairStatusPortable(ctx: PortableMutationCtx, { id, status }: { id: string; status: RepairStatus }) {
+  if (["in_progress", "ready", "completed"].includes(status)) await assertRepairApprovalPortable(ctx, id);
+  const job = await requireOwnedRow<Row>(ctx, "repairJobs", id);
+  if (job.status === status) return id;
+  if (status === "cancelled") {
+    const invoices = await ctx.db.query("invoices").withIndex("by_repair_job", (q) => q.eq("repairJobId", id)).take(100);
+    if (invoices.some((row) => row.status !== "void")) throw new Error("Void the linked invoice before cancelling this repair.");
+  }
+  if (!REPAIR_TRANSITIONS[job.status as RepairStatus]?.includes(status)) throw new Error("That repair status transition is not available.");
+  await ctx.db.patch(id, { status, updatedAtISO: nowISO(), timeline: [...job.timeline, event("status", REPAIR_STATUS_LABEL[status], await actorName(ctx, job.societyId))] });
+  return id;
+}
+
+/** Transactional and idempotent: one active invoice per repair. */
+export async function invoiceRepairJobPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  await assertRepairBillablePortable(ctx, id);
+  const job = await requireOwnedRow<Row>(ctx, "repairJobs", id);
+  if (job.status === "cancelled") throw new Error("A cancelled repair cannot be invoiced.");
+  const existing = await ctx.db.query("invoices").withIndex("by_repair_job", (q) => q.eq("repairJobId", id)).take(100);
+  const active = existing.find((row) => row.status !== "void");
+  if (active) return active._id;
+  const settings = await loadSettings(ctx, job.societyId);
+  const invoiceId = await upsertPortable(ctx, { societyId: job.societyId, partyKind: job.partyKind, memberId: job.memberId, counterpartyId: job.counterpartyId, billToName: job.billToName, billToEmail: job.billToEmail, billToAddress: job.billToAddress, issueDate: await organizationToday(ctx, job.societyId), terms: settings?.defaultTerms ?? DEFAULT_TERMS, reference: job.number, currency: job.currency, repairJobId: id, lines: job.lines, memo: `${job.asset}${job.serialNumber ? ` (${job.serialNumber})` : ""}\n${job.problem}` });
+  await ctx.db.patch(id, { updatedAtISO: nowISO(), timeline: [...job.timeline, event("invoiced", "Invoice created", await actorName(ctx, job.societyId))] });
+  return invoiceId;
 }

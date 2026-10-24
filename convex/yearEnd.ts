@@ -18,19 +18,19 @@ import { toPortableQueryCtx } from "./lib/portable";
  */
 
 export const annualStatement = authorizedQuery("yearEnd:annualStatement", query)({
-  args: { societyId: v.id("societies"), fiscalYear: v.string() },
+  args: { societyId: v.id("societies"), fiscalYear: v.string(), currency: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => annualStatementPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const orgRevenueExpense = authorizedQuery("yearEnd:orgRevenueExpense", query)({
-  args: { societyId: v.id("societies"), fiscalYear: v.string() },
+  args: { societyId: v.id("societies"), fiscalYear: v.string(), currency: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => orgRevenueExpensePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const restrictedFundStatement = authorizedQuery("yearEnd:restrictedFundStatement", query)({
-  args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
+  args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()), currency: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => restrictedFundStatementPortable(await toPortableQueryCtx(ctx), args),
 });

@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { ChartCard, formatRange, type DateRange } from "../../../components/charts";
 import { SankeyChart, type SankeyNodeInput } from "../../../components/charts/SankeyChart";
-import { formatMoney } from "../../../lib/money";
+import { formatMoney as baseFormatMoney, type MoneyFormatOptions } from "../../../lib/money";
 import { pluralize } from "../../../lib/format";
 import {
   FUND_LABELS,
@@ -17,6 +17,9 @@ import {
   type SankeyTxn,
 } from "./cashFlowSankey";
 import { useFinanceInsightsData } from "./useFinanceInsightsData";
+import { useFinancePermissions } from "../../../hooks/useFinancePermissions";
+import { ReportPdfDownload } from "../reports/ReportPdfDownload";
+import { sankeyReportDocument } from "./sankeyReportDocument";
 
 type AccountRow = { _id: string; accountType?: string; isRestricted?: boolean };
 
@@ -30,8 +33,9 @@ const ACCOUNT_TITLES = ["Money in", "Accounts", "Money out"];
  * to money out by category, for the range chosen in the finance range bar.
  * Clicking a category focuses the diagram on it and lists what is behind it.
  */
-export function CashFlowSankeyCard({ societyId, range }: { societyId: string; range: DateRange }) {
-  const data = useFinanceInsightsData(societyId);
+export function CashFlowSankeyCard({ societyId, range, currency }: { societyId: string; range: DateRange; currency?: string }) {
+  const data = useFinanceInsightsData(societyId, true, currency);
+  const { canExport } = useFinancePermissions();
   const accounts = useQuery(api.financialHub.accounts, { societyId: societyId as any }) as AccountRow[] | undefined;
   const restrictedIds = useMemo(
     () => new Set((accounts ?? []).filter((a) => a.isRestricted && BANK_TYPES.has(String(a.accountType))).map((a) => String(a._id))),
@@ -42,6 +46,7 @@ export function CashFlowSankeyCard({ societyId, range }: { societyId: string; ra
   const txns = data.txns as SankeyTxn[];
   const model = useMemo(() => buildCashFlowSankey(txns, range, { restrictedAccountIds: restrictedIds, splitFunds }), [range, restrictedIds, splitFunds, txns]);
   const selectedFlow = selected ? flowForNode(model, selected) : null;
+  const report = useMemo(() => sankeyReportDocument(model, range, { currency: data.currency, sourceCurrencies: data.sourceCurrencies, truncated: data.truncated, selectedFlow }), [model, range, data.currency, data.sourceCurrencies, data.truncated, selectedFlow]);
 
   // A selection that no longer exists in this range (or fold) is dropped.
   useEffect(() => {
@@ -50,7 +55,7 @@ export function CashFlowSankeyCard({ societyId, range }: { societyId: string; ra
 
   if (!data.loading && !data.hasAnyFinance) return null;
   const loading = data.loading || accounts === undefined;
-  const nodes = withDetails(model);
+  const nodes = withDetails(model, data.currency);
   const empty = !loading && model.transactionCount === 0;
   const canSplit = restrictedIds.size > 0;
 
@@ -64,7 +69,9 @@ export function CashFlowSankeyCard({ societyId, range }: { societyId: string; ra
       emptyMessage="No money in or out in this range."
       height={300}
       actions={
-        canSplit && !loading && !empty ? (
+        <>
+        <ReportPdfDownload societyId={societyId} report={report} filename={`cash-flow-diagram-${range.start}-${range.end}`} disabled={loading || !canExport} label="Diagram PDF" />
+        {canSplit && !loading && !empty ? (
           <div className="segmented segmented--compact" role="group" aria-label="Funds">
             {[
               { id: true, label: "By fund" },
@@ -81,20 +88,22 @@ export function CashFlowSankeyCard({ societyId, range }: { societyId: string; ra
               </button>
             ))}
           </div>
-        ) : undefined
+        ) : undefined}
+        </>
       }
-      table={sankeyTable(model)}
+      table={sankeyTable(model, data.currency)}
     >
       <SankeyChart
         nodes={nodes}
         links={model.links}
-        ariaLabel={summary(model)}
+        ariaLabel={summary(model, data.currency)}
+        formatValue={(value) => baseFormatMoney(value, { currency: data.currency })}
         columnTitles={model.funds.length > 1 ? FUND_TITLES : ACCOUNT_TITLES}
         selectedId={selected}
         onSelect={setSelected}
       />
       {selectedFlow ? (
-        <SelectedFlow flow={selectedFlow} txns={txns} range={range} model={model} onClear={() => setSelected(null)} />
+        <SelectedFlow currency={data.currency} flow={selectedFlow} txns={txns} range={range} model={model} onClear={() => setSelected(null)} />
       ) : (
         <p className="cash-flow-sankey__hint">Select a category to see what is behind it.</p>
       )}
@@ -102,7 +111,8 @@ export function CashFlowSankeyCard({ societyId, range }: { societyId: string; ra
   );
 }
 
-function withDetails(model: CashFlowSankeyModel): SankeyNodeInput[] {
+function withDetails(model: CashFlowSankeyModel, currency = "CAD"): SankeyNodeInput[] {
+  const formatMoney = (value: number, options?: MoneyFormatOptions) => baseFormatMoney(value, { ...options, currency });
   const flows = new Map([...model.inflows, ...model.outflows].map((flow) => [flow.id, flow]));
   return model.nodes.map((node) => {
     const flow = flows.get(node.id);
@@ -129,12 +139,14 @@ function withDetails(model: CashFlowSankeyModel): SankeyNodeInput[] {
   });
 }
 
-function summary(model: CashFlowSankeyModel) {
+function summary(model: CashFlowSankeyModel, currency = "CAD") {
+  const formatMoney = (value: number, options?: MoneyFormatOptions) => baseFormatMoney(value, { ...options, currency });
   const top = (flows: CategoryFlow[]) => flows.slice(0, 3).map((flow) => `${flow.category} ${formatMoney(flow.cents, { trimWholeCents: true })}`).join(", ");
   return `Cash flow: ${formatMoney(model.totalIn, { trimWholeCents: true })} in, mostly ${top(model.inflows) || "none"}; ${formatMoney(model.totalOut, { trimWholeCents: true })} out, mostly ${top(model.outflows) || "none"}; net change ${formatMoney(model.net, { trimWholeCents: true, signDisplay: "exceptZero" })}.`;
 }
 
-function sankeyTable(model: CashFlowSankeyModel) {
+function sankeyTable(model: CashFlowSankeyModel, currency = "CAD") {
+  const formatMoney = (value: number, options?: MoneyFormatOptions) => baseFormatMoney(value, { ...options, currency });
   const fundColumns = model.funds.length > 1;
   const share = (cents: number, base: number) => (base ? `${((cents / base) * 100).toFixed(1)}%` : "—");
   const row = (flow: CategoryFlow, base: number) => ({
@@ -160,10 +172,11 @@ function sankeyTable(model: CashFlowSankeyModel) {
   };
 }
 
-function SelectedFlow({ flow, txns, range, model, onClear }: { flow: CategoryFlow; txns: SankeyTxn[]; range: DateRange; model: CashFlowSankeyModel; onClear: () => void }) {
+function SelectedFlow({ flow, txns, range, model, onClear, currency = "CAD" }: { currency?: string; flow: CategoryFlow; txns: SankeyTxn[]; range: DateRange; model: CashFlowSankeyModel; onClear: () => void }) {
   const rows = useMemo(() => transactionsForFlow(txns, range, flow), [flow, range, txns]);
   const payees = useMemo(() => topCounterparties(rows), [rows]);
   const base = flow.direction === "in" ? model.totalIn : model.totalOut;
+  const formatMoney = (value: number, options?: MoneyFormatOptions) => baseFormatMoney(value, { ...options, currency });
   const pct = base ? Math.round((flow.cents / base) * 100) : 0;
   return (
     <div className="cash-flow-sankey__focus" role="status">

@@ -29,6 +29,8 @@ export type RecordTableContextValue = {
   ) => void;
   /** Fires when a cell is edited + submitted. Receives { recordId, fieldName, value }. */
   onUpdate?: (args: { recordId: string; fieldName: string; value: unknown }) => void | Promise<void>;
+  /** Hide editing affordances for derived/locked records; omitted preserves normal editing. */
+  canEditRecord?: (record: any) => boolean;
   /** Creates a record through the owning page's domain workflow. */
   onCreate?: () => void | Promise<void>;
   /** Persists a user-driven row order when the object supports ordering. */

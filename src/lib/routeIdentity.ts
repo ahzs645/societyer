@@ -363,6 +363,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   // ---- Finance ----
   "/app/financials": { icon: PiggyBank, group: "finance", label: "Financials" },
   "/app/financials/accounting": { icon: Calculator, group: "finance", label: "Accounting" },
+  "/app/financials/planning": { icon: Gauge, group: "finance", label: "Cost planning" },
   "/app/financials/reports": { icon: FileChartColumn, group: "finance", label: "Financial reports" },
   "/app/financials/journal-entries": { icon: NotebookPen, group: "finance", label: "Journal entries" },
   "/app/financials/chart-of-accounts": { icon: ListTree, group: "finance", label: "Chart of accounts" },
@@ -380,6 +381,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/bills": { icon: ReceiptText, group: "finance", label: "Bills", module: "bills" },
   "/app/bills/vendors": { icon: Building2, group: "finance", label: "Vendors", module: "bills" },
   "/app/payroll": { icon: Wallet, group: "finance", label: "Payroll", module: "payroll" },
+  "/app/payroll/calculator": { icon: Calculator, group: "finance", label: "Payroll calculator", module: "payroll" },
   "/app/corporate-cards": { icon: CreditCard, group: "finance", label: "Credit cards", module: "cards" },
   "/app/investments": { icon: TrendingUp, group: "finance", label: "Investments", module: "investments" },
   "/app/assets": { icon: Package, group: "finance", label: "Assets", module: "assets" },

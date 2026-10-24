@@ -1,0 +1,34 @@
+import { useEffect, useState } from "react";
+import { Field } from "../../components/ui";
+import { cleanDocumentExtras, type DocumentExtras, type DocumentAttachment } from "../../../shared/documentExtras";
+
+/** Transaction-specific document content, independent of the reusable design. */
+export function DocumentExtrasFields({ value = {}, onChange, disabled = false }: { value?: DocumentExtras; onChange: (value: DocumentExtras) => void; disabled?: boolean }) {
+  const [error, setError] = useState("");
+  const update = (patch: Partial<DocumentExtras>) => { try { const next = { ...value, ...patch }; cleanDocumentExtras(next); setError(""); onChange(next); } catch (problem) { setError(problem instanceof Error ? problem.message : "Could not update document details."); } };
+  const [paymentUrl, setPaymentUrl] = useState(value.paymentUrl || "");
+  useEffect(() => setPaymentUrl(value.paymentUrl || ""), [value.paymentUrl]);
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    try {
+      const additions = await Promise.all(Array.from(files).map(async (file): Promise<DocumentAttachment> => {
+        if (!["application/pdf", "image/png", "image/jpeg"].includes(file.type) || file.size > 440000) throw new Error("Choose PDF, PNG or JPEG attachments below 440 KB.");
+        const dataUrl = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Could not read attachment.")); reader.readAsDataURL(file); });
+        return { name: file.name, mimeType: file.type as DocumentAttachment["mimeType"], dataUrl };
+      }));
+      update({ attachments: [...value.attachments || [], ...additions] });
+    } catch (problem) { setError(problem instanceof Error ? problem.message : "Could not attach file."); }
+  };
+  return <details className="card invoice-card"><summary>Terms, payment details & attachments</summary><div className="form-stack" style={{ padding: 16 }}>
+    {error && <p className="field__error" role="alert">{error}</p>}
+    <Field label="Terms and conditions"><textarea className="input textarea" disabled={disabled} value={value.termsAndConditions || ""} maxLength={12000} onChange={(event) => update({ termsAndConditions: event.target.value })} /></Field>
+    <Field label="Online payment link"><div className="invoice-commerce-actions"><input className="input" type="url" disabled={disabled} value={paymentUrl} placeholder="https://" onChange={(event) => setPaymentUrl(event.target.value)} /><button type="button" className="btn btn--sm" disabled={disabled} onClick={() => update({ paymentUrl })}>Apply link</button></div></Field>
+    <fieldset disabled={disabled}><legend>Bank details</legend>{(value.bankDetails || []).map((row, index) => <div key={index} className="invoice-commerce-actions"><input className="input" aria-label={`Bank field ${index + 1} label`} value={row.label} maxLength={100} onChange={(event) => update({ bankDetails: value.bankDetails!.map((field, i) => i === index ? { ...field, label: event.target.value } : field) })} /><input className="input" aria-label={`Bank field ${index + 1} value`} value={row.value} maxLength={300} onChange={(event) => update({ bankDetails: value.bankDetails!.map((field, i) => i === index ? { ...field, value: event.target.value } : field) })} /><button type="button" className="btn btn--sm" onClick={() => update({ bankDetails: value.bankDetails!.filter((_, i) => i !== index) })}>Remove</button></div>)}<button type="button" className="btn btn--sm" disabled={(value.bankDetails?.length || 0) >= 12} onClick={() => update({ bankDetails: [...value.bankDetails || [], { label: "Account", value: "" }] })}>Add bank field</button></fieldset>
+    <fieldset disabled={disabled}><legend>Annexure tables</legend>{(value.annexures || []).map((annex, index) => {
+      const changeAnnex = (patch: Partial<typeof annex>) => update({ annexures: value.annexures!.map((item, i) => i === index ? { ...item, ...patch } : item) });
+      return <div className="form-stack" key={index}><Field label={`Annexure ${index + 1} title`}><input className="input" value={annex.title} maxLength={200} onChange={(event) => changeAnnex({ title: event.target.value })} /></Field><div style={{ overflowX: "auto" }}><table className="table"><thead><tr>{annex.columns.map((column, j) => <th key={j}><input className="input" aria-label={`Annexure ${index + 1} column ${j + 1}`} value={column} maxLength={100} onChange={(event) => changeAnnex({ columns: annex.columns.map((item, k) => k === j ? event.target.value : item) })} /></th>)}<th>Actions</th></tr></thead><tbody>{annex.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}><input className="input" aria-label={`Annexure ${index + 1} row ${i + 1} column ${j + 1}`} value={cell} maxLength={1000} onChange={(event) => changeAnnex({ rows: annex.rows.map((item, k) => k === i ? item.map((text, l) => l === j ? event.target.value : text) : item) })} /></td>)}<td><button type="button" className="btn btn--sm" onClick={() => changeAnnex({ rows: annex.rows.filter((_, k) => k !== i) })}>Remove row</button></td></tr>)}</tbody></table></div><div className="invoice-commerce-actions"><button type="button" className="btn btn--sm" onClick={() => changeAnnex({ rows: [...annex.rows, annex.columns.map(() => "")] })}>Add row</button><button type="button" className="btn btn--sm" disabled={annex.columns.length >= 12} onClick={() => changeAnnex({ columns: [...annex.columns, "Column"], rows: annex.rows.map((row) => [...row, ""]) })}>Add column</button><button type="button" className="btn btn--sm" onClick={() => update({ annexures: value.annexures!.filter((_, i) => i !== index) })}>Remove annexure</button></div></div>;
+    })}<button type="button" className="btn btn--sm" disabled={(value.annexures?.length || 0) >= 10} onClick={() => update({ annexures: [...value.annexures || [], { title: "Additional details", columns: ["Item", "Details"], rows: [["", ""]] }] })}>Add annexure table</button></fieldset>
+    <Field label="Attach PDFs or images" hint="PDF pages are appended to the download. Enable attachments in the document design. Maximum 440 KB combined; images 175 KB each."><input className="input" type="file" disabled={disabled} multiple accept="application/pdf,image/png,image/jpeg" onChange={(event) => { void upload(event.target.files); event.target.value = ""; }} /></Field>
+    {(value.attachments || []).map((attachment, index) => <div key={index} className="invoice-commerce-actions"><span>{attachment.name}</span><button type="button" className="btn btn--sm" disabled={disabled} onClick={() => update({ attachments: value.attachments!.filter((_, i) => i !== index) })}>Remove attachment</button></div>)}
+  </div></details>;
+}

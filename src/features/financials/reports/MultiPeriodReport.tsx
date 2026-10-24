@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "convex/react";
 import { BookOpen } from "lucide-react";
-import { api } from "@/lib/convexApi";
 import { ReportTable, type ReportColumn, type ReportRow } from "../../../components/ReportTable";
 import { EmptyState } from "../../../components/ui";
 import { formatDate } from "../../../lib/format";
-import type { BooksReport, BooksReportRow, ReportPeriod } from "../../../../shared/booksReports";
+import { buildBooksReport, buildReportPeriods, type BooksReport, type BooksReportRow, type ReportPeriod } from "../../../../shared/booksReports";
+import { useCompleteBooks } from "./useCompleteBooks";
 import { ReportChartStrip } from "./ReportChartStrip";
+import { ReportPdfDownload } from "./ReportPdfDownload";
+import { statementPdfData } from "./brandedReportData";
 import { ReportDrilldown, type DrillTarget } from "./ReportDrilldown";
 import { BASIS_LABELS, REPORT_TITLES, STATEMENT_KINDS, describeFilter, isFiltered, toReportFilter, type StatementSlug } from "./reportFilters";
 import { STATEMENT_PRESETS, formatPeriodRange, statementRangeProblem } from "./reportPeriods";
@@ -96,22 +97,10 @@ export function MultiPeriodReport({
     [settings.fiscalStartMonth, state.frequency, state.range, state.today],
   );
 
-  const report = useQuery(
-    api.accounting.booksReport,
-    problem
-      ? "skip"
-      : {
-          societyId: context.societyId,
-          report: kind,
-          from: state.range.from,
-          to: state.range.to,
-          frequency: state.frequency,
-          basis: state.basis,
-          asOf: state.today,
-          ...(state.currency ? { currency: state.currency } : {}),
-          ...(filter ? { filter } : {}),
-        },
-  ) as BooksReport | undefined;
+  const complete = useCompleteBooks(context.societyId);
+  const report = useMemo(() => complete.books && !problem ? buildBooksReport(kind, {
+    ...complete.books, periods: buildReportPeriods({ from: state.range.from, to: state.range.to, frequency: state.frequency, today: state.today, fiscalStartMonth: settings.fiscalStartMonth }), basis: state.basis, currency: state.currency, filter,
+  }) : undefined, [complete.books, problem, kind, state.range.from, state.range.to, state.frequency, state.today, settings.fiscalStartMonth, state.basis, state.currency, filter]);
 
   // Keep the last report's program and currency options while the next one loads.
   const [options, setOptions] = useState<ToolbarOptions>({ programs: [], currencies: [] });
@@ -153,6 +142,14 @@ export function MultiPeriodReport({
     });
   };
 
+  const pdfReport = useMemo(() => report ? statementPdfData(report, title, [
+    `${BASIS_LABELS[report.basis]} basis · ${report.currency}`,
+    `Period: ${rangeText}`,
+    `Requested range: ${state.range.from} to ${state.range.to}; as of ${state.today}`,
+    `Columns: ${state.frequency}`,
+    filterText ? `Filters: ${filterText}` : "Funds, programs and tags: all",
+    "Source: posted journal entries; draft and voided entries excluded.",
+  ]) : undefined, [report, title, rangeText, state.range.from, state.range.to, state.today, state.frequency, filterText]);
   const noPostings = report?.postedLineCount === 0;
   const filtered = isFiltered(state.filter);
 
@@ -173,6 +170,10 @@ export function MultiPeriodReport({
         currency={currency}
         actions={actions}
       />
+
+      <div className="books-report__note" role="status">{complete.books ? `Complete source snapshot loaded at ${complete.books.loadedAtISO}. Refresh after posting or editing entries.` : `Loading complete ledger: ${complete.progress.toLocaleString()} records…`} <button className="btn btn--sm" onClick={complete.refresh}>Refresh complete report</button></div>
+      {complete.error && <p className="field__error" role="alert">{complete.error}</p>}
+      {context.canExport && !problem && <ReportPdfDownload societyId={context.societyId} report={pdfReport} filename={`${title} ${state.range.from} to ${state.range.to}`} />}
 
       {problem ? (
         <p className="books-report__note books-report__note--warn" role="alert">{problem}</p>
@@ -216,7 +217,7 @@ export function MultiPeriodReport({
         </>
       )}
 
-      <ReportDrilldown context={context} target={drill} basis={state.basis} filter={filter} filterText={filterText} currency={currency} onClose={() => setDrill(null)} />
+      <ReportDrilldown books={complete.books} context={context} target={drill} basis={state.basis} filter={filter} filterText={filterText} currency={currency} onClose={() => setDrill(null)} />
     </section>
   );
 }

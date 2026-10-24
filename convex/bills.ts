@@ -10,6 +10,8 @@ import {
   bulkApprovePortable,
   setSchedulePortable,
   recordPaymentPortable,
+  recordAdjustmentPortable,
+  reverseAdjustmentPortable,
   removePaymentPortable,
   markPaidPortable,
   cancelPortable,
@@ -101,7 +103,7 @@ export const recordPayment = authorizedMutation("bills:recordPayment", mutation)
 
 // The payment is addressed by its key inside the bill (named `paymentKey`, not an id: it is not a row).
 export const removePayment = authorizedMutation("bills:removePayment", mutation)({
-  args: { id: v.id("bills"), paymentKey: v.string() },
+  args: { id: v.id("bills"), paymentKey: v.string(), date: v.optional(v.string()), reason: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => removePaymentPortable(await toPortableMutationCtx(ctx), args),
 });
@@ -156,3 +158,6 @@ export const upsertVendor = authorizedMutation("bills:upsertVendor", mutation)({
   returns: v.any(),
   handler: async (ctx, args) => upsertVendorPortable(await toPortableMutationCtx(ctx), args),
 });
+
+export const recordAdjustment = authorizedMutation("bills:recordAdjustment", mutation)({args:{id:v.id("bills"),kind:v.union(v.literal("credit"),v.literal("write_off"),v.literal("refund")),date:v.string(),amountCents:v.number(),reason:v.string(),idempotencyKey:v.string(),adjustmentAccountId:v.optional(v.id("financialAccounts")),sourcePaymentKey:v.optional(v.string()),cashAccountId:v.optional(v.id("financialAccounts")),reference:v.optional(v.string())},returns:v.string(),handler:async(ctx,args)=>recordAdjustmentPortable(await toPortableMutationCtx(ctx),args)});
+export const reverseAdjustment = authorizedMutation("bills:reverseAdjustment", mutation)({args:{id:v.id("bills"),paymentKey:v.string(),date:v.string(),reason:v.string()},returns:v.string(),handler:async(ctx,args)=>reverseAdjustmentPortable(await toPortableMutationCtx(ctx),args)});

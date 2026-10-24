@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { calendarDate, calendarDateKey } from "../lib/calendarDates";
 import { isPastDue } from "../../shared/dateOnly";
+import { isPayrollRoeDeadline } from "../../shared/payrollDeadline";
 import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
 import { useIsBottomSheet } from "../lib/useSheetDrag";
@@ -48,11 +49,11 @@ const STATUS_FILTER_ITEMS: { id: StatusFilter; label: string }[] = [
  */
 const DEADLINE_INLINE_EDIT: RecordTableInlineEdit = {
   columns: {
-    title: { editor: "text", required: true },
-    description: { editor: "text" },
-    dueDate: { editor: "date", required: true },
-    category: { editor: "select", required: true },
-    recurrence: { editor: "select", required: true },
+    title: { editor: "text", required: true, readOnly: isPayrollRoeDeadline },
+    description: { editor: "text", readOnly: isPayrollRoeDeadline },
+    dueDate: { editor: "date", required: true, readOnly: isPayrollRoeDeadline },
+    category: { editor: "select", required: true, readOnly: isPayrollRoeDeadline },
+    recurrence: { editor: "select", required: true, readOnly: isPayrollRoeDeadline },
   },
 };
 
@@ -66,6 +67,7 @@ function statusOf(record: any): DeadlineStatus {
   }
   return record?.done ? "complete" : "open";
 }
+const canEditDeadlineRecord = (record: { sourceKey?: unknown }) => !isPayrollRoeDeadline(record);
 
 export function DeadlinesPage() {
   const society = useSociety();
@@ -111,6 +113,8 @@ export function DeadlinesPage() {
   });
 
   const allRecords = (items ?? []) as any[];
+  const editingDerived = !!editingId && isPayrollRoeDeadline(allRecords.find((row) => row._id === editingId) ?? {});
+  const canEdit = canWrite && !editingDerived;
   const records = useMemo(() => {
     const visible = statusFilter === "all"
       ? allRecords
@@ -135,7 +139,7 @@ export function DeadlinesPage() {
     setOpen(true);
   };
   const save = async () => {
-    if (!canWrite || saving || !form.title?.trim()) return;
+    if (!canEdit || saving || !form.title?.trim()) return;
     setSaving(true);
     try {
       const { recurrenceEndDate, ...rest } = { ...form, description: descriptionEditor.current?.getMarkdown() ?? form.description };
@@ -152,7 +156,7 @@ export function DeadlinesPage() {
   };
 
   const handleDelete = async (record: any) => {
-    if (!canWrite) return;
+    if (!canWrite || isPayrollRoeDeadline(record)) return;
     const ok = await confirm({
       title: "Delete deadline?",
       message: `"${record.title}" will be permanently removed.`,
@@ -179,7 +183,7 @@ export function DeadlinesPage() {
   // rolls forward, so surface the next date (with an Undo) instead of it looking
   // like nothing changed.
   const completeAndNotify = async (record: any, moved?: { note: string; show: { label: string; onClick: () => void } }) => {
-    if (!canWrite) return;
+    if (!canWrite || isPayrollRoeDeadline(record)) return;
     const id = record._id as Id<"deadlines">;
     let res: any;
     try {
@@ -264,8 +268,14 @@ export function DeadlinesPage() {
             objectMetadata={tableData.objectMetadata}
             hydratedView={tableData.hydratedView}
             records={records}
+            canEditRecord={canEditDeadlineRecord}
             onRecordClick={(_id, record) => openRecord(record)}
             onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+              const record = allRecords.find((row) => row._id === recordId);
+              if (isPayrollRoeDeadline(record ?? {})) {
+                toast.error("ROE deadlines are maintained by the payroll ROE workflow.");
+                return;
+              }
               if (fieldName === "status") {
                 const nextStatus = value as DeadlineStatus;
                 const rec = allRecords.find((r) => r._id === recordId);
@@ -317,6 +327,7 @@ export function DeadlinesPage() {
             <RecordTable
               loading={tableData.loading || items === undefined}
               inlineEdit={canWrite ? DEADLINE_INLINE_EDIT : undefined}
+              canMoveRecord={canEditDeadlineRecord}
               renderCell={({ record, field }) => {
                 if (field.name === "status") {
                   const s = statusOf(record);
@@ -326,9 +337,10 @@ export function DeadlinesPage() {
                   return (
                     <span onClick={(e) => e.stopPropagation()}>
                       <Checkbox
-                        disabled={!canWrite}
+                        disabled={!canWrite || isPayrollRoeDeadline(record)}
                         checked={s === "complete"}
                         onChange={() => {
+                          if (isPayrollRoeDeadline(record)) return;
                           if (s === "complete") {
                             setStatus({ id: record._id, status: "open" });
                           } else {
@@ -367,12 +379,14 @@ export function DeadlinesPage() {
                         {record.title}
                       </strong>
                       {record.description && <div className="deadline-title-cell__desc">{record.description}</div>}
+                      {isPayrollRoeDeadline(record) && <a href="/app/payroll/calculator?tab=roe" onClick={(event) => event.stopPropagation()}>Managed by ROE workflow</a>}
                     </div>
                   );
                 }
                 return undefined;
               }}
               renderRowActions={(r) => {
+                if (isPayrollRoeDeadline(r)) return <a className="btn btn--ghost btn--sm" href="/app/payroll/calculator?tab=roe">Open ROE workflow</a>;
                 const s = statusOf(r);
                 const isClosed = s === "closed";
                 return (
@@ -409,16 +423,17 @@ export function DeadlinesPage() {
       )}
 
       <Drawer
-        open={open} onClose={() => { if (!saving) setOpen(false); }} title={editingId ? canWrite ? "Edit deadline" : "View deadline" : "Add deadline"}
-        footer={<><button className="btn" onClick={() => setOpen(false)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite || saving || !form?.title?.trim()}>{saving ? "Saving…" : "Save"}</button></>}
+        open={open} onClose={() => { if (!saving) setOpen(false); }} title={editingId ? canEdit ? "Edit deadline" : "View deadline" : "Add deadline"}
+        footer={<><button className="btn" onClick={() => setOpen(false)} disabled={saving}>{editingDerived ? "Close" : "Cancel"}</button>{editingDerived ? <a className="btn btn--accent" href="/app/payroll/calculator?tab=roe">Open ROE workflow</a> : <button className="btn btn--accent" onClick={save} disabled={!canEdit || saving || !form?.title?.trim()}>{saving ? "Saving…" : "Save"}</button>}</>}
       >
         {form && (
-          <fieldset disabled={!canWrite || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <fieldset disabled={!canEdit || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {editingDerived && <p role="status">This deadline is derived from retained ROE issuance and follow-up facts. Update those facts in the payroll ROE workflow.</p>}
             <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
               Use a deadline for dates imposed by law or regulation. Internal work belongs in Tasks; promises to funders or partners belong in Commitments.
             </p>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Description"><MarkdownEditor ref={descriptionEditor} readOnly={!canWrite || saving} rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
+            <Field label="Description"><MarkdownEditor ref={descriptionEditor} readOnly={!canEdit || saving} rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
                 <Select

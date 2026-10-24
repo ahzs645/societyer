@@ -1,0 +1,37 @@
+{
+  "thresholdCents": [
+    0,
+    5036300,
+    10072800,
+    11564800,
+    14043000,
+    19040500,
+    26554500
+  ],
+  "rates": [
+    "0.0560",
+    "0.0770",
+    "0.1050",
+    "0.1229",
+    "0.1470",
+    "0.1680",
+    "0.2050"
+  ],
+  "constantCents": [
+    0,
+    105800,
+    387800,
+    594800,
+    933200,
+    1333100,
+    2315600
+  ],
+  "reductionCents": 69000,
+  "source": {
+    "file": "2026-07/t4127.html",
+    "url": "https://www.canada.ca/en/revenue-agency/services/forms-publications/payroll/t4127-payroll-deductions-formulas/t4127-jul/t4127-jul-payroll-deductions-formulas.html",
+    "sha256": "b61b53a67a06c0ebe5b354ad36c2109430819711c9595a099012e7c717aca627",
+    "bytes": 92685
+  },
+  "section": "Chapter 5: British Columbia \u2013 V and KP values for Option 2"
+}

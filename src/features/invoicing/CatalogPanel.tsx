@@ -1,3 +1,6 @@
+import { cleanInvoiceLineDetails, INVOICE_LINE_DETAIL_KEYS } from "../../../shared/invoiceLineDetails";
+import type { InvoiceLine } from "../../../shared/invoicing";
+import { INVOICE_CURRENCIES } from "../../../shared/invoiceCommerce";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { BookOpen, MoreHorizontal, Pencil, Plus, Power, Trash2 } from "lucide-react";
@@ -11,7 +14,7 @@ import { useToast } from "../../components/Toast";
 import { parseMoneyInput } from "../../lib/money";
 import type { CatalogItem } from "./types";
 
-type Draft = { id?: string; name: string; description: string; priceInput: string; tax: string; category: string; active: boolean };
+type Draft = Partial<InvoiceLine> & { id?: string; name: string; description: string; priceInput: string; tax: string; category: string; active: boolean; kind: "item" | "service"; sku: string; unit: string; currency: string };
 
 const TAX_CHOICES = [
   { value: "none", label: "No tax" },
@@ -25,7 +28,8 @@ const TAX_CHOICES = [
 
 function toDraft(item?: CatalogItem): Draft {
   return {
-    id: item?._id,
+    ...cleanInvoiceLineDetails(item??{}),
+    id: item?._id, kind: item?.kind ?? "item", sku: item?.sku ?? "", unit: item?.unit ?? "each", currency: item?.currency ?? "CAD",
     name: item?.name ?? "",
     description: item?.description ?? "",
     priceInput: item ? (item.unitPriceCents / 100).toFixed(2) : "",
@@ -42,6 +46,7 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
   const remove = useMutation(api.invoices.removeCatalogItem);
   const toast = useToast();
   const confirm = useConfirm();
+  const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,11 +56,13 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
     if (!draft.name.trim()) return setError("Give the item a name.");
     if (cents == null || cents < 0) return setError("Enter a price of zero or more.");
     const [taxLabel, rate] = draft.tax === "none" ? [undefined, undefined] : draft.tax.split("|");
+    setBusy(true);
     try {
       await upsert({
         id: draft.id as any,
         societyId: societyId as any,
-        name: draft.name,
+        ...cleanInvoiceLineDetails(draft),
+        name: draft.name, kind: draft.kind, sku: draft.sku || undefined, unit: draft.unit, currency: draft.currency,
         description: draft.description || undefined,
         unitPriceCents: cents,
         taxRatePercent: rate ? Number(rate) : undefined,
@@ -67,7 +74,7 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
       setDraft(null);
     } catch (err: any) {
       setError(err?.message ?? "Could not save the item.");
-    }
+    } finally { setBusy(false); }
   };
 
   return (
@@ -75,7 +82,7 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
       <div className="card__head">
         <div>
           <h2 className="card__title">Catalog</h2>
-          <span className="card__subtitle">Items you bill often. Prices and tax fill in when you add them to an invoice.</span>
+          <span className="card__subtitle">Reusable products and services with unit rates, currency, and tax. Add them to any invoice.</span>
         </div>
         <button type="button" className="btn btn--sm btn--accent" disabled={!canWrite} onClick={() => { setError(null); setDraft(toDraft()); }}>
           <Plus size={14} aria-hidden="true" /> New item
@@ -90,8 +97,8 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
           <thead>
             <tr>
               <th>Item</th>
-              <th>Category</th>
-              <th className="num">Price</th>
+              <th>Type / SKU</th><th>Category</th>
+              <th className="num">Rate</th>
               <th>Tax</th>
               <th><span className="sr-only">Actions</span></th>
             </tr>
@@ -103,8 +110,9 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
                   <span className="invoice-table__name">{item.name}{!item.active && <> <Badge>Inactive</Badge></>}</span>
                   {item.description && <span className="muted invoice-table__sub">{item.description}</span>}
                 </td>
+                <td data-label="Type / SKU">{item.kind === "service" ? "Service" : "Item"}{item.sku ? ` · ${item.sku}` : ""}</td>
                 <td data-label="Category">{item.category ?? <span className="muted">—</span>}</td>
-                <td data-label="Price" className="num"><Money cents={item.unitPriceCents} /></td>
+                <td data-label="Price" className="num"><Money cents={item.unitPriceCents} currency={item.currency ?? "CAD"} /> {item.currency ?? "CAD"} / {item.unit ?? "each"}</td>
                 <td data-label="Tax">{item.taxRatePercent ? `${item.taxLabel ?? "Tax"} ${item.taxRatePercent}%` : <span className="muted">None</span>}</td>
                 <td className="invoice-table__actions">
                   <Menu
@@ -143,7 +151,7 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
         footer={
           <>
             <button type="button" className="btn" onClick={() => setDraft(null)}>Cancel</button>
-            <button type="button" className="btn btn--accent" disabled={!canWrite} onClick={() => void save()}>Save</button>
+            <button type="button" className="btn btn--accent" disabled={!canWrite || busy} onClick={() => void save()}>Save</button>
           </>
         }
       >
@@ -156,12 +164,18 @@ export function CatalogPanel({ items, societyId, canWrite }: { items: CatalogIte
             <Field label="Description" hint="Printed under the item on invoices.">
               <textarea className="input textarea" rows={2} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
             </Field>
-            <Field label="Unit price (CAD)" required>
+            <Field label={`Unit rate (${draft.currency})`} required>
               <input className="input num" inputMode="decimal" value={draft.priceInput} placeholder="0.00" onChange={(e) => setDraft({ ...draft, priceInput: e.target.value })} />
             </Field>
+            <Field label="Type"><Select value={draft.kind} onChange={(kind) => setDraft({ ...draft, kind: kind as "item" | "service" })} options={[{ value: "item", label: "Item / part" }, { value: "service", label: "Service / labour" }]} /></Field>
+            <Field label="SKU / code"><input className="input" value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} /></Field>
+            <Field label="Unit"><input className="input" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="each / hour / day" /></Field>
+            <Field label="Currency"><Select value={draft.currency} onChange={(currency) => setDraft({ ...draft, currency })} options={INVOICE_CURRENCIES.map((value) => ({ value, label: value }))} /></Field>
             <Field label="Sales tax">
               <Select value={draft.tax} onChange={(tax) => setDraft({ ...draft, tax })} options={TAX_CHOICES} />
             </Field>
+            <Field label="Rate tax mode"><Select value={draft.taxMode??"exclusive"} onChange={value=>setDraft({...draft,taxMode:value as "exclusive"|"inclusive"})} options={[{value:"exclusive",label:"Tax exclusive"},{value:"inclusive",label:"Tax inclusive"}]}/></Field>
+            <details><summary>Manufacturer, identifiers, image and tracking</summary><div className="form-stack">{INVOICE_LINE_DETAIL_KEYS.map(key=><Field key={key} label={key}><input className="input" value={draft[key]??""} onChange={event=>setDraft({...draft,[key]:event.target.value})}/></Field>)}<Field label="Serial numbers"><textarea className="input textarea" value={draft.serialNumbers?.join("\n")??""} onChange={event=>setDraft({...draft,serialNumbers:event.target.value.split(/\r?\n/)})}/></Field><Field label="Item image"><input className="input" type="file" accept="image/png,image/jpeg" onChange={event=>{const file=event.target.files?.[0];if(!file)return;if(file.size>100000){setError("Choose an image smaller than 100 KB.");return;}const reader=new FileReader();reader.onload=()=>{try{setDraft({...draft,...cleanInvoiceLineDetails({imageUrl:String(reader.result)})});}catch(error){setError(error instanceof Error?error.message:"Invalid image");}};reader.readAsDataURL(file);}}/></Field>{draft.imageUrl&&<><img src={draft.imageUrl} width={64} alt="Catalog item"/><button type="button" className="btn btn--sm" onClick={()=>setDraft({...draft,imageUrl:undefined})}>Remove image</button></>}</div></details>
             <Field label="Category" hint="For your records, e.g. Rental income or Sponsorship.">
               <input className="input" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
             </Field>

@@ -26,6 +26,8 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "apiPlatform:revokeToken",
   "apiPlatform:setWebhookSubscriptionStatus",
   "communications:ensureDefaultTemplates",
+  // Hosted action only; BillingAutomationPanel routes local delivery through the portable native-capability handler.
+  "billingAutomationActions:runDue",
   "communications:sendCampaign",
   "communications:sendMeetingNotice",
   "documentVersions:beginUpload",

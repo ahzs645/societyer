@@ -100,6 +100,8 @@ export interface SearchFilterBuilder {
 export interface PaginationOptions {
   numItems: number;
   cursor: string | null;
+  /** Hosted soft read bound; a shorter page still advances its continuation cursor. Local stores may ignore it. */
+  maximumBytesRead?: number;
 }
 
 export interface PaginationResult<T> {

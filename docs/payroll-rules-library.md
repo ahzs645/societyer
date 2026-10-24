@@ -1,0 +1,17 @@
+# Payroll rule editions
+
+The payroll calculator’s **Rules library** manages workspace deduction-parameter editions. It preserves the reviewed built-in payment-date editions when no workspace edition is selected.
+
+An operator clones an archived official edition, edits structured percentages, caps, tax brackets and claim amounts, and records official source URLs and review evidence. Percent fields show percentages: `5.95` means 5.95%; exported JSON stores `0.0595`. JSON money uses integer CAD cents. The editor validates relationships between contribution rates, earnings ceilings and annual maximums. It previews actual deductions against the built-in edition and compares changed parameters with the archived baseline.
+
+The workflow is draft → reviewed → published → retired. Draft edits require the current content hash. Review and publication are separate explicit administrator actions. Review freezes the content; changes require a new revision. SHA-256 covers the edition name, description, complete rate parameters and source evidence. Publication retains its reviewer, source review dates, evidence and publishing actor. Retirement retains the reason and actor. Original archived source hashes describe the baseline downloads; they do not certify modified numbers.
+
+Native payroll accepts an optional `ruleEditionId`. The server loads an owned, published edition, verifies its hash, checks the payment date/year/province/method and formula-policy coverage, and passes its typed rates to the deductions engine. The complete selected rate set, revision, hash, official evidence and reviewer are frozen in the calculation. An edition retired after approval blocks new finalization until the draft is recalculated using a usable edition; existing finalized calculations retain their original snapshot.
+
+The supported parameter schema is ordinary B.C. CRA Option 1/Option 2. January and July formula-policy ranges remain separate. Future-year parameter data may be saved and reviewed, but cannot calculate beyond the engine’s reviewed coverage. Imported expressions, code and unsupported jurisdiction policies are rejected. The standard EI employer multiplier remains 1.4; actual approved reduced coverage belongs in employer or employee settings with its approval evidence.
+
+The source catalog links CRA T4127 formulas, CPP and EI rate tables, B.C. employment standards and employer health tax, and WorkSafeBC rates. Actual employment rules, employer EHT qualifications/location/openings, WorkSafe net assessments, earning classifications, wages and employee declarations remain in their existing focused setup modules. Saving rate data does not invent a new earnings policy or formula engine.
+
+The library is workspace owned. Finance readers can inspect/export editions; finance writers can edit drafts; administrators review, publish and retire. Every API page has at most forty editions and one database pagination call. The UI loads every published page for its date/method selector. Source and edition IDs remain scoped to the current workspace; official catalog identifiers are validated as catalog values.
+
+Verification: `npx tsx scripts/check-payroll-rules.ts` covers pure schema/unit conversion, workflow, permissions, stale hashes, tampering, paging, selected native money, balanced ledger posting and retained snapshots on both portable database runtimes. `npx playwright test -c playwright.payroll-rules.config.ts` covers the real editor, comparison, publication, JSON export, persisted selection and frozen native calculation.

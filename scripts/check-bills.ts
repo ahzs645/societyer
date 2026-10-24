@@ -329,22 +329,27 @@ assert.deepEqual([cashEntry.source, cashEntry.basis, cashEntry.date], ["bill_cas
 assert.deepEqual((await linesOf(cashEntry._id)).map((line) => [line.accountId, line.side, line.amountCents]).sort(), [[AP, "credit", 63000], ["static_financial_facilities_expense", "debit", 63000]].sort());
 assert.equal(await creditBalance(AP, "cash"), 0, "under cash basis Accounts payable nets to zero after the payment");
 await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: agm._id, date: today, amountCents: 63000, method: "eft", financialTransactionId: suggestion._id }), /already linked/);
-// undo: the entry is voided and the bank line goes back as it was
+// A dated correction retains the original postings and restores the bank line.
 const paymentKey = (await billById(overdue._id)).payments[0].key;
 await bills.removePaymentPortable(ctx, { id: overdue._id, paymentKey });
 txn = await get(suggestion._id);
 assert.deepEqual([txn.matchedKind, txn.matchedId, txn.accountingAccountId, txn.category, txn.reconciledAtISO], [undefined, undefined, undefined, undefined, undefined], "unlinking restores the bank line");
 assert.equal(await creditBalance(AP), apBeforePayment, "the payment entry no longer counts");
-assert.equal((await get(cashEntry._id)).status, "void", "removing the payment voids its cash-only entry too");
+assert.equal((await get(cashEntry._id)).status, "posted", "the original cash-only entry remains in historical reports");
+const removedPayment = (await billById(overdue._id)).payments.find((payment) => payment.key === paymentKey)!;
+assert.equal(removedPayment.reversedDate, today, "the legacy removal API defaults the correction to organization today");
+assert.equal((await get(String(removedPayment.reversalJournalEntryId))).date, today);
+assert.deepEqual([(await get(String(removedPayment.cashBasisReversalJournalEntryId))).date, (await get(String(removedPayment.cashBasisReversalJournalEntryId))).basis], [today, "cash-only"]);
+assert.equal((await get(String(removedPayment.journalEntryId))).status, "posted");
 assert.equal(await creditBalance(AP, "cash"), 0);
 assert.equal((await billById(overdue._id)).status, "overdue");
 
 // A bank line Backfill imports already posted: the link voids that entry, so
 // the bank is credited and the expense booked once; removing the payment
-// posts it again and gives the line back its rule history.
+// appends a dated restoration and gives the line back its rule history.
 {
   const accounting = await import("../shared/functions/accounting");
-  const ownEntries = async () => (await accounting.postedJournalForTransaction(ctx, suggestion._id)).entries.filter((entry) => entry.source === accounting.TRANSACTION_BACKFILL_SOURCE);
+  const ownEntries = async () => (await accounting.postedJournalForTransaction(ctx, suggestion._id)).entries.filter((entry) => [accounting.TRANSACTION_BACKFILL_SOURCE, accounting.BILL_BANK_RESTORATION_SOURCE].includes(entry.source));
   // Categorised by a rule to the expense account, then posted: Dr expense / Cr bank.
   const ruleApplication = { ruleName: "Janitorial", batchId: "batch_1", appliedAtISO: "2026-03-20T00:00:00.000Z", previous: { category: "Uncategorized" } };
   await db.patch(suggestion._id, { category: "Janitorial", accountingAccountId: "static_financial_facilities_expense", categorizedBy: "rule", ruleId: "static_rule_janitorial", ruleApplication });
@@ -355,14 +360,15 @@ assert.equal((await billById(overdue._id)).status, "overdue");
   const [cashBasisBefore, accrualBefore] = [await statements("cash"), await statements("accrual")];
 
   // Refused, and nothing changes, while the bank line's entry can't be voided.
-  const settingsId = await db.insert("booksSettings", { societyId: S, closeDate: suggestion.date, createdAtISO: new Date().toISOString(), updatedAtISO: new Date().toISOString() });
+  const settingsId = await db.insert("booksSettings", { societyId: S, closeDate: backfill.date, createdAtISO: new Date().toISOString(), updatedAtISO: new Date().toISOString() });
   await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: overdue._id, date: today, amountCents: -suggestion.amountCents, method: "eft", financialTransactionId: suggestion._id }), /would void that entry, which can't change: The books are closed/);
   await db.delete(settingsId);
   assert.equal((await get(backfill._id)).status, "posted");
-  assert.equal((await billById(overdue._id)).payments.length, 0, "the refused link records nothing");
+  assert.equal((await billById(overdue._id)).payments.filter((payment) => !payment.reversedDate).length, 0, "the refused link records no active payment");
+  assert.equal((await billById(overdue._id)).payments.length, 1, "the earlier reversed payment remains retained");
 
-  await bills.recordPaymentPortable(ctx, { id: overdue._id, date: suggestion.date, amountCents: -suggestion.amountCents, method: "eft", financialTransactionId: suggestion._id });
-  const linkedPayment = (await billById(overdue._id)).payments[0];
+  await bills.recordPaymentPortable(ctx, { id: overdue._id, date: today, amountCents: -suggestion.amountCents, method: "eft", financialTransactionId: suggestion._id });
+  const linkedPayment = (await billById(overdue._id)).payments.find((payment) => !payment.reversedDate)!;
   assert.equal((await get(backfill._id)).status, "void", "the bank line's own entry is voided by the link");
   assert.equal(linkedPayment.voidedTransactionEntryId, backfill._id, "and remembered on the payment");
   assert.equal(await creditBalance(CASH), cashBeforeLink, "the bank is credited once: the payment replaces the backfill entry");
@@ -374,7 +380,12 @@ assert.equal((await billById(overdue._id)).status, "overdue");
   }
 
   await bills.removePaymentPortable(ctx, { id: overdue._id, paymentKey: linkedPayment.key });
-  assert.equal((await get(backfill._id)).status, "posted", "removing the payment posts the bank line's entry again");
+  assert.equal((await get(backfill._id)).status, "void", "the old backfill entry is never rewritten by a later correction");
+  const retainedLinked = (await billById(overdue._id)).payments.find((payment) => payment.key === linkedPayment.key)!;
+  const restored = await get(String(retainedLinked.restoredTransactionJournalEntryId));
+  assert.deepEqual([restored.status, restored.source, restored.date], ["posted", accounting.BILL_BANK_RESTORATION_SOURCE, today]);
+  assert.deepEqual((await linesOf(restored._id)).map((line) => [line.accountId, line.side, line.amountCents]), (await linesOf(backfill._id)).map((line) => [line.accountId, line.side, line.amountCents]));
+  assert.equal((await get(String(linkedPayment.journalEntryId))).status, "posted");
   assert.equal(await creditBalance(CASH), cashBeforeLink);
   txn = await get(suggestion._id);
   assert.deepEqual([txn.category, txn.accountingAccountId, txn.categorizedBy, txn.ruleId, txn.ruleApplication], ["Janitorial", "static_financial_facilities_expense", "rule", "static_rule_janitorial", ruleApplication], "the rule history comes back with the line");
@@ -386,7 +397,8 @@ assert.equal((await billById(overdue._id)).status, "overdue");
   await db.insert("journalLines", { societyId: S, journalEntryId: manualEntry, accountId: CASH, amountCents: 63000, side: "credit", financialTransactionId: manualTxn, lineOrder: 0 });
   await db.insert("journalLines", { societyId: S, journalEntryId: manualEntry, accountId: "static_financial_facilities_expense", amountCents: 63000, side: "debit", lineOrder: 1 });
   await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: overdue._id, date: today, amountCents: 63000, method: "eft", financialTransactionId: manualTxn }), new RegExp(`already in the books \\(a manual journal dated ${today}\\)`));
-  assert.equal((await billById(overdue._id)).payments.length, 0);
+  assert.equal((await billById(overdue._id)).payments.filter((payment) => !payment.reversedDate).length, 0);
+  assert.equal((await billById(overdue._id)).payments.length, 2, "both corrected payments stay in the audit history");
   for (const line of (await db.query("journalLines").collect()).filter((row) => row.journalEntryId === manualEntry)) await db.delete(line._id);
   await db.delete(manualEntry);
   await db.delete(manualTxn);
@@ -427,7 +439,7 @@ await db.patch(currentPeriod._id, { status: "open" });
   const markLocked = bills.markPaidPortable(ctx, { societyId: S, ids: [scheduled._id], date: today, method: "eft", cashAccountId: CASH });
   await assert.rejects(() => markLocked, lockedMessage, "bulk mark paid stops rather than skipping every bill");
   const paidOpen = await billById(open._id);
-  await assert.rejects(() => bills.removePaymentPortable(ctx, { id: open._id, paymentKey: paidOpen.payments[0].key }), /can't be voided/);
+  await assert.rejects(() => bills.removePaymentPortable(ctx, { id: open._id, paymentKey: paidOpen.payments[0].key }), lockedMessage);
   assert.equal((await billById(open._id)).payments.length, 2, "the payment stays");
   assert.equal((await get(String(paidOpen.payments[0].cashBasisJournalEntryId))).status, "posted", "and so does its cash-only entry");
   assert.equal((await get(scheduled._id)).status, "scheduled", "nothing changed");

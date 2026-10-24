@@ -1,0 +1,95 @@
+import { isCalendarDate } from "./invoicing";
+import { parseReportExpression, evaluateReportExpression } from "./reportExpressions";
+export const COMMERCE_REPORT_SOURCES = ["ar_aging", "ap_aging", "sales_items", "sales_customers", "repair_analytics", "ledger"] as const;
+export type CommerceReportSource = typeof COMMERCE_REPORT_SOURCES[number];
+export type CommerceValue = string | number | null;
+export type CommerceColumn = { key: string; label: string; type: "text" | "date" | "money" | "number" | "percent"; aggregate?: "sum" | "max" | "average" | "none" };
+export type CommerceRecord = { id: string; values: Record<string, CommerceValue>; links?: Array<{ label: string; url: string }> };
+export type CommerceFilters = { asOf: string; from: string; to: string; currency: string; basis: "cash" | "accrual"; party: string; status: string; programCode: string; fundId: string; tagIds: string[]; accountId: string; includeDrafts: boolean };
+export type CommerceMetric = { key: string; label: string; expression: string; type: "money" | "number" | "percent" };
+export type CommerceChartDefinition = { id: string; title: string; type: "bar" | "line" | "pie"; labelKey: string; valueKeys: string[] };
+export type CommerceSection = { id: string; title: string; kind: "summary" | "table" | "chart"; visible: boolean; chartId?: string };
+export type CommerceReportDefinition = { version: 1; name: string; source: CommerceReportSource; columns: Array<{ key: string; label: string; visible: boolean; width: number }>; groupBy: string[]; metrics: CommerceMetric[]; charts: CommerceChartDefinition[]; sections: CommerceSection[]; filters: CommerceFilters; sort: { key: string; direction: "asc" | "desc" } };
+export type CommerceDataset = { source: CommerceReportSource; columns: CommerceColumn[]; rows: CommerceRecord[]; warnings: string[]; currencies: string[]; generatedAtISO: string; filterLabels?: Record<string, string> };
+export type CommerceReportResult = CommerceDataset & { title: string; filters: CommerceFilters; definition: CommerceReportDefinition; totals: Record<string, CommerceValue>; sourceRowCount: number; charts: Array<CommerceChartDefinition & { labels: string[]; series: Array<{ key: string; label: string; values: Array<number | null>; type: CommerceColumn["type"] }> }> };
+const text = (key: string, label: string): CommerceColumn => ({ key, label, type: "text", aggregate: "none" });
+const money = (key: string, label: string): CommerceColumn => ({ key, label, type: "money", aggregate: "sum" });
+const number = (key: string, label: string, aggregate: CommerceColumn["aggregate"] = "sum"): CommerceColumn => ({ key, label, type: "number", aggregate });
+const date = (key: string, label: string): CommerceColumn => ({ key, label, type: "date", aggregate: "none" });
+const agingColumns = [text("documentNumber", "Document"), text("party", "Customer / vendor"), date("issueDate", "Issued"), date("dueDate", "Due"), number("ageDays", "Days overdue", "max"), money("totalCents", "Document total"), money("settledCents", "Settled as of date"), money("currentCents", "Current"), money("days1to30Cents", "1–30 days"), money("days31to60Cents", "31–60 days"), money("days61to90Cents", "61–90 days"), money("days91plusCents", "91+ days"), money("openCents", "Open debt"), money("unappliedCreditCents", "Credit balance"), money("netBalanceCents", "Net balance")];
+const salesColumns = [text("documentNumber", "Invoice"), text("party", "Customer"), text("item", "Item / service"), text("sku", "SKU"), date("issueDate", "Invoice date"), date("recognitionDate", "Recognition date"), text("month", "Month"), number("quantity", "Quantity"), money("grossCents", "Before discount"), money("discountCents", "Discount"), money("revenueCents", "Net sales (excl. tax)"), number("lineCount", "Lines")];
+export const COMMERCE_REPORT_CATALOG: Record<CommerceReportSource, { title: string; description: string; columns: CommerceColumn[]; groupBy: string[] }> = {
+  ar_aging: { title: "Receivables aging", description: "Issued invoices and signed settlements as of a calendar date, with customer credit balances kept separately.", columns: agingColumns, groupBy: ["party"] },
+  ap_aging: { title: "Payables aging", description: "Approved vendor bills, partial payments and vendor credits as of a calendar date.", columns: agingColumns, groupBy: ["party"] },
+  sales_items: { title: "Sales by item", description: "Invoice-line sales after discounts, excluding tax; cash basis follows payment and refund dates.", columns: salesColumns, groupBy: ["item"] },
+  sales_customers: { title: "Sales by customer", description: "Customer sales from invoice records, with dated cash receipts, refunds and credit adjustments.", columns: salesColumns, groupBy: ["party"] },
+  repair_analytics: { title: "Repair analytics", description: "Repair volume, recorded time, labour cost, billing and approval status from actual repair records.", columns: [text("documentNumber", "Work order"), text("party", "Customer"), text("asset", "Equipment"), text("status", "Repair status"), text("technician", "Technician"), text("approvalStatus", "Approval"), date("receivedDate", "Received"), text("month", "Month"), number("jobCount", "Jobs"), number("elapsedDays", "Days in workflow", "average"), number("minutes", "Recorded minutes"), number("billableMinutes", "Billable minutes"), money("labourCostCents", "Labour cost"), money("estimatedBillingCents", "Time billing value"), money("billedCents", "Invoiced (excl. tax)"), money("outstandingCents", "Invoice balance"), money("marginCents", "Invoiced less labour cost")], groupBy: ["status"] },
+  ledger: { title: "General ledger composer", description: "Every matching posted journal line, with actual accounting basis, account currency and dimensions.", columns: [date("date", "Date"), text("month", "Month"), text("documentNumber", "Entry"), text("account", "Ledger account"), text("party", "Counterparty"), text("description", "Memo / description"), text("programCode", "Program"), text("fund", "Fund"), text("tags", "Tags"), money("debitCents", "Debit"), money("creditCents", "Credit"), money("netCents", "Debit less credit"), number("lineCount", "Lines")], groupBy: [] },
+};
+export function defaultCommerceReport(source: CommerceReportSource, today = new Date().toISOString().slice(0, 10)): CommerceReportDefinition {
+  const spec = COMMERCE_REPORT_CATALOG[source]; if (!spec) throw new Error("Choose a report source.");
+  const hidden = new Set(source.endsWith("aging") ? ["documentNumber", "issueDate", "dueDate", "totalCents", "settledCents", "ageDays"] : source.startsWith("sales") ? ["documentNumber", "issueDate", "recognitionDate", "sku", "month", "lineCount"] : []);
+  const valueKey = source.endsWith("aging") ? "openCents" : source.startsWith("sales") ? "revenueCents" : source === "ledger" ? "netCents" : "jobCount";
+  const labelKey = spec.groupBy[0] ?? "account";
+  return { version: 1, source, name: spec.title, columns: spec.columns.map((column) => ({ key: column.key, label: column.label, visible: !hidden.has(column.key), width: column.type === "text" ? 2 : 1 })), groupBy: [...spec.groupBy], metrics: [], charts: [{ id: "main", title: spec.title, type: "bar", labelKey, valueKeys: [valueKey] }], sections: [{ id: "summary", kind: "summary", title: "Report totals", visible: true }, { id: "chart", kind: "chart", title: "Report graph", chartId: "main", visible: true }, { id: "table", kind: "table", title: "Report details", visible: true }], filters: { asOf: today, from: `${today.slice(0, 4)}-01-01`, to: today, currency: "CAD", basis: "accrual", party: "", status: "", programCode: "", fundId: "", tagIds: [], accountId: "", includeDrafts: false }, sort: { key: labelKey, direction: "asc" } };
+}
+function boundedText(value: unknown, label: string, max = 120): string { if (typeof value !== "string" || value.length > max) throw new Error(`${label} must be text of at most ${max} characters.`); return value.trim(); }
+export function cleanCommerceDefinition(input: unknown): CommerceReportDefinition {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Choose a valid report definition.");
+  const value = input as CommerceReportDefinition;
+  if (value.version !== 1 || !COMMERCE_REPORT_SOURCES.includes(value.source)) throw new Error("Unsupported report definition version or source.");
+  const spec = COMMERCE_REPORT_CATALOG[value.source], base = defaultCommerceReport(value.source);
+  const filters = { ...base.filters, ...value.filters };
+  for (const key of ["asOf", "from", "to"] as const) if (!isCalendarDate(filters[key])) throw new Error("Choose valid report calendar dates.");
+  if (filters.from > filters.to) throw new Error("Report start must be on or before the end date.");
+  if (!/^[A-Z]{3}$/.test(filters.currency) || !["cash", "accrual"].includes(filters.basis)) throw new Error("Choose an ISO currency and accounting basis.");
+  for (const key of ["party", "status", "programCode", "fundId", "accountId"] as const) filters[key] = boundedText(filters[key], "Report filter", 200);
+  if (!Array.isArray(filters.tagIds) || filters.tagIds.length > 20 || filters.tagIds.some((id) => typeof id !== "string" || id.length > 200)) throw new Error("Choose at most 20 report tags.");
+  filters.tagIds = [...new Set(filters.tagIds)]; filters.includeDrafts = Boolean(filters.includeDrafts);
+  if (!Array.isArray(value.metrics) || value.metrics.length > 20) throw new Error("Use at most 20 calculated metrics.");
+  const numeric = spec.columns.filter((column) => column.type !== "text" && column.type !== "date").map((column) => column.key), keys = new Set(spec.columns.map((column) => column.key));
+  const metrics = value.metrics.map((metric) => { const key = boundedText(metric.key, "Metric key", 40); if (!/^[A-Za-z][A-Za-z_0-9]*$/.test(key) || keys.has(key) || ["constructor", "prototype", "__proto__"].includes(key)) throw new Error("Metric keys must be unique field names starting with a letter."); parseReportExpression(metric.expression, numeric); keys.add(key); numeric.push(key); if (!["money", "number", "percent"].includes(metric.type)) throw new Error("Choose a metric value type."); return { key, label: boundedText(metric.label, "Metric label"), expression: metric.expression, type: metric.type }; });
+  if (!Array.isArray(value.columns) || value.columns.length !== keys.size || new Set(value.columns.map((column) => column.key)).size !== keys.size || value.columns.some((column) => !keys.has(column.key))) throw new Error("Include every source field and metric once, using visibility to hide a column.");
+  const columns = value.columns.map((column) => { if (typeof column.width !== "number" || !Number.isFinite(column.width) || column.width < 0.25 || column.width > 20) throw new Error("Column width must be 0.25–20 units."); return { key: column.key, label: boundedText(column.label, "Column label"), visible: Boolean(column.visible), width: column.width }; });
+  if (!columns.some((column) => column.visible)) throw new Error("Show at least one report column.");
+  const groupable = spec.columns.filter((column) => column.type === "text" || column.type === "date").map((column) => column.key);
+  if (!Array.isArray(value.groupBy) || value.groupBy.length > 3 || value.groupBy.some((key) => !groupable.includes(key)) || new Set(value.groupBy).size !== value.groupBy.length) throw new Error("Group by up to three different text or date fields.");
+  if (!Array.isArray(value.charts) || value.charts.length > 8) throw new Error("Use at most eight report charts.");
+  const chartIds = new Set<string>();
+  const charts = value.charts.map((chart) => { const id = boundedText(chart.id, "Chart ID", 40); if (!id || chartIds.has(id) || !["bar", "line", "pie"].includes(chart.type) || !keys.has(chart.labelKey)) throw new Error("Choose a unique chart ID, type and label field."); chartIds.add(id); if (!Array.isArray(chart.valueKeys) || chart.valueKeys.length < 1 || chart.valueKeys.length > 4 || chart.valueKeys.some((key) => !numeric.includes(key)) || (chart.type === "pie" && chart.valueKeys.length !== 1)) throw new Error("Choose one numeric field for a pie or up to four fields for other charts."); return { id, title: boundedText(chart.title, "Chart title"), type: chart.type, labelKey: chart.labelKey, valueKeys: [...new Set(chart.valueKeys)] }; });
+  if (!Array.isArray(value.sections) || value.sections.length < 1 || value.sections.length > 12 || new Set(value.sections.map((section) => section.id)).size !== value.sections.length) throw new Error("Use 1–12 sections with unique IDs.");
+  const sections = value.sections.map((section) => { if (!["summary", "table", "chart"].includes(section.kind) || (section.kind === "chart" && !chartIds.has(section.chartId ?? ""))) throw new Error("Choose a valid section and chart."); return { id: boundedText(section.id, "Section ID", 40), title: boundedText(section.title, "Section title"), kind: section.kind, visible: Boolean(section.visible), ...(section.kind === "chart" ? { chartId: section.chartId } : {}) }; });
+  if (!sections.some((section) => section.visible)) throw new Error("Show at least one report section.");
+  if (!value.sort || !keys.has(value.sort.key) || !["asc", "desc"].includes(value.sort.direction)) throw new Error("Choose a sort field and direction.");
+  return { version: 1, source: value.source, name: boundedText(value.name, "Report name") || base.name, columns, groupBy: [...value.groupBy], metrics, charts, sections, filters, sort: { ...value.sort } };
+}
+function aggregate(rows: CommerceRecord[], columns: CommerceColumn[]) {
+  const values: Record<string, CommerceValue> = {};
+  for (const column of columns) { const raw = rows.map((row) => row.values[column.key]); const numbers = raw.filter((value): value is number => typeof value === "number" && Number.isFinite(value)); values[column.key] = column.aggregate === "sum" ? numbers.reduce((sum, value) => sum + value, 0) : column.aggregate === "max" ? numbers.length ? numbers.reduce((a, b) => Math.max(a, b), -Infinity) : null : column.aggregate === "average" ? numbers.length ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : null : raw.every((value) => value === raw[0]) ? raw[0] ?? null : "Multiple"; }
+  return values;
+}
+export function composeCommerceReport(dataset: CommerceDataset, input: CommerceReportDefinition): CommerceReportResult {
+  const definition = cleanCommerceDefinition(input); if (definition.source !== dataset.source) throw new Error("Report data and definition sources differ.");
+  const sourceColumns = dataset.columns, groups = new Map<string, CommerceRecord[]>();
+  for (const row of dataset.rows) { const key = definition.groupBy.length ? JSON.stringify(definition.groupBy.map((field) => row.values[field] ?? "")) : row.id; const group = groups.get(key) ?? []; group.push(row); groups.set(key, group); }
+  const columns = [...sourceColumns, ...definition.metrics.map((metric) => ({ key: metric.key, label: metric.label, type: metric.type, aggregate: "none" as const }))];
+  const compiled = definition.metrics.map((metric, index) => ({ metric, node: parseReportExpression(metric.expression, columns.slice(0, sourceColumns.length + index).filter((column) => column.type !== "text" && column.type !== "date").map((column) => column.key)) }));
+  const calculate = (values: Record<string, CommerceValue>) => { for (const { metric, node } of compiled) values[metric.key] = evaluateReportExpression(node, values); return values; };
+  const rows = [...groups.entries()].map(([id, members]) => ({ id, values: calculate(aggregate(members, sourceColumns)), links: members.flatMap((row) => row.links ?? []) }));
+  const sign = definition.sort.direction === "asc" ? 1 : -1;
+  rows.sort((a, b) => { const av = a.values[definition.sort.key], bv = b.values[definition.sort.key]; return sign * (typeof av === "number" && typeof bv === "number" ? av - bv : String(av ?? "").localeCompare(String(bv ?? ""), undefined, { numeric: true })); });
+  const totals = calculate(aggregate(dataset.rows, sourceColumns));
+  const byKey = new Map(columns.map((column) => [column.key, column]));
+  const charts = definition.charts.map((chart) => ({ ...chart, labels: rows.map((row) => String(row.values[chart.labelKey] ?? "—")), series: chart.valueKeys.map((key) => ({ key, label: definition.columns.find((column) => column.key === key)?.label ?? byKey.get(key)?.label ?? key, type: byKey.get(key)!.type, values: rows.map((row) => typeof row.values[key] === "number" ? row.values[key] as number : null) })) }));
+  for (const chart of charts) {
+    if (new Set(chart.series.map((series) => series.type === "money" ? "money" : series.type)).size > 1) throw new Error(`Chart “${chart.title}” combines different units. Use separate charts for currencies, counts and percentages.`);
+    if (chart.type === "pie" && chart.series[0]?.values.some((value) => value !== null && value < 0)) throw new Error(`Pie chart “${chart.title}” has negative values. Use bars or a line for signed amounts.`);
+  }
+  const warnings = [...dataset.warnings]; if (compiled.some(({ metric }) => rows.some((row) => row.values[metric.key] === null))) warnings.push("Some calculated values are unavailable (missing inputs, division by zero or numeric overflow); they are shown as —.");
+  return { ...dataset, columns, rows, warnings, title: definition.name, filters: definition.filters, definition, totals, sourceRowCount: dataset.rows.length, charts };
+}
+export function formatCommerceValue(value: CommerceValue | undefined, column: Pick<CommerceColumn, "type">, currency: string): string { if (value === null || value === undefined) return "—"; if (typeof value !== "number") return value; return column.type === "money" ? new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(value / 100) : column.type === "percent" ? `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 2 }).format(value)}%` : new Intl.NumberFormat("en-CA", { maximumFractionDigits: 2 }).format(value); }
+export type CommerceSourceTable = "invoices" | "bills" | "repairJobs" | "repairOperations" | "repairTimeEntries" | "journalEntries" | "journalLines" | "financialAccounts" | "fundRestrictions" | "financeTags" | "accountingCounterparties" | "users" | "financialTransactions" | "budgets";
+export type CommerceSourcePageArgs = { sourceTable: CommerceSourceTable; cursor: string | null; pageSize: number };
+export type CommerceSourcePage = { page: Record<string, any>[]; isDone: boolean; continueCursor: string };
+export function commerceSourceTables(source: CommerceReportSource): CommerceSourceTable[] { return source === "ar_aging" || source.startsWith("sales") ? ["invoices", "fundRestrictions", "financeTags"] : source === "ap_aging" ? ["bills", "fundRestrictions", "financeTags"] : source === "repair_analytics" ? ["repairJobs", "repairOperations", "repairTimeEntries", "invoices", "users"] : ["journalEntries", "journalLines", "financialAccounts", "fundRestrictions", "financeTags", "accountingCounterparties", "financialTransactions", "budgets"]; }

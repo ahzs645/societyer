@@ -86,12 +86,24 @@ const reconciliationFns = lazyHandlers(() => import("./reconciliation"), "reconc
 const transactionRulesFns = lazyHandlers(() => import("./transactionRules"), "transactionRules");
 const transactionLinesFns = lazyHandlers(() => import("./transactionLines"), "transactionLines");
 const financeTagsFns = lazyHandlers(() => import("./financeTags"), "financeTags");
+const billingAutomationFns = lazyHandlers(() => import("./billingAutomation"), "billingAutomation");
+const commerceReportsFns = lazyHandlers(() => import("./commerceReports"), "commerceReports");
+const invoicePreferencesFns = lazyHandlers(() => import("./invoicePreferences"), "invoicePreferences");
+const billingDocumentsFns = lazyHandlers(() => import("./billingDocuments"), "billingDocuments");
 const invoicesFns = lazyHandlers(() => import("./invoices"), "invoices");
 const billsFns = lazyHandlers(() => import("./bills"), "bills");
 const businessRegistersFns = lazyHandlers(() => import("./businessRegisters"), "businessRegisters");
 const bankAccountsFns = lazyHandlers(() => import("./bankAccounts"), "bankAccounts");
 const receiptInboxFns = lazyHandlers(() => import("./receiptInbox"), "receiptInbox");
 const spendBudgetsFns = lazyHandlers(() => import("./spendBudgets"), "spendBudgets");
+const costPlanningFns = lazyHandlers(() => import("./costPlanning"), "costPlanning");
+const payrollCalculationFns = lazyHandlers(() => import("./payrollCalculation"), "payrollCalculation");
+const payrollTd1Fns = lazyHandlers(() => import("./payrollTd1"), "payrollTd1");
+const payrollRulesFns = lazyHandlers(() => import("./payrollRules"), "payrollRules");
+const payrollRoeWorkflowFns = lazyHandlers(() => import("./payrollRoeWorkflow"), "payrollRoeWorkflow");
+const payrollRemittanceFns = lazyHandlers(() => import("./payrollRemittance"), "payrollRemittance");
+const payrollLeaveFns = lazyHandlers(() => import("./payrollLeave"), "payrollLeave");
+const financialProviderRefreshFns = lazyHandlers(() => import("./financialProviderRefresh"), "financialProviderRefresh");
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
 import * as policiesFns from "./policies";
@@ -176,6 +188,107 @@ import * as filesFns from "./files";
 const intakeFns = lazyHandlers(() => import("./intake"), "intake");
 const intakeReviewFns = lazyHandlers(() => import("./intakeReview"), "intakeReview");
 const intakeCompactionFns = lazyHandlers(() => import("./intakeCompaction"), "intakeCompaction");
+
+const BILLING_COMMERCE_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableQuery({ name: "payrollTd1:workspace", handler: payrollTd1Fns.workspacePortable }),
+  definePortableMutation({ name: "payrollTd1:applyReviewed", handler: payrollTd1Fns.applyReviewedPortable }),
+  definePortableQuery({ name: "payrollRules:workspace", handler: payrollRulesFns.workspacePortable }),
+  definePortableQuery({ name: "payrollRules:get", handler: payrollRulesFns.getPortable }),
+  definePortableMutation({ name: "payrollRules:saveDraft", handler: payrollRulesFns.saveDraftPortable }),
+  definePortableMutation({ name: "payrollRules:review", handler: payrollRulesFns.reviewPortable }),
+  definePortableMutation({ name: "payrollRules:publish", handler: payrollRulesFns.publishPortable }),
+  definePortableMutation({ name: "payrollRules:retire", handler: payrollRulesFns.retirePortable }),
+  definePortableQuery({ name: "payrollRoeWorkflow:workspace", handler: payrollRoeWorkflowFns.workspacePortable }),
+  definePortableMutation({ name: "payrollRoeWorkflow:saveCase", handler: payrollRoeWorkflowFns.saveCasePortable }),
+  definePortableMutation({ name: "payrollRoeWorkflow:updateChecklist", handler: payrollRoeWorkflowFns.updateChecklistPortable }),
+  definePortableMutation({ name: "payrollRoeWorkflow:recordGenerated", handler: payrollRoeWorkflowFns.recordGeneratedPortable }),
+  definePortableMutation({ name: "payrollRoeWorkflow:recordSubmission", handler: payrollRoeWorkflowFns.recordSubmissionPortable }),
+  definePortableMutation({ name: "payrollRoeWorkflow:recordIssuance", handler: payrollRoeWorkflowFns.recordIssuancePortable }),
+  definePortableMutation({ name: "payrollRoeWorkflow:saveFollowUp", handler: payrollRoeWorkflowFns.saveFollowUpPortable }),
+  definePortableMutation({ name: "payrollRoeWorkflow:closeCase", handler: payrollRoeWorkflowFns.closeCasePortable }),
+  definePortableQuery({ name: "payrollRemittance:workspace", handler: payrollRemittanceFns.workspacePortable }),
+  definePortableQuery({ name: "payrollRemittance:preview", handler: payrollRemittanceFns.previewPortable }),
+  definePortableMutation({ name: "payrollRemittance:saveDraft", handler: payrollRemittanceFns.saveDraftPortable }),
+  definePortableMutation({ name: "payrollRemittance:approve", handler: payrollRemittanceFns.approvePortable }),
+  definePortableMutation({ name: "payrollRemittance:recordPreparedExport", handler: payrollRemittanceFns.recordPreparedExportPortable }),
+  definePortableMutation({ name: "payrollRemittance:recordManualSubmission", handler: payrollRemittanceFns.recordManualSubmissionPortable }),
+  definePortableMutation({ name: "payrollRemittance:reject", handler: payrollRemittanceFns.rejectPortable }),
+  definePortableMutation({ name: "payrollRemittance:reconcilePayment", handler: payrollRemittanceFns.reconcilePaymentPortable }),
+  definePortableMutation({ name: "payrollRemittance:saveReadiness", handler: payrollRemittanceFns.saveReadinessPortable }),
+  definePortableMutation({ name: "payrollRemittance:confirmLegacyAccount", handler: payrollRemittanceFns.confirmLegacyAccountPortable }),
+  definePortableQuery({ name: "payrollLeave:workspace", handler: payrollLeaveFns.workspacePortable }),
+  definePortableMutation({ name: "payrollLeave:savePeriod", handler: payrollLeaveFns.savePeriodPortable }),
+  definePortableMutation({ name: "payrollLeave:saveRequest", handler: payrollLeaveFns.saveRequestPortable }),
+  definePortableMutation({ name: "payrollLeave:transitionRequest", handler: payrollLeaveFns.transitionRequestPortable }),
+  definePortableMutation({ name: "financialHub:importBrowserWaveTransactions", handler: financialProviderRefreshFns.importBrowserWaveTransactionsPortable }),
+  definePortableQuery({ name: "payrollCalculation:workspace", handler: payrollCalculationFns.workspacePortable }),
+  definePortableQuery({ name: "payrollCalculation:preview", handler: payrollCalculationFns.previewPortable }),
+  definePortableQuery({ name: "payrollCalculation:exportContext", handler: payrollCalculationFns.exportContextPortable }),
+  definePortableMutation({ name: "payrollCalculation:saveEmployerSettings", handler: payrollCalculationFns.saveEmployerSettingsPortable }),
+  definePortableMutation({ name: "payrollCalculation:saveProfile", handler: payrollCalculationFns.saveProfilePortable }),
+  definePortableMutation({ name: "payrollCalculation:saveEarningCode", handler: payrollCalculationFns.saveEarningCodePortable }),
+  definePortableMutation({ name: "payrollCalculation:saveWorkDay", handler: payrollCalculationFns.saveWorkDayPortable }),
+  definePortableMutation({ name: "payrollCalculation:saveOpeningBalance", handler: payrollCalculationFns.saveOpeningBalancePortable }),
+  definePortableMutation({ name: "payrollCalculation:saveDraft", handler: payrollCalculationFns.saveDraftPortable }),
+  definePortableMutation({ name: "payrollCalculation:approve", handler: payrollCalculationFns.approvePortable }),
+  definePortableMutation({ name: "payrollCalculation:finalize", handler: payrollCalculationFns.finalizePortable }),
+  definePortableMutation({ name: "payrollCalculation:reverse", handler: payrollCalculationFns.reversePortable }),
+  definePortableMutation({ name: "payrollCalculation:recordPayment", handler: payrollCalculationFns.recordPaymentPortable }),
+  definePortableQuery({ name: "costPlanning:workspace", handler: costPlanningFns.workspacePortable }),
+  definePortableQuery({ name: "costPlanning:sourcePage", handler: costPlanningFns.sourcePagePortable }),
+  definePortableMutation({ name: "costPlanning:savePeriod", handler: costPlanningFns.savePeriodPortable }),
+  definePortableMutation({ name: "costPlanning:saveCost", handler: costPlanningFns.saveCostPortable }),
+  definePortableMutation({ name: "costPlanning:saveStaff", handler: costPlanningFns.saveStaffPortable }),
+  definePortableMutation({ name: "costPlanning:setArchived", handler: costPlanningFns.setArchivedPortable }),
+  definePortableMutation({ name: "costPlanning:importSource", handler: costPlanningFns.importSourcePortable }),
+  // Durable billing delivery automation
+  definePortableQuery({ name: "billingAutomation:sourcePage", handler: billingAutomationFns.sourcePagePortable }),
+  definePortableQuery({ name: "billingAutomation:workspace", handler: billingAutomationFns.workspacePortable }),
+  definePortableMutation({ name: "billingAutomation:saveSettings", handler: billingAutomationFns.saveSettingsPortable }),
+  definePortableMutation({ name: "billingAutomation:saveSchedule", handler: billingAutomationFns.saveSchedulePortable }),
+  definePortableMutation({ name: "billingAutomation:setScheduleActive", handler: billingAutomationFns.setScheduleActivePortable }),
+  definePortableMutation({ name: "billingAutomation:prepareDue", handler: billingAutomationFns.prepareDuePortable }),
+  definePortableMutation({ name: "billingAutomation:claimRun", handler: billingAutomationFns.claimRunPortable }),
+  definePortableMutation({ name: "billingAutomation:retryRun", handler: billingAutomationFns.retryRunPortable }),
+  definePortableQuery({ name: "billingAutomation:getRun", handler: billingAutomationFns.getRunPortable }),
+  definePortableMutation({ name: "billingAutomation:deliverLocal", handler: billingAutomationFns.deliverLocalPortable }),
+  // Commerce report composer and paginated sources
+  definePortableQuery({ name: "commerceReports:sourcePage", handler: commerceReportsFns.sourcePagePortable }),
+  definePortableQuery({ name: "commerceReports:listDefinitions", handler: commerceReportsFns.listDefinitionsPortable }),
+  definePortableQuery({ name: "commerceReports:getDefinition", handler: commerceReportsFns.getDefinitionPortable }),
+  definePortableMutation({ name: "commerceReports:saveDefinition", handler: commerceReportsFns.saveDefinitionPortable }),
+  definePortableMutation({ name: "commerceReports:duplicateDefinition", handler: commerceReportsFns.duplicateDefinitionPortable }),
+  definePortableMutation({ name: "commerceReports:archiveDefinition", handler: commerceReportsFns.archiveDefinitionPortable }),
+  definePortableQuery({ name: "commerceReports:listPresets", handler: commerceReportsFns.listPresetsPortable }),
+  definePortableMutation({ name: "commerceReports:savePreset", handler: commerceReportsFns.savePresetPortable }),
+  definePortableMutation({ name: "commerceReports:removePreset", handler: commerceReportsFns.removePresetPortable }),
+  // Billing preferences and customer documents
+  definePortableQuery({ name: "invoicePreferences:workspace", handler: invoicePreferencesFns.workspacePortable }),
+  definePortableQuery({ name: "invoicePreferences:collectionPage", handler: invoicePreferencesFns.collectionPagePortable }),
+  definePortableMutation({ name: "invoicePreferences:saveProfile", handler: invoicePreferencesFns.saveProfilePortable }),
+  definePortableMutation({ name: "invoicePreferences:savePriceList", handler: invoicePreferencesFns.savePriceListPortable }),
+  definePortableMutation({ name: "invoicePreferences:assignCustomer", handler: invoicePreferencesFns.assignCustomerPortable }),
+  definePortableMutation({ name: "invoicePreferences:saveView", handler: invoicePreferencesFns.saveViewPortable }),
+  definePortableMutation({ name: "invoicePreferences:removeView", handler: invoicePreferencesFns.removeViewPortable }),
+  definePortableQuery({ name: "billingDocuments:workspace", handler: billingDocumentsFns.workspacePortable }),
+  definePortableMutation({ name: "billingDocuments:upsertQuote", handler: billingDocumentsFns.upsertQuotePortable }),
+  definePortableMutation({ name: "billingDocuments:setQuoteStatus", handler: billingDocumentsFns.setQuoteStatusPortable }),
+  definePortableMutation({ name: "billingDocuments:reviseQuote", handler: billingDocumentsFns.reviseQuotePortable }),
+  definePortableMutation({ name: "billingDocuments:convertQuote", handler: billingDocumentsFns.convertQuotePortable }),
+  definePortableQuery({ name: "billingDocuments:customerStatement", handler: billingDocumentsFns.customerStatementPortable }),
+  definePortableMutation({ name: "billingDocuments:saveStatementSnapshot", handler: billingDocumentsFns.saveStatementSnapshotPortable }),
+  definePortableQuery({ name: "billingDocuments:repairOperations", handler: billingDocumentsFns.repairOperationsPortable }),
+  definePortableMutation({ name: "billingDocuments:saveRepairDispatch", handler: billingDocumentsFns.saveRepairDispatchPortable }),
+  definePortableMutation({ name: "billingDocuments:requestRepairApproval", handler: billingDocumentsFns.requestRepairApprovalPortable }),
+  definePortableMutation({ name: "billingDocuments:decideRepairApproval", handler: billingDocumentsFns.decideRepairApprovalPortable }),
+  definePortableMutation({ name: "billingDocuments:startRepairTimer", handler: billingDocumentsFns.startRepairTimerPortable }),
+  definePortableMutation({ name: "billingDocuments:stopRepairTimer", handler: billingDocumentsFns.stopRepairTimerPortable }),
+  definePortableMutation({ name: "billingDocuments:syncRepairTimeCharges", handler: billingDocumentsFns.syncRepairTimeChargesPortable }),
+  definePortableMutation({ name: "billingDocuments:saveRepairTime", handler: billingDocumentsFns.saveRepairTimePortable }),
+  definePortableMutation({ name: "billingDocuments:removeRepairTime", handler: billingDocumentsFns.removeRepairTimePortable }),
+  definePortableMutation({ name: "billingDocuments:setRepairStatus", handler: billingDocumentsFns.setRepairStatusGuardedPortable }),
+  definePortableMutation({ name: "billingDocuments:invoiceRepair", handler: billingDocumentsFns.invoiceRepairGuardedPortable }),
+];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
@@ -665,14 +778,24 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "spendBudgets:upsert", handler: spendBudgetsFns.upsertPortable }),
   definePortableMutation({ name: "spendBudgets:setArchived", handler: spendBudgetsFns.setArchivedPortable }),
   definePortableMutation({ name: "spendBudgets:remove", handler: spendBudgetsFns.removePortable }),
+  ...BILLING_COMMERCE_FUNCTIONS,
   // invoices
+  definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
+  definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),
+  definePortableMutation({ name: "invoices:upsertRepairJob", handler: invoicesFns.upsertRepairJobPortable }),
+  definePortableMutation({ name: "invoices:setRepairStatus", handler: invoicesFns.setRepairStatusPortable }),
+  definePortableMutation({ name: "invoices:invoiceRepairJob", handler: invoicesFns.invoiceRepairJobPortable }),
   definePortableQuery({ name: "invoices:workspace", handler: invoicesFns.workspacePortable }),
+  definePortableQuery({ name: "invoices:documentTemplates", handler: invoicesFns.documentTemplatesPortable }),
   definePortableMutation({ name: "invoices:upsert", handler: invoicesFns.upsertPortable }),
   definePortableMutation({ name: "invoices:markSent", handler: invoicesFns.markSentPortable }),
   definePortableMutation({ name: "invoices:voidInvoices", handler: invoicesFns.voidInvoicesPortable }),
   definePortableMutation({ name: "invoices:restoreVoided", handler: invoicesFns.restoreVoidedPortable }),
   definePortableMutation({ name: "invoices:duplicate", handler: invoicesFns.duplicatePortable }),
   definePortableMutation({ name: "invoices:remove", handler: invoicesFns.removePortable }),
+  definePortableMutation({ name: "invoices:recordAdjustment", handler: invoicesFns.recordAdjustmentPortable }),
+  definePortableMutation({ name: "invoices:reverseAdjustment", handler: invoicesFns.reverseAdjustmentPortable }),
+  definePortableMutation({ name: "invoices:revalue", handler: invoicesFns.revaluePortable }),
   definePortableMutation({ name: "invoices:recordPayment", handler: invoicesFns.recordPaymentPortable }),
   definePortableMutation({ name: "invoices:removePayment", handler: invoicesFns.removePaymentPortable }),
   definePortableMutation({ name: "invoices:revertToUnpaid", handler: invoicesFns.revertToUnpaidPortable }),
@@ -693,6 +816,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invoices:postExisting", handler: invoicesFns.postExistingPortable }),
 
   // bills
+  definePortableMutation({ name: "bills:recordAdjustment", handler: billsFns.recordAdjustmentPortable }),
+  definePortableMutation({ name: "bills:reverseAdjustment", handler: billsFns.reverseAdjustmentPortable }),
   definePortableQuery({ name: "bills:workspace", handler: billsFns.workspacePortable }),
   definePortableMutation({ name: "bills:upsert", handler: billsFns.upsertPortable }),
   definePortableMutation({ name: "bills:submit", handler: billsFns.submitPortable }),

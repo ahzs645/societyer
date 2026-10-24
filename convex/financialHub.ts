@@ -3,7 +3,6 @@ import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/aut
 import { v } from "convex/values";
 import { query, internalMutation, mutation, action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 import {
   waveListAccounts,
@@ -13,6 +12,7 @@ import { providers } from "./providers/env";
 import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
 import { invalidRuleIds, rulePatchForTransaction, ruleReferenceIndex } from "../shared/transactionRules";
 import { aliasedCounterparty } from "../shared/payeeAliases";
+import { assertProviderConnectionRemovable, importBrowserWaveTransactionsPortable, refreshFinancialProviderDataPortable } from "../shared/functions/financialProviderRefresh";
 import {
   connectionsPortable,
   disconnectPortable,
@@ -300,6 +300,8 @@ export const removeDemoData = authorizedMutation("financialHub:removeDemoData", 
       .collect();
     const demoConnections = connections.filter(isDemoFinancialConnection);
     const demoConnectionIds = new Set<string>((demoConnections as any[]).map((row) => String(row._id)));
+    const portable = await toPortableMutationCtx(ctx);
+    for (const connection of demoConnections) await assertProviderConnectionRemovable(portable, String(societyId), String(connection._id));
 
     const counts = {
       connections: 0,
@@ -416,54 +418,10 @@ export const _replaceSyncedData = internalMutation({
       args.connectionId,
       args.societyId,
     );
-    const prevAccounts = await ctx.db
-      .query("financialAccounts")
-      .withIndex("by_connection", (q) => q.eq("connectionId", args.connectionId))
-      .collect();
-    for (const a of prevAccounts) await ctx.db.delete(a._id);
-
-    const prevTx = await ctx.db
-      .query("financialTransactions")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    for (const t of prevTx) {
-      if (t.connectionId === args.connectionId) await ctx.db.delete(t._id);
-    }
-
-    const idByExternal: Record<string, Id<"financialAccounts">> = {};
-    for (const a of args.accounts) {
-      const id = await ctx.db.insert("financialAccounts", {
-        societyId: args.societyId,
-        connectionId: args.connectionId,
-        externalId: a.externalId,
-        name: a.name,
-        currency: a.currency,
-        accountType: a.accountType,
-        balanceCents: a.balanceCents,
-        isRestricted: a.isRestricted,
-        restrictedPurpose: a.restrictedPurpose,
-      });
-      idByExternal[a.externalId] = id;
-    }
-
-    for (const t of args.transactions) {
-      const accountId = idByExternal[t.accountExternalId];
-      if (!accountId) continue;
-      await ctx.db.insert("financialTransactions", {
-        societyId: args.societyId,
-        connectionId: args.connectionId,
-        accountId,
-        externalId: t.externalId,
-        date: t.date,
-        description: t.description,
-        amountCents: t.amountCents,
-        category: t.category,
-        categoryAccountExternalId: t.categoryAccountExternalId,
-        counterparty: t.counterparty,
-        counterpartyExternalId: t.counterpartyExternalId,
-        counterpartyResourceType: t.counterpartyResourceType,
-      });
-    }
+    await refreshFinancialProviderDataPortable(await toPortableMutationCtx(ctx), {
+      societyId: String(args.societyId), connectionId: String(args.connectionId),
+      accounts: args.accounts, transactions: args.transactions,
+    });
 
     await ctx.db.patch(args.connectionId, {
       lastSyncAtISO: new Date().toISOString(),
@@ -514,133 +472,10 @@ export const importBrowserWaveTransactions = authorizedMutation("financialHub:im
       societyId: args.societyId,
       required: "Admin",
     });
-    const societyId = String(args.societyId);
-    if (args.profileKey && args.profileSocietyId !== societyId) {
-      throw new Error("Browser profile reference is missing or belongs to another society.");
-    }
-
-    const now = new Date().toISOString();
-    const existingConnections = await ctx.db
-      .query("financialConnections")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const connection = existingConnections.find((row) =>
-      row.provider === "wave"
-      && row.externalBusinessId === args.businessId
-      && (!args.profileKey || (
-        row.browserProfileKey === args.profileKey
-        && row.browserProfileSocietyId === societyId
-      )),
-    );
-
-    const connectionPayload = {
-      societyId: args.societyId,
-      provider: "wave",
-      status: "connected",
-      accountLabel: args.profileKey ? `Wave browser profile ${args.profileKey}` : "Wave browser connector",
-      externalBusinessId: args.businessId,
-      syncMode: "browser",
-      browserProfileKey: args.profileKey,
-      browserProfileSocietyId: args.profileKey ? societyId : undefined,
-      connectedAtISO: connection?.connectedAtISO ?? now,
-      lastSyncAtISO: now,
-      lastError: undefined,
-      demo: false,
-    };
-    const connectionId = connection
-      ? (await ctx.db.patch(connection._id, connectionPayload), connection._id)
-      : await ctx.db.insert("financialConnections", connectionPayload);
-
-    const existingAccounts: any[] = await ctx.db
-      .query("financialAccounts")
-      .withIndex("by_connection", (q) => q.eq("connectionId", connectionId))
-      .collect();
-    const existingByExternal = new Map(existingAccounts.map((account) => [account.externalId, account]));
-    const accountIdByExternal = new Map(existingAccounts.map((account) => [account.externalId, account._id]));
-
-    const uniqueAccounts = new Map<string, any>(args.accounts.map((account: any) => [account.externalId, account]));
-    for (const account of uniqueAccounts.values()) {
-      const existing = existingByExternal.get(account.externalId);
-      const payload = {
-        societyId: args.societyId,
-        connectionId,
-        externalId: account.externalId,
-        name: account.name,
-        currency: account.currency,
-        accountType: account.accountType,
-        balanceCents: account.balanceCents ?? existing?.balanceCents ?? 0,
-        isRestricted: account.isRestricted,
-        restrictedPurpose: account.restrictedPurpose,
-      };
-      if (existing) {
-        await ctx.db.patch(existing._id, payload);
-        accountIdByExternal.set(account.externalId, existing._id);
-      } else {
-        const id = await ctx.db.insert("financialAccounts", payload);
-        accountIdByExternal.set(account.externalId, id);
-      }
-    }
-
-    const previousTransactions = await ctx.db
-      .query("financialTransactions")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    for (const transaction of previousTransactions) {
-      if (transaction.connectionId === connectionId) await ctx.db.delete(transaction._id);
-    }
-
-    let insertedTransactions = 0;
-    let skippedTransactions = 0;
-    const seenTransactionIds = new Set<string>();
-    for (const transaction of args.transactions) {
-      if (seenTransactionIds.has(transaction.externalId)) continue;
-      seenTransactionIds.add(transaction.externalId);
-
-      let accountId = accountIdByExternal.get(transaction.accountExternalId);
-      if (!accountId) {
-        accountId = await ctx.db.insert("financialAccounts", {
-          societyId: args.societyId,
-          connectionId,
-          externalId: transaction.accountExternalId,
-          name: "Wave account",
-          currency: "CAD",
-          accountType: "Asset",
-          balanceCents: 0,
-          isRestricted: false,
-        });
-        accountIdByExternal.set(transaction.accountExternalId, accountId);
-      }
-
-      if (!transaction.date) {
-        skippedTransactions += 1;
-        continue;
-      }
-
-      await ctx.db.insert("financialTransactions", {
-        societyId: args.societyId,
-        connectionId,
-        accountId,
-        externalId: transaction.externalId,
-        date: transaction.date,
-        description: transaction.description,
-        amountCents: transaction.amountCents,
-        category: transaction.category,
-        categoryAccountExternalId: transaction.categoryAccountExternalId,
-        counterparty: transaction.counterparty,
-        counterpartyExternalId: transaction.counterpartyExternalId,
-        counterpartyResourceType: transaction.counterpartyResourceType,
-      });
-      insertedTransactions += 1;
-    }
-
-    return {
-      connectionId,
-      accounts: accountIdByExternal.size,
-      importedAccounts: uniqueAccounts.size,
-      transactions: insertedTransactions,
-      skippedTransactions,
-      syncedAtISO: now,
-    };
+    return importBrowserWaveTransactionsPortable(await toPortableMutationCtx(ctx), {
+      ...args, societyId: String(args.societyId),
+      actingUserId: args.actingUserId ? String(args.actingUserId) : undefined,
+    });
   },
 });
 

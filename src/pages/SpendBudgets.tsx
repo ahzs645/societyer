@@ -86,6 +86,7 @@ export function SpendBudgetsPage() {
         actions={
           <>
             <Link className="btn-action" to="/app/approvals"><ClipboardCheck size={12} aria-hidden="true" /> Approvals</Link>
+            <Link className="btn-action" to="/app/financials/planning"><Gauge size={12} aria-hidden="true" /> Plan semester costs</Link>
             <button type="button" className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => setEditing({ budget: null })}>
               <Plus size={12} aria-hidden="true" /> New budget
             </button>

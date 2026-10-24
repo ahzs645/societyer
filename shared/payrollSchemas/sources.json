@@ -1,0 +1,20 @@
+[
+  {
+    "submissionVersion": "2026",
+    "url": "https://www.canada.ca/content/dam/cra-arc/serv-info/eservices/xmlschm1-26-3.zip",
+    "sha256": "eaa9f869aaa8270662d16989839399cc6700437b7a349113bf812d76a49310c5",
+    "retrievedAt": "2026-10-23"
+  },
+  {
+    "submissionVersion": "2027",
+    "url": "https://www.canada.ca/content/dam/cra-arc/serv-info/eservices/xmlschm1-27-1.zip",
+    "sha256": "304b4379d06f2989120aa088b19b61b3b10ecbad1770c4cab50aa285038d6801",
+    "retrievedAt": "2026-10-23"
+  },
+  {
+    "submissionVersion": "roe-v2",
+    "url": "https://srv136.services.gc.ca/ROE-RE/ROEWeb-REWeb/pub/resource/XmlV2Schema",
+    "sha256": "bf0297eecee8b93fa940355fbc4897c0186f7a0c61a16d53152c19361c35edd0",
+    "retrievedAt": "2026-10-23"
+  }
+]

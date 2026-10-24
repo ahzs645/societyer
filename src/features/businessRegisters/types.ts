@@ -1,19 +1,42 @@
 /** Shapes the business-register workspace queries return (shared/functions/businessRegisters.ts). */
+import type { PayrollDeductionYtd } from "../../../shared/payrollDeductions";
+import type { RemittanceScheduleRule, RemittanceScheduleChange, PayRunClassifiedBases } from "../../../shared/businessRegisters";
 
 export type PayRunLineRow = {
   employeeId?: string;
+  providerEmployeeId?: string;
   employeeName: string;
+  provinceOfEmployment?: string;
+  ehtLocationId?: string;
+  ehtAttributionBasis?: "primary_reporting" | "reasonable_allocation";
+  ehtAttributionEvidence?: string;
+  vacationAccruedCents?: number;
+  vacationPaidCents?: number;
+  sickPaidDaysUsed?: number;
+  sickUnpaidDaysUsed?: number;
   grossCents: number;
+  nonCashTaxableCents?: number;
+  nonTaxableCashCents?: number;
   cppEmployeeCents: number;
+  cpp2EmployeeCents?: number;
   eiEmployeeCents: number;
   incomeTaxCents: number;
+  federalTaxCents?: number;
+  provincialTaxCents?: number;
+  additionalIncomeTaxCents?: number;
+  classifiedBases?: PayRunClassifiedBases;
+  regularClassifiedBases?: PayRunClassifiedBases;
+  bonusClassifiedBases?: PayRunClassifiedBases;
+  deductionYtdDelta?: PayrollDeductionYtd;
+  insurableHours?: number;
   otherDeductionsCents?: number;
   cppEmployerCents: number;
+  cpp2EmployerCents?: number;
   eiEmployerCents: number;
   netCents: number;
 };
 
-export type PayRunRow = Omit<PayRunLineRow, "employeeId" | "employeeName"> & {
+export type PayRunRow = Omit<PayRunLineRow, "employeeId" | "employeeName" | "providerEmployeeId"> & {
   _id: string;
   periodStart: string;
   periodEnd: string;
@@ -24,16 +47,30 @@ export type PayRunRow = Omit<PayRunLineRow, "employeeId" | "employeeName"> & {
   differenceCents: number;
   source: string;
   providerName?: string;
+  providerRunId?: string;
+  runType?: string;
+  correctsRunId?: string;
+  correctionOfProviderRunId?: string;
+  calculationId?: string;
+  reversedDate?: string;
+  reversalId?: string;
+  sourceMissingFields?: string[];
+  missingValuesConfirmed?: boolean;
   transactionId?: string;
   notes?: string;
 };
 
 export type RemittanceRow = {
   _id: string;
+  payrollAccountNumber?: string;
+  rpAccountEvidence?: string;
+  rpAccountConfirmedAtISO?: string;
+  rpAccountConfirmedByUserId?: string;
   periodStart: string;
   periodEnd: string;
   period: string;
   dueDate?: string;
+  schedule?: RemittanceScheduleRule;
   amountDueCents: number;
   paidCents?: number;
   paidOn?: string;
@@ -53,6 +90,9 @@ export type SlipRow = {
   recipientName: string;
   employmentIncomeCents: number;
   cppCents: number;
+  cpp2Cents?: number;
+  providerEmployeeId?: string;
+  providerName?: string;
   eiCents: number;
   incomeTaxCents: number;
   otherIncomeCents?: number;
@@ -77,13 +117,16 @@ export type RoeRow = {
   notes?: string;
 };
 
-export type PayrollEmployee = { _id: string; name: string; role?: string; active: boolean; annualSalaryCents?: number; province?: string };
+export type PayrollEmployee = { _id: string; name: string; providerEmployeeId?: string; employeeNumber?: string; role?: string; active: boolean; annualSalaryCents?: number; province?: string };
 
 export type PayrollSettings = {
   remitterType: string;
+  province?: string;
   cadence?: string;
   dueRule?: string;
   dueValue?: number;
+  remittanceBaseline?: RemittanceScheduleRule;
+  remittanceScheduleHistory?: RemittanceScheduleChange[];
   payrollAccountNumber?: string;
   providerName?: string;
   workersCompProvider?: string;
@@ -105,6 +148,8 @@ export type PayrollWorkspace = {
     year: number;
     ytdGrossCents: number;
     ytdRemittableCents: number;
+    ytdCpp2EmployeeCents: number;
+    ytdCpp2EmployerCents: number;
     ytdRunCount: number;
     openRemittanceCount: number;
     overdueRemittanceCount: number;

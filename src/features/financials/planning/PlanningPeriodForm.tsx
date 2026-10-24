@@ -1,0 +1,31 @@
+import { useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/lib/convexApi";
+import { Field } from "../../../components/ui";
+import { Select } from "../../../components/Select";
+import { Checkbox } from "../../../components/Controls";
+import { defaultCostPeriod, validateCostPeriod, type CostPeriod } from "../../../../shared/costPlanning";
+import { moneyInput, periodFields, planningCents, planningError, semesterDates, type PlanningBudget } from "./planningFormUtils";
+import { usePlanningCollection } from "./usePlanningSources";
+
+export function PlanningPeriodForm({ societyId, today, currency, value, duplicate = false, onSaved, onCancel }: { societyId: string; today: string; currency: string; value?: CostPeriod | null; duplicate?: boolean; onSaved: (id: string) => void; onCancel: () => void }) {
+  const save = useMutation(api.costPlanning.savePeriod);
+  const [draft, setDraft] = useState(() => value ? periodFields(value) : { ...periodFields(defaultCostPeriod(today)), currency });
+  const [allocation, setAllocation] = useState(moneyInput(draft.allocationCents)), [opening, setOpening] = useState(moneyInput(draft.openingBalanceCents)), [reserve, setReserve] = useState(moneyInput(draft.reserveCents));
+  const [preset, setPreset] = useState("custom"), [year, setYear] = useState(draft.startDate.slice(0, 4)), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const budgets = usePlanningCollection<PlanningBudget>({ societyId, collection: "budgets" }, "Planning budgets");
+  const patch = (fields: Partial<CostPeriod>) => setDraft((old) => ({ ...old, ...fields }));
+  const setSemester = (season: string, nextYear = year) => { setPreset(season); if (season !== "custom" && /^\d{4}$/.test(nextYear)) patch(semesterDates(season as "winter" | "summer" | "fall", Number(nextYear))); };
+  const submit = async () => { setBusy(true); setError(""); try { const fields = periodFields(validateCostPeriod({ ...draft, allocationCents: planningCents(allocation, "Allocation"), openingBalanceCents: planningCents(opening, "Opening balance", true), reserveCents: planningCents(reserve, "Reserve") })); const id = await save({ societyId, id: duplicate ? undefined : value?._id, fields }); onSaved(id); } catch (cause) { setError(planningError(cause)); } finally { setBusy(false); } };
+  const budgetOptions = [{ value: "", label: "No linked spending budget" }, ...budgets.rows.map((budget) => ({ value: budget._id, label: budget.name ?? budget.title ?? "Spending budget" }))];
+  if (draft.spendBudgetId && !budgets.rows.some((budget) => budget._id === draft.spendBudgetId)) budgetOptions.push({ value: draft.spendBudgetId, label: "Existing linked budget" });
+  return <form className="form-stack cost-planner" aria-label={duplicate ? "Duplicate planning period" : value ? "Edit planning period" : "New planning period"} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+    <div className="cost-planner__form-grid"><Field label="Semester preset"><Select value={preset} onChange={setSemester} options={[{ value: "custom", label: "Custom dates" }, { value: "winter", label: "Winter · January–April" }, { value: "summer", label: "Summer · May–August" }, { value: "fall", label: "Fall · September–December" }]} /></Field>{preset !== "custom" && <Field label="Preset year"><input className="input" inputMode="numeric" value={year} maxLength={4} onChange={(event) => { setYear(event.target.value); setSemester(preset, event.target.value); }} /></Field>}</div>
+    <Field label="Period name" required><input className="input" value={draft.name} maxLength={200} onChange={(event) => patch({ name: event.target.value })} /></Field>
+    <div className="cost-planner__form-grid"><Field label="Start date"><input className="input" type="date" value={draft.startDate} onChange={(event) => { setPreset("custom"); patch({ startDate: event.target.value }); }} /></Field><Field label="End date" hint="Inclusive; up to two years."><input className="input" type="date" value={draft.endDate} onChange={(event) => { setPreset("custom"); patch({ endDate: event.target.value }); }} /></Field><Field label="Currency"><input className="input" placeholder="CAD" value={draft.currency} maxLength={3} onChange={(event) => patch({ currency: event.target.value.toUpperCase() })} /></Field><Field label="Allocation" hint="Funding allocated to this entire period."><input className="input" inputMode="decimal" value={allocation} onChange={(event) => setAllocation(event.target.value)} /></Field><Field label="Opening balance" hint="Available balance carried into the period."><input className="input" inputMode="decimal" value={opening} onChange={(event) => setOpening(event.target.value)} /></Field><Field label="Reserve" hint="Amount to keep available after forecast costs."><input className="input" inputMode="decimal" value={reserve} onChange={(event) => setReserve(event.target.value)} /></Field><Field label="Forecast basis"><Select value={draft.basis} onChange={(basis) => patch({ basis })} options={[{ value: "cash", label: "Cash · dated payments" }, { value: "allocated", label: "Allocated · covered period" }]} /></Field><Field label="Linked spending budget" hint="Used only for recorded bank spending comparison. Its cycle limit does not set this period’s allocation."><Select value={draft.spendBudgetId ?? ""} disabled={!budgets.ready} onChange={(spendBudgetId) => patch({ spendBudgetId: spendBudgetId || undefined })} options={budgetOptions} /></Field></div>
+    {budgets.loader}{!budgets.ready && !budgets.error && <p role="status">Loading spending budgets…</p>}
+    <Checkbox checked={draft.includePlanned} onChange={(includePlanned) => patch({ includePlanned })} label="Include planned costs" hint="Committed costs always count. Paused and archived costs are excluded." />
+    <p className="muted">All dates and funding amounts remain editable after choosing a semester preset. This plan creates no payment or pay run.</p>
+    {error && <p className="field__error" role="alert">{error}</p>}<div className="cost-planner__actions"><button type="button" className="btn" disabled={busy} onClick={onCancel}>Cancel</button><button className="btn btn--accent" disabled={busy}>{busy ? "Saving…" : "Save period"}</button></div>
+  </form>;
+}

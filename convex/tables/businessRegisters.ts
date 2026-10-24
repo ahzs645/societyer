@@ -1,6 +1,16 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
+export const payrollDeductionYtdDeltaValidator = v.object({
+  regularTaxableCents: v.number(), regularPensionableCents: v.number(), regularInsurableCents: v.number(), bonusTaxableCents: v.number(), bonusPensionableCents: v.number(), bonusInsurableCents: v.number(),
+  cppCents: v.number(), cpp2Cents: v.number(), eiCents: v.number(), employerEiCents: v.number(), bonusCppCents: v.number(), bonusEiCents: v.number(), cppAdditionalRegularCents: v.number(), cppAdditionalBonusCents: v.number(),
+  registeredPlanCents: v.number(), unionDuesCents: v.number(), maintenanceCents: v.number(), bonusRegisteredPlanCents: v.number(), regularTaxCents: v.number(), bonusTaxCents: v.number(), additionalTaxCents: v.number(),
+  regularFederalTaxCents: v.optional(v.number()), regularProvincialTaxCents: v.optional(v.number()), bonusFederalTaxCents: v.optional(v.number()), bonusProvincialTaxCents: v.optional(v.number()),
+});
+export const payrollClassifiedBasesValidator = v.object({ cashCents: v.number(), taxableCents: v.number(), pensionableCents: v.number(), insurableCents: v.number(), vacationableCents: v.number(), ehtCents: v.number(), workSafeCents: v.number() });
+const remittanceRuleFields = { remitterType: v.string(), province: v.optional(v.string()), cadence: v.optional(v.string()), dueRule: v.optional(v.string()), dueValue: v.optional(v.number()) };
+const remittanceRuleValidator = v.object(remittanceRuleFields);
+
 /**
  * Business registers: payroll records (pay runs, CRA source-deduction
  * remittances, year-end slips, records of employment), corporate cards and
@@ -16,13 +26,27 @@ import { v } from "convex/values";
 
 export const payRunLineValidator = v.object({
   employeeId: v.optional(v.id("employees")),
+  providerEmployeeId: v.optional(v.string()),
   employeeName: v.string(),
+  provinceOfEmployment: v.optional(v.string()),
+  ehtLocationId: v.optional(v.string()), ehtAttributionBasis: v.optional(v.union(v.literal("primary_reporting"), v.literal("reasonable_allocation"))), ehtAttributionEvidence: v.optional(v.string()),
+  vacationAccruedCents: v.optional(v.number()), vacationPaidCents: v.optional(v.number()), sickPaidDaysUsed: v.optional(v.number()), sickUnpaidDaysUsed: v.optional(v.number()),
   grossCents: v.number(),
+  nonCashTaxableCents: v.optional(v.number()),
+  nonTaxableCashCents: v.optional(v.number()),
   cppEmployeeCents: v.number(),
+  cpp2EmployeeCents: v.optional(v.number()),
   eiEmployeeCents: v.number(),
   incomeTaxCents: v.number(),
+  federalTaxCents: v.optional(v.number()), provincialTaxCents: v.optional(v.number()), additionalIncomeTaxCents: v.optional(v.number()),
+  deductionYtdDelta: v.optional(payrollDeductionYtdDeltaValidator),
+  classifiedBases: v.optional(payrollClassifiedBasesValidator),
+  regularClassifiedBases: v.optional(payrollClassifiedBasesValidator),
+  bonusClassifiedBases: v.optional(payrollClassifiedBasesValidator),
+  insurableHours: v.optional(v.number()),
   otherDeductionsCents: v.optional(v.number()),
   cppEmployerCents: v.number(),
+  cpp2EmployerCents: v.optional(v.number()),
   eiEmployerCents: v.number(),
   netCents: v.number(),
 });
@@ -31,9 +55,12 @@ export const businessRegisterTables = {
   payrollSettings: defineTable({
     societyId: v.id("societies"),
     remitterType: v.string(), // regular | quarterly | accelerated
+    province: v.optional(v.string()),
     cadence: v.optional(v.string()), // monthly | twice_monthly | quarterly (non-regular remitters)
     dueRule: v.optional(v.string()), // day_of_next_month | days_after_period_end
     dueValue: v.optional(v.number()),
+    remittanceBaseline: v.optional(remittanceRuleValidator),
+    remittanceScheduleHistory: v.optional(v.array(v.object({ ...remittanceRuleFields, effectiveFrom: v.string(), noticeReference: v.string() }))),
     payrollAccountNumber: v.optional(v.string()), // CRA payroll program account (RP)
     providerName: v.optional(v.string()),
     workersCompProvider: v.optional(v.string()), // WorkSafeBC | WSIB | Other
@@ -49,16 +76,30 @@ export const businessRegisterTables = {
     periodEnd: v.string(),
     payDate: v.string(),
     grossCents: v.number(),
+    nonCashTaxableCents: v.optional(v.number()),
+    nonTaxableCashCents: v.optional(v.number()),
     cppEmployeeCents: v.number(),
+    cpp2EmployeeCents: v.optional(v.number()),
     eiEmployeeCents: v.number(),
     incomeTaxCents: v.number(),
+    federalTaxCents: v.optional(v.number()), provincialTaxCents: v.optional(v.number()), additionalIncomeTaxCents: v.optional(v.number()),
     otherDeductionsCents: v.optional(v.number()),
     cppEmployerCents: v.number(),
+    cpp2EmployerCents: v.optional(v.number()),
     eiEmployerCents: v.number(),
     netCents: v.number(),
     lines: v.optional(v.array(payRunLineValidator)),
     source: v.string(), // manual | import
     providerName: v.optional(v.string()),
+    providerRunId: v.optional(v.string()),
+    runType: v.optional(v.string()),
+    correctsRunId: v.optional(v.id("payRuns")),
+    correctionOfProviderRunId: v.optional(v.string()),
+    sourceMissingFields: v.optional(v.array(v.string())),
+    missingValuesConfirmed: v.optional(v.boolean()),
+    calculationId: v.optional(v.id("payrollCalculations")),
+    reversedDate: v.optional(v.string()),
+    reversalId: v.optional(v.id("payRuns")),
     transactionId: v.optional(v.id("financialTransactions")),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
@@ -69,9 +110,14 @@ export const businessRegisterTables = {
 
   payrollRemittances: defineTable({
     societyId: v.id("societies"),
+    payrollAccountNumber: v.optional(v.string()),
+    rpAccountEvidence: v.optional(v.string()),
+    rpAccountConfirmedAtISO: v.optional(v.string()),
+    rpAccountConfirmedByUserId: v.optional(v.id("users")),
     periodStart: v.string(),
     periodEnd: v.string(),
     dueDate: v.optional(v.string()),
+    schedule: v.optional(remittanceRuleValidator),
     amountDueCents: v.number(),
     paidCents: v.optional(v.number()),
     paidOn: v.optional(v.string()),
@@ -87,9 +133,12 @@ export const businessRegisterTables = {
     year: v.number(),
     slipType: v.string(), // T4 | T4A | RL-1
     employeeId: v.optional(v.id("employees")),
+    providerEmployeeId: v.optional(v.string()),
+    providerName: v.optional(v.string()),
     recipientName: v.string(),
     employmentIncomeCents: v.number(),
     cppCents: v.number(),
+    cpp2Cents: v.optional(v.number()), // T4 box 16A (separate from box 16)
     eiCents: v.number(),
     incomeTaxCents: v.number(),
     otherIncomeCents: v.optional(v.number()),
@@ -118,7 +167,7 @@ export const businessRegisterTables = {
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
-  }).index("by_society", ["societyId"]),
+  }).index("by_society", ["societyId"]).index("by_society_serial", ["societyId", "serialNumber"]),
 
   corporateCards: defineTable({
     societyId: v.id("societies"),

@@ -13,9 +13,9 @@
  *    after the month the employees were paid.
  *  - T4, T4A and RL-1 slips and summaries for a calendar year are due on the
  *    last day of February of the following year.
- * Quarterly and accelerated remitters follow the schedule on their CRA
- * notice, so the organization enters that cadence and due day itself. Dates
- * are not moved for weekends or holidays. A record of employment and workers'
+ * Quarterly and accelerated threshold 1/2 schedules follow CRA rules. Legacy
+ * custom schedules remain available. CRA deadlines move to the next business
+ * day for weekends and recognized holidays. A record of employment and workers'
  * compensation reports are due on dates the organization sets.
  *
  * Pure TypeScript shared by the portable functions, the demo generators, the
@@ -24,6 +24,7 @@
  */
 import { addDays, addMonthsClamped, allocateProportionally, daysBetween, isCalendarDate } from "./invoicing";
 import { TRANSFER_CATEGORY } from "./transferCategories";
+import type { PayrollDeductionYtd } from "./payrollDeductions";
 
 export { addDays, daysBetween, isCalendarDate };
 
@@ -57,12 +58,14 @@ function dayOfFollowingMonth(date: string, day: number) {
 
 /* ------------------------------------------------------------- payroll */
 
-export const REMITTER_TYPES = ["regular", "quarterly", "accelerated"] as const;
+export const REMITTER_TYPES = ["regular", "quarterly", "accelerated_threshold_1", "accelerated_threshold_2", "accelerated"] as const;
 export type RemitterType = (typeof REMITTER_TYPES)[number];
 export const REMITTER_TYPE_LABEL: Record<RemitterType, string> = {
   regular: "Regular (monthly)",
   quarterly: "Quarterly",
-  accelerated: "Accelerated",
+  accelerated_threshold_1: "Accelerated — threshold 1",
+  accelerated_threshold_2: "Accelerated — threshold 2",
+  accelerated: "Custom schedule (legacy accelerated)",
 };
 
 export const REMITTANCE_CADENCES = ["monthly", "twice_monthly", "quarterly"] as const;
@@ -83,21 +86,76 @@ export const REMITTANCE_DUE_RULE_LABEL: Record<RemittanceDueRule, string> = {
 /** The regular-remitter rule: the 15th of the month after pay day. */
 export const REGULAR_REMITTANCE_DUE_DAY = 15;
 
-export type RemittanceSchedule = {
+export type RemittanceScheduleRule = {
   remitterType: RemitterType | string;
   /** Quarterly and accelerated remitters: how often deductions are remitted. */
   cadence?: RemittanceCadence | string;
   dueRule?: RemittanceDueRule | string;
   /** The day of the following month, or the number of days after the period ends. */
   dueValue?: number;
+  /** CRA recognizes provincial holidays where the employer is situated. */
+  province?: string;
 };
+export type RemittanceScheduleChange = RemittanceScheduleRule & { effectiveFrom: string; noticeReference: string };
+export type RemittanceSchedule = RemittanceScheduleRule & { remittanceBaseline?: RemittanceScheduleRule; remittanceScheduleHistory?: RemittanceScheduleChange[] };
+export function remittanceRule(schedule: RemittanceScheduleRule): RemittanceScheduleRule {
+  return Object.fromEntries(Object.entries({ remitterType: schedule.remitterType, province: schedule.province || "BC", ...(schedule.remitterType === "accelerated" || schedule.remitterType === "quarterly" && schedule.dueRule ? { cadence: schedule.cadence, dueRule: schedule.dueRule, dueValue: schedule.dueValue } : {}) }).filter(([, value]) => value !== undefined)) as RemittanceScheduleRule;
+}
+export function remittanceScheduleForPayDate(payDate: string, schedule: RemittanceSchedule): RemittanceScheduleRule {
+  let selected: RemittanceScheduleRule = schedule.remittanceBaseline || remittanceRule(schedule);
+  for (const change of [...schedule.remittanceScheduleHistory || []].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))) if (change.effectiveFrom <= payDate) selected = change;
+  return remittanceRule(selected);
+}
 
 export type Period = { start: string; end: string };
+
+export const PAYROLL_DEADLINE_SOURCES = {
+  cra: "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/remitting-source-deductions/how-when-remit-due-dates.html",
+  holidays: "https://www.canada.ca/en/revenue-agency/services/tax/public-holidays.html",
+  bc: "https://www2.gov.bc.ca/gov/content/employment-business/employment-standards-advice/employment-standards/statutory-holidays",
+  reviewedOn: "2026-10-23",
+} as const;
+function nthWeekday(year: number, month: number, weekday: number, occurrence: number) {
+  const first = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  return `${year}-${pad2(month)}-${pad2(1 + (weekday - first + 7) % 7 + (occurrence - 1) * 7)}`;
+}
+function easterSunday(year: number) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = (h + l - 7 * m + 114) % 31 + 1;
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+/** Actual holiday dates from CRA's list, plus B.C. Family Day; weekends are handled separately. */
+export function craPayrollHolidays(year: number, province = "BC"): Set<string> {
+  if (province.toUpperCase() !== "BC") throw new Error("The reviewed payroll remittance calendar currently covers B.C. plus CRA federal holidays. Select a supported calendar.");
+  const easter = easterSunday(year), may25 = `${year}-05-25`, victoria = addDays(may25, -((new Date(`${may25}T00:00:00Z`).getUTCDay() + 6) % 7 || 7));
+  const result = new Set([`${year}-01-01`, addDays(easter, -2), addDays(easter, 1), victoria, `${year}-07-01`, nthWeekday(year, 9, 1, 1), ...(year >= 2021 ? [`${year}-09-30`] : []), nthWeekday(year, 10, 1, 2), `${year}-11-11`, `${year}-12-25`, `${year}-12-26`]);
+  result.add(nthWeekday(year, 8, 1, 1));
+  if (province.toUpperCase() === "BC" && year >= 2013) result.add(nthWeekday(year, 2, 1, year < 2019 ? 2 : 3));
+  return result;
+}
+export function isCraPayrollBusinessDay(date: string, province = "BC") {
+  if (!isCalendarDate(date)) return false;
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return weekday !== 0 && weekday !== 6 && !craPayrollHolidays(Number(date.slice(0, 4)), province).has(date);
+}
+export function nextCraPayrollBusinessDay(date: string, province = "BC") {
+  if (!isCalendarDate(date)) throw new Error("Choose a valid payroll deadline date.");
+  let candidate = date;
+  while (!isCraPayrollBusinessDay(candidate, province)) candidate = addDays(candidate, 1);
+  return candidate;
+}
+export function addCraPayrollWorkingDays(date: string, count: number, province = "BC") {
+  if (!isCalendarDate(date) || !Number.isSafeInteger(count) || count < 0 || count > 366) throw new Error("Choose a valid date and working-day count.");
+  let candidate = date, remaining = count;
+  while (remaining > 0) { candidate = addDays(candidate, 1); if (isCraPayrollBusinessDay(candidate, province)) remaining--; }
+  return candidate;
+}
 
 /** Whether the schedule says enough to compute due dates. */
 export function scheduleIsComplete(schedule: RemittanceSchedule | null | undefined): boolean {
   if (!schedule) return false;
-  if (schedule.remitterType === "regular") return true;
+  if (["regular", "accelerated_threshold_1", "accelerated_threshold_2"].includes(schedule.remitterType) || schedule.remitterType === "quarterly" && !schedule.dueRule) return true;
   return (
     (REMITTANCE_CADENCES as readonly string[]).includes(String(schedule.cadence)) &&
     (REMITTANCE_DUE_RULES as readonly string[]).includes(String(schedule.dueRule)) &&
@@ -109,8 +167,13 @@ export function scheduleIsComplete(schedule: RemittanceSchedule | null | undefin
 
 /** The remittance period a pay date falls in, or null when the schedule is incomplete. */
 export function remittancePeriodFor(payDate: string, schedule: RemittanceSchedule | null | undefined): Period | null {
+  if (schedule?.remittanceScheduleHistory?.length) schedule = remittanceScheduleForPayDate(payDate, schedule);
   if (!isCalendarDate(payDate) || !scheduleIsComplete(schedule)) return null;
-  const cadence = schedule!.remitterType === "regular" ? "monthly" : schedule!.cadence;
+  if (schedule!.remitterType === "accelerated_threshold_2") {
+    const day = Number(payDate.slice(8)), start = day <= 7 ? 1 : day <= 14 ? 8 : day <= 21 ? 15 : 22, end = start === 22 ? Number(monthEnd(payDate).slice(8)) : start + 6;
+    return { start: `${payDate.slice(0, 7)}-${pad2(start)}`, end: `${payDate.slice(0, 7)}-${pad2(end)}` };
+  }
+  const cadence = schedule!.remitterType === "regular" ? "monthly" : schedule!.remitterType === "quarterly" ? schedule!.cadence || "quarterly" : schedule!.remitterType === "accelerated_threshold_1" ? "twice_monthly" : schedule!.cadence;
   if (cadence === "twice_monthly") {
     const day = Number(payDate.slice(8, 10));
     return day <= 15
@@ -127,30 +190,45 @@ export function remittancePeriodFor(payDate: string, schedule: RemittanceSchedul
 
 /** When the deductions withheld in `period` are due to the CRA, or null when the schedule is incomplete. */
 export function remittanceDueDate(period: Period, schedule: RemittanceSchedule | null | undefined): string | null {
+  if (schedule?.remittanceScheduleHistory?.length) schedule = remittanceScheduleForPayDate(period.start, schedule);
   if (!scheduleIsComplete(schedule) || !isCalendarDate(period.end)) return null;
-  if (schedule!.remitterType === "regular") return dayOfFollowingMonth(period.end, REGULAR_REMITTANCE_DUE_DAY);
-  if (schedule!.dueRule === "days_after_period_end") return addDays(period.end, Math.round(Number(schedule!.dueValue)));
-  return dayOfFollowingMonth(period.end, Number(schedule!.dueValue));
+  const province = schedule!.province || "BC";
+  if (schedule!.remitterType === "accelerated_threshold_2") return addCraPayrollWorkingDays(period.end, 3, province);
+  const date = schedule!.remitterType === "regular" || schedule!.remitterType === "quarterly" && !schedule!.dueRule ? dayOfFollowingMonth(period.end, REGULAR_REMITTANCE_DUE_DAY)
+    : schedule!.remitterType === "accelerated_threshold_1" ? Number(period.end.slice(8)) === 15 ? `${period.end.slice(0, 7)}-25` : dayOfFollowingMonth(period.end, 10)
+    : schedule!.dueRule === "days_after_period_end" ? addDays(period.end, Math.round(Number(schedule!.dueValue))) : dayOfFollowingMonth(period.end, Number(schedule!.dueValue));
+  return nextCraPayrollBusinessDay(date, province);
 }
 
 export type PayRunAmounts = {
   grossCents: number;
+  nonCashTaxableCents?: number;
+  nonTaxableCashCents?: number;
   cppEmployeeCents: number;
+  cpp2EmployeeCents?: number;
   eiEmployeeCents: number;
   incomeTaxCents: number;
+  federalTaxCents?: number;
+  provincialTaxCents?: number;
+  additionalIncomeTaxCents?: number;
   otherDeductionsCents?: number;
   cppEmployerCents: number;
+  cpp2EmployerCents?: number;
   eiEmployerCents: number;
   netCents: number;
 };
 
 export const PAY_RUN_AMOUNT_FIELDS = [
   "grossCents",
+  "nonCashTaxableCents",
+  "nonTaxableCashCents",
   "cppEmployeeCents",
+  "cpp2EmployeeCents",
   "eiEmployeeCents",
   "incomeTaxCents",
   "otherDeductionsCents",
   "cppEmployerCents",
+  "cpp2EmployerCents",
   "eiEmployerCents",
   "netCents",
 ] as const;
@@ -159,45 +237,62 @@ export const PAY_RUN_AMOUNT_FIELDS = [
 export function remittableCents(run: PayRunAmounts): number {
   return (
     Math.round(run.cppEmployeeCents || 0) +
+    Math.round(run.cpp2EmployeeCents || 0) +
     Math.round(run.eiEmployeeCents || 0) +
     Math.round(run.incomeTaxCents || 0) +
     Math.round(run.cppEmployerCents || 0) +
+    Math.round(run.cpp2EmployerCents || 0) +
     Math.round(run.eiEmployerCents || 0)
   );
 }
 
-/** Gross minus every deduction, less the net actually paid. Zero when the run adds up. */
+/** Taxable gross − non-cash benefits + non-taxable cash − deductions − net cash paid. */
 export function payRunDifferenceCents(run: PayRunAmounts): number {
   const deductions =
     Math.round(run.cppEmployeeCents || 0) +
+    Math.round(run.cpp2EmployeeCents || 0) +
     Math.round(run.eiEmployeeCents || 0) +
     Math.round(run.incomeTaxCents || 0) +
     Math.round(run.otherDeductionsCents || 0);
-  return Math.round(run.grossCents || 0) - deductions - Math.round(run.netCents || 0);
+  return Math.round(run.grossCents || 0) - Math.round(run.nonCashTaxableCents || 0) + Math.round(run.nonTaxableCashCents || 0) - deductions - Math.round(run.netCents || 0);
 }
 
-/** Employer cost of a run: gross pay plus the employer's CPP and EI. */
+/** Basic employer cost: taxable gross plus employer CPP, CPP2 and EI. Full costing lives in the calculation snapshot. */
 export function employerCostCents(run: PayRunAmounts): number {
-  return Math.round(run.grossCents || 0) + Math.round(run.cppEmployerCents || 0) + Math.round(run.eiEmployerCents || 0);
+  return Math.round(run.grossCents || 0) + Math.round(run.cppEmployerCents || 0) + Math.round(run.cpp2EmployerCents || 0) + Math.round(run.eiEmployerCents || 0);
 }
 
-export type PayRunLine = PayRunAmounts & { employeeId?: string; employeeName: string };
+export const PAY_RUN_TYPES = ["regular", "bonus", "off_cycle", "final", "correction", "reversal"] as const;
+export type PayRunType = typeof PAY_RUN_TYPES[number];
+export type PayRunIdentity = { providerName?: string; providerRunId?: string; runType?: PayRunType; correctsRunId?: string; correctionOfProviderRunId?: string };
+export function payRunImportKey(run: PayRunIdentity & { periodStart: string; periodEnd: string; payDate: string }) {
+  const provider = (run.providerName || "").trim().toLowerCase(), type = run.runType || "regular", correction = (run.correctionOfProviderRunId || run.correctsRunId || "").trim(), providerRunId = run.providerRunId?.trim();
+  return JSON.stringify(providerRunId ? [provider, "provider", providerRunId, type, correction] : [provider, "period", run.periodStart, run.periodEnd, run.payDate, type, correction]);
+}
+export type PayRunClassifiedBases = { cashCents: number; taxableCents: number; pensionableCents: number; insurableCents: number; vacationableCents: number; ehtCents: number; workSafeCents: number };
+export type PayRunLine = PayRunAmounts & { employeeId?: string; providerEmployeeId?: string; employeeName: string; provinceOfEmployment?: string; ehtLocationId?: string; ehtAttributionBasis?: "primary_reporting" | "reasonable_allocation"; ehtAttributionEvidence?: string; vacationAccruedCents?: number; vacationPaidCents?: number; sickPaidDaysUsed?: number; sickUnpaidDaysUsed?: number; deductionYtdDelta?: PayrollDeductionYtd; classifiedBases?: PayRunClassifiedBases; regularClassifiedBases?: PayRunClassifiedBases; bonusClassifiedBases?: PayRunClassifiedBases; insurableHours?: number };
 
 /** Sum per-employee lines into run totals. */
-export function sumPayRunLines(lines: ReadonlyArray<Partial<PayRunAmounts>>): Required<PayRunAmounts> {
-  const total: Required<PayRunAmounts> = {
+export type PayRunTotals = Required<Omit<PayRunAmounts, "federalTaxCents" | "provincialTaxCents" | "additionalIncomeTaxCents">> & Pick<PayRunAmounts, "federalTaxCents" | "provincialTaxCents" | "additionalIncomeTaxCents">;
+export function sumPayRunLines(lines: ReadonlyArray<Partial<PayRunAmounts>>): PayRunTotals {
+  const total: PayRunTotals = {
     grossCents: 0,
+    nonCashTaxableCents: 0,
+    nonTaxableCashCents: 0,
     cppEmployeeCents: 0,
+    cpp2EmployeeCents: 0,
     eiEmployeeCents: 0,
     incomeTaxCents: 0,
     otherDeductionsCents: 0,
     cppEmployerCents: 0,
+    cpp2EmployerCents: 0,
     eiEmployerCents: 0,
     netCents: 0,
   };
   for (const line of lines) {
     for (const field of PAY_RUN_AMOUNT_FIELDS) total[field] += Math.round(Number(line[field] ?? 0) || 0);
   }
+  for (const field of ["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"] as const) if (lines.length && lines.every((line) => line[field] !== undefined)) total[field] = lines.reduce((sum, line) => sum + Number(line[field] || 0), 0);
   return total;
 }
 
@@ -237,30 +332,31 @@ export type SlipStatus = (typeof SLIP_STATUSES)[number];
 export const SLIP_STATUS_LABEL: Record<SlipStatus, string> = { draft: "Draft", issued: "Given to recipient", filed: "Filed" };
 
 /** T4, T4A and RL-1 slips and summaries for `year` are due on the last day of February of the next year. */
-export function slipFilingDeadline(year: number): string {
+export function slipFilingDeadline(year: number, province = "BC"): string {
   const next = Math.round(year) + 1;
-  return `${next}-02-${pad2(daysInMonth(next, 2))}`;
+  return nextCraPayrollBusinessDay(`${next}-02-${pad2(daysInMonth(next, 2))}`, province);
 }
 
-export type SlipTotals = { employmentIncomeCents: number; cppCents: number; eiCents: number; incomeTaxCents: number };
+export type SlipTotals = { employmentIncomeCents: number; cppCents: number; cpp2Cents: number; eiCents: number; incomeTaxCents: number };
 
 /**
  * Slip amounts per employee for a calendar year, from the per-employee lines
  * of the pay runs paid in that year (pay date decides the year, as for T4s).
  */
 export function slipTotalsFromPayRuns(
-  runs: ReadonlyArray<{ payDate: string; lines?: ReadonlyArray<Partial<PayRunLine>> }>,
+  runs: ReadonlyArray<{ payDate: string; providerName?: string; lines?: ReadonlyArray<Partial<PayRunLine>> }>,
   year: number,
-): Map<string, SlipTotals & { employeeName: string; employeeId?: string }> {
-  const byEmployee = new Map<string, SlipTotals & { employeeName: string; employeeId?: string }>();
+): Map<string, SlipTotals & { employeeName: string; employeeId?: string; providerEmployeeId?: string; providerName?: string }> {
+  const byEmployee = new Map<string, SlipTotals & { employeeName: string; employeeId?: string; providerEmployeeId?: string; providerName?: string }>();
   for (const run of runs) {
     if (Number(String(run.payDate).slice(0, 4)) !== year) continue;
     for (const line of run.lines ?? []) {
-      const key = line.employeeId ? `id:${line.employeeId}` : `name:${String(line.employeeName ?? "").trim().toLowerCase()}`;
+      const key = line.employeeId ? `id:${line.employeeId}` : line.providerEmployeeId ? `provider:${String(run.providerName || "").trim().toLowerCase()}:${line.providerEmployeeId}` : `name:${String(line.employeeName ?? "").trim().toLowerCase()}`;
       if (key === "name:") continue;
-      const current = byEmployee.get(key) ?? { employeeName: String(line.employeeName ?? ""), employeeId: line.employeeId, employmentIncomeCents: 0, cppCents: 0, eiCents: 0, incomeTaxCents: 0 };
+      const current = byEmployee.get(key) ?? { employeeName: String(line.employeeName ?? ""), employeeId: line.employeeId, providerEmployeeId: line.providerEmployeeId, providerName: run.providerName, employmentIncomeCents: 0, cppCents: 0, cpp2Cents: 0, eiCents: 0, incomeTaxCents: 0 };
       current.employmentIncomeCents += Math.round(line.grossCents ?? 0);
       current.cppCents += Math.round(line.cppEmployeeCents ?? 0);
+      current.cpp2Cents += Math.round(line.cpp2EmployeeCents ?? 0);
       current.eiCents += Math.round(line.eiEmployeeCents ?? 0);
       current.incomeTaxCents += Math.round(line.incomeTaxCents ?? 0);
       byEmployee.set(key, current);
@@ -533,21 +629,39 @@ export function investedReserves(holdings: ReadonlyArray<Holding & { name?: stri
 
 /* ------------------------------------------------- payroll provider CSV */
 
-const CSV_HEADER_ALIASES: Record<string, string[]> = {
+export const PAYROLL_CSV_FIELD_LABELS = {
+  periodStart: "Period start", periodEnd: "Period end", payDate: "Pay date", employeeName: "Employee name", providerEmployeeId: "Provider employee ID",
+  providerName: "Provider", providerRunId: "Provider run ID", runType: "Run type", correctionOfProviderRunId: "Corrects provider run ID",
+  grossCents: "Taxable gross", nonCashTaxableCents: "Non-cash taxable benefits", nonTaxableCashCents: "Non-taxable cash / reimbursements",
+  cppEmployeeCents: "Employee CPP", cpp2EmployeeCents: "Employee CPP2", eiEmployeeCents: "Employee EI", incomeTaxCents: "Combined income tax",
+  federalTaxCents: "Federal income tax", provincialTaxCents: "Provincial income tax", additionalIncomeTaxCents: "Additional TD1 tax", otherDeductionsCents: "Other deductions",
+  cppEmployerCents: "Employer CPP", cpp2EmployerCents: "Employer CPP2", eiEmployerCents: "Employer EI", netCents: "Net cash pay",
+} as const;
+export type PayrollCsvField = keyof typeof PAYROLL_CSV_FIELD_LABELS;
+const CSV_HEADER_ALIASES: Record<PayrollCsvField, string[]> = {
   periodStart: ["period start", "pay period start", "start date", "period from", "from"],
   periodEnd: ["period end", "pay period end", "end date", "period to", "to", "period ending"],
   payDate: ["pay date", "payment date", "cheque date", "paid on", "date paid", "pay day"],
   employeeName: ["employee", "employee name", "name", "worker"],
-  grossCents: ["gross", "gross pay", "gross earnings", "total gross", "earnings"],
+  providerEmployeeId: ["employee id", "employee number", "employee code", "provider employee id", "worker id", "payroll id"],
+  providerName: ["provider", "provider name", "payroll provider"], providerRunId: ["run id", "pay run id", "payroll run id", "provider run id", "payroll number"],
+  runType: ["run type", "pay run type", "payroll type"], correctionOfProviderRunId: ["corrects run id", "correction of", "original run id", "corrects provider run id"],
+  grossCents: ["gross", "gross pay", "gross earnings", "total gross", "earnings", "taxable gross"],
+  nonCashTaxableCents: ["non cash taxable", "non cash taxable benefits", "noncash benefits", "taxable non cash benefits"],
+  nonTaxableCashCents: ["non taxable cash", "reimbursements", "non taxable reimbursements", "non taxable cash / reimbursements"],
   cppEmployeeCents: ["cpp", "cpp employee", "employee cpp", "cpp/qpp", "cpp ee", "qpp"],
+  cpp2EmployeeCents: ["cpp2", "cpp 2", "cpp2 employee", "employee cpp2", "cpp2 ee", "second cpp"],
   eiEmployeeCents: ["ei", "ei employee", "employee ei", "ei ee", "ei premium"],
-  incomeTaxCents: ["income tax", "federal tax", "tax", "tax withheld", "income tax withheld", "fed + prov tax"],
+  incomeTaxCents: ["income tax", "tax", "tax withheld", "income tax withheld", "fed + prov tax", "combined income tax"],
+  federalTaxCents: ["federal tax", "federal income tax", "fed tax", "federal withholding"],
+  provincialTaxCents: ["provincial tax", "provincial income tax", "prov tax", "bc tax", "provincial withholding"],
+  additionalIncomeTaxCents: ["additional tax", "additional income tax", "extra withholding", "td1 additional tax"],
   otherDeductionsCents: ["other deductions", "other", "benefits", "union dues", "deductions other"],
   cppEmployerCents: ["cpp employer", "employer cpp", "cpp er", "er cpp"],
+  cpp2EmployerCents: ["cpp2 employer", "employer cpp2", "cpp2 er", "er cpp2"],
   eiEmployerCents: ["ei employer", "employer ei", "ei er", "er ei"],
-  netCents: ["net", "net pay", "take home", "net amount"],
+  netCents: ["net", "net pay", "take home", "net amount", "net cash pay"],
 };
-
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[_]+/g, " ").replace(/[()$]/g, "").replace(/\s+/g, " ").trim();
 }
@@ -580,12 +694,11 @@ export function parseCsv(text: string): string[][] {
 
 function parseAmountCents(value: string): number | null {
   const raw = value.trim();
-  if (!raw) return 0;
-  const negative = /^\(.*\)$/.test(raw) || raw.startsWith("-");
-  const cleaned = raw.replace(/[()$,\s-]/g, "");
-  if (!/^\d+(\.\d{0,2})?$/.test(cleaned)) return null;
-  const cents = Math.round(Number(cleaned) * 100);
-  return negative ? -cents : cents;
+  if (!raw) return null;
+  const normalized = raw.replace(/[$,\s]/g, "");
+  const signed = /^\(.*\)$/.test(normalized) ? `-${normalized.slice(1, -1)}` : normalized;
+  if (!/^-?\d+(\.\d{0,2})?$/.test(signed)) return null;
+  return Math.round(Number(signed) * 100);
 }
 
 function parseCsvDate(value: string): string | null {
@@ -599,69 +712,91 @@ function parseCsvDate(value: string): string | null {
   return null;
 }
 
-export type ImportedPayRun = Required<PayRunAmounts> & {
-  periodStart: string;
-  periodEnd: string;
-  payDate: string;
-  lines: PayRunLine[];
+export type ImportedPayRun = PayRunTotals & PayRunIdentity & {
+  periodStart: string; periodEnd: string; payDate: string; lines: PayRunLine[];
+  sourceMissingFields?: string[]; missingValuesConfirmed?: boolean;
+};
+export type PayrollCsvOptions = { mapping?: Partial<Record<PayrollCsvField, number | null>>; providerName?: string; confirmMissingAsZero?: boolean; standardEmployerShares?: boolean };
+export type PayrollCsvResult = {
+  runs: ImportedPayRun[]; errors: string[]; warnings: string[]; columns: string[]; headers: string[];
+  mapping: Array<{ field: PayrollCsvField; label: string; column: number | null; header?: string }>;
+  missingCells: Array<{ row: number; field: string }>; requiresReview: boolean; taxMode: "combined" | "split" | "missing";
 };
 
-export type PayrollCsvResult = { runs: ImportedPayRun[]; errors: string[]; columns: string[] };
-
-/**
- * Read a payroll provider's register export. One row per employee per pay
- * run (or one row per run without an employee column); rows with the same
- * period and pay date form one run. Dates must be YYYY-MM-DD (or YYYY/MM/DD):
- * day-first and month-first dates can't be told apart. Missing employer CPP
- * defaults to the employee CPP and missing employer EI to 1.4 × employee EI,
- * the usual employer share; net defaults to gross minus deductions.
- */
-export function parsePayrollCsv(text: string): PayrollCsvResult {
+/** Explicit mappings and missing-cell provenance keep absent deductions distinct from confirmed zeroes. */
+export function parsePayrollCsv(text: string, options: PayrollCsvOptions = {}): PayrollCsvResult {
+  const result: PayrollCsvResult = { runs: [], errors: [], warnings: [], columns: [], headers: [], mapping: [], missingCells: [], requiresReview: false, taxMode: "missing" };
+  if (text.length > 2_000_000) { result.errors.push("Choose a payroll CSV smaller than 2 MB."); return result; }
   const table = parseCsv(text);
-  const errors: string[] = [];
-  if (table.length < 2) return { runs: [], errors: ["The file has no data rows."], columns: [] };
-  const headers = table[0].map(normalizeHeader);
-  const column: Record<string, number> = {};
-  for (const [field, aliases] of Object.entries(CSV_HEADER_ALIASES)) {
-    const index = headers.findIndex((header) => aliases.includes(header));
-    if (index >= 0) column[field] = index;
+  if (table.length < 2) { result.errors.push("The file has no data rows."); return result; }
+  if (table.length > 5001) { result.errors.push("Import at most 5,000 employee rows at a time."); return result; }
+  result.headers = table[0];
+  const headers = table[0].map(normalizeHeader), column: Partial<Record<PayrollCsvField, number>> = {};
+  for (const [field, aliases] of Object.entries(CSV_HEADER_ALIASES) as Array<[PayrollCsvField, string[]]>) {
+    const custom = options.mapping?.[field];
+    const index = custom === null ? -1 : custom !== undefined ? custom : headers.findIndex((header) => aliases.includes(header));
+    if (index >= 0 && index < headers.length) column[field] = index;
+    result.mapping.push({ field, label: PAYROLL_CSV_FIELD_LABELS[field], column: column[field] ?? null, header: column[field] === undefined ? undefined : table[0][index] });
   }
-  for (const required of ["payDate", "grossCents"]) {
-    if (column[required] === undefined) errors.push(`Missing a ${required === "payDate" ? "pay date" : "gross pay"} column.`);
-  }
-  if (errors.length) return { runs: [], errors, columns: Object.keys(column) };
+  result.columns = Object.keys(column);
+  for (const required of ["payDate", "grossCents"] as const) if (column[required] === undefined) result.errors.push(`Missing a ${required === "payDate" ? "pay date" : "gross pay"} column.`);
+  if (result.errors.length) return result;
+  result.taxMode = column.incomeTaxCents !== undefined ? "combined" : column.federalTaxCents !== undefined || column.provincialTaxCents !== undefined ? "split" : "missing";
   const runs = new Map<string, ImportedPayRun>();
   table.slice(1).forEach((cells, index) => {
-    const lineNo = index + 2;
-    const cell = (field: string) => (column[field] === undefined ? "" : String(cells[column[field]] ?? ""));
+    const row = index + 2, cell = (field: PayrollCsvField) => column[field] === undefined ? "" : String(cells[column[field]!] ?? "");
     const payDate = parseCsvDate(cell("payDate"));
-    if (!payDate) { errors.push(`Row ${lineNo}: pay date must be YYYY-MM-DD.`); return; }
-    const periodEnd = column.periodEnd === undefined ? payDate : parseCsvDate(cell("periodEnd"));
-    const periodStart = column.periodStart === undefined ? (periodEnd ? monthStart(periodEnd) : null) : parseCsvDate(cell("periodStart"));
-    if (!periodStart || !periodEnd) { errors.push(`Row ${lineNo}: period dates must be YYYY-MM-DD.`); return; }
-    const amounts: Record<string, number> = {};
-    for (const field of PAY_RUN_AMOUNT_FIELDS) {
-      const value = parseAmountCents(cell(field));
-      if (value === null) { errors.push(`Row ${lineNo}: "${cell(field)}" is not an amount.`); return; }
-      amounts[field] = value;
-    }
-    if (column.cppEmployerCents === undefined) amounts.cppEmployerCents = amounts.cppEmployeeCents;
-    if (column.eiEmployerCents === undefined) amounts.eiEmployerCents = Math.round(amounts.eiEmployeeCents * 1.4);
-    if (column.netCents === undefined) {
-      amounts.netCents = amounts.grossCents - amounts.cppEmployeeCents - amounts.eiEmployeeCents - amounts.incomeTaxCents - amounts.otherDeductionsCents;
-    }
-    const employeeName = cell("employeeName").trim();
-    if (containsCardNumber(employeeName)) { errors.push(`Row ${lineNo}: the employee column holds a long number.`); return; }
-    const key = `${periodStart}|${periodEnd}|${payDate}`;
-    const run = runs.get(key) ?? {
-      periodStart, periodEnd, payDate, lines: [],
-      grossCents: 0, cppEmployeeCents: 0, eiEmployeeCents: 0, incomeTaxCents: 0, otherDeductionsCents: 0, cppEmployerCents: 0, eiEmployerCents: 0, netCents: 0,
+    if (!payDate) { result.errors.push(`Row ${row}: pay date must be YYYY-MM-DD.`); return; }
+    const periodEnd = column.periodEnd === undefined ? payDate : parseCsvDate(cell("periodEnd")), periodStart = column.periodStart === undefined ? periodEnd && monthStart(periodEnd) : parseCsvDate(cell("periodStart"));
+    if (!periodStart || !periodEnd || periodStart > periodEnd) { result.errors.push(`Row ${row}: choose valid period dates in YYYY-MM-DD order.`); return; }
+    const rowMissing: string[] = []; let invalid = false;
+    const amount = (field: PayrollCsvField) => {
+      const value = cell(field), parsed = parseAmountCents(value);
+      if (parsed === null && value.trim()) { result.errors.push(`Row ${row}: ${PAYROLL_CSV_FIELD_LABELS[field]} is not an amount.`); invalid = true; return 0; }
+      if (parsed === null) { rowMissing.push(field); result.missingCells.push({ row, field }); return 0; }
+      if (!Number.isSafeInteger(parsed) || Math.abs(parsed) > 100_000_000_000) { result.errors.push(`Row ${row}: amount is too large.`); invalid = true; return 0; }
+      return parsed;
     };
+    const amounts = Object.fromEntries(PAY_RUN_AMOUNT_FIELDS.filter((field) => field !== "incomeTaxCents" && field !== "netCents" && !["cppEmployerCents", "cpp2EmployerCents", "eiEmployerCents"].includes(field)).map((field) => [field, amount(field)])) as PayRunTotals;
+    for (const field of ["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"] as const) if (column[field] !== undefined && cell(field).trim()) amounts[field] = amount(field);
+    if (column.incomeTaxCents !== undefined) {
+      amounts.incomeTaxCents = amount("incomeTaxCents");
+      if (column.federalTaxCents !== undefined && column.provincialTaxCents !== undefined && cell("federalTaxCents").trim() && cell("provincialTaxCents").trim()) {
+        const split = (amounts.federalTaxCents || 0) + (amounts.provincialTaxCents || 0) + (amounts.additionalIncomeTaxCents || 0);
+        if (split !== amounts.incomeTaxCents) { result.errors.push(`Row ${row}: combined income tax disagrees with federal plus provincial tax. Correct the mapping.`); invalid = true; }
+      }
+    } else if (result.taxMode === "split") amounts.incomeTaxCents = (amounts.federalTaxCents ?? amount("federalTaxCents")) + (amounts.provincialTaxCents ?? amount("provincialTaxCents")) + (amounts.additionalIncomeTaxCents || 0);
+    else amounts.incomeTaxCents = amount("incomeTaxCents");
+    for (const [employer, employee, multiplier] of [["cppEmployerCents", "cppEmployeeCents", 1], ["cpp2EmployerCents", "cpp2EmployeeCents", 1], ["eiEmployerCents", "eiEmployeeCents", 1.4]] as const) {
+      if (options.standardEmployerShares && !cell(employer).trim()) amounts[employer] = Math.round(amounts[employee] * multiplier);
+      else amounts[employer] = amount(employer);
+    }
+    amounts.netCents = cell("netCents").trim() ? amount("netCents") : amounts.grossCents - amounts.nonCashTaxableCents + amounts.nonTaxableCashCents - amounts.cppEmployeeCents - amounts.cpp2EmployeeCents - amounts.eiEmployeeCents - amounts.incomeTaxCents - amounts.otherDeductionsCents;
+    if (invalid) return;
+    const rawType = cell("runType").trim().toLowerCase().replace(/[ -]+/g, "_"), runType = (rawType || "regular") as PayRunType;
+    if (!(PAY_RUN_TYPES as readonly string[]).includes(runType)) { result.errors.push(`Row ${row}: choose regular, bonus, off_cycle, final, correction or reversal as the run type.`); return; }
+    const providerRunId = cell("providerRunId").trim(), correctionOfProviderRunId = cell("correctionOfProviderRunId").trim(), providerName = cell("providerName").trim() || options.providerName;
+    if (runType !== "regular" && !providerRunId) { result.errors.push(`Row ${row}: non-regular runs need a provider run ID to distinguish additional payrolls.`); return; }
+    if (["correction", "reversal"].includes(runType) && !correctionOfProviderRunId) { result.errors.push(`Row ${row}: identify the original provider run being corrected.`); return; }
+    const providerEmployeeId = cell("providerEmployeeId").trim(), employeeName = cell("employeeName").trim() || providerEmployeeId;
+    if (containsCardNumber(employeeName)) { result.errors.push(`Row ${row}: the employee column holds a long number.`); return; }
+    const identity = { periodStart, periodEnd, payDate, providerName, ...(providerRunId ? { providerRunId } : {}), runType, ...(correctionOfProviderRunId ? { correctionOfProviderRunId } : {}) };
+    const key = payRunImportKey(identity), previous = runs.get(key), run: ImportedPayRun = previous ?? { ...sumPayRunLines([]), ...identity, lines: [] };
+    if (run.periodStart !== periodStart || run.periodEnd !== periodEnd || run.payDate !== payDate) { result.errors.push(`Row ${row}: the same provider run ID has conflicting dates.`); return; }
+    if (providerEmployeeId && run.lines.some((line) => line.providerEmployeeId === providerEmployeeId)) { result.errors.push(`Row ${row}: duplicate employee ID within one run. Consolidate the employee's earnings first.`); return; }
     for (const field of PAY_RUN_AMOUNT_FIELDS) run[field] += amounts[field];
-    if (employeeName) run.lines.push({ employeeName, ...(amounts as Required<PayRunAmounts>) });
+    for (const field of ["federalTaxCents", "provincialTaxCents", "additionalIncomeTaxCents"] as const) run[field] = amounts[field] === undefined || previous && previous[field] === undefined ? undefined : Number(previous?.[field] || 0) + amounts[field]!;
+    if (employeeName) run.lines.push({ employeeName, ...(providerEmployeeId ? { providerEmployeeId } : {}), ...amounts });
+    run.sourceMissingFields = [...new Set([...(run.sourceMissingFields || []), ...rowMissing])];
+    run.missingValuesConfirmed = !!options.confirmMissingAsZero;
     runs.set(key, run);
   });
-  return { runs: [...runs.values()].sort((a, b) => a.payDate.localeCompare(b.payDate)), errors, columns: Object.keys(column) };
+  result.runs = [...runs.values()].sort((a, b) => a.payDate.localeCompare(b.payDate));
+  if (result.missingCells.length) result.warnings.push(`${result.missingCells.length} missing deduction or contribution cells are not confirmed zeroes. Map them or explicitly confirm zero values.`);
+  if (options.standardEmployerShares) result.warnings.push("You selected matching employer CPP/CPP2 and standard 1.4× EI for missing employer amounts. Verify any approved reduced EI rate separately.");
+  if (column.providerRunId === undefined) result.warnings.push("No provider run ID is mapped. Only regular payroll can use the legacy period/provider identity.");
+  result.requiresReview = result.missingCells.length > 0 && !options.confirmMissingAsZero;
+  return result;
 }
 
 /* ------------------------------------------------------ deadline feed */
@@ -690,16 +825,22 @@ export function splitCents(total: number, weights: number[]): number[] {
 
 /* ----------------------------------------------- remittances from pay runs */
 
-export type RemittancePeriodTotal = { periodStart: string; periodEnd: string; dueDate: string | null; amountDueCents: number; payRunCount: number };
+export type RemittancePeriodTotal = { periodStart: string; periodEnd: string; dueDate: string | null; amountDueCents: number; payRunCount: number; schedule?: RemittanceScheduleRule };
 
 /** One remittance per period that has pay runs, its amount what those runs owe the CRA. */
 export function remittancesFromPayRuns(runs: ReadonlyArray<PayRunAmounts & { payDate: string }>, schedule: RemittanceSchedule | null | undefined): RemittancePeriodTotal[] {
   const byPeriod = new Map<string, RemittancePeriodTotal>();
   for (const run of runs) {
     if (!isCalendarDate(run.payDate)) continue;
-    const period = remittancePeriodFor(run.payDate, schedule) ?? { start: monthStart(run.payDate), end: monthEnd(run.payDate) };
+    const effective = schedule ? remittanceScheduleForPayDate(run.payDate, schedule) : null;
+    const nativePeriod = remittancePeriodFor(run.payDate, effective) ?? { start: monthStart(run.payDate), end: monthEnd(run.payDate) };
+    const period = { ...nativePeriod };
+    for (const change of schedule?.remittanceScheduleHistory || []) {
+      if (change.effectiveFrom <= run.payDate && change.effectiveFrom > period.start) period.start = change.effectiveFrom;
+      if (change.effectiveFrom > run.payDate && change.effectiveFrom <= period.end) period.end = addDays(change.effectiveFrom, -1);
+    }
     const key = `${period.start}|${period.end}`;
-    const entry = byPeriod.get(key) ?? { periodStart: period.start, periodEnd: period.end, dueDate: remittanceDueDate(period, schedule), amountDueCents: 0, payRunCount: 0 };
+    const entry = byPeriod.get(key) ?? { periodStart: period.start, periodEnd: period.end, dueDate: remittanceDueDate(nativePeriod, effective), amountDueCents: 0, payRunCount: 0, ...(effective ? { schedule: remittanceRule(effective) } : {}) };
     entry.amountDueCents += remittableCents(run);
     entry.payRunCount += 1;
     byPeriod.set(key, entry);
@@ -769,7 +910,7 @@ export function registerDeadlines(input: RegisterDeadlineInput, today: string, e
     out.push({
       sourceKey,
       title: `Remit payroll source deductions for ${periodLabel(row.periodStart, row.periodEnd)}`,
-      description: `${dollars(row.amountDueCents)} of CPP, EI and income tax to the CRA. From the payroll register.`,
+      description: `${dollars(row.amountDueCents)} of CPP, CPP2, EI and income tax to the CRA. From the payroll register.`,
       dueDate: row.dueDate,
       category: "Payroll",
       done,
@@ -814,7 +955,7 @@ export function registerDeadlines(input: RegisterDeadlineInput, today: string, e
     const sourceKey = `payroll:roe:${roe._id}`;
     const done = roe.status === "issued";
     if (done && !openKeys.has(sourceKey)) continue;
-    out.push({ sourceKey, title: `Issue a record of employment for ${roe.employeeName}`, description: "From the payroll register.", dueDate: roe.dueDate, category: "Payroll", done });
+    out.push({ sourceKey, title: "Issue a record of employment", description: "Open the protected payroll register for employee details and issuance evidence.", dueDate: roe.dueDate, category: "Payroll", done });
   }
 
   // Workers' compensation: the next date in the series not already completed.

@@ -21,6 +21,8 @@ type RecordBoardProps<T> = {
   onMove: (item: T, toColumnId: string) => void;
   /** Disable every move affordance when the caller cannot persist a move. */
   canMove?: boolean;
+  /** Keep derived or locked records readable while other cards remain movable. */
+  canMoveItem?: (item: T) => boolean;
   onItemClick?: (item: T) => void;
   /** Right-click on a card. Receive the item plus the original event so the
    * caller can position a portal'd menu at the click coordinates. */
@@ -62,6 +64,7 @@ export function RecordBoard<T>({
   renderCard,
   onMove,
   canMove = true,
+  canMoveItem,
   onItemClick,
   onItemContextMenu,
   emptyLabel,
@@ -111,7 +114,7 @@ export function RecordBoard<T>({
                       e.preventDefault();
                       if (dragId) {
                         const found = items.find((item) => getItemId(item) === dragId);
-                        if (found) onMove(found, col.id);
+                        if (found && (!canMoveItem || canMoveItem(found))) onMove(found, col.id);
                       }
                       setDragId(null);
                       setOverCol(null);
@@ -121,13 +124,14 @@ export function RecordBoard<T>({
             >
               {colItems.map((item) => {
                 const id = getItemId(item);
+                const movable = canMove && (!canMoveItem || canMoveItem(item));
                 return (
                   <div
                     key={id}
-                    className={`kanban__card${canMove ? " is-movable" : ""}${dragId === id ? " is-dragging" : ""}${onItemClick ? " is-clickable" : ""}`}
-                    draggable={canMove}
+                    className={`kanban__card${movable ? " is-movable" : ""}${dragId === id ? " is-dragging" : ""}${onItemClick ? " is-clickable" : ""}`}
+                    draggable={movable}
                     onDragStart={
-                      canMove
+                      movable
                         ? (e) => {
                             e.dataTransfer.effectAllowed = "move";
                             setDragId(id);
@@ -135,7 +139,7 @@ export function RecordBoard<T>({
                         : undefined
                     }
                     onDragEnd={
-                      canMove
+                      movable
                         ? () => {
                             setDragId(null);
                             setOverCol(null);
@@ -171,7 +175,7 @@ export function RecordBoard<T>({
                       * gets a move-menu trigger (bottom sheet on phones via
                       * Menu). CSS shows it only on coarse-pointer devices —
                       * desktop keeps drag-and-drop with no extra chrome. */}
-                    {canMove && (
+                    {movable && (
                       <Menu
                         trigger={
                           <button

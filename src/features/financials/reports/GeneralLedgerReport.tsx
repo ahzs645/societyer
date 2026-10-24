@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
-import { api } from "@/lib/convexApi";
 import { Menu } from "../../../components/Menu";
 import { Select, type SelectOption } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { SkeletonRows } from "../../../components/ui";
 import { downloadTableExport, rememberExportFormat, type TableExportFormat } from "../../../lib/tableExport";
 import { sheetTextRows } from "../../../lib/xlsx/textRows";
-import { reportCurrencies, type GeneralLedgerReport as LedgerReport } from "../../../../shared/booksReports";
+import { buildGeneralLedgerReport, reportCurrencies, type GeneralLedgerReport as LedgerReport } from "../../../../shared/booksReports";
 import { ReportControl } from "../components/FinanceReportControls";
 import { accountLabel, generalLedgerSheet } from "./generalLedgerExport";
+import { useCompleteBooks } from "./useCompleteBooks";
 import { GeneralLedgerTable } from "./GeneralLedgerTable";
+import { ReportPdfDownload } from "./ReportPdfDownload";
+import { ledgerPdfData } from "./brandedReportData";
 import { BASIS_LABELS, describeFilter, isFiltered, toReportFilter } from "./reportFilters";
 import { LEDGER_PRESETS, formatPeriodRange, rangeProblem } from "./reportPeriods";
 import { PeriodControl, ReportFilterControls, ReportToolbar } from "./ReportToolbar";
@@ -19,7 +20,6 @@ import type { ReportState, ReportStateActions } from "./useReportState";
 import type { ChartAccountOption, ReportContext } from "./types";
 
 /** Lines shown (and exported) at most; a narrower range or one account shows the rest. */
-const LEDGER_LIMIT = 2000;
 const ALL_ACCOUNTS = "__all";
 
 /** Ledger account picker: All accounts, then the chart sorted by code. */
@@ -99,21 +99,9 @@ export function GeneralLedgerReport({
   // An account id from another society or a deleted account would fail the query.
   const accountId = state.accountId && accounts.some((account) => String(account._id) === state.accountId) ? state.accountId : null;
 
-  const report = useQuery(
-    api.accounting.generalLedgerReport,
-    problem
-      ? "skip"
-      : {
-          societyId: context.societyId,
-          from: state.range.from,
-          to: state.range.to,
-          basis: state.basis,
-          limit: LEDGER_LIMIT,
-          ...(accountId ? { accountId } : {}),
-          ...(state.currency ? { currency: state.currency } : {}),
-          ...(filter ? { filter } : {}),
-        },
-  ) as LedgerReport | undefined;
+  const complete = useCompleteBooks(context.societyId);
+  const [displayPage, setDisplayPage] = useState(0);
+  const report = useMemo(() => complete.books && !problem ? buildGeneralLedgerReport({ ...complete.books, from: state.range.from, to: state.range.to, basis: state.basis, currency: state.currency, filter, accountId, limit: Number.MAX_SAFE_INTEGER }) : undefined, [complete.books, problem, state.range.from, state.range.to, state.basis, state.currency, filter, accountId]);
 
   // Keep the last ledger's programs while the next one loads; currencies come from the chart.
   const [programs, setPrograms] = useState<string[]>([]);
@@ -129,6 +117,14 @@ export function GeneralLedgerReport({
     () => [context.societyName, `General ledger · ${scope}`, `${BASIS_LABELS[state.basis]} basis · ${currency}`, rangeText, ...(filterText ? [filterText] : [])],
     [context.societyName, currency, filterText, rangeText, scope, state.basis],
   );
+
+  const pdfReport = useMemo(() => report ? ledgerPdfData(report, [
+    `${BASIS_LABELS[report.basis]} basis · ${report.currency}`,
+    `Period: ${report.from} to ${report.to}`,
+    `Account: ${scope}`,
+    filterText ? `Filters: ${filterText}` : "Funds, programs and tags: all",
+    "Source: posted journal entries; draft and voided entries excluded.",
+  ]) : undefined, [report, scope, filterText]);
 
   return (
     <section className="books-report" aria-label="General ledger">
@@ -149,6 +145,10 @@ export function GeneralLedgerReport({
         <AccountControl accounts={accounts} value={accountId} onChange={actions.setAccount} />
       </ReportFilterControls>
 
+      <div className="books-report__note" role="status">{complete.books ? `Complete ledger snapshot loaded at ${complete.books.loadedAtISO}. Exports contain every matching line.` : `Loading complete ledger: ${complete.progress.toLocaleString()} records…`} <button className="btn btn--sm" onClick={complete.refresh}>Refresh complete report</button></div>
+      {complete.error && <p className="field__error" role="alert">{complete.error}</p>}
+      {context.canExport && !problem && <ReportPdfDownload societyId={context.societyId} report={pdfReport} filename={`General ledger ${state.range.from} to ${state.range.to}`} />}
+
       {problem ? (
         <p className="books-report__note books-report__note--warn" role="alert">{problem}</p>
       ) : (
@@ -168,7 +168,8 @@ export function GeneralLedgerReport({
             </span>
             {context.canExport && <LedgerExportMenu fileName={`General ledger ${state.range.from} to ${state.range.to}`} report={report} title={titleLines} />}
           </div>
-          {report ? <GeneralLedgerTable report={report} caption={`General ledger, ${scope}, ${rangeText}`} tags={context.tags} /> : <SkeletonRows rows={8} columns={7} />}
+          {report && report.rows.length > 100 && <div className="row" style={{ gap: 8 }}><button className="btn btn--sm" disabled={displayPage <= 0} onClick={() => setDisplayPage((value) => value - 1)}>Previous lines</button><span>Page {Math.min(displayPage, Math.ceil(report.rows.length / 100) - 1) + 1} of {Math.ceil(report.rows.length / 100)} · downloads include all {report.rows.length.toLocaleString()} lines</span><button className="btn btn--sm" disabled={displayPage >= Math.ceil(report.rows.length / 100) - 1} onClick={() => setDisplayPage((value) => value + 1)}>Next lines</button></div>}
+          {report ? <GeneralLedgerTable report={{ ...report, rows: report.rows.slice(Math.min(displayPage, Math.max(0, Math.ceil(report.rows.length / 100) - 1)) * 100, (Math.min(displayPage, Math.max(0, Math.ceil(report.rows.length / 100) - 1)) + 1) * 100) }} caption={`General ledger, ${scope}, ${rangeText}`} tags={context.tags} /> : <SkeletonRows rows={8} columns={7} />}
         </>
       )}
     </section>

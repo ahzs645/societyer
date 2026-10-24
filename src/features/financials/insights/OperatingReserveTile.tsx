@@ -26,7 +26,7 @@ function useReservePolicy(societyId: string) {
  * Months of operating reserve: unrestricted cash over average monthly money
  * out. Uses complete months only, so it does not follow the range selector.
  */
-export function OperatingReserveTile({ societyId, txns, unrestrictedCents, today }: { societyId: string; txns: FinanceTxn[]; unrestrictedCents: number; today: string }) {
+export function OperatingReserveTile({ societyId, txns, unrestrictedCents, today, currency = "CAD" }: { currency?: string; societyId: string; txns: FinanceTxn[]; unrestrictedCents: number; today: string }) {
   const reserve = useMemo(() => operatingReserve(txns, unrestrictedCents, today), [today, txns, unrestrictedCents]);
   const policy = useReservePolicy(societyId);
   const span = reserve.window ? `${formatMonthLong(monthKey(reserve.window.start))} to ${formatMonthLong(monthKey(reserve.window.end))}` : null;
@@ -63,9 +63,9 @@ export function OperatingReserveTile({ societyId, txns, unrestrictedCents, today
             <strong>Unrestricted cash ÷ average monthly money out.</strong>
           </p>
           <p>
-            Unrestricted cash is {formatMoney(unrestrictedCents, { trimWholeCents: true })}: your bank and card balances, less accounts marked as restricted.
+            Unrestricted cash is {formatMoney(unrestrictedCents, { currency, trimWholeCents: true })}: your bank and card balances, less accounts marked as restricted.
             {reserve.months != null && span && (
-              <> Average monthly money out is {formatMoney(reserve.averageMonthlyOutflowCents, { trimWholeCents: true })}, over the {reserve.windowMonths} complete months from {span}.</>
+              <> Average monthly money out is {formatMoney(reserve.averageMonthlyOutflowCents, { currency, trimWholeCents: true })}, over the {reserve.windowMonths} complete months from {span}.</>
             )}
           </p>
           <p>

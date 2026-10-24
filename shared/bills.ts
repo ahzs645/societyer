@@ -79,6 +79,18 @@ export type BillLine = {
 export type BillCashShare = { key: string; amountCents: number };
 
 export type BillPayment = {
+  kind?: "payment" | "credit" | "write_off" | "refund";
+  reversedDate?: string;
+  idempotencyKey?: string;
+  sourcePaymentKey?: string;
+  adjustmentAccountId?: string;
+  reversalJournalEntryId?: string;
+  cashBasisReversalJournalEntryId?: string;
+  reversedAtISO?: string;
+  reversalReason?: string;
+  restoredTransactionJournalEntryId?: string;
+  replacedTransactionEntryId?: string;
+  bankTransferJournalEntryId?: string;
   key: string;
   date: string;
   amountCents: number;
@@ -96,15 +108,20 @@ export function billTotalCents(lines: ReadonlyArray<Pick<BillLine, "amountCents"
   return (lines ?? []).reduce((sum, line) => sum + Math.round(Number(line.amountCents) || 0), 0);
 }
 
-export function billPaidCents(payments: ReadonlyArray<Pick<BillPayment, "amountCents">> | undefined): number {
-  return (payments ?? []).reduce((sum, payment) => sum + Math.round(Number(payment.amountCents) || 0), 0);
+export function billPaidCents(payments: ReadonlyArray<Pick<BillPayment, "amountCents"> & { reversedDate?: string }> | undefined): number {
+  return (payments ?? []).reduce((sum, payment) => sum + (payment.reversedDate ? 0 : Math.round(Number(payment.amountCents) || 0)), 0);
+}
+
+/** Preserve the original settlement until its dated reversal takes effect. */
+export function billPaidCentsAsOf(payments: ReadonlyArray<Pick<BillPayment, "amountCents" | "date" | "reversedDate">> | undefined, asOfDate: string): number {
+  return (payments ?? []).reduce((sum, payment) => sum + (payment.date > asOfDate || payment.reversedDate && payment.reversedDate <= asOfDate ? 0 : Math.round(Number(payment.amountCents) || 0)), 0);
 }
 
 export type BillStatusInput = {
   lifecycle: BillLifecycle | string;
   dueDate: string;
   totalCents: number;
-  payments?: ReadonlyArray<Pick<BillPayment, "amountCents">>;
+  payments?: ReadonlyArray<Pick<BillPayment, "amountCents"> & { reversedDate?: string }>;
 };
 
 /**
@@ -161,7 +178,7 @@ export function validateBillLines(
   for (const [index, line] of lines.entries()) {
     const n = index + 1;
     if (!Number.isSafeInteger(line.amountCents)) return `Line ${n}: enter an amount.`;
-    if (line.amountCents < 0) return `Line ${n}: amounts can't be negative. Record a vendor credit as its own bill line on the right account.`;
+    if (line.amountCents < 0) return `Line ${n}: amounts can't be negative. Record a vendor credit as an adjustment on an approved bill.`;
     if (complete && !line.accountId) return `Line ${n}: choose the account this cost goes to.`;
     const tagProblem = groupOf ? lineTagProblems(`Line ${n}`, line.tagIds, groupOf)[0] : undefined;
     if (tagProblem) return tagProblem;
@@ -229,6 +246,10 @@ export type PostingLine = {
   fundRestrictionId?: string;
   financialTransactionId?: string;
   tagIds?: string[];
+  programCode?: string;
+  grantId?: string;
+  counterpartyId?: string;
+  documentIds?: string[];
 };
 
 function billPostingLabel(bill: { billNumber?: string | null; vendorName?: string | null }) {
@@ -292,10 +313,11 @@ export function paymentPostingLines(
  */
 export function recognizedCashShares(
   lines: ReadonlyArray<Pick<BillLine, "key" | "amountCents">>,
-  payments: ReadonlyArray<Pick<BillPayment, "amountCents" | "cashBasisShares">>,
+  payments: ReadonlyArray<Pick<BillPayment, "amountCents" | "cashBasisShares" | "kind" | "reversedDate">>,
 ): Map<string, number> {
   const recognized = new Map<string, number>();
   for (const payment of payments) {
+    if (payment.reversedDate || payment.kind === "credit" || payment.kind === "write_off") continue;
     const shares = payment.cashBasisShares ?? cashBasisShares(lines, recognized, payment.amountCents);
     for (const share of shares) recognized.set(share.key, (recognized.get(share.key) ?? 0) + share.amountCents);
   }
@@ -472,7 +494,7 @@ export type BillForSummary = {
   dueDate: string;
   totalCents: number;
   balanceCents: number;
-  payments?: ReadonlyArray<Pick<BillPayment, "amountCents" | "date">>;
+  payments?: ReadonlyArray<Pick<BillPayment, "amountCents" | "date" | "kind" | "reversedDate">>;
 };
 
 export function summarizeBills(bills: ReadonlyArray<BillForSummary>, today: string) {
@@ -509,10 +531,10 @@ export function summarizeBills(bills: ReadonlyArray<BillForSummary>, today: stri
       summary.awaitingCents += bill.totalCents;
     }
     if (bill.status === "scheduled") summary.scheduledCount += 1;
-    if (bill.status !== "canceled") {
-      for (const payment of bill.payments ?? []) {
-        if (payment.date >= since && payment.date <= today) summary.paidLast30Cents += payment.amountCents;
-      }
+    for (const payment of bill.payments ?? []) {
+      if (payment.kind === "credit" || payment.kind === "write_off") continue;
+      if (payment.date >= since && payment.date <= today) summary.paidLast30Cents += payment.amountCents;
+      if (payment.reversedDate && payment.reversedDate >= since && payment.reversedDate <= today) summary.paidLast30Cents -= payment.amountCents;
     }
   }
   return summary;
