@@ -25,7 +25,24 @@ export const communicationsTables = {
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
+    .index("by_society_user", ["societyId", "userId"])
     .index("by_user", ["userId"])
+    .index("by_dismissed_at", ["dismissedAt"]),
+
+  // A broadcast has one content row, but each recipient owns their inbox state.
+  // Legacy broadcast flags remain the initial state until a receipt is written.
+  notificationReceipts: defineTable({
+    societyId: v.id("societies"),
+    userId: v.id("users"),
+    notificationId: v.id("notifications"),
+    readAt: v.optional(v.string()),
+    dismissedAt: v.optional(v.string()),
+    snoozedUntilISO: v.optional(v.string()),
+    removedAt: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_user_notification", ["userId", "notificationId"])
+    .index("by_notification", ["notificationId"])
     .index("by_dismissed_at", ["dismissedAt"]),
 
   // Per-person channel × kind switches. Kinds are listed in

@@ -2611,6 +2611,7 @@ async function wipe(ctx: PortableMutationCtx) {
     "budgets",
     "signatures",
     "notifications",
+    "notificationReceipts",
     "notificationPrefs",
     "notificationRules",
     "users",

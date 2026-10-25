@@ -120,13 +120,14 @@ export const removeAllDismissed = authorizedMutation("notifications:removeAllDis
  * by the default in the Settings UI. */
 export const DEFAULT_DISMISSED_RETENTION_DAYS = 30;
 
-/** Daily cleanup — hard-delete notifications dismissed longer ago than each
- * society's configured retention window. A retention of 0 means "keep forever",
- * so those societies are skipped. Driven by the cron in `crons.ts`. */
+/** Daily cleanup in bounded pages. Targeted/untouched legacy notifications can
+ * be deleted; a person's expired broadcast dismissal becomes a compact
+ * tombstone. Keep that tombstone while the broadcast exists so it cannot
+ * reappear for that person or disappear for another person. */
 export const purgeDismissed = internalMutation({
-  args: { cursor: v.optional(v.string()) },
-  returns: v.any(),
-  handler: async (ctx, { cursor }) => {
+  args: { cursor: v.optional(v.string()), phase: v.optional(v.union(v.literal("notifications"), v.literal("receipts"))) },
+  returns: v.object({ purged: v.number(), isDone: v.boolean() }),
+  handler: async (ctx, { cursor, phase = "notifications" }) => {
     const now = Date.now();
     // Per-society cutoff ISO string, computed once. null = keep forever.
     const cutoffBySociety = new Map<string, string | null>();
@@ -140,6 +141,22 @@ export const purgeDismissed = internalMutation({
       return cutoff;
     };
 
+    if (phase === "receipts") {
+      const rows = await ctx.db.query("notificationReceipts")
+        .withIndex("by_dismissed_at", q => q.gt("dismissedAt", ""))
+        .paginate({ cursor: cursor ?? null, numItems: 200 });
+      let purged = 0;
+      for (const receipt of rows.page) {
+        const cutoff = await cutoffFor(receipt.societyId);
+        if (!cutoff || !receipt.dismissedAt || receipt.dismissedAt >= cutoff) continue;
+        if (!await ctx.db.get(receipt.notificationId)) await ctx.db.delete(receipt._id);
+        else await ctx.db.patch(receipt._id, { removedAt: receipt.removedAt ?? new Date(now).toISOString(), dismissedAt: undefined, snoozedUntilISO: undefined });
+        purged += 1;
+      }
+      if (!rows.isDone) await ctx.scheduler.runAfter(0, internal.notifications.purgeDismissed, { phase, cursor: rows.continueCursor });
+      return { purged, isDone: rows.isDone };
+    }
+
     const rows = await ctx.db
       .query("notifications")
       .withIndex("by_dismissed_at", (q) => q.gt("dismissedAt", ""))
@@ -149,16 +166,22 @@ export const purgeDismissed = internalMutation({
       if (!r.dismissedAt) continue;
       const cutoff = await cutoffFor(r.societyId);
       if (cutoff && r.dismissedAt < cutoff) {
+        // A historical broadcast may have acquired personal receipts since
+        // rollout. Its global flag is no longer permission to erase it for all.
+        if (!r.userId && await ctx.db.query("notificationReceipts").withIndex("by_notification", q => q.eq("notificationId", r._id)).first()) continue;
         await ctx.db.delete(r._id);
         purged++;
       }
     }
     if (!rows.isDone) {
       await ctx.scheduler.runAfter(0, internal.notifications.purgeDismissed, {
+        phase,
         cursor: rows.continueCursor,
       });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.notifications.purgeDismissed, { phase: "receipts" });
     }
-    return { purged, isDone: rows.isDone };
+    return { purged, isDone: false };
   },
 });
 

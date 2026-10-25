@@ -4265,6 +4265,7 @@ const tables: Record<string, any[]> = {
   members,
   minutes,
   notifications,
+  notificationReceipts: [],
   notificationPrefs,
   notificationRules,
   pipaTraining: [

@@ -2,8 +2,8 @@
  * PORTABLE FUNCTIONS: the notifications domain (list / unreadCount / create /
  * remove / removeAllDismissed / listPrefs / upsertPref).
  *
- * Pure `ctx.db` reads and writes over the `notifications`/`notificationPrefs`
- * tables. Each handler runs unchanged on hosted Convex, the local Dexie runtime,
+ * Pure `ctx.db` reads and writes over notifications, personal receipts and
+ * preferences. Each handler runs unchanged on hosted Convex, the local Dexie runtime,
  * and the convex-test oracle. The bell-state mutations (dismiss / dismissAll /
  * markRead / markAllRead / snooze) are ported here too; the crons
  * (purgeDismissed / scanUpcoming) and the digest action stay on Convex.
@@ -50,6 +50,78 @@ export function normalizeNotificationLink(href?: string): string | undefined {
 }
 
 type ViewerRow = { _id: string; role?: unknown };
+const INBOX_WINDOW = 200;
+type NotificationRow = Record<string, any> & { _id: string; societyId: string; userId?: string };
+
+/** Inbox arguments are compatibility hints, never authority to impersonate another recipient. */
+async function notificationViewer(ctx: PortableQueryCtx, societyId: string, userId?: string) {
+  const viewer = await requireSocietyMembership(ctx, societyId);
+  if (userId && userId !== viewer._id) throw new Error("Notification recipient does not match the current user.");
+  return viewer;
+}
+
+function notificationAudienceAllows(viewer: ViewerRow, row: Record<string, any>): boolean {
+  if (row.userId) return row.userId === viewer._id;
+  return receivableKinds(viewer.role).has(preferenceKindFor(row));
+}
+
+async function requireNotificationForViewer(ctx: PortableQueryCtx, id: string) {
+  const row = await requireOwnedRow(ctx, "notifications", id);
+  const viewer = await notificationViewer(ctx, row.societyId);
+  if (!notificationAudienceAllows(viewer, row)) throw new Error("notifications not found.");
+  const visible = await notificationForUser(ctx, row, viewer._id);
+  if (visible.removedAt) throw new Error("notifications not found.");
+  return { row: visible, viewer };
+}
+
+/** A fixed recent inbox window; another user's private notices cannot crowd it out. */
+async function notificationCandidates(ctx: PortableQueryCtx, societyId: string, userId: string, broadcastRows?: NotificationRow[]) {
+  const [broadcast, personal] = await Promise.all([
+    broadcastRows ?? ctx.db.query<NotificationRow>("notifications").withIndex("by_society_user", q => q.eq("societyId", societyId).eq("userId", undefined)).order("desc").take(INBOX_WINDOW),
+    isSyntheticOwner(userId) ? [] : ctx.db.query<NotificationRow>("notifications").withIndex("by_society_user", q => q.eq("societyId", societyId).eq("userId", userId)).order("desc").take(INBOX_WINDOW),
+  ]);
+  return [...broadcast, ...personal].sort((a, b) => Number(b._creationTime ?? 0) - Number(a._creationTime ?? 0) || String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")) || b._id.localeCompare(a._id)).slice(0, INBOX_WINDOW);
+}
+
+async function receiptFor(ctx: PortableQueryCtx, row: NotificationRow, userId: string) {
+  if (row.userId || isSyntheticOwner(userId)) return null;
+  const receipt = await ctx.db.query("notificationReceipts").withIndex("by_user_notification", q => q.eq("userId", userId).eq("notificationId", row._id)).unique();
+  return receipt?.societyId === row.societyId ? receipt : null;
+}
+
+/** An existing receipt owns all state fields, including an explicitly cleared snooze. */
+async function notificationForUser(ctx: PortableQueryCtx, row: NotificationRow, userId: string): Promise<NotificationRow> {
+  const receipt = await receiptFor(ctx, row, userId);
+  if (!receipt) return row;
+  return { ...row, readAt: receipt.readAt, dismissedAt: receipt.dismissedAt, snoozedUntilISO: receipt.snoozedUntilISO, removedAt: receipt.removedAt };
+}
+
+async function inboxForUser(ctx: PortableQueryCtx, societyId: string, userId: string, broadcastRows?: NotificationRow[]) {
+  const candidates = await notificationCandidates(ctx, societyId, userId, broadcastRows);
+  return Promise.all(candidates.map(row => notificationForUser(ctx, row, userId)));
+}
+
+async function patchNotificationState(ctx: PortableMutationCtx, row: NotificationRow, userId: string, patch: Record<string, any>) {
+  // A targeted row has exactly one recipient. A synthetic owner represents one
+  // person holding a local file and cannot create a hosted user foreign key.
+  if (row.userId || isSyntheticOwner(userId)) {
+    if (patch.removedAt) await ctx.db.delete(row._id);
+    else await ctx.db.patch(row._id, patch);
+    return;
+  }
+  const receipt = await receiptFor(ctx, row, userId);
+  if (receipt) {
+    await ctx.db.patch(receipt._id, patch);
+    return;
+  }
+  // Legacy broadcast flags remain the baseline until this person first acts.
+  // Copy the complete state once; later edits never fall back to stale flags.
+  await ctx.db.insert("notificationReceipts", {
+    societyId: row.societyId, userId, notificationId: row._id,
+    readAt: row.readAt, dismissedAt: row.dismissedAt, snoozedUntilISO: row.snoozedUntilISO,
+    ...patch,
+  });
+}
 
 /** Stored preference rows for one person (none for a synthetic local owner). */
 async function prefsFor(ctx: PortableQueryCtx, userId: string): Promise<NotificationPrefRow[]> {
@@ -77,6 +149,7 @@ async function viewerReceives(ctx: PortableQueryCtx, viewer: ViewerRow) {
   const kinds = receivableKinds(viewer.role);
   return (row: Record<string, any>) => {
     const kind = preferenceKindFor(row);
+    if (row.userId && row.userId !== viewer._id) return false;
     if (!(row.userId && row.userId === viewer._id) && !kinds.has(kind)) return false;
     return prefAllows(prefs, "inApp", kind);
   };
@@ -98,17 +171,14 @@ export async function notificationsList(
     includeDismissed?: boolean;
   },
 ) {
-  const viewer = await requireSocietyMembership(ctx, societyId);
-  if (userId) await getOwned(ctx, "users", userId, societyId);
+  const viewer = await notificationViewer(ctx, societyId, userId);
   const receives = await viewerReceives(ctx, viewer);
   const nowISO = new Date().toISOString();
-  const rows = await ctx.db
-    .query("notifications")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .order("desc")
-    .take(limit ?? 100);
+  const rows = await inboxForUser(ctx, societyId, viewer._id);
+  const requestedLimit = Number.isFinite(limit) ? Math.max(0, Math.min(INBOX_WINDOW, Math.floor(limit!))) : 100;
   return rows
     .filter((r) => {
+      if (r.removedAt) return false;
       if (userId && r.userId && r.userId !== userId) return false;
       if (!receives(r)) return false;
       if (unreadOnly && r.readAt) return false;
@@ -118,6 +188,7 @@ export async function notificationsList(
       if (!includeDismissed && r.snoozedUntilISO && r.snoozedUntilISO > nowISO) return false;
       return true;
     })
+    .slice(0, requestedLimit)
     .map((r: Record<string, any>) => ({ ...r, linkHref: normalizeNotificationLink(r.linkHref) }));
 }
 
@@ -125,16 +196,12 @@ export async function notificationsUnreadCount(
   ctx: PortableQueryCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
-  const viewer = await requireSocietyMembership(ctx, societyId);
-  if (userId) await getOwned(ctx, "users", userId, societyId);
+  const viewer = await notificationViewer(ctx, societyId, userId);
   const receives = await viewerReceives(ctx, viewer);
   const nowISO = new Date().toISOString();
-  const rows = await ctx.db
-    .query("notifications")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .order("desc")
-    .take(200);
+  const rows = await inboxForUser(ctx, societyId, viewer._id);
   return rows.filter((r) => {
+    if (r.removedAt) return false;
     if (r.readAt) return false;
     if (!receives(r)) return false;
     if (r.dismissedAt) return false;
@@ -165,25 +232,22 @@ export async function notificationCreate(
 }
 
 export async function notificationMarkRead(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "notifications", id);
-  await ctx.db.patch(id, { readAt: new Date().toISOString() });
+  const { row, viewer } = await requireNotificationForViewer(ctx, id);
+  await patchNotificationState(ctx, row, viewer._id, { readAt: new Date().toISOString() });
 }
 
 export async function notificationMarkAllRead(
   ctx: PortableMutationCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
-  if (userId) await getOwned(ctx, "users", userId, societyId);
-  const rows = await ctx.db
-    .query("notifications")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
+  const viewer = await notificationViewer(ctx, societyId, userId);
+  const receives = await viewerReceives(ctx, viewer);
+  const rows = await inboxForUser(ctx, societyId, viewer._id);
   const now = new Date().toISOString();
   for (const r of rows) {
-    if (r.readAt) continue;
-    if (userId && r.userId && r.userId !== userId) continue;
-    await ctx.db.patch(r._id, { readAt: now });
+    if (r.readAt || r.removedAt) continue;
+    if (!receives(r)) continue;
+    await patchNotificationState(ctx, r, viewer._id, { readAt: now });
   }
 }
 
@@ -192,8 +256,8 @@ export async function notificationMarkAllRead(
  * the row survives on the Notifications page until `purgeDismissed` runs. */
 export async function notificationDismiss(ctx: PortableMutationCtx, { id }: { id: string }) {
   const now = new Date().toISOString();
-  const existing = await requireOwnedRow(ctx, "notifications", id);
-  await ctx.db.patch(id, {
+  const { row: existing, viewer } = await requireNotificationForViewer(ctx, id);
+  await patchNotificationState(ctx, existing, viewer._id, {
     dismissedAt: now,
     readAt: existing?.readAt ?? now,
   });
@@ -205,53 +269,46 @@ export async function notificationSnooze(
   ctx: PortableMutationCtx,
   { id, untilISO }: { id: string; untilISO: string | null },
 ) {
-  await requireOwnedRow(ctx, "notifications", id);
-  await ctx.db.patch(id, { snoozedUntilISO: untilISO ?? undefined });
+  const { row, viewer } = await requireNotificationForViewer(ctx, id);
+  await patchNotificationState(ctx, row, viewer._id, { snoozedUntilISO: untilISO ?? undefined });
 }
 
-/** Clear every (non-dismissed) notification for this user/society from the bell. */
+/** Clear non-dismissed notifications in this person's recent inbox window. */
 export async function notificationDismissAll(
   ctx: PortableMutationCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
-  if (userId) await getOwned(ctx, "users", userId, societyId);
-  const rows = await ctx.db
-    .query("notifications")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
+  const viewer = await notificationViewer(ctx, societyId, userId);
+  const receives = await viewerReceives(ctx, viewer);
+  const rows = await inboxForUser(ctx, societyId, viewer._id);
   const now = new Date().toISOString();
   for (const r of rows) {
-    if (r.dismissedAt) continue;
-    if (userId && r.userId && r.userId !== userId) continue;
-    await ctx.db.patch(r._id, { dismissedAt: now, readAt: r.readAt ?? now });
+    if (r.dismissedAt || r.removedAt) continue;
+    if (!receives(r)) continue;
+    await patchNotificationState(ctx, r, viewer._id, { dismissedAt: now, readAt: r.readAt ?? now });
   }
 }
 
-/** Permanently delete a single notification now, without waiting for the
- * retention purge. Used by the "Delete permanently" action on the
- * Notifications page (Dismissed tab). */
+/** Permanently remove a notification from this person's inbox. Broadcasts
+ * retain a receipt tombstone so the shared notice survives for other people. */
 export async function notificationRemove(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "notifications", id);
-  await ctx.db.delete(id);
+  const { row, viewer } = await requireNotificationForViewer(ctx, id);
+  await patchNotificationState(ctx, row, viewer._id, { removedAt: new Date().toISOString() });
 }
 
-/** Permanently delete every dismissed notification for this user/society now. */
+/** Remove dismissed notifications in this person's recent inbox window. */
 export async function notificationRemoveAllDismissed(
   ctx: PortableMutationCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
-  if (userId) await getOwned(ctx, "users", userId, societyId);
-  const rows = await ctx.db
-    .query("notifications")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
+  const viewer = await notificationViewer(ctx, societyId, userId);
+  const receives = await viewerReceives(ctx, viewer);
+  const rows = await inboxForUser(ctx, societyId, viewer._id);
   let removed = 0;
   for (const r of rows) {
-    if (!r.dismissedAt) continue;
-    if (userId && r.userId && r.userId !== userId) continue;
-    await ctx.db.delete(r._id);
+    if (!r.dismissedAt || r.removedAt) continue;
+    if (!receives(r)) continue;
+    await patchNotificationState(ctx, r, viewer._id, { removedAt: new Date().toISOString() });
     removed++;
   }
   return { removed };
@@ -811,14 +868,10 @@ async function weeklySummaryLines(
   return lines;
 }
 
-async function unreadForDigest(ctx: PortableQueryCtx, societyId: string, nowMs: number) {
+async function unreadForDigest(ctx: PortableQueryCtx, societyId: string, userId: string, nowMs: number, broadcastRows?: NotificationRow[]) {
   const nowISO = new Date(nowMs).toISOString();
-  const rows = await ctx.db
-    .query("notifications")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .order("desc")
-    .take(200);
-  return rows.filter((row) => !row.readAt && !row.dismissedAt && !(row.snoozedUntilISO && row.snoozedUntilISO > nowISO));
+  const rows = await inboxForUser(ctx, societyId, userId, broadcastRows);
+  return rows.filter((row) => !row.removedAt && !row.readAt && !row.dismissedAt && !(row.snoozedUntilISO && row.snoozedUntilISO > nowISO));
 }
 
 export type DigestRecipient = {
@@ -837,15 +890,16 @@ export type DigestRecipient = {
  * people who turned the weekly summary on. Respects role permissions.
  */
 export async function buildDigestPlan(ctx: PortableQueryCtx, societyId: string, cadence: DigestCadence, nowMs = Date.now()): Promise<DigestRecipient[]> {
-  const [users, unread] = await Promise.all([
+  const [users, broadcast] = await Promise.all([
     ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    unreadForDigest(ctx, societyId, nowMs),
+    ctx.db.query<NotificationRow>("notifications").withIndex("by_society_user", q => q.eq("societyId", societyId).eq("userId", undefined)).order("desc").take(INBOX_WINDOW),
   ]);
   const plan: DigestRecipient[] = [];
   for (const user of users as DigestUser[]) {
     if (user.status && user.status !== "Active") continue;
     const prefs = await prefsFor(ctx, user._id);
     if (!digestEnabled(prefs, cadence)) continue;
+    const unread = await unreadForDigest(ctx, societyId, user._id, nowMs, broadcast);
     const kinds = receivableKinds(user.role);
     const visible = unread.filter((row) => {
       if (row.userId && row.userId !== user._id) return false;
@@ -906,7 +960,7 @@ export async function notificationSettings(ctx: PortableQueryCtx, { societyId }:
         isRestricted: account.isRestricted === true,
       }))
     : [];
-  const unread = await unreadForDigest(ctx, societyId, nowMs);
+  const unread = await unreadForDigest(ctx, societyId, viewer._id, nowMs);
   const weeklyPreview = await weeklySummaryLines(ctx, societyId, viewer as DigestUser, prefs, unread, nowMs);
   const synthetic = isSyntheticOwner(viewer._id);
   return {

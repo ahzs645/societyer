@@ -17,7 +17,8 @@
  *   - `withIndex` index NAMES are advisory on the local adapters (they scan +
  *     apply the eq/range constraints in JS); on Convex they hit the real index.
  *   - `filter` takes a JS predicate (engine-agnostic), NOT Convex's FilterBuilder.
- *     The Convex adapter implements it as collect-then-filter.
+ *     The Convex adapter evaluates predicates while iterating bounded reads,
+ *     or filters a native page. A filtered page can be empty before isDone.
  *   - Capabilities (email, storage, AI, ...) are NOT part of `db`. They are
  *     injected via `ctx.capabilities` so local runtimes can supply demo/native
  *     variants or fail loudly with a structured CAPABILITY_UNAVAILABLE error.
