@@ -23,9 +23,11 @@ import {
 } from "../meetingAttendanceGrid";
 import { meetingCalendarDate } from "../meetingDates";
 import { visibleDirectoryRows } from "./peopleDirectory";
+import { assertMeetingFieldsUnchanged, type MeetingExpectedFields } from "../meetingConcurrency";
 
 export type SaveAttendanceGridArgs = {
   minutesId: string;
+  expected?: MeetingExpectedFields;
   rows: Array<Omit<AttendanceGridRow, "key"> & { key?: string }>;
   nonPersons?: Array<{ name: string; kind?: string }>;
   /** Quorum computed from the grid; applied only when the minutes record none. */
@@ -48,6 +50,7 @@ export async function saveAttendanceGridPortable(ctx: PortableMutationCtx, args:
   const societyId = String(minutes.societyId);
   await requirePermissionPortable(ctx, societyId, "minutes:write");
   await requirePermissionPortable(ctx, societyId, "meetings:write");
+  assertMeetingFieldsUnchanged(minutes, args.expected, "attendance record");
   if (minutes.approvedAt || minutes.adoptedSnapshot) throw new Error("Adopted minutes are frozen. Start an amendment to change recorded content.");
   if (!Array.isArray(args.rows) || args.rows.length > MAX_ROWS) throw new Error(`Attendance can hold at most ${MAX_ROWS} rows.`);
   const meeting: any = await getOwned(ctx, "meetings", String(minutes.meetingId), societyId);
@@ -74,7 +77,7 @@ export async function saveAttendanceGridPortable(ctx: PortableMutationCtx, args:
     absent: patch.absent,
     detailedAttendance: patch.detailedAttendance,
   };
-  if (!minutes.quorumStatus && args.quorumStatusIfUnset && ["confirmed", "not_met", "not_recorded"].includes(args.quorumStatusIfUnset)) {
+  if ((!minutes.quorumStatus || minutes.quorumStatus === "not_recorded") && meeting.status === "Held" && args.quorumStatusIfUnset && ["confirmed", "not_met", "not_recorded"].includes(args.quorumStatusIfUnset)) {
     minutesPatch.quorumStatus = args.quorumStatusIfUnset;
     minutesPatch.quorumMet = args.quorumStatusIfUnset === "confirmed";
   }

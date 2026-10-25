@@ -1,4 +1,5 @@
-import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
+import { createMotionAutosave } from "../features/meetings/lib/motionAutosave";
+import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
 import {
   MOTION_OUTCOMES,
@@ -455,17 +456,18 @@ function OutcomeOverridePanel({
 export type MotionEditorHandle = {
   startAdding: () => void;
   /** Commit any in-progress motion draft. Returns true if a non-empty draft
-   * was committed, false if there was nothing to commit. Used by parents that
+   * was committed, false if there was nothing to commit; waits for all pending
+   * saves and rejects on failure. Used by parents that
    * own a "Save" button outside the editor — they can flush a pending draft
    * before persisting their own state so it doesn't get silently dropped. */
-  commitDraft: () => boolean;
+  commitDraft: () => Promise<boolean>;
 };
 
 export const MotionEditor = forwardRef<MotionEditorHandle, {
   motions: Motion[];
   /** Read access preserves motion details while disabling all writes and imperative add/commit. */
   readOnly?: boolean;
-  onChange: (next: Motion[]) => void;
+  onChange: (next: Motion[], expected?: Motion[]) => void | Promise<Motion[] | void>;
   /** Director full names used to autofill movedBy/secondedBy. */
   directorNames: string[];
   people?: MotionPerson[];
@@ -508,56 +510,53 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   renderMotionAccessory,
 }, ref) {
   const { can } = usePermissions();
-  // Every keystroke in a motion field saves the whole list. Until the saves
-  // settle, show the latest local edit: rendering each save's echo would put
-  // an older value back into the input and drop the characters typed since.
-  const [pendingMotions, setPendingMotions] = useState<Motion[] | null>(null);
-  useEffect(() => {
-    if (!pendingMotions) return;
-    const timer = window.setTimeout(() => setPendingMotions(null), 1500);
-    return () => window.clearTimeout(timer);
-  }, [pendingMotions]);
-  const motions = pendingMotions ?? motionsProp;
-  // MA-10: typing in a motion's text fields used to save the whole motions
-  // list on every keystroke. Free-text edits now wait for a pause in typing
-  // (or for focus to leave the editor, or for the editor to unmount) and go
-  // out as one save; structural changes (add, remove, outcome, tallies) save
-  // at once and carry any typed text with them. The local echo above keeps
-  // what is on screen correct in the meantime.
   const onChangePropRef = useRef(onChangeProp);
   onChangePropRef.current = onChangeProp;
-  const queuedSave = useRef<{ next: Motion[]; timer: number } | null>(null);
+  const [saveController] = useState(() => createMotionAutosave(motionsProp, async (next, expected) => {
+    const canonical = await onChangePropRef.current(next, expected);
+    return canonical ?? next;
+  }));
+  const saveState = useSyncExternalStore(saveController.subscribe, saveController.getSnapshot, saveController.getSnapshot);
+  const motions = saveState.value;
+  useEffect(() => { saveController.receiveServer(motionsProp); }, [saveController, motionsProp]);
+  const queuedTimer = useRef<number | null>(null);
   const flushQueuedSave = useCallback(() => {
-    const queued = queuedSave.current;
-    if (!queued) return;
-    window.clearTimeout(queued.timer);
-    queuedSave.current = null;
-    // Restart the echo window from the moment the save actually goes out.
-    setPendingMotions(queued.next);
-    onChangePropRef.current(queued.next);
-  }, []);
+    if (queuedTimer.current !== null) {
+      window.clearTimeout(queuedTimer.current);
+      queuedTimer.current = null;
+    }
+    return saveController.flush();
+  }, [saveController]);
+  const flushInBackground = useCallback(() => { void flushQueuedSave().catch(() => undefined); }, [flushQueuedSave]);
   useEffect(() => {
-    window.addEventListener("pagehide", flushQueuedSave);
-    return () => {
-      window.removeEventListener("pagehide", flushQueuedSave);
-      flushQueuedSave();
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (saveController.getSnapshot().saveState === "saved") return;
+      event.preventDefault();
+      event.returnValue = "";
     };
-  }, [flushQueuedSave]);
+    window.addEventListener("pagehide", flushInBackground);
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => {
+      window.removeEventListener("pagehide", flushInBackground);
+      window.removeEventListener("beforeunload", beforeUnload);
+      flushInBackground();
+    };
+  }, [saveController, flushInBackground]);
   const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
   authority.current = { readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") };
   const onChange = (next: Motion[], options: { debounce?: boolean } = {}) => {
     if (authority.current.readOnly) return false;
     const previouslyCarried = new Set(motions.filter(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried").map(motion => motion.adoptsMinutesId));
     if (!authority.current.canApprove && next.some(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried" && !previouslyCarried.has(motion.adoptsMinutesId))) return false;
-    setPendingMotions(next);
-    if (queuedSave.current) window.clearTimeout(queuedSave.current.timer);
+    saveController.change(next);
+    if (queuedTimer.current !== null) window.clearTimeout(queuedTimer.current);
     if (options.debounce) {
-      queuedSave.current = { next, timer: window.setTimeout(flushQueuedSave, MOTION_TEXT_SAVE_DELAY_MS) };
+      queuedTimer.current = window.setTimeout(flushInBackground, MOTION_TEXT_SAVE_DELAY_MS);
       return true;
     }
     // This save carries every queued text edit, so the queue is spent.
-    queuedSave.current = null;
-    onChangeProp(next);
+    queuedTimer.current = null;
+    flushInBackground();
     return true;
   };
   const onAddToBacklog = !readOnly && can("motions:write") && onAddToBacklogProp
@@ -658,13 +657,19 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
 
   useImperativeHandle(ref, () => ({
     startAdding: beginAdding,
-    commitDraft: () => {
+    commitDraft: async () => {
       const text = draft.text.trim();
-      if (authority.current.readOnly || !adding || !text) return false;
-      if (!onChange([...motions, { ...draft, text }])) return false;
-      resetDraft();
-      setAdding(false);
-      return true;
+      let committed = false;
+      if (!authority.current.readOnly && adding && text) {
+        if (!onChange([...motions, { ...draft, text }])) return false;
+        resetDraft();
+        setAdding(false);
+        committed = true;
+      }
+      // Even without an add form, a section cannot close over a pending or
+      // failed inline motion save.
+      await flushQueuedSave();
+      return committed;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [adding, draft, motions, onChange, sectionScope, agendaSections]);
@@ -733,7 +738,29 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   );
   return (
     <MotionEditorExtrasContext.Provider value={extras}>
-    <div onBlur={flushQueuedSave}>
+    <div onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) flushInBackground();
+    }}>
+      {saveState.saveState === "error" && (
+        <div className="flag flag--warn" role="alert">
+          <p>{saveState.error} Your motion changes are still shown below.</p>
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="btn-action" disabled={readOnly} onClick={flushInBackground}>Retry motion save</button>
+            <button type="button" className="btn-action" onClick={async () => {
+              const discard = await confirm({
+                title: "Load the latest saved motions?",
+                message: "This replaces your unsaved motion changes with the latest saved list. Copy any text you want to keep before continuing.",
+                confirmLabel: "Load saved motions",
+                tone: "warn",
+              });
+              if (discard) saveController.useLatestServer();
+            }}>Load saved motions</button>
+          </div>
+        </div>
+      )}
+      {(saveState.saveState === "saving" || saveState.saveState === "pending") && (
+        <p className="muted" role="status">{saveState.saveState === "saving" ? "Saving motions…" : "Unsaved motion changes"}</p>
+      )}
       {businessMotionRows.length === 0 && !adding && (
         <div className="muted">
           {isAdjournmentScope

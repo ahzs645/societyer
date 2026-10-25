@@ -41,6 +41,8 @@ import { agendaOnlyMeetingStatus } from "../meetingStatus";
 import { meetingCalendarDate } from "../meetingDates";
 import { assertMotionVotes } from "../motionValidation";
 import { normalizeActionItemStatusFields } from "../actionItemStatus";
+import { assertMeetingFieldsUnchanged, meetingAgendaSnapshot, meetingFieldValuesMatch, type MeetingAgendaSnapshot, type MeetingExpectedFields } from "../meetingConcurrency";
+import { getForMeetingPortable, syncForMeetingPortable } from "./agendas";
 
 // ----- portable quorum-snapshot helpers (copied from convex/lib/bylawRules) --
 
@@ -191,8 +193,8 @@ export function statusFromEmbeddedOutcome(raw?: string): { status: string; outco
 /** Mirror one minutes doc's embedded `motions[]` into the motions table by
  *  RECONCILE-BY-IDENTITY: an embedded motion carrying a `motionId` updates that
  *  row in place (stable id across saves), a new one is inserted, and rows whose
- *  motion was removed are deleted. The stable id is back-linked into
- *  `minutes.motions[]` and the ordered `minutes.motionIds`, so references
+ *  motion was removed are deleted. The stable id is stored in the ordered
+ *  `minutes.motionIds` and returned in displayMotions, so references
  *  (motionIds, history, future links) survive edits instead of churning on every
  *  save. Reads come from the table via resolveMinutesMotions. */
 export async function syncMotionsForMinutes(
@@ -206,147 +208,149 @@ export async function syncMotionsForMinutes(
   }
   await assertMinutesForeignKeys(ctx, String(args.societyId), { motions: args.motions ?? [] });
   await assertMotionPersonLinksBelongToSociety(ctx, String(args.societyId), args.motions ?? []);
-  // Best-effort: a mirror failure must never roll back the minutes save that
-  // triggered it. A stale mirror is corrected by the step-2 backfill or the
-  // next edit; a broken minutes save is a user-facing regression.
-  try {
-    const existing = await ctx.db
-      .query("motions")
-      .withIndex("by_minutes", (q) => q.eq("minutesId", args.minutesId))
-      .collect();
-    const existingById = new Map(existing.map((row: any) => [String(row._id), row]));
-    const keptIds = new Set<string>();
+  // The motions table is the sole authority, so a failed write must fail the
+  // entire enclosing transaction. Swallowing an error here would commit the
+  // minutes fields while silently losing some of the motions that were saved.
+  const existing = await ctx.db
+    .query("motions")
+    .withIndex("by_minutes", (q) => q.eq("minutesId", args.minutesId))
+    .collect();
+  const existingById = new Map(existing.map((row: any) => [String(row._id), row]));
+  const keptIds = new Set<string>();
 
-    const now = new Date().toISOString();
-    const motionIds: any[] = [];
-    // "append" (import merge): keep every existing row untouched and add the
-    // submitted motions after them, preserving the stored order.
-    if (args.mode === "append") {
-      const minutesRow: any = await ctx.db.get(args.minutesId);
-      const ordered = Array.isArray(minutesRow?.motionIds) ? minutesRow.motionIds.filter((id: any) => existingById.has(String(id))) : [];
-      for (const row of existing) if (!ordered.some((id: any) => String(id) === String(row._id))) ordered.push(row._id);
-      for (const id of ordered) { keptIds.add(String(id)); motionIds.push(id); }
-    }
-    for (const m of args.motions ?? []) {
-      const classified = statusFromEmbeddedOutcome(m.outcome);
-      const { status, outcome } = classified;
-      // Keep the source wording verbatim whenever it is not a canonical label.
-      const rawOutcome = typeof m.outcome === "string" ? m.outcome.trim() : "";
-      const sourceOutcomeText = m.sourceOutcomeText ?? (!classified.canonical && rawOutcome ? rawOutcome : undefined);
-      const note = classified.canonical
-        ? undefined
-        : classified.needsReview
-          ? `legacy outcome: ${m.outcome} (not recognised; review the source)`
-          : `legacy outcome: ${m.outcome}`;
-      // Classify recurring procedural motions (adjournment, approve-minutes,
-      // approve-agenda, recess, receive-reports) from their wording and stamp
-      // the first-class record with an explicit kind + label, so the master
-      // list filters by a stored tag instead of regex-matching every render.
-      // Default the "decided by" axis from the catalogue (most procedural
-      // motions pass by general consent, carrying without a recorded tally).
-      const kind = classifyProceduralMotion({
-        text: m.text,
-        sectionTitle: m.sectionTitle,
-        resolutionType: m.resolutionType,
-      });
-      const tags = applyProceduralTags(m.tags, {
-        text: m.text,
-        sectionTitle: m.sectionTitle,
-      });
-      const decidedBy =
-        m.decidedBy ??
-        classified.decidedBy ??
-        defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
-      const historyEntry = stripUndefined({
-        at: now,
-        minutesId: args.minutesId,
-        meetingId: args.meetingId,
-        status,
-        outcome,
-        votesFor: m.votesFor,
-        votesAgainst: m.votesAgainst,
-        abstentions: m.abstentions,
-        note,
-      });
-      const fields = stripUndefined({
-        societyId: args.societyId,
-        minutesId: args.minutesId,
-        primaryMeetingId: args.meetingId,
-        title: m.name,
-        text: m.text ?? "",
-        movedBy: m.movedBy,
-        movedByMemberId: m.movedByMemberId,
-        movedByDirectorId: m.movedByDirectorId,
-        secondedBy: m.secondedBy,
-        secondedByMemberId: m.secondedByMemberId,
-        secondedByDirectorId: m.secondedByDirectorId,
-        resolutionTypeLabel: m.resolutionType,
-        status,
-        outcome,
-        decidedBy,
-        proceduralKind: kind?.key,
-        tags: tags.length ? tags : undefined,
-        votesFor: m.votesFor,
-        votesAgainst: m.votesAgainst,
-        abstentions: m.abstentions,
-        sectionIndex: m.sectionIndex,
-        sectionTitle: m.sectionTitle,
-        motionTemplateId: m.motionTemplateId,
-        adoptsMinutesId: m.adoptsMinutesId,
-        movedByPersonId: m.movedByPersonId,
-        secondedByPersonId: m.secondedByPersonId,
-        abstainedBy: Array.isArray(m.abstainedBy) && m.abstainedBy.length ? m.abstainedBy : undefined,
-        opposedBy: Array.isArray(m.opposedBy) && m.opposedBy.length ? m.opposedBy : undefined,
-        dissentDocumentId: m.dissentDocumentId,
-        sourceLocator: m.sourceLocator,
-        sourceOutcomeText,
-        outcomeOverrideNote: m.outcomeOverrideNote,
-        transcriptRef: m.transcriptRef,
-        sourceExternalIds: Array.isArray(m.sourceExternalIds) && m.sourceExternalIds.length ? m.sourceExternalIds : undefined,
-        source: "minutes",
-      });
-      // Reconcile by identity: an embedded motion that already links a row of
-      // this minutes updates it in place (replace() overwrites the whole row so
-      // fields cleared in the editor don't linger); otherwise insert a fresh row.
-      const linkId = args.mode !== "append" && m.motionId != null && existingById.has(String(m.motionId)) ? m.motionId : null;
-      let rowId: any;
-      if (linkId) {
-        const prev: any = existingById.get(String(linkId));
-        await ctx.db.replace(linkId, {
-          // The transcript link is set by transcripts:linkMinutesItem; a save
-          // that does not carry it (agenda sync, drafting) must not drop it.
-          ...(prev?.transcriptRef ? { transcriptRef: prev.transcriptRef } : {}),
-          ...fields,
-          history: [historyEntry],
+  const now = new Date().toISOString();
+  const motionIds: any[] = [];
+  // "append" (import merge): keep every existing row untouched and add the
+  // submitted motions after them, preserving the stored order.
+  if (args.mode === "append") {
+    const minutesRow: any = await ctx.db.get(args.minutesId);
+    const ordered = Array.isArray(minutesRow?.motionIds) ? minutesRow.motionIds.filter((id: any) => existingById.has(String(id))) : [];
+    for (const row of existing) if (!ordered.some((id: any) => String(id) === String(row._id))) ordered.push(row._id);
+    for (const id of ordered) { keptIds.add(String(id)); motionIds.push(id); }
+  }
+  for (const m of args.motions ?? []) {
+    const classified = statusFromEmbeddedOutcome(m.outcome);
+    const { status, outcome } = classified;
+    // Keep the source wording verbatim whenever it is not a canonical label.
+    const rawOutcome = typeof m.outcome === "string" ? m.outcome.trim() : "";
+    const sourceOutcomeText = m.sourceOutcomeText ?? (!classified.canonical && rawOutcome ? rawOutcome : undefined);
+    const note = classified.canonical
+      ? undefined
+      : classified.needsReview
+        ? `legacy outcome: ${m.outcome} (not recognised; review the source)`
+        : `legacy outcome: ${m.outcome}`;
+    // Classify recurring procedural motions (adjournment, approve-minutes,
+    // approve-agenda, recess, receive-reports) from their wording and stamp
+    // the first-class record with an explicit kind + label, so the master
+    // list filters by a stored tag instead of regex-matching every render.
+    // Default the "decided by" axis from the catalogue (most procedural
+    // motions pass by general consent, carrying without a recorded tally).
+    const kind = classifyProceduralMotion({
+      text: m.text,
+      sectionTitle: m.sectionTitle,
+      resolutionType: m.resolutionType,
+    });
+    const tags = applyProceduralTags(m.tags, {
+      text: m.text,
+      sectionTitle: m.sectionTitle,
+    });
+    const decidedBy =
+      m.decidedBy ??
+      classified.decidedBy ??
+      defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
+    const historyEntry = stripUndefined({
+      at: now,
+      minutesId: args.minutesId,
+      meetingId: args.meetingId,
+      status,
+      outcome,
+      votesFor: m.votesFor,
+      votesAgainst: m.votesAgainst,
+      abstentions: m.abstentions,
+      note,
+    });
+    const fields = {
+      societyId: args.societyId,
+      minutesId: args.minutesId,
+      primaryMeetingId: args.meetingId,
+      title: m.name,
+      text: m.text ?? "",
+      movedBy: m.movedBy,
+      movedByMemberId: m.movedByMemberId,
+      movedByDirectorId: m.movedByDirectorId,
+      secondedBy: m.secondedBy,
+      secondedByMemberId: m.secondedByMemberId,
+      secondedByDirectorId: m.secondedByDirectorId,
+      resolutionTypeLabel: m.resolutionType,
+      status,
+      outcome,
+      decidedBy,
+      proceduralKind: kind?.key,
+      tags: tags.length ? tags : undefined,
+      votesFor: m.votesFor,
+      votesAgainst: m.votesAgainst,
+      abstentions: m.abstentions,
+      sectionIndex: m.sectionIndex,
+      sectionTitle: m.sectionTitle,
+      motionTemplateId: m.motionTemplateId,
+      adoptsMinutesId: m.adoptsMinutesId,
+      movedByPersonId: m.movedByPersonId,
+      secondedByPersonId: m.secondedByPersonId,
+      abstainedBy: Array.isArray(m.abstainedBy) && m.abstainedBy.length ? m.abstainedBy : undefined,
+      opposedBy: Array.isArray(m.opposedBy) && m.opposedBy.length ? m.opposedBy : undefined,
+      dissentDocumentId: m.dissentDocumentId,
+      sourceLocator: m.sourceLocator,
+      sourceOutcomeText,
+      outcomeOverrideNote: m.outcomeOverrideNote,
+      transcriptRef: m.transcriptRef,
+      sourceExternalIds: Array.isArray(m.sourceExternalIds) && m.sourceExternalIds.length ? m.sourceExternalIds : undefined,
+      source: "minutes",
+    };
+    // Reconcile by identity: an embedded motion that already links a row of
+    // this minutes updates it in place; otherwise insert a fresh row. Patch
+    // the editor's fields (including explicit undefined clears) so unrelated
+    // first-class metadata and the existing history survive a minutes edit.
+    const linkId = args.mode !== "append" && m.motionId != null && existingById.has(String(m.motionId)) ? m.motionId : null;
+    let rowId: any;
+    if (linkId) {
+      const prev: any = existingById.get(String(linkId));
+      const nextFields = {
+        // The transcript link is set by transcripts:linkMinutesItem; a save
+        // that does not carry it (agenda sync, drafting) must not drop it.
+        ...fields,
+        transcriptRef: fields.transcriptRef ?? prev?.transcriptRef,
+      };
+      const changed = Object.entries(nextFields).some(([field, value]) => !meetingFieldValuesMatch(prev?.[field], value));
+      if (changed) {
+        await ctx.db.patch(linkId, {
+          ...nextFields,
+          history: [...(Array.isArray(prev?.history) ? prev.history : []), historyEntry],
           createdAtISO: prev?.createdAtISO ?? now,
           updatedAtISO: now,
         });
-        rowId = linkId;
-      } else {
-        rowId = await ctx.db.insert("motions", {
-          ...fields,
-          history: [historyEntry],
-          createdAtISO: now,
-          updatedAtISO: now,
-        });
       }
-      keptIds.add(String(rowId));
-      motionIds.push(rowId);
+      rowId = linkId;
+    } else {
+      rowId = await ctx.db.insert("motions", stripUndefined({
+        ...fields,
+        history: [historyEntry],
+        createdAtISO: now,
+        updatedAtISO: now,
+      }));
     }
-    // Drop rows whose motion was removed from the embedded array this save.
-    for (const row of existing) {
-      if (!keptIds.has(String(row._id))) await ctx.db.delete(row._id);
-    }
-    // Maintain the ordered id references only — the embedded `minutes.motions[]`
-    // is NO LONGER written (the table + motionIds ARE the record now, Phase 4C).
-    // Reconcile keys on the motionId the caller carries in each submitted motion
-    // (the editor supplies it from displayMotions; agenda sync from the resolver).
-    await ctx.db.patch(args.minutesId, { motionIds });
-  } catch (err) {
-    console.warn(
-      `[motions] dual-write sync failed for minutes ${String(args.minutesId)}: ${String(err)}`,
-    );
+    keptIds.add(String(rowId));
+    motionIds.push(rowId);
   }
+  // Drop rows whose motion was removed from the embedded array this save.
+  for (const row of existing) {
+    if (!keptIds.has(String(row._id))) await ctx.db.delete(row._id);
+  }
+  // Maintain the ordered id references only — the embedded `minutes.motions[]`
+  // is NO LONGER written (the table + motionIds ARE the record now, Phase 4C).
+  // Reconcile keys on the motionId the caller carries in each submitted motion
+  // (the editor supplies it from displayMotions; agenda sync from the resolver).
+  const currentMinutes = await ctx.db.get(args.minutesId);
+  if (!meetingFieldValuesMatch(currentMinutes?.motionIds, motionIds)) await ctx.db.patch(args.minutesId, { motionIds });
 }
 
 /** Adopted wording, attendance, appendices and metadata never resolve from later live edits. */
@@ -501,11 +505,10 @@ export async function getByMeetingPortable(
   { meetingId }: { meetingId: string },
 ) {
   await requireOwnedRow(ctx, "meetings", meetingId);
-  const rows = await ctx.db
+  const m = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-    .collect();
-  const m = rows[0];
+    .first();
   if (!m) return null;
   return minutesForReader(ctx, await sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }));
 }
@@ -685,18 +688,28 @@ export async function transposeSourcePortable(ctx: PortableMutationCtx, {id,sour
 // ----- mutations ------------------------------------------------------------
 
 export async function createPortable(ctx: PortableMutationCtx, args: any) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   validateGenericEvidence(args);
   args = normalizeActionItemFields({ ...args, ...normalizeMeetingHistory(args) });
   await assertSubmittedMotionVotes(ctx, String(args.societyId), args.motions);
   for (const key of [...MEETING_HISTORY_FIELDS, ...EVIDENCE_FIELDS]) if (args[key] === undefined) delete args[key];
   await assertMeetingHistoryReferences(ctx, args.societyId, args, undefined, args.heldAt);
-  await requireSocietyMembership(ctx, args.societyId);
   if (args.sourceReviewedByUserId) {
     await getOwned(ctx, "users", args.sourceReviewedByUserId, args.societyId);
   }
   await assertMinutesForeignKeys(ctx, args.societyId, args);
   await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
-  const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  // Two editors can open a meeting before either one's bootstrap completes.
+  // Reading this index in the same transaction makes creation idempotent;
+  // Convex's conflict retry then returns the first record to both callers.
+  const existing = await ctx.db.query("minutes")
+    .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
+    .first();
+  if (existing) {
+    if (meeting.minutesId !== existing._id) await ctx.db.patch(args.meetingId, { minutesId: existing._id });
+    return existing._id;
+  }
   const snapshot = meeting
     ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
     : null;
@@ -766,6 +779,8 @@ async function applyAdoptionApprovals(
   minutes: any,
   targets: any[],
 ) {
+  if (targets.length === 0) return;
+  const actor = await requireSocietyMembership(ctx, String(minutes.societyId));
   for (const target of targets) {
     const now = new Date().toISOString();
     const targetPatch: Record<string, unknown> = {
@@ -786,7 +801,7 @@ async function applyAdoptionApprovals(
       : null;
     await ctx.db.insert("activity", {
       societyId: minutes.societyId,
-      actor: "You",
+      actor: String(actor.displayName || "Workspace member"),
       entityType: "minutes",
       subjectId: String(target._id),
       // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
@@ -800,16 +815,37 @@ async function applyAdoptionApprovals(
 
 export async function updatePortable(
   ctx: PortableMutationCtx,
-  { id, patch: rawPatch }: { id: string; patch: any },
+  { id, patch: rawPatch, expected, expectedAgenda, syncAgenda }: {
+    id: string;
+    patch: any;
+    expected?: MeetingExpectedFields;
+    expectedAgenda?: MeetingAgendaSnapshot;
+    syncAgenda?: Omit<Parameters<typeof syncForMeetingPortable>[1], "societyId" | "meetingId" | "status">;
+  },
 ) {
   const minutes = await requireOwnedRow(ctx, "minutes", id);
   // The restricted view blanks source-derived fields; saving it back would overwrite real content.
   if ((await sourceMinutesView(ctx, minutes)).sourceTransposition?.reviewStatus === "restricted") throw new Error("Source content is restricted by document access.");
+  assertMeetingFieldsUnchanged({
+    ...minutes,
+    ...(expected && Object.prototype.hasOwnProperty.call(expected, "motions")
+      ? { motions: await resolveMinutesMotions(ctx, minutes) } : {}),
+  }, expected, "minutes record");
   if (Object.prototype.hasOwnProperty.call(rawPatch,"sourceMeetingRecord")) throw new Error("Source records are managed through cited source completion.");
   if (["adoptedSnapshot", "adoptedRevision", "adoptionHistory", "motionSnapshots", "motionSnapshotAtISO"].some(key => Object.prototype.hasOwnProperty.call(rawPatch, key))) throw new Error("Adopted snapshots are managed by approval and amendment operations.");
   const approvalMetadata = new Set(["clearApproval", "clearApprovedInMeeting", "approvedAt", "approvedInMeetingId", "motions"]);
   if (minutes.approvedAt && !rawPatch.clearApproval && Object.keys(rawPatch).some(key => !approvalMetadata.has(key))) throw new Error("Adopted minutes are frozen. Start an amendment to change recorded content.");
   const societyId = String(minutes.societyId);
+  if (syncAgenda) {
+    if (!Array.isArray(rawPatch.sections)) throw new Error("An agenda sync requires the minutes sections being saved.");
+    await requirePermissionPortable(ctx, societyId, "agendas:write");
+    if (expectedAgenda !== undefined) {
+      // A colleague can edit agenda metadata without changing minutes.sections.
+      // Compare the same reader projection that supplied the editor's baseline.
+      const agenda = meetingAgendaSnapshot(await getForMeetingPortable(ctx, { meetingId: String(minutes.meetingId) }));
+      assertMeetingFieldsUnchanged({ agenda }, { agenda: expectedAgenda }, "meeting agenda");
+    }
+  }
   validateGenericEvidence(rawPatch, minutes);
   const historyPatch = normalizeMeetingHistory(rawPatch);
   assertMeetingHistoryMutable(minutes, historyPatch, rawPatch.clearApproval === true);
@@ -896,6 +932,23 @@ export async function updatePortable(
       motions: submittedMotions,
     });
   }
+  // A section edit used to save minutes and then synchronize its agenda in a
+  // second client mutation. Keep both writes in this transaction so a failed
+  // agenda update or a concurrent editor cannot leave half of the change saved.
+  if (syncAgenda) await syncForMeetingPortable(ctx, {
+    ...syncAgenda,
+    societyId,
+    meetingId: String(minutes.meetingId),
+  });
+  if (submittedMotions || Array.isArray(patch.sections)) {
+    const saved = await ctx.db.get(id);
+    return {
+      ...(submittedMotions ? { motions: await resolveMinutesMotions(ctx, saved) } : {}),
+      ...(Array.isArray(patch.sections) ? { sections: saved?.sections ?? [] } : {}),
+      ...(syncAgenda ? { agenda: meetingAgendaSnapshot(await getForMeetingPortable(ctx, { meetingId: String(minutes.meetingId) })) } : {}),
+    };
+  }
+  return null;
 }
 
 // Upsert a minutes row from an AI-generated draft (transcripts.runPipeline).

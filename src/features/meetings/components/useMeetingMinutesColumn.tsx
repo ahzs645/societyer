@@ -64,6 +64,7 @@ import type {
 } from "./MeetingMinutesColumn.internal";
 
 import { minutesPresentCount } from "../../../../shared/meetingAttendanceGrid";
+import { meetingAgendaSnapshot, meetingExpectedFields, type MeetingExpectedFields } from "../../../../shared/meetingConcurrency";
 import { Tooltip } from "../../../components/Tooltip";
 import { motionTranscriptChip } from "../transcript/TranscriptTimeChip";
 
@@ -85,8 +86,8 @@ export type MeetingMinutesColumnProps = {
   quorumLegalGuides: any[];
   members: any;
   directors: any;
-  saveMinuteSections: (next: any[]) => void | Promise<void> | undefined;
-  saveMinuteMotions: (next: Motion[]) => void | Promise<void> | undefined;
+  saveMinuteSections: (next: any[], expected?: MeetingExpectedFields, expectedAgenda?: ReturnType<typeof meetingAgendaSnapshot>) => Promise<{ sections: any[]; agenda: ReturnType<typeof meetingAgendaSnapshot> } | undefined>;
+  saveMinuteMotions: (next: Motion[], expected?: Motion[]) => Promise<Motion[]>;
   resolvedMotions?: Motion[];
   addSectionToBacklog: (section: any) => void | Promise<void>;
   onOpenMotions?: () => void;
@@ -113,6 +114,8 @@ export type MeetingMinutesColumnProps = {
   createTaskFromAction?: (draft: any) => Promise<string | undefined>;
   /** Agenda item rows (with ids and A9 fields) for the details editor. */
   agendaItemRecords?: any[];
+  /** The agenda read alongside the sections, used to protect concurrent metadata edits. */
+  agendaRecord?: any;
 }; 
 
 export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
@@ -155,7 +158,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const minutesFrozen = !!(minutes?.approvedAt || minutes?.adoptedSnapshot);
   const canEditMinutes = can("minutes:write") && !minutesFrozen;
   // These callbacks save both records; gate both before the first write.
-  const canEditAgenda = canEditMinutes && can("agendas:write");
+  const canEditAgenda = canEditMinutes && can("agendas:write") && props.agendaRecord !== undefined;
   const canEditSections = canEditAgenda;
   const canTransposeSource = canEditAgenda && !minutes?.approvedAt && !minutes?.adoptedSnapshot && !Array.isArray(minutes?.motionSnapshots);
   const transposeSourceMutation = usePermissionedMutation(api.minutes.transposeSource, canTransposeSource);
@@ -228,6 +231,9 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   }, [sections, motions]);
   const [sectionEditIndex, setSectionEditIndex] = useState<number | null>(null);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
+  const sectionEditBaseline = useRef<MeetingExpectedFields>({});
+  const sectionAgendaBaseline = useRef<ReturnType<typeof meetingAgendaSnapshot>>(null);
+  const [savingSection, setSavingSection] = useState(false);
   const [agendaNumberingMode, setAgendaNumberingMode] = useState<AgendaNumberingMode>(readStoredAgendaNumberingMode);
   // Drag-to-reorder + right-click menu state for root sections in the agenda
   // record. Both work on root indices (position in `rootGroups`), not the
@@ -305,7 +311,9 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
         actionItems: [],
       },
     ];
-    await saveMinuteSections(next);
+    const saved = await saveMinuteSections(next);
+    sectionEditBaseline.current = meetingExpectedFields({ sections: saved?.sections ?? next }, ["sections"]);
+    sectionAgendaBaseline.current = meetingAgendaSnapshot(saved?.agenda);
     if (agendaEdit !== null) {
       // Sections are root agenda items; never auto-add as a child.
       setAgendaEdit([...agendaEdit, { title: newTitle, depth: 0 }]);
@@ -1077,6 +1085,8 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const startSectionEdit = (index: number) => {
     if (!allowed("minutes:write", "agendas:write")) return;
     const section = sections[index] ?? {};
+    sectionEditBaseline.current = meetingExpectedFields(minutes ?? {}, ["sections"]);
+    sectionAgendaBaseline.current = meetingAgendaSnapshot(props.agendaRecord);
     setSectionEditIndex(index);
     setSectionEditorTab("notes");
     setSectionDraft({
@@ -1094,61 +1104,70 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
 
   const saveSectionEdit = async () => {
     if (!allowed("minutes:write", "agendas:write") || (!!sectionDraft && Object.keys(sectionDraft.taskUpdates).length > 0 && !allowed("tasks:write"))) return;
-    if (sectionEditIndex == null || !sectionDraft) return;
-    // Flush any in-progress motion draft first so it lands in motions[] before
-    // we close the editor. commitDraft is a no-op when there's nothing to
-    // commit (empty text or no open draft), so it's safe to always call.
-    sectionMotionEditorRef.current?.commitDraft();
-    // Read the editor's current markdown directly — Milkdown's onChange flows
-    // through React state, and a fast Save click can land before that
-    // re-render has flushed.
-    const latestDiscussion =
-      sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft.discussion;
-    const existing = sections[sectionEditIndex] ?? {};
-    const next = [...sections];
-    // Build the section explicitly rather than spreading `existing`, but preserve
-    // the stored fields this editor doesn't manage. The agenda sync writes
-    // motionText/motionTemplateId/motionId onto the section
-    // (shared/functions/agendas.ts) and the `update` validator DOES accept them
-    // (convex/minutes.ts `minuteSection`, added precisely so stored sections
-    // round-trip). Dropping them here silently wiped the section↔motion linkage
-    // and the `hasStartedMinutesDraft` motionText signal on every section save.
-    // depth/reportSubmitted are likewise preserved.
-    next[sectionEditIndex] = {
-      title: sectionDraft.title.trim() || existing.title || "Untitled section",
-      type: sectionDraft.type.trim() || undefined,
-      presenter: cleanOptional(sectionDraft.presenter),
-      discussion: cleanOptional(latestDiscussion),
-      reportSubmitted: existing.reportSubmitted,
-      depth: existing.depth,
-      motionText: existing.motionText,
-      motionTemplateId: existing.motionTemplateId,
-      motionId: existing.motionId,
-      sourceReference: existing.sourceReference,
-      sourceReviewStatus: existing.sourceReviewStatus,
-      sourceKind: existing.sourceKind,
-      sourceEvidence: existing.sourceEvidence,
-      agendaItemId: existing.agendaItemId,
-      decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
-      // Action items are edited in the Action items card (status, assignee,
-      // task link); the section editor keeps them exactly as stored so A12
-      // status, person links and task ids are never stripped.
-      actionItems: Array.isArray(existing.actionItems) ? existing.actionItems : [],
-      sourceTitle: existing.sourceTitle,
-      linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
-      publicVisible: sectionDraft.publicVisible ? undefined : false,
-    };
-    await saveMinuteSections(next);
-    for (const [taskId, patch] of Object.entries(sectionDraft.taskUpdates)) {
-      const cleanPatch: { status?: string; completionNote?: string } = {};
-      if (patch.status) cleanPatch.status = patch.status;
-      if (patch.completionNote !== undefined) cleanPatch.completionNote = patch.completionNote;
-      if (Object.keys(cleanPatch).length) {
-        await applyTaskUpdate(taskId, cleanPatch);
+    if (sectionEditIndex == null || !sectionDraft || savingSection) return;
+    setSavingSection(true);
+    try {
+      // Flush any in-progress motion draft first so it lands in motions[] before
+      // we close the editor. It also waits for inline edits already saving,
+      // and rejects on failure so this section draft stays open.
+      await sectionMotionEditorRef.current?.commitDraft();
+      // Read the editor's current markdown directly — Milkdown's onChange flows
+      // through React state, and a fast Save click can land before that
+      // re-render has flushed.
+      const latestDiscussion =
+        sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft.discussion;
+      const existing = sections[sectionEditIndex] ?? {};
+      const next = [...sections];
+      // Build the section explicitly rather than spreading `existing`, but preserve
+      // the stored fields this editor doesn't manage. The agenda sync writes
+      // motionText/motionTemplateId/motionId onto the section
+      // (shared/functions/agendas.ts) and the `update` validator DOES accept them
+      // (convex/minutes.ts `minuteSection`, added precisely so stored sections
+      // round-trip). Dropping them here silently wiped the section↔motion linkage
+      // and the `hasStartedMinutesDraft` motionText signal on every section save.
+      // depth/reportSubmitted are likewise preserved.
+      next[sectionEditIndex] = {
+        title: sectionDraft.title.trim() || existing.title || "Untitled section",
+        type: sectionDraft.type.trim() || undefined,
+        presenter: cleanOptional(sectionDraft.presenter),
+        discussion: cleanOptional(latestDiscussion),
+        reportSubmitted: existing.reportSubmitted,
+        depth: existing.depth,
+        motionText: existing.motionText,
+        motionTemplateId: existing.motionTemplateId,
+        motionId: existing.motionId,
+        sourceReference: existing.sourceReference,
+        sourceReviewStatus: existing.sourceReviewStatus,
+        sourceKind: existing.sourceKind,
+        sourceEvidence: existing.sourceEvidence,
+        agendaItemId: existing.agendaItemId,
+        decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
+        // Action items are edited in the Action items card (status, assignee,
+        // task link); the section editor keeps them exactly as stored so A12
+        // status, person links and task ids are never stripped.
+        actionItems: Array.isArray(existing.actionItems) ? existing.actionItems : [],
+        sourceTitle: existing.sourceTitle,
+        linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
+        publicVisible: sectionDraft.publicVisible ? undefined : false,
+      };
+      const saved = await saveMinuteSections(next, sectionEditBaseline.current, sectionAgendaBaseline.current);
+      sectionEditBaseline.current = meetingExpectedFields({ sections: saved?.sections ?? next }, ["sections"]);
+      sectionAgendaBaseline.current = meetingAgendaSnapshot(saved?.agenda);
+      for (const [taskId, patch] of Object.entries(sectionDraft.taskUpdates)) {
+        const cleanPatch: { status?: string; completionNote?: string } = {};
+        if (patch.status) cleanPatch.status = patch.status;
+        if (patch.completionNote !== undefined) cleanPatch.completionNote = patch.completionNote;
+        if (Object.keys(cleanPatch).length) {
+          await applyTaskUpdate(taskId, cleanPatch);
+        }
       }
+      setSectionEditIndex(null);
+      setSectionDraft(null);
+    } catch (error) {
+      toast.error("Could not save the section", error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingSection(false);
     }
-    setSectionEditIndex(null);
-    setSectionDraft(null);
   };
 
   const cancelSectionEdit = () => {
@@ -1327,7 +1346,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               >
                 <Trash2 size={14} />
               </button>
-              <button className="btn-action btn-action--primary" type="button" onClick={saveSectionEdit}>
+              <button className="btn-action btn-action--primary" type="button" onClick={saveSectionEdit} disabled={savingSection}>
                 <Save size={12} /> Save
               </button>
             </div>
@@ -1436,10 +1455,11 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               * below is still here for pulling unrelated motions into this
               * section. */}
             <MotionEditor
+              key={minutes?._id ?? props.meeting?._id}
               ref={sectionMotionEditorRef}
               motions={motions}
               readOnly={!canEditMotions}
-              onChange={(next) => { void saveMinuteMotions(next); }}
+              onChange={saveMinuteMotions}
               directorNames={assigneeOptions}
               people={motionPeople}
               adoptionTargets={adoptionTargets}
@@ -1567,7 +1587,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
             </button>
             <div className="row" style={{ gap: 6 }}>
               <button className="btn-action" onClick={cancelSectionEdit}>Cancel</button>
-              <button className="btn-action btn-action--primary" onClick={saveSectionEdit}>
+              <button className="btn-action btn-action--primary" onClick={saveSectionEdit} disabled={savingSection}>
                 <Save size={12} /> {hasPendingSectionMotion ? "Save section + add motion" : "Save section"}
               </button>
             </div>

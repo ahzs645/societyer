@@ -194,6 +194,7 @@ export const listSummaries = authorizedQuery("minutes:listSummaries", query)({
 export const saveAttendanceGrid = authorizedMutation("minutes:saveAttendanceGrid", mutation)({
   args: {
     minutesId: v.id("minutes"),
+    expected: v.optional(v.record(v.string(), v.any())),
     rows: v.array(v.object({
       key: v.optional(v.string()),
       name: v.string(),
@@ -256,6 +257,29 @@ export const create = authorizedMutation("minutes:create", mutation)({
 export const update = authorizedMutation("minutes:update", mutation)({
   args: {
     id: v.id("minutes"),
+    expected: v.optional(v.record(v.string(), v.any())),
+    expectedAgenda: v.optional(v.union(v.null(), v.object({
+      agenda: v.record(v.string(), v.any()),
+      items: v.array(v.record(v.string(), v.any())),
+    }))),
+    syncAgenda: v.optional(v.object({
+      title: v.optional(v.string()),
+      items: v.array(v.object({
+        title: v.string(),
+        depth: v.optional(v.union(v.literal(0), v.literal(1))),
+        type: v.optional(v.string()),
+        details: v.optional(v.string()),
+        presenter: v.optional(v.string()),
+        timeAllottedMinutes: v.optional(v.number()),
+        motionTemplateId: v.optional(v.id("motionTemplates")),
+        motionId: v.optional(v.id("motions")),
+        motionText: v.optional(v.string()),
+        itemNumber: v.optional(v.string()),
+        requestedAction: v.optional(v.string()),
+        scheduledTimeText: v.optional(v.string()),
+        consent: v.optional(v.boolean()),
+      })),
+    })),
     patch: v.object({
       heldAt: v.optional(v.string()),
       ...structuredMinutesFields,

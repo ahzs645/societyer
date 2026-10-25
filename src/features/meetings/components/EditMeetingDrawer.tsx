@@ -7,7 +7,7 @@
  * missing) and notes. The source header is shown alongside so corrections can
  * be made against what the document actually says.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Drawer, Field } from "@/components/ui";
@@ -29,6 +29,7 @@ import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
 import { meetingRecordKind, type MeetingRecordKind } from "../../../../shared/meetingRecordKind";
 import { MeetingRecordKindPicker } from "./MeetingRecordKindPicker";
+import { meetingExpectedFields, type MeetingExpectedFields } from "../../../../shared/meetingConcurrency";
 
 export const COMMON_TIME_ZONES = [
   "America/Vancouver",
@@ -110,6 +111,7 @@ export function EditMeetingDrawer({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [initial, setInitial] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const editBaseline = useRef<MeetingExpectedFields>({});
   const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
@@ -118,6 +120,11 @@ export function EditMeetingDrawer({
       return;
     }
     const next = draftFromMeeting(meeting);
+    editBaseline.current = meetingExpectedFields(meeting, [
+      "title", "type", "committeeId", "special", "hostBody", "externalOrganization",
+      "scheduledAt", "scheduledAtPrecision", "localStartText", "localEndText", "timeZone",
+      "location", "electronic", "status", "quorumRequired", "notes", "recordKind",
+    ]);
     setDraft(next);
     setInitial(JSON.stringify(next));
     setShowErrors(false);
@@ -158,7 +165,7 @@ export function EditMeetingDrawer({
   const preview = draft ? meetingDatePatchFromDraft(draft.date, viewerTimeZone()) : null;
 
   const save = async () => {
-    if (!draft || !canWrite) return;
+    if (!draft || !canWrite || saving) return;
     setShowErrors(true);
     if (issues.length || !preview) return;
     setSaving(true);
@@ -172,6 +179,7 @@ export function EditMeetingDrawer({
         && meetingRecordKind(meeting) !== "minutes";
       await update({
         id: meeting._id,
+        expected: editBaseline.current,
         patch: {
           title: normalizedMeetingTitle(draft.title),
           type: body.type,

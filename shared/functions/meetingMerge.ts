@@ -9,7 +9,7 @@
  * merged.
  */
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireOwnedRow } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { mergedVersionContent, planMeetingMerge, type MergePlan } from "../meetingMerge";
 import { meetingCalendarDate } from "../meetingDates";
@@ -99,6 +99,9 @@ async function loadPair(ctx: PortableQueryCtx, args: MergeArgs) {
     target, duplicate, targetMinutes, duplicateMinutes, targetMotions, duplicateMotions,
     committees: committees.map((row: any) => ({ _id: String(row._id), name: row.name, bodyKey: row.bodyKey })),
   });
+  if (targetMinutes && duplicateMinutes && mergedVersionContent(duplicate, duplicateMinutes, duplicateMotions).length > MAX_SNAPSHOT_CHARS) {
+    plan.blockers.push("The duplicate's complete source record is too large to preserve in this merge. Keep both meetings until the source record can be archived without truncation.");
+  }
   return { societyId, target, duplicate, targetMinutes, duplicateMinutes, targetMotions, duplicateMotions, plan };
 }
 
@@ -140,6 +143,7 @@ export async function mergePortable(ctx: PortableMutationCtx, args: MergeArgs) {
     await requirePermissionPortable(ctx, societyId, permission);
   }
   if (plan.blockers.length) throw new Error(plan.blockers[0]);
+  const actor = await requireSocietyMembership(ctx, societyId);
   const now = new Date().toISOString();
   const duplicateId = String(duplicate._id);
   const targetId = String(target._id);
@@ -149,9 +153,9 @@ export async function mergePortable(ctx: PortableMutationCtx, args: MergeArgs) {
   let motionsDropped = 0;
 
   if (duplicateMinutes && targetMinutes) {
-    let contentJson = mergedVersionContent(duplicate, duplicateMinutes, duplicateMotions);
-    if (contentJson.length > MAX_SNAPSHOT_CHARS) contentJson = mergedVersionContent(duplicate, { ...duplicateMinutes, sourceMeetingRecord: undefined }, duplicateMotions);
-    if (contentJson.length > MAX_SNAPSHOT_CHARS) contentJson = JSON.stringify({ truncated: true, meeting: { _id: duplicateId, title: duplicate.title } });
+    // Never discard source evidence to fit the snapshot: the duplicate is
+    // deleted below, so a truncated snapshot would be irreversible data loss.
+    const contentJson = mergedVersionContent(duplicate, duplicateMinutes, duplicateMotions);
     const existingVersions: any[] = Array.isArray(targetMinutes.importedSourceVersions) ? targetMinutes.importedSourceVersions : [];
     const carried: any[] = Array.isArray(duplicateMinutes.importedSourceVersions) ? duplicateMinutes.importedSourceVersions : [];
     const versionIds = new Set(existingVersions.map((row) => String(row.versionId)));
@@ -261,7 +265,7 @@ export async function mergePortable(ctx: PortableMutationCtx, args: MergeArgs) {
   await ctx.db.patch(target._id, { sourceReviewNotes: [target.sourceReviewNotes, reviewNote].filter(Boolean).join("\n") });
   await ctx.db.insert("activity", {
     societyId,
-    actor: "You",
+    actor: String(actor.displayName || "Workspace member"),
     entityType: "meeting",
     subjectId: targetId,
     entityId: targetId,

@@ -8,7 +8,7 @@
  * person" correction, and counts update as you edit. Saving writes the
  * minutes, the meeting and the attendance register together.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { ClipboardPaste, FileText, Plus, Save, Trash2, UserX, Users, Wand2, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -37,6 +37,7 @@ import {
 import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 import { Tooltip } from "../../../components/Tooltip";
+import { meetingExpectedFields, type MeetingExpectedFields } from "../../../../shared/meetingConcurrency";
 
 const STATUS_OPTIONS = ATTENDANCE_GRID_STATUSES.map((value) => ({ value, label: ATTENDANCE_GRID_STATUS_LABELS[value] }));
 const STATUS_TONE: Record<AttendanceGridStatus, "success" | "neutral" | "warn" | "info"> = {
@@ -75,7 +76,7 @@ export function MeetingAttendanceGrid({
   notYetHeld?: boolean;
 }) {
   const { can } = usePermissions();
-  const canEdit = can("minutes:write") && can("meetings:write") && !minutes?.approvedAt;
+  const canEdit = can("minutes:write") && can("meetings:write") && !minutes?.approvedAt && !minutes?.adoptedSnapshot;
   const records = useQuery(api.meetings.attendanceRecords, can("meetings:read") && meeting?._id ? { meetingId: meeting._id } : "skip") as any[] | undefined;
   const save = usePermissionedMutation(api.minutes.saveAttendanceGrid, canEdit);
   const toast = useToast();
@@ -86,12 +87,14 @@ export function MeetingAttendanceGrid({
   const [pasteText, setPasteText] = useState("");
   const [pasteStatus, setPasteStatus] = useState<AttendanceGridStatus>("present");
   const [saving, setSaving] = useState(false);
+  const editBaseline = useRef<MeetingExpectedFields>({});
 
   const viewRows = useMemo(() => attendanceRowsFromMinutes(minutes, records ?? []), [minutes, records]);
 
   useEffect(() => {
     if (!editing) return;
     const seeded = attendanceRowsFromMinutes(minutes, records ?? []);
+    editBaseline.current = meetingExpectedFields(minutes ?? {}, ["attendees", "absent", "detailedAttendance"]);
     setRows(seeded);
     setNonPersons([]);
     setInitial(rowsSignature(seeded, []));
@@ -164,7 +167,7 @@ export function MeetingAttendanceGrid({
   };
 
   const submit = async () => {
-    if (!canEdit || !minutes) return;
+    if (!canEdit || !minutes || saving) return;
     const blank = rows.filter((row) => !row.name.trim());
     if (blank.length) {
       toast.error("Some rows have no name", "Enter a name or remove the empty rows.");
@@ -174,6 +177,7 @@ export function MeetingAttendanceGrid({
     try {
       const result: any = await save({
         minutesId: minutes._id,
+        expected: editBaseline.current,
         rows: rows.map(({ key: _key, ...row }) => ({
           ...row,
           personId: row.personId as any,
@@ -257,7 +261,7 @@ export function MeetingAttendanceGrid({
           </details>
         )}
         {canEdit && (
-          <button type="button" className="btn-action" onClick={() => onEditingChange(true)} data-testid="attendance-edit">
+          <button type="button" className="btn-action" onClick={() => onEditingChange(true)} disabled={records === undefined} data-testid="attendance-edit">
             <Users size={12} /> Edit attendance
           </button>
         )}
