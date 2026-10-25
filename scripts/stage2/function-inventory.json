@@ -4015,6 +4015,523 @@
     ]
   },
   {
+    "key": "convex:billingAutomation:claimInternal",
+    "surface": "convex",
+    "name": "billingAutomation:claimInternal",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:claimRun",
+    "surface": "convex",
+    "name": "billingAutomation:claimRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:deliverLocal",
+    "surface": "convex",
+    "name": "billingAutomation:deliverLocal",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:dueWork",
+    "surface": "convex",
+    "name": "billingAutomation:dueWork",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:finalizeInternal",
+    "surface": "convex",
+    "name": "billingAutomation:finalizeInternal",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:getRun",
+    "surface": "convex",
+    "name": "billingAutomation:getRun",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:outboxInternal",
+    "surface": "convex",
+    "name": "billingAutomation:outboxInternal",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:prepareDue",
+    "surface": "convex",
+    "name": "billingAutomation:prepareDue",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:prepareInternal",
+    "surface": "convex",
+    "name": "billingAutomation:prepareInternal",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:reportSourceInternal",
+    "surface": "convex",
+    "name": "billingAutomation:reportSourceInternal",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:retryRun",
+    "surface": "convex",
+    "name": "billingAutomation:retryRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:saveSchedule",
+    "surface": "convex",
+    "name": "billingAutomation:saveSchedule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingAutomationSchedules",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:billingAutomation:saveSettings",
+    "surface": "convex",
+    "name": "billingAutomation:saveSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:setScheduleActive",
+    "surface": "convex",
+    "name": "billingAutomation:setScheduleActive",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingAutomationSchedules",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingAutomation:sourcePage",
+    "surface": "convex",
+    "name": "billingAutomation:sourcePage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:updateInternal",
+    "surface": "convex",
+    "name": "billingAutomation:updateInternal",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:workerContext",
+    "surface": "convex",
+    "name": "billingAutomation:workerContext",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomation:workspace",
+    "surface": "convex",
+    "name": "billingAutomation:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/billingAutomation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingAutomationActions:runDue",
+    "surface": "convex",
+    "name": "billingAutomationActions:runDue",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/billingAutomationActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingAutomationActions:scan",
+    "surface": "convex",
+    "name": "billingAutomationActions:scan",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/billingAutomationActions.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingDocuments:convertQuote",
+    "surface": "convex",
+    "name": "billingDocuments:convertQuote",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:customerStatement",
+    "surface": "convex",
+    "name": "billingDocuments:customerStatement",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingDocuments:decideRepairApproval",
+    "surface": "convex",
+    "name": "billingDocuments:decideRepairApproval",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:invoiceRepair",
+    "surface": "convex",
+    "name": "billingDocuments:invoiceRepair",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:removeRepairTime",
+    "surface": "convex",
+    "name": "billingDocuments:removeRepairTime",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairTimeEntries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:repairOperations",
+    "surface": "convex",
+    "name": "billingDocuments:repairOperations",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "repairJobId",
+        "table": "repairJobs",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:requestRepairApproval",
+    "surface": "convex",
+    "name": "billingDocuments:requestRepairApproval",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:reviseQuote",
+    "surface": "convex",
+    "name": "billingDocuments:reviseQuote",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:saveRepairDispatch",
+    "surface": "convex",
+    "name": "billingDocuments:saveRepairDispatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "technicianUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:saveRepairTime",
+    "surface": "convex",
+    "name": "billingDocuments:saveRepairTime",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairTimeEntries",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "repairJobId",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "technicianUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:saveStatementSnapshot",
+    "surface": "convex",
+    "name": "billingDocuments:saveStatementSnapshot",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:billingDocuments:setQuoteStatus",
+    "surface": "convex",
+    "name": "billingDocuments:setQuoteStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:setRepairStatus",
+    "surface": "convex",
+    "name": "billingDocuments:setRepairStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:startRepairTimer",
+    "surface": "convex",
+    "name": "billingDocuments:startRepairTimer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "technicianUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:stopRepairTimer",
+    "surface": "convex",
+    "name": "billingDocuments:stopRepairTimer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairTimeEntries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:syncRepairTimeCharges",
+    "surface": "convex",
+    "name": "billingDocuments:syncRepairTimeCharges",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:upsertQuote",
+    "surface": "convex",
+    "name": "billingDocuments:upsertQuote",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:billingDocuments:workspace",
+    "surface": "convex",
+    "name": "billingDocuments:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/billingDocuments.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "quoteId",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:bills:attachDocument",
     "surface": "convex",
     "name": "bills:attachDocument",
@@ -4141,6 +4658,34 @@
     ]
   },
   {
+    "key": "convex:bills:recordAdjustment",
+    "surface": "convex",
+    "name": "bills:recordAdjustment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "adjustmentAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "cashAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:bills:recordPayment",
     "surface": "convex",
     "name": "bills:recordPayment",
@@ -4188,6 +4733,22 @@
     "key": "convex:bills:removePayment",
     "surface": "convex",
     "name": "bills:removePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/bills.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:bills:reverseAdjustment",
+    "surface": "convex",
+    "name": "bills:reverseAdjustment",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/bills.ts",
@@ -4788,6 +5349,101 @@
         "optional": true
       }
     ]
+  },
+  {
+    "key": "convex:commerceReports:archiveDefinition",
+    "surface": "convex",
+    "name": "commerceReports:archiveDefinition",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:commerceReports:duplicateDefinition",
+    "surface": "convex",
+    "name": "commerceReports:duplicateDefinition",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:commerceReports:getDefinition",
+    "surface": "convex",
+    "name": "commerceReports:getDefinition",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:commerceReports:listDefinitions",
+    "surface": "convex",
+    "name": "commerceReports:listDefinitions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:commerceReports:listPresets",
+    "surface": "convex",
+    "name": "commerceReports:listPresets",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:commerceReports:removePreset",
+    "surface": "convex",
+    "name": "commerceReports:removePreset",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reportFilterPresets",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:commerceReports:saveDefinition",
+    "surface": "convex",
+    "name": "commerceReports:saveDefinition",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reportDefinitions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:commerceReports:savePreset",
+    "surface": "convex",
+    "name": "commerceReports:savePreset",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:commerceReports:sourcePage",
+    "surface": "convex",
+    "name": "commerceReports:sourcePage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/commerceReports.ts",
+    "idArguments": []
   },
   {
     "key": "convex:commitments:create",
@@ -6253,6 +6909,104 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:costPlanning:importSource",
+    "surface": "convex",
+    "name": "costPlanning:importSource",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/costPlanning.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:costPlanning:saveCost",
+    "surface": "convex",
+    "name": "costPlanning:saveCost",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/costPlanning.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "costPlanningItems",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:costPlanning:savePeriod",
+    "surface": "convex",
+    "name": "costPlanning:savePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/costPlanning.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "costPlanningPeriods",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:costPlanning:saveStaff",
+    "surface": "convex",
+    "name": "costPlanning:saveStaff",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/costPlanning.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "staffCostPlans",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:costPlanning:setArchived",
+    "surface": "convex",
+    "name": "costPlanning:setArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/costPlanning.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:costPlanning:sourcePage",
+    "surface": "convex",
+    "name": "costPlanning:sourcePage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/costPlanning.ts",
+    "idArguments": [
+      {
+        "path": "periodId",
+        "table": "costPlanningPeriods",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:costPlanning:workspace",
+    "surface": "convex",
+    "name": "costPlanning:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/costPlanning.ts",
+    "idArguments": [
+      {
+        "path": "periodId",
+        "table": "costPlanningPeriods",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -13459,6 +14213,148 @@
     ]
   },
   {
+    "key": "convex:invoicePreferences:assignCustomer",
+    "surface": "convex",
+    "name": "invoicePreferences:assignCustomer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoicePreferences.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "priceListId",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoicePreferences:collectionPage",
+    "surface": "convex",
+    "name": "invoicePreferences:collectionPage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/invoicePreferences.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoicePreferences:removeView",
+    "surface": "convex",
+    "name": "invoicePreferences:removeView",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoicePreferences.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "billingInvoiceViews",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoicePreferences:savePriceList",
+    "surface": "convex",
+    "name": "invoicePreferences:savePriceList",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoicePreferences.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoicePreferences:saveProfile",
+    "surface": "convex",
+    "name": "invoicePreferences:saveProfile",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoicePreferences.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "priceListId",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoicePreferences:saveView",
+    "surface": "convex",
+    "name": "invoicePreferences:saveView",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoicePreferences.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "billingInvoiceViews",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoicePreferences:workspace",
+    "surface": "convex",
+    "name": "invoicePreferences:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/invoicePreferences.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:billMemberDues",
     "surface": "convex",
     "name": "invoices:billMemberDues",
@@ -13477,6 +14373,28 @@
         "table": "members",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:documentTemplates",
+    "surface": "convex",
+    "name": "invoices:documentTemplates",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "templateId",
+        "table": "invoiceTemplates",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -13514,6 +14432,22 @@
         "path": "subscriptionIds",
         "table": "memberSubscriptions",
         "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:invoiceRepairJob",
+    "surface": "convex",
+    "name": "invoices:invoiceRepairJob",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
         "optional": false
       }
     ]
@@ -13629,6 +14563,34 @@
     ]
   },
   {
+    "key": "convex:invoices:recordAdjustment",
+    "surface": "convex",
+    "name": "invoices:recordAdjustment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:recordPayment",
     "surface": "convex",
     "name": "invoices:recordPayment",
@@ -13708,6 +14670,38 @@
     "key": "convex:invoices:restoreVoided",
     "surface": "convex",
     "name": "invoices:restoreVoided",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:revalue",
+    "surface": "convex",
+    "name": "invoices:revalue",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:reverseAdjustment",
+    "surface": "convex",
+    "name": "invoices:reverseAdjustment",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/invoices.ts",
@@ -13831,6 +14825,22 @@
     ]
   },
   {
+    "key": "convex:invoices:setRepairStatus",
+    "surface": "convex",
+    "name": "invoices:setRepairStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:setSeriesStatus",
     "surface": "convex",
     "name": "invoices:setSeriesStatus",
@@ -13883,6 +14893,18 @@
         "optional": false
       },
       {
+        "path": "priceListId",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "repairJobId",
+        "table": "repairJobs",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "actingUserId",
         "table": "users",
         "array": false,
@@ -13919,6 +14941,50 @@
     ]
   },
   {
+    "key": "convex:invoices:upsertPriceList",
+    "surface": "convex",
+    "name": "invoices:upsertPriceList",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:upsertRepairJob",
+    "surface": "convex",
+    "name": "invoices:upsertRepairJob",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:upsertSeries",
     "surface": "convex",
     "name": "invoices:upsertSeries",
@@ -13941,6 +15007,28 @@
       {
         "path": "fromInvoiceId",
         "table": "invoices",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:upsertTemplate",
+    "surface": "convex",
+    "name": "invoices:upsertTemplate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "invoiceTemplates",
         "array": false,
         "optional": true
       }
@@ -20030,6 +21118,489 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollCalculation:approve",
+    "surface": "convex",
+    "name": "payrollCalculation:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollCalculation:exportContext",
+    "surface": "convex",
+    "name": "payrollCalculation:exportContext",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollCalculation:finalize",
+    "surface": "convex",
+    "name": "payrollCalculation:finalize",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollCalculation:preview",
+    "surface": "convex",
+    "name": "payrollCalculation:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollCalculation:recordPayment",
+    "surface": "convex",
+    "name": "payrollCalculation:recordPayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": [
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollCalculation:reverse",
+    "surface": "convex",
+    "name": "payrollCalculation:reverse",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollCalculation:saveDraft",
+    "surface": "convex",
+    "name": "payrollCalculation:saveDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollCalculation:saveEarningCode",
+    "surface": "convex",
+    "name": "payrollCalculation:saveEarningCode",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollEarningCodes",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollCalculation:saveEmployerSettings",
+    "surface": "convex",
+    "name": "payrollCalculation:saveEmployerSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollCalculation:saveOpeningBalance",
+    "surface": "convex",
+    "name": "payrollCalculation:saveOpeningBalance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollOpeningBalances",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollCalculation:saveProfile",
+    "surface": "convex",
+    "name": "payrollCalculation:saveProfile",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollEmployeeProfiles",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollCalculation:saveWorkDay",
+    "surface": "convex",
+    "name": "payrollCalculation:saveWorkDay",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollWorkDays",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollCalculation:workspace",
+    "surface": "convex",
+    "name": "payrollCalculation:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollCalculation.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollLeave:savePeriod",
+    "surface": "convex",
+    "name": "payrollLeave:savePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollLeave.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollLeave:saveRequest",
+    "surface": "convex",
+    "name": "payrollLeave:saveRequest",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollLeave.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollLeave:transitionRequest",
+    "surface": "convex",
+    "name": "payrollLeave:transitionRequest",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollLeave.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollLeave:workspace",
+    "surface": "convex",
+    "name": "payrollLeave:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollLeave.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRemittance:approve",
+    "surface": "convex",
+    "name": "payrollRemittance:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRemittance:confirmLegacyAccount",
+    "surface": "convex",
+    "name": "payrollRemittance:confirmLegacyAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": [
+      {
+        "path": "obligationId",
+        "table": "payrollRemittances",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollRemittance:preview",
+    "surface": "convex",
+    "name": "payrollRemittance:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": [
+      {
+        "path": "obligationId",
+        "table": "payrollRemittances",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollRemittance:reconcilePayment",
+    "surface": "convex",
+    "name": "payrollRemittance:reconcilePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": [
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollRemittance:recordManualSubmission",
+    "surface": "convex",
+    "name": "payrollRemittance:recordManualSubmission",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRemittance:recordPreparedExport",
+    "surface": "convex",
+    "name": "payrollRemittance:recordPreparedExport",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRemittance:reject",
+    "surface": "convex",
+    "name": "payrollRemittance:reject",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRemittance:saveDraft",
+    "surface": "convex",
+    "name": "payrollRemittance:saveDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRemittance:saveReadiness",
+    "surface": "convex",
+    "name": "payrollRemittance:saveReadiness",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRemittance:workspace",
+    "surface": "convex",
+    "name": "payrollRemittance:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollRemittance.ts",
+    "idArguments": [
+      {
+        "path": "bankAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:closeCase",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:closeCase",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:recordGenerated",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:recordGenerated",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:recordIssuance",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:recordIssuance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:recordSubmission",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:recordSubmission",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:saveCase",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:saveCase",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": [
+      {
+        "path": "registerId",
+        "table": "recordsOfEmployment",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:saveFollowUp",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:saveFollowUp",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:updateChecklist",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:updateChecklist",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRoeWorkflow:workspace",
+    "surface": "convex",
+    "name": "payrollRoeWorkflow:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollRoeWorkflow.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRules:get",
+    "surface": "convex",
+    "name": "payrollRules:get",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollRules.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRules:publish",
+    "surface": "convex",
+    "name": "payrollRules:publish",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRules.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRules:retire",
+    "surface": "convex",
+    "name": "payrollRules:retire",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRules.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRules:review",
+    "surface": "convex",
+    "name": "payrollRules:review",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRules.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRules:saveDraft",
+    "surface": "convex",
+    "name": "payrollRules:saveDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollRules.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollRules:workspace",
+    "surface": "convex",
+    "name": "payrollRules:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollRules.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:payrollTd1:applyReviewed",
+    "surface": "convex",
+    "name": "payrollTd1:applyReviewed",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payrollTd1.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payrollTd1:workspace",
+    "surface": "convex",
+    "name": "payrollTd1:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payrollTd1.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
         "array": false,
         "optional": false
       }
@@ -30217,6 +31788,426 @@
     ]
   },
   {
+    "key": "portable:billingAutomation:claimRun",
+    "surface": "portable",
+    "name": "billingAutomation:claimRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingAutomation:deliverLocal",
+    "surface": "portable",
+    "name": "billingAutomation:deliverLocal",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingAutomation:getRun",
+    "surface": "portable",
+    "name": "billingAutomation:getRun",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingAutomation:prepareDue",
+    "surface": "portable",
+    "name": "billingAutomation:prepareDue",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingAutomation:retryRun",
+    "surface": "portable",
+    "name": "billingAutomation:retryRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingAutomation:saveSchedule",
+    "surface": "portable",
+    "name": "billingAutomation:saveSchedule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingAutomationSchedules",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:billingAutomation:saveSettings",
+    "surface": "portable",
+    "name": "billingAutomation:saveSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingAutomation:setScheduleActive",
+    "surface": "portable",
+    "name": "billingAutomation:setScheduleActive",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingAutomationSchedules",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingAutomation:sourcePage",
+    "surface": "portable",
+    "name": "billingAutomation:sourcePage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingAutomation:workspace",
+    "surface": "portable",
+    "name": "billingAutomation:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingDocuments:convertQuote",
+    "surface": "portable",
+    "name": "billingDocuments:convertQuote",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:customerStatement",
+    "surface": "portable",
+    "name": "billingDocuments:customerStatement",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingDocuments:decideRepairApproval",
+    "surface": "portable",
+    "name": "billingDocuments:decideRepairApproval",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:invoiceRepair",
+    "surface": "portable",
+    "name": "billingDocuments:invoiceRepair",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:removeRepairTime",
+    "surface": "portable",
+    "name": "billingDocuments:removeRepairTime",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairTimeEntries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:repairOperations",
+    "surface": "portable",
+    "name": "billingDocuments:repairOperations",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "repairJobId",
+        "table": "repairJobs",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:requestRepairApproval",
+    "surface": "portable",
+    "name": "billingDocuments:requestRepairApproval",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:reviseQuote",
+    "surface": "portable",
+    "name": "billingDocuments:reviseQuote",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:saveRepairDispatch",
+    "surface": "portable",
+    "name": "billingDocuments:saveRepairDispatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "technicianUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:saveRepairTime",
+    "surface": "portable",
+    "name": "billingDocuments:saveRepairTime",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairTimeEntries",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "repairJobId",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "technicianUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:saveStatementSnapshot",
+    "surface": "portable",
+    "name": "billingDocuments:saveStatementSnapshot",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:billingDocuments:setQuoteStatus",
+    "surface": "portable",
+    "name": "billingDocuments:setQuoteStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:setRepairStatus",
+    "surface": "portable",
+    "name": "billingDocuments:setRepairStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:startRepairTimer",
+    "surface": "portable",
+    "name": "billingDocuments:startRepairTimer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "technicianUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:stopRepairTimer",
+    "surface": "portable",
+    "name": "billingDocuments:stopRepairTimer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairTimeEntries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:syncRepairTimeCharges",
+    "surface": "portable",
+    "name": "billingDocuments:syncRepairTimeCharges",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:upsertQuote",
+    "surface": "portable",
+    "name": "billingDocuments:upsertQuote",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:billingDocuments:workspace",
+    "surface": "portable",
+    "name": "billingDocuments:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "quoteId",
+        "table": "billingQuotes",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:bills:attachDocument",
     "surface": "portable",
     "name": "bills:attachDocument",
@@ -30343,6 +32334,34 @@
     ]
   },
   {
+    "key": "portable:bills:recordAdjustment",
+    "surface": "portable",
+    "name": "bills:recordAdjustment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "adjustmentAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "cashAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:bills:recordPayment",
     "surface": "portable",
     "name": "bills:recordPayment",
@@ -30390,6 +32409,22 @@
     "key": "portable:bills:removePayment",
     "surface": "portable",
     "name": "bills:removePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "bills",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:bills:reverseAdjustment",
+    "surface": "portable",
+    "name": "bills:reverseAdjustment",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
@@ -30981,6 +33016,101 @@
         "optional": true
       }
     ]
+  },
+  {
+    "key": "portable:commerceReports:archiveDefinition",
+    "surface": "portable",
+    "name": "commerceReports:archiveDefinition",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:commerceReports:duplicateDefinition",
+    "surface": "portable",
+    "name": "commerceReports:duplicateDefinition",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:commerceReports:getDefinition",
+    "surface": "portable",
+    "name": "commerceReports:getDefinition",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:commerceReports:listDefinitions",
+    "surface": "portable",
+    "name": "commerceReports:listDefinitions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:commerceReports:listPresets",
+    "surface": "portable",
+    "name": "commerceReports:listPresets",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:commerceReports:removePreset",
+    "surface": "portable",
+    "name": "commerceReports:removePreset",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reportFilterPresets",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:commerceReports:saveDefinition",
+    "surface": "portable",
+    "name": "commerceReports:saveDefinition",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reportDefinitions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:commerceReports:savePreset",
+    "surface": "portable",
+    "name": "commerceReports:savePreset",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:commerceReports:sourcePage",
+    "surface": "portable",
+    "name": "commerceReports:sourcePage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
   },
   {
     "key": "portable:commitments:create",
@@ -32278,6 +34408,104 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:costPlanning:importSource",
+    "surface": "portable",
+    "name": "costPlanning:importSource",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:costPlanning:saveCost",
+    "surface": "portable",
+    "name": "costPlanning:saveCost",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "costPlanningItems",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:costPlanning:savePeriod",
+    "surface": "portable",
+    "name": "costPlanning:savePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "costPlanningPeriods",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:costPlanning:saveStaff",
+    "surface": "portable",
+    "name": "costPlanning:saveStaff",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "staffCostPlans",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:costPlanning:setArchived",
+    "surface": "portable",
+    "name": "costPlanning:setArchived",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:costPlanning:sourcePage",
+    "surface": "portable",
+    "name": "costPlanning:sourcePage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "periodId",
+        "table": "costPlanningPeriods",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:costPlanning:workspace",
+    "surface": "portable",
+    "name": "costPlanning:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "periodId",
+        "table": "costPlanningPeriods",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -35288,6 +37516,28 @@
         "table": "financialConnections",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:financialHub:importBrowserWaveTransactions",
+    "surface": "portable",
+    "name": "financialHub:importBrowserWaveTransactions",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -38751,6 +41001,148 @@
     ]
   },
   {
+    "key": "portable:invoicePreferences:assignCustomer",
+    "surface": "portable",
+    "name": "invoicePreferences:assignCustomer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "priceListId",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoicePreferences:collectionPage",
+    "surface": "portable",
+    "name": "invoicePreferences:collectionPage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoicePreferences:removeView",
+    "surface": "portable",
+    "name": "invoicePreferences:removeView",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "billingInvoiceViews",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoicePreferences:savePriceList",
+    "surface": "portable",
+    "name": "invoicePreferences:savePriceList",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoicePreferences:saveProfile",
+    "surface": "portable",
+    "name": "invoicePreferences:saveProfile",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "priceListId",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoicePreferences:saveView",
+    "surface": "portable",
+    "name": "invoicePreferences:saveView",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "billingInvoiceViews",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoicePreferences:workspace",
+    "surface": "portable",
+    "name": "invoicePreferences:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:billMemberDues",
     "surface": "portable",
     "name": "invoices:billMemberDues",
@@ -38769,6 +41161,28 @@
         "table": "members",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:documentTemplates",
+    "surface": "portable",
+    "name": "invoices:documentTemplates",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "templateId",
+        "table": "invoiceTemplates",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -38806,6 +41220,22 @@
         "path": "subscriptionIds",
         "table": "memberSubscriptions",
         "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:invoiceRepairJob",
+    "surface": "portable",
+    "name": "invoices:invoiceRepairJob",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
         "optional": false
       }
     ]
@@ -38921,6 +41351,34 @@
     ]
   },
   {
+    "key": "portable:invoices:recordAdjustment",
+    "surface": "portable",
+    "name": "invoices:recordAdjustment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "depositAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:recordPayment",
     "surface": "portable",
     "name": "invoices:recordPayment",
@@ -39000,6 +41458,38 @@
     "key": "portable:invoices:restoreVoided",
     "surface": "portable",
     "name": "invoices:restoreVoided",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:revalue",
+    "surface": "portable",
+    "name": "invoices:revalue",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:reverseAdjustment",
+    "surface": "portable",
+    "name": "invoices:reverseAdjustment",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
@@ -39123,6 +41613,22 @@
     ]
   },
   {
+    "key": "portable:invoices:setRepairStatus",
+    "surface": "portable",
+    "name": "invoices:setRepairStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:setSeriesStatus",
     "surface": "portable",
     "name": "invoices:setSeriesStatus",
@@ -39175,6 +41681,18 @@
         "optional": false
       },
       {
+        "path": "priceListId",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "repairJobId",
+        "table": "repairJobs",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "actingUserId",
         "table": "users",
         "array": false,
@@ -39211,6 +41729,50 @@
     ]
   },
   {
+    "key": "portable:invoices:upsertPriceList",
+    "surface": "portable",
+    "name": "invoices:upsertPriceList",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "invoicePriceLists",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:upsertRepairJob",
+    "surface": "portable",
+    "name": "invoices:upsertRepairJob",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "repairJobs",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:upsertSeries",
     "surface": "portable",
     "name": "invoices:upsertSeries",
@@ -39233,6 +41795,28 @@
       {
         "path": "fromInvoiceId",
         "table": "invoices",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:upsertTemplate",
+    "surface": "portable",
+    "name": "invoices:upsertTemplate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "invoiceTemplates",
         "array": false,
         "optional": true
       }
@@ -44037,6 +46621,489 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollCalculation:approve",
+    "surface": "portable",
+    "name": "payrollCalculation:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollCalculation:exportContext",
+    "surface": "portable",
+    "name": "payrollCalculation:exportContext",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollCalculation:finalize",
+    "surface": "portable",
+    "name": "payrollCalculation:finalize",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollCalculation:preview",
+    "surface": "portable",
+    "name": "payrollCalculation:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollCalculation:recordPayment",
+    "surface": "portable",
+    "name": "payrollCalculation:recordPayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollCalculation:reverse",
+    "surface": "portable",
+    "name": "payrollCalculation:reverse",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollCalculation:saveDraft",
+    "surface": "portable",
+    "name": "payrollCalculation:saveDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollCalculation:saveEarningCode",
+    "surface": "portable",
+    "name": "payrollCalculation:saveEarningCode",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollEarningCodes",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollCalculation:saveEmployerSettings",
+    "surface": "portable",
+    "name": "payrollCalculation:saveEmployerSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollCalculation:saveOpeningBalance",
+    "surface": "portable",
+    "name": "payrollCalculation:saveOpeningBalance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollOpeningBalances",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollCalculation:saveProfile",
+    "surface": "portable",
+    "name": "payrollCalculation:saveProfile",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollEmployeeProfiles",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollCalculation:saveWorkDay",
+    "surface": "portable",
+    "name": "payrollCalculation:saveWorkDay",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollWorkDays",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollCalculation:workspace",
+    "surface": "portable",
+    "name": "payrollCalculation:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollLeave:savePeriod",
+    "surface": "portable",
+    "name": "payrollLeave:savePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollLeave:saveRequest",
+    "surface": "portable",
+    "name": "payrollLeave:saveRequest",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollLeave:transitionRequest",
+    "surface": "portable",
+    "name": "payrollLeave:transitionRequest",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollLeave:workspace",
+    "surface": "portable",
+    "name": "payrollLeave:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRemittance:approve",
+    "surface": "portable",
+    "name": "payrollRemittance:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRemittance:confirmLegacyAccount",
+    "surface": "portable",
+    "name": "payrollRemittance:confirmLegacyAccount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "obligationId",
+        "table": "payrollRemittances",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollRemittance:preview",
+    "surface": "portable",
+    "name": "payrollRemittance:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "obligationId",
+        "table": "payrollRemittances",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollRemittance:reconcilePayment",
+    "surface": "portable",
+    "name": "payrollRemittance:reconcilePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollRemittance:recordManualSubmission",
+    "surface": "portable",
+    "name": "payrollRemittance:recordManualSubmission",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRemittance:recordPreparedExport",
+    "surface": "portable",
+    "name": "payrollRemittance:recordPreparedExport",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRemittance:reject",
+    "surface": "portable",
+    "name": "payrollRemittance:reject",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRemittance:saveDraft",
+    "surface": "portable",
+    "name": "payrollRemittance:saveDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRemittance:saveReadiness",
+    "surface": "portable",
+    "name": "payrollRemittance:saveReadiness",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRemittance:workspace",
+    "surface": "portable",
+    "name": "payrollRemittance:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "bankAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:closeCase",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:closeCase",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:recordGenerated",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:recordGenerated",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:recordIssuance",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:recordIssuance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:recordSubmission",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:recordSubmission",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:saveCase",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:saveCase",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "registerId",
+        "table": "recordsOfEmployment",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:saveFollowUp",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:saveFollowUp",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:updateChecklist",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:updateChecklist",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRoeWorkflow:workspace",
+    "surface": "portable",
+    "name": "payrollRoeWorkflow:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRules:get",
+    "surface": "portable",
+    "name": "payrollRules:get",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRules:publish",
+    "surface": "portable",
+    "name": "payrollRules:publish",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRules:retire",
+    "surface": "portable",
+    "name": "payrollRules:retire",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRules:review",
+    "surface": "portable",
+    "name": "payrollRules:review",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRules:saveDraft",
+    "surface": "portable",
+    "name": "payrollRules:saveDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollRules:workspace",
+    "surface": "portable",
+    "name": "payrollRules:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:payrollTd1:applyReviewed",
+    "surface": "portable",
+    "name": "payrollTd1:applyReviewed",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payrollTd1:workspace",
+    "surface": "portable",
+    "name": "payrollTd1:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
         "array": false,
         "optional": false
       }

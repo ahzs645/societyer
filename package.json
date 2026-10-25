@@ -436,7 +436,10 @@
     "test:procurement-integrity": "python3 scripts/procurement/test-export.py && python3 scripts/procurement/test-integrity.py && tsx scripts/check-procurement-publication.ts && tsx scripts/check-procurement-source-status.ts && tsx scripts/check-procurement-operator.ts",
     "test:procurement-operator": "tsx scripts/check-procurement-operator.ts",
     "test:procurement-browser": "playwright test --config playwright.procurement.config.ts",
-    "test:procurement-precomputed": "tsx scripts/check-procurement-precomputed.ts"
+    "test:procurement-precomputed": "tsx scripts/check-procurement-precomputed.ts",
+    "test:meeting-collaboration": "node --import tsx scripts/check-meeting-collaboration.ts && node --import tsx scripts/check-meeting-notes-autosave.ts && node --import tsx scripts/check-meeting-motion-autosave.ts",
+    "test:convex-multi-user": "node --import tsx scripts/check-convex-portable-bounded.ts && node --import tsx scripts/check-dashboard-corporation-convex.ts && node --import tsx scripts/check-notification-recipient-isolation.ts && node --import tsx scripts/check-notification-personal-state.ts && node scripts/check-convex-usage-summary.mjs",
+    "usage:summarize": "node scripts/summarize-convex-usage.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

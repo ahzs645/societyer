@@ -101,7 +101,7 @@ function ComposerGraph({
                 x={annotation.x}
                 y={annotation.y + 10}
                 fontSize={12}
-                fill="var(--text, #18181b)"
+                fill="var(--text-primary)"
               >
                 {annotation.text}
               </text>

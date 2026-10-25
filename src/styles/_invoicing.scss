@@ -573,6 +573,9 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 .invoice-paper--compact { padding: token(s-4); box-shadow: none; }
 
 .invoice-doc {
+  --invoice-brand-ink: var(--invoice-ink);
+  --invoice-brand-muted: var(--invoice-ink-muted);
+  --invoice-brand-paper: var(--invoice-paper);
   position: relative;
   min-width: 0;
   color: token(invoice-ink);
@@ -1002,13 +1005,13 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 .invoice-brand-card-logo { display: block; width: 220px; max-width: 100%; margin-bottom: token(s-3); }
 .invoice-doc--brand-inter, .invoice-doc--brand-sans {
   font-family: "Invoice Inter", Arial, sans-serif;
-  color: var(--invoice-brand-ink);
+  color: var(--invoice-brand-ink, #18181b);
   .invoice-doc__title { font-family: "Invoice Display", Arial, sans-serif; font-weight: 500; letter-spacing: -0.04em; }
   .invoice-doc__label, .invoice-doc__brand-descriptor { font-family: "Invoice Mono", monospace; }
   .invoice-doc__logo { max-width: 240px; max-height: 64px; padding: 10px; box-sizing: content-box; }
-  .invoice-doc__muted, .invoice-doc__foot { color: var(--invoice-brand-muted); }
-  .invoice-doc__pay { background: var(--invoice-brand-paper); }
+  .invoice-doc__muted, .invoice-doc__foot { color: var(--invoice-brand-muted, #52525b); }
+  .invoice-doc__pay { background: var(--invoice-brand-paper, #f4f4f5); }
 }
 .invoice-doc__brand-descriptor { font-size: 10px; letter-spacing: 0.04em; margin-bottom: token(s-2); }
 
-.invoice-doc--brand-serif { font-family: Georgia, "Times New Roman", serif; color: var(--invoice-brand-ink); }
+.invoice-doc--brand-serif { font-family: Georgia, "Times New Roman", serif; color: var(--invoice-brand-ink, #18181b); }
