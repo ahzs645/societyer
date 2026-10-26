@@ -5,7 +5,7 @@ import { Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { Checkbox } from "../../components/Controls";
 import { triggerBlobDownload } from "../../lib/zip";
-import { importInvoiceBrand, type InvoiceBrand } from "../../../shared/invoiceBranding";
+import { importInvoiceBrand, invoiceBrandFontDescription, type InvoiceBrand } from "../../../shared/invoiceBranding";
 import { resolveDocumentDesign, resolveDocumentAdvanced, type DocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
 import { InvoiceDocument, type InvoiceDocumentData } from "./InvoiceDocument";
 import {
@@ -76,9 +76,9 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
   const importBrand = async (file?: File) => {
     if (!file) return;
     try {
-      if (file.size > 2_000_000) throw new Error("Choose a brand.json smaller than 2 MB.");
+      if (file.size > 2_000_000) throw new Error("Choose a Brandkit JSON profile smaller than 2 MB.");
       applyBrand(importInvoiceBrand(JSON.parse(await file.text()))); onError("");
-    } catch (error) { onError(error instanceof Error ? error.message : "Could not import brand.json."); }
+    } catch (error) { onError(error instanceof Error ? error.message : "Could not import the Brandkit profile."); }
   };
 
   return <div className="document-designer">
@@ -88,11 +88,11 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
       <DocumentGeometryControls {...controls} />
       <DesignSection id="branding" title="Branding">
         <div className="invoice-brand-controls"><strong>Brand kit</strong><button className="btn btn--sm" type="button" onClick={() => { try { applyBrand(importInvoiceBrand(ddcnorthBrand, "https://projects.ahmadjalil.com/brandkit/?brand=ddcnorth")); onError(""); } catch (error) { onError(error instanceof Error ? error.message : "Could not apply brand."); } }}>Apply ddcnorth</button>
-          <Field label="Import brand.json" hint="Supports brandkit logo geometry, palette and supported font families."><input className="input" type="file" accept=".json,application/json" onChange={(e) => { void importBrand(e.target.files?.[0]); e.target.value = ""; }} /></Field>
-          {config.brand && <div><p>{config.brand.name} · {config.brand.version}</p><p className="muted">Font: {config.brand.font === "inter" ? "Inter / Inter Display / Space Mono" : config.brand.font}. Legal and contact details come from your organization.</p><div className="invoice-brand-swatches">{[config.brand.primary, config.brand.ink, config.brand.paper, config.brand.light].map((color, index) => <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />)}</div><button type="button" className="btn btn--sm" onClick={() => onChange({ brand: undefined })}>Use organization branding</button></div>}
+          <Field label="Import Brandkit profile" hint="Use source/consumer-profile.json from a Brandkit download. Existing circle-symbol brand.json files are also supported."><input className="input" type="file" accept=".json,application/json" onChange={(e) => { void importBrand(e.target.files?.[0]); e.target.value = ""; }} /></Field>
+          {config.brand && <div><p>{config.brand.name} · {config.brand.version}</p><p className="muted">Document body font: {invoiceBrandFontDescription(config.brand)}. Legal and contact details come from your organization.</p>{config.brand.sourceTypography && <p className="muted">Logo lettering is preserved as vector artwork. Heading and label fonts use the document typography controls; source font files are not imported.</p>}<div className="invoice-brand-swatches">{[config.brand.primary, config.brand.ink, config.brand.paper, config.brand.light].map((color, index) => <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />)}</div><button type="button" className="btn btn--sm" onClick={() => onChange({ brand: undefined })}>Use organization branding</button></div>}
         </div>
         <Checkbox label="Show logo" checked={config.showLogo} onChange={(showLogo) => onChange({ showLogo })} />
-        {config.brand && <Field label="Logo color"><Select value={config.logoVariant ?? "primary"} onChange={(logoVariant) => onChange({ logoVariant: logoVariant as InvoiceTemplate["logoVariant"] })} options={[{ value: "primary", label: "Brand primary" }, { value: "black", label: "Black" }, { value: "reverse", label: "White on brand color" }]} /></Field>}
+        {config.brand && <Field label="Logo color"><Select value={config.logoVariant ?? "primary"} onChange={(logoVariant) => onChange({ logoVariant: logoVariant as InvoiceTemplate["logoVariant"] })} options={[{ value: "primary", label: "Brand colors" }, { value: "black", label: "Black" }, { value: "reverse", label: "Reverse on brand color" }]} /></Field>}
         <div className="document-designer__grid"><DesignNumber label="Logo width (pt)" value={design.logo.width} min={24} max={280} onChange={(width) => update({ logo: { ...design.logo, width } })} /><Field label="Logo alignment"><Select value={design.logo.alignment} onChange={(alignment) => update({ logo: { ...design.logo, alignment: alignment as DocumentDesign["logo"]["alignment"] } })} options={[{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }]} /></Field></div>
         <Field label="Accent color"><input className="input document-designer__color" type="color" value={config.accentColor} onChange={(e) => onChange({ accentColor: e.target.value })} /></Field>
       </DesignSection>
