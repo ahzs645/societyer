@@ -76,7 +76,7 @@ function BooksReportsView({ societyId, societyName, slug }: { societyId: Id<"soc
               program, fund or tag, so cash at the start is the whole cash balance and cash at the end is that plus the
               filtered net change.
             </p>
-            <p>Click any amount to see the journal lines behind it. Downloads include the society, basis, range and filters.</p>
+            <p>Click any amount to see the journal lines behind it. Downloads include the organization name, basis, range and filters.</p>
           </>
         }
       />

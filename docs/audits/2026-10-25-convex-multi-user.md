@@ -2,6 +2,8 @@
 
 **Date:** 2026-10-25
 
+**CI follow-up:** 2026-10-26
+
 **Repository:** `ahzs645/societyer`
 
 **Reviewed baseline:** `2ebd01b948a984bfb017438b4043be83d1fa1a99` (`main`)
@@ -14,7 +16,7 @@ The highest-priority source defects were in personal notification isolation and 
 
 This is a broad source and automated-behavior audit, with deeper review of meetings, minutes, agendas, motions, attendance, notifications, workspace access, and the Convex adapter. It is **not a claim that every screen was visually tested or that production data has been audited**.
 
-The production site and Convex dashboard presented sign-in screens. The available Convex integration supplied development/scaling guidance, but did not expose this project's billing, function logs, tables, or usage metrics. Browser policy prevented reaching the local preview. No production data was accessed or changed, no messages were sent, and no production deployment or merge was performed during the audit.
+The production site and Convex dashboard presented sign-in screens. The available Convex integration supplied development/scaling guidance, but did not expose this project's billing, function logs, tables, or usage metrics. Its guidance tool was retested successfully on October 26; its declared capability explicitly excludes live deployment/log inspection. Dashboard sign-in was not completed. Browser policy prevented reaching the local preview; the repository's existing CI did run its synthetic browser suites, as described below. No production data was accessed or changed, no messages were sent, and no production deployment or merge was performed during the audit.
 
 The tracked DDC North build configuration points to `industrious-cricket-610`; the development configuration points to `gallant-anteater-27`. These are source configuration values, not confirmation that those deployments currently run this exact commit. Confirm the live project/deployment before comparing metrics or releasing changes.
 
@@ -125,6 +127,16 @@ The corporation dashboard could return `roleHolders` IDs and an unknown appointm
 Three already-existing routes lacked fixture/access-scope inventory entries: financial planning, the report catalog, and the payroll calculator. Their entries were added and the route gate passes. The commerce chart referenced an undefined text color, and invoice branding used undefined ink/muted/paper custom properties; those now use defined theme values. CSS-variable validation and Sass compilation pass. Visual browser QA remains outstanding.
 
 Sources: [dashboard validator](../../convex/dashboard.ts), [dashboard regression](../../scripts/check-dashboard-corporation-convex.ts), [route fixtures](../../tests/helpers/interfaceRoutes.ts), [route scopes](../../shared/interfaceRouteAccess.ts), [commerce chart](../../src/features/financials/reports/CommerceReportView.tsx), [invoice styles](../../src/styles/_invoicing.scss).
+
+### 8. CI exposed existing translation and entity-copy gaps
+
+The first PR run passed portable conformance but failed two checks in the legal-governance workflow. The actual legal/evidence checks passed **57/57**, both normally and after UTC midnight. The navigation gate failed because the existing Cost planning and Payroll calculator labels lacked translation keys. The same failure was reproduced on the exact base commit. This follow-up adds the English/French keys; platform polish now checks 132 translated navigation labels and 406 French keys in parity.
+
+The synthetic browser sweep visited **130 routes in each of eight workspaces with zero uncaught page errors**, but its strict copy verdict reported 24 findings. Eighteen came from two unchanged financial descriptions that referred to a BC society/the society in other entity workspaces. Six came from the privacy scanner separating a law label from its Conditional badge at a newline. The test itself requires those conditional law summaries; removing the labels or broadly allowlisting bare PIPA text would weaken its intended checks.
+
+The financial descriptions are corrected, and the scanner now preserves the semantic context of verified conditional privacy summaries while continuing to reject unqualified or misplaced law labels. Focused scanner regressions are wired into CI. These changes address the observed source/test defects; the subsequent browser run determines whether the full strict sweep is green.
+
+Initial CI evidence: [legal-governance run](https://github.com/ahzs645/societyer/actions/runs/40245184603), [browser job](https://github.com/ahzs645/societyer/actions/runs/40245184603/job/121325140117), [translation job](https://github.com/ahzs645/societyer/actions/runs/40245184603/job/121325140325). The same browser job also passed four corporation-flow tests and nine record/task tests. The failing copy/scanner sources were byte-identical to the base revision; a complete baseline browser run was not performed locally.
 
 ## Remaining implementation work
 
@@ -243,7 +255,7 @@ Or use `npm run usage:summarize -- /tmp/societyer-convex.jsonl` for interactive 
 
 ### Validation still required
 
-The attempt to push to an anonymous local Convex backend failed because that backend did not start within its startup timeout. Typechecks and `convex-test` handler tests passed, but this is not a successful hosted schema deployment. Browser smoke/visual testing was blocked by the available browser environment and production sign-in. There has been no production performance measurement or live data migration rehearsal.
+The attempt to push to an anonymous local Convex backend failed because that backend did not start within its startup timeout. Typechecks and `convex-test` handler tests passed, but this is not a successful hosted schema deployment. Local browser/visual testing and the authenticated production walkthrough remain blocked; the available CI browser evidence is described above. There has been no production performance measurement or live data migration rehearsal.
 
 Before release:
 

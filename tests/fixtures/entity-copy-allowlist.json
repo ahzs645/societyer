@@ -5,6 +5,7 @@
       "pattern": "pipa",
       "route": "/app/privacy",
       "channel": "main",
+      "context": "privacy-summary",
       "workspaces": [
         "cbca-corp",
         "obca-corp",

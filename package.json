@@ -93,6 +93,7 @@
     "test:corporation-mvp": "tsx scripts/check-corporation-mvp-flow.ts",
     "test:corporation-flow": "npx playwright test --config playwright.corporation.config.ts",
     "test:entity-sweep": "playwright test --config playwright.entity-sweep.config.ts",
+    "test:entity-copy-scanner": "node --import tsx scripts/check-entity-copy-scanner.ts",
     "test:dashboard-compliance": "tsx scripts/check-dashboard-compliance-rules.ts && tsx scripts/check-entity-rule-scope.ts",
     "test:entity-rule-scope": "tsx scripts/check-entity-rule-scope.ts",
     "test:organization-vocabulary": "tsx scripts/check-organization-vocabulary.ts",

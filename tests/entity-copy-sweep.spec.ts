@@ -35,6 +35,8 @@ import { matchPath } from "react-router-dom";
 import fs from "node:fs";
 import path from "node:path";
 import { INTERFACE_ROUTES } from "./helpers/interfaceRoutes";
+import { isAllowed, partitionPrivacySummaryText, scan, type AllowList, type Finding, type WorkspaceKey } from "./helpers/entityCopyScanner";
+export { isAllowed } from "./helpers/entityCopyScanner";
 import { chooseGuidedSetupAct, type GuidedSetupAct } from "./helpers/guidedSetup";
 
 test.skip(!process.env.SOCIETYER_ENTITY_SWEEP, "Runs only under playwright.entity-sweep.config.ts");
@@ -43,7 +45,6 @@ test.skip(!process.env.SOCIETYER_ENTITY_SWEEP, "Runs only under playwright.entit
 // Workspaces
 // ---------------------------------------------------------------------------
 
-type WorkspaceKey = "bc-corp" | "cbca-corp" | "obca-corp" | "custom" | "bc-society" | "bc-demo" | "cbca-demo" | "obca-demo";
 type Workspace = {
   key: WorkspaceKey;
   name: string;
@@ -107,102 +108,8 @@ const routesForShard = (shard: number) =>
   (ONLY_ROUTES ?? SWEEP_ROUTES).filter((_, index) => index % SHARDS === shard);
 
 // ---------------------------------------------------------------------------
-// Patterns
-// ---------------------------------------------------------------------------
-
-type PatternKey =
-  | "societies-act"
-  | "societies-online"
-  | "bc-soc"
-  | "societies-section"
-  | "society"
-  | "members"
-  | "agm"
-  | "bylaws"
-  | "constitution"
-  | "pipa"
-  | "charity-toggle";
-
-type Pattern = {
-  key: PatternKey;
-  regex: RegExp;
-  /** Skip the match when the surrounding line also matches this. */
-  unless?: RegExp;
-  applies?: (workspace: Workspace) => boolean;
-  /** Only applied to the checkbox/switch label channel. */
-  toggleOnly?: boolean;
-};
-
-const PATTERNS: Pattern[] = [
-  { key: "societies-act", regex: /Societies Act/g },
-  { key: "societies-online", regex: /Societies Online/g },
-  { key: "bc-soc", regex: /BC-SOC-/g },
-  { key: "societies-section", regex: /Societies[^\n]{0,40}?\bs\.\s?\d+|\bs\.\s?\d+[^\n]{0,40}?Societies/g },
-  { key: "society", regex: /\bsociety\b/gi },
-  // "members" as voters/owners; board/committee/team membership is fine.
-  { key: "members", regex: /(?<!\b(?:board|committee|team|staff|family|council|panel|crew|commission)\s)\bmembers?\b/gi, unless: /\b(?:board|committee|team|staff) members?\b/i },
-  { key: "agm", regex: /\bAGMs?\b|annual general meeting/gi },
-  // A BC company has articles only, so any by-law wording is a leak there.
-  // Federal, Ontario and other corporations do have by-laws (hyphenated, the
-  // statutory spelling); only the society spelling "bylaws" is flagged.
-  { key: "bylaws", regex: /\bby-?laws?\b/gi, unless: /articles/i, applies: (workspace) => workspace.bc },
-  { key: "bylaws", regex: /\bbylaws?\b/gi, unless: /articles/i, applies: (workspace) => !workspace.bc },
-  { key: "constitution", regex: /\bconstitution(?:s|al)?\b/gi },
-  { key: "pipa", regex: /\bPIPA\b/g, applies: (workspace) => !workspace.bc },
-  { key: "charity-toggle", regex: /charit(?:y|ies|able)/gi, toggleOnly: true, applies: (workspace) => !workspace.society },
-];
-
-type Channel = "main" | "chrome" | "sidebar" | "popover" | "toggle" | "title";
-type Finding = {
-  workspace: WorkspaceKey;
-  route: string;
-  channel: Channel;
-  pattern: PatternKey;
-  match: string;
-  snippet: string;
-  inNav: boolean;
-};
-
-const normalise = (text: string) => text.replace(/[ \t ]+/g, " ").replace(/\n{2,}/g, "\n");
-
-function scan(workspace: Workspace, route: string, channel: Channel, rawText: string, inNav: boolean): Finding[] {
-  const text = normalise(rawText.split(workspace.name).join("‹workspace›"));
-  const findings: Finding[] = [];
-  for (const pattern of PATTERNS) {
-    if (pattern.applies && !pattern.applies(workspace)) continue;
-    if (pattern.toggleOnly !== (channel === "toggle")) {
-      if (pattern.toggleOnly || channel === "toggle") continue;
-    }
-    for (const match of text.matchAll(pattern.regex)) {
-      const index = match.index ?? 0;
-      const lineStart = text.lastIndexOf("\n", index) + 1;
-      const lineEndRaw = text.indexOf("\n", index);
-      const line = text.slice(lineStart, lineEndRaw === -1 ? undefined : lineEndRaw);
-      if (pattern.unless && pattern.unless.test(line)) continue;
-      const start = Math.max(lineStart, index - 70);
-      const end = Math.min(lineEndRaw === -1 ? text.length : lineEndRaw, index + match[0].length + 70);
-      const snippet = `${start > lineStart ? "…" : ""}${text.slice(start, end).trim()}${end < (lineEndRaw === -1 ? text.length : lineEndRaw) ? "…" : ""}`;
-      findings.push({ workspace: workspace.key, route, channel, pattern: pattern.key, match: match[0], snippet, inNav });
-    }
-  }
-  return findings;
-}
-
-// ---------------------------------------------------------------------------
 // Allow-list and baseline
 // ---------------------------------------------------------------------------
-
-type AllowEntry = {
-  pattern: PatternKey | "*";
-  /** Exact route, "*" for any, or a route prefix ending in "*". */
-  route?: string;
-  workspaces?: WorkspaceKey[];
-  channel?: Channel;
-  /** Regex (source) tested against the snippet. */
-  snippet: string;
-  reason: string;
-};
-type AllowList = { allow: AllowEntry[]; knownLeaks: string[] };
 
 function loadAllowList(): AllowList {
   const raw = JSON.parse(fs.readFileSync(ALLOWLIST_FILE, "utf8"));
@@ -210,20 +117,6 @@ function loadAllowList(): AllowList {
     if (!entry.reason || !String(entry.reason).trim()) throw new Error(`Allow-list entry without a reason: ${JSON.stringify(entry)}`);
   }
   return { allow: raw.allow ?? [], knownLeaks: raw.knownLeaks ?? [] };
-}
-
-const routeMatches = (rule: string | undefined, route: string) =>
-  !rule || rule === "*" || (rule.endsWith("*") ? route.startsWith(rule.slice(0, -1)) : rule === route);
-
-export function isAllowed(finding: Finding, allow: AllowEntry[]): AllowEntry | undefined {
-  return allow.find(
-    (entry) =>
-      (entry.pattern === "*" || entry.pattern === finding.pattern) &&
-      routeMatches(entry.route, finding.route) &&
-      (!entry.workspaces || entry.workspaces.includes(finding.workspace)) &&
-      (!entry.channel || entry.channel === finding.channel) &&
-      new RegExp(entry.snippet, "i").test(finding.snippet),
-  );
 }
 
 /** Baseline key: workspace | route | pattern. Coarse on purpose, so dates and counts in snippets do not churn it. */
@@ -329,7 +222,7 @@ async function assertPrivacyScope(page: Page, workspace: Workspace) {
 
 /** Text the page shows, split into channels. */
 async function collect(page: Page) {
-  return await page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const visibleText = (element: Element | null) => (element ? (element as HTMLElement).innerText ?? "" : "");
     const main = document.querySelector("#main-content");
     const sidebar = document.querySelector(".sidebar");
@@ -365,8 +258,14 @@ async function collect(page: Page) {
       .map((element) => element.getAttribute("title") ?? "")
       .filter((title) => title.length > 3);
     const navHrefs = Array.from(document.querySelectorAll(".sidebar a[href]")).map((anchor) => new URL((anchor as HTMLAnchorElement).href).pathname);
-    return { main: visibleText(main), chrome, sidebar: visibleText(sidebar), toggles: toggles.join("\n"), titles: titles.join("\n"), navHrefs };
+    // Capture only summaries inside the scope assessment; open or unexpectedly
+    // applicable laws stay in the ordinary main scan. Do not mutate these nodes.
+    const privacySummaries = Array.from(main?.querySelectorAll(".privacy-scope-assessment details:not([open]) > summary") ?? [])
+      .filter((summary) => summary.getClientRects().length > 0 && getComputedStyle(summary).visibility === "visible")
+      .map(visibleText);
+    return { main: visibleText(main), privacySummaries, chrome, sidebar: visibleText(sidebar), toggles: toggles.join("\n"), titles: titles.join("\n"), navHrefs };
   });
+  return { ...text, ...partitionPrivacySummaryText(text.main, text.privacySummaries) };
 }
 
 async function collectPopovers(page: Page) {
@@ -482,6 +381,7 @@ test.describe("entity copy sweep", () => {
           const finalPath = new URL(page.url()).pathname.replace(/^\/demo(?=\/)/, "");
           const inNav = navHrefs.has(route) || navHrefs.has(finalPath);
           findings.push(...scan(workspace, route, "main", text.main, inNav));
+          for (const summary of text.privacySummaries) findings.push(...scan(workspace, route, "main", summary, inNav, "privacy-summary"));
           findings.push(...scan(workspace, route, "chrome", text.chrome, inNav));
           findings.push(...scan(workspace, route, "popover", popovers, inNav));
           findings.push(...scan(workspace, route, "toggle", text.toggles, inNav));
@@ -540,7 +440,7 @@ test.describe("entity copy verdict", () => {
     // Collapse identical snippets per workspace/route/pattern/channel.
     const unique = new Map<string, Finding & { count: number }>();
     for (const finding of all) {
-      const key = `${finding.workspace}|${finding.route}|${finding.channel}|${finding.pattern}|${finding.snippet}`;
+      const key = `${finding.workspace}|${finding.route}|${finding.channel}|${finding.context ?? ""}|${finding.pattern}|${finding.snippet}`;
       const current = unique.get(key);
       if (current) current.count += 1;
       else unique.set(key, { ...finding, count: 1 });

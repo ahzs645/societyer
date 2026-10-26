@@ -31,6 +31,8 @@ jobs:
         run: npm run test:corporation-demo
       - name: Navigation labels, translations and privacy labels
         run: npx tsx scripts/check-platform-polish.ts
+      - name: Entity-copy scanner context regression
+        run: npm run test:entity-copy-scanner
       - name: Portable manifest drift
         run: npm run test:portable-manifest
       - name: Convex, TypeScript and production build
