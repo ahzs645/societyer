@@ -16,6 +16,8 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 import { agendaItemsForReader } from "./minutesPrivacy";
+import { assertMeetingFieldsUnchanged, meetingAgendaSnapshot, type MeetingAgendaSnapshot } from "../meetingConcurrency";
+import { requirePermissionPortable } from "./permissions";
 
 // ----- queries --------------------------------------------------------------
 
@@ -249,6 +251,9 @@ export async function syncForMeetingPortable(
     meetingId: string;
     title?: string;
     status?: string;
+    expectedAgenda?: MeetingAgendaSnapshot;
+    expectedNoMinutes?: boolean;
+    initializeMinutes?: boolean;
     items: Array<{
       title: string;
       depth?: 0 | 1;
@@ -265,6 +270,23 @@ export async function syncForMeetingPortable(
   for (const item of args.items) assertAgendaItemExtension(item);
   await requireSocietyMembership(ctx, args.societyId);
   const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  if (args.initializeMinutes) {
+    await requirePermissionPortable(ctx, args.societyId, "minutes:write");
+    if (args.expectedNoMinutes !== true || args.expectedAgenda === undefined) {
+      throw new Error("Reload the agenda before creating its initial minutes draft.");
+    }
+  }
+  if (args.expectedNoMinutes) {
+    const existingMinutes = await ctx.db.query("minutes")
+      .withIndex("by_meeting", q => q.eq("meetingId", args.meetingId)).first();
+    if (existingMinutes || meeting.minutesId) {
+      throw new Error("This meeting's minutes changed while you were editing. Your changes have not been saved. Reload the latest version and apply your changes again.");
+    }
+  }
+  if (args.expectedAgenda !== undefined) {
+    const agenda = meetingAgendaSnapshot(await getForMeetingPortable(ctx, { meetingId: args.meetingId }));
+    assertMeetingFieldsUnchanged({ agenda }, { agenda: args.expectedAgenda }, "meeting agenda");
+  }
   for (const item of args.items) {
     if (item.motionTemplateId) {
       await getOwned(ctx, "motionTemplates", item.motionTemplateId, args.societyId);
@@ -363,6 +385,10 @@ export async function syncForMeetingPortable(
     .collect();
   savedItems.sort((a, b) => a.order - b.order);
   await syncMeetingAndMinutesFromAgenda(ctx, meeting, savedItems, now);
+  if (args.initializeMinutes && savedItems.length > 0) {
+    // The compare, agenda write and initial minutes/motions all commit together.
+    await startMinutesFromAgendaPortable(ctx, { agendaId: String(agendaId) });
+  }
 
   return agendaId;
 }

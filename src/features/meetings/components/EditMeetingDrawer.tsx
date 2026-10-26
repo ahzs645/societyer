@@ -1,3 +1,7 @@
+import { useCurrentUserId } from "../../../hooks/useCurrentUser";
+import { meetingDraftIdentityKey } from "../lib/meetingDraftStore";
+import { MeetingDraftRecovery, MeetingDraftScopeContext, useMeetingDraftScope } from "../useMeetingDraft";
+import { useMeetingFormDraft } from "../useMeetingFormDraft";
 /**
  * "Edit meeting" (ui-meetings F2/F3/F14, schema B8, A13, A18): one drawer for
  * every correction a reviewer makes to a transposed meeting — title, body
@@ -87,7 +91,17 @@ export function splitSourceTimeText(text: unknown): { start: string; end: string
   return { start: parts[0] ?? "", end: parts.slice(1).join(" – ") };
 }
 
-export function EditMeetingDrawer({
+export function EditMeetingDrawer(props: {
+  open: boolean; onClose: () => void; meeting: any; minutes?: any; committees: any[] | undefined; recentLocations?: string[];
+}) {
+  const userId = useCurrentUserId();
+  const scope = useMeetingDraftScope(props.meeting?._id, props.meeting?.societyId, userId);
+  if (!props.meeting) return null;
+  if (!scope) return <Drawer open={props.open} onClose={props.onClose} title="Edit meeting"><p>Verify your account and select this meeting's workspace before editing or recovering a draft.</p></Drawer>;
+  return <MeetingDraftScopeContext.Provider value={scope}><EditMeetingDrawerEditor key={meetingDraftIdentityKey(scope.identity)} {...props} /></MeetingDraftScopeContext.Provider>;
+}
+
+function EditMeetingDrawerEditor({
   open,
   onClose,
   meeting,
@@ -108,32 +122,34 @@ export function EditMeetingDrawer({
   const canStartMinutes = canWrite && can("minutes:write");
   const startMinutesFromNotes = usePermissionedMutation(api.meetings.startMinutesFromNotes, canStartMinutes);
   const toast = useToast();
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [initial, setInitial] = useState<string>("");
+  const form = useMeetingFormDraft<Draft, MeetingExpectedFields>("meeting-details", (value): value is Draft => {
+    const row = value as Draft | null;
+    return !!row && ["title", "body", "externalOrganization", "location", "status", "quorumRequired", "notes", "recordKind"].every((key) => typeof (row as any)[key] === "string") && !!row.date && typeof row.date.date === "string" && typeof row.electronic === "boolean";
+  }, (value): value is MeetingExpectedFields => !!value && typeof value === "object" && "title" in value && "scheduledAt" in value);
+  const draft = form.value;
+  const setDraft = (next: Draft | null | ((current: Draft | null) => Draft | null)) => {
+    const value = typeof next === "function" ? next(form.controller.getSnapshot()?.value ?? null) : next;
+    if (value) form.controller.change(value); else form.controller.discard();
+  };
   const [saving, setSaving] = useState(false);
-  const editBaseline = useRef<MeetingExpectedFields>({});
   const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
-    if (!open || !meeting) {
-      setDraft(null);
-      return;
-    }
+    if (!open || !meeting || form.controller.getSnapshot()) return;
     const next = draftFromMeeting(meeting);
-    editBaseline.current = meetingExpectedFields(meeting, [
+    const baseline = meetingExpectedFields(meeting, [
       "title", "type", "committeeId", "special", "hostBody", "externalOrganization",
       "scheduledAt", "scheduledAtPrecision", "localStartText", "localEndText", "timeZone",
       "location", "electronic", "status", "quorumRequired", "notes", "recordKind",
     ]);
-    setDraft(next);
-    setInitial(JSON.stringify(next));
+    form.controller.begin(next, baseline);
     setShowErrors(false);
     // Only re-seed when the drawer opens or a different meeting is shown.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, meeting?._id]);
 
-  const dirty = !!draft && JSON.stringify(draft) !== initial;
-  const guardedClose = useDirtyCloseGuard(dirty, onClose, "meeting edits");
+  const dirty = form.controller.dirty();
+  const guardedClose = useDirtyCloseGuard(dirty, () => { form.controller.discard(); onClose(); }, "meeting edits");
   const bodyOptions = useMemo(
     () => meetingBodyOptions((committees ?? []).map((row: any) => ({ _id: String(row._id), name: row.name, status: row.status }))).map((option) => ({ value: option.value, label: option.label, hint: option.group })),
     [committees],
@@ -165,11 +181,15 @@ export function EditMeetingDrawer({
   const preview = draft ? meetingDatePatchFromDraft(draft.date, viewerTimeZone()) : null;
 
   const save = async () => {
+    const draft = form.controller.getSnapshot()?.value;
+    const preview = draft ? meetingDatePatchFromDraft(draft.date, viewerTimeZone()) : null;
     if (!draft || !canWrite || saving) return;
     setShowErrors(true);
     if (issues.length || !preview) return;
     setSaving(true);
     try {
+      const submitted = form.controller.capture();
+      if (!submitted) return;
       const body = bodyPatchForValue(draft.body);
       const quorum = draft.quorumRequired.trim() ? Number(draft.quorumRequired) : undefined;
       // Switching to minutes carries the notes into the minutes draft and adds
@@ -177,9 +197,9 @@ export function EditMeetingDrawer({
       const seedMinutesFromNotes = canStartMinutes
         && draft.recordKind === "minutes"
         && meetingRecordKind(meeting) !== "minutes";
-      await update({
+      const saved = await update({
         id: meeting._id,
-        expected: editBaseline.current,
+        expected: submitted.payload.baseline,
         patch: {
           title: normalizedMeetingTitle(draft.title),
           type: body.type,
@@ -197,10 +217,15 @@ export function EditMeetingDrawer({
           ...(seedMinutesFromNotes ? {} : { recordKind: draft.recordKind }),
         },
       });
-      if (seedMinutesFromNotes) await startMinutesFromNotes({ id: meeting._id });
-      toast.success("Meeting updated", normalizedMeetingTitle(draft.title));
-      setInitial(JSON.stringify(draft));
-      onClose();
+      let acceptedBaseline = saved?.expected ?? submitted.payload.baseline;
+      if (!form.controller.checkpoint(submitted, acceptedBaseline)) return;
+      if (seedMinutesFromNotes) {
+        await startMinutesFromNotes({ id: meeting._id });
+        acceptedBaseline = { ...acceptedBaseline, recordKind: "minutes" };
+      }
+      const closed = form.controller.complete(submitted, acceptedBaseline);
+      toast.success("Meeting updated", closed ? normalizedMeetingTitle(draft.title) : "The submitted changes were saved. Your newer edits are still here.");
+      if (closed) onClose();
     } catch (error: any) {
       toast.error("Could not save the meeting", error?.message ?? String(error));
     } finally {
@@ -227,6 +252,7 @@ export function EditMeetingDrawer({
     >
       {draft && (
         <div className="meeting-form edit-meeting-form">
+          <MeetingDraftRecovery draft={form.recovery} label="meeting details" disabled={!canWrite || dirty || saving} onRestore={form.controller.restore} />
           {header && (
             <div className="edit-meeting-form__source" aria-label="As written in source">
               <div className="edit-meeting-form__source-head"><FileText size={12} /> As written in the source</div>

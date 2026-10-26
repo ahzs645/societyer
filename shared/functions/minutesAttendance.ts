@@ -23,7 +23,7 @@ import {
 } from "../meetingAttendanceGrid";
 import { meetingCalendarDate } from "../meetingDates";
 import { visibleDirectoryRows } from "./peopleDirectory";
-import { assertMeetingFieldsUnchanged, type MeetingExpectedFields } from "../meetingConcurrency";
+import { assertMeetingFieldsUnchanged, meetingExpectedFields, type MeetingExpectedFields } from "../meetingConcurrency";
 
 export type SaveAttendanceGridArgs = {
   minutesId: string;
@@ -194,6 +194,7 @@ export async function saveAttendanceGridPortable(ctx: PortableMutationCtx, args:
   }
 
   return {
+    expected: meetingExpectedFields(minutesPatch, ["attendees", "absent", "detailedAttendance"]),
     attendees: patch.attendees.length,
     absent: patch.absent.length,
     rows: patch.detailedAttendance.length,

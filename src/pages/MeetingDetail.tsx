@@ -100,6 +100,9 @@ import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMin
 import { MinutesMetadataCard } from "../features/meetings/components/MinutesMetadataCard";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
+import { useMeetingFormDraft } from "../features/meetings/useMeetingFormDraft";
+import { MeetingDraftRecovery, MeetingDraftScopeContext, useMeetingDraftScope } from "../features/meetings/useMeetingDraft";
+import { meetingDraftIdentityKey } from "../features/meetings/lib/meetingDraftStore";
 import { useLocalMinutesDraft } from "../features/meetings/useLocalMinutesDraft";
 import { DeviceAiError } from "../lib/localAi/transport";
 import { DRAFT_CANCELLED, isDraftCancelled } from "../features/meetings/deviceDraftProgress";
@@ -181,7 +184,11 @@ export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
   // Each meeting owns its draft buffers and pending bootstrap/save promises.
   // Reusing the route component must never send meeting A's draft to meeting B.
-  return <MeetingDetailWorkspace key={id ?? "missing-meeting"} />;
+  const selected = useSociety();
+  const userId = useCurrentUserId();
+  const draftScope = useMeetingDraftScope(id, selected?._id, userId);
+  const identity = draftScope ? meetingDraftIdentityKey(draftScope.identity) : `${userId ?? "signed-out"}:${selected?._id ?? "no-workspace"}:${id}`;
+  return <MeetingDraftScopeContext.Provider value={draftScope}><MeetingDetailWorkspace key={identity} /></MeetingDraftScopeContext.Provider>;
 }
 
 function MeetingDetailWorkspace() {
@@ -341,27 +348,35 @@ function MeetingDetailWorkspace() {
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
-  const [agendaEdit, setAgendaEditState] = useState<AgendaItemEntry[] | null>(null);
-  // Synchronous mirror of agendaEdit. "Save agenda" can be clicked in the same
-  // frame as the last keystroke (fast typists, automation); the button's
-  // onClick is a closure over the PREVIOUS render's state, so reading state
-  // there can silently drop the just-typed row. The ref is written at set time
-  // (not on commit), so saveAgenda always sees the latest rows.
-  const agendaEditRef = useRef<AgendaItemEntry[] | null>(null);
+  type AgendaBaseline = { expected: MeetingExpectedFields; agenda: ReturnType<typeof meetingAgendaSnapshot>; minutesId: string | null; sections: any[]; motions: Motion[]; metadata: any[]; title: string };
+  const agendaForm = useMeetingFormDraft<AgendaItemEntry[], AgendaBaseline>("agenda", (value): value is AgendaItemEntry[] => Array.isArray(value) && value.every((row) => !!row && typeof row.title === "string" && (row.depth === 0 || row.depth === 1)), (value): value is AgendaBaseline => {
+    const row = value as AgendaBaseline | null;
+    return !!row && !!row.expected && "sections" in row.expected && "motions" in row.expected && "agenda" in row && (row.minutesId === null || typeof row.minutesId === "string") && Array.isArray(row.sections) && Array.isArray(row.motions) && Array.isArray(row.metadata) && typeof row.title === "string";
+  });
+  const agendaEdit = agendaForm.value;
+  const agendaSaving = useRef(false);
+  const [agendaIsSaving, setAgendaIsSaving] = useState(false);
+  // The form controller captures synchronous changes and the original server baseline.
   const agendaEditBaseline = useRef<MeetingExpectedFields>({});
   const agendaRecordBaseline = useRef<ReturnType<typeof meetingAgendaSnapshot>>(null);
   const setAgendaEdit = (value: AgendaItemEntry[] | null) => {
+    if (agendaSaving.current && !agendaForm.controller.getSnapshot()?.baseline.minutesId) return;
     if (value !== null && agendaRecord === undefined) {
       toast.info("The agenda is still loading. Try again in a moment.");
       return;
     }
-    if (value !== null && agendaEditRef.current === null) {
+    if (value === null) agendaForm.controller.discard();
+    else if (!agendaForm.controller.getSnapshot()) {
       agendaRecordBaseline.current = meetingAgendaSnapshot(agendaRecord);
       agendaEditBaseline.current = meetingExpectedFields({ ...minutes, motions: displayMotions }, ["sections", "motions"]);
-    }
-    agendaEditRef.current = value;
-    setAgendaEditState(value);
+      agendaForm.controller.begin(value, {
+        expected: agendaEditBaseline.current, agenda: agendaRecordBaseline.current,
+        minutesId: minutes?._id ?? null, sections: minutes?.sections ?? [], motions: displayMotions,
+        metadata: canonicalAgendaItems ?? [], title: agendaRecord?.agenda?.title || `${meeting?.title ?? "Meeting"} agenda`,
+      });
+    } else agendaForm.controller.change(value);
   };
+
   // Attendance grid edit mode (the grid owns its rows; see MeetingAttendanceGrid).
   const [attendanceEdit, setAttendanceEdit] = useState<boolean | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
@@ -1736,10 +1751,16 @@ function MeetingDetailWorkspace() {
   });
 
   const saveAgenda = async () => {
-    if (!(canMinutesWrite && canAgendasWrite)) return;
+    if (!(canMinutesWrite && canAgendasWrite) || agendaSaving.current) return;
+    agendaSaving.current = true;
+    setAgendaIsSaving(true);
    try {
-    // Read the ref, not the state — see agendaEditRef above.
-    const editedRows = agendaEditRef.current ?? agendaEdit;
+    const submitted = agendaForm.controller.capture();
+    if (!submitted) return;
+    const baseline = submitted.payload.baseline;
+    let acceptedBaseline = baseline;
+    // Capture the controller synchronously so the last keystroke is included.
+    const editedRows = submitted.payload.value;
     // Clean: drop empty titles and force any leading depth-1 entry to depth 0
     // (a child without a preceding root is impossible on save).
     const cleaned: AgendaItemEntry[] = [];
@@ -1760,7 +1781,7 @@ function MeetingDetailWorkspace() {
     // new title (and keep its notes, actions and motions). Sections keep the
     // agenda item ids that still exist at this point; the sync re-links them.
     const minutesPatch: any = {};
-    if (minutes) {
+    if (baseline.minutesId) {
       const sectionHasDetails = (section: any) =>
         !!(
           section?.discussion ||
@@ -1770,9 +1791,9 @@ function MeetingDetailWorkspace() {
           (section?.linkedTaskIds ?? []).length
         );
       const aligned = alignSectionsToAgenda(
-        (minutes.sections ?? []) as any[],
+        baseline.sections as any[],
         next,
-        displayMotions as any[],
+        baseline.motions as any[],
         (title, depth) => buildSectionFromTitle(title, depth),
         sectionHasDetails,
       );
@@ -1781,11 +1802,11 @@ function MeetingDetailWorkspace() {
     }
 
     const agendaSync = {
-      title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
+      title: baseline.title,
       items: cleaned.map((entry) => {
         // A renamed item keeps its type, presenter, details and motion link.
-        const metadata = (entry._id ? canonicalAgendaItems?.find((item: any) => item._id && String(item._id) === String(entry._id)) : undefined)
-          ?? canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
+        const metadata = (entry._id ? baseline.metadata.find((item: any) => item._id && String(item._id) === String(entry._id)) : undefined)
+          ?? baseline.metadata.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
         return {
           title: entry.title,
           depth: entry.depth,
@@ -1799,66 +1820,37 @@ function MeetingDetailWorkspace() {
         };
       }),
     };
-    if (minutes) {
-      await updateMinutes({
-        id: minutes._id,
+    if (baseline.minutesId) {
+      const saved = await updateMinutes({
+        id: baseline.minutesId as Id<"minutes">,
         patch: minutesPatch,
-        expected: agendaEditBaseline.current,
-        expectedAgenda: agendaRecordBaseline.current,
+        expected: baseline.expected,
+        expectedAgenda: baseline.agenda,
         syncAgenda: agendaSync,
       });
+      acceptedBaseline = {
+        ...baseline,
+        sections: saved?.sections ?? minutesPatch.sections ?? baseline.sections,
+        motions: saved?.motions ?? baseline.motions,
+        agenda: meetingAgendaSnapshot(saved?.agenda),
+        metadata: (saved?.agenda?.items ?? baseline.metadata) as any[],
+        expected: meetingExpectedFields({ sections: saved?.sections ?? minutesPatch.sections ?? baseline.sections, motions: saved?.motions ?? baseline.motions }, ["sections", "motions"]),
+      };
     } else {
-      await syncAgendaForMeeting({ societyId: meeting.societyId, meetingId: meeting._id, ...agendaSync });
-    }
-
-    // Auto-bootstrap the minutes record on first save. This subsumes the old
-    // "Create from agenda" button — saving the agenda is now the single entry
-    // point that produces an editable minutes draft mirroring the agenda.
-    if (!minutes && next.length) {
-      const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
-      const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
-      await createMinutes({
-        societyId: meeting.societyId,
-        meetingId: meeting._id,
-        heldAt: meeting.scheduledAt,
-        attendees,
-        absent: [],
-        quorumMet: requiresLegalQuorumRegister || quorumRequired == null ? false : attendees.length >= quorumRequired,
-        quorumStatus: requiresLegalQuorumRegister || quorumRequired == null ? "not_recorded" : attendees.length >= quorumRequired ? "confirmed" : "not_met",
-        quorumRequired: quorumRequired ?? undefined,
-        discussion: "",
-        sections: next.map((entry) => {
-          const metadata = canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
-          return {
-            ...buildSectionFromTitle(entry.title, entry.depth),
-            type: metadata?.type ?? inferAgendaSectionType(entry.title),
-            presenter: metadata?.presenter,
-            discussion: metadata?.details ?? "",
-          };
-        }),
-        motions: (canonicalAgendaItems ?? [])
-          .map((item, index) => ({
-            text: String(item.motionText ?? "").trim(),
-            outcome: "Pending",
-            resolutionType: "Ordinary",
-            sectionIndex: index,
-            sectionTitle: item.title,
-          }))
-          .filter((motion) => motion.text),
-        decisions: [],
-        actionItems: [],
+      await syncAgendaForMeeting({ societyId: meeting.societyId, meetingId: meeting._id, ...agendaSync,
+        expectedAgenda: baseline.agenda, expectedNoMinutes: true, initializeMinutes: true,
       });
-      setAgendaEdit(null);
-      toast.success("Agenda saved");
-      return;
     }
 
-    setAgendaEdit(null);
+    // Initial minutes are created in the same guarded agenda transaction.
+    // If typing continued meanwhile, keep those edits and their original
+    // baseline; a new minutes record will require a fresh reviewed edit.
+    agendaForm.controller.complete(submitted, acceptedBaseline);
     toast.success("Agenda saved");
    } catch (error) {
      console.error("[saveAgenda]", error);
      toast.error("Couldn't save agenda", error instanceof Error ? error.message : String(error));
-   }
+   } finally { agendaSaving.current = false; setAgendaIsSaving(false); }
   };
 
   const startAttendanceEdit = () => {
@@ -2821,6 +2813,12 @@ function MeetingDetailWorkspace() {
             agendaTree={agendaTree}
             agendaEdit={agendaEdit}
             setAgendaEdit={setAgendaEdit}
+            agendaInitializing={agendaIsSaving && !agendaForm.state?.baseline.minutesId}
+            agendaRecovery={<MeetingDraftRecovery draft={agendaForm.recovery} label="agenda" disabled={!(canMinutesWrite && canAgendasWrite) || agendaEdit !== null || agendaSaving.current} onRestore={(payload) => {
+              agendaForm.controller.restore(payload);
+              agendaEditBaseline.current = payload.baseline.expected;
+              agendaRecordBaseline.current = payload.baseline.agenda;
+            }} />}
             saveAgenda={saveAgenda}
             attendanceEdit={attendanceEdit}
             setAttendanceEdit={setAttendanceEdit}

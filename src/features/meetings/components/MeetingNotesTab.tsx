@@ -13,6 +13,8 @@ import { useToast } from "@/components/Toast";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { MEETING_WORKING_NOTES_MAX_LENGTH, type MeetingRecordStep } from "../../../../shared/meetingRecordKind";
 import { MeetingRecordStepper } from "./MeetingRecordStepper";
+import { MeetingDraftRecovery, useMeetingDraft } from "../useMeetingDraft";
+import type { AutosaveDraft } from "../lib/meetingDraftStore";
 import { createNotesAutosave, type NotesSaveState } from "../lib/notesAutosave";
 
 /** Typing must pause this long before the notes save. */
@@ -32,11 +34,15 @@ const SAVE_STATE_LABELS: Record<NotesSaveState, string> = {
  */
 function useAutosavedNotes(meetingId: Id<"meetings">, serverValue: string | undefined, canWrite: boolean) {
   const update = usePermissionedMutation(api.meetings.update, canWrite);
+  const recovery = useMeetingDraft<AutosaveDraft<string, string | null>>("notes", (value): value is AutosaveDraft<string, string | null> => {
+    const row = value as AutosaveDraft<string, string | null> | null;
+    return !!row && typeof row.value === "string" && (typeof row.baseline === "string" || row.baseline === null);
+  });
   const controller = useMemo(() => createNotesAutosave(serverValue, (workingNotes, expected) =>
-    update({ id: meetingId, patch: { workingNotes }, expected: { workingNotes: expected } }),
+    update({ id: meetingId, patch: { workingNotes }, expected: { workingNotes: expected } }), recovery.journal ?? undefined,
     // A changed server value is reconciled below, never a new edit session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [meetingId, update]);
+  ), [meetingId, update, recovery.journal]);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const timer = useRef<number | null>(null);
   const flush = useCallback(() => {
@@ -72,7 +78,7 @@ function useAutosavedNotes(meetingId: Id<"meetings">, serverValue: string | unde
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(flushInBackground, NOTES_SAVE_DELAY_MS);
   };
-  return { ...state, onChange, flush, flushInBackground, useLatestServer: controller.useLatestServer };
+  return { ...state, onChange, flush, flushInBackground, useLatestServer: controller.useLatestServer, recovery, restore: controller.restore, saveRecovered: controller.saveRecovered };
 }
 
 export function MeetingNotesTab({
@@ -146,6 +152,12 @@ export function MeetingNotesTab({
         <div className="card__body meeting-notes-doc__body" onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) notes.flushInBackground();
         }}>
+          <MeetingDraftRecovery draft={notes.recovery} label="notes" onRestore={notes.restore} disabled={!canWrite || notes.saveState !== "saved"} />
+          {notes.recovered && <div className="flag flag--warn" role="status">
+            <p>Recovered notes are ready to review. Saving uses their original server version, so newer work by someone else will cause a conflict.</p>
+            <button type="button" className="btn-action" disabled={!canWrite} onClick={() => { void notes.saveRecovered().catch(() => undefined); }}>Save recovered draft</button>
+            <button type="button" className="btn-action" onClick={notes.useLatestServer}>Discard restored notes</button>
+          </div>}
           <MarkdownEditor
             value={notes.value}
             onChange={notes.onChange}

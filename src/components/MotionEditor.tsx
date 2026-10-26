@@ -1,3 +1,6 @@
+import { useToast } from "./Toast";
+import { MeetingDraftRecovery, useMeetingDraft } from "../features/meetings/useMeetingDraft";
+import type { AutosaveDraft } from "../features/meetings/lib/meetingDraftStore";
 import { createMotionAutosave } from "../features/meetings/lib/motionAutosave";
 import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
@@ -510,12 +513,24 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   renderMotionAccessory,
 }, ref) {
   const { can } = usePermissions();
+  const toast = useToast();
+  const newMotionDirty = useRef(false);
   const onChangePropRef = useRef(onChangeProp);
   onChangePropRef.current = onChangeProp;
+  const validMotions = (value: unknown): value is Motion[] => Array.isArray(value) && value.every((row) => !!row && typeof row.text === "string");
+  const recovery = useMeetingDraft<AutosaveDraft<Motion[]>>("motions", (value): value is AutosaveDraft<Motion[]> => {
+    const row = value as AutosaveDraft<Motion[]> | null;
+    return !!row && validMotions(row.value) && validMotions(row.baseline);
+  });
+  type NewMotionDraft = { value: Motion; baseline: AutosaveDraft<Motion[]> };
+  const newMotionRecovery = useMeetingDraft<NewMotionDraft>("new-motion", (value): value is NewMotionDraft => {
+    const row = value as NewMotionDraft | null;
+    return !!row && validMotions([row.value]) && !!row.baseline && validMotions(row.baseline.value) && validMotions(row.baseline.baseline);
+  });
   const [saveController] = useState(() => createMotionAutosave(motionsProp, async (next, expected) => {
     const canonical = await onChangePropRef.current(next, expected);
     return canonical ?? next;
-  }));
+  }, recovery.journal ?? undefined));
   const saveState = useSyncExternalStore(saveController.subscribe, saveController.getSnapshot, saveController.getSnapshot);
   const motions = saveState.value;
   useEffect(() => { saveController.receiveServer(motionsProp); }, [saveController, motionsProp]);
@@ -530,7 +545,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const flushInBackground = useCallback(() => { void flushQueuedSave().catch(() => undefined); }, [flushQueuedSave]);
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (saveController.getSnapshot().saveState === "saved") return;
+      if (saveController.getSnapshot().saveState === "saved" && !(newMotionDirty.current && !newMotionRecovery.journal?.getSnapshot().savedOnDevice)) return;
       event.preventDefault();
       event.returnValue = "";
     };
@@ -541,14 +556,19 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
       window.removeEventListener("beforeunload", beforeUnload);
       flushInBackground();
     };
-  }, [saveController, flushInBackground]);
+  }, [saveController, flushInBackground, newMotionRecovery.journal]);
   const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
   authority.current = { readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") };
   const onChange = (next: Motion[], options: { debounce?: boolean } = {}) => {
     if (authority.current.readOnly) return false;
     const previouslyCarried = new Set(motions.filter(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried").map(motion => motion.adoptsMinutesId));
     if (!authority.current.canApprove && next.some(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried" && !previouslyCarried.has(motion.adoptsMinutesId))) return false;
-    saveController.change(next);
+    // A confirmation dialog may outlive a subscription update or further
+    // typing. Refuse its stale list and retain the current editor contents.
+    if (!saveController.change(next, motions)) {
+      toast.error("Motions changed while you were reviewing", "Review the current list and try the action again. Your draft has been kept.");
+      return false;
+    }
     if (queuedTimer.current !== null) window.clearTimeout(queuedTimer.current);
     if (options.debounce) {
       queuedTimer.current = window.setTimeout(flushInBackground, MOTION_TEXT_SAVE_DELAY_MS);
@@ -574,13 +594,24 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const makeDraft = (): Motion => ({ text: "", outcome: "Pending", resolutionType: "Ordinary", ...sectionPatchForScope() });
   const [adding, setAdding] = useState(false);
   const confirm = useConfirm();
-  const [draft, setDraft] = useState<Motion>(makeDraft);
+  const [draft, setDraftState] = useState<Motion>(makeDraft);
+  const draftRef = useRef(draft);
+  const newMotionBaseline = useRef(saveController.getDraft());
+  const setDraft = (next: Motion | ((previous: Motion) => Motion)) => {
+    const value = typeof next === "function" ? next(draftRef.current) : next;
+    draftRef.current = value;
+    setDraftState(value);
+    newMotionDirty.current = JSON.stringify(value) !== JSON.stringify(makeDraft());
+    if (newMotionDirty.current) newMotionRecovery.journal?.write({ value, baseline: newMotionBaseline.current });
+    else newMotionRecovery.journal?.discardCurrent();
+  };
   // Index of the motion the user is editing inline. Lifted out of MotionRow
   // so the parent can enforce one-at-a-time editing and so the bottom
   // "Add motion" button can swap to "Done" while an edit is open.
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const beginAdding = () => {
     if (authority.current.readOnly) return;
+    if (!adding) newMotionBaseline.current = saveController.getDraft();
     // When scoped to a section, force the draft's sectionIndex/sectionTitle to
     // that section every time the user opens the add form — otherwise stale
     // values from a previous cancelled draft could leak in.
@@ -598,8 +629,14 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     setDraft((current) => ({ ...current, [key]: value, ...extra }));
   };
 
-  const resetDraft = () => {
-    setDraft(makeDraft());
+  const resetDraft = (committed = false) => {
+    const empty = makeDraft();
+    draftRef.current = empty;
+    newMotionDirty.current = false;
+    setDraftState(empty);
+    // Move the recovery copy into the full motion queue only after that copy
+    // is durable. A quota failure must not delete the add form's last backup.
+    if (!committed || !recovery.journal || recovery.journal.getSnapshot().savedOnDevice) newMotionRecovery.journal?.discardCurrent();
   };
 
   const nameOptions = useMemo(
@@ -637,7 +674,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
       if (!ok) return;
     }
     if (!onChange([...motions, { ...draft, text: draft.text.trim() }])) return;
-    resetDraft();
+    resetDraft(true);
     setAdding(false);
   };
 
@@ -661,8 +698,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
       const text = draft.text.trim();
       let committed = false;
       if (!authority.current.readOnly && adding && text) {
-        if (!onChange([...motions, { ...draft, text }])) return false;
-        resetDraft();
+        if (!onChange([...motions, { ...draft, text }])) throw new Error("Motions changed. Review the current list before saving the section.");
+        resetDraft(true);
         setAdding(false);
         committed = true;
       }
@@ -704,8 +741,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   // left editingIndex stale for any earlier deletion.
   const deleteMotionAt = (i: number) => {
     if (authority.current.readOnly) return;
-    setEditingIndex((cur) => (cur == null ? cur : cur === i ? null : i < cur ? cur - 1 : cur));
-    onChange(motions.filter((_, j) => j !== i));
+    if (onChange(motions.filter((_, j) => j !== i))) setEditingIndex((cur) => (cur == null ? cur : cur === i ? null : i < cur ? cur - 1 : cur));
   };
 
   const addAdjournmentRecord = () => {
@@ -741,6 +777,16 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     <div onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) flushInBackground();
     }}>
+      <MeetingDraftRecovery draft={recovery} label="motions" onRestore={saveController.restore} disabled={readOnly || saveState.saveState !== "saved" || adding || sectionScope != null} disabledReason={sectionScope != null ? "Open the Motions tab to restore and review the complete motion list." : undefined} />
+      <MeetingDraftRecovery draft={newMotionRecovery} label="new motion" onRestore={(payload) => {
+        saveController.restore({ value: [...payload.baseline.value, payload.value], baseline: payload.baseline.baseline });
+        if (recovery.journal?.getSnapshot().savedOnDevice) newMotionRecovery.journal?.discardCurrent();
+      }} disabled={readOnly || saveState.saveState !== "saved" || adding || sectionScope != null} disabledReason={sectionScope != null ? "Open the Motions tab to restore and review the complete motion list." : undefined} />
+      {saveState.recovered && <div className="flag flag--warn" role="status">
+        <p>Review the recovered motions before saving. Their original server version is kept for conflict checking.</p>
+        <button type="button" className="btn-action" disabled={readOnly} onClick={() => { void saveController.saveRecovered().catch(() => undefined); }}>Save recovered draft</button>
+        <button type="button" className="btn-action" onClick={saveController.useLatestServer}>Discard restored motions</button>
+      </div>}
       {saveState.saveState === "error" && (
         <div className="flag flag--warn" role="alert">
           <p>{saveState.error} Your motion changes are still shown below.</p>

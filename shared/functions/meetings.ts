@@ -18,7 +18,7 @@ import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { createPortable as createMinutesPortable, resolveMinutesMotions, syncMotionsForMinutes, updatePortable as updateMinutesPortable } from "./minutes";
 import { requirePermissionPortable } from "./permissions";
-import { assertMeetingFieldsUnchanged, type MeetingExpectedFields } from "../meetingConcurrency";
+import { assertMeetingFieldsUnchanged, meetingExpectedFields, type MeetingExpectedFields } from "../meetingConcurrency";
 import { meetingForReader } from "./minutesPrivacy";
 import { discussionSeededWithNotes, isMeetingRecordKind, meetingRecordKind, MEETING_WORKING_NOTES_MAX_LENGTH, type MeetingRecordKind } from "../meetingRecordKind";
 
@@ -909,6 +909,10 @@ export async function updatePortable(
       }
     }
   }
+  // Return only fields the editor compared, after applying normalized changes.
+  // A later subscription may already include somebody else's edit and must
+  // never become the baseline for this acknowledgement.
+  return { expected: meetingExpectedFields({ ...authorizedRow, ...next }, Object.keys(expected ?? {})) };
 }
 
 /**

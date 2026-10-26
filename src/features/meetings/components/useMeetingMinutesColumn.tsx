@@ -1,3 +1,5 @@
+import { MeetingDraftRecovery } from "../useMeetingDraft";
+import { useMeetingFormDraft } from "../useMeetingFormDraft";
 // MeetingMinutesColumn state + behavior extracted into a hook so the component
 // file is presentation-focused. Verbatim body move.
 
@@ -74,6 +76,8 @@ export type MeetingMinutesColumnProps = {
   agendaTree: AgendaItemEntry[];
   agendaEdit: AgendaItemEntry[] | null;
   setAgendaEdit: (value: AgendaItemEntry[] | null) => void;
+  agendaRecovery?: import("react").ReactNode;
+  agendaInitializing?: boolean;
   saveAgenda: () => void | Promise<void>;
   attendanceEdit: any;
   setAttendanceEdit: (value: any) => void;
@@ -230,7 +234,18 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections, motions]);
   const [sectionEditIndex, setSectionEditIndex] = useState<number | null>(null);
-  const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
+  type SectionBaseline = { index: number; expected: MeetingExpectedFields; agenda: ReturnType<typeof meetingAgendaSnapshot> };
+  const sectionForm = useMeetingFormDraft<SectionDraft, SectionBaseline>("section", (value): value is SectionDraft => {
+    const row = value as SectionDraft | null;
+    return !!row && typeof row.title === "string" && typeof row.type === "string" && typeof row.presenter === "string" && typeof row.discussion === "string"
+      && Array.isArray(row.decisions) && row.decisions.every((item) => typeof item === "string") && Array.isArray(row.actionItems)
+      && Array.isArray(row.linkedTaskIds) && row.linkedTaskIds.every((item) => typeof item === "string") && !!row.taskUpdates && typeof row.taskUpdates === "object" && typeof row.publicVisible === "boolean";
+  }, (value): value is SectionBaseline => {
+    const row = value as SectionBaseline | null;
+    return !!row && Number.isInteger(row.index) && row.index >= 0 && !!row.expected && "sections" in row.expected && "agenda" in row;
+  });
+  const sectionDraft = sectionForm.value;
+  const setSectionDraft = (value: SectionDraft | null) => value === null ? sectionForm.controller.discard() : sectionForm.controller.change(value);
   const sectionEditBaseline = useRef<MeetingExpectedFields>({});
   const sectionAgendaBaseline = useRef<ReturnType<typeof meetingAgendaSnapshot>>(null);
   const [savingSection, setSavingSection] = useState(false);
@@ -298,7 +313,8 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   }, [isMobileSectionEditor, sectionEditIndex]);
 
   const addSection = async () => {
-    if (!allowed("minutes:write", "agendas:write")) return;
+    if (!allowed("minutes:write", "agendas:write") || sectionForm.controller.dirty()) return;
+    const editSession = sectionForm.controller.generation();
     const newTitle = "New section";
     const newIndex = sections.length;
     const next = [
@@ -312,6 +328,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       },
     ];
     const saved = await saveMinuteSections(next);
+    if (sectionForm.controller.generation() !== editSession || sectionForm.controller.dirty()) return;
     sectionEditBaseline.current = meetingExpectedFields({ sections: saved?.sections ?? next }, ["sections"]);
     sectionAgendaBaseline.current = meetingAgendaSnapshot(saved?.agenda);
     if (agendaEdit !== null) {
@@ -322,7 +339,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     focusSectionTitleOnEdit.current = true;
     setSectionEditIndex(newIndex);
     setSectionEditorTab("notes");
-    setSectionDraft({
+    sectionForm.controller.begin({
       title: "New section",
       type: "discussion",
       presenter: "",
@@ -332,7 +349,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       linkedTaskIds: [],
       taskUpdates: {},
       publicVisible: true,
-    });
+    }, { index: newIndex, expected: sectionEditBaseline.current, agenda: sectionAgendaBaseline.current });
   };
 
   const removeSection = async (index: number) => {
@@ -1083,13 +1100,13 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   };
 
   const startSectionEdit = (index: number) => {
-    if (!allowed("minutes:write", "agendas:write")) return;
+    if (!allowed("minutes:write", "agendas:write") || sectionForm.controller.dirty()) return;
     const section = sections[index] ?? {};
     sectionEditBaseline.current = meetingExpectedFields(minutes ?? {}, ["sections"]);
     sectionAgendaBaseline.current = meetingAgendaSnapshot(props.agendaRecord);
     setSectionEditIndex(index);
     setSectionEditorTab("notes");
-    setSectionDraft({
+    sectionForm.controller.begin({
       title: section.title ?? "",
       type: section.type ?? "discussion",
       presenter: section.presenter ?? "",
@@ -1099,7 +1116,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       linkedTaskIds: Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [],
       taskUpdates: {},
       publicVisible: section.publicVisible !== false,
-    });
+    }, { index, expected: sectionEditBaseline.current, agenda: sectionAgendaBaseline.current });
   };
 
   const saveSectionEdit = async () => {
@@ -1107,17 +1124,25 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     if (sectionEditIndex == null || !sectionDraft || savingSection) return;
     setSavingSection(true);
     try {
-      // Flush any in-progress motion draft first so it lands in motions[] before
-      // we close the editor. It also waits for inline edits already saving,
-      // and rejects on failure so this section draft stays open.
-      await sectionMotionEditorRef.current?.commitDraft();
       // Read the editor's current markdown directly — Milkdown's onChange flows
       // through React state, and a fast Save click can land before that
       // re-render has flushed.
       const latestDiscussion =
         sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft.discussion;
-      const existing = sections[sectionEditIndex] ?? {};
-      const next = [...sections];
+      const current = sectionForm.controller.getSnapshot();
+      if (!current) return;
+      if (latestDiscussion !== current.value.discussion) sectionForm.controller.change({ ...current.value, discussion: latestDiscussion });
+      const submitted = sectionForm.controller.capture();
+      if (!submitted) return;
+      // Capture the section/session before awaiting any nested motion save.
+      // Cancelling A and opening B must never retarget this save to B's draft.
+      await sectionMotionEditorRef.current?.commitDraft();
+      if (!sectionForm.controller.isCurrent(submitted)) return;
+      const savedDraft = submitted.payload.value;
+      const submittedIndex = submitted.payload.baseline.index;
+      const originalSections = Array.isArray(submitted.payload.baseline.expected.sections) ? submitted.payload.baseline.expected.sections : [];
+      const existing = originalSections[submittedIndex] ?? {};
+      const next = [...originalSections];
       // Build the section explicitly rather than spreading `existing`, but preserve
       // the stored fields this editor doesn't manage. The agenda sync writes
       // motionText/motionTemplateId/motionId onto the section
@@ -1126,10 +1151,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       // round-trip). Dropping them here silently wiped the section↔motion linkage
       // and the `hasStartedMinutesDraft` motionText signal on every section save.
       // depth/reportSubmitted are likewise preserved.
-      next[sectionEditIndex] = {
-        title: sectionDraft.title.trim() || existing.title || "Untitled section",
-        type: sectionDraft.type.trim() || undefined,
-        presenter: cleanOptional(sectionDraft.presenter),
+      next[submittedIndex] = {
+        title: savedDraft.title.trim() || existing.title || "Untitled section",
+        type: savedDraft.type.trim() || undefined,
+        presenter: cleanOptional(savedDraft.presenter),
         discussion: cleanOptional(latestDiscussion),
         reportSubmitted: existing.reportSubmitted,
         depth: existing.depth,
@@ -1141,19 +1166,22 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
         sourceKind: existing.sourceKind,
         sourceEvidence: existing.sourceEvidence,
         agendaItemId: existing.agendaItemId,
-        decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
+        decisions: savedDraft.decisions.map((d) => d.trim()).filter(Boolean),
         // Action items are edited in the Action items card (status, assignee,
         // task link); the section editor keeps them exactly as stored so A12
         // status, person links and task ids are never stripped.
         actionItems: Array.isArray(existing.actionItems) ? existing.actionItems : [],
         sourceTitle: existing.sourceTitle,
-        linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
-        publicVisible: sectionDraft.publicVisible ? undefined : false,
+        linkedTaskIds: savedDraft.linkedTaskIds.length ? savedDraft.linkedTaskIds : undefined,
+        publicVisible: savedDraft.publicVisible ? undefined : false,
       };
-      const saved = await saveMinuteSections(next, sectionEditBaseline.current, sectionAgendaBaseline.current);
+      const saved = await saveMinuteSections(next, submitted.payload.baseline.expected, submitted.payload.baseline.agenda);
       sectionEditBaseline.current = meetingExpectedFields({ sections: saved?.sections ?? next }, ["sections"]);
       sectionAgendaBaseline.current = meetingAgendaSnapshot(saved?.agenda);
-      for (const [taskId, patch] of Object.entries(sectionDraft.taskUpdates)) {
+      const acceptedBaseline = { index: submittedIndex, expected: sectionEditBaseline.current, agenda: sectionAgendaBaseline.current };
+      if (!sectionForm.controller.checkpoint(submitted, acceptedBaseline)) return;
+      for (const [taskId, patch] of Object.entries(savedDraft.taskUpdates)) {
+        if (!sectionForm.controller.isCurrent(submitted)) return;
         const cleanPatch: { status?: string; completionNote?: string } = {};
         if (patch.status) cleanPatch.status = patch.status;
         if (patch.completionNote !== undefined) cleanPatch.completionNote = patch.completionNote;
@@ -1161,8 +1189,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
           await applyTaskUpdate(taskId, cleanPatch);
         }
       }
-      setSectionEditIndex(null);
-      setSectionDraft(null);
+      if (sectionForm.controller.complete(submitted, acceptedBaseline)) setSectionEditIndex(null);
     } catch (error) {
       toast.error("Could not save the section", error instanceof Error ? error.message : String(error));
     } finally {
@@ -1630,7 +1657,15 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       });
     });
   };
+  const sectionRecovery = (sectionForm.recovery.error || sectionForm.recovery.savedOnDevice || sectionForm.recovery.recoveries.length > 0) ? <MeetingDraftRecovery draft={sectionForm.recovery} label="section" disabled={!canEditSections || sectionEditIndex !== null} onRestore={(payload) => {
+    sectionEditBaseline.current = payload.baseline.expected;
+    sectionAgendaBaseline.current = payload.baseline.agenda;
+    sectionForm.controller.restore(payload);
+    setSectionEditIndex(payload.baseline.index);
+    setSectionEditorTab("notes");
+  }} /> : null;
   return {
+    sectionRecovery,
     canEditMinutes, canEditAgenda, canEditSections, canEditAttendance, canEditMotions, canEditTasks, canEditTranscript, canAddToBacklog,
     minutes,
     agenda,

@@ -308,5 +308,56 @@ assert.ok((await t.run((ctx) => ctx.db.get(firstId)))?.approvedAt);
 assert.ok(await first.query(api.agendas.getForMeeting, { meetingId: ids.meetingId }));
 console.log("✓ deleting a meeting cannot bypass its approved-minutes protection or remove the agenda");
 
+const draftAgendaMeeting = await t.run(ctx => ctx.db.insert("meetings", {
+  societyId: ids.societyId, title: "Fictional recoverable agenda", type: "Board", scheduledAt: "2027-01-02T12:00:00Z",
+  electronic: false, status: "Scheduled", attendeeIds: ["Fictional invitee"], quorumRequired: 1,
+}));
+const initialAgendaArgs = {
+  societyId: ids.societyId, meetingId: draftAgendaMeeting, expectedAgenda: null,
+  expectedNoMinutes: true, initializeMinutes: true, items: [{ title: "First agenda item", depth: 0 as const }],
+};
+await first.mutation(api.agendas.syncForMeeting, initialAgendaArgs);
+const initialAgenda = await first.query(api.agendas.getForMeeting, { meetingId: draftAgendaMeeting });
+const initialMinutes = await first.query(api.minutes.getByMeeting, { meetingId: draftAgendaMeeting });
+assert.ok(initialMinutes);
+assert.equal(initialMinutes.sections[0].agendaItemId, initialAgenda.items[0]._id);
+assert.deepEqual(initialMinutes.attendees, [], "initial agenda save does not turn invitees into attendance");
+assert.equal(initialMinutes.quorumStatus, "not_recorded");
+await assert.rejects(() => second.mutation(api.agendas.syncForMeeting, {
+  ...initialAgendaArgs, items: [{ title: "Recovered stale item" }],
+}), /minutes changed while you were editing/);
+assert.deepEqual(await first.query(api.agendas.getForMeeting, { meetingId: draftAgendaMeeting }), initialAgenda);
+assert.equal((await t.run(ctx => ctx.db.query("minutes").withIndex("by_meeting", q => q.eq("meetingId", draftAgendaMeeting)).collect())).length, 1);
+await second.mutation(api.agendas.updateItem, { itemId: initialAgenda.items[0]._id, presenter: "Fictional new presenter" });
+await assert.rejects(() => first.mutation(api.agendas.syncForMeeting, {
+  societyId: ids.societyId, meetingId: draftAgendaMeeting, expectedAgenda: meetingAgendaSnapshot(initialAgenda),
+  items: [{ title: "Stale renamed item" }],
+}), /meeting agenda changed while you were editing/);
+assert.equal((await first.query(api.agendas.getForMeeting, { meetingId: draftAgendaMeeting })).items[0].presenter, "Fictional new presenter");
+await assert.rejects(() => reader.mutation(api.agendas.syncForMeeting, initialAgendaArgs), /Permission|permission/);
+console.log("✓ initial agenda and minutes creation is atomic; recovered stale agendas cannot replace independently created minutes or changed items");
+
+const meetingAck = await first.mutation(api.meetings.update, {
+  id: draftAgendaMeeting, expected: { title: "Fictional recoverable agenda", committeeId: null },
+  patch: { title: "Fictional accepted title", clearCommitteeId: true },
+});
+assert.deepEqual(meetingAck.expected, { title: "Fictional accepted title", committeeId: null });
+assert.deepEqual(Object.keys(meetingAck), ["expected"], "acknowledgements do not return unrelated meeting content");
+await first.mutation(api.meetings.update, { id: draftAgendaMeeting, expected: meetingAck.expected, patch: { title: "Fictional later typing" } });
+await assert.rejects(() => second.mutation(api.meetings.update, {
+  id: draftAgendaMeeting, expected: meetingAck.expected, patch: { title: "Fictional stale title" },
+}), /changed while you were editing/);
+const attendanceAck = await first.mutation(api.minutes.saveAttendanceGrid, {
+  minutesId: initialMinutes._id, expected: meetingExpectedFields(initialMinutes, ["attendees", "absent", "detailedAttendance"]),
+  rows: [{ name: "  Fictional Person  ", status: "present" }],
+});
+assert.deepEqual(attendanceAck.expected, meetingExpectedFields(await first.query(api.minutes.getByMeeting, { meetingId: draftAgendaMeeting }), ["attendees", "absent", "detailedAttendance"]));
+assert.equal(attendanceAck.attendees, 1, "existing count fields remain compatible");
+await first.mutation(api.minutes.saveAttendanceGrid, {
+  minutesId: initialMinutes._id, expected: attendanceAck.expected,
+  rows: [{ name: "Fictional Person", status: "absent" }],
+});
+console.log("✓ accepted meeting and normalized attendance baselines let newer drafts save while still rejecting stale collaborators");
+
 await assert.rejects(() => t.mutation(api.minutes.update, { id: firstId, patch: { discussion: "Anonymous edit" } }), /Authentication|Permission|authenticated/i);
 console.log("Meeting collaboration checks passed (synthetic data, no live deployment).");

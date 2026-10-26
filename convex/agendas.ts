@@ -111,6 +111,12 @@ export const syncForMeeting = authorizedMutation("agendas:syncForMeeting", mutat
     meetingId: v.id("meetings"),
     title: v.optional(v.string()),
     status: v.optional(v.string()),
+    expectedAgenda: v.optional(v.union(v.null(), v.object({
+      agenda: v.record(v.string(), v.any()),
+      items: v.array(v.record(v.string(), v.any())),
+    }))),
+    expectedNoMinutes: v.optional(v.boolean()),
+    initializeMinutes: v.optional(v.boolean()),
     items: v.array(v.object({
       title: v.string(),
       depth: v.optional(v.union(v.literal(0), v.literal(1))),

@@ -1,9 +1,11 @@
+import type { AutosaveDraft, AutosaveDraftSink } from "./meetingDraftStore";
 export type NotesSaveState = "saved" | "pending" | "saving" | "error";
 
 export type NotesAutosaveSnapshot = {
   value: string;
   saveState: NotesSaveState;
   error: string | null;
+  recovered: boolean;
 };
 
 /**
@@ -14,13 +16,16 @@ export type NotesAutosaveSnapshot = {
 export function createNotesAutosave(
   initial: string | undefined,
   save: (value: string, expected: string | null) => Promise<unknown>,
+  durable?: AutosaveDraftSink<string, string | null>,
 ) {
   let baseline: string | null = initial ?? null;
   let latestServer: string | null = baseline;
   let serverVersion = 0;
   let queued: string | null = null;
   let inFlight: Promise<void> | null = null;
-  let snapshot: NotesAutosaveSnapshot = { value: initial ?? "", saveState: "saved", error: null };
+  let snapshot: NotesAutosaveSnapshot = { value: initial ?? "", saveState: "saved", error: null, recovered: false };
+  let revision: string | null = null;
+  const persist = () => { revision = durable?.write({ value: snapshot.value, baseline }) ?? null; };
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<NotesAutosaveSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
@@ -28,6 +33,7 @@ export function createNotesAutosave(
   };
 
   const flush = (): Promise<void> => {
+    if (snapshot.recovered) return Promise.reject(new Error("Review the recovered notes, then choose Save recovered draft."));
     if (inFlight) return inFlight;
     if (queued === null) return Promise.resolve();
     // Start in a microtask so every caller receives the same in-flight promise,
@@ -35,8 +41,10 @@ export function createNotesAutosave(
     const run = Promise.resolve().then(async () => {
       while (queued !== null) {
         const next = queued;
+        const submittedRevision = revision;
         queued = null;
         if (next === (baseline ?? "")) {
+          durable?.acknowledge(submittedRevision);
           baseline = latestServer;
           publish({ value: baseline ?? "", saveState: "saved", error: null });
           continue;
@@ -45,11 +53,14 @@ export function createNotesAutosave(
         try {
           const baselineBefore = baseline;
           const observedBefore = serverVersion;
+          durable?.assertActive();
           await save(next, baseline);
           const newerServerValue = serverVersion > observedBefore
             && latestServer !== baselineBefore && latestServer !== next;
           if (!newerServerValue) latestServer = next;
           baseline = next;
+          durable?.acknowledge(submittedRevision);
+          if (queued !== null) persist();
           if (queued === null && newerServerValue) {
             baseline = latestServer;
             publish({ value: latestServer ?? "", saveState: "saved", error: null });
@@ -88,6 +99,7 @@ export function createNotesAutosave(
     change(value: string) {
       queued = value;
       publish({ value, saveState: "pending", error: null });
+      persist();
     },
     receiveServer(value: string | undefined) {
       latestServer = value ?? null;
@@ -96,12 +108,24 @@ export function createNotesAutosave(
       baseline = latestServer;
       publish({ value: value ?? "", saveState: "saved", error: null });
     },
+    restore(draft: AutosaveDraft<string, string | null>) {
+      if (inFlight) return;
+      baseline = draft.baseline;
+      queued = draft.value;
+      publish({ value: draft.value, saveState: "pending", error: null, recovered: true });
+      persist();
+    },
+    saveRecovered() {
+      publish({ recovered: false });
+      return flush();
+    },
     /** Explicitly discard a conflicting draft after the user has reviewed it. */
     useLatestServer() {
       if (inFlight) return;
       baseline = latestServer;
       queued = null;
-      publish({ value: latestServer ?? "", saveState: "saved", error: null });
+      durable?.discardCurrent();
+      publish({ value: latestServer ?? "", saveState: "saved", error: null, recovered: false });
     },
     flush,
   };
