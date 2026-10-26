@@ -14,6 +14,7 @@ import React, {useLayoutEffect} from 'react';
 import {create, act} from ${JSON.stringify(renderer)};
 import * as society from ${JSON.stringify(path.join(root, "src/hooks/useSociety.ts"))};
 import * as user from ${JSON.stringify(path.join(root, "src/hooks/useCurrentUser.ts"))};
+import {meetingWorkspaceScope} from ${JSON.stringify(path.join(root, "src/features/meetings/lib/meetingWorkspaceScope.ts"))};
 let tree;
 function Reader(){
   const s=society.useSocietySelection(); const u=user.useCurrentUserId(); const current=user.useCurrentUser();
@@ -26,6 +27,7 @@ export function setup(ids, options={}){
   society.setMembershipSocietyIds(ids.map(id=>({societyId:id,userId:'user-'+id})));
   act(()=>{tree=create(React.createElement(React.Fragment,null,...Array.from({length:5},(_,key)=>React.createElement(Reader,{key})),options.switchOnMount?React.createElement(SwitchOnMount):null))});
 }
+export function meetingScope(meeting){return meetingWorkspaceScope(meeting,society.getStoredSocietyId())}
 export function select(id){let result;act(()=>{result=society.setStoredSocietyId(id)});return result}
 export function receive(event){act(()=>window.dispatchEvent(event))}
 export function snapshot(){const nodes=tree.toJSON();return (Array.isArray(nodes)?nodes:[nodes]).map(n=>n.children[0])}
@@ -82,8 +84,14 @@ function shows(tab, expected) { assert.ok(tab.snapshot().every(row => row === ex
 // only the person's original workspace. The previous code reverted both to A.
 const env = environment(), old = env.tab(), invited = env.tab();
 old.setup(["a"]); invited.setup(["a", "b"]); env.flush();
+// A meeting deep link must remain closed while the page's selected role and
+// supporting people/documents belong to another workspace.
+assert.deepEqual(JSON.parse(JSON.stringify(invited.meetingScope({_id:"meeting-b",societyId:"b"}))), {matches:false});
+assert.deepEqual(JSON.parse(JSON.stringify(invited.meetingScope(undefined))), {matches:false});
 assert.equal(invited.select("b"), true); env.flush();
 shows(invited, "b:user-b:Admin"); shows(old, "a:user-a:Owner");
+assert.deepEqual(JSON.parse(JSON.stringify(invited.meetingScope({_id:"meeting-b",societyId:"b"}))), {matches:true,meetingId:"meeting-b",societyId:"b"});
+assert.deepEqual(JSON.parse(JSON.stringify(old.meetingScope({_id:"meeting-b",societyId:"b"}))), {matches:false});
 assert.equal(env.values.get(SOCIETY), "b"); assert.equal(env.values.get(USER), "user-b");
 // Even stale getters must not erase a newer tab's saved choice.
 old.society.getStoredSocietyId(); old.user.getStoredUserId(); env.flush();

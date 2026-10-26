@@ -33,6 +33,7 @@ const RESOURCES = Object.fromEntries(Object.entries(RESOURCE_GROUPS).flatMap(([r
 const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   roleHolders: "legalOperations", auditLogEntries: "activity",
   workflowRuns: "workflows", outboxMessages: "pendingEmails",
+  notificationReceipts: "notifications",
   auditorAppointments: "auditors", pipaTrainings: "pipaTraining",
   directorAttestations: "attestations", customFieldDefinitions: "customFields",
   publications: "transparency", apiClients: "apiPlatform", apiTokens: "apiPlatform",
@@ -157,6 +158,9 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (name === "files:generateLogoUploadUrl") return "society:write";
   if (name === "calendarFeed:getFeedToken") return "settings:write";
   if (name === "documents:recordOpen") return "documents:read";
+  // Inbox state belongs to the signed-in recipient, including for read-only
+  // workspace members. The handlers enforce the recipient on every operation.
+  if (["notifications:markRead", "notifications:markAllRead", "notifications:dismiss", "notifications:dismissAll", "notifications:snooze", "notifications:remove", "notifications:removeAllDismissed"].includes(name)) return "tasks:read";
   // Readers may save their own presentation preferences. Handlers enforce user ownership.
   if (["invoicePreferences:saveView", "invoicePreferences:removeView"].includes(name)) return "financials:read";
   if (name === "workflows:generatedDocumentPreflight") return "tasks:write";

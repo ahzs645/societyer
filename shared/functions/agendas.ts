@@ -16,6 +16,8 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 import { agendaItemsForReader } from "./minutesPrivacy";
+import { assertMeetingFieldsUnchanged, meetingAgendaSnapshot, type MeetingAgendaSnapshot } from "../meetingConcurrency";
+import { requirePermissionPortable } from "./permissions";
 
 // ----- queries --------------------------------------------------------------
 
@@ -249,6 +251,9 @@ export async function syncForMeetingPortable(
     meetingId: string;
     title?: string;
     status?: string;
+    expectedAgenda?: MeetingAgendaSnapshot;
+    expectedNoMinutes?: boolean;
+    initializeMinutes?: boolean;
     items: Array<{
       title: string;
       depth?: 0 | 1;
@@ -265,6 +270,23 @@ export async function syncForMeetingPortable(
   for (const item of args.items) assertAgendaItemExtension(item);
   await requireSocietyMembership(ctx, args.societyId);
   const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  if (args.initializeMinutes) {
+    await requirePermissionPortable(ctx, args.societyId, "minutes:write");
+    if (args.expectedNoMinutes !== true || args.expectedAgenda === undefined) {
+      throw new Error("Reload the agenda before creating its initial minutes draft.");
+    }
+  }
+  if (args.expectedNoMinutes) {
+    const existingMinutes = await ctx.db.query("minutes")
+      .withIndex("by_meeting", q => q.eq("meetingId", args.meetingId)).first();
+    if (existingMinutes || meeting.minutesId) {
+      throw new Error("This meeting's minutes changed while you were editing. Your changes have not been saved. Reload the latest version and apply your changes again.");
+    }
+  }
+  if (args.expectedAgenda !== undefined) {
+    const agenda = meetingAgendaSnapshot(await getForMeetingPortable(ctx, { meetingId: args.meetingId }));
+    assertMeetingFieldsUnchanged({ agenda }, { agenda: args.expectedAgenda }, "meeting agenda");
+  }
   for (const item of args.items) {
     if (item.motionTemplateId) {
       await getOwned(ctx, "motionTemplates", item.motionTemplateId, args.societyId);
@@ -363,6 +385,10 @@ export async function syncForMeetingPortable(
     .collect();
   savedItems.sort((a, b) => a.order - b.order);
   await syncMeetingAndMinutesFromAgenda(ctx, meeting, savedItems, now);
+  if (args.initializeMinutes && savedItems.length > 0) {
+    // The compare, agenda write and initial minutes/motions all commit together.
+    await startMinutesFromAgendaPortable(ctx, { agendaId: String(agendaId) });
+  }
 
   return agendaId;
 }
@@ -392,15 +418,16 @@ export async function startMinutesFromAgendaPortable(
     return { minutesId: existing[0]._id, reused: true };
   }
 
-  const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
+  // Planned invitees do not establish attendance or quorum at a future meeting.
+  const attendees = meeting.status === "Held" && Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
   const minutesPayload: Record<string, unknown> = {
     societyId: meeting.societyId,
     meetingId: meeting._id,
     heldAt: meeting.scheduledAt,
     attendees,
     absent: [],
-    quorumMet: meeting.quorumRequired == null ? false : attendees.length >= meeting.quorumRequired,
-    quorumStatus: meeting.quorumRequired == null ? "not_recorded" : attendees.length >= meeting.quorumRequired ? "confirmed" : "not_met",
+    quorumMet: false,
+    quorumStatus: "not_recorded",
     discussion: "",
     sections: items.map(sectionFromAgendaItem),
     motions: motionsFromAgendaItems(items),
@@ -553,20 +580,34 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
   // them, and no longer reads the retired embedded minutes.motions[]. Phase 4C.
   const existingMotions: any[] = (await resolveMinutesMotions(ctx, minutes)).map(cleanMotion);
   const agendaMotions = motionsFromAgendaItems(items);
-  const agendaMotionKeys = new Set(agendaMotions.map((motion) => normalizeTitle(String(motion.text ?? ""))));
-  const existingMotionByText = new Map<string, any>();
+  const existingMotionById = new Map(existingMotions.map((motion) => [String(motion.motionId), motion]));
+  const existingMotionByText = new Map<string, any[]>();
   for (const motion of existingMotions) {
     const key = normalizeTitle(motion?.text ?? "");
-    if (key && !existingMotionByText.has(key)) existingMotionByText.set(key, motion);
+    if (!key) continue;
+    const sameText = existingMotionByText.get(key) ?? [];
+    sameText.push(motion);
+    existingMotionByText.set(key, sameText);
   }
-  const mergedAgendaMotions = agendaMotions.map((motion) => {
-    const existing = existingMotionByText.get(normalizeTitle(String(motion.text ?? "")));
-    return existing ? cleanMotion({ ...existing, sectionIndex: motion.sectionIndex, sectionTitle: motion.sectionTitle }) : cleanMotion(motion);
-  });
-  const preservedMotions = existingMotions.filter((motion: any) => {
-    const key = normalizeTitle(motion?.text ?? "");
-    return !agendaMotionKeys.has(key);
-  });
+  const matchedMotionIds = new Set<string>();
+  const mergedAgendaMotions: any[] = [];
+  for (const motion of agendaMotions) {
+    // A live motion can be amended after its agenda was prepared. Its linked
+    // identity takes precedence over old proposed wording; never submit that
+    // row once as Pending and again as the preserved recorded vote.
+    const existing = (motion.motionId ? existingMotionById.get(String(motion.motionId)) : undefined)
+      ?? existingMotionByText.get(normalizeTitle(String(motion.text ?? "")))
+        ?.find((candidate) => !matchedMotionIds.has(String(candidate.motionId)));
+    if (existing) {
+      const id = String(existing.motionId);
+      if (matchedMotionIds.has(id)) continue;
+      matchedMotionIds.add(id);
+      mergedAgendaMotions.push(cleanMotion({ ...existing, sectionIndex: motion.sectionIndex, sectionTitle: motion.sectionTitle }));
+    } else {
+      mergedAgendaMotions.push(cleanMotion(motion));
+    }
+  }
+  const preservedMotions = existingMotions.filter((motion: any) => !matchedMotionIds.has(String(motion.motionId)));
   const nextMotions = [...mergedAgendaMotions, ...preservedMotions.map((motion: any) => {
     if (motion.sectionIndex == null) return cleanMotion(motion);
     const newIndex = newIndexOfOld.get(Number(motion.sectionIndex));
@@ -649,8 +690,8 @@ function cleanMotion(motion: any) {
   if (motion?.name !== undefined) clean.name = motion.name;
   if (motion?.decidedBy !== undefined) clean.decidedBy = motion.decidedBy;
   // Person links, dissent, source wording and override notes (A1/A11/C1/C13/
-  // G-04). syncMotionsForMinutes replaces the motion row with what it is
-  // given, so anything left out here was erased by every section save.
+  // G-04). syncMotionsForMinutes clears absent editor-managed fields, so these
+  // values must accompany every section save even when that editor hides them.
   for (const key of MOTION_KEPT_FIELDS) if (motion?.[key] !== undefined) clean[key] = motion[key];
   return clean;
 }

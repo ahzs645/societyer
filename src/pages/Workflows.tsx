@@ -12,7 +12,8 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Banner, Drawer, Field } from "../components/ui";
+import { scheduledTriggerSupport } from "../../shared/workflows/scheduleTiming";
 import { Select } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -213,7 +214,7 @@ export function WorkflowsPage() {
   };
 
   const save = async () => {
-    if (!canManage || !form) return;
+    if (!canManage || !form || busyId === "create") return;
     const trigger: any = { kind: form.triggerKind };
     if (form.triggerKind === "cron") trigger.cron = form.cron;
     if (form.triggerKind === "date_offset") {
@@ -227,16 +228,24 @@ export function WorkflowsPage() {
       return;
     }
     setNameError("");
-    await create({
-      societyId: society._id,
-      recipe: form.recipe,
-      name: String(form.name).trim(),
-      trigger,
-      provider: form.provider,
-      status: "active",
-    });
-    setOpen(false);
-    toast.success("Workflow created");
+    setBusyId("create");
+    try {
+      const id = await create({
+        societyId: society._id,
+        recipe: form.recipe,
+        name: String(form.name).trim(),
+        trigger,
+        provider: form.provider,
+        status: "active",
+      });
+      setOpen(false);
+      toast.success(form.triggerKind === "manual" ? "Workflow created" : "Workflow created; review its schedule authorization");
+      if (id) navigate(`/app/workflows/${id}`);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Could not create workflow");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
@@ -490,7 +499,7 @@ export function WorkflowsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" disabled={!canManage} onClick={save}>Create</button>
+            <button className="btn btn--accent" disabled={!canManage || busyId === "create"} onClick={save}>{busyId === "create" ? "Creating…" : "Create"}</button>
           </>
         }
       >
@@ -580,7 +589,7 @@ export function WorkflowsPage() {
                             }))}
                           />
                         </Field>
-                        <Field label="Time" hint={describeCron(form.cron)}>
+                        <Field label="Time (UTC)" hint={`${describeCron(form.cron)} UTC`}>
                           <input
                             className="input"
                             type="time"
@@ -604,8 +613,8 @@ export function WorkflowsPage() {
                 ) : (
                   <>
                     <Field
-                      label="Schedule"
-                      hint={`${describeCron(form.cron)} — e.g. every Monday at 9am is entered as cron syntax: 0 9 * * 1`}
+                      label="Schedule (UTC)"
+                      hint="Daily and weekly five-field cron; for Monday at 9am UTC enter: 0 9 * * 1"
                     >
                       <input
                         className="input mono"
@@ -649,6 +658,9 @@ export function WorkflowsPage() {
                 </Field>
               </>
             )}
+            {form.triggerKind !== "manual" && <Banner tone={scheduledTriggerSupport({ kind: form.triggerKind, cron: form.cron }).supported ? "info" : "warn"}>
+              {scheduledTriggerSupport({ kind: form.triggerKind, cron: form.cron }).reason ?? "After creating this workflow, review its steps and explicitly authorize automatic runs. Due schedules are checked every 15 minutes."}
+            </Banner>}
           </>
         )}
       </Drawer>

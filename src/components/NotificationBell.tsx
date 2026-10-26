@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X, Clock, Settings2 } from "lucide-react";
-import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { useToast } from "./Toast";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
@@ -21,22 +21,26 @@ export function NotificationBell() {
   const { can } = usePermissions();
   const canRead = can("tasks:read");
   const canWrite = can("tasks:write");
-  const userId = useCurrentUserId() ?? undefined;
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
   const notifications = useQuery(
     api.notifications.list,
-    canRead && society ? { societyId: society._id, userId, limit: 15 } : "skip",
+    open && canRead && society ? { societyId: society._id, limit: 15 } : "skip",
   );
   const unread = useQuery(
     api.notifications.unreadCount,
-    canRead && society ? { societyId: society._id, userId } : "skip",
+    canRead && society ? { societyId: society._id } : "skip",
   );
-  const markRead = usePermissionedMutation(api.notifications.markRead, canWrite);
-  const markAllRead = usePermissionedMutation(api.notifications.markAllRead, canWrite);
-  const dismiss = usePermissionedMutation(api.notifications.dismiss, canWrite);
-  const dismissAll = usePermissionedMutation(api.notifications.dismissAll, canWrite);
-  const snooze = usePermissionedMutation(api.notifications.snooze, canWrite);
+  const markRead = usePermissionedMutation(api.notifications.markRead, canRead);
+  const markAllRead = usePermissionedMutation(api.notifications.markAllRead, canRead);
+  const dismiss = usePermissionedMutation(api.notifications.dismiss, canRead);
+  const dismissAll = usePermissionedMutation(api.notifications.dismissAll, canRead);
+  const snooze = usePermissionedMutation(api.notifications.snooze, canRead);
   useLocalAlertScan(society?._id, canWrite);
-  const [open, setOpen] = useState(false);
+  const updateInbox = async (write: () => Promise<unknown>) => {
+    try { await write(); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Couldn't update your notifications"); }
+  };
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   // Dialog semantics: focus moves in, Escape closes, focus returns to the bell.
@@ -148,21 +152,21 @@ export function NotificationBell() {
                 <>
                   <button
                     className="btn btn--ghost btn--sm"
-                    disabled={!canWrite}
+                    disabled={!canRead}
                     onClick={async () => {
-                      if (!canWrite) return;
-                      await markAllRead({ societyId: society._id, userId });
+                      if (!canRead) return;
+                      await updateInbox(() => markAllRead({ societyId: society._id }));
                     }}
                   >
                     Mark all read
                   </button>
                   <button
                     className="btn btn--ghost btn--sm"
-                    disabled={!canWrite}
+                    disabled={!canRead}
                     title="Clear all notifications from this list"
                     onClick={async () => {
-                      if (!canWrite) return;
-                      await dismissAll({ societyId: society._id, userId });
+                      if (!canRead) return;
+                      await updateInbox(() => dismissAll({ societyId: society._id }));
                     }}
                   >
                     Clear all
@@ -173,7 +177,7 @@ export function NotificationBell() {
 
             {(notifications ?? []).length === 0 && (
               <div className="empty-state">
-                You're all caught up.
+                {notifications === undefined ? "Loading notifications…" : "You're all caught up."}
               </div>
             )}
 
@@ -198,7 +202,7 @@ export function NotificationBell() {
                 <div
                   className={`notif-row${n.readAt ? "" : " is-unread"}`}
                   onClick={async () => {
-                    if (canWrite && !n.readAt) await markRead({ id: n._id });
+                    if (canRead && !n.readAt) await updateInbox(() => markRead({ id: n._id }));
                     setOpen(false);
                   }}
                 >
@@ -226,15 +230,15 @@ export function NotificationBell() {
                 <Tooltip content="Clear notification">
                   <button
                     className="notif-clear"
-                    disabled={!canWrite}
+                    disabled={!canRead}
                     aria-label="Clear notification"
                     onClick={(event) => {
                       // Sibling of the row body, but guard anyway so a click never
                       // navigates the link or marks-read underneath.
                       event.preventDefault();
                       event.stopPropagation();
-                      if (!canWrite) return;
-                      void dismiss({ id: n._id });
+                      if (!canRead) return;
+                      void updateInbox(() => dismiss({ id: n._id }));
                     }}
                   >
                     <X size={13} />
@@ -245,14 +249,14 @@ export function NotificationBell() {
                 <Tooltip content="Snooze for 1 day">
                   <button
                     className="notif-clear notif-clear--secondary"
-                    disabled={!canWrite}
+                    disabled={!canRead}
                     aria-label="Snooze for 1 day"
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      if (!canWrite) return;
+                      if (!canRead) return;
                       const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-                      void snooze({ id: n._id, untilISO: until });
+                      void updateInbox(() => snooze({ id: n._id, untilISO: until }));
                     }}
                   >
                     <Clock size={13} />

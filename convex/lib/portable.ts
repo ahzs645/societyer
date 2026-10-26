@@ -4,8 +4,10 @@
  * Wraps a real Convex `ctx` so a portable handler runs on hosted Convex with no
  * changes. The contract is deliberately the SUBSET of Convex's ctx we allow, so
  * this wrapper is thin: index reads pass straight through to the real index;
- * only the engine-agnostic `filter(predicate)` is implemented as collect-then-
- * filter (Convex's native `.filter` uses a FilterBuilder, not a JS predicate).
+ * the engine-agnostic `filter(predicate)` runs over the real query iterator
+ * (Convex's native `.filter` uses a FilterBuilder, not a JS predicate). Bounded
+ * reads stop once enough matches are found; pages filter the native page so
+ * its read bounds and stable continuation cursor remain intact.
  *
  * Convex mutations are already one atomic transaction, so `transaction(body)`
  * just runs the body.
@@ -85,32 +87,37 @@ class ConvexPortableQuery<T extends PortableDoc> implements PortableQuery<T> {
 
   async take(n: number): Promise<T[]> {
     if (!this.predicates.length) return ((await this.inner.take(n)) as T[]).map((row) => this.project(row));
-    return this.apply(await this.inner.collect()).slice(0, n).map((row) => this.project(row));
+    if (!Number.isSafeInteger(n) || n < 0) throw new Error("take() requires a non-negative safe integer");
+    const rows: T[] = [];
+    if (n === 0) return rows;
+    // A sparse predicate may still scan many documents. Prefer an index for
+    // common filters; do not read the rest once the requested matches exist.
+    for await (const row of this.inner as AsyncIterable<T>) {
+      if (!this.predicates.every((predicate) => predicate(row))) continue;
+      rows.push(this.project(row));
+      if (rows.length === n) break;
+    }
+    return rows;
   }
 
   async first(): Promise<T | null> {
     if (!this.predicates.length) return this.project(((await this.inner.first()) ?? null) as T | null);
-    return this.project(this.apply(await this.inner.collect())[0] ?? null);
+    return (await this.take(1))[0] ?? null;
   }
 
   async unique(): Promise<T | null> {
     if (!this.predicates.length) return this.project(((await this.inner.unique()) ?? null) as T | null);
-    const rows = this.apply(await this.inner.collect());
+    const rows = await this.take(2);
     if (rows.length > 1) throw new Error("unique() found more than one matching document");
-    return this.project(rows[0] ?? null);
+    return rows[0] ?? null;
   }
 
   async paginate(opts: PaginationOptions) {
-    if (!this.predicates.length) {
-      const res = await this.inner.paginate(opts);
-      return { page: (res.page as T[]).map((row) => this.project(row)), isDone: res.isDone as boolean, continueCursor: res.continueCursor as string };
-    }
-    const rows = this.apply(await this.inner.collect());
-    const start = opts.cursor ? Number(opts.cursor) : 0;
-    const page = rows.slice(start, start + opts.numItems).map((row) => this.project(row));
-    const nextStart = start + opts.numItems;
-    const isDone = nextStart >= rows.length;
-    return { page, isDone, continueCursor: isDone ? "" : String(nextStart) };
+    const res = await this.inner.paginate(opts);
+    // A filtered page may be short or empty. isDone and continueCursor describe
+    // the underlying range, so callers must continue until isDone, not until
+    // an empty page. Preserve Convex's page-splitting metadata as well.
+    return { ...res, page: this.apply(res.page as T[]).map((row) => this.project(row)), isDone: res.isDone as boolean, continueCursor: res.continueCursor as string };
   }
 }
 

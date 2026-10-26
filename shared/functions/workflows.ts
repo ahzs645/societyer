@@ -18,6 +18,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 import { parseWorkflowStatus } from "../workflows/schemas";
+import { invalidateScheduleForPatch, workflowWithoutScheduleAuthority } from "../workflows/scheduleAuthorization";
 
 // The node types a user can append to a workflow's preview graph. Kept in sync
 // with the same catalog in convex/workflowCatalog.ts; only the `type` values
@@ -34,11 +35,12 @@ export const NODE_TYPE_CATALOG: Array<{ type: string; label: string; description
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  return ctx.db
+  const rows = await ctx.db
     .query("workflows")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .order("desc")
     .collect();
+  return rows.map(workflowWithoutScheduleAuthority);
 }
 
 export async function listRunsPortable(
@@ -89,7 +91,8 @@ export async function setStatusPortable(
     societyId: String(wf.societyId),
     required: "Director",
   });
-  await ctx.db.patch(id, { status: parseWorkflowStatus(status) });
+  const patch = { status: parseWorkflowStatus(status) };
+  await ctx.db.patch(id, { ...patch, ...invalidateScheduleForPatch(wf, patch) });
 }
 
 // Light-touch patch for inline edits from the record table. Only
@@ -110,10 +113,11 @@ export async function updatePortable(
     societyId: String(wf.societyId),
     required: "Director",
   });
-  await ctx.db.patch(id, {
+  const next = {
     ...patch,
     ...(patch.status ? { status: parseWorkflowStatus(patch.status) } : {}),
-  });
+  };
+  await ctx.db.patch(id, { ...next, ...invalidateScheduleForPatch(wf, next) });
 }
 
 // Append (or insert) a node into the workflow's preview graph. For now this
@@ -177,7 +181,7 @@ export async function addNodePortable(
     next = [...existing, newNode];
   }
 
-  await ctx.db.patch(id, { nodePreview: next });
+  await ctx.db.patch(id, { nodePreview: next, ...invalidateScheduleForPatch(wf, { nodePreview: next }) });
   return { key: newKey };
 }
 
@@ -235,7 +239,7 @@ export async function updateNodeConfigPortable(
     label: label ?? prev.label,
     description: description ?? prev.description,
   };
-  await ctx.db.patch(id, { nodePreview: next });
+  await ctx.db.patch(id, { nodePreview: next, ...invalidateScheduleForPatch(wf, { nodePreview: next }) });
 }
 
 export async function removeNodePortable(
@@ -254,5 +258,5 @@ export async function removeNodePortable(
   const existing: Record<string, any>[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
   const next = existing.filter((n) => n.key !== key);
   if (next.length === existing.length) return;
-  await ctx.db.patch(id, { nodePreview: next });
+  await ctx.db.patch(id, { nodePreview: next, ...invalidateScheduleForPatch(wf, { nodePreview: next }) });
 }

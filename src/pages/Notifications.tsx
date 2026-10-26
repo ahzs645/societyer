@@ -3,7 +3,6 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
 import { Segmented, Tabs } from "../components/primitives";
@@ -40,10 +39,9 @@ export function NotificationsPage() {
   const society = useSociety();
   const { can } = usePermissions();
   const digestAvailable = !isLocalDataRuntime() && can("tasks:write");
-  const userId = useCurrentUserId() ?? undefined;
   const notifications = useQuery(
     api.notifications.list,
-    society ? { societyId: society._id, userId, limit: 200, includeDismissed: true } : "skip",
+    society && can("tasks:read") ? { societyId: society._id, limit: 200, includeDismissed: true } : "skip",
   );
   const markAllRead = useMutation(api.notifications.markAllRead);
   const removeNotification = useMutation(api.notifications.remove);
@@ -125,8 +123,12 @@ export function NotificationsPage() {
               aria-label="Mark all read"
               disabled={unreadCount === 0}
               onClick={async () => {
-                await markAllRead({ societyId: society._id, userId });
-                toast.success("Marked all read");
+                try {
+                  await markAllRead({ societyId: society._id });
+                  toast.success("Marked all read");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Couldn't mark notifications read");
+                }
               }}
             >
               <CheckCheck size={12} aria-hidden="true" /> Mark all read
@@ -166,7 +168,7 @@ export function NotificationsPage() {
                   if (!ok) return;
                   setBusy(true);
                   try {
-                    await removeAllDismissed({ societyId: society._id, userId });
+                    await removeAllDismissed({ societyId: society._id });
                     toast.success("Deleted cleared notifications");
                   } catch (err: any) {
                     toast.error(err?.message ?? "Couldn't delete notifications");

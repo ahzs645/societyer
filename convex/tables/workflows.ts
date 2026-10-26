@@ -42,10 +42,27 @@ export const workflowTables = {
     lastRunAtISO: v.optional(v.string()),
     nextRunAtISO: v.optional(v.string()),
     createdByUserId: v.optional(v.id("users")),
+    // Legacy workflows have no grant and are never selected by the scheduler.
+    scheduleEnabled: v.optional(v.boolean()),
+    scheduleAuthorization: v.optional(v.object({
+      version: v.number(),
+      authorizerUserId: v.id("users"),
+      authIssuer: v.string(),
+      authSubject: v.string(),
+      externalIdentityId: v.optional(v.id("externalIdentities")),
+      authorizedAtISO: v.string(),
+      expiresAtISO: v.string(),
+      definitionFingerprint: v.string(),
+      revokedAtISO: v.optional(v.string()),
+      revokedReason: v.optional(v.string()),
+    })),
+    scheduleBlockedReason: v.optional(v.string()),
+    scheduleLastAttemptAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_next_run", ["nextRunAtISO"])
-    .index("by_status_next_run", ["status", "nextRunAtISO"]),
+    .index("by_status_next_run", ["status", "nextRunAtISO"])
+    .index("by_schedule_enabled_status_next_run", ["scheduleEnabled", "status", "nextRunAtISO"]),
 
   // Queued manual-send emails (the "outbox"). Used when no live email
   // provider is configured, or when the workflow author explicitly wants a
@@ -114,9 +131,12 @@ export const workflowTables = {
     demo: v.boolean(),
     triggeredBy: v.string(), // cron | manual | event
     triggeredByUserId: v.optional(v.id("users")),
+    scheduleTickAtISO: v.optional(v.string()),
+    scheduleAuthorizationVersion: v.optional(v.number()),
   })
     .index("by_society", ["societyId"])
-    .index("by_workflow", ["workflowId"]),
+    .index("by_workflow", ["workflowId"])
+    .index("by_workflow_schedule_tick", ["workflowId", "scheduleTickAtISO"]),
 
   workflowPackages: defineTable({
     societyId: v.id("societies"),

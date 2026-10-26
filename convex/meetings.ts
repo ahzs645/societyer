@@ -88,6 +88,7 @@ export const applyTemplate = authorizedMutation("meetings:applyTemplate", mutati
 export const update = authorizedMutation("meetings:update", mutation)({
   args: {
     id: v.id("meetings"),
+    expected: v.optional(v.record(v.string(), v.any())),
     patch: v.object({
       type: v.optional(v.string()),
       committeeId: v.optional(v.id("committees")),

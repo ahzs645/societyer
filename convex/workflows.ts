@@ -44,6 +44,11 @@ import { requireDocumentAccess } from "../shared/functions/documents";
 import { assertSafeProviderReceipt, submissionPayloadSha256 } from "../shared/pathways/submissions";
 import { normalizeModuleSettings } from "../src/lib/modules";
 import { getOwned, isActiveMembership, principalUserId, requireSocietyMembership } from "../shared/functions/access";
+import { invalidateScheduleForPatch, workflowWithoutScheduleAuthority } from "../shared/workflows/scheduleAuthorization";
+import {
+  authorizeWorkflowSchedule, recordScheduledFailure, runScheduledWorkflow,
+  scheduledAuthority, workflowScheduleStatus,
+} from "./lib/workflowSchedule";
 
 import {
   UNBC_AFFILIATE_FIELDS,
@@ -73,7 +78,6 @@ import {
   computeEffectiveNodePreview,
   enqueueEmailsForRunInline,
   reconcileStepsOnFailure,
-  computeNextRunAt,
   runExternalWorkflow,
   runExternalGovernanceRecipe,
   runExternalNotificationWorkflow,
@@ -299,13 +303,70 @@ export const get = authorizedQuery("workflows:get", query)({
     const wf = await ctx.db.get(id);
     if (!wf) return null;
     return {
-      ...wf,
+      ...workflowWithoutScheduleAuthority(wf),
       nodePreview: computeEffectiveNodePreview(wf.nodePreview, wf.providerConfig, wf.config),
     };
   },
 });
 
 // ---- mutations ---------------------------------------------------------
+
+const scheduleStateValidator = v.union(
+  v.literal("not_authorized"), v.literal("authorized"), v.literal("expired"), v.literal("revoked"),
+  v.literal("configuration_changed"), v.literal("paused"), v.literal("blocked"),
+);
+const scheduleStatusValidator = v.object({
+  supported: v.boolean(), state: scheduleStateValidator, reason: v.optional(v.string()),
+  definition: v.optional(v.object({ name: v.string(), recipe: v.string(), cron: v.string() })),
+  definitionFingerprint: v.optional(v.string()), authorizerUserId: v.optional(v.id("users")),
+  authorizerName: v.optional(v.string()), authorizedAtISO: v.optional(v.string()),
+  expiresAtISO: v.optional(v.string()), nextRunAtISO: v.optional(v.string()),
+});
+const scheduledRunStateValidator = v.union(
+  scheduleStateValidator, v.literal("skipped"), v.literal("already_claimed"), v.literal("manual_required"),
+);
+
+export const scheduleStatus = authorizedQuery("workflows:scheduleStatus", query)({
+  args: { id: v.id("workflows") },
+  returns: scheduleStatusValidator,
+  handler: async (ctx, { id }) => {
+    const portable = await toPortableQueryCtx(ctx);
+    const workflow = await ctx.db.get(id);
+    if (!workflow) throw new Error("workflows not found.");
+    await requireSocietyMembership(portable, workflow.societyId);
+    return workflowScheduleStatus(ctx, workflow);
+  },
+});
+
+export const authorizeSchedule = authorizedMutation("workflows:authorizeSchedule", mutation)({
+  args: { id: v.id("workflows"), expiresAtISO: v.string(), expectedDefinitionFingerprint: v.string() },
+  returns: scheduleStatusValidator,
+  handler: async (ctx, { id, expiresAtISO, expectedDefinitionFingerprint }) => {
+    const workflow = await ctx.db.get(id);
+    if (!workflow) throw new Error("workflows not found.");
+    return authorizeWorkflowSchedule(ctx, workflow, expiresAtISO, expectedDefinitionFingerprint);
+  },
+});
+
+export const revokeSchedule = authorizedMutation("workflows:revokeSchedule", mutation)({
+  args: { id: v.id("workflows") },
+  returns: scheduleStatusValidator,
+  handler: async (ctx, { id }) => {
+    const workflow = await ctx.db.get(id);
+    if (!workflow) throw new Error("workflows not found.");
+    const portable = await toPortableMutationCtx(ctx);
+    await requirePermissionPortable(portable, workflow.societyId, "tasks:write");
+    const patch = {
+      scheduleEnabled: false,
+      nextRunAtISO: undefined,
+      ...(workflow.scheduleAuthorization ? { scheduleAuthorization: {
+        ...workflow.scheduleAuthorization, revokedAtISO: new Date().toISOString(), revokedReason: "revoked",
+      } } : {}),
+    };
+    await ctx.db.patch(id, patch);
+    return workflowScheduleStatus(ctx, { ...workflow, ...patch });
+  },
+});
 
 
 export const create = authorizedMutation("workflows:create", mutation)({
@@ -377,7 +438,8 @@ export const create = authorizedMutation("workflows:create", mutation)({
       nodePreview,
       trigger,
       config: { ...configForRecipe(recipe), ...(args.config ?? {}) },
-      nextRunAtISO: computeNextRunAt(trigger),
+      // Selecting a schedule does not authorize unattended execution.
+      scheduleEnabled: false,
       createdByUserId,
     });
   },
@@ -542,13 +604,12 @@ export const configure = authorizedMutation("workflows:configure", mutation)({
     }
     if (patch.trigger) {
       next.trigger = parseWorkflowTrigger(patch.trigger);
-      const nextRunAtISO = computeNextRunAt(next.trigger);
-      if (nextRunAtISO) next.nextRunAtISO = nextRunAtISO;
+      if (!wf.scheduleAuthorization) next.nextRunAtISO = undefined;
     }
     if (patch.status) next.status = parseWorkflowStatus(patch.status);
     if (patch.provider) next.provider = workflowProviderSchema.parse(patch.provider);
     if (patch.nodePreview) next.nodePreview = parseWorkflowNodes(patch.nodePreview);
-    await ctx.db.patch(id, next);
+    await ctx.db.patch(id, { ...next, ...invalidateScheduleForPatch(wf, next) });
   },
 });
 
@@ -582,10 +643,11 @@ export const updateProviderLink = authorizedMutation("workflows:updateProviderLi
         operation: "workflow_endpoint_save",
       });
     }
-    await ctx.db.patch(id, {
+    const next = {
       provider: provider ?? wf.provider ?? "n8n",
       providerConfig,
-    });
+    };
+    await ctx.db.patch(id, { ...next, ...invalidateScheduleForPatch(wf, next) });
   },
 });
 
@@ -901,6 +963,7 @@ export const _createRun = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    if (args.triggeredBy === "cron") throw new Error("Scheduled runs require an explicitly authorized internal schedule claim.");
     const portableCtx = await toPortableMutationCtx(ctx);
     await getOwned(portableCtx, "workflows", args.workflowId, args.societyId);
     const triggeredByUserId = await principalUserId(portableCtx, args.societyId);
@@ -937,6 +1000,15 @@ export const _requireRunAuthority = internalQuery({
   handler: async (ctx, { id }) => {
     const run = await ctx.db.get(id);
     const workflow = run ? await ctx.db.get(run.workflowId) : null;
+    if (run?.triggeredBy === "cron") {
+      if (!workflow || run.societyId !== workflow.societyId || !run.scheduleTickAtISO ||
+          run.scheduleAuthorizationVersion !== workflow.scheduleAuthorization?.version ||
+          run.triggeredByUserId !== workflow.scheduleAuthorization?.authorizerUserId ||
+          (await scheduledAuthority(ctx, workflow, Date.now())).state !== "authorized") {
+        throw new Error("Workflow execution authority has been revoked.");
+      }
+      return null;
+    }
     const actorId = run?.triggeredByUserId ?? workflow?.createdByUserId;
     const actor = actorId ? await ctx.db.get(actorId) : null;
     if (run && !normalizeModuleSettings(await ctx.db.get(run.societyId)).workflows) throw new Error("Workflow execution is disabled for this organization.");
@@ -1039,7 +1111,8 @@ export const _touchSchedule = internalMutation({
     const now = new Date().toISOString();
     await ctx.db.patch(id, {
       lastRunAtISO: now,
-      nextRunAtISO: computeNextRunAt(wf.trigger, new Date()),
+      // A manual run neither enables a schedule nor postpones its claimed tick.
+      ...(!wf.scheduleEnabled ? { nextRunAtISO: undefined } : {}),
     });
   },
 });
@@ -1195,35 +1268,63 @@ export const recordConnectorRun = authorizedMutation("workflows:recordConnectorR
 
 export const scan = internalAction({
   args: {},
-  returns: v.any(),
+  returns: v.array(v.object({ workflowId: v.id("workflows"), state: v.union(scheduledRunStateValidator, v.literal("failed")) })),
   handler: async (ctx) => {
     const dueBefore = new Date().toISOString();
     const candidates: any[] = await ctx.runQuery(internal.workflows._listDue, {
       dueBefore,
     });
+    const results: Array<{ workflowId: string; state: string }> = [];
     for (const wf of candidates) {
-      await ctx.runAction(api.workflows.run, {
-        societyId: wf.societyId,
-        workflowId: wf._id,
-        triggeredBy: "cron",
-      });
+      try {
+        const result = await ctx.runMutation(internal.workflows._runScheduled, {
+          workflowId: wf._id, dueAtISO: wf.nextRunAtISO,
+        });
+        results.push({ workflowId: wf._id, state: result.state });
+      } catch {
+        // Each workflow is its own transaction. One failure cannot roll back
+        // another workflow or leave it waiting behind a permanently due row.
+        try {
+          await ctx.runMutation(internal.workflows._recordScheduledFailure, {
+            workflowId: wf._id, dueAtISO: wf.nextRunAtISO,
+          });
+        } catch { /* A later bounded scan can retry an unrecorded failure. */ }
+        results.push({ workflowId: wf._id, state: "failed" });
+      }
     }
+    return results;
   },
 });
 
 
 export const _listDue = internalQuery({
   args: { dueBefore: v.string() },
-  returns: v.any(),
+  returns: v.array(v.object({ _id: v.id("workflows"), nextRunAtISO: v.string() })),
   handler: async (ctx, { dueBefore }) => {
-    return await ctx.db
+    const due = await ctx.db
       .query("workflows")
-      .withIndex("by_status_next_run", (q) =>
+      .withIndex("by_schedule_enabled_status_next_run", (q) =>
         // Lower bound excludes unscheduled workflows: an absent nextRunAtISO
         // sorts before every string, so lte alone would match them.
-        q.eq("status", "active").gt("nextRunAtISO", "").lte("nextRunAtISO", dueBefore),
+        q.eq("scheduleEnabled", true).eq("status", "active").gt("nextRunAtISO", "").lte("nextRunAtISO", dueBefore),
       )
       .take(25);
+    return due.map(workflow => ({ _id: workflow._id, nextRunAtISO: workflow.nextRunAtISO }));
+  },
+});
+
+export const _runScheduled = internalMutation({
+  args: { workflowId: v.id("workflows"), dueAtISO: v.string() },
+  returns: v.object({ state: scheduledRunStateValidator, runId: v.optional(v.id("workflowRuns")) }),
+  handler: (ctx, args) => runScheduledWorkflow(ctx, args.workflowId, args.dueAtISO),
+});
+
+export const _recordScheduledFailure = internalMutation({
+  args: { workflowId: v.id("workflows"), dueAtISO: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await recordScheduledFailure(ctx, args.workflowId, args.dueAtISO);
+    return null;
   },
 });
 
@@ -1240,6 +1341,7 @@ export const run = authorizedAction("workflows:run", action)({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    if (args.triggeredBy === "cron") throw new Error("Scheduled runs require an explicitly authorized internal schedule claim.");
     const wf: any = await ctx.runQuery(api.workflows.get, {
       id: args.workflowId,
     });

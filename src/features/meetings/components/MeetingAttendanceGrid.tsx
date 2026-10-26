@@ -1,3 +1,5 @@
+import { MeetingDraftRecovery } from "../useMeetingDraft";
+import { useMeetingFormDraft } from "../useMeetingFormDraft";
 /**
  * Attendance grid (schema B4/B5, ui-meetings F5/F13/F15, ui-people P9).
  *
@@ -8,7 +10,7 @@
  * person" correction, and counts update as you edit. Saving writes the
  * minutes, the meeting and the attendance register together.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { ClipboardPaste, FileText, Plus, Save, Trash2, UserX, Users, Wand2, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -37,6 +39,7 @@ import {
 import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 import { Tooltip } from "../../../components/Tooltip";
+import { meetingExpectedFields, type MeetingExpectedFields } from "../../../../shared/meetingConcurrency";
 
 const STATUS_OPTIONS = ATTENDANCE_GRID_STATUSES.map((value) => ({ value, label: ATTENDANCE_GRID_STATUS_LABELS[value] }));
 const STATUS_TONE: Record<AttendanceGridStatus, "success" | "neutral" | "warn" | "info"> = {
@@ -75,33 +78,42 @@ export function MeetingAttendanceGrid({
   notYetHeld?: boolean;
 }) {
   const { can } = usePermissions();
-  const canEdit = can("minutes:write") && can("meetings:write") && !minutes?.approvedAt;
+  const canEdit = can("minutes:write") && can("meetings:write") && !minutes?.approvedAt && !minutes?.adoptedSnapshot;
   const records = useQuery(api.meetings.attendanceRecords, can("meetings:read") && meeting?._id ? { meetingId: meeting._id } : "skip") as any[] | undefined;
   const save = usePermissionedMutation(api.minutes.saveAttendanceGrid, canEdit);
   const toast = useToast();
-  const [rows, setRows] = useState<AttendanceGridRow[]>([]);
-  const [nonPersons, setNonPersons] = useState<NonPerson[]>([]);
-  const [initial, setInitial] = useState("");
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const [pasteStatus, setPasteStatus] = useState<AttendanceGridStatus>("present");
+  type AttendanceDraft = { rows: AttendanceGridRow[]; nonPersons: NonPerson[]; pasteText: string; pasteStatus: AttendanceGridStatus; pasteOpen: boolean };
+  const form = useMeetingFormDraft<AttendanceDraft, MeetingExpectedFields>("attendance", (value): value is AttendanceDraft => {
+    const row = value as AttendanceDraft | null;
+    return !!row && Array.isArray(row.rows) && row.rows.every((person) => !!person && typeof person.key === "string" && typeof person.name === "string" && ATTENDANCE_GRID_STATUSES.includes(person.status))
+      && Array.isArray(row.nonPersons) && row.nonPersons.every((person) => !!person && typeof person.name === "string" && typeof person.kind === "string")
+      && typeof row.pasteText === "string" && ATTENDANCE_GRID_STATUSES.includes(row.pasteStatus) && typeof row.pasteOpen === "boolean";
+  }, (value): value is MeetingExpectedFields => !!value && typeof value === "object" && ["attendees", "absent", "detailedAttendance"].every((key) => key in value));
+  const rows = form.value?.rows ?? [];
+  const nonPersons = form.value?.nonPersons ?? [];
+  const setRows = (next: AttendanceGridRow[] | ((previous: AttendanceGridRow[]) => AttendanceGridRow[])) => form.controller.change((current) => ({ ...current, rows: typeof next === "function" ? next(current.rows) : next }));
+  const setNonPersons = (next: NonPerson[] | ((previous: NonPerson[]) => NonPerson[])) => form.controller.change((current) => ({ ...current, nonPersons: typeof next === "function" ? next(current.nonPersons) : next }));
+  const pasteOpen = form.value?.pasteOpen ?? false;
+  const pasteText = form.value?.pasteText ?? "";
+  const pasteStatus = form.value?.pasteStatus ?? "present";
+  const setPasteOpen = (next: boolean | ((previous: boolean) => boolean)) => form.controller.change((current) => ({ ...current, pasteOpen: typeof next === "function" ? next(current.pasteOpen) : next }));
+  const setPasteText = (pasteText: string) => form.controller.change((current) => ({ ...current, pasteText }));
+  const setPasteStatus = (pasteStatus: AttendanceGridStatus) => form.controller.change((current) => ({ ...current, pasteStatus }));
   const [saving, setSaving] = useState(false);
 
   const viewRows = useMemo(() => attendanceRowsFromMinutes(minutes, records ?? []), [minutes, records]);
 
   useEffect(() => {
-    if (!editing) return;
+    if (!editing || form.controller.getSnapshot()) return;
     const seeded = attendanceRowsFromMinutes(minutes, records ?? []);
-    setRows(seeded);
-    setNonPersons([]);
-    setInitial(rowsSignature(seeded, []));
+    form.controller.begin({ rows: seeded, nonPersons: [], pasteText: "", pasteStatus: "present", pasteOpen: false }, meetingExpectedFields(minutes ?? {}, ["attendees", "absent", "detailedAttendance"]));
     setPasteOpen(false);
     // Seed once per edit session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
-  const dirty = editing && rowsSignature(rows, nonPersons) !== initial;
-  const close = useDirtyCloseGuard(dirty, () => onEditingChange(false), "attendance changes");
+  const dirty = editing && form.controller.dirty();
+  const close = useDirtyCloseGuard(dirty, () => { form.controller.discard(); onEditingChange(false); }, "attendance changes");
 
   const activeRows = editing ? rows : viewRows;
   const counts = attendanceCounts(activeRows);
@@ -164,7 +176,8 @@ export function MeetingAttendanceGrid({
   };
 
   const submit = async () => {
-    if (!canEdit || !minutes) return;
+    if (!canEdit || !minutes || saving) return;
+    if (form.controller.getSnapshot()?.value.pasteText.trim()) { toast.error("Apply or clear the pasted names before saving attendance."); return; }
     const blank = rows.filter((row) => !row.name.trim());
     if (blank.length) {
       toast.error("Some rows have no name", "Enter a name or remove the empty rows.");
@@ -172,8 +185,12 @@ export function MeetingAttendanceGrid({
     }
     setSaving(true);
     try {
+      const submitted = form.controller.capture();
+      if (!submitted) return;
+      const { rows, nonPersons } = submitted.payload.value;
       const result: any = await save({
         minutesId: minutes._id,
+        expected: submitted.payload.baseline,
         rows: rows.map(({ key: _key, ...row }) => ({
           ...row,
           personId: row.personId as any,
@@ -184,8 +201,7 @@ export function MeetingAttendanceGrid({
         quorumStatusIfUnset: quorumMet == null || notYetHeld ? undefined : quorumMet ? "confirmed" : "not_met",
       });
       toast.success("Attendance saved", `${result?.attendees ?? counts.inAttendance} attending · ${result?.absent ?? counts.notAttending} regrets/absent${nonPersons.length ? ` · ${nonPersons.length} kept as evidence` : ""}`);
-      setInitial(rowsSignature(rows, nonPersons));
-      onEditingChange(false);
+      if (form.controller.complete(submitted, result?.expected ?? submitted.payload.baseline)) onEditingChange(false);
     } catch (error: any) {
       toast.error("Couldn't save attendance", error?.message ?? String(error));
     } finally {
@@ -222,8 +238,13 @@ export function MeetingAttendanceGrid({
     return suggestion?.kind === "link" ? { ...row, personId: suggestion.personId } : row;
   }));
 
+  const recovery = <MeetingDraftRecovery draft={form.recovery} label="attendance" disabled={!canEdit || dirty || saving} onRestore={(payload) => {
+    form.controller.restore(payload);
+    onEditingChange(true);
+  }} />;
   const view = (
       <div className="attendance-grid attendance-grid--view">
+        {recovery}
         {summary}
         {viewRows.length === 0 ? (
           <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>No attendance recorded yet.</p>
@@ -257,7 +278,7 @@ export function MeetingAttendanceGrid({
           </details>
         )}
         {canEdit && (
-          <button type="button" className="btn-action" onClick={() => onEditingChange(true)} data-testid="attendance-edit">
+          <button type="button" className="btn-action" onClick={() => onEditingChange(true)} disabled={records === undefined} data-testid="attendance-edit">
             <Users size={12} /> Edit attendance
           </button>
         )}
@@ -284,6 +305,7 @@ export function MeetingAttendanceGrid({
       }
     >
     <div className="attendance-grid attendance-grid--edit" data-testid="attendance-grid">
+      {recovery}
       {summary}
       <div className="attendance-grid__toolbar">
         <button type="button" className="btn-action" onClick={() => addRows([blankAttendanceRow()])}>

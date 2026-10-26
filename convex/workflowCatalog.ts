@@ -4,6 +4,7 @@
 // registrations stay in workflows.ts so all api/internal.workflows.* paths are unchanged.
 
 import { v } from "convex/values";
+import { nextScheduledRunAt, scheduledTriggerSupport } from "../shared/workflows/scheduleTiming";
 import {
   query,
   mutation,
@@ -403,16 +404,8 @@ function computeNextRunAt(
   trigger: { kind: string; cron?: string; offset?: { daysBefore: number } },
   from: Date = new Date(),
 ): string | undefined {
-  if (trigger.kind === "manual") return undefined;
-  if (trigger.kind === "cron") {
-    const next = new Date(from.getTime() + 24 * 60 * 60 * 1000);
-    return next.toISOString();
-  }
-  if (trigger.kind === "date_offset") {
-    const next = new Date(from.getTime() + 60 * 60 * 1000);
-    return next.toISOString();
-  }
-  return undefined;
+  if (!scheduledTriggerSupport(trigger).supported) return undefined;
+  return nextScheduledRunAt(trigger, from.getTime());
 }
 
 

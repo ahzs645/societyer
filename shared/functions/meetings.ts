@@ -18,8 +18,8 @@ import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { createPortable as createMinutesPortable, resolveMinutesMotions, syncMotionsForMinutes, updatePortable as updateMinutesPortable } from "./minutes";
 import { requirePermissionPortable } from "./permissions";
+import { assertMeetingFieldsUnchanged, meetingExpectedFields, type MeetingExpectedFields } from "../meetingConcurrency";
 import { meetingForReader } from "./minutesPrivacy";
-import { todayDateOnly } from "../dateOnly";
 import { discussionSeededWithNotes, isMeetingRecordKind, meetingRecordKind, MEETING_WORKING_NOTES_MAX_LENGTH, type MeetingRecordKind } from "../meetingRecordKind";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
@@ -617,27 +617,11 @@ export async function createPortable(
       if (adoptsId) motion.adoptsMinutesId = adoptsId;
       return motion;
     });
-  // Resolve attendees. Explicit form input wins; otherwise auto-snapshot
-  // current directors for Board meetings. One-shot at create time only —
-  // edits never re-seed, so the user can manage the list freely afterwards.
-  let attendees = Array.isArray(args.attendeeIds) ? args.attendeeIds.map(String) : [];
-  if (attendees.length === 0 && args.type === "Board") {
-    const allDirectors = await ctx.db
-      .query("directors")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const todayISO = todayDateOnly();
-    attendees = allDirectors
-      .filter((d) => {
-        const status = String(d.status ?? "").toLowerCase();
-        if (status && !["active", "current", "verified"].includes(status)) return false;
-        const end = d.termEnd || d.resignedAt;
-        if (!end) return true;
-        return String(end).slice(0, 10) >= todayISO;
-      })
-      .map((d) => `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim())
-      .filter(Boolean);
-  }
+  // A roster or invitation is not evidence of presence. Preserve explicitly
+  // recorded attendance only when recording a held meeting; scheduled meeting
+  // invitees remain on the meeting row until attendance is actually recorded.
+  const attendees = args.status === "Held" && Array.isArray(args.attendeeIds)
+    ? [...new Set(args.attendeeIds.map(String))] : [];
 
   const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
   // Motions are materialized into the table (Phase 4C — not stored on the minutes
@@ -649,8 +633,8 @@ export async function createPortable(
     heldAt: args.scheduledAt,
     attendees,
     absent: [],
-    quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
-    quorumStatus: quorumRequired == null ? "not_recorded" : attendees.length >= quorumRequired ? "confirmed" : "not_met",
+    quorumMet: false,
+    quorumStatus: "not_recorded",
     quorumRequired: quorumRequired ?? undefined,
     bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
     quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
@@ -836,8 +820,9 @@ export async function applyTemplatePortable(
 
 export async function updatePortable(
   ctx: PortableMutationCtx,
-  { id, patch }: {
+  { id, patch, expected }: {
     id: string;
+    expected?: MeetingExpectedFields;
     patch: {
       type?: string;
       committeeId?: string;
@@ -886,6 +871,7 @@ export async function updatePortable(
   },
 ) {
   const authorizedRow = await requireOwnedRow(ctx, "meetings", id);
+  assertMeetingFieldsUnchanged(authorizedRow, expected, "meeting");
   assertMeetingExtension({ ...authorizedRow, ...patch });
   const societyId = String(authorizedRow.societyId);
   await Promise.all([
@@ -923,6 +909,10 @@ export async function updatePortable(
       }
     }
   }
+  // Return only fields the editor compared, after applying normalized changes.
+  // A later subscription may already include somebody else's edit and must
+  // never become the baseline for this acknowledgement.
+  return { expected: meetingExpectedFields({ ...authorizedRow, ...next }, Object.keys(expected ?? {})) };
 }
 
 /**
@@ -951,7 +941,7 @@ export async function startMinutesFromNotesPortable(ctx: PortableMutationCtx, { 
   let minutesId: string;
   let seeded = false;
   if (!existing) {
-    const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
+    const attendees = meeting.status === "Held" && Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
     minutesId = String(await createMinutesPortable(ctx, {
       societyId,
       meetingId: id,
@@ -1107,6 +1097,13 @@ export async function setPackageReviewStatusPortable(
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   await requireOwnedRow(ctx, "meetings", id);
+  const minutesRows = await ctx.db
+    .query("minutes")
+    .withIndex("by_meeting", (q) => q.eq("meetingId", id))
+    .collect();
+  if (minutesRows.some((row) => row.approvedAt || row.adoptedSnapshot || Array.isArray(row.motionSnapshots))) {
+    throw new Error("This meeting has approved minutes. Use the minutes amendment process before removing its meeting record.");
+  }
   // Cascade to the scaffolding created alongside the meeting so deletes don't
   // leave orphan minutes/agendas that render as broken links elsewhere.
   const agendas = await ctx.db
@@ -1121,10 +1118,6 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
     for (const item of items) await ctx.db.delete(item._id);
     await ctx.db.delete(agenda._id);
   }
-  const minutesRows = await ctx.db
-    .query("minutes")
-    .withIndex("by_meeting", (q) => q.eq("meetingId", id))
-    .collect();
   for (const row of minutesRows) await ctx.db.delete(row._id);
   await ctx.db.delete(id);
 }

@@ -132,7 +132,7 @@ type DashboardBoardMember = {
   _id: DashboardId;
   name: string;
   position: string;
-  termStart: string;
+  termStart?: string;
   termEnd?: string;
   isBCResident: boolean;
 };

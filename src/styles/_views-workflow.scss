@@ -13,6 +13,22 @@
   margin: token('s-3') token('s-4') 0;
 }
 
+.workflow-schedule-notice {
+  flex-shrink: 0;
+  margin: token('s-3') token('s-4');
+}
+
+.workflow-schedule-notice__description {
+  margin: 0 0 token('s-2');
+  overflow-wrap: anywhere;
+}
+
+.workflow-schedule-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+
 .workflow-topbar {
   @include flex-between;
   gap: token('s-3');

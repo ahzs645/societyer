@@ -283,6 +283,7 @@ const STATIC_EXPORT_TABLES = [
   "paperlessConnections",
   "paperlessDocumentSyncs",
   "notifications",
+  "notificationReceipts",
   "notificationPrefs",
   "notificationRules",
   "memberCommunicationPrefs",

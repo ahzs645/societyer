@@ -11,6 +11,9 @@ export type InterfaceRoute = {
 };
 export const INTERFACE_ROUTES: InterfaceRoute[] = [
   { pattern: "/app/meetings/offline", path: "/demo/app/meetings/offline", kind: "app", fixture: "route" },
+  { pattern: "/app/financials/planning", path: "/demo/app/financials/planning", kind: "app", fixture: "route" },
+  { pattern: "/app/financials/reports/catalog", path: "/demo/app/financials/reports/catalog", kind: "app", fixture: "route" },
+  { pattern: "/app/payroll/calculator", path: "/demo/app/payroll/calculator", kind: "app", fixture: "route" },
   {
     "pattern": "/",
     "path": "/",

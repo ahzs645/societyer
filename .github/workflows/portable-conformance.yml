@@ -48,6 +48,17 @@ jobs:
           npm run test:authorization-policy
           npm run test:permissioned-mutation
 
+      - name: Meeting collaboration and per-user notification regressions
+        run: |
+          npm run test:meeting-collaboration
+          npm run test:convex-multi-user
+
+      - name: Scheduled workflow authority and durable draft recovery
+        run: |
+          npm run test:workflow-schedule
+          npm run test:meeting-draft-recovery
+          npm run test:meeting-integrity
+
       - name: Desktop main-process typecheck
         run: npm run test:electron-architecture
 

@@ -81,10 +81,10 @@ const dashboardMeetingValidator = validator.object({
 });
 
 const dashboardDirectorValidator = validator.object({
-  _id: validator.id("directors"),
+  _id: validator.union(validator.id("directors"), validator.id("roleHolders")),
   name: validator.string(),
   position: validator.string(),
-  termStart: validator.string(),
+  termStart: validator.optional(validator.string()),
   termEnd: validator.optional(validator.string()),
   isBCResident: validator.boolean(),
 });

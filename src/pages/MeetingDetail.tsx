@@ -1,4 +1,5 @@
 import { transcriptText } from "../../shared/transcriptModel";
+import { meetingAgendaSnapshot, meetingExpectedFields, type MeetingExpectedFields } from "../../shared/meetingConcurrency";
 import { TranscriptWorkspace } from "../features/meetings/transcript/TranscriptWorkspace";
 import { motionTranscriptChip } from "../features/meetings/transcript/TranscriptTimeChip";
 import { motionDisplayName, motionNumbers, motionTallySummary } from "../lib/motionDisplay";
@@ -34,7 +35,8 @@ import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
 import { appRouteHref } from "../lib/appRouteHref";
-import { useSociety } from "../hooks/useSociety";
+import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
+import { meetingWorkspaceScope } from "../features/meetings/lib/meetingWorkspaceScope";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -98,6 +100,9 @@ import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMin
 import { MinutesMetadataCard } from "../features/meetings/components/MinutesMetadataCard";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
+import { useMeetingFormDraft } from "../features/meetings/useMeetingFormDraft";
+import { MeetingDraftRecovery, MeetingDraftScopeContext, useMeetingDraftScope } from "../features/meetings/useMeetingDraft";
+import { meetingDraftIdentityKey } from "../features/meetings/lib/meetingDraftStore";
 import { useLocalMinutesDraft } from "../features/meetings/useLocalMinutesDraft";
 import { DeviceAiError } from "../lib/localAi/transport";
 import { DRAFT_CANCELLED, isDraftCancelled } from "../features/meetings/deviceDraftProgress";
@@ -177,29 +182,39 @@ function phoneTabOrder(items: MeetingTabItem[], isPhone: boolean, activeTab: Mee
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
+  // Each meeting owns its draft buffers and pending bootstrap/save promises.
+  // Reusing the route component must never send meeting A's draft to meeting B.
+  const selected = useSociety();
+  const userId = useCurrentUserId();
+  const draftScope = useMeetingDraftScope(id, selected?._id, userId);
+  const identity = draftScope ? meetingDraftIdentityKey(draftScope.identity) : `${userId ?? "signed-out"}:${selected?._id ?? "no-workspace"}:${id}`;
+  return <MeetingDraftScopeContext.Provider value={draftScope}><MeetingDetailWorkspace key={identity} /></MeetingDraftScopeContext.Provider>;
+}
+
+function MeetingDetailWorkspace() {
+  const { id } = useParams<{ id: string }>();
   const convexClient = useConvex();
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const { loaded: permissionsLoaded, can } = usePermissions();
-  const canMeetingsWrite = can("meetings:write");
-  const canMinutesWrite = can("minutes:write");
-  const canMinutesRead = can("minutes:read");
-  const canAgendasWrite = can("agendas:write");
-  const canMotionsWrite = can("motions:write");
-  const canTasksWrite = can("tasks:write");
-  const canDownload = can("exports:download");
-  const canApproveMinutes = permissionsLoaded && can("minutes:approve");
-  // A missing, deleted or foreign id reads as null (RecordNotFound below), and
-  // the meeting's own panels wait until it exists instead of failing (FF-2).
+  // Resolve only the meeting first. Supporting lists and edit authority stay
+  // disabled until the user selects this meeting's workspace.
   const meeting = useRecordQuery<any>(api.meetings.get, can("meetings:read") && id ? { id: id as Id<"meetings"> } : "skip");
-  const meetingId = meeting?._id as Id<"meetings"> | undefined;
-  // Lists on this page belong to the meeting's own society (the workspace
-  // selector can point elsewhere, e.g. right after opening a deep link).
-  const meetingSocietyId = (meeting?.societyId ?? society?._id) as string | undefined;
+  const workspaceScope = meetingWorkspaceScope(meeting, society?._id);
+  const meetingId = workspaceScope.meetingId as Id<"meetings"> | undefined;
+  const meetingSocietyId = workspaceScope.societyId as Id<"societies"> | undefined;
+  const canMeetingsWrite = workspaceScope.matches && can("meetings:write");
+  const canMinutesWrite = workspaceScope.matches && can("minutes:write");
+  const canMinutesRead = workspaceScope.matches && can("minutes:read");
+  const canAgendasWrite = workspaceScope.matches && can("agendas:write");
+  const canMotionsWrite = workspaceScope.matches && can("motions:write");
+  const canTasksWrite = workspaceScope.matches && can("tasks:write");
+  const canDownload = workspaceScope.matches && can("exports:download");
+  const canApproveMinutes = workspaceScope.matches && permissionsLoaded && can("minutes:approve");
   const minutes = useQuery(api.minutes.getByMeeting, can("minutes:read") && meetingId ? { meetingId } : "skip");
   const liveMotionRows = useQuery(
     api.motions.listForMinutes,
-    can("motions:read") && minutes ? { minutesId: minutes._id } : "skip",
+    can("motions:read") && meetingId && minutes ? { minutesId: minutes._id } : "skip",
   );
   const displayMotions = useMemo(() => {
     if (!minutes) return [] as Motion[];
@@ -224,10 +239,10 @@ export function MeetingDetailPage() {
   const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
   const sourceDocuments = useQuery(
     api.documents.getMany,
-    can("documents:read") && sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds } : "skip",
+    can("documents:read") && meetingId && sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds } : "skip",
   );
   // Working transcripts are for the people who keep the minutes (decision A1, shared/minutesPrivacy.ts).
-  const canReadTranscript = can("meetings:read") && can(TRANSCRIPT_READ_PERMISSION);
+  const canReadTranscript = workspaceScope.matches && can("meetings:read") && can(TRANSCRIPT_READ_PERMISSION);
   const transcriptRecord = useQuery(
     api.transcripts.getByMeeting,
     canReadTranscript && meetingId ? { meetingId } : "skip",
@@ -237,15 +252,15 @@ export function MeetingDetailPage() {
     : transcriptRecord?.withheld === TRANSCRIPT_WITHHELD_IN_CAMERA ? "in_camera" : null;
   const directors = useQuery(
     api.directors.list,
-    can("directors:read") && society && permissionsLoaded && can("directors:read") ? { societyId: society._id } : "skip",
+    can("directors:read") && meetingSocietyId && permissionsLoaded ? { societyId: meetingSocietyId } : "skip",
   );
   const members = useQuery(
     api.members.list,
-    can("members:read") && society ? { societyId: society._id } : "skip",
+    can("members:read") && meetingSocietyId ? { societyId: meetingSocietyId } : "skip",
   );
   const users = useQuery(
     api.users.list,
-    can("users:read") && society && permissionsLoaded && can("users:read") ? { societyId: society._id } : "skip",
+    can("users:read") && meetingSocietyId && permissionsLoaded ? { societyId: meetingSocietyId } : "skip",
   );
   const committees = useQuery(
     api.committees.list,
@@ -253,10 +268,10 @@ export function MeetingDetailPage() {
   );
   const meetingCommitteeDetail = useQuery(
     api.committees.detail,
-    can("committees:read") && meeting?.committeeId && permissionsLoaded && can("committees:read") ? { id: meeting.committeeId } : "skip",
+    can("committees:read") && meetingId && meeting?.committeeId && permissionsLoaded ? { id: meeting.committeeId } : "skip",
   );
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
-  const allDocuments = useQuery(api.documents.listSummaries, can("documents:read") && society ? { societyId: society._id } : "skip");
+  const allDocuments = useQuery(api.documents.listSummaries, can("documents:read") && meetingSocietyId ? { societyId: meetingSocietyId } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
   const allMeetings = useQuery(api.meetings.list, can("meetings:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip");
@@ -274,7 +289,7 @@ export function MeetingDetailPage() {
   // rendered into the export's signature block.
   const minutesSignatures = useQuery(
     api.signatures.listForEntity,
-    can("documents:read") && minutes ? { entityType: "minutes", subjectId: minutes._id as string } : "skip",
+    can("documents:read") && meetingId && minutes ? { entityType: "minutes", subjectId: minutes._id as string } : "skip",
   );
   // Conflict-of-interest / recusal declarations for this meeting.
   const meetingConflicts = useQuery(
@@ -333,17 +348,35 @@ export function MeetingDetailPage() {
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
-  const [agendaEdit, setAgendaEditState] = useState<AgendaItemEntry[] | null>(null);
-  // Synchronous mirror of agendaEdit. "Save agenda" can be clicked in the same
-  // frame as the last keystroke (fast typists, automation); the button's
-  // onClick is a closure over the PREVIOUS render's state, so reading state
-  // there can silently drop the just-typed row. The ref is written at set time
-  // (not on commit), so saveAgenda always sees the latest rows.
-  const agendaEditRef = useRef<AgendaItemEntry[] | null>(null);
+  type AgendaBaseline = { expected: MeetingExpectedFields; agenda: ReturnType<typeof meetingAgendaSnapshot>; minutesId: string | null; sections: any[]; motions: Motion[]; metadata: any[]; title: string };
+  const agendaForm = useMeetingFormDraft<AgendaItemEntry[], AgendaBaseline>("agenda", (value): value is AgendaItemEntry[] => Array.isArray(value) && value.every((row) => !!row && typeof row.title === "string" && (row.depth === 0 || row.depth === 1)), (value): value is AgendaBaseline => {
+    const row = value as AgendaBaseline | null;
+    return !!row && !!row.expected && "sections" in row.expected && "motions" in row.expected && "agenda" in row && (row.minutesId === null || typeof row.minutesId === "string") && Array.isArray(row.sections) && Array.isArray(row.motions) && Array.isArray(row.metadata) && typeof row.title === "string";
+  });
+  const agendaEdit = agendaForm.value;
+  const agendaSaving = useRef(false);
+  const [agendaIsSaving, setAgendaIsSaving] = useState(false);
+  // The form controller captures synchronous changes and the original server baseline.
+  const agendaEditBaseline = useRef<MeetingExpectedFields>({});
+  const agendaRecordBaseline = useRef<ReturnType<typeof meetingAgendaSnapshot>>(null);
   const setAgendaEdit = (value: AgendaItemEntry[] | null) => {
-    agendaEditRef.current = value;
-    setAgendaEditState(value);
+    if (agendaSaving.current && !agendaForm.controller.getSnapshot()?.baseline.minutesId) return;
+    if (value !== null && agendaRecord === undefined) {
+      toast.info("The agenda is still loading. Try again in a moment.");
+      return;
+    }
+    if (value === null) agendaForm.controller.discard();
+    else if (!agendaForm.controller.getSnapshot()) {
+      agendaRecordBaseline.current = meetingAgendaSnapshot(agendaRecord);
+      agendaEditBaseline.current = meetingExpectedFields({ ...minutes, motions: displayMotions }, ["sections", "motions"]);
+      agendaForm.controller.begin(value, {
+        expected: agendaEditBaseline.current, agenda: agendaRecordBaseline.current,
+        minutesId: minutes?._id ?? null, sections: minutes?.sections ?? [], motions: displayMotions,
+        metadata: canonicalAgendaItems ?? [], title: agendaRecord?.agenda?.title || `${meeting?.title ?? "Meeting"} agenda`,
+      });
+    } else agendaForm.controller.change(value);
   };
+
   // Attendance grid edit mode (the grid owns its rows; see MeetingAttendanceGrid).
   const [attendanceEdit, setAttendanceEdit] = useState<boolean | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
@@ -679,6 +712,25 @@ export function MeetingDetailPage() {
   if (meeting === undefined) return <PageLoading />;
   if (meeting === null) {
     return <RecordNotFound recordLabel="Meeting" backTo="/app/meetings" backLabel="All meetings" icon={<Calendar size={18} />} />;
+  }
+  if (!workspaceScope.matches) {
+    return (
+      <div className="page" data-testid="meeting-workspace-mismatch">
+        <PageHeader title="Meeting in another workspace" icon={<Calendar size={18} />} />
+        <EmptyState
+          title="Open this meeting's workspace"
+          description="Switch to the meeting's workspace to use its people, documents and permissions."
+          action={<div className="row" style={{ gap: 8, justifyContent: "center" }}>
+            <button type="button" className="btn btn--accent" onClick={() => {
+              if (!setStoredSocietyId(meeting.societyId as Id<"societies">)) {
+                toast.error("This meeting's workspace is not available to your account.");
+              }
+            }}>Switch to meeting workspace</button>
+            <Link className="btn" to="/app/meetings">All meetings</Link>
+          </div>}
+        />
+      </div>
+    );
   }
 
   // Adopted minutes show the agenda frozen at adoption; snapshots taken before
@@ -1507,8 +1559,8 @@ export function MeetingDetailPage() {
     }
   };
 
-  const saveMotions = async (next: Motion[]) => {
-    if (!(canMinutesWrite)) return;
+  const saveMotions = async (next: Motion[], expectedMotions: Motion[] = displayMotions): Promise<Motion[]> => {
+    if (!canMinutesWrite) throw new Error("Your workspace role cannot edit minutes.");
     // Detect adoption motions newly recorded as Carried BEFORE saving — the
     // backend stamps the linked minutes approved as part of this update, and
     // the user deserves to hear that it happened.
@@ -1525,12 +1577,11 @@ export function MeetingDetailPage() {
         !previouslyCarried.has(String(m.adoptsMinutesId)),
     );
     if (newlyCarriedAdoptions.length > 0 && !canApproveMinutes) {
-      toast.error("Minutes approval permission is required to carry an adoption motion.");
-      return;
+      throw new Error("Minutes approval permission is required to carry an adoption motion.");
     }
     const minutesId = minutes?._id ?? (await ensureMinutes());
-    if (!minutesId) return;
-    await updateMinutes({ id: minutesId, patch: { motions: next } });
+    if (!minutesId) throw new Error("The minutes record could not be created.");
+    const saved = await updateMinutes({ id: minutesId, patch: { motions: next }, expected: { motions: expectedMotions } });
     for (const m of newlyCarriedAdoptions) {
       const target = (allMinutes ?? []).find((rec: any) => String(rec._id) === String(m.adoptsMinutesId));
       if (!target || target.approvedAt) continue;
@@ -1542,6 +1593,7 @@ export function MeetingDetailPage() {
           : "The linked minutes were approved because the adoption motion carried.",
       );
     }
+    return saved?.motions ?? next;
   };
 
   // One-click seed from the "minutes awaiting adoption" card: a Pending motion
@@ -1620,10 +1672,14 @@ export function MeetingDetailPage() {
     toast.success("Outcomes updated", `${changed} motion${changed === 1 ? "" : "s"} set to ${bulkOutcome.outcome}${skipped ? `; ${skipped} left unchanged because their tally contradicts it` : ""}.`);
   };
 
-  const saveMinuteSections = async (next: any[]) => {
+  const saveMinuteSections = async (
+    next: any[],
+    expected?: MeetingExpectedFields,
+    expectedAgenda?: ReturnType<typeof meetingAgendaSnapshot>,
+  ): Promise<{ sections: any[]; agenda: ReturnType<typeof meetingAgendaSnapshot> } | undefined> => {
     if (!(canMinutesWrite && canAgendasWrite)) return;
     if (!minutes) return;
-    await updateMinutes({ id: minutes._id, patch: { sections: next } });
+    if (agendaRecord === undefined) throw new Error("The agenda is still loading. Try again in a moment.");
     // Keep the agenda record (agendas/agendaItems) in sync with section titles
     // AND depth so the sidebar agenda card and the right-side Agenda record
     // never drift apart. Tracked alongside the source section so duplicate-titled sections each
@@ -1641,21 +1697,26 @@ export function MeetingDetailPage() {
       nextAgenda.push({ title, depth, source: section });
       if (depth === 0) hasRoot = true;
     }
-    await syncAgendaForMeeting({
-      societyId: meeting.societyId,
-      meetingId: meeting._id,
-      title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
-      items: nextAgenda.map((entry) => ({
-        title: entry.title,
-        depth: entry.depth,
-        // Honour the saved section type (set via the Motion/Report pills in
-        // the section header) ahead of title-based inference, otherwise the
-        // agenda re-sync silently overwrites the user's pill choice on save.
-        type: entry.source?.type || inferAgendaSectionType(entry.title),
-        presenter: entry.source?.presenter || undefined,
-        details: entry.source?.discussion || undefined,
-      })),
+    const saved = await updateMinutes({
+      id: minutes._id,
+      patch: { sections: next },
+      expected: expected ?? meetingExpectedFields(minutes, ["sections"]),
+      expectedAgenda: expectedAgenda === undefined ? meetingAgendaSnapshot(agendaRecord) : expectedAgenda,
+      syncAgenda: {
+        title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
+        items: nextAgenda.map((entry) => ({
+          title: entry.title,
+          depth: entry.depth,
+          // Honour the saved section type (set via the Motion/Report pills in
+          // the section header) ahead of title-based inference, otherwise the
+          // agenda re-sync silently overwrites the user's pill choice on save.
+          type: entry.source?.type || inferAgendaSectionType(entry.title),
+          presenter: entry.source?.presenter || undefined,
+          details: entry.source?.discussion || undefined,
+        })),
+      },
     });
+    return { sections: saved?.sections ?? next, agenda: meetingAgendaSnapshot(saved?.agenda) };
   };
 
   const addMotionToBacklog = async (_motion: Motion, motionIndex: number) => {
@@ -1690,10 +1751,16 @@ export function MeetingDetailPage() {
   });
 
   const saveAgenda = async () => {
-    if (!(canMinutesWrite && canAgendasWrite)) return;
+    if (!(canMinutesWrite && canAgendasWrite) || agendaSaving.current) return;
+    agendaSaving.current = true;
+    setAgendaIsSaving(true);
    try {
-    // Read the ref, not the state — see agendaEditRef above.
-    const editedRows = agendaEditRef.current ?? agendaEdit;
+    const submitted = agendaForm.controller.capture();
+    if (!submitted) return;
+    const baseline = submitted.payload.baseline;
+    let acceptedBaseline = baseline;
+    // Capture the controller synchronously so the last keystroke is included.
+    const editedRows = submitted.payload.value;
     // Clean: drop empty titles and force any leading depth-1 entry to depth 0
     // (a child without a preceding root is impossible on save).
     const cleaned: AgendaItemEntry[] = [];
@@ -1713,7 +1780,8 @@ export function MeetingDetailPage() {
     // sync matches sections by title, so a renamed item must already carry its
     // new title (and keep its notes, actions and motions). Sections keep the
     // agenda item ids that still exist at this point; the sync re-links them.
-    if (minutes && !minutes.approvedAt) {
+    const minutesPatch: any = {};
+    if (baseline.minutesId) {
       const sectionHasDetails = (section: any) =>
         !!(
           section?.discussion ||
@@ -1723,28 +1791,22 @@ export function MeetingDetailPage() {
           (section?.linkedTaskIds ?? []).length
         );
       const aligned = alignSectionsToAgenda(
-        (minutes.sections ?? []) as any[],
+        baseline.sections as any[],
         next,
-        displayMotions as any[],
+        baseline.motions as any[],
         (title, depth) => buildSectionFromTitle(title, depth),
         sectionHasDetails,
       );
-      if (aligned.sectionsChanged || aligned.motionsChanged) {
-        const patch: any = {};
-        if (aligned.sectionsChanged) patch.sections = aligned.sections;
-        if (aligned.motionsChanged) patch.motions = aligned.motions;
-        await updateMinutes({ id: minutes._id, patch });
-      }
+      minutesPatch.sections = aligned.sections;
+      if (aligned.motionsChanged) minutesPatch.motions = aligned.motions;
     }
 
-    await syncAgendaForMeeting({
-      societyId: meeting.societyId,
-      meetingId: meeting._id,
-      title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
+    const agendaSync = {
+      title: baseline.title,
       items: cleaned.map((entry) => {
         // A renamed item keeps its type, presenter, details and motion link.
-        const metadata = (entry._id ? canonicalAgendaItems?.find((item: any) => item._id && String(item._id) === String(entry._id)) : undefined)
-          ?? canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
+        const metadata = (entry._id ? baseline.metadata.find((item: any) => item._id && String(item._id) === String(entry._id)) : undefined)
+          ?? baseline.metadata.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
         return {
           title: entry.title,
           depth: entry.depth,
@@ -1757,56 +1819,38 @@ export function MeetingDetailPage() {
           motionText: metadata?.motionText,
         };
       }),
-    });
-
-    // Auto-bootstrap the minutes record on first save. This subsumes the old
-    // "Create from agenda" button — saving the agenda is now the single entry
-    // point that produces an editable minutes draft mirroring the agenda.
-    if (!minutes && next.length) {
-      const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
-      const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
-      await createMinutes({
-        societyId: meeting.societyId,
-        meetingId: meeting._id,
-        heldAt: meeting.scheduledAt,
-        attendees,
-        absent: [],
-        quorumMet: requiresLegalQuorumRegister || quorumRequired == null ? false : attendees.length >= quorumRequired,
-        quorumStatus: requiresLegalQuorumRegister || quorumRequired == null ? "not_recorded" : attendees.length >= quorumRequired ? "confirmed" : "not_met",
-        quorumRequired: quorumRequired ?? undefined,
-        discussion: "",
-        sections: next.map((entry) => {
-          const metadata = canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
-          return {
-            ...buildSectionFromTitle(entry.title, entry.depth),
-            type: metadata?.type ?? inferAgendaSectionType(entry.title),
-            presenter: metadata?.presenter,
-            discussion: metadata?.details ?? "",
-          };
-        }),
-        motions: (canonicalAgendaItems ?? [])
-          .map((item, index) => ({
-            text: String(item.motionText ?? "").trim(),
-            outcome: "Pending",
-            resolutionType: "Ordinary",
-            sectionIndex: index,
-            sectionTitle: item.title,
-          }))
-          .filter((motion) => motion.text),
-        decisions: [],
-        actionItems: [],
+    };
+    if (baseline.minutesId) {
+      const saved = await updateMinutes({
+        id: baseline.minutesId as Id<"minutes">,
+        patch: minutesPatch,
+        expected: baseline.expected,
+        expectedAgenda: baseline.agenda,
+        syncAgenda: agendaSync,
       });
-      setAgendaEdit(null);
-      toast.success("Agenda saved");
-      return;
+      acceptedBaseline = {
+        ...baseline,
+        sections: saved?.sections ?? minutesPatch.sections ?? baseline.sections,
+        motions: saved?.motions ?? baseline.motions,
+        agenda: meetingAgendaSnapshot(saved?.agenda),
+        metadata: (saved?.agenda?.items ?? baseline.metadata) as any[],
+        expected: meetingExpectedFields({ sections: saved?.sections ?? minutesPatch.sections ?? baseline.sections, motions: saved?.motions ?? baseline.motions }, ["sections", "motions"]),
+      };
+    } else {
+      await syncAgendaForMeeting({ societyId: meeting.societyId, meetingId: meeting._id, ...agendaSync,
+        expectedAgenda: baseline.agenda, expectedNoMinutes: true, initializeMinutes: true,
+      });
     }
 
-    setAgendaEdit(null);
+    // Initial minutes are created in the same guarded agenda transaction.
+    // If typing continued meanwhile, keep those edits and their original
+    // baseline; a new minutes record will require a fresh reviewed edit.
+    agendaForm.controller.complete(submitted, acceptedBaseline);
     toast.success("Agenda saved");
    } catch (error) {
      console.error("[saveAgenda]", error);
      toast.error("Couldn't save agenda", error instanceof Error ? error.message : String(error));
-   }
+   } finally { agendaSaving.current = false; setAgendaIsSaving(false); }
   };
 
   const startAttendanceEdit = () => {
@@ -2763,11 +2807,18 @@ export function MeetingDetailPage() {
             </Banner>
           )}
           <MeetingMinutesColumn
+            key={meeting._id}
             minutes={minutes}
             agenda={agendaTree.map((entry) => entry.title)}
             agendaTree={agendaTree}
             agendaEdit={agendaEdit}
             setAgendaEdit={setAgendaEdit}
+            agendaInitializing={agendaIsSaving && !agendaForm.state?.baseline.minutesId}
+            agendaRecovery={<MeetingDraftRecovery draft={agendaForm.recovery} label="agenda" disabled={!(canMinutesWrite && canAgendasWrite) || agendaEdit !== null || agendaSaving.current} onRestore={(payload) => {
+              agendaForm.controller.restore(payload);
+              agendaEditBaseline.current = payload.baseline.expected;
+              agendaRecordBaseline.current = payload.baseline.agenda;
+            }} />}
             saveAgenda={saveAgenda}
             attendanceEdit={attendanceEdit}
             setAttendanceEdit={setAttendanceEdit}
@@ -2779,6 +2830,7 @@ export function MeetingDetailPage() {
             directoryPeople={directoryPeople}
             expectedAttendees={expectedAttendees}
             agendaItemRecords={(agendaRecord as any)?.items ?? []}
+            agendaRecord={agendaRecord}
             saveTopLevelActionItems={async (items) => { if (minutes && canMinutesWrite) await updateMinutes({ id: minutes._id, patch: { actionItems: items } }); }}
             createTaskFromAction={canTasksWrite ? createTaskFromAction : undefined}
             quorumSnapshot={quorumSnapshot}
@@ -2854,6 +2906,7 @@ export function MeetingDetailPage() {
             </div>
             <div className="card__body">
               <MotionEditor
+                key={meeting._id}
                 readOnly={!motionsEditable}
                 ref={motionEditorRef}
                 motions={displayMotions}

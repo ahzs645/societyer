@@ -125,7 +125,7 @@ export function ChartOfAccountsPage() {
           noAccounts ? (
             <RecordTableEmpty
               title="No accounts yet"
-              description="Start from a standard chart of accounts for a BC society, then rename, add or nest accounts to fit."
+              description="Start from a nonprofit chart of accounts template, then rename, add or nest accounts to fit your organization."
               action={canWrite ? (
                 <button type="button" className="btn btn--accent btn--sm" disabled={seeding} onClick={() => void seed()}>
                   Set up standard chart of accounts

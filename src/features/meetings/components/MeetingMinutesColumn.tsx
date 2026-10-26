@@ -63,6 +63,7 @@ import { Tooltip } from "../../../components/Tooltip";
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
+    sectionRecovery,
     canEditAgenda, canEditSections, canEditAttendance, canEditTranscript, canAddToBacklog,
     minutes,
     agenda,
@@ -234,8 +235,11 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
 
   return (
     <div className="meeting-minutes-layout">
+      {sectionRecovery && <div style={{ gridColumn: "1 / -1" }}>{sectionRecovery}</div>}
       <aside className="meeting-minutes-side">
-        <div className="card meeting-minutes-agenda-card">
+        {props.agendaRecovery}
+        <fieldset className="card meeting-minutes-agenda-card" disabled={props.agendaInitializing} style={{ minWidth: 0, padding: 0, margin: 0 }}>
+          {props.agendaInitializing && <p className="muted" role="status">Saving the agenda and starting its minutes…</p>}
           <div className="card__head">
             <h2 className="card__title">Agenda</h2>
             {agendaEdit !== null && canEditAgenda && (
@@ -567,7 +571,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               </>
             )}
           </div>
-        </div>
+        </fieldset>
 
         {minutes && (
           <>
@@ -1153,6 +1157,10 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
           </div>
         )}
       </div>
+      {canEditSections && !isMobileSectionEditor && sectionEditIndex !== null && !sections[sectionEditIndex] && sectionDraft && <div className="card" style={{ gridColumn: "1 / -1" }}>
+        <p className="flag flag--warn">This section is no longer at its original position in the saved minutes. Your recovered text is kept below; saving will check the original version.</p>
+        {renderSectionEditor("inline")}
+      </div>}
       {canEditSections && isMobileSectionEditor && sectionEditIndex !== null && sectionDraft && renderSectionEditor("mobile")}
       {canEditAgenda && agendaItemMenu && (() => {
         const i = agendaItemMenu.index;
