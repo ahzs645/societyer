@@ -27846,6 +27846,22 @@
     ]
   },
   {
+    "key": "convex:workflows:_recordScheduledFailure",
+    "surface": "convex",
+    "name": "workflows:_recordScheduledFailure",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workflows.ts",
+    "idArguments": [
+      {
+        "path": "workflowId",
+        "table": "workflows",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:workflows:_requireRunAuthority",
     "surface": "convex",
     "name": "workflows:_requireRunAuthority",
@@ -27856,6 +27872,22 @@
       {
         "path": "id",
         "table": "workflowRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workflows:_runScheduled",
+    "surface": "convex",
+    "name": "workflows:_runScheduled",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workflows.ts",
+    "idArguments": [
+      {
+        "path": "workflowId",
+        "table": "workflows",
         "array": false,
         "optional": false
       }
@@ -27912,6 +27944,22 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:workflows:authorizeSchedule",
+    "surface": "convex",
+    "name": "workflows:authorizeSchedule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/workflows.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workflows",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -28248,6 +28296,22 @@
     ]
   },
   {
+    "key": "convex:workflows:revokeSchedule",
+    "surface": "convex",
+    "name": "workflows:revokeSchedule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/workflows.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workflows",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:workflows:run",
     "surface": "convex",
     "name": "workflows:run",
@@ -28299,6 +28363,22 @@
     "access": "service",
     "source": "convex/workflows.ts",
     "idArguments": []
+  },
+  {
+    "key": "convex:workflows:scheduleStatus",
+    "surface": "convex",
+    "name": "workflows:scheduleStatus",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/workflows.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workflows",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "convex:workflows:setStatus",

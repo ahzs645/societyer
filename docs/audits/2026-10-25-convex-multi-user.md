@@ -10,6 +10,8 @@
 
 **Review branch:** `audit/convex-multi-user-2026-10-25`
 
+**Implementation follow-up, 2026-10-26:** The scheduled-workflow authority, historical integrity tooling, and durable meeting-draft items identified below are addressed in the [dated follow-up report](2026-10-26-workflows-history-drafts.md). Deployment, an actual historical export audit, and the authenticated browser walkthrough remain outstanding. The coverage and numerical test results in this report retain the initial audit evidence; they are not measurements of live usage or results from the follow-up's later test runs.
+
 ## Outcome and evidence boundary
 
 The highest-priority source defects were in personal notification isolation and simultaneous meeting editing. This branch fixes those defects, adds regression checks against actual Convex handlers with synthetic data, and makes several bounded-read and view-validation improvements. Convex is a reasonable architecture for a small collaborating team; the source review does not establish a need to change databases or upgrade a plan. Actual costs must be assessed from the deployment's measured usage.
@@ -78,7 +80,7 @@ Both editors now serialize saves, retain newer typing during an in-flight reques
 
 The queues also handle a collaborator's later subscription update arriving before an earlier mutation response, and a delayed subscription echo after an acknowledged save. Recovery controls let the user retry or deliberately load the saved copy. Browser unload warns when unsaved work remains.
 
-**Remaining limitation:** These drafts are held in memory. SPA navigation or workspace switching can still discard them. This branch does not provide durable offline draft storage or a complete navigation-blocking workflow.
+**Initial limitation, addressed in the October 26 follow-up:** These queues originally retained drafts only in memory. The [durable recovery implementation](2026-10-26-workflows-history-drafts.md#3-durable-meeting-drafts) now adds device recovery across navigation/reload for the covered editors, with explicit restore/discard, original conflict baselines, identity scoping and storage-failure feedback. See that report for the remaining editor and device-storage limits.
 
 Sources: [notes controller](../../src/features/meetings/lib/notesAutosave.ts), [motion controller](../../src/features/meetings/lib/motionAutosave.ts), [notes tab](../../src/features/meetings/components/MeetingNotesTab.tsx), [motion editor](../../src/components/MotionEditor.tsx).
 
@@ -138,23 +140,29 @@ The financial descriptions are corrected, and the scanner now preserves the sema
 
 Initial CI evidence: [legal-governance run](https://github.com/ahzs645/societyer/actions/runs/40245184603), [browser job](https://github.com/ahzs645/societyer/actions/runs/40245184603/job/121325140117), [translation job](https://github.com/ahzs645/societyer/actions/runs/40245184603/job/121325140325). The same browser job also passed four corporation-flow tests and nine record/task tests. The failing copy/scanner sources were byte-identical to the base revision; a complete baseline browser run was not performed locally.
 
-## Remaining implementation work
+## Follow-up status and remaining work
 
-### Scheduled workflows fail without an authenticated actor
+### Scheduled workflow authority — implemented in the October 26 follow-up
 
-**Priority: high if scheduled workflows are used. Reproduced, not fixed here.** [`workflows.scan`](../../convex/workflows.ts) is an internal cron action, but calls the public authorized `workflows.run` without a user session. A synthetic due workflow invoked through the actual Convex handler fails with `Authentication required.` and creates zero runs. The first failed candidate can also abort the rest of that scan.
+**Initial finding, high priority if schedules are used:** At the initial audit baseline, [`workflows.scan`](../../convex/workflows.ts) called the public authorized `workflows.run` without a user session. A synthetic due workflow invoked through the actual Convex handler failed with `Authentication required.` and created zero runs. The first failed candidate could also abort the rest of that scan. These are the original reproduction results, not the behavior asserted for the follow-up implementation.
 
-The fix needs an explicit persisted automation authority/owner and an internal execution path that checks current membership, role, workflow status, and allowed operations before side effects. Failure of one workflow should not prevent processing other due workflows. Do not make the public runner unauthenticated or trust a caller-supplied `actingUserId` to solve this. The existing creator field alone is not an implementation of those checks.
+**Implementation addressed:** The [October 26 follow-up](2026-10-26-workflows-history-drafts.md#1-scheduled-workflow-authority) adds an explicit, expiring grant from a verified signed-in person, an internal transactional executor, current identity/membership/role/module checks, occurrence replay protection, failure isolation, and review/revoke controls. Supported automatic effects are deliberately limited to the standard internal recipes described there; the public manual runner retains authentication. Stored cron expressions now determine supported daily/weekly UTC occurrences.
 
-### Existing duplicates and draft deletion dependencies need a data plan
+**Remaining operational work:** Deploy and validate the backend/schema in staging, review and authorize each intended schedule, and verify a supported run plus revocation with real authenticated sessions. Existing workflows do not become authorized merely because the code is deployed. Production schedule configuration and run logs have not been inspected.
 
-The idempotent initialization fix prevents new duplicate minutes in the tested path. It does not merge duplicates already present in a live database. Run a read-only inventory of meetings with multiple minutes rows, broken meeting-to-minutes links, duplicate motion IDs, and foreign/missing parent references. Reconcile only after preserving all source versions and an owner review.
+### Historical integrity tooling — implemented; actual inventory and deletion policy remain outstanding
+
+The idempotent initialization fix prevents new duplicate minutes in the tested path. It does not merge duplicates already present in a live database. The [October 26 follow-up](2026-10-26-workflows-history-drafts.md#2-read-only-historical-integrity-audit) adds an offline, read-only checker for duplicate minutes, candidate duplicate meetings, broken meeting/minutes and motion relationships, cross-workspace references, and linked sources, documents, tasks, transcripts, attendance and approval history. Its [operator guide](../meeting-integrity-audit.md) covers native Convex snapshots and existing workspace exports, scope/completeness declarations, private output, and interpretation limits.
+
+**Tooling addressed; live-data work pending:** Only synthetic exports have been checked during implementation. Obtain an actual consistent export and run the checker before deciding whether historical records need cleanup. Missing, redacted, filtered or non-atomic coverage remains qualified; a missing table is not an empty table. Preserve every source version and approved snapshot, then prepare a record-by-record reconciliation plan for owner review. No actual historical export audit or repair is claimed.
 
 Draft meeting removal still has an incomplete dependency policy for first-class motions, sources/materials, tasks, transcripts, and related records. Approved minutes are protected by this branch, but draft cleanup should become an explicit archive or dependency-aware deletion flow. Blind cascading could destroy evidence or references needed elsewhere.
 
-### Durable drafts and adoption UX
+### Durable meeting drafts — implemented; browser/adoption walkthrough pending
 
-Add local durable drafts scoped by authenticated user, workspace, meeting, and editor type if offline resilience is required. Include versioned baselines, clear recovery, retention, and navigation behavior. Separately validate the complete preview/adopt/amend/package experience with two real browser sessions and representative historical records.
+The [October 26 follow-up](2026-10-26-workflows-history-drafts.md#3-durable-meeting-drafts) adds device-local, versioned recovery copies for notes, existing/new motions, minutes sections, agendas, attendance and meeting details. Drafts retain their original conflict baselines and are scoped by runtime/backend, authenticated account, membership user, workspace, meeting and editor. Recovery is explicit, and restoring a draft does not itself save it to the server. The follow-up documents retention, storage-failure behavior and editors outside this coverage.
+
+**Remaining operational work:** Exercise reload/navigation, offline/reconnect, account/workspace switches, two tabs, recovery/discard, and a conflicting collaborator save in authenticated browsers. Separately validate the complete preview/adopt/amend/package experience with two real sessions and representative historical records. Synthetic queue, storage and hook checks do not replace that walkthrough.
 
 ### Performance work should follow the measured hot functions
 
@@ -237,7 +245,7 @@ Or use `npm run usage:summarize -- /tmp/societyer-convex.jsonl` for interactive 
 
 ## Verification and release
 
-### Completed automated checks
+### Completed automated checks from the initial audit
 
 - New `test:convex-multi-user` suite: bounded adapter reads, actual corporation dashboard query, targeted notification isolation, personal broadcast state/retention, and usage summarizer.
 - New `test:meeting-collaboration` suite: actual Convex two-editor transactions and the notes/motion save queues, including deliberate failures and delayed subscription timing.
@@ -259,10 +267,10 @@ The attempt to push to an anonymous local Convex backend failed because that bac
 
 Before release:
 
-1. Deploy backend/schema changes to the intended development/staging environment and verify the new notification index/table and optional meeting arguments. Deploy the backend before the new frontend.
-2. Run a two-account browser walkthrough: targeted notices, independent broadcast state, meeting workspace switching, simultaneous notes/sections/agenda/motions/attendance edits, conversion after a failed save, preview/adoption, and route navigation with a pending save.
-3. Inspect historical duplicate minutes and orphan relationships read-only. Do not automatically rewrite approved minutes or globally reset historical notification flags.
+1. Deploy backend/schema changes to the intended development/staging environment and verify the new notification index/table, workflow grant/run metadata and indexes, and optional meeting/agenda baseline arguments. Follow the [dated release checklist](2026-10-26-workflows-history-drafts.md#verification-and-release), deploying the backend before the new frontend.
+2. Run a two-account/two-tab browser walkthrough: targeted notices, independent broadcast state, meeting workspace switching, simultaneous notes/sections/agenda/motions/attendance edits, conversion after a failed save, preview/adoption, and offline/reload/navigation with recoverable drafts.
+3. Run the [read-only historical checker](../meeting-integrity-audit.md) against an actual export and review duplicate/orphan findings with its coverage qualifications. Do not automatically rewrite approved minutes or globally reset historical notification flags.
 4. Measure a quiet window and a representative collaboration session. Prioritize the highest read/latency functions before further query restructuring.
-5. Decide the scheduled-workflow authority fix, draft archival policy, durable draft requirements, and privileged export role policy separately.
+5. Review and authorize each intended supported workflow schedule after staging validation. Decide the remaining draft archival/deletion policy and privileged export role policy separately.
 
 The new regression suites are included in the portable-conformance CI workflow. This branch is prepared for review; it does not itself authorize or perform a production rollout.

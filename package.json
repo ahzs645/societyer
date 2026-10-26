@@ -440,7 +440,11 @@
     "test:procurement-precomputed": "tsx scripts/check-procurement-precomputed.ts",
     "test:meeting-collaboration": "node --import tsx scripts/check-meeting-collaboration.ts && node --import tsx scripts/check-meeting-notes-autosave.ts && node --import tsx scripts/check-meeting-motion-autosave.ts",
     "test:convex-multi-user": "node --import tsx scripts/check-convex-portable-bounded.ts && node --import tsx scripts/check-dashboard-corporation-convex.ts && node --import tsx scripts/check-notification-recipient-isolation.ts && node --import tsx scripts/check-notification-personal-state.ts && node scripts/check-convex-usage-summary.mjs",
-    "usage:summarize": "node scripts/summarize-convex-usage.mjs"
+    "usage:summarize": "node scripts/summarize-convex-usage.mjs",
+    "test:workflow-schedule": "node --import tsx scripts/check-workflow-schedule-timing.ts && node --import tsx scripts/check-workflow-schedule-authorization.ts && node --import tsx scripts/check-hosted-identity.ts",
+    "test:meeting-draft-recovery": "node --import tsx scripts/check-meeting-draft-recovery.ts && node scripts/check-meeting-draft-hooks.mjs",
+    "test:meeting-integrity": "node --import tsx scripts/check-meeting-integrity-audit.ts",
+    "meetings:audit": "node --import tsx scripts/audit-meeting-integrity.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",
