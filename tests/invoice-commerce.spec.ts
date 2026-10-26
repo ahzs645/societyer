@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
 
 async function pick(page: Page, scope: Locator, label: string, option: string) {
@@ -15,7 +16,7 @@ test("reusable templates and rates persist; repair billing links payments and do
   await page.goto("/app/invoices?tab=templates");
   await page.getByRole("button", { name: "Use ddcnorth brand", exact: true }).click();
   let drawer = page.getByRole("dialog");
-  await expect(drawer).toContainText("Inter / Inter Display / Space Mono");
+  await expect(drawer).toContainText("Document body font: Inter.");
   await drawer.getByLabel("Template name", { exact: true }).fill(name);
   await pick(page, drawer, "Layout", "Modern");
   await drawer.getByLabel("Footer", { exact: true }).fill("Repair warranty: 90 days");
@@ -83,5 +84,40 @@ test("reusable templates and rates persist; repair billing links payments and do
   await page.getByRole("link", { name: /View linked repair/ }).click();
   await expect(page.getByRole("dialog")).toContainText("Balance");
   await expect(page.getByRole("dialog").getByRole("button", { name: "View invoice", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("portable Brandkit profiles import, preview and persist with explicit font fallback", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/app/invoices?tab=templates");
+  await page.getByRole("button", { name: "New template", exact: true }).click();
+  const drawer = page.getByRole("dialog");
+  const name = `Portable Brandkit ${Date.now()}`;
+  await drawer.getByLabel("Template name", { exact: true }).fill(name);
+  for (const [id, title, font] of [
+    ["ddcnorth", "ddcnorth", "Inter"], ["overtheedge", "Over the Edge", "Inter (fallback for Helvetica Neue)"],
+    ["sparklab", "SPARK Lab", "Noto Serif (fallback for Source Serif 4)"], ["northwind", "northwind", "Inter"],
+    ["bc-province-1977", "Province of British Columbia", "Inter (fallback for TeX Gyre Heros)"],
+    ["bc-hydro-1983", "B.C.Hydro", "Noto Serif (fallback for TeX Gyre Termes)"],
+    ["firstform", "First Form", "Inter (fallback for Sora)"],
+  ]) {
+    await drawer.getByLabel("Import Brandkit profile", { exact: true }).setInputFiles(fileURLToPath(new URL(`../scripts/fixtures/brandkit/${id}.json`, import.meta.url)));
+    await expect(drawer.locator(".invoice-brand-controls")).toContainText(title);
+    await expect(drawer.locator(".invoice-brand-controls")).toContainText(`Document body font: ${font}.`);
+    await expect(drawer.getByRole("img", { name: `${title} logo`, exact: true })).toBeVisible();
+  }
+  const downloading = page.waitForEvent("download");
+  await drawer.getByRole("button", { name: "Download sample PDF", exact: true }).click();
+  const download = await downloading;
+  const pdf = await PDFDocument.load(await readFile((await download.path())!));
+  expect(pdf.getPageCount()).toBe(1);
+  await drawer.getByRole("button", { name: "Save template", exact: true }).click();
+  await expect(drawer).not.toBeVisible();
+  await page.reload();
+  const card = page.locator(".invoice-template-card").filter({ hasText: name });
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Customize", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Inter (fallback for Sora)");
   expect(errors).toEqual([]);
 });
