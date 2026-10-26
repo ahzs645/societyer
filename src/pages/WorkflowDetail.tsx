@@ -18,7 +18,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { presentRecipe } from "../lib/workflowRecipePresentation";
-import { useSociety } from "../hooks/useSociety";
+import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { Badge, Banner, Drawer, Field } from "../components/ui";
@@ -102,6 +102,7 @@ import type {
   FieldMapping,
 } from "./WorkflowDetail.internal";
 import { Tooltip } from "../components/Tooltip";
+import { WorkflowScheduleAuthorization } from "../features/workflows/components/WorkflowScheduleAuthorization";
 
 const WORKFLOW_STATUS_LABELS: Record<string, string> = {
   active: "Active",
@@ -122,17 +123,25 @@ function titleCase(value: string) {
 export function WorkflowDetailPage() {
   const { id } = useParams();
   const society = useSociety();
+  const userId = useCurrentUserId();
+  return <WorkflowDetailWorkspace key={`${id ?? "missing"}:${society?._id ?? "unselected"}:${userId ?? "anonymous"}`} />;
+}
+
+function WorkflowDetailWorkspace() {
+  const { id } = useParams();
+  const society = useSociety();
   const canManage = usePermissions().can("tasks:write");
   // React Flow forces a light colour scheme on its subtree unless told the
   // app theme, which left white nodes and invisible zoom controls in dark mode.
   const { resolvedTheme } = useThemePreference();
   const workflow = useRecordQuery<any>(api.workflows.get, id ? { id: id as any } : "skip");
-  const runs = useQuery(api.workflows.runsForWorkflow, id && workflow ? { workflowId: id as any } : "skip");
+  const workspaceMatches = Boolean(workflow && society && String(workflow.societyId) === String(society._id));
+  const runs = useQuery(api.workflows.runsForWorkflow, id && workspaceMatches ? { workflowId: id as any } : "skip");
   const catalog = useQuery(api.workflows.listCatalog, {});
   const nodeTypeCatalog = useQuery(api.workflows.listNodeTypes, {});
   const documents = useQuery(
     api.documents.list,
-    society ? { societyId: society._id } : "skip",
+    workspaceMatches ? { societyId: workflow.societyId } : "skip",
   );
   const setStatus = useMutation(api.workflows.setStatus);
   const addNode = useMutation(api.workflows.addNode);
@@ -165,6 +174,18 @@ export function WorkflowDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (!workflow) {
     return <RecordNotFound recordLabel="Workflow" backTo="/app/workflows" backLabel="All workflows" />;
+  }
+  if (!workspaceMatches) {
+    return (
+      <div className="page">
+        <Banner tone="warn" title="This workflow belongs to another workspace">
+          <p>Switch to the workflow’s workspace to review its steps and schedule permissions.</p>
+          <button className="btn btn--accent" onClick={() => {
+            if (!setStoredSocietyId(workflow.societyId)) toast.error("You no longer have access to this workspace.");
+          }}>Switch to workflow workspace</button>
+        </Banner>
+      </div>
+    );
   }
 
   const providerConfig = workflow.providerConfig ?? {};
@@ -202,11 +223,17 @@ export function WorkflowDetailPage() {
 
   const isActive = workflow.status === "active";
   const statusLabel = WORKFLOW_STATUS_LABELS[workflow.status] ?? titleCase(workflow.status ?? "draft");
-  const toggleStatus = () =>
-    canManage && setStatus({
-      id: workflow._id,
-      status: isActive ? "paused" : "active",
-    });
+  const toggleStatus = async () => {
+    if (!canManage || busy) return;
+    setBusy(true);
+    try {
+      await setStatus({ id: workflow._id, status: isActive ? "paused" : "active" });
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not change workflow status");
+    } finally {
+      setBusy(false);
+    }
+  };
   const launch = () => (launchUsesIntake ? openIntake() : runWorkflow());
   const launchDisabled = !canManage || busy || !isActive || isLocalDataRuntime();
   // Phones get one primary action plus a ⋯ menu; five labelled buttons wrapped
@@ -303,6 +330,7 @@ export function WorkflowDetailPage() {
         </Banner>
       )}
       {isLocalDataRuntime() && <p className="muted" style={{ padding: "8px 16px", margin: 0, fontSize: "var(--fs-sm)" }}>Running workflows needs a connected server; you can prepare and review this one here.</p>}
+      <WorkflowScheduleAuthorization workflow={workflow} canManage={canManage} />
       <div className="workflow-shell">
         <section className="workflow-canvas" aria-label="Workflow canvas">
           <ReactFlow

@@ -13,5 +13,15 @@ export function stripImportedAuthBindings<T extends Record<string, any[]>>(table
       return localUser;
     });
   }
+  if (Array.isArray(result.workflows)) {
+    result.workflows = result.workflows.map(row => {
+      const workflow = { ...row, scheduleEnabled: false };
+      // A restored record is not an authorization to resume unattended work.
+      // Keep the workflow definition and run history, but require a fresh grant.
+      delete workflow.scheduleAuthorization;
+      delete workflow.nextRunAtISO;
+      return workflow;
+    });
+  }
   return result as T;
 }

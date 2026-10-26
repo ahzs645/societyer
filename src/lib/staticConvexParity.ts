@@ -71,6 +71,10 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "subscriptions:simulateActivation",
   "transcripts:runPipeline",
   "workflows:inspectPdfTemplate",
+  // Hosted cron authority is never granted from the local/demo runtime.
+  // WorkflowScheduleAuthorization skips its status query and disables these controls there.
+  "workflows:authorizeSchedule",
+  "workflows:revokeSchedule",
   "workflows:run",
 ]);
 

@@ -77,6 +77,9 @@ const snapshot = {
   users: [{ _id: "retained-user-id", role: "Owner", societyId: "society-b", authIssuer: issuerA, authSubject: "operator-sub", externalIdentityId: identityId, email: "retained@test" }],
   externalIdentities: [{ _id: identityId, issuer: issuerA, subject: "operator-sub", status: "Active" }],
   roleHolders: [{ _id: "historical-person", roleType: "director", fullName: "Historical Director" }],
+  workflows: [{ _id: "retained-workflow", societyId: "society-b", name: "Fictional recurring review", status: "active", scheduleEnabled: true,
+    nextRunAtISO: "2027-01-01T08:00:00Z", scheduleAuthorization: { authorizerUserId: "retained-user-id", authIssuer: issuerA, authSubject: "operator-sub" } }],
+  workflowRuns: [{ _id: "retained-run", workflowId: "retained-workflow", status: "manual_required" }],
 };
 const sanitized = stripImportedAuthBindings(snapshot);
 assert.equal(sanitized.externalIdentities, undefined);
@@ -88,10 +91,19 @@ assert.equal(sanitized.users[0].role, "Owner");
 assert.equal(sanitized.users[0].email, "retained@test");
 assert.deepEqual(sanitized.roleHolders, snapshot.roleHolders);
 assert.equal(snapshot.users[0].authIssuer, issuerA, "sanitization must not mutate the original backup");
+assert.equal(sanitized.workflows[0].scheduleEnabled, false);
+assert.equal(sanitized.workflows[0].scheduleAuthorization, undefined);
+assert.equal(sanitized.workflows[0].nextRunAtISO, undefined);
+assert.equal(sanitized.workflows[0]._id, "retained-workflow");
+assert.deepEqual(sanitized.workflowRuns, snapshot.workflowRuns, "run history is preserved without restoring execution authority");
+assert.equal(snapshot.workflows[0].scheduleEnabled, true, "the source backup is not modified");
 const restoreStore = new LocalDexieRowStore({ seed: {}, persistKey: "hosted-identity-restore-test" });
 await restoreStore.importSnapshot({ tables: snapshot });
 const restored = await restoreStore.exportSnapshot();
 assert.equal(restored.tables.externalIdentities, undefined);
 assert.equal(restored.tables.users[0].authSubject, undefined);
 assert.equal(restored.tables.users[0]._id, "retained-user-id");
+assert.equal(restored.tables.workflows[0].scheduleEnabled, false);
+assert.equal(restored.tables.workflows[0].scheduleAuthorization, undefined);
+assert.deepEqual(restored.tables.workflowRuns.map(({ _id, workflowId, status }) => ({ _id, workflowId, status })), snapshot.workflowRuns);
 console.log("Hosted identity checks passed: exact issuer/subject, immutable identity, ambiguous/legacy denial, lifecycle revocation, local compatibility, and broker configuration.");
