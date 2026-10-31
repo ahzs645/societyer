@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import type { Id } from "../../convex/_generated/dataModel";
 import { useNavigate } from "react-router-dom";
 import { localDataClient, reseedLocalData } from "./localDataClient";
 import { getStoredSocietyId, setStoredSocietyId } from "../hooks/useSociety";
@@ -205,7 +206,7 @@ async function setupInteractionAudit() {
     name: "Interaction Browser Society", fiscalYearEnd: "12-31", jurisdictionCode: "CA-BC",
     entityType: "society", actFormedUnder: "societies_act",
   }) as any;
-  const societyId = String(created.societyId);
+  const societyId = created.societyId as Id<"societies">;
   const users = await localDataClient.query("users:list", { societyId }) as any[];
   const owner = users.find(row => row.role === "Owner" && row.status === "Active");
   if (!owner) throw new Error("The interaction fixture requires its real owner.");
@@ -255,3 +256,4 @@ export function E2ERouterBridge() {
   }, [navigate]);
   return null;
 }
+
