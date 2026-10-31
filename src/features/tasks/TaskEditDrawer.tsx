@@ -139,7 +139,8 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
     </button>
   </>;
   const content = form && <>
-    <MeetingDraftRecovery draft={state.recovery} label="task" recordLabel="task" disabled={!canManage || dirty || saving} onRestore={controller.restore} />
+    <MeetingDraftRecovery draft={state.recovery} label="task" recordLabel="task" disabled={!canManage || dirty || saving} onRestore={controller.restore}
+      recoveryNotice={task ? "A restored draft is tied to the version of this task it was started from. If the task has changed since, saving it will be refused; discard the recovery copy and make your edits on the latest version instead." : undefined} />
     <p className="muted" role="status">Fields and checklist changes are saved together when you choose {task ? "Save" : "Create"}. Unsaved edits are recoverable here when the draft-saved message is shown.</p>
     {task && <TaskStateBanner task={{ ...task, status: form.status, dueDate: form.dueDate }} canManage={canManage && !saving}
       onReopen={() => patch({ status: "Todo" })}

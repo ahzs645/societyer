@@ -30,7 +30,12 @@ function comparable(value: unknown): unknown {
 }
 
 export function meetingFieldValuesMatch(left: unknown, right: unknown): boolean {
-  return JSON.stringify(comparable(left)) === JSON.stringify(comparable(right));
+  return canonicalMeetingJson(left) === canonicalMeetingJson(right);
+}
+
+/** Sorted-key JSON in which absent and undefined values compare equal to null. */
+export function canonicalMeetingJson(value: unknown): string {
+  return JSON.stringify(comparable(value));
 }
 
 /** Capture a detached, wire-safe baseline when an editor opens. */

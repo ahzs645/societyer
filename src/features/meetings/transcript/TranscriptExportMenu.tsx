@@ -96,7 +96,7 @@ export function TranscriptExportMenu({
       if (new TextEncoder().encode(file.content).byteLength > TRANSCRIPT_EXPORT_BYTE_LIMIT) throw new Error("This transcript exceeds the 64 MB export limit. No file was exported.");
       triggerBlobDownload(new Blob([file.content], { type: file.mime }), file.fileName);
       const privacy = !hasInCamera ? "" : consent.includeInCamera ? ", in-camera parts included"
-        : `${file.inCameraCount ? `, ${file.inCameraCount} in-camera parts left out` : ""}${plan.unmarked.length ? ", may contain unmarked in-camera parts" : ""}`;
+        : `${file.inCameraCount ? `, ${file.inCameraCount} in-camera ${file.inCameraCount === 1 ? "part" : "parts"} left out` : ""}${plan.unmarked.length ? ", may contain unmarked in-camera parts" : ""}`;
       const size = file.tooLargeToImport && format !== "txt" ? " It is over 16 MB, so it cannot be imported again as one timed file." : "";
       const message = `Downloaded ${file.fileName}${privacy}.${size}`;
       setProgress(message); onExported(message);

@@ -5,6 +5,7 @@
  * transcript to a client runs its rows through these, on hosted Convex and the
  * local runtime alike. Stored rows are never changed.
  */
+import { withoutFollowUpReceipt } from "../followUpScheduling";
 import type { PortableDoc, PortableQueryCtx } from "../portable/ctx";
 import {
   IN_CAMERA_ACCESS_PERMISSION,
@@ -189,7 +190,9 @@ export async function agendaItemsForReader<T extends PortableDoc>(ctx: PortableQ
  * notes are withheld from readers without in-camera access when its minutes
  * record an in-camera session (decision A3).
  */
-export async function meetingForReader<T extends PortableDoc>(ctx: PortableQueryCtx, meeting: T, gate: Gate = readerAccessGate(ctx)): Promise<T> {
+export async function meetingForReader<T extends PortableDoc>(ctx: PortableQueryCtx, row: T, gate: Gate = readerAccessGate(ctx)): Promise<T> {
+  // Follow-up replay receipts are internal bookkeeping for every reader.
+  const meeting = withoutFollowUpReceipt(row);
   if (typeof meeting.workingNotes !== "string" || !meeting.workingNotes.trim()) return meeting;
   const minutes = await minutesForMeeting(ctx, meeting._id, meeting.societyId);
   if (!workingNotesAreInCamera(meeting, minutes)) return meeting;
