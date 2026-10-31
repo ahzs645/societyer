@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { useAuth } from "../../auth/AuthProvider";
 import { getStoredUserId } from "../../hooks/useCurrentUser";
 import { getStoredSocietyId } from "../../hooks/useSociety";
@@ -23,7 +23,10 @@ export function useMeetingDraftScope(meetingId: string | undefined, societyId: s
   const latestKey = useRef(key);
   const mounted = useRef(true);
   latestKey.current = key;
-  useEffect(() => {
+  // React replays mount effects in development. Re-enable the parent scope
+  // before child passive effects refresh their journals; otherwise replay
+  // clears the recovered list while the scope still looks unmounted.
+  useLayoutEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);

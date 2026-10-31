@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: 'tests', testMatch: 'interaction-audit.spec.ts', timeout: 120_000, expect: { timeout: 20_000 },
   fullyParallel: false, workers: 1, retries: 0, maxFailures: process.env.CI ? 3 : 0, outputDir: 'tmp/interaction-audit-browser',
   reporter: [['list'], ['json', { outputFile: 'tmp/interaction-audit-results.json' }]],
-  use: { baseURL: `http://127.0.0.1:${port}`, timezoneId: 'America/Vancouver', screenshot: 'only-on-failure', trace: 'retain-on-failure',
+  use: { actionTimeout: 20_000, navigationTimeout: 30_000, baseURL: `http://127.0.0.1:${port}`, timezoneId: 'America/Vancouver', screenshot: 'only-on-failure', trace: 'retain-on-failure',
     launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined },
   webServer: { command: `VITE_RUNTIME_MODE=local-indexeddb VITE_E2E_TEST_HARNESS=1 VITE_LOCAL_WORKSPACE_ID=interaction-audit npx vite --host 127.0.0.1 --port ${port} --strictPort`, port, reuseExistingServer: false, timeout: 90_000 },
   projects: [

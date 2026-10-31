@@ -38,16 +38,32 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - run: npm run test:interaction-audit-ui
-      - name: Existing task and record flows
-        if: ${{ !cancelled() }}
-        run: npx playwright test -c playwright.interface.config.ts tests/interface-tasks.spec.ts tests/interface-records.spec.ts --project=desktop
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         with:
           name: interaction-audit-browser-${{ github.run_id }}
           path: |
             tmp/interaction-audit-browser
             tmp/interaction-audit-results.json
+          retention-days: 7
+  existing-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Existing task and record flows
+        run: npx playwright test -c playwright.interface.config.ts tests/interface-tasks.spec.ts tests/interface-records.spec.ts --project=desktop
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: interaction-audit-existing-browser-${{ github.run_id }}
+          path: |
             tmp/interface-suite-results
             tmp/interface-results.json
           retention-days: 7
