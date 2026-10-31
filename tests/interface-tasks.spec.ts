@@ -32,7 +32,7 @@ test("tasks list groups work, edits rows in place and keeps a checklist", async 
   await page.getByRole("menuitem", { name: /Urgent/ }).click();
   await expect(row.locator(".task-priority-icon--Urgent")).toBeVisible();
 
-  // The drawer's checklist saves straight away and shows progress on the row.
+  // Checklist changes are staged with the task and appear on the row only after Save.
   await row.locator(".task-row__title-text").click();
   const drawer = page.getByRole("dialog", { name: "Edit task", exact: true });
   const step = drawer.getByRole("textbox", { name: "Add a checklist step", exact: true });
@@ -41,8 +41,10 @@ test("tasks list groups work, edits rows in place and keeps a checklist", async 
   await step.fill("Confirm the deposit");
   await step.press("Enter");
   await drawer.getByRole("checkbox", { name: /Tick Call the community centre/ }).check();
+  await expect(row.getByText("1/2", { exact: true })).toHaveCount(0);
+  await drawer.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(drawer).toBeHidden();
   await expect(row.getByText("1/2", { exact: true })).toBeVisible();
-  await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // Completing offers an undo that restores the previous status.
   await row.hover();

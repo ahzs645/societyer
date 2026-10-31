@@ -106,6 +106,9 @@ export function useSheetDrag(
     let dragging = false;
     let blocked = false;
     let closing = false;
+    let disposed = false;
+    let dismissTimer: number | undefined;
+    let resetFrame: number | undefined;
     // "pull" moves the sheet down (dismiss, or collapse when expanded);
     // "grow" raises a collapsed sheet's top edge toward full height.
     let mode: "pull" | "grow" = "pull";
@@ -257,10 +260,17 @@ export function useSheetDrag(
         return;
       }
       closing = true;
-      if (reduce) {
-        dismissRef.current();
-        return;
-      }
+      const dismiss = dismissRef.current;
+      const finishDismiss = () => {
+        if (disposed) return;
+        dismiss();
+        // A dirty-close guard may keep the form mounted while it asks for
+        // confirmation. Do not leave that form translated off-screen.
+        resetFrame = window.requestAnimationFrame(() => {
+          if (!disposed && sheet.isConnected) { closing = false; reset(true); }
+        });
+      };
+      if (reduce) { finishDismiss(); return; }
       sheet.style.transition = `transform 220ms ${SHEET_EASING}`;
       sheet.style.transform = `translate3d(0, ${sheet.offsetHeight + 24}px, 0)`;
       const bd = backdrop();
@@ -268,7 +278,7 @@ export function useSheetDrag(
         bd.style.transition = `opacity 220ms ${SHEET_EASING}`;
         bd.style.opacity = "0";
       }
-      window.setTimeout(() => dismissRef.current(), 200);
+      dismissTimer = window.setTimeout(finishDismiss, 200);
     };
 
     const onTouchCancel = () => {
@@ -286,6 +296,9 @@ export function useSheetDrag(
     sheet.addEventListener("touchend", onTouchEnd);
     sheet.addEventListener("touchcancel", onTouchCancel);
     return () => {
+      disposed = true;
+      if (dismissTimer !== undefined) window.clearTimeout(dismissTimer);
+      if (resetFrame !== undefined) window.cancelAnimationFrame(resetFrame);
       sheet.removeEventListener("touchstart", onTouchStart);
       sheet.removeEventListener("touchmove", onTouchMove);
       sheet.removeEventListener("touchend", onTouchEnd);

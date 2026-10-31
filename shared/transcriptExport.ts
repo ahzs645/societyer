@@ -44,7 +44,12 @@ export const TRANSCRIPT_EXPORT_FORMATS = [
   { id: "srt", label: "SRT", extension: "srt", mime: "application/x-subrip;charset=utf-8" },
   { id: "json", label: "Whisper JSON", extension: "json", mime: "application/json;charset=utf-8" },
 ] as const;
-export type TranscriptExportFormat = (typeof TRANSCRIPT_EXPORT_FORMATS)[number]["id"];
+/** Text is downloadable, but unlike these three caption formats is not a timed round trip. */
+export const TRANSCRIPT_DOWNLOAD_FORMATS = [
+  ...TRANSCRIPT_EXPORT_FORMATS,
+  { id: "txt", label: "Plain text", extension: "txt", mime: "text/plain;charset=utf-8" },
+] as const;
+export type TranscriptExportFormat = (typeof TRANSCRIPT_DOWNLOAD_FORMATS)[number]["id"];
 
 export type ExportableTranscript = {
   segments: readonly TranscriptSegment[];
@@ -58,6 +63,8 @@ export type ExportableTranscript = {
  */
 export function transcriptExportHint(format: TranscriptExportFormat, transcript: Pick<ExportableTranscript, "segments">): string {
   switch (format) {
+    case "txt":
+      return "Speaker names and text (no timings)";
     case "vtt":
       return "Names and timings";
     case "srt":
@@ -188,7 +195,7 @@ export function transcriptExportFileName(
     .replace(/^-+|-+$/g, "")
     .slice(0, 80)
     .replace(/-+$/, "") || "meeting-transcript";
-  const extension = TRANSCRIPT_EXPORT_FORMATS.find((entry) => entry.id === format)?.extension ?? format;
+  const extension = TRANSCRIPT_DOWNLOAD_FORMATS.find((entry) => entry.id === format)?.extension ?? format;
   return `${slug}${day ? `-${day}` : ""}.${extension}`;
 }
 
@@ -199,8 +206,10 @@ export function exportTranscript(
 ): TranscriptExportFile {
   const cues = exportCues(transcript, options.inCameraRanges);
   const content =
-    format === "vtt" ? toWebVtt(cues) : format === "srt" ? toSrt(cues) : toWhisperJson(cues, transcript.language);
-  const entry = TRANSCRIPT_EXPORT_FORMATS.find((candidate) => candidate.id === format);
+    format === "vtt" ? toWebVtt(cues) : format === "srt" ? toSrt(cues)
+      : format === "txt" ? cues.map((cue) => cue.inCamera ? cue.text : `${cue.speaker}: ${cue.text}`).join("\n") + "\n"
+      : toWhisperJson(cues, transcript.language);
+  const entry = TRANSCRIPT_DOWNLOAD_FORMATS.find((candidate) => candidate.id === format);
   return {
     fileName: transcriptExportFileName(options.title, options.date, format),
     mime: entry?.mime ?? "text/plain;charset=utf-8",

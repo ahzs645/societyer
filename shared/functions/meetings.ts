@@ -1,3 +1,6 @@
+import { followUpMotionFingerprint, followUpMotionSelection } from "../followUpScheduling";
+import { inCameraFacts, isInCameraMotion, IN_CAMERA_ACCESS_PERMISSION } from "../minutesPrivacy";
+import { carryForwardToMeetingPortable } from "./motionBacklog";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
  * PORTABLE FUNCTIONS: the meetings domain
@@ -18,7 +21,7 @@ import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { createPortable as createMinutesPortable, resolveMinutesMotions, syncMotionsForMinutes, updatePortable as updateMinutesPortable } from "./minutes";
 import { requirePermissionPortable } from "./permissions";
-import { assertMeetingFieldsUnchanged, meetingExpectedFields, type MeetingExpectedFields } from "../meetingConcurrency";
+import { assertMeetingFieldsUnchanged, meetingFieldValuesMatch, meetingExpectedFields, type MeetingExpectedFields } from "../meetingConcurrency";
 import { meetingForReader } from "./minutesPrivacy";
 import { discussionSeededWithNotes, isMeetingRecordKind, meetingRecordKind, MEETING_WORKING_NOTES_MAX_LENGTH, type MeetingRecordKind } from "../meetingRecordKind";
 
@@ -426,6 +429,8 @@ export async function createPortable(
   ctx: PortableMutationCtx,
   args: {
     societyId: string;
+    /** Optional atomic, replay-safe scheduling of a follow-up meeting. */
+    followUp?: { requestId: string; sourceMeetingId: string; sourceMinutesId?: string; motionIndexes: number[]; sourceMotionFingerprint?: string };
     committeeId?: string;
     type: string;
     title: string;
@@ -469,6 +474,45 @@ export async function createPortable(
 ) {
   assertMeetingExtension(args);
   await requireSocietyMembership(ctx, args.societyId);
+  const actorUserId = await principalUserId(ctx, args.societyId);
+  if (args.followUp) {
+    await requirePermissionPortable(ctx, args.societyId, "meetings:write");
+    const followUp = args.followUp;
+    if (typeof followUp.requestId !== "string" || !/^[a-zA-Z0-9-]{20,80}$/.test(followUp.requestId)) throw new Error("Invalid follow-up request ID.");
+    if (!Array.isArray(followUp.motionIndexes) || followUp.motionIndexes.length > 1000 || followUp.motionIndexes.some((index) => !Number.isSafeInteger(index) || index < 0)) throw new Error("Invalid carried-forward motion selection.");
+    await getOwned(ctx, "meetings", followUp.sourceMeetingId, args.societyId);
+    if (followUp.sourceMinutesId) {
+      await requirePermissionPortable(ctx, args.societyId, "minutes:read");
+      const source = await getOwned(ctx, "minutes", followUp.sourceMinutesId, args.societyId);
+      if (String(source.meetingId) !== followUp.sourceMeetingId) throw new Error("The source minutes belong to a different meeting.");
+    }
+    if (followUp.motionIndexes.length) {
+      if (!followUp.sourceMinutesId) throw new Error("Source minutes are required to carry forward motions.");
+      await requirePermissionPortable(ctx, args.societyId, "motions:write");
+    }
+    // Convex serializes concurrent claims; PortableRuntime does so inside its
+    // transaction too. The same request cannot create a second graph after a
+    // lost acknowledgement. A key cannot be rebound to different inputs.
+    const previous = await ctx.db.query("meetings")
+      .withIndex("by_society_follow_up_request", (q) => q.eq("societyId", args.societyId).eq("followUpRequestId", followUp.requestId)).first();
+    if (previous) {
+      if (previous.followUpActorId !== actorUserId || !previous.followUpRequestJson || !meetingFieldValuesMatch(JSON.parse(String(previous.followUpRequestJson)), args)) {
+        throw new Error("This scheduling request was already used with different details. Review the existing meeting before starting another request.");
+      }
+      return String(previous._id);
+    }
+    if (followUp.sourceMinutesId && followUp.motionIndexes.length) {
+      const source = await getOwned(ctx, "minutes", followUp.sourceMinutesId, args.societyId);
+      const motions = await resolveMinutesMotions(ctx, source);
+      const selected = followUpMotionSelection(motions, followUp.motionIndexes);
+      if (followUp.motionIndexes.some((index) => isInCameraMotion(motions[index], inCameraFacts(source)))) {
+        await requirePermissionPortable(ctx, args.societyId, IN_CAMERA_ACCESS_PERMISSION);
+      }
+      if (followUp.sourceMotionFingerprint !== await followUpMotionFingerprint(selected)) {
+        throw new Error("The selected source motions changed. Reopen scheduling and review them; no meeting was created.");
+      }
+    }
+  }
   await Promise.all([
     args.committeeId ? getOwned(ctx, "committees", args.committeeId, args.societyId) : Promise.resolve(),
     args.bylawRuleSetId ? getOwned(ctx, "bylawRuleSets", args.bylawRuleSetId, args.societyId) : Promise.resolve(),
@@ -530,10 +574,11 @@ export async function createPortable(
       })
     : undefined;
 
-  const { agendaJson: _agendaJsonInput, ...meetingArgs } = args;
-  const actorUserId = await principalUserId(ctx, args.societyId);
+  const { agendaJson: _agendaJsonInput, followUp, ...meetingArgs } = args;
   const meetingId = await ctx.db.insert("meetings", {
     ...meetingArgs,
+    ...(followUp ? { followUpRequestId: followUp.requestId, followUpActorId: actorUserId,
+      followUpRequestJson: JSON.stringify(args), followUpSourceMeetingId: followUp.sourceMeetingId } : {}),
     sourceReviewedByUserId: args.sourceReviewedByUserId ? actorUserId : undefined,
     packageReviewedByUserId: args.packageReviewedByUserId ? actorUserId : undefined,
     templateSnapshotJson,
@@ -666,6 +711,14 @@ export async function createPortable(
       minutesId,
       meetingId,
       motions: scaffoldedMotions,
+    });
+  }
+  if (followUp?.sourceMinutesId && followUp.motionIndexes.length) {
+    // Deliberately inside this same transaction: failure rolls back the meeting,
+    // minutes, agenda, seeded approval, and every carried-forward item together.
+    await carryForwardToMeetingPortable(ctx, {
+      meetingId, sourceMinutesId: followUp.sourceMinutesId,
+      motionIndexes: [...new Set(followUp.motionIndexes)],
     });
   }
   return meetingId;

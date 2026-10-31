@@ -16587,6 +16587,18 @@
         "optional": false
       },
       {
+        "path": "followUp.sourceMeetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "followUp.sourceMinutesId",
+        "table": "minutes",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "committeeId",
         "table": "committees",
         "array": false,
@@ -43263,6 +43275,18 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "followUp.sourceMeetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "followUp.sourceMinutesId",
+        "table": "minutes",
+        "array": false,
+        "optional": true
       },
       {
         "path": "committeeId",

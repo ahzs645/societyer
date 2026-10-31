@@ -97,3 +97,12 @@ export function isStaticGenericCrud(name: string): boolean {
   const exportName = name.split(":")[1] ?? "";
   return STATIC_GENERIC_CRUD_PREFIX.test(exportName);
 }
+
+/** These hosted capabilities fail explicitly; they must never report a local save. */
+export const STATIC_UNSUPPORTED_WRITES: ReadonlyMap<string, string> = new Map([
+  ["meetingTranscription:editSegment", "Paged transcription edits require the connected workspace. Export a timed transcript there and import a local copy to edit on this device."],
+]);
+export function assertLocalWriteCapability(name: string): void {
+  const message = STATIC_UNSUPPORTED_WRITES.get(name);
+  if (message) throw new Error(message);
+}

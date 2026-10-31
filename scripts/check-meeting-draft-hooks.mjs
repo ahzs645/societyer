@@ -1,15 +1,30 @@
-/** Real React draft hooks; only auth, runtime and browser storage are fixtures. */
+/**
+ * Real React DOM/StrictMode hook regression. Auth/runtime identity and a minimal
+ * non-interactive DOM are fixtures; the journal, controller and hooks are real.
+ * Strict effect replay must not hide recovered drafts. Layout and input behavior
+ * remain the responsibility of the Playwright browser suite.
+ */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 import path from "node:path";
 import { build } from "esbuild";
+import { DOMImplementation } from "@xmldom/xmldom";
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();
 const entry = `
 import React from 'react';
-import {create, act} from ${JSON.stringify(require.resolve("react-test-renderer"))};
+import {createRoot} from ${JSON.stringify(require.resolve("react-dom/client"))};
+import {act} from ${JSON.stringify(require.resolve("react"))};
+function create(element) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  const render = element => root.render(React.createElement(React.StrictMode, null, element));
+  render(element);
+  return { update:render, unmount:()=>root.unmount(), toJSON:()=>({children:[container.textContent]}) };
+}
 import {MeetingDraftScopeContext, useMeetingDraftScope} from ${JSON.stringify(path.join(root, "src/features/meetings/useMeetingDraft.tsx"))};
 import {useMeetingFormDraft} from ${JSON.stringify(path.join(root, "src/features/meetings/useMeetingFormDraft.ts"))};
 import {meetingDraftIdentityKey} from ${JSON.stringify(path.join(root, "src/features/meetings/lib/meetingDraftStore.ts"))};
@@ -59,8 +74,28 @@ const storage = {
 };
 const fixture = { mode: "none", authenticated: true, membershipStatus: "bound", accountId: null, userId: "user-a", societyId: "workspace-a", meetingId: "meeting-a", verifiedUserId: "user-a", verifiedSocietyId: "workspace-a", local: true, demo: false, runtime: "convex-self-hosted" };
 const window = new EventTarget(); window.localStorage = storage;
+// React DOM only needs host nodes for this lifecycle test. No DOM events are
+// synthesized here; pointer/keyboard/layout assertions live in Playwright.
+const document = new DOMImplementation().createDocument('http://www.w3.org/1999/xhtml', 'html', null);
+const createElement = document.createElement.bind(document);
+document.createElement = name => {
+  const node = createElement(name);
+  node.style = {};
+  node.addEventListener = () => {};
+  node.removeEventListener = () => {};
+  return node;
+};
+document.addEventListener = () => {};
+document.removeEventListener = () => {};
+document.body = document.createElement('body');
+document.documentElement.appendChild(document.body);
+document.activeElement = document.body;
+window.document = document;
+window.HTMLIFrameElement = class {};
+window.HTMLElement = class {};
+document.defaultView = window;
 const module = { exports: {} };
-vm.runInNewContext(outputFiles[0].text, { module, exports: module.exports, require, console, process, window, fixture, setTimeout, clearTimeout, setImmediate, clearImmediate, performance });
+vm.runInNewContext(outputFiles[0].text, { module, exports: module.exports, require, console, process, window, document, navigator: {userAgent:"Node StrictMode test"}, IS_REACT_ACT_ENVIRONMENT: true, fixture, setTimeout, clearTimeout, setImmediate, clearImmediate, performance });
 const app = module.exports;
 app.mount();
 assert.ok(app.journal(), "bound no-auth local workspaces enable scoped recovery");
@@ -104,4 +139,4 @@ assert.equal(app.snapshot().text, "Keystrokes while storage is blocked");
 assert.equal(app.snapshot().durable, false);
 assert.match(app.snapshot().error, /Keep this editor open/);
 app.unmount();
-console.log("Meeting draft React hooks: explicit restore, local/demo/hosted isolation, verified account/workspace transitions, signout retention and blocked storage passed.");
+console.log("Meeting draft React DOM StrictMode hooks: explicit restore, local/demo/hosted isolation, verified account/workspace transitions, signout retention and blocked storage passed.");

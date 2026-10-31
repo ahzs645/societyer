@@ -4,19 +4,25 @@ import { newTaskChecklistId, taskChecklistProgress, type TaskChecklistItem } fro
 
 /**
  * Steps inside a task. Ticking, renaming, removing and adding a step call
- * `onChange` with the whole list; the Tasks page saves it straight away for
- * an existing task and with the form for a new one.
+ * `onChange` with the whole list. The task editor stages it with the form;
+ * even an unfinished add/rename buffer belongs to the recoverable draft.
  */
 export function TaskChecklist({
   items,
   onChange,
   readOnly,
+  draft: controlledDraft,
+  onDraftChange,
 }: {
   items: TaskChecklistItem[];
   onChange: (items: TaskChecklistItem[]) => void;
   readOnly?: boolean;
+  draft?: string;
+  onDraftChange?: (value: string) => void;
 }) {
-  const [draft, setDraft] = useState("");
+  const [localDraft, setLocalDraft] = useState("");
+  const draft = controlledDraft ?? localDraft;
+  const setDraft = onDraftChange ?? setLocalDraft;
   const { done, total } = taskChecklistProgress(items);
   const add = () => {
     const title = draft.trim();
@@ -52,16 +58,12 @@ export function TaskChecklist({
               <span className="task-checklist__label">
                 <input
                   className="task-checklist__text check-anim-label"
-                  defaultValue={item.title}
+                  value={item.title}
                   readOnly={readOnly}
                   maxLength={300}
                   aria-label="Checklist step"
                   onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-                  onBlur={(event) => {
-                    const title = event.currentTarget.value.trim();
-                    if (!title) { event.currentTarget.value = item.title; return; }
-                    if (title !== item.title) onChange(items.map((entry) => (entry.id === item.id ? { ...entry, title } : entry)));
-                  }}
+                  onChange={(event) => onChange(items.map((entry) => entry.id === item.id ? { ...entry, title: event.target.value } : entry))}
                 />
                 <span className="task-checklist__strike check-anim-label" aria-hidden="true">{item.title}</span>
               </span>

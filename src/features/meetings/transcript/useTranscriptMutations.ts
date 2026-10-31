@@ -1,3 +1,4 @@
+import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -30,7 +31,7 @@ export function useTranscriptMutations({
   const mergeSpeakers = usePermissionedMutation(api.transcripts.mergeSpeakers, canWrite);
   const unmergeSpeaker = usePermissionedMutation(api.transcripts.unmergeSpeaker, canWrite);
   const importTimed = usePermissionedMutation(api.transcripts.importTimed, canWrite);
-  const editPaged = usePermissionedMutation(api.meetingTranscription.editSegment, canWrite);
+  const editPaged = usePermissionedMutation(api.meetingTranscription.editSegment, canWrite && !isLocalDataRuntime());
   const confirm = useConfirm();
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");

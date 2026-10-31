@@ -12,6 +12,11 @@ import { v } from "convex/values";
 export const meetingTables = {
   meetings: defineTable({
     societyId: v.id("societies"),
+    // Internal replay receipt for the atomic next-meeting scheduling command.
+    followUpRequestId: v.optional(v.string()),
+    followUpActorId: v.optional(v.string()),
+    followUpRequestJson: v.optional(v.string()),
+    followUpSourceMeetingId: v.optional(v.id("meetings")),
     committeeId: v.optional(v.id("committees")),
     type: v.string(),
     title: v.string(),
@@ -52,6 +57,7 @@ export const meetingTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "scheduledAt"])
+    .index("by_society_follow_up_request", ["societyId", "followUpRequestId"])
     .index("by_committee", ["committeeId"]),
 
   meetingTemplates: defineTable({

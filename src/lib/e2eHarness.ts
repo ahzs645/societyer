@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+import type { Id } from "../../convex/_generated/dataModel";
+import { useNavigate } from "react-router-dom";
 import { localDataClient, reseedLocalData } from "./localDataClient";
 import { getStoredSocietyId, setStoredSocietyId } from "../hooks/useSociety";
 import { setStoredUserId } from "../hooks/useCurrentUser";
@@ -20,7 +23,11 @@ type CorporationMvpOptions = { jurisdictionCode?: "CA-FED-CBCA" | "CA-BC" };
 declare global {
   interface Window {
     __societyerE2E?: {
+      navigate?: (to: string | number) => void;
       reset(): Promise<void>;
+      setupInteractionAudit(): Promise<any>;
+      inspectInteractionAudit(societyId: string): Promise<any>;
+      failNextInteractionWrite(name: "tasks:update" | "notifications:markRead"): void;
       setupCorporationMvp(options?: CorporationMvpOptions): Promise<CorporationMvpFixture>;
       setupPathway(): Promise<{ societyId: string; documentId: string; reviewerId: string }>;
       inspectPathway(societyId: string): Promise<any>;
@@ -192,4 +199,60 @@ async function inspect() {
   };
 }
 
-window.__societyerE2E = { reset, setupCorporationMvp, setupPathway, inspectPathway, inspect };
+
+/** Synthetic records only, through the same permission-checked local entry points. */
+async function setupInteractionAudit() {
+  const created = await localDataClient.mutation("society:createWorkspace", {
+    name: "Interaction Browser Society", fiscalYearEnd: "12-31", jurisdictionCode: "CA-BC",
+    entityType: "society", actFormedUnder: "societies_act",
+  }) as any;
+  const societyId = created.societyId as Id<"societies">;
+  const users = await localDataClient.query("users:list", { societyId }) as any[];
+  const owner = users.find(row => row.role === "Owner" && row.status === "Active");
+  if (!owner) throw new Error("The interaction fixture requires its real owner.");
+  setStoredUserId(owner._id); setStoredSocietyId(societyId);
+  const second = await localDataClient.mutation("users:upsert", { societyId, email: "second@interaction.example.test", displayName: "Second Synthetic Owner", role: "Admin", status: "Active" }) as string;
+  const goalIds: string[] = [];
+  for (const title of ["Interaction goal A", "Interaction goal B"]) goalIds.push(await localDataClient.mutation("goals:create", {
+    societyId, title, category: "Other", status: "Active", startDate: "2026-01-01", targetDate: "2027-01-01", progressPercent: 0, milestones: [], keyResults: [],
+  }) as string);
+  const taskIds: string[] = [];
+  for (let index = 0; index < 2; index++) taskIds.push(await localDataClient.mutation("tasks:create", {
+    societyId, title: `Interaction task ${index ? "B" : "A"}`, status: "Todo", priority: "Medium", tags: [],
+    goalId: goalIds[index], dueDate: "2026-10-31", assignee: "Synthetic source owner",
+    responsibleUserIds: [owner._id, second], checklist: [{ id: "first", title: "Original step", done: false }],
+  }) as string);
+  for (const [title, linkHref] of [["Interaction linked bell", "/app/tasks"], ["Interaction no-link bell", undefined], ["Interaction page link", "/app/tasks"]]) {
+    await localDataClient.mutation("notifications:create", { societyId, kind: "general", severity: "info", title, linkHref });
+  }
+  await waitForLocalQueryPropagation(societyId);
+  return { societyId, taskIds, goalIds, userIds: [owner._id, second] };
+}
+async function inspectInteractionAudit(societyId: string) {
+  return { tasks: await localDataClient.query("tasks:list", { societyId }), notifications: await localDataClient.query("notifications:list", { societyId, limit: 100 }) };
+}
+function failNextInteractionWrite(name: "tasks:update" | "notifications:markRead") {
+  const original = localDataClient.mutation.bind(localDataClient);
+  localDataClient.mutation = ((reference: any, args: any) => {
+    if ((typeof reference === "string" ? reference : reference?.[Symbol.for("functionName")]) === name) {
+      localDataClient.mutation = original;
+      return Promise.reject(new Error("Injected interaction write failure"));
+    }
+    return original(reference, args);
+  }) as typeof localDataClient.mutation;
+}
+
+window.__societyerE2E = { setupInteractionAudit, inspectInteractionAudit, failNextInteractionWrite, reset, setupCorporationMvp, setupPathway, inspectPathway, inspect };
+
+/** Uses the real router, so same-route history tests do not simulate navigation with pushState. */
+export function E2ERouterBridge() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const harness = window.__societyerE2E;
+    if (!harness) return;
+    const go = (to: string | number) => { if (typeof to === "number") navigate(to); else navigate(to); };
+    harness.navigate = go;
+    return () => { if (harness.navigate === go) delete harness.navigate; };
+  }, [navigate]);
+  return null;
+}

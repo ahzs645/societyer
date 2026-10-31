@@ -1,0 +1,69 @@
+name: Interaction audit regression
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: interaction-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run test:interaction-audit
+      - run: npm run test:meeting-collaboration && npm run test:motions-carryforward && npm run test:task-source-links
+      - run: npm run test:portable-manifest
+      - run: npm run build
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Repeated native phone sheet gestures
+        run: npx playwright test -c playwright.interaction-audit.config.ts --project=narrow-phone --project=phone --grep "vetoed phone swipe" --repeat-each=3
+      - run: npm run test:interaction-audit-ui
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: interaction-audit-browser-${{ github.run_id }}
+          path: |
+            tmp/interaction-audit-browser
+            tmp/interaction-audit-results.json
+          retention-days: 7
+  existing-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Existing task and record flows
+        run: npx playwright test -c playwright.interface.config.ts tests/interface-tasks.spec.ts tests/interface-records.spec.ts --project=desktop
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: interaction-audit-existing-browser-${{ github.run_id }}
+          path: |
+            tmp/interface-suite-results
+            tmp/interface-results.json
+          retention-days: 7

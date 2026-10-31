@@ -33,6 +33,7 @@ import type { FinanceTagsApi } from "./useFinanceTags";
 import { useSpendBudgetOptions } from "./useSpendBudgetOptions";
 import { Select } from "../../../components/Select";
 import type { ReviewSegment } from "./transactionFilters";
+import { transactionDeepLink } from "./transactionDeepLink";
 
 /** A transactions-table row as the Financials page maps it. */
 export type PanelTransaction = {
@@ -91,14 +92,7 @@ function rawPayeeOf(txn: PanelTransaction): string {
 }
 
 /** `/app/financials?tab=transactions&transactionId=<id>` on the current origin (keeps the /demo prefix). */
-export function transactionDeepLink(id: string): string {
-  const url = new URL(window.location.href);
-  url.search = "";
-  url.hash = "";
-  url.searchParams.set("tab", "transactions");
-  url.searchParams.set("transactionId", id);
-  return url.toString();
-}
+
 
 type PanelTab = "transaction" | "journal";
 
@@ -241,10 +235,10 @@ export function TransactionDetailPanel({
   };
 
   const copyLink = async () => {
-    const link = transactionDeepLink(record._id);
+    const link = transactionDeepLink(record._id, societyId);
     try {
       await navigator.clipboard.writeText(link);
-      toast.success("Link copied", "It opens this transaction for anyone with access.");
+      toast.success("Link copied", link.startsWith("file:") ? "This is a local desktop link, not a publicly hosted URL." : "It opens this transaction for anyone with access to this workspace.");
     } catch {
       toast.info("Copy this link", link);
     }

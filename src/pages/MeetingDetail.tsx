@@ -1,3 +1,4 @@
+import { ScheduleNextMeetingModal } from "../features/meetings/components/ScheduleNextMeetingModal";
 import { transcriptText } from "../../shared/transcriptModel";
 import { meetingAgendaSnapshot, meetingExpectedFields, type MeetingExpectedFields } from "../../shared/meetingConcurrency";
 import { TranscriptWorkspace } from "../features/meetings/transcript/TranscriptWorkspace";
@@ -119,7 +120,6 @@ import { MeetingConflictsCard } from "../features/meetings/components/MeetingCon
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
 import { Modal, useConfirm, usePrompt } from "../components/Modal";
 import { isPastMeeting, meetingNotYetHeld, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
-import { DateTimeInput } from "../components/DateTimeInput";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -308,8 +308,6 @@ function MeetingDetailWorkspace() {
   // Local and desktop workspaces draft with the on-device model when one is set up.
   const localDraft = useLocalMinutesDraft();
   const navigate = useNavigate();
-  const createMeeting = usePermissionedMutation(api.meetings.create, can("meetings:write"));
-  const carryForwardToMeeting = usePermissionedMutation(api.motionBacklog.carryForwardToMeeting, can("motions:write"));
   const updateMeeting = usePermissionedMutation(api.meetings.update, can("meetings:write"));
   const markSourceReview = usePermissionedMutation(api.meetings.markSourceReview, can("meetings:write"));
   const setPackageReviewStatus = usePermissionedMutation(api.meetings.setPackageReviewStatus, can("meetings:write"));
@@ -385,14 +383,7 @@ function MeetingDetailWorkspace() {
   // the minutes were adopted). null = closed.
   const [approvalEdit, setApprovalEdit] = useState<{ approvedAt: string; approvedInMeetingId: string } | null>(null);
   // Modal state for scheduling the next meeting from these minutes. null = closed.
-  const [nextMeetingDraft, setNextMeetingDraft] = useState<{
-    title: string;
-    type: string;
-    scheduledAt: string;
-    location: string;
-    carryForward: boolean;
-  } | null>(null);
-  const [schedulingNext, setSchedulingNext] = useState(false);
+  const [nextMeetingOpen, setNextMeetingOpen] = useState(false);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [storedSourceFidelity, setStoredSourceFidelity] = useState(() => readStoredExportBool("sourceFidelity", true));
   const [sourceFidelityChoice, setSourceFidelityChoice] = useState<Record<string, boolean>>({});
@@ -1105,72 +1096,7 @@ function MeetingDetailWorkspace() {
     .map((motion, index) => ({ motion, index }))
     .filter(({ motion }) => !isAdjournmentMotion(motion) && isPostponedOutcome(motion.outcome));
 
-  const startNextMeeting = () => {
-    if (!(canMeetingsWrite)) return;
-    setNextMeetingDraft({
-      title: meeting.title,
-      type: meeting.type,
-      scheduledAt: minutes?.nextMeetingAt
-        ? toDateTimeLocalValue(new Date(minutes.nextMeetingAt))
-        : toDateTimeLocalValue(new Date(Date.now() + 28 * 864e5)),
-      location: minutes?.nextMeetingLocation ?? meeting.location ?? "",
-      carryForward: canMotionsWrite && carriedForwardMotions.length > 0,
-    });
-  };
-
-  const confirmNextMeeting = async () => {
-    if (!(canMeetingsWrite)) return;
-    if (!society || !nextMeetingDraft || !nextMeetingDraft.title.trim()) return;
-    if (nextMeetingDraft.carryForward && !canMotionsWrite) return;
-    setSchedulingNext(true);
-    try {
-      // Seed the next agenda with approval of these minutes — carrying a real
-      // reference to the minutes record, so recording the motion as Carried on
-      // the next meeting stamps these minutes approved automatically.
-      // Carried-forward (Tabled/Deferred) business is added separately below
-      // as tracked backlog records linked onto the new agenda.
-      const agendaSeed = [
-        {
-          title: `Approval of minutes — ${meeting.title}`,
-          type: "motion",
-          motionText: `BE IT RESOLVED THAT the minutes of ${meeting.title} held ${formatMeetingDate(meeting, { withTime: false })} be approved as circulated.`,
-          adoptsMinutesId: minutes?._id ? String(minutes._id) : undefined,
-        },
-      ];
-      const meetingId = await createMeeting({
-        societyId: society._id,
-        type: nextMeetingDraft.type,
-        title: nextMeetingDraft.title.trim(),
-        scheduledAt: nextMeetingDraft.scheduledAt,
-        location: nextMeetingDraft.location.trim() || undefined,
-        electronic: !!meeting.electronic,
-        status: "Scheduled",
-        attendeeIds: [],
-        agendaJson: JSON.stringify(agendaSeed),
-      });
-      let carried = 0;
-      if (meetingId && nextMeetingDraft.carryForward && minutes && carriedForwardMotions.length > 0) {
-        const result = await carryForwardToMeeting({
-          meetingId,
-          sourceMinutesId: minutes._id,
-          motionIndexes: carriedForwardMotions.map((entry) => entry.index),
-        });
-        carried = (result?.created ?? 0) + (result?.reused ?? 0);
-      }
-      setNextMeetingDraft(null);
-      toast.success(
-        "Next meeting scheduled",
-        carried > 0
-          ? `Seeded minutes approval and carried ${carried} item${carried === 1 ? "" : "s"} into the agenda and backlog.`
-          : "Seeded its agenda with approval of these minutes.",
-      );
-      if (meetingId) navigate(`/app/meetings/${meetingId}`);
-    } catch (error: any) {
-      toast.error(error?.message ? String(error.message).replace(/^.*Error:\s*/, "") : "Could not schedule the next meeting.");
-    } finally {
-      setSchedulingNext(false);
-    }
-  };
+  const startNextMeeting = () => { if (canMeetingsWrite) setNextMeetingOpen(true); };
 
   // Section indices to omit from the public copy. A depth=0 (root) section
   // flagged publicVisible:false cascades to its trailing depth=1 children —
@@ -3164,74 +3090,10 @@ function MeetingDetailWorkspace() {
         )}
       </Modal>
 
-      <Modal
-        open={canMeetingsWrite && !!nextMeetingDraft}
-        onClose={() => setNextMeetingDraft(null)}
-        title="Schedule next meeting"
-        size="md"
-        footer={
-          <>
-            <button className="btn" onClick={() => setNextMeetingDraft(null)}>Cancel</button>
-            <button
-              className="btn btn--accent"
-              onClick={confirmNextMeeting}
-              disabled={!canMeetingsWrite || (schedulingNext || !nextMeetingDraft?.title.trim())}
-            >
-              Schedule meeting
-            </button>
-          </>
-        }
-      >
-        {nextMeetingDraft && (
-          <div>
-            <p className="muted" style={{ marginTop: 0 }}>
-              Creates the next meeting and seeds its agenda with approval of these minutes
-              {carriedForwardMotions.length > 0 ? " plus any carried-forward business" : ""}.
-            </p>
-            <Field label="Meeting title">
-              <input
-                className="input"
-                value={nextMeetingDraft.title}
-                onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, title: event.target.value })}
-              />
-            </Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Type">
-                <input
-                  className="input"
-                  value={nextMeetingDraft.type}
-                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, type: event.target.value })}
-                />
-              </Field>
-              <Field label="Date & time">
-                <DateTimeInput
-                  value={nextMeetingDraft.scheduledAt}
-                  onChange={(value) => setNextMeetingDraft({ ...nextMeetingDraft, scheduledAt: value })}
-                />
-              </Field>
-            </div>
-            <Field label="Location">
-              <input
-                className="input"
-                value={nextMeetingDraft.location}
-                onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, location: event.target.value })}
-                placeholder="Venue or join link"
-              />
-            </Field>
-            {carriedForwardMotions.length > 0 && (
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={nextMeetingDraft.carryForward} disabled={!canMotionsWrite}
-                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, carryForward: event.target.checked })}
-                />
-                Carry forward {carriedForwardMotions.length} tabled/deferred motion
-                {carriedForwardMotions.length === 1 ? "" : "s"} onto the agenda &amp; motion backlog
-              </label>
-            )}
-          </div>
-        )}
-      </Modal>
+      {nextMeetingOpen && <ScheduleNextMeetingModal societyId={society._id} meeting={meeting} minutes={minutes}
+        sourceMotions={displayMotions} motionIndexes={carriedForwardMotions.map((entry) => entry.index)} canSchedule={canMeetingsWrite} canCarry={canMotionsWrite}
+        onClose={() => setNextMeetingOpen(false)} />}
+
     </div>
   );
 }

@@ -12,11 +12,13 @@ const storageFailure = "This device could not keep the latest recovery copy. Kee
 
 export function createMeetingDraftJournal<T>(options: {
   identity: MeetingDraftIdentity | null;
+  recordLabel?: string;
   editor: string;
   storage: () => DraftStorage;
   active: () => boolean;
   valid: (value: unknown) => value is T;
 }) {
+  const recordLabel = options.recordLabel ?? "meeting";
   const session = id();
   let sequence = 0;
   let current: { key: string; payloadJson: string } | null = null;
@@ -27,7 +29,7 @@ export function createMeetingDraftJournal<T>(options: {
     for (const listener of listeners) listener();
   };
   const isActive = () => !!options.identity && options.active();
-  const assertActive = () => { if (!isActive()) throw new Error("Your account or workspace changed. Reopen this meeting before saving the draft."); };
+  const assertActive = () => { if (!isActive()) throw new Error(`Your account or workspace changed. Reopen this ${recordLabel} before saving the draft.`); };
   const refresh = () => {
     if (!isActive()) { publish({ recoveries: [] }); return; }
     try {
@@ -53,7 +55,7 @@ export function createMeetingDraftJournal<T>(options: {
         const before = newest.get(row.session);
         if (!before || before.sequence < row.sequence) newest.set(row.session, { ...row, key });
       }
-      publish({ recoveries: [...newest.values()].sort((a, b) => b.savedAt - a.savedAt), ...(invalid ? { error: "A recovery copy could not be read. It has been kept on this device; your saved meeting is unchanged." } : {}) });
+      publish({ recoveries: [...newest.values()].sort((a, b) => b.savedAt - a.savedAt), ...(invalid ? { error: `A recovery copy could not be read. It has been kept on this device; your saved ${recordLabel} is unchanged.` } : {}) });
     } catch { publish({ error: storageFailure }); }
   };
   const write = (payload: T): string | null => {
@@ -83,7 +85,7 @@ export function createMeetingDraftJournal<T>(options: {
       options.storage().removeItem(key);
       if (current?.key === key) { current = null; publish({ savedOnDevice: false, error: null }); }
       refresh();
-    } catch { publish({ error: "The recovery copy could not be removed from this device. Your saved meeting is unchanged." }); }
+    } catch { publish({ error: `The recovery copy could not be removed from this device. Your saved ${recordLabel} is unchanged.` }); }
   };
   return {
     getSnapshot: () => snapshot,

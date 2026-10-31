@@ -1047,3 +1047,24 @@ select.select:hover:not(:disabled) {
     max-width: 100%;
   }
 }
+
+// Notification activation is a real link/button, with the same row layout.
+.notif-row--activation {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+}
+.notif-title-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
