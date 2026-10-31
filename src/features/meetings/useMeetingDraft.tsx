@@ -63,13 +63,15 @@ export function useMeetingDraft<T>(editor: string, valid: (value: unknown) => va
   return { journal, ...state };
 }
 
-export function MeetingDraftRecovery<T>({ draft, label, onRestore, disabled = false, disabledReason, recordLabel = "meeting" }: {
+export function MeetingDraftRecovery<T>({ draft, label, onRestore, disabled = false, disabledReason, recordLabel = "meeting", recoveryNotice }: {
   draft: ReturnType<typeof useMeetingDraft<T>>;
   label: string;
   onRestore: (payload: T) => void;
   disabled?: boolean;
   disabledReason?: string;
   recordLabel?: string;
+  /** Extra guidance shown with the recovery copies, before anyone restores one. */
+  recoveryNotice?: string;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -79,6 +81,7 @@ export function MeetingDraftRecovery<T>({ draft, label, onRestore, disabled = fa
     {draft.savedOnDevice && <p className="muted" role="status">Your {label} draft is saved on this device. Server save is separate.</p>}
     {draft.recoveries.length > 0 && <div className="flag flag--warn" aria-label={`Recover ${label} drafts`}>
       <p>{draft.recoveries.length === 1 ? "A draft from another editing session is" : `${draft.recoveries.length} drafts from other editing sessions are`} saved on this device. Restore to review before saving to the server. Another open tab may still be editing.</p>
+      {recoveryNotice && <p className="muted">{recoveryNotice}</p>}
       {draft.recoveries.map((entry) => <div className="row" style={{ gap: 8, flexWrap: "wrap" }} key={entry.key}>
         <span>{new Date(entry.savedAt).toLocaleString()}</span>
         <button className="btn-action" type="button" disabled={disabled} onClick={() => {

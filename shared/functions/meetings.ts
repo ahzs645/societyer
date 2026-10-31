@@ -1,4 +1,4 @@
-import { followUpMotionFingerprint, followUpMotionSelection } from "../followUpScheduling";
+import { FOLLOW_UP_RECEIPT_FIELDS, followUpMotionFingerprint, followUpMotionSelection, followUpRequestDigest } from "../followUpScheduling";
 import { inCameraFacts, isInCameraMotion, IN_CAMERA_ACCESS_PERMISSION } from "../minutesPrivacy";
 import { carryForwardToMeetingPortable } from "./motionBacklog";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
@@ -416,7 +416,8 @@ export async function listPortable(
     .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
     .order("desc")
     // Working notes can be long and no list view reads them; the detail page loads them via `get`.
-    .omitFields("workingNotes")
+    // Replay receipts are internal bookkeeping and never part of a reader's view.
+    .omitFields("workingNotes", ...FOLLOW_UP_RECEIPT_FIELDS)
     .collect();
 }
 
@@ -496,7 +497,11 @@ export async function createPortable(
     const previous = await ctx.db.query("meetings")
       .withIndex("by_society_follow_up_request", (q) => q.eq("societyId", args.societyId).eq("followUpRequestId", followUp.requestId)).first();
     if (previous) {
-      if (previous.followUpActorId !== actorUserId || !previous.followUpRequestJson || !meetingFieldValuesMatch(JSON.parse(String(previous.followUpRequestJson)), args)) {
+      // Rows written before the digest receipt kept a JSON copy; compare either form.
+      const sameRequest = typeof previous.followUpRequestDigest === "string"
+        ? previous.followUpRequestDigest === await followUpRequestDigest(args)
+        : typeof previous.followUpRequestJson === "string" && meetingFieldValuesMatch(JSON.parse(previous.followUpRequestJson), args);
+      if (previous.followUpActorId !== actorUserId || !sameRequest) {
         throw new Error("This scheduling request was already used with different details. Review the existing meeting before starting another request.");
       }
       return String(previous._id);
@@ -578,7 +583,7 @@ export async function createPortable(
   const meetingId = await ctx.db.insert("meetings", {
     ...meetingArgs,
     ...(followUp ? { followUpRequestId: followUp.requestId, followUpActorId: actorUserId,
-      followUpRequestJson: JSON.stringify(args), followUpSourceMeetingId: followUp.sourceMeetingId } : {}),
+      followUpRequestDigest: await followUpRequestDigest(args), followUpSourceMeetingId: followUp.sourceMeetingId } : {}),
     sourceReviewedByUserId: args.sourceReviewedByUserId ? actorUserId : undefined,
     packageReviewedByUserId: args.packageReviewedByUserId ? actorUserId : undefined,
     templateSnapshotJson,

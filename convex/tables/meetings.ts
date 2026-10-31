@@ -15,6 +15,8 @@ export const meetingTables = {
     // Internal replay receipt for the atomic next-meeting scheduling command.
     followUpRequestId: v.optional(v.string()),
     followUpActorId: v.optional(v.string()),
+    followUpRequestDigest: v.optional(v.string()),
+    // Legacy receipt copy: no longer written, kept so existing rows validate. Never returned to readers.
     followUpRequestJson: v.optional(v.string()),
     followUpSourceMeetingId: v.optional(v.id("meetings")),
     committeeId: v.optional(v.id("committees")),

@@ -33,6 +33,13 @@ export function normalizedTaskPatch<T extends Record<string, unknown>>(patch: T)
   return next;
 }
 
+/**
+ * A draft stays tied to the version of the task it was started from, including
+ * after recovery, so retrying it can never overwrite the newer record.
+ */
+export const TASK_EDIT_CONFLICT_MESSAGE =
+  "This task changed since you opened it, so your edits were not saved. Your draft stays on this device, but it will keep being refused because it was started from the older version. Note the changes you want, discard the draft, then reopen the task and make them on the latest version.";
+
 /** A null baseline value represents an absent optional field on the wire. */
 export function taskEditBaseline(task: Record<string, unknown>): TaskEditBaseline {
   return Object.fromEntries(TASK_EDITABLE_FIELDS.map((field) => [field, task[field] ?? null]));
@@ -44,7 +51,7 @@ export function assertTaskEditBaseline(task: Record<string, unknown>, expected?:
   }
   for (const [field, value] of Object.entries(expected)) {
     if (!meetingFieldValuesMatch(task[field] ?? null, value)) {
-      throw new Error("This task changed since you opened it. Your draft is kept; reopen the task and review the newer record before saving.");
+      throw new Error(TASK_EDIT_CONFLICT_MESSAGE);
     }
   }
 }

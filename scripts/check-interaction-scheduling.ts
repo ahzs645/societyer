@@ -7,7 +7,7 @@ import { betterAuthIssuer } from '../convex/lib/authIdentity';
 import { toPortableMutationCtx } from '../convex/lib/portable';
 import { createPortable } from '../shared/functions/meetings';
 import { motionRowToEmbedded } from '../shared/minutesMotions';
-import { followUpMotionFingerprint, followUpMotionSelection } from '../shared/followUpScheduling';
+import { FOLLOW_UP_RECEIPT_FIELDS, followUpMotionFingerprint, followUpMotionSelection } from '../shared/followUpScheduling';
 import { LocalStoreDb, MemoryRowStore, PortableRuntime, makeCapabilities } from '../shared/portable/index';
 import { PORTABLE_FUNCTIONS } from '../shared/functions/registry';
 import { portableTestPrincipal, PORTABLE_TEST_AUTH_SUBJECT } from './portable-test-fixture';
@@ -76,6 +76,37 @@ for (const [label, f, count, schedule, fail] of [
 }
 await assert.rejects(() => viewer.mutation(api.meetings.create, argsFor(fixture, 'interaction-viewer-key-000006')));
 await assert.rejects(() => otherOwner.mutation(api.meetings.create, argsFor(fixture, 'interaction-replay-key-000001')), /different details/);
+// The replay receipt is a digest, never a second copy of the request, and readers never see it.
+const SECRET = 'Synthetic confidential wording 0042';
+for (const [label, f, run, schedule, get, list] of [
+  ['Convex', fixture, (fn: (db: any) => Promise<any>) => t.run(ctx => fn(ctx.db)), (args: any) => owner.mutation(api.meetings.create, args),
+    (id: string) => owner.query(api.meetings.get, { id: id as any }), (societyId: string) => owner.query(api.meetings.list, { societyId: societyId as any })],
+  ['local', local, (fn: (db: any) => Promise<any>) => db.transaction(() => fn(db)), (args: any) => rt.runMutation('meetings:create', args),
+    (id: string) => rt.runQuery('meetings:get', { id }), (societyId: string) => rt.runQuery('meetings:list', { societyId })],
+] as const) {
+  const args = { ...argsFor(f, 'interaction-receipt-key-000009'), notes: SECRET, remotePasscode: SECRET };
+  const id = await schedule(args);
+  const stored = await run(sourceDb => sourceDb.get(id));
+  assert.match(String(stored.followUpRequestDigest), /^[0-9a-f]{64}$/, `${label}: receipt stores a request digest`);
+  assert.equal(stored.followUpRequestJson, undefined, `${label}: receipt stores no copy of the request`);
+  for (const field of FOLLOW_UP_RECEIPT_FIELDS) assert.ok(!String(stored[field] ?? '').includes(SECRET), `${label}: ${field} holds no request wording`);
+  assert.equal(await schedule(args), id, `${label}: digest receipt replays the original meeting`);
+  await assert.rejects(() => schedule({ ...args, notes: 'Changed wording' }), /different details/);
+  const read = await get(id) as any;
+  const listed = (await list(f.societyId) as any[]).find(row => String(row._id) === String(id));
+  assert.ok(listed, `${label}: scheduled meeting is listed`);
+  for (const field of FOLLOW_UP_RECEIPT_FIELDS) {
+    assert.ok(!(field in read), `${label}: meetings:get omits ${field}`);
+    assert.ok(!(field in listed), `${label}: meetings:list omits ${field}`);
+  }
+  // Rows written before the digest kept a JSON copy: they still replay and still never reach readers.
+  await run(sourceDb => sourceDb.patch(id, { followUpRequestDigest: undefined, followUpRequestJson: JSON.stringify(args) }));
+  assert.equal((await run(sourceDb => sourceDb.get(id))).followUpRequestDigest, undefined, `${label}: fixture exercises the legacy receipt path`);
+  assert.equal(await schedule(args), id, `${label}: legacy JSON receipt still replays`);
+  await assert.rejects(() => schedule({ ...args, title: 'Changed legacy payload' }), /different details/);
+  assert.ok(!('followUpRequestJson' in (await get(id) as any)), `${label}: legacy receipt copy is withheld from readers`);
+  console.log(`✓ ${label}: digest-only replay receipt, legacy receipt replay, receipts withheld from get and list`);
+}
 // Draft minutes use ordered first-class rows, not the retired embedded array.
 async function seedNativeSource(db: any, societyId: string) {
   const meetingId = await db.insert('meetings', { societyId, title: 'Native source', type: 'Board', scheduledAt: now, electronic: false, status: 'Held', attendeeIds: [] });
