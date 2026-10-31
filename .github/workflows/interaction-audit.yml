@@ -1,8 +1,6 @@
 name: Interaction audit regression
 on:
   pull_request:
-  push:
-    branches: [fix/interaction-audit-2026-10-31]
   workflow_dispatch:
 permissions:
   contents: read
@@ -37,6 +35,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      - name: Repeated native phone sheet gestures
+        run: npx playwright test -c playwright.interaction-audit.config.ts --project=narrow-phone --project=phone --grep "vetoed phone swipe" --repeat-each=3
       - run: npm run test:interaction-audit-ui
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}

@@ -121,9 +121,13 @@ test('a vetoed phone swipe restores the guarded sheet instead of leaving it off-
   await page.getByRole('button', { name: 'Open guarded form', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Guarded form', exact: true });
   await dialog.getByLabel('Draft text').fill('Keep this text');
-  const box = await dialog.boundingBox(); expect(box).not.toBeNull();
+  // A fill does not wait for the sheet entrance animation. Read the touch
+  // origin only after the real grabber is stable and can receive input.
+  const grabber = dialog.locator(".sheet-grabber");
+  await grabber.click({ trial: true });
+  const box = await grabber.boundingBox(); expect(box).not.toBeNull();
   const session = await context.newCDPSession(page);
-  const x = box!.x + box!.width / 2; const y = box!.y + 12;
+  const x = box!.x + box!.width / 2; const y = box!.y + box!.height / 2;
   await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
   for (const dy of [25, 65, 120, 160]) await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: Math.min(y + dy, page.viewportSize()!.height - 5) }] });
   await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });

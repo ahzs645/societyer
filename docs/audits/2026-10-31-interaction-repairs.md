@@ -14,12 +14,12 @@ Baseline: `4aadbc8fbad1a8d049314e1999ba9f595907fc90`. Scope: the 13 interaction 
 | S06 | Palette pinning is restricted to durable registered pages/commands; unsupported dynamic results are not offered as favorites. Unavailable command pins can be removed. Valid permission-hidden pins are not destroyed. | Pin eligibility tests; command permission filtering in both consumers. |
 | S07 | Today is normalized to a calendar day, date parsing rejects overflow, and the shortcut is disabled outside constraints. | Actual DatePicker browser test with min=max=today after midday. |
 | S08 | Year browsing has its own cursor; range arrows move one complete 13-year window rather than a month. | Actual DatePicker browser year-grid assertions. |
-| S09 | URL-owned task filters reconcile workspace/store/view and parameter values. Removing parameters removes only the corresponding URL-owned filter, preserving manual constraints. | Interface gates and source review; URL/history browser qualification is tracked separately below. |
+| S09 | URL-owned task filters reconcile workspace/store/view and parameter values. Removing parameters removes only the corresponding URL-owned filter, preserving manual constraints. | Four-viewport same-route navigation, Back/Forward, parameter removal and filter-chip removal browser regressions. |
 | S10 | Bell and Notifications page use the same read-state activation hook and report mutation errors. | Browser click/keyboard read-state persistence checks. |
 | S11 | Linked notifications own their handler on the actual link; non-links use real buttons, with clear/snooze kept separate. | Browser Enter/Space activation and panel closure. |
 | S12 | TypeScript binding-aware inventory sees wrappers, aliases, namespaces, destructuring and literal computed refs. Unknown/partially dynamic hook refs fail the gate; dispatch classification ignores comments and fixture strings. | `check-interaction-write-inventory.ts`; full parity inventory. The newly found hosted-only paged transcript edit rejects explicitly in local mode; local UI offers a timed-file import instead. |
 | S13 | Sidebar, rail and mobile tab projection share the same Favorites ordering, after authority filtering. | Order/permission projection tests and phone/desktop reload test. |
-| R01 | Follow-up creation, agenda, approval motion, minutes and carry-forward share one transaction. A durable request key returns the same graph after lost acknowledgements; changed payload/source rejects. Source fingerprints avoid storing confidential wording in replay receipts. | `check-interaction-scheduling.ts`: actual Convex and LocalStoreDb fault injection, full rollback, retry, concurrent calls, source drift and role checks. |
+| R01 | Follow-up creation, agenda, approval motion, minutes and carry-forward share one transaction. A durable request key returns the same graph after lost acknowledgements; changed payload/source rejects. Source fingerprints avoid storing confidential wording in replay receipts. | `check-interaction-scheduling.ts`: actual Convex and LocalStoreDb fault injection, full rollback, retry, concurrent calls, source drift, native ordered-motion selection and role checks. |
 | R02 | All checklist changes, including unfinished add and rename input, are staged with task fields. Cancel never silently commits them; Save validates/commits them together. | Handler readback plus browser staged/buffered checklist test. |
 | R03 | The task editor reuses the identity-bound durable draft journal and close guard. Recovered baselines reject stale overwrites. Failed saves preserve drafts; quota errors never claim durability. Swipe dismissal restores a form when its close guard vetoes dismissal. | Existing comprehensive journal/hook regressions; task browser failed-save/reload/recovery and phone swipe test. |
 
@@ -35,7 +35,7 @@ npm run test:interaction-audit-ui
 npm run build
 ```
 
-The browser suite uses an opt-in local IndexedDB runtime and synthetic fixtures through normal permission-checked mutations. Four Chromium viewports cover 320, 390, 768 and 1440 pixels. The a small control fixture render the actual shared components; they are not a replacement implementation. Fault injection is available only in the existing opt-in E2E harness, not a hosted endpoint.
+The browser suite uses an opt-in local IndexedDB runtime and synthetic fixtures through normal permission-checked mutations. Four Chromium viewports cover 320, 390, 768 and 1440 pixels. A small control fixture renders the actual shared components; it is not a replacement implementation. Fault injection is available only in the existing opt-in E2E harness, not a hosted endpoint.
 
 ## Rollout and boundaries
 
@@ -50,3 +50,25 @@ Physical iOS/Android keyboards, Safari/WebKit, authenticated production integrat
 ## Verification record
 
 Local handler, navigation, export, inventory and existing regression gates were exercised against this change. Local browser navigation was blocked by the execution environment (`ERR_BLOCKED_BY_ADMINISTRATOR`), so browser evidence must come from the pull-request CI runs. See PR checks for the tested head and browser artifacts; a pending check is not counted as passing.
+
+## Qualification discovered during implementation
+
+The failed-save/reload browser regression exposed a real shared draft-hook defect:
+React StrictMode replays effect cleanup and setup, and the child journal's passive
+refresh could run before its parent scope became active again. The scope now uses
+a layout effect for the mounted flag, so journal refresh sees the correct active
+identity. The hook regression now uses actual React DOM StrictMode with a minimal,
+non-interactive DOM fixture. It fails with the old effect and passes with the fix;
+it retains all existing account/workspace, signout, blocked-storage and explicit
+restore assertions. The browser recovery flow also passed at all four widths.
+
+The touch regression reads the real grabber only after Playwright has verified
+that it is stable and receives input. This avoids deriving gesture coordinates
+from a moving entrance animation. CI repeats both native CDP phone gestures three
+times before the full interaction suite. It does not retry failed tests or weaken
+the requirement to show the dirty-work confirmation and retain the edited text.
+
+The PR's checks and description contain the exact qualified head and results.
+Earlier failed qualification runs are retained as evidence, not counted as
+passing. The broader Stage 2 runner reports harness errors and exclusions
+separately; those are not successful permission probes.
