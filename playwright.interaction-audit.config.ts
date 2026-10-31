@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 const port = 4192;
 export default defineConfig({
   testDir: 'tests', testMatch: 'interaction-audit.spec.ts', timeout: 120_000, expect: { timeout: 20_000 },
-  fullyParallel: false, workers: 1, retries: 0, outputDir: 'tmp/interaction-audit-browser',
+  fullyParallel: false, workers: 1, retries: 0, maxFailures: process.env.CI ? 3 : 0, outputDir: 'tmp/interaction-audit-browser',
   reporter: [['list'], ['json', { outputFile: 'tmp/interaction-audit-results.json' }]],
   use: { baseURL: `http://127.0.0.1:${port}`, timezoneId: 'America/Vancouver', screenshot: 'only-on-failure', trace: 'retain-on-failure',
     launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined },

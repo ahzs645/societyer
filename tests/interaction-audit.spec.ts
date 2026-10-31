@@ -65,12 +65,12 @@ test('dirty close, failed save, reload and explicit draft recovery retain task w
 test('bell links and non-links are keyboard-operable and the full page shares read-state behavior', async ({ page }) => {
   const f = await fixture(page);
   const read = async (title: string) => Boolean((await inspect(page, f.societyId)).notifications.find((row: any) => row.title === title)?.readAt);
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await page.getByRole('button', { name: /^Notifications(?: \(\d+ unread\))?$/ }).click();
   const panel = page.locator('.notif-panel');
   await panel.getByRole('link', { name: /Interaction linked bell/ }).press('Enter');
   await expect(panel).toBeHidden();
   await expect.poll(() => read('Interaction linked bell')).toBe(true);
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await page.getByRole('button', { name: /^Notifications(?: \(\d+ unread\))?$/ }).click();
   await panel.getByRole('button', { name: /Interaction no-link bell/ }).press('Space');
   await expect(panel).toBeHidden();
   await expect.poll(() => read('Interaction no-link bell')).toBe(true);

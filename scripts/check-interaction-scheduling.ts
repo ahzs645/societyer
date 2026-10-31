@@ -6,6 +6,7 @@ import { api } from '../convex/_generated/api';
 import { betterAuthIssuer } from '../convex/lib/authIdentity';
 import { toPortableMutationCtx } from '../convex/lib/portable';
 import { createPortable } from '../shared/functions/meetings';
+import { motionRowToEmbedded } from '../shared/minutesMotions';
 import { followUpMotionFingerprint, followUpMotionSelection } from '../shared/followUpScheduling';
 import { LocalStoreDb, MemoryRowStore, PortableRuntime, makeCapabilities } from '../shared/portable/index';
 import { PORTABLE_FUNCTIONS } from '../shared/functions/registry';
@@ -75,4 +76,34 @@ for (const [label, f, count, schedule, fail] of [
 }
 await assert.rejects(() => viewer.mutation(api.meetings.create, argsFor(fixture, 'interaction-viewer-key-000006')));
 await assert.rejects(() => otherOwner.mutation(api.meetings.create, argsFor(fixture, 'interaction-replay-key-000001')), /different details/);
+// Draft minutes use ordered first-class rows, not the retired embedded array.
+async function seedNativeSource(db: any, societyId: string) {
+  const meetingId = await db.insert('meetings', { societyId, title: 'Native source', type: 'Board', scheduledAt: now, electronic: false, status: 'Held', attendeeIds: [] });
+  const minutesId = await db.insert('minutes', { societyId, meetingId, heldAt: now, attendees: [], absent: [], quorumMet: false, discussion: '', decisions: [], actionItems: [] });
+  const motionIds: string[] = [];
+  for (const text of ['Native selected business', 'Other native business']) motionIds.push(await db.insert('motions', {
+    societyId, minutesId, primaryMeetingId: meetingId, text, status: 'Deferred', source: 'minutes', createdAtISO: now, updatedAtISO: now,
+  }));
+  await db.patch(minutesId, { motionIds });
+  return { societyId, meetingId, minutesId, motionIds, display: await Promise.all(motionIds.map(async id => motionRowToEmbedded(await db.get(id)))) };
+}
+for (const [label, f, run, schedule] of [
+  ['Convex', fixture, (fn: (db: any) => Promise<any>) => t.run(ctx => fn(ctx.db)), (args: any) => owner.mutation(api.meetings.create, args)],
+  ['local', local, (fn: (db: any) => Promise<any>) => db.transaction(() => fn(db)), (args: any) => rt.runMutation('meetings:create', args)],
+] as const) {
+  const native = await run(sourceDb => seedNativeSource(sourceDb, f.societyId));
+  const sourceMotionFingerprint = await followUpMotionFingerprint(followUpMotionSelection(native.display, [0]));
+  const args = { ...argsFor(native, 'interaction-native-key-000007'), followUp: {
+    requestId: 'interaction-native-key-000007', sourceMeetingId: native.meetingId,
+    sourceMinutesId: native.minutesId, motionIndexes: [0], sourceMotionFingerprint,
+  } };
+  const targetId = await schedule(args);
+  const carried = await run(async sourceDb => (await sourceDb.query('motions').collect()).find((row: any) => row.targetMeetingId === targetId && row.sourceMinutesId === native.minutesId));
+  assert.equal(carried?.text, 'Native selected business', `${label}: UI display and transactional handler fingerprint the same native row`);
+  await run(sourceDb => sourceDb.patch(native.motionIds[0], { text: 'Changed native business' }));
+  const before = await run(counts);
+  await assert.rejects(() => schedule({ ...args, followUp: { ...args.followUp, requestId: 'interaction-native-key-000008' } }), /motions changed/);
+  assert.deepEqual(await run(counts), before, `${label}: source drift writes no partial graph`);
+  console.log(`✓ ${label}: native ordered-motion selection and changed-source rejection`);
+}
 console.log('Interaction scheduling checks passed.');
