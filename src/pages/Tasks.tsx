@@ -6,7 +6,6 @@ import { ArrowUpRight, Check, History, ListTodo, MoreHorizontal, Pencil, Plus, R
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { isHistoricalSourceAction, taskStatusLabel as sharedTaskStatusLabel } from "../../shared/taskStatus";
-import { HistoricalActionSource } from "../features/tasks/HistoricalActionSource";
 import { api } from "@/lib/convexApi";
 import {
   RecordTable,
@@ -29,21 +28,13 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
-import { Drawer } from "../components/ui";
-import {
-  TaskFormFields,
-  TASK_STATUSES,
-  makeTaskFormDefaults,
-  useTaskFormData,
-  type TaskFormValue,
-} from "../features/tasks/TaskFormFields";
+import { TaskEditDrawer } from "../features/tasks/TaskEditDrawer";
+import { TASK_STATUSES, useTaskFormData } from "../features/tasks/TaskFormFields";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { TaskListView, usePhoneTaskSelection } from "../features/tasks/TaskListView";
 import { useLongPress } from "../platform/record-engine/record-table/hooks/useLongPress";
 import { TaskBoardView } from "../features/tasks/TaskBoardView";
 import { TaskScopeBar } from "../features/tasks/TaskScopeBar";
-import { TaskChecklist } from "../features/tasks/TaskChecklist";
-import { TaskDiscussion, TaskStateBanner } from "../features/tasks/TaskDetailExtras";
 import type { TaskViewActions } from "../features/tasks/TaskMenus";
 import {
   isClosedStatus,
@@ -57,7 +48,6 @@ import {
   type TaskRecord,
   type TaskScope,
 } from "../features/tasks/taskModel";
-import type { TaskChecklistItem } from "../../shared/taskChecklist";
 import { useSociety } from "../hooks/useSociety";
 import { formatDate, isPastDue } from "../lib/format";
 import { useIsMobile } from "../lib/useIsMobile";
@@ -65,12 +55,6 @@ import { useIsBottomSheet } from "../lib/useSheetDrag";
 import { TaskViewSummaryButton } from "../features/tasks/TaskViewSheet";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Tooltip } from "../components/Tooltip";
-
-type EditableTaskForm = TaskFormValue & {
-  _id?: Id<"tasks">;
-  tags?: string[];
-  checklist: TaskChecklistItem[];
-};
 
 type TaskLayout = "list" | "engine";
 const LAYOUT_KEY = "societyer:tasks:layout";
@@ -124,9 +108,8 @@ export function TasksPage() {
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<EditableTaskForm | null>(null);
+  const [editingTask, setEditingTask] = useState<TaskRecord | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [saving, setSaving] = useState(false);
   // Current tasks open as a grouped list; the record views (table, board,
   // calendar) stay one click away in the toolbar's view switch.
   const [layout, setLayoutState] = useState<TaskLayout>(() => readStored(LAYOUT_KEY, ["list", "engine"] as const, "list"));
@@ -312,14 +295,7 @@ export function TasksPage() {
 
   const openNew = useCallback(() => {
     if (!canManage) return;
-    setForm({
-      ...makeTaskFormDefaults({
-        committeeId: requestedCommitteeId || undefined,
-        goalId: requestedGoalId || undefined,
-      }),
-      tags: [],
-      checklist: [],
-    });
+    setEditingTask(null);
     setOpen(true);
   }, [requestedCommitteeId, requestedGoalId, canManage]);
 
@@ -368,132 +344,8 @@ export function TasksPage() {
   };
 
   const openEdit = (task: TaskRecord) => {
-    setForm({
-      ...makeTaskFormDefaults({
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        priority: task.priority,
-        assignee: task.assignee,
-        dueDate: task.dueDate,
-        responsibleUserId: task.responsibleUserIds?.[0] ?? "",
-        committeeId: task.committeeId,
-        goalId: task.goalId,
-        meetingId: task.meetingId,
-        agendaItemId: task.agendaItemId,
-        assigneePersonId: task.assigneePersonId,
-        sourceAssignee: task.sourceAssignee,
-        filingId: task.filingId,
-        workflowId: task.workflowId,
-        documentId: task.documentId,
-        commitmentId: task.commitmentId,
-        eventId: task.eventId,
-        completionNote: task.completionNote,
-      }),
-      _id: task._id,
-      tags: task.tags ?? [],
-      checklist: task.checklist ?? [],
-    });
+    setEditingTask(task);
     setOpen(true);
-  };
-
-  /** An existing task's checklist saves on every change; a new task's saves with the form. */
-  const changeChecklist = async (items: TaskChecklistItem[]) => {
-    const id = form?._id;
-    setForm((previous) => (previous ? { ...previous, checklist: items } : previous));
-    if (!id || !canManage) return;
-    try {
-      await update({ id, patch: { checklist: items } });
-    } catch (error) {
-      toast.error("Could not save the checklist", error instanceof Error ? error.message : "Please try again.");
-    }
-  };
-
-  const save = async () => {
-    if (!form || !canManage || saving) return;
-    if (!form.title.trim()) { toast.error("Title is required"); return; }
-    setSaving(true);
-    try {
-      if (form._id) {
-        await update({
-          id: form._id,
-          patch: cleanPatch({
-            title: form.title,
-            description: form.description || undefined,
-            status: form.status,
-            priority: form.priority,
-            assignee: form.assignee || undefined,
-            ...(form.assigneePersonId
-              ? { assigneePersonId: form.assigneePersonId as Id<"peopleDirectory"> }
-              : { clearAssigneePersonId: true }),
-            ...(form.meetingId
-              ? { meetingId: form.meetingId as Id<"meetings"> }
-              : { clearMeetingId: true }),
-            ...(form.meetingId && form.agendaItemId
-              ? { agendaItemId: form.agendaItemId as Id<"agendaItems"> }
-              : { clearAgendaItemId: true }),
-            responsibleUserIds: form.responsibleUserId
-              ? [form.responsibleUserId as Id<"users">]
-              : [],
-            dueDate: form.dueDate || undefined,
-            committeeId: form.committeeId
-              ? (form.committeeId as Id<"committees">)
-              : undefined,
-            goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
-            filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
-            workflowId: form.workflowId
-              ? (form.workflowId as Id<"workflows">)
-              : undefined,
-            documentId: form.documentId
-              ? (form.documentId as Id<"documents">)
-              : undefined,
-            commitmentId: form.commitmentId
-              ? (form.commitmentId as Id<"commitments">)
-              : undefined,
-            eventId: form.eventId || undefined,
-            completionNote: form.completionNote || undefined,
-            completedByUserId:
-              form.status === "Done" && currentUserId ? currentUserId : undefined,
-          }),
-        });
-        setOpen(false);
-        toast.success("Task updated", form.title);
-        return;
-      }
-
-      await create({
-        societyId: society._id,
-        title: form.title,
-        description: form.description || undefined,
-        status: form.status,
-        priority: form.priority,
-        assignee: form.assignee || undefined,
-        assigneePersonId: form.assigneePersonId ? (form.assigneePersonId as Id<"peopleDirectory">) : undefined,
-        meetingId: form.meetingId ? (form.meetingId as Id<"meetings">) : undefined,
-        agendaItemId: form.meetingId && form.agendaItemId ? (form.agendaItemId as Id<"agendaItems">) : undefined,
-        responsibleUserIds: form.responsibleUserId
-          ? [form.responsibleUserId as Id<"users">]
-          : undefined,
-        dueDate: form.dueDate || undefined,
-        committeeId: form.committeeId
-          ? (form.committeeId as Id<"committees">)
-          : undefined,
-        goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
-        filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
-        workflowId: form.workflowId ? (form.workflowId as Id<"workflows">) : undefined,
-        documentId: form.documentId ? (form.documentId as Id<"documents">) : undefined,
-        commitmentId: form.commitmentId
-          ? (form.commitmentId as Id<"commitments">)
-          : undefined,
-        eventId: form.eventId || undefined,
-        tags: form.tags ?? [],
-        checklist: form.checklist.length ? form.checklist : undefined,
-      });
-      setOpen(false);
-      toast.success("Task created", form.title);
-    } catch (error) {
-      toast.error("Could not save task", error instanceof Error ? error.message : "Please try again.");
-    } finally { setSaving(false); }
   };
 
   const confirmDelete = async (id: Id<"tasks">, title: string) => {
@@ -997,98 +849,15 @@ export function TasksPage() {
         </div>
       )}
 
-      <Drawer
-        open={open}
+      {open && <TaskEditDrawer
+        task={editingTask}
+        societyId={society._id}
+        data={formData}
+        canManage={canManage}
+        initialValues={{ committeeId: requestedCommitteeId || undefined, goalId: requestedGoalId || undefined }}
         onClose={() => setOpen(false)}
-        title={form?._id ? (canManage ? "Edit task" : "View task") : "New task"}
-        footer={
-          <>
-            {form?._id && (
-              <button
-                className="btn btn--danger"
-                style={{ marginRight: "auto" }}
-                disabled={!canManage}
-                onClick={async () => {
-                  if (!form._id) return;
-                  const approved = await confirm({
-                    title: "Delete task?",
-                    message: `"${form.title}" will be permanently removed.`,
-                    confirmLabel: "Delete",
-                    tone: "danger",
-                  });
-                  if (!approved) return;
-                  await remove({ id: form._id });
-                  toast.success("Task deleted");
-                  setOpen(false);
-                }}
-              >
-                Delete
-              </button>
-            )}
-            <button className="btn" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form?.title.trim()}>
-              {saving ? "Saving…" : form?._id ? "Save" : "Create"}
-            </button>
-          </>
-        }
-      >
-        {form && (
-          <>
-            {!form._id && (
-              <p
-                className="muted"
-                style={{
-                  fontSize: "var(--fs-sm)",
-                  marginTop: 0,
-                  marginBottom: 12,
-                }}
-              >
-                Use a task for internal work your board or staff needs to do. Legal or
-                regulatory dates belong in Deadlines; promises to funders or partners
-                belong in Commitments.
-              </p>
-            )}
-            {form._id && (() => {
-              const task = records.find((record) => record._id === form._id);
-              return task ? (
-                <TaskStateBanner
-                  task={task}
-                  canManage={canManage}
-                  onReopen={() => { void viewActions.setStatus(task, "Todo"); setForm((previous) => previous ? { ...previous, status: "Todo" } : previous); }}
-                  onRescheduleToday={() => { const today = isoDay(startOfToday()); void viewActions.setDue(task, today); setForm((previous) => previous ? { ...previous, dueDate: today } : previous); }}
-                />
-              ) : null;
-            })()}
-            {form._id && (() => {
-              const task = records.find((record) => record._id === form._id);
-              return task && (isHistoricalSourceAction(task) || task.sourceObservations?.length || task.meetingId) ? (
-                <HistoricalActionSource
-                  task={task}
-                  meetingTitle={task.meetingIdLabel}
-                  onPromote={canManage && isHistoricalSourceAction(task) ? async () => { await promoteToCurrent(task); setOpen(false); } : undefined}
-                />
-              ) : null;
-            })()}
-            <fieldset disabled={!canManage || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-            <TaskFormFields
-              readOnly={!canManage}
-              value={form}
-              onChange={(patch) =>
-                setForm((previous) =>
-                  previous ? { ...previous, ...patch } : previous,
-                )
-              }
-              data={formData}
-              mode={form._id ? "edit" : "create"}
-            />
-            </fieldset>
-            <TaskChecklist items={form.checklist} onChange={(items) => void changeChecklist(items)} readOnly={!canManage} />
-            {form._id && <TaskDiscussion taskId={String(form._id)} />}
-          </>
-        )}
-      </Drawer>
+        onPromote={promoteToCurrent}
+      />}
     </div>
   );
 }
@@ -1358,8 +1127,6 @@ function withRelationOptions<F extends { name: string; config?: unknown }>(
   return { ...field, config: { ...((field.config as object | undefined) ?? {}), options } };
 }
 
-const NOT_APPLIED = Symbol("not applied");
-
 /**
  * Other pages link here as /app/tasks?committeeId=… or ?goalId=…. Those land
  * as ordinary table filters (removable chips). They are re-applied whenever
@@ -1371,20 +1138,23 @@ function TaskUrlFilters({ committeeId, goalId }: { committeeId: string; goalId: 
   const filters = useRecordTableState((s) => s.filters);
   const savedView = useRecordTableState((s) => s.savedView);
   const [, setSearchParams] = useSearchParams();
-  const appliedFor = useRef<unknown>(NOT_APPLIED);
+  const appliedFor = useRef<{ view: unknown; handle: unknown; signature: string } | null>(null);
   useEffect(() => {
     const wanted = [
       { fieldName: "committeeId", value: committeeId },
       { fieldName: "goalId", value: goalId },
     ].filter((entry) => entry.value);
-    if (wanted.length === 0) return;
-    if (appliedFor.current === savedView) {
+    const signature = JSON.stringify([committeeId, goalId]);
+    const applied = appliedFor.current;
+    if (applied?.view === savedView && applied.handle === handle && applied.signature === signature) {
       const removed = wanted.filter((entry) => !filters.some((filter) => filter.id === `url-${entry.fieldName}`));
       if (removed.length === 0) return;
       setSearchParams(
         (previous) => {
           const next = new URLSearchParams(previous);
-          for (const entry of removed) next.delete(entry.fieldName);
+          for (const entry of removed) {
+            if (next.get(entry.fieldName) === entry.value) next.delete(entry.fieldName);
+          }
           return next;
         },
         { replace: true },
@@ -1396,9 +1166,11 @@ function TaskUrlFilters({ committeeId, goalId }: { committeeId: string; goalId: 
       return column ? [{ ...entry, fieldMetadataId: column.fieldMetadataId }] : [];
     });
     if (additions.length < wanted.length) return; // wait for the view to load
-    appliedFor.current = savedView;
+    appliedFor.current = { view: savedView, handle, signature };
+    // Only replace filters owned by the URL. A manually added filter on the
+    // same field remains the user's independent constraint.
     const existing = handle.get().filters.filter(
-      (filter) => !additions.some((addition) => addition.fieldMetadataId === filter.fieldMetadataId),
+      (filter) => filter.id !== "url-committeeId" && filter.id !== "url-goalId",
     );
     handle.get().setFilters([
       ...existing,
@@ -1411,10 +1183,4 @@ function TaskUrlFilters({ committeeId, goalId }: { committeeId: string; goalId: 
     ]);
   }, [columns, committeeId, filters, goalId, handle, savedView, setSearchParams]);
   return null;
-}
-
-function cleanPatch<T extends Record<string, unknown>>(source: T): T {
-  return Object.fromEntries(
-    Object.entries(source).filter(([, value]) => value !== undefined),
-  ) as T;
 }

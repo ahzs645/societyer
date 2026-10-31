@@ -4,7 +4,7 @@ import { WhisperXQueue } from "./WhisperXQueue";
 import { PagedTranscriptToolbar } from "./PagedTranscriptToolbar";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
@@ -32,7 +32,7 @@ import {
 } from "./useTranscriptWorkspaceState";
 import { handleWorkspaceKeyDown } from "./useTranscriptNavigation";
 import { activeIndex } from "./activeIndex";
-import { citationsBySegment, type LinkableMotion } from "./transcriptLinks";
+import { linkedTranscriptRange, citationsBySegment, type LinkableMotion } from "./transcriptLinks";
 import { useMinutesLinks, type LinkMinutes } from "./useMinutesLinks";
 import { useInCameraMarks } from "./useInCameraMarks";
 import { InCameraNote } from "./InCameraTranscript";
@@ -80,13 +80,24 @@ export function TranscriptWorkspace({
   /** Where an untimed transcript is kept and edited, shown with its text. */
   plainTextNote?: ReactNode;
 }) {
+  const location = useLocation();
   const headerTranscript = transcript;
   const jobId = transcript?.pagedJobId;
+  const pagedUnavailable = Boolean(jobId && isLocalDataRuntime());
   const [cursor, setCursor] = useState({ jobId: "", index: 0 });
   const pageIndex = cursor.jobId === jobId ? Math.min(cursor.index, Math.max(0, (transcript?.pageCount ?? 1) - 1)) : 0;
   const setPageIndex = useCallback((index: number) => setCursor({ jobId: jobId ?? "", index }), [jobId]);
   const convex = useConvex();
-  const page = useQuery(hostedApi.meetingTranscription.page, jobId ? { jobId, page: pageIndex } : "skip") as { segments: TranscriptSegment[]; revision: number; startSec: number; endSec: number } | undefined;
+  useEffect(() => {
+    const range = linkedTranscriptRange(location.search);
+    if (!jobId || !range || pagedUnavailable) return;
+    let cancelled = false;
+    void convex.query(hostedApi.meetingTranscription.pageAtTime, { jobId, seconds: range.start })
+      .then((index: number) => { if (!cancelled) setPageIndex(index); })
+      .catch(() => { /* The page query reports unavailable data; keep the current page usable. */ });
+    return () => { cancelled = true; };
+  }, [jobId, location.search, convex, setPageIndex, pagedUnavailable]);
+  const page = useQuery(hostedApi.meetingTranscription.page, jobId && !pagedUnavailable ? { jobId, page: pageIndex } : "skip") as { segments: TranscriptSegment[]; revision: number; startSec: number; endSec: number } | undefined;
   if (jobId) transcript = { ...transcript!, segments: page?.segments ?? EMPTY_SEGMENTS };
   const workspace = useTranscriptPlayerLayout();
   const { can } = usePermissions();
@@ -138,6 +149,15 @@ export function TranscriptWorkspace({
     if (!jobId || !page || !source || !clock.playing || clock.currentTime >= page.startSec && clock.currentTime <= page.endSec) return;
     void convex.query(hostedApi.meetingTranscription.pageAtTime, { jobId, seconds: clock.currentTime }).then((index: number) => { if (index !== pageIndex) setPageIndex(index); });
   }, [jobId, page, source, clock.currentTime, clock.playing, convex, pageIndex, headerTranscript?.pageCount, setPageIndex]);
+  if (pagedUnavailable) return <section className="transcript-workspace" aria-label="Transcript workspace">
+    <p role="alert">This transcript uses hosted pages that are unavailable in this local workspace. Open the connected workspace to read or export them, then import a timed local copy here. No paged edits can be saved on this device.</p>
+    {canWrite && <label className="field"><span>Import a local transcript copy (VTT, SRT or Whisper JSON)</span>
+      <input type="file" accept=".vtt,.srt,.json" disabled={importing} onChange={(event) => {
+        const file = event.target.files?.[0]; event.target.value = ""; if (file) void importFile(file);
+      }} />
+    </label>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
   return (
     <section
       ref={workspace}
@@ -146,7 +166,7 @@ export function TranscriptWorkspace({
       onKeyDown={(event) => handleWorkspaceKeyDown(event, Boolean(source), clock.toggle, skip)}
     >
       <WhisperXQueue societyId={societyId} meetingId={meetingId} transcript={headerTranscript} />
-      {jobId && <PagedTranscriptToolbar jobId={jobId} page={pageIndex} pageCount={headerTranscript?.pageCount ?? 1} segmentCount={headerTranscript?.segmentCount ?? 0} onPage={setPageIndex} speakers={speakers} />}
+      {jobId && <PagedTranscriptToolbar key={jobId} meetingId={meetingId} minutes={minutes} sourceRevision={headerTranscript?.contentRevision} onExported={announce} jobId={jobId} page={pageIndex} pageCount={headerTranscript?.pageCount ?? 1} segmentCount={headerTranscript?.segmentCount ?? 0} onPage={setPageIndex} speakers={speakers} />}
       {jobId && !page && <p role="status">Loading transcript page…</p>}
       <TranscriptWorkspaceHeader
         meetingId={meetingId}
@@ -167,7 +187,7 @@ export function TranscriptWorkspace({
         importing={importing}
         importFile={review.importFile}
         setRecording={setRecording}
-        exportMenu={<TranscriptExportMenu meetingId={meetingId} transcript={transcript} minutes={minutes} onExported={announce} />}
+        exportMenu={!jobId && <TranscriptExportMenu meetingId={meetingId} transcript={transcript} minutes={minutes} sourceKey={headerTranscript?.contentRevision ?? headerTranscript?._id} onExported={announce} />}
       />
       <TranscriptStatus notice={feedback.notice} undo={feedback.undo} />
       <TranscriptNotices

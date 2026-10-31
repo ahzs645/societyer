@@ -27,6 +27,7 @@ export type StaticCommand = {
   icon: ComponentType<{ size?: number | string }>;
   /** Module gate — command is hidden when the module is disabled. */
   module?: ModuleKey;
+  permission?: string;
   run: () => void | Promise<void>;
 };
 
@@ -45,6 +46,7 @@ export function useStaticCommands(): StaticCommand[] {
     () => [
       {
         id: "action-create-meeting",
+        permission: "meetings:write",
         label: "Create meeting",
         icon: Calendar,
         // The GlobalMeetingCreate popup (mounted in Layout) listens for this
@@ -53,12 +55,14 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-mark-filing-filed",
+        permission: "filings:write",
         label: "Mark filing filed",
         icon: FileCheck2,
         run: () => navigate("/app/filings?intent=mark-filed"),
       },
       {
         id: "action-add-filing",
+        permission: "filings:write",
         label: "Add filing",
         icon: FilePlus,
         // The Filings page opens its "Add filing" form on ?intent=add.
@@ -66,12 +70,14 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-generate-agm-package",
+        permission: "meetings:write",
         label: `Generate ${meetingLabel} package`,
         icon: FileCog,
         run: () => navigate("/app/meetings?intent=generate-agm-package&type=AGM"),
       },
       {
         id: "action-draft-minutes",
+        permission: "minutes:write",
         label: "Draft minutes",
         icon: PenLine,
         // Open the picker so the user explicitly chooses which meeting to
@@ -80,6 +86,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-add-motion",
+        permission: "motions:write",
         label: "Add motion",
         icon: Gavel,
         // Opens the motion backlog composer (Motions → Tabled) on ?intent=add.
@@ -87,6 +94,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-add-task",
+        permission: "tasks:write",
         label: "Add task",
         icon: ListTodo,
         // The GlobalTaskCreate drawer (mounted in Layout) listens for this
@@ -95,6 +103,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-add-commitment",
+        permission: "commitments:write",
         label: "Add commitment",
         icon: ClipboardList,
         // The GlobalCommitmentCreate popup (mounted in Layout) listens for this
@@ -103,6 +112,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-add-agreement",
+        permission: "agreements:write",
         label: "Add agreement",
         icon: FileSignature,
         // Hidden with the Agreements register; the register opens its create drawer on ?intent=add.
@@ -111,6 +121,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-add-asset",
+        permission: "financials:write",
         label: "Add asset",
         icon: Package,
         // Hidden with the Asset register, like its navigation and routes.
@@ -121,6 +132,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-new-transaction-rule",
+        permission: "financials:write",
         label: "New transaction rule",
         icon: Zap,
         // The Transaction rules page opens a blank rule editor on ?intent=new.
@@ -128,6 +140,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-invite-teammate",
+        permission: "users:write",
         label: "Invite teammate",
         icon: UserPlus,
         // The Users page opens its "Invite a user" form on ?intent=invite.
@@ -135,6 +148,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-request-director-attestation",
+        permission: "attestations:write",
         label: "Request director attestation",
         icon: ShieldCheck,
         module: "attestations",
@@ -142,12 +156,14 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-export-minute-book",
+        permission: "exports:download",
         label: "Export minute book",
         icon: Download,
         run: () => navigate("/app/minute-book?intent=export"),
       },
       {
         id: "action-start-inspection-response",
+        permission: "documents:write",
         label: "Start inspection response",
         icon: Eye,
         module: "recordsInspection",
@@ -157,6 +173,7 @@ export function useStaticCommands(): StaticCommand[] {
         ? [
             {
               id: "action-seed-demo",
+        permission: "settings:write",
               label: "Seed demo society",
               icon: Sparkles,
               run: async () => {
@@ -173,6 +190,7 @@ export function useStaticCommands(): StaticCommand[] {
               ? [
                   {
                     id: "action-seed-shared-views",
+        permission: "settings:write",
                     label: "Seed governance shared views",
                     icon: Settings,
                     run: async () => {

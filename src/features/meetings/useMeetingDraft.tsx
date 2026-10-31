@@ -8,11 +8,11 @@ import { useConfirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { createMeetingDraftJournal, meetingDraftIdentityKey, type MeetingDraftIdentity, type MeetingDraftState } from "./lib/meetingDraftStore";
 
-type Scope = { identity: MeetingDraftIdentity; active: () => boolean };
+type Scope = { identity: MeetingDraftIdentity; active: () => boolean; recordLabel?: string };
 export const MeetingDraftScopeContext = createContext<Scope | null>(null);
 
 /** Bound membership/identity comes from the existing auth and workspace hooks. */
-export function useMeetingDraftScope(meetingId: string | undefined, societyId: string | undefined, userId: string | null) {
+export function useMeetingDraftScope(meetingId: string | undefined, societyId: string | undefined, userId: string | null, recordLabel = "meeting") {
   const auth = useAuth();
   const runtime = isStaticDemoRuntime() ? "demo" : isLocalDataRuntime() ? `local:${getRuntimeMode()}` : `convex:${import.meta.env.VITE_CONVEX_URL ?? ""}`;
   const accountId = `${auth.mode}:${auth.session?.user.id ?? userId ?? ""}`;
@@ -28,11 +28,11 @@ export function useMeetingDraftScope(meetingId: string | undefined, societyId: s
     return () => { mounted.current = false; };
   }, []);
   return useMemo<Scope | null>(() => identity ? {
-    identity,
+    identity, recordLabel,
     active: () => mounted.current && latestKey.current === key && getStoredUserId() === identity.userId && getStoredSocietyId() === identity.societyId,
     // Identity is a tuple; changing any account/workspace/runtime field creates a new scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  } : null, [key]);
+  } : null, [key, recordLabel]);
 }
 
 const EMPTY: MeetingDraftState<never> = { recoveries: [], error: null, savedOnDevice: false };
@@ -44,7 +44,7 @@ export function useMeetingDraft<T>(editor: string, valid: (value: unknown) => va
   const validator = useRef(valid);
   validator.current = valid;
   const journal = useMemo(() => scope ? createMeetingDraftJournal<T>({
-    identity: scope.identity, editor, active: scope.active,
+    identity: scope.identity, editor, active: scope.active, recordLabel: scope.recordLabel,
     storage: () => window.localStorage,
     valid: (value): value is T => validator.current(value),
   }) : null, [scope, editor]);
@@ -60,12 +60,13 @@ export function useMeetingDraft<T>(editor: string, valid: (value: unknown) => va
   return { journal, ...state };
 }
 
-export function MeetingDraftRecovery<T>({ draft, label, onRestore, disabled = false, disabledReason }: {
+export function MeetingDraftRecovery<T>({ draft, label, onRestore, disabled = false, disabledReason, recordLabel = "meeting" }: {
   draft: ReturnType<typeof useMeetingDraft<T>>;
   label: string;
   onRestore: (payload: T) => void;
   disabled?: boolean;
   disabledReason?: string;
+  recordLabel?: string;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -83,7 +84,7 @@ export function MeetingDraftRecovery<T>({ draft, label, onRestore, disabled = fa
         }}>Restore {label} draft</button>
         <button className="btn-action" type="button" onClick={async () => {
           try {
-            if (await confirm({ title: `Discard this ${label} recovery copy?`, message: "This removes only the selected copy from this device. The saved meeting and other drafts stay unchanged.", confirmLabel: "Discard recovery copy", tone: "warn" })) draft.journal!.discard(entry);
+            if (await confirm({ title: `Discard this ${label} recovery copy?`, message: `This removes only the selected copy from this device. The saved ${recordLabel} and other drafts stay unchanged.`, confirmLabel: "Discard recovery copy", tone: "warn" })) draft.journal!.discard(entry);
           } catch (error) { toast.error("Could not discard the recovery copy", error instanceof Error ? error.message : String(error)); }
         }}>Discard recovery copy</button>
       </div>)}

@@ -187,9 +187,9 @@ import "./theme/palette.css";
 import "./theme/tokens.css";
 import "./styles/index.scss";
 
-if (import.meta.env.VITE_E2E_TEST_HARNESS === "1") {
-  void import("./lib/e2eHarness");
-}
+const E2ERouterBridge = import.meta.env.VITE_E2E_TEST_HARNESS === "1"
+  ? React.lazy(() => import("./lib/e2eHarness").then((module) => ({ default: module.E2ERouterBridge })))
+  : null;
 
 applyThemePreference(getStoredThemePreference());
 installStaleBuildRecovery();
@@ -365,6 +365,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         basename={routerBasename}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
+        {E2ERouterBridge && <Suspense fallback={null}><E2ERouterBridge /></Suspense>}
         <Suspense fallback={<PageLoader />}>
         <Routes>
           {!appShellOwnsRoot && <Route path="/" element={<LandingEntry />} />}

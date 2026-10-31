@@ -1,4 +1,5 @@
 import { Fragment, memo, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { Menu } from "../../../components/Menu";
 import {
@@ -109,6 +110,7 @@ function SegmentActions({
   onMarkStart: (index: number) => void;
   onCopy: (text: string) => void;
 }) {
+  const location = useLocation();
   return (
     <Menu
       label={`Segment actions at ${formatTranscriptTime(segment.startSec)}`}
@@ -151,7 +153,7 @@ function SegmentActions({
             {
               id: "link",
               label: "Copy link to this moment",
-              onSelect: () => onCopy(transcriptLink(segment.startSec, segment.endSec)),
+              onSelect: () => onCopy(transcriptLink(segment.startSec, segment.endSec, location)),
             },
           ],
         },

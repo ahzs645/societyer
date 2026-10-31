@@ -1,3 +1,4 @@
+import { useNotificationActivation } from "../features/notifications/useNotificationActivation";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useEffect, useRef, useState } from "react";
@@ -31,7 +32,7 @@ export function NotificationBell() {
     api.notifications.unreadCount,
     canRead && society ? { societyId: society._id } : "skip",
   );
-  const markRead = usePermissionedMutation(api.notifications.markRead, canRead);
+  const activateNotification = useNotificationActivation();
   const markAllRead = usePermissionedMutation(api.notifications.markAllRead, canRead);
   const dismiss = usePermissionedMutation(api.notifications.dismiss, canRead);
   const dismissAll = usePermissionedMutation(api.notifications.dismissAll, canRead);
@@ -199,32 +200,26 @@ export function NotificationBell() {
                   ? "var(--warn)"
                   : "var(--text-secondary)";
               const body = (
-                <div
-                  className={`notif-row${n.readAt ? "" : " is-unread"}`}
-                  onClick={async () => {
-                    if (canRead && !n.readAt) await updateInbox(() => markRead({ id: n._id }));
-                    setOpen(false);
-                  }}
-                >
+                <>
                   <Icon size={14} style={{ color, flexShrink: 0, marginTop: 2 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "var(--fs-md)", fontWeight: 500 }}>{n.title}</div>
+                  <span style={{ flex: 1, minWidth: 0, display: "block" }}>
+                    <span style={{ display: "block", fontSize: "var(--fs-md)", fontWeight: 500 }}>{n.title}</span>
                     {n.body && (
-                      <div
+                      <span
                         className="muted"
-                        style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}
+                        style={{ display: "block", fontSize: "var(--fs-sm)", marginTop: 2 }}
                       >
                         {n.body}
-                      </div>
+                      </span>
                     )}
-                    <div
+                    <span
                       className="muted"
-                      style={{ fontSize: "var(--fs-xs)", marginTop: 4, fontVariantNumeric: "tabular-nums" }}
+                      style={{ display: "block", fontSize: "var(--fs-xs)", marginTop: 4, fontVariantNumeric: "tabular-nums" }}
                     >
                       {formatDateTime(n.createdAtISO)}
-                    </div>
-                  </div>
-                </div>
+                    </span>
+                  </span>
+                </>
               );
               const clearButton = (
                 <Tooltip content="Clear notification">
@@ -266,11 +261,11 @@ export function NotificationBell() {
               return (
                 <div key={n._id} style={{ position: "relative" }}>
                   {n.linkHref ? (
-                    <Link to={n.linkHref} style={{ color: "inherit", textDecoration: "none" }}>
-                      {body}
-                    </Link>
+                    <Link to={n.linkHref} className={`notif-row notif-row--activation${n.readAt ? "" : " is-unread"}`}
+                      onClick={() => activateNotification(n, dismissPanel)}>{body}</Link>
                   ) : (
-                    body
+                    <button type="button" className={`notif-row notif-row--activation${n.readAt ? "" : " is-unread"}`}
+                      onClick={() => activateNotification(n, dismissPanel)}>{body}</button>
                   )}
                   {snoozeButton}
                   {clearButton}

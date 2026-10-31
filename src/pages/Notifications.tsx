@@ -1,3 +1,4 @@
+import { useNotificationActivation } from "../features/notifications/useNotificationActivation";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { usePermissions } from "../hooks/usePermissions";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -48,6 +49,7 @@ export function NotificationsPage() {
   const removeAllDismissed = useMutation(api.notifications.removeAllDismissed);
   const sendDigest = useAction(api.notifications.sendDigest);
   const toast = useToast();
+  const activateNotification = useNotificationActivation();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   // "All" is the inbox — everything not cleared — so its count matches the
@@ -222,7 +224,8 @@ export function NotificationsPage() {
               </Badge></span>
               <div className="notif-row__main">
                 <div style={{ fontWeight: 500 }}>
-                  {n.linkHref ? <Link to={n.linkHref}>{n.title}</Link> : n.title}
+                  {n.linkHref ? <Link to={n.linkHref} onClick={() => activateNotification(n)}>{n.title}</Link>
+                    : <button type="button" className="notif-title-action" onClick={() => activateNotification(n)}>{n.title}</button>}
                   {!n.readAt && (
                     <span
                       style={{

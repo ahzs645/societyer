@@ -46,8 +46,10 @@ function parseISO(v: string): Date | null {
   if (!v) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
   if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return isNaN(d.getTime()) ? null : d;
+  const d = new Date(0);
+  d.setFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setHours(0, 0, 0, 0);
+  return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]) ? d : null;
 }
 
 function toISO(d: Date): string {
@@ -107,6 +109,7 @@ export function DatePicker({
   const placeholder = placeholderProp ?? "Pick a date";
   const selected = parseISO(value);
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const [open, setOpen] = useState(defaultOpen);
   const wasOpenRef = useRef(defaultOpen);
   useEffect(() => {
@@ -118,6 +121,7 @@ export function DatePicker({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [quick, setQuick] = useState<"month" | "year" | null>(null);
+  const [yearCursor, setYearCursor] = useState(viewMonth.getFullYear());
   // Typed entry (O-9): reaching a date years back by clicking is slow, so the
   // popover also takes a typed date, validated before it is applied.
   const [typed, setTyped] = useState("");
@@ -175,6 +179,7 @@ export function DatePicker({
       // No value yet: start on today when it is in view (and allowed),
       // otherwise on the first of the month.
       const now = new Date();
+      now.setHours(0, 0, 0, 0);
       const todayAllowed = !(minD && now < minD) && !(maxD && now > maxD);
       const todayInView = now.getFullYear() === viewMonth.getFullYear() && now.getMonth() === viewMonth.getMonth();
       setFocusDate(selected ?? (todayInView && todayAllowed
@@ -279,6 +284,10 @@ export function DatePicker({
     setFocusDate(new Date(target.getFullYear(), target.getMonth(), day));
   };
   const shiftMonth = (delta: number) => goToMonth(viewMonth.getFullYear(), viewMonth.getMonth() + delta);
+  const shiftRange = (delta: number) => {
+    if (quick === "year") setYearCursor((year) => Math.max(YEAR_RANGE + 1, Math.min(9999 - YEAR_RANGE, year + delta * (YEAR_RANGE * 2 + 1))));
+    else shiftMonth(delta);
+  };
 
   const pick = (d: Date) => {
     if (minD && d < minD) return;
@@ -524,7 +533,7 @@ export function DatePicker({
                 <button
                   type="button"
                   className="calendar__nav"
-                  onClick={() => shiftMonth(-1)}
+                  onClick={() => shiftRange(-1)}
                   aria-label={quick === "year" ? "Previous year range" : "Previous month"}
                 >
                   <ChevronLeft size={14} />
@@ -541,7 +550,7 @@ export function DatePicker({
                   <button
                     type="button"
                     className={`calendar__title-btn${quick === "year" ? " is-open" : ""}`}
-                    onClick={() => setQuick((q) => (q === "year" ? null : "year"))}
+                    onClick={() => { setYearCursor(viewMonth.getFullYear()); setQuick((q) => (q === "year" ? null : "year")); }}
                     aria-label="Choose year"
                   >
                     {viewMonth.getFullYear()}
@@ -550,7 +559,7 @@ export function DatePicker({
                 <button
                   type="button"
                   className="calendar__nav"
-                  onClick={() => shiftMonth(1)}
+                  onClick={() => shiftRange(1)}
                   aria-label={quick === "year" ? "Next year range" : "Next month"}
                 >
                   <ChevronRight size={14} />
@@ -574,7 +583,8 @@ export function DatePicker({
                 </div>
               ) : quick === "year" ? (
                 <div className="calendar__quick calendar__quick--years" role="grid" aria-label="Year">
-                  {Array.from({ length: YEAR_RANGE * 2 + 1 }, (_, i) => viewMonth.getFullYear() - YEAR_RANGE + i).map(
+                  <span className="sr-only" aria-live="polite">{yearCursor - YEAR_RANGE} to {yearCursor + YEAR_RANGE}</span>
+                  {Array.from({ length: YEAR_RANGE * 2 + 1 }, (_, i) => yearCursor - YEAR_RANGE + i).map(
                     (y) => (
                       <button
                         key={y}
@@ -628,7 +638,7 @@ export function DatePicker({
                 <span className="muted calendar__keys" style={{ fontSize: "var(--fs-xxs)" }}>
                   ← → · PgUp/PgDn · T = today
                 </span>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => pick(today)}>
+                <button type="button" className="btn btn--ghost btn--sm" disabled={Boolean((minD && today < minD) || (maxD && today > maxD))} onClick={() => pick(today)}>
                   Today
                 </button>
                 {clearable && value && (

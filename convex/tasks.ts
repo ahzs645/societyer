@@ -69,6 +69,7 @@ export const create = authorizedMutation("tasks:create", mutation)({
 export const update = authorizedMutation("tasks:update", mutation)({
   args: {
     id: v.id("tasks"),
+    expected: v.optional(v.record(v.string(), v.any())),
     patch: v.object({
       title: v.optional(v.string()),
       description: v.optional(v.string()),
@@ -98,6 +99,7 @@ export const update = authorizedMutation("tasks:update", mutation)({
       // Convex strips `undefined` patch fields from the wire, so unlinking a
       // task from its meeting needs an explicit flag.
       clearMeetingId: v.optional(v.boolean()),
+      clearFields: v.optional(v.array(v.union(v.literal("description"), v.literal("assignee"), v.literal("assigneePersonId"), v.literal("dueDate"), v.literal("committeeId"), v.literal("goalId"), v.literal("meetingId"), v.literal("agendaItemId"), v.literal("filingId"), v.literal("workflowId"), v.literal("documentId"), v.literal("commitmentId"), v.literal("eventId"), v.literal("completionNote")))),
     }),
   },
   returns: v.any(),
