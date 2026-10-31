@@ -64,7 +64,8 @@ import { useDialogFocus } from "../lib/useDialogFocus";
 import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
-import { navParentForRoute } from "../lib/navTree";
+import { navParentForRoute, NAV_TREE_ROUTES } from "../lib/navTree";
+import { canPinFavorite } from "../lib/favoriteProjection";
 import { ROUTE_SHORTCUTS, type Shortcut } from "../lib/shortcutsRegistry";
 import { ShortcutHint } from "./ShortcutHint";
 
@@ -525,7 +526,7 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
   const createCommands = useCreateCommands();
   const actions = useMemo<CommandItem[]>(
     () =>
-      [...createCommands, ...staticCommands.filter((command) => !CREATE_COMMAND_IDS.has(command.id))].map((command: { id: string; label: string; icon: CommandItem["icon"]; module?: ModuleKey; keywords?: string[]; run: () => void | Promise<void> }) => ({
+      [...createCommands, ...staticCommands.filter((command) => !CREATE_COMMAND_IDS.has(command.id) && (!command.permission || can(command.permission)))].map((command: { id: string; label: string; icon: CommandItem["icon"]; module?: ModuleKey; keywords?: string[]; run: () => void | Promise<void> }) => ({
         id: command.id,
         label: command.label,
         icon: command.icon,
@@ -534,16 +535,18 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
         ...(command.keywords ? { keywords: command.keywords } : {}),
         run: command.run,
       })),
-    [createCommands, staticCommands],
+    [createCommands, staticCommands, can],
   );
 
   const pinnedCommandSet = useMemo(() => new Set(pinnedCommandIds), [pinnedCommandIds]);
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
 
-  // Anything the user can run from the palette can be pinned: navigation
-  // entries (have `to`), action entries (have `run`). Recent rows preserve
-  // both fields when they're spread, so they fall in here too.
-  const canPinItem = (item: CommandItem): boolean => Boolean(item.to || item.run) && !item.id.endsWith(ASK_QUERY_SUFFIX);
+  // Only stable pages and static commands have a durable sidebar resolver.
+  // Record/search results and session-bound actions must not offer a false pin.
+  const pinnableRoutes = useMemo(() => new Set(NAV_TREE_ROUTES), []);
+  const pinnableCommands = useMemo(() => new Set(staticCommands.map((command) => command.id)), [staticCommands]);
+  const canPinItem = (item: CommandItem): boolean =>
+    !item.id.endsWith(ASK_QUERY_SUFFIX) && canPinFavorite(item, pinnableRoutes, pinnableCommands);
 
   const isItemPinned = (item: CommandItem): boolean => {
     if (item.to) return pinnedRouteSet.has(item.to);
@@ -551,6 +554,7 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
   };
 
   const togglePinned = (item: CommandItem) => {
+    if (!canPinItem(item)) return;
     if (item.to) {
       setPinnedRoutes((prev) => {
         const next = prev.includes(item.to!) ? prev.filter((route) => route !== item.to) : [...prev, item.to!];

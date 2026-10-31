@@ -14,8 +14,10 @@ import { fileURLToPath } from "node:url";
 import {
   STATIC_OFFLINE_NOOP_WRITES,
   STATIC_PENDING_WRITES,
+  STATIC_UNSUPPORTED_WRITES,
   isStaticGenericCrud,
 } from "../src/lib/staticConvexParity.ts";
+import { inventoryFrontendWrites, inventoryExplicitDispatch } from "./lib/frontendWriteInventory";
 import { PORTABLE_FUNCTION_NAMES } from "../shared/functions/registry.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -33,48 +35,12 @@ function walk(dir: string): string[] {
   return out;
 }
 
-// (1) Every mutation/action the frontend invokes, as "module:fn". Convex
-// function references can be nested (api.dir.module.fn -> "dir/module:fn"); the
-// last two path segments give the "module:fn" the static mirror dispatches on.
-function collectFrontendWrites(): Map<string, string[]> {
-  const refs = new Map<string, string[]>();
-  const pattern = /use(?:Mutation|Action)\(\s*api((?:\.[a-zA-Z0-9_]+)+)\s*\)/g;
-  for (const file of walk(srcDir)) {
-    const text = readFileSync(file, "utf8");
-    for (const match of text.matchAll(pattern)) {
-      const segments = match[1].split(".").filter(Boolean);
-      if (segments.length < 2) continue;
-      const name = `${segments[segments.length - 2]}:${segments[segments.length - 1]}`;
-      const list = refs.get(name) ?? [];
-      list.push(path.relative(repoRoot, file));
-      refs.set(name, list);
-    }
-  }
-  return refs;
-}
-
-// (2) Names the mirror handles explicitly, i.e. any "module:fn" string literal
-// in the static mirror (handlers are `name === "module:fn"` / switch(name) cases).
-function collectExplicitlyHandled(): Set<string> {
-  // The compatibility barrel delegates to the isolated legacy dispatcher and
-  // its domain sibling modules. Scan every file containing explicit handlers.
-  const mirrorFiles = [
-    staticConvexPath,
-    path.join(srcDir, "lib", "staticLegacyDispatch.ts"),
-    path.join(srcDir, "lib", "staticConvexYcn.ts"),
-  ];
-  const handled = new Set<string>();
-  for (const file of mirrorFiles) {
-    const text = readFileSync(file, "utf8");
-    for (const match of text.matchAll(/["']([a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*)["']/g)) {
-      handled.add(match[1]);
-    }
-  }
-  return handled;
-}
-
-const frontendWrites = collectFrontendWrites();
-const explicitlyHandled = collectExplicitlyHandled();
+const { refs: frontendWrites, unresolved } = inventoryFrontendWrites(walk(srcDir).map((file) => ({
+  fileName: path.relative(repoRoot, file), text: readFileSync(file, "utf8"),
+})));
+const explicitlyHandled = inventoryExplicitDispatch([
+  staticConvexPath, path.join(srcDir, "lib", "staticLegacyDispatch.ts"), path.join(srcDir, "lib", "staticConvexYcn.ts"),
+].map((file) => ({ fileName: file, text: readFileSync(file, "utf8") })));
 
 // Functions ported to the portable ctx.db contract are handled by the live local
 // runtime (PortableRuntime in staticConvex.ts), not the hand-written mirror.
@@ -83,23 +49,25 @@ const portableHandled = new Set(PORTABLE_FUNCTION_NAMES);
 const isHandled = (name: string) =>
   explicitlyHandled.has(name) || isStaticGenericCrud(name) || portableHandled.has(name);
 
-const summary = { handled: 0, noop: 0, pending: 0 };
+const summary = { handled: 0, noop: 0, pending: 0, unsupported: 0 };
 const unclassified: string[] = [];
 
 for (const [name, files] of frontendWrites) {
   if (isHandled(name)) summary.handled++;
   else if (STATIC_OFFLINE_NOOP_WRITES.has(name)) summary.noop++;
   else if (STATIC_PENDING_WRITES.has(name)) summary.pending++;
+  else if (STATIC_UNSUPPORTED_WRITES.has(name)) summary.unsupported++;
   else unclassified.push(`${name}  (called from ${files[0]}${files.length > 1 ? ` +${files.length - 1} more` : ""})`);
 }
 
 // Anti-rot: a ledger entry that is now handled should be removed; an entry no
 // longer called by the frontend is stale.
-const ledger = [...STATIC_OFFLINE_NOOP_WRITES, ...STATIC_PENDING_WRITES];
+const ledger = [...STATIC_OFFLINE_NOOP_WRITES, ...STATIC_PENDING_WRITES, ...STATIC_UNSUPPORTED_WRITES.keys()];
 const nowHandled = ledger.filter((name) => isHandled(name));
 const stale = ledger.filter((name) => !frontendWrites.has(name) && !isHandled(name));
 
 const errors: string[] = [];
+if (unresolved.length) errors.push(`Unresolved frontend write hooks (do not silently omit):\n${unresolved.join("\n")}`);
 if (unclassified.length) {
   errors.push(
     `${unclassified.length} frontend write(s) are neither handled by the static mirror nor classified in staticConvexParity.ts:\n` +
@@ -126,9 +94,9 @@ if (errors.length) {
 }
 
 console.log(
-  `Static-mirror parity ok: ${frontendWrites.size} frontend writes ` +
+  `Static-mirror source classification ok: ${frontendWrites.size} frontend writes ` +
     `(${summary.handled} handled, ${summary.noop} intentional offline no-ops, ` +
-    `${summary.pending} pending/unimplemented).`,
+    `${summary.pending} pending/unimplemented, ${summary.unsupported} explicit capability rejections).`,
 );
 if (summary.pending) {
   console.log(
@@ -136,3 +104,5 @@ if (summary.pending) {
       `They throw in dev and warn in production until a handler is added.`,
   );
 }
+
+console.log("Source classification is not a delivery guarantee. Runtime persistence and explicit unsupported-capability behavior require domain/browser tests.");

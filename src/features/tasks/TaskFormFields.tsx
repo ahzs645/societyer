@@ -33,7 +33,7 @@ export type TaskFormValue = {
   priority: string;
   assignee: string;
   dueDate: string;
-  responsibleUserId: string;
+  responsibleUserIds: string[];
   committeeId: string;
   goalId: string;
   meetingId: string;
@@ -49,7 +49,7 @@ export type TaskFormValue = {
   completionNote: string;
 };
 
-export type TaskFormInitialValues = Partial<TaskFormValue>;
+export type TaskFormInitialValues = Partial<TaskFormValue> & { /** Legacy create callers. */ responsibleUserId?: string };
 
 export function makeTaskFormDefaults(initial?: TaskFormInitialValues): TaskFormValue {
   return {
@@ -59,7 +59,7 @@ export function makeTaskFormDefaults(initial?: TaskFormInitialValues): TaskFormV
     priority: initial?.priority ?? "Medium",
     assignee: initial?.assignee ?? "",
     dueDate: initial?.dueDate ?? "",
-    responsibleUserId: initial?.responsibleUserId ?? "",
+    responsibleUserIds: [...new Set(initial?.responsibleUserIds ?? (initial?.responsibleUserId ? [initial.responsibleUserId] : []))],
     committeeId: initial?.committeeId ?? "",
     goalId: initial?.goalId ?? "",
     meetingId: initial?.meetingId ?? "",
@@ -191,13 +191,21 @@ export function TaskFormFields({
           onChange={(e) => onChange({ assignee: e.target.value })}
         />
       </Field>
-      <Field label="Responsible user">
-        <Select
-          value={value.responsibleUserId}
-          onChange={(v) => onChange({ responsibleUserId: v })}
-          clearable
-          searchable
-          options={(users ?? []).map((u: any) => ({ value: u._id, label: u.displayName }))}
+      <Field label="Responsible users">
+        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+          {value.responsibleUserIds.map((id, index) => {
+            const name = users?.find((user) => String(user._id) === id)?.displayName ?? `Responsible user ${index + 1}`;
+            return <button key={id} type="button" className="btn-action" disabled={readOnly}
+              aria-label={`Remove responsible user ${name}`}
+              onClick={() => onChange({ responsibleUserIds: value.responsibleUserIds.filter((userId) => userId !== id) })}>
+              {name} ×
+            </button>;
+          })}
+        </div>
+        <Select value="" placeholder="Add responsible user" aria-label="Add responsible user"
+          disabled={readOnly || users === undefined} searchable
+          onChange={(id) => { if (id && !value.responsibleUserIds.includes(id)) onChange({ responsibleUserIds: [...value.responsibleUserIds, id] }); }}
+          options={(users ?? []).filter((user) => !value.responsibleUserIds.includes(String(user._id))).map((user) => ({ value: String(user._id), label: user.displayName }))}
         />
       </Field>
       <Field label="Committee (optional)">

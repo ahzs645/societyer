@@ -33,6 +33,7 @@ export const get = authorizedQuery("meetings:get", query)({
 export const create = authorizedMutation("meetings:create", mutation)({
   args: {
     societyId: v.id("societies"),
+    followUp: v.optional(v.object({ requestId: v.string(), sourceMeetingId: v.id("meetings"), sourceMinutesId: v.optional(v.id("minutes")), motionIndexes: v.array(v.number()), sourceMotionFingerprint: v.optional(v.string()) })),
     committeeId: v.optional(v.id("committees")),
     type: v.string(),
     title: v.string(),

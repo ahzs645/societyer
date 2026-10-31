@@ -13,6 +13,7 @@ import { HISTORICAL_ACTION_TAG, PROMOTED_ACTION_TAG, TASK_STATUSES, actionTitleK
 import { normalizeTaskChecklist, type TaskChecklistItem } from "../taskChecklist";
 import { isInCameraSection, sectionTitleAt } from "../minutesPrivacy";
 import { tasksForReader } from "./minutesPrivacy";
+import { assertTaskEditBaseline, normalizedTaskPatch, type TaskClearableField, type TaskEditBaseline } from "../taskEditing";
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -182,8 +183,9 @@ export async function taskCreate(
 
 export async function taskUpdate(
   ctx: PortableMutationCtx,
-  { id, patch }: {
+  { id, patch, expected }: {
     id: string;
+    expected?: TaskEditBaseline;
     patch: {
       title?: string;
       description?: string;
@@ -211,6 +213,7 @@ export async function taskUpdate(
       completionNote?: string;
       checklist?: TaskChecklistItem[];
       clearMeetingId?: boolean;
+      clearFields?: TaskClearableField[];
     };
   },
 ): Promise<void> {
@@ -218,6 +221,8 @@ export async function taskUpdate(
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("tasks not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   const task = await getOwned(ctx, "tasks", id, candidate.societyId);
+  assertTaskEditBaseline(task, expected);
+  const next = normalizedTaskPatch(patch);
   if (patch.committeeId) await getOwned(ctx, "committees", patch.committeeId, candidate.societyId);
   if (patch.assigneePersonId) await getOwned(ctx, "peopleDirectory", patch.assigneePersonId, candidate.societyId);
   if (patch.meetingId) await getOwned(ctx, "meetings", patch.meetingId, candidate.societyId);
@@ -228,18 +233,15 @@ export async function taskUpdate(
   if (patch.commitmentId) await getOwned(ctx, "commitments", patch.commitmentId, candidate.societyId);
   if (patch.eventId) await assertTaskEventReference(ctx, patch.eventId, candidate.societyId);
   if (patch.status && !(TASK_STATUSES as readonly string[]).includes(patch.status)) throw new Error(`Unknown task status "${patch.status}".`);
-  if (patch.agendaItemId) await assertAgendaItem(ctx, patch.agendaItemId, candidate.societyId, patch.clearMeetingId ? undefined : patch.meetingId ?? task.meetingId);
+  if (patch.agendaItemId) await assertAgendaItem(ctx, patch.agendaItemId, candidate.societyId, Object.hasOwn(next, "meetingId") ? next.meetingId as string | undefined : task.meetingId);
   for (const userId of patch.responsibleUserIds ?? []) {
     await getOwned(ctx, "users", userId, candidate.societyId);
   }
-  const { clearMeetingId, clearAssigneePersonId, clearAgendaItemId, ...rest } = patch;
-  const next: Record<string, unknown> = { ...rest };
   if (patch.checklist) next.checklist = normalizeTaskChecklist(patch.checklist);
-  if (clearAgendaItemId || clearMeetingId) next.agendaItemId = undefined;
-  if (clearAssigneePersonId) next.assigneePersonId = undefined;
-  // `undefined` fields are stripped from the wire, so unlinking arrives as an
-  // explicit flag and is converted to an unset here.
-  if (clearMeetingId) next.meetingId = undefined;
+  // Changing a meeting cannot retain an agenda item from the previous meeting.
+  if (patch.meetingId && task.agendaItemId && !Object.hasOwn(next, "agendaItemId")) {
+    await assertAgendaItem(ctx, task.agendaItemId, candidate.societyId, patch.meetingId);
+  }
   if (patch.status && patch.status !== task.status) next.statusHistory = [...(task.statusHistory ?? []), {
     from: task.status, to: patch.status, recordedAtISO: new Date().toISOString(), actorUserId: await principalUserId(ctx, candidate.societyId),
     completionNote: patch.completionNote ?? task.completionNote, priorCompletedAt: task.completedAt,

@@ -445,7 +445,9 @@
     "test:workflow-schedule": "node --import tsx scripts/check-workflow-schedule-timing.ts && node --import tsx scripts/check-workflow-schedule-authorization.ts && node --import tsx scripts/check-hosted-identity.ts",
     "test:meeting-draft-recovery": "node --import tsx scripts/check-meeting-draft-recovery.ts && node scripts/check-meeting-draft-hooks.mjs",
     "test:meeting-integrity": "node --import tsx scripts/check-meeting-integrity-audit.ts",
-    "meetings:audit": "node --import tsx scripts/audit-meeting-integrity.ts"
+    "meetings:audit": "node --import tsx scripts/audit-meeting-integrity.ts",
+    "test:interaction-audit": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:static-parity && npm run test:meeting-draft-recovery && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks",
+    "test:interaction-audit-ui": "playwright test --config playwright.interaction-audit.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

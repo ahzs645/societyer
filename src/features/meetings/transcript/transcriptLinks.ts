@@ -1,20 +1,18 @@
+import { appRouteAbsoluteHref, type AppRouteHrefOptions } from "../../../lib/appRouteHref";
 import type { TranscriptRef } from "../../../../shared/transcriptModel";
 import { motionNumberLabel, motionNumbers, motionShortTitle, type DisplayMotion } from "../../../lib/motionDisplay";
 import { activeIndex, formatTranscriptTime } from "./activeIndex";
 
-export function transcriptLink(start: number, end: number) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("tab", "transcript");
-  url.searchParams.set("t", `${start}-${end}`);
-  return url.href;
+export function transcriptLink(start: number, end: number, location: { pathname: string; search: string }, options: AppRouteHrefOptions = {}) {
+  return appRouteAbsoluteHref(`${location.pathname}${transcriptSearch(location.search, { startSec: start, endSec: end })}`, options);
 }
 
 export function transcriptQuote(text: string, speaker: string, start: number) {
   return `"${text.trim()}" — ${speaker}, ${formatTranscriptTime(start)}`;
 }
 
-export function linkedTranscriptRange() {
-  const value = new URL(window.location.href).searchParams.get("t");
+export function linkedTranscriptRange(search: string) {
+  const value = new URLSearchParams(search).get("t");
   const match = value?.match(/^(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?$/);
   if (!match) return null;
   const start = Number(match[1]);

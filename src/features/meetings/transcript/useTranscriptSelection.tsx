@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { speakerName } from "../../../../shared/transcriptModel";
@@ -35,6 +36,7 @@ export function useTranscriptSelection({
   /** Editors of unapproved minutes can mark the selection as an in-camera session (decision A2). */
   inCamera?: Pick<InCameraProps, "choices" | "canMark" | "onMark">;
 }) {
+  const location = useLocation();
   const [selected, setSelected] = useState<SelectedQuote | null>(null);
   // While the "Link to…" menu is open, choosing an item may collapse the text
   // selection; keep the toolbar (and the menu it anchors) until the menu closes.
@@ -179,7 +181,7 @@ function SelectionToolbar({
       >
         Copy quote
       </button>
-      <button type="button" onClick={() => onCopy(transcriptLink(selected.start, selected.end))}>
+      <button type="button" onClick={() => onCopy(transcriptLink(selected.start, selected.end, location))}>
         Copy link
       </button>
       {linkSections && (
@@ -206,10 +208,12 @@ function SelectionToolbar({
 }
 
 function useLinkedTranscriptRange(root: RefObject<HTMLDivElement>, segments: readonly TranscriptSegment[]) {
-  const scrolled = useRef(false);
+  const location = useLocation();
+  const scrolled = useRef<string | null>(null);
   useEffect(() => {
-    const range = linkedTranscriptRange();
-    if (!range || !segments.length) return;
+    const range = linkedTranscriptRange(location.search);
+    if (!range) { scrolled.current = null; return; }
+    if (!segments.length) return;
     const overlaps = (node: HTMLElement) =>
       range.end > range.start
         ? Number(node.dataset.end) > range.start && Number(node.dataset.start) < range.end
@@ -221,16 +225,16 @@ function useLinkedTranscriptRange(root: RefObject<HTMLDivElement>, segments: rea
     });
     for (const node of highlighted) node.classList.add("is-linked-range");
     const frame = requestAnimationFrame(() => {
-      if (!scrolled.current && nodes[0]) {
+      if (scrolled.current !== location.search && nodes[0]) {
         nodes[0].scrollIntoView({ block: "center", behavior: "instant" });
-        scrolled.current = true;
+        scrolled.current = location.search;
       }
     });
     return () => {
       cancelAnimationFrame(frame);
       for (const node of highlighted) node.classList.remove("is-linked-range");
     };
-  }, [root, segments]);
+  }, [root, segments, location.search]);
 }
 
 /** Clip a selection to text content, excluding speaker headers and action controls. */

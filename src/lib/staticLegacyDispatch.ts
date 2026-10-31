@@ -41,7 +41,7 @@ import {
   staticGenerateDocumentFromCatalog,
 } from "./staticConvexDocuments";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
-import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
+import { STATIC_OFFLINE_NOOP_WRITES, assertLocalWriteCapability } from "./staticConvexParity";
 import { invalidRuleIds, rulePatchForTransaction, ruleReferenceIndex } from "../../shared/transactionRules";
 import { aliasedCounterparty } from "../../shared/payeeAliases";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
@@ -1325,6 +1325,7 @@ const MUT_DISPATCHERS = [
 ];
 
 export function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  assertLocalWriteCapability(name);
   const localResult = store?.mutationResult(name, args);
   if (localResult !== undefined) return localResult;
 

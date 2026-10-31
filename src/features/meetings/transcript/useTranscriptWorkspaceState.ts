@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import type { TranscriptSegment } from "./timedTranscript";
 import type { MediaClock } from "./useMediaClock";
 import { linkedTranscriptRange } from "./transcriptLinks";
@@ -66,7 +67,7 @@ export function useTranscriptFeedback({
       const copy = async () => {
         try {
           await navigator.clipboard.writeText(text);
-          show("Copied to clipboard.");
+          show(text.startsWith("file:") ? "Local desktop link copied. It is not a publicly hosted URL." : "Copied to clipboard.");
         } catch {
           setCopyError(
             "Could not copy. Select the transcript text and copy it using your device’s copy command.",
@@ -90,6 +91,7 @@ export function useTranscriptPlayback(
   segments: readonly TranscriptSegment[],
   source: string,
 ) {
+  const location = useLocation();
   const { seek: seekMedia, skip: skipMedia, play: playMedia } = clock;
   const [followRevision, setFollowRevision] = useState(0);
   const seek = useCallback(
@@ -114,12 +116,14 @@ export function useTranscriptPlayback(
   );
   const linkedSource = useRef("");
   useEffect(() => {
-    const range = linkedTranscriptRange();
-    if (range && source && segments.length && linkedSource.current !== source) {
-      linkedSource.current = source;
+    const range = linkedTranscriptRange(location.search);
+    const key = `${source}|${location.search}`;
+    if (!range) linkedSource.current = "";
+    if (range && source && segments.length && linkedSource.current !== key) {
+      linkedSource.current = key;
       seek(range.start);
     }
-  }, [source, segments, seek]);
+  }, [source, segments, seek, location.search]);
   const onPlaySample = useCallback(
     (index: number) => {
       if (!segments[index]) return;

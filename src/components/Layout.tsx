@@ -1,3 +1,4 @@
+import { orderedFavoriteRoutes } from "../lib/favoriteProjection";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -701,17 +702,18 @@ export function Layout() {
     [pinnedNav, society, entityKind, isMultiEntity, can],
   );
 
-  // Resolve pinned command IDs into runnable commands. Commands whose ID isn't
-  // in the static registry (e.g. removed in a later release) are quietly
-  // dropped — the pin stays in localStorage but renders as nothing.
+  const orderedPinnedNav = useMemo(() => orderedFavoriteRoutes(favoritesOrder, visiblePinnedNav), [favoritesOrder, visiblePinnedNav]);
+
+  // Unavailable commands stay removable, rather than silently disappearing.
   const staticCommands = useStaticCommands();
   const visiblePinnedCommands = useMemo(() => {
     const byId = new Map(staticCommands.map((command) => [command.id, command]));
     return pinnedCommandIds
       .map((id) => byId.get(id))
       .filter((command): command is NonNullable<typeof command> => Boolean(command))
-      .filter((command) => !command.module || isModuleEnabled(society, command.module));
-  }, [staticCommands, pinnedCommandIds, society]);
+      .filter((command) => (!command.module || isModuleEnabled(society, command.module)) && (!command.permission || can(command.permission)));
+  }, [staticCommands, pinnedCommandIds, society, can]);
+  const unavailableCommandIds = pinnedCommandIds.filter((id) => !staticCommands.some((command) => command.id === id));
   // The two-level tree, minus pages this organization can't use. A parent
   // whose children are all hidden disappears with them. A pinned top-level
   // page (Dashboard) already sits in Favorites, so it isn't repeated; pages
@@ -747,7 +749,7 @@ export function Layout() {
   // Phones: the bottom bar shows the first four pinned pages, so the More
   // drawer's Favorites leaves them out (they come back while editing, so the
   // order can still be changed).
-  const bottomBarRoutes = new Set(isMobileNav ? visiblePinnedNav.slice(0, 4).map((item) => item.to) : []);
+  const bottomBarRoutes = new Set(isMobileNav ? orderedPinnedNav.slice(0, 4).map((item) => item.to) : []);
   // The Operations desk links Tasks and Deadlines with their counts. In the
   // drawer those pages already sit in the bottom bar, Favorites or the tree
   // with the same counts, so it only repeats them, unless it is carrying the
@@ -1485,6 +1487,10 @@ export function Layout() {
                 </button>
               )}
             </div>
+            {unavailableCommandIds.length > 0 && <button type="button" className="btn btn--ghost btn--sm"
+              onClick={() => setPinnedCommandIds((ids) => ids.filter((id) => !unavailableCommandIds.includes(id)))}>
+              Remove {unavailableCommandIds.length} unavailable favorite{unavailableCommandIds.length === 1 ? "" : "s"}
+            </button>}
             {/* Phones browse Favorites as a two-column grid of tiles; Edit
               * mode returns to the list so the reorder controls have room.
               * Desktop: `display: contents`, the rows sit in the nav as before. */}
@@ -2045,7 +2051,7 @@ export function Layout() {
              * excluded from the nav bar. */}
             {/* While the More sheet/drawer is open, More is the active tab. */}
             <BottomNavIndicator activeKey={mobileSidebarOpen ? "more" : loc.pathname} />
-            {visiblePinnedNav.slice(0, 4).map((item) => {
+            {orderedPinnedNav.slice(0, 4).map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
