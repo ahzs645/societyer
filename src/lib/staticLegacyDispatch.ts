@@ -1,6 +1,7 @@
 import { assertValid, validateAccessCustodyInput } from "../../shared/recordValidation";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
+import { validateNaicsSectorSelection } from "../../shared/naicsCanada2022";
 import { validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
 // portable migration backlog is complete.
@@ -1389,6 +1390,7 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
     }
     if (name === "society:upsert") {
       delete row.societyId; // A society is the tenant root, not a child of the default demo society.
+      validateNaicsSectorSelection(row.naicsSector);
       validateEntitySetup(row);
       validateFormationEvidence(row, args?.id, store?.getRow("documents", row.certificateEvidenceDocumentId), store?.listRows("documentVersions", { documentId: row.certificateEvidenceDocumentId }) ?? []);
       if (row.formationStatus === "incorporated") {

@@ -107,6 +107,8 @@
     "test:local-snapshots": "tsx scripts/check-local-snapshot-roundtrip.ts",
     "test:local-workspace-binding": "tsx scripts/check-local-workspace-binding.ts",
     "test:organization-domain": "tsx scripts/check-organization-domain.ts",
+    "test:naics-sector": "tsx scripts/check-naics-sector.ts",
+    "test:naics-sector-ui": "playwright test --config playwright.naics.config.ts",
     "test:jurisdiction-modules": "tsx scripts/check-jurisdiction-modules.ts",
     "test:post-incorporation-steps": "tsx scripts/check-post-incorporation-steps.ts",
     "test:post-incorporation-checklist-flow": "tsx scripts/check-post-incorporation-checklist-flow.ts",
