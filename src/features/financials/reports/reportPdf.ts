@@ -12,7 +12,7 @@ export async function buildBrandedReportPdf(props: BrandedReportPdfProps): Promi
   await ensureDocumentPdfEngine();
   const [fonts, organization] = await Promise.all([
     props.fonts ?? loadDocumentFonts(config),
-    config.showLogo && !config.brand ? resolveDocumentOrganizationLogo(props.organization) : props.organization,
+    config.showLogo && !config.customLogo && !config.brand ? resolveDocumentOrganizationLogo(props.organization) : props.organization,
   ]);
   const raw = await renderDocumentWithLayout(createElement(BrandedReportPdfDocument, { ...props, organization, fonts }));
   const date = new Date().toISOString().slice(0, 10);

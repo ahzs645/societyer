@@ -1,3 +1,4 @@
+import { invoicePaymentText, type InvoiceReceivingMethod } from "../../../shared/invoicePaymentMethods";
 import { invoiceBrandLogo } from "../../../shared/invoiceBranding";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -14,6 +15,8 @@ import "./documentPreview.css";
 
 export type InvoiceDocumentData = {
   documentTemplate?: InvoiceTemplate;
+  paymentMethods?: InvoiceReceivingMethod[];
+  paymentInstructions?: string;
   documentKind?: "invoice" | "receipt" | "work_order" | "quote" | "statement";
   documentExtras?: DocumentExtras;
   documentTable?: DocumentCustomTable;
@@ -48,8 +51,10 @@ export type InvoiceDocumentProps = {
 /** The flowing HTML preview shares its normalized data, settings and blocks with the PDF. */
 export function InvoiceDocument({ invoice, organization, paymentInstructions }: InvoiceDocumentProps) {
   const data = documentPresentation(invoice), { config, design, advanced: a, extras, kind, title, columns, cellValue, summary, metadata, page } = data;
+  paymentInstructions = invoicePaymentText(invoice, paymentInstructions);
   const brand = config.brand;
-  const logo = brand ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(invoiceBrandLogo(brand, config.logoVariant))}` : organization.logoUrl;
+  const logoBrand = config.customLogo ? undefined : brand;
+  const logo = logoBrand ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(invoiceBrandLogo(logoBrand, config.logoVariant))}` : config.customLogo || organization.logoUrl;
   const typography = (section: keyof typeof design.typography): CSSProperties => { const type = design.typography[section]; return { fontFamily: documentCssFont(type.fontFamily, brand?.font), fontSize: `${type.fontSize}pt`, color: type.color }; };
   const element = (key: keyof typeof a.typography): CSSProperties => { const type = a.typography[key]; return { fontFamily: documentCssFont(type.fontFamily, brand?.font), fontSize: `${type.fontSize}pt`, color: type.color }; };
   const address = (key: "organization" | "billing" | "shipping") => {
@@ -74,8 +79,8 @@ export function InvoiceDocument({ invoice, organization, paymentInstructions }: 
     header: <header className="document-preview__header" style={{ ...typography("header"), borderColor: a.colors.border, minHeight: a.page.firstHeaderHeight ? `${a.page.firstHeaderHeight}pt` : undefined, backgroundColor: a.backgrounds.header.color }}>
       <div aria-hidden="true" className="document-preview__artwork" style={{ ...documentBackgroundCss(a.backgrounds.header), opacity: a.backgrounds.header.opacity }} />
       <div className="document-preview__logo-area" style={{ minWidth: `${Math.min(design.logo.width, page.width - design.page.margins.left - design.page.margins.right)}pt`, alignItems: design.logo.alignment === "center" ? "center" : design.logo.alignment === "right" ? "flex-end" : "flex-start" }}>
-        {config.showLogo && logo && <img src={logo} alt={`${brand?.name || organization.name || "Organization"} logo`} style={{ width: `${design.logo.width}pt`, ...(a.logo.height > 0 ? { height: `${a.logo.height}pt`, objectFit: a.logo.preserveAspectRatio ? "contain" : "fill" } : {}), ...(config.logoVariant === "reverse" ? { background: brand?.primary || config.accentColor, padding: "6pt" } : {}) }} />}
-        {config.showLogo && brand?.descriptor && <div style={{ fontSize: "8pt", fontFamily: brand.font === "inter" ? documentCssFont("space_mono") : undefined }}>{brand.descriptor}</div>}
+        {config.showLogo && logo && <img src={logo} alt={`${logoBrand?.name || organization.name || "Organization"} logo`} style={{ width: `${design.logo.width}pt`, ...(a.logo.height > 0 ? { height: `${a.logo.height}pt`, objectFit: a.logo.preserveAspectRatio ? "contain" : "fill" } : {}), ...(!config.customLogo && config.logoVariant === "reverse" ? { background: brand?.primary || config.accentColor, padding: "6pt" } : {}) }} />}
+        {config.showLogo && !config.customLogo && brand?.descriptor && <div style={{ fontSize: "8pt", fontFamily: brand.font === "inter" ? documentCssFont("space_mono") : undefined }}>{brand.descriptor}</div>}
       </div>
       <div className="document-preview__heading">{a.visibility.title && <h1 style={element("title")}>{title}</h1>}<dl>{metadata.map((item, index) => <div key={index} style={item.balance ? { backgroundColor: a.colors.balanceBackground, padding: 4 } : {}}><dt style={element("labels")}>{item.label}</dt><dd style={element(item.balance ? "balance" : item.number ? "documentNumber" : "labels")}>{item.value}</dd></div>)}</dl></div>{stamp("header")}
     </header>,

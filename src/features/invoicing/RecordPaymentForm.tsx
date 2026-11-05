@@ -38,7 +38,10 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
   const suggestions = useMemo(() => suggestPaymentTransactions({...invoice,balanceCents:foreign&&rateMicros>0?convertInvoiceCents(invoice.balanceCents,rateMicros):invoice.balanceCents}, unlinked), [invoice, unlinked, foreign, rateMicros]);
   const [amountInput, setAmountInput] = useState((invoice.balanceCents / 100).toFixed(2));
   const [date, setDate] = useState(suggestions[0]?.date && suggestions[0].exact ? [suggestions[0].date, suggestions[0].releasedDate ?? ""].sort().at(-1)! : today);
-  const [method, setMethod] = useState<string>("e_transfer");
+  const [method, setMethod] = useState<string>(() => {
+    const preferred = invoice.paymentMethods?.[0]?.type;
+    return preferred === "eft" ? "direct_deposit" : preferred ?? "e_transfer";
+  });
   const [reference, setReference] = useState("");
   const [txnId, setTxnId] = useState<string>(suggestions[0]?.exact ? suggestions[0]._id : "");
   const [depositAccountId, setDepositAccountId] = useState("");

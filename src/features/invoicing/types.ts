@@ -1,3 +1,4 @@
+import type { InvoiceReceivingMethod } from "../../../shared/invoicePaymentMethods";
 import type { InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
 import type { DocumentExtras } from "../../../shared/documentExtras";
 import type { InvoiceTemplate, InvoicePriceList, RepairStatus } from "../../../shared/invoiceCommerce";
@@ -31,6 +32,8 @@ export type InvoiceRow = {
   dueDate: string;
   reference?: string;
   documentTemplate?: InvoiceTemplate;
+  paymentMethods?: InvoiceReceivingMethod[];
+  paymentInstructions?: string;
   money?: InvoiceMoneyOptions; documentExtras?: DocumentExtras;
   cashPaidCents?: number; creditCents?: number; writeOffCents?: number; refundCents?: number;
   fxRevaluations?: Array<{key:string;date:string;rateMicros:number;source?:string;invoiceBalanceCents:number;baseBalanceCents:number;adjustmentCents:number;journalEntryId?:string;reversedDate?:string;reversalJournalEntryId?:string}>;
@@ -157,6 +160,8 @@ export type InvoiceSettings = {
   nextNumberPreview: string;
   defaultTerms: string;
   paymentInstructions?: string;
+  paymentMethods?: InvoiceReceivingMethod[];
+  defaultPaymentMethodIds?: string[];
   defaultMemo?: string;
   replyToEmail?: string;
   receivableAccountId?: string;

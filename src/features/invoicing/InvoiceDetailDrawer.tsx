@@ -1,3 +1,4 @@
+import { InvoicePdfPreview } from "./InvoicePdfPreview";
 import { InvoiceAdjustmentsPanel } from "./InvoiceAdjustmentsPanel";
 import { useState } from "react";
 import { useMutation } from "convex/react";
@@ -13,7 +14,7 @@ import { useToast } from "../../components/Toast";
 import { formatDate, formatDateTime } from "../../lib/format";
 import { formatMoney } from "../../lib/money";
 import { INVOICE_TERMS_LABEL, PAYMENT_METHOD_LABEL, isOpenStatus, type InvoiceTerms, type PaymentMethod } from "../../../shared/invoicing";
-import { InvoiceDocument, InvoicePrintPortal } from "./InvoiceDocument";
+import { InvoicePrintPortal } from "./InvoiceDocument";
 import { InvoiceStatusPill, NeedsActionPill } from "./InvoiceStatusPill";
 import { RecordPaymentForm } from "./RecordPaymentForm";
 import { InvoiceDepositLink } from "./InvoiceDepositLink";
@@ -343,8 +344,8 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
 
       {showPreview && (
         <section className="invoice-drawer__section" aria-label="Invoice preview">
-          <div className="invoice-paper invoice-paper--compact">
-            <InvoiceDocument invoice={invoice} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
+          <div className="invoice-paper invoice-paper--pdf">
+            <InvoicePdfPreview invoice={invoice} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
           </div>
         </section>
       )}

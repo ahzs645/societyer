@@ -447,7 +447,11 @@
     "test:meeting-integrity": "node --import tsx scripts/check-meeting-integrity-audit.ts",
     "meetings:audit": "node --import tsx scripts/audit-meeting-integrity.ts",
     "test:interaction-audit": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:static-parity && npm run test:meeting-draft-recovery && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks",
-    "test:interaction-audit-ui": "playwright test --config playwright.interaction-audit.config.ts"
+    "test:interaction-audit-ui": "playwright test --config playwright.interaction-audit.config.ts",
+    "test:invoice-preview-controls-ui": "playwright test --config playwright.invoice-preview-controls.config.ts",
+    "test:invoice-payment-methods": "tsx scripts/check-invoice-payment-methods.ts",
+    "test:invoice-branding-setup": "tsx scripts/check-invoice-branding-setup.tsx",
+    "test:invoice-payment-branding-ui": "playwright test --config playwright.invoice-payment-branding.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

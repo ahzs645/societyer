@@ -1,7 +1,7 @@
 import { Document, Page, View, Text, Table, Row, Cell, Svg, Image, type FontRegistration, type Style } from "@formepdf/react";
 import { cleanInvoiceTemplate, resolveDocumentDesign, resolveDocumentAdvanced, type InvoiceTemplate } from "../../../../shared/invoiceCommerce";
 import { sizedBrandSvg } from "../../invoicing/InvoicePdfDocument";
-import { cleanDocumentImage } from "../../../../shared/documentRichContent";
+import { cleanDocumentImage, documentImageDimensions } from "../../../../shared/documentRichContent";
 import { documentPdfFontFamily, documentAddressLines } from "../../invoicing/documentPresentation";
 import { invoiceBrandPdfSvg } from "../../../../shared/invoiceBranding";
 import type { InvoiceOrganization } from "../../invoicing/types";
@@ -67,7 +67,8 @@ export function BrandedReportPdfDocument({ report, template, organization, fonts
   const width = size.width - design.page.margins.left - design.page.margins.right;
   const style = (key: keyof typeof design.typography): Style => { const value = design.typography[key]; return { fontFamily: documentPdfFontFamily(value.fontFamily, fonts), fontSize: value.fontSize, color: value.color }; };
   const tableStyle = style("table");
-  const aspectRatio = config.brand ? config.brand.logoWidth / config.brand.logoHeight : organization.logoAspectRatio;
+  const customLogoSize = config.customLogo ? documentImageDimensions(config.customLogo) : undefined;
+  const aspectRatio = customLogoSize ? customLogoSize.width / customLogoSize.height : config.brand ? config.brand.logoWidth / config.brand.logoHeight : organization.logoAspectRatio;
   const requestedWidth = Math.min(design.logo.width, width), naturalHeight = aspectRatio ? requestedWidth / aspectRatio : advanced.logo.height || requestedWidth * 0.4;
   const logoHeight = advanced.logo.height > 0 ? advanced.logo.height : naturalHeight;
   const logoWidth = advanced.logo.preserveAspectRatio && advanced.logo.height > 0 && aspectRatio ? Math.min(requestedWidth, advanced.logo.height * aspectRatio) : requestedWidth;
@@ -103,9 +104,9 @@ export function BrandedReportPdfDocument({ report, template, organization, fonts
   return <Document title={title} author={organization.name} creator="Societyer · pdfcn / Forme" lang="en-CA" fonts={fonts} style={style("body")}>
     <Page size={size} margin={design.page.margins}>
       <View wrap={false} style={{ marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: advanced.colors.border, minHeight: advanced.page.firstHeaderHeight || undefined }}>
-        {config.showLogo && !config.brand && organization.logoUrl && <View style={{ alignItems: design.logo.alignment === "right" ? "flex-end" : design.logo.alignment === "center" ? "center" : "flex-start", marginBottom: 14 }}><Image src={organization.logoUrl} width={logoWidth} height={aspectRatio || !advanced.logo.preserveAspectRatio ? drawnHeight : undefined} alt={`${organization.name ?? "Organization"} logo`} /></View>}
-        {config.showLogo && config.brand && <View style={{ alignItems: design.logo.alignment === "right" ? "flex-end" : design.logo.alignment === "center" ? "center" : "flex-start", marginBottom: 14 }}><View style={{ padding: config.logoVariant === "reverse" ? 8 : 0, backgroundColor: config.logoVariant === "reverse" ? config.brand.primary : undefined }}><Svg width={logoWidth} height={drawnHeight} viewBox={`0 0 ${logoWidth} ${drawnHeight}`} content={sizedBrandSvg(config.brand, config.logoVariant, logoWidth, drawnHeight)} /></View></View>}
-        {config.showLogo && config.brand?.descriptor && <Text style={{ fontFamily: fonts?.some((font) => font.family === "InvoiceLabel") ? "InvoiceLabel" : documentPdfFontFamily("mono", fonts), fontSize: 8, marginBottom: 12 }}>{config.brand.descriptor}</Text>}
+        {config.showLogo && (config.customLogo || (!config.brand && organization.logoUrl)) && <View style={{ alignItems: design.logo.alignment === "right" ? "flex-end" : design.logo.alignment === "center" ? "center" : "flex-start", marginBottom: 14 }}><Image src={config.customLogo || organization.logoUrl!} width={logoWidth} height={aspectRatio || !advanced.logo.preserveAspectRatio ? drawnHeight : undefined} alt={`${organization.name ?? "Organization"} logo`} /></View>}
+        {config.showLogo && !config.customLogo && config.brand && <View style={{ alignItems: design.logo.alignment === "right" ? "flex-end" : design.logo.alignment === "center" ? "center" : "flex-start", marginBottom: 14 }}><View style={{ padding: config.logoVariant === "reverse" ? 8 : 0, backgroundColor: config.logoVariant === "reverse" ? config.brand.primary : undefined }}><Svg width={logoWidth} height={drawnHeight} viewBox={`0 0 ${logoWidth} ${drawnHeight}`} content={sizedBrandSvg(config.brand, config.logoVariant, logoWidth, drawnHeight)} /></View></View>}
+        {config.showLogo && !config.customLogo && config.brand?.descriptor && <Text style={{ fontFamily: fonts?.some((font) => font.family === "InvoiceLabel") ? "InvoiceLabel" : documentPdfFontFamily("mono", fonts), fontSize: 8, marginBottom: 12 }}>{config.brand.descriptor}</Text>}
         {design.fields.organization && advanced.addresses.organization.placement === "flow" && advanced.visibility.organizationName && <Text style={{ fontFamily: documentPdfFontFamily(advanced.typography.organizationName.fontFamily, fonts), fontSize: advanced.typography.organizationName.fontSize, color: advanced.typography.organizationName.color, marginBottom: 6 }}>{organization.name ?? "Organization"}</Text>}
         {design.fields.organization && advanced.addresses.organization.placement === "flow" && advanced.visibility.organizationAddress && organization.address && <Text style={{ fontFamily: documentPdfFontFamily(advanced.typography.organizationAddress.fontFamily, fonts), fontSize: advanced.typography.organizationAddress.fontSize, color: advanced.typography.organizationAddress.color, marginBottom: 6 }}>{documentAddressLines(advanced.addresses.organization, { ...organization, name: "", taxNumber: organization.gstNumber })}</Text>}
         {advanced.visibility.title && <Text style={{ fontFamily: documentPdfFontFamily(advanced.typography.title.fontFamily, fonts), fontSize: advanced.typography.title.fontSize, color: advanced.typography.title.color, marginBottom: 8 }}>{title}</Text>}

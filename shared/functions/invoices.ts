@@ -1,3 +1,4 @@
+import { defaultInvoicePayments, cleanInvoicePaymentMethods, selectInvoicePaymentMethods, invoicePaymentText, type InvoiceReceivingMethod } from "../invoicePaymentMethods";
 import { cleanInvoiceMoney, convertInvoiceCents, settlementTotals, explicitFxQuote, type InvoiceMoneyOptions } from "../invoiceMoney";
 import { cleanDocumentExtras, type DocumentExtras } from "../documentExtras";
 import { cleanInvoiceLineDetails } from "../invoiceLineDetails";
@@ -100,7 +101,7 @@ import {
   type InvoiceStatus,
 } from "../invoicing";
 
-type Row = { _id: string; societyId: string; [key: string]: any };
+type Row = { paymentMethods?: InvoiceReceivingMethod[]; paymentInstructions?: string; defaultPaymentMethodIds?: string[]; _id: string; societyId: string; [key: string]: any };
 
 const DEFAULT_TERMS = "net_30";
 
@@ -135,6 +136,11 @@ async function loadSettings(ctx: PortableQueryCtx, societyId: string): Promise<R
   return ((await ctx.db.query("invoiceSettings").withIndex("by_society", (q) => q.eq("societyId", societyId)).first()) as Row | null) ?? null;
 }
 
+async function defaultDocumentTemplate(ctx: PortableQueryCtx, settings: Row | null, societyId: string) {
+  const template = settings?.defaultTemplateId ? await getOwned<Row>(ctx, "invoiceTemplates", settings.defaultTemplateId, societyId) : null;
+  return cleanInvoiceTemplate(template?.active ? template.config : undefined);
+}
+
 function settingsView(row: Row | null, invoices: Row[]) {
   const prefix = normalizeInvoicePrefix(row?.prefix);
   const nextNumber = nextInvoiceSequence(invoices, row?.nextNumber);
@@ -145,6 +151,8 @@ function settingsView(row: Row | null, invoices: Row[]) {
     nextNumberPreview: formatInvoiceNumber(prefix, nextNumber),
     defaultTerms: row?.defaultTerms ?? DEFAULT_TERMS,
     paymentInstructions: row?.paymentInstructions,
+    paymentMethods: row?.paymentMethods ?? [],
+    defaultPaymentMethodIds: row?.defaultPaymentMethodIds ?? [],
     defaultMemo: row?.defaultMemo,
     replyToEmail: row?.replyToEmail,
     defaultTemplateId: row?.defaultTemplateId,
@@ -633,6 +641,7 @@ type InvoiceArgs = PartyArgs & {
   reference?: string;
   currency?: string;
   documentTemplate?: InvoiceTemplate;
+  paymentMethodIds?: string[];
   money?: InvoiceMoneyOptions;
   documentExtras?: DocumentExtras;
   priceListId?: string | null;
@@ -642,7 +651,7 @@ type InvoiceArgs = PartyArgs & {
   memo?: string;
 };
 
-async function invoiceFields(ctx: PortableQueryCtx, args: InvoiceArgs) {
+async function invoiceFields(ctx: PortableQueryCtx, args: InvoiceArgs, original: Row | null) {
   if (!isCalendarDate(args.issueDate)) throw new Error("Choose an issue date.");
   const terms = (INVOICE_TERMS as readonly string[]).includes(args.terms) ? args.terms : DEFAULT_TERMS;
   if (terms === "custom" && !isCalendarDate(args.dueDate)) throw new Error("Choose a due date.");
@@ -684,6 +693,8 @@ async function invoiceFields(ctx: PortableQueryCtx, args: InvoiceArgs) {
     currency,
     money: cleanInvoiceMoney(args.money, currency, (await loadInvoiceLedgerContext(ctx, args.societyId)).workspaceCurrency),
     documentExtras: args.documentExtras ? cleanDocumentExtras(args.documentExtras) : undefined,
+    ...defaultInvoicePayments(settings),
+    ...(args.paymentMethodIds !== undefined ? { paymentMethods: selectInvoicePaymentMethods([...(original?.paymentMethods ?? []), ...(settings?.paymentMethods ?? []).filter((method: InvoiceReceivingMethod) => !original?.paymentMethods?.some((saved) => saved.id === method.id))], args.paymentMethodIds) } : {}),
     documentTemplate: cleanInvoiceTemplate(args.documentTemplate ?? (defaultTemplate?.active ? defaultTemplate.config : undefined)),
     priceListId: args.priceListId || undefined,
     repairJobId: args.repairJobId,
@@ -706,7 +717,13 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: InvoiceArgs
     documentTemplate: args.documentTemplate ?? original?.documentTemplate,
     money: args.money === undefined ? original?.money : args.money,
     documentExtras: args.documentExtras === undefined ? original?.documentExtras : args.documentExtras,
-    repairJobId: args.repairJobId ?? original?.repairJobId, priceListId: args.priceListId === undefined ? original?.priceListId : args.priceListId });
+    repairJobId: args.repairJobId ?? original?.repairJobId, priceListId: args.priceListId === undefined ? original?.priceListId : args.priceListId }, original);
+  if (original && args.paymentMethodIds === undefined) {
+    fields.paymentMethods = original.paymentMethods ?? fields.paymentMethods;
+    fields.paymentInstructions = original.paymentInstructions ?? fields.paymentInstructions;
+  } else if (original) {
+    fields.paymentInstructions = original.paymentInstructions ?? fields.paymentInstructions;
+  }
   if (original && original.currency !== fields.currency && ((original.payments ?? []).length || original.journalEntryId)) throw new Error("Currency cannot change after payments or ledger posting.");
   if (original && (original.journalEntryId || original.status !== "draft") && JSON.stringify(original.money?.fx) !== JSON.stringify(fields.money?.fx)) throw new Error("The invoice FX quote is immutable after issue. Void and replace the invoice to change it.");
   if(new TextEncoder().encode(JSON.stringify({...original,...fields})).byteLength>900000)throw new Error("This invoice exceeds 900 KB. Reduce artwork or attachments before saving.");
@@ -774,7 +791,7 @@ async function draftOutboxEmail(ctx: PortableMutationCtx, invoice: Row, kind: "i
     replyTo: settings?.replyToEmail,
     to: invoice.billToEmail,
     subject: kind === "reminder" ? `Reminder: invoice ${invoice.number} from ${organizationName}` : `Invoice ${invoice.number} from ${organizationName}`,
-    body: outboxBody(invoice, organizationName, kind, balanceCents, settings?.paymentInstructions),
+    body: outboxBody(invoice, organizationName, kind, balanceCents, invoicePaymentText(invoice, settings?.paymentInstructions)),
     attachments: [],
     status: "draft",
     createdAtISO: nowISO(),
@@ -1013,6 +1030,7 @@ export async function duplicatePortable(ctx: PortableMutationCtx, { id }: { id: 
   const { sequence, number } = await allocateNumber(ctx, row.societyId);
   const at = nowISO();
   const terms = row.terms === "custom" ? DEFAULT_TERMS : row.terms;
+  const defaults = defaultInvoicePayments(await loadSettings(ctx, row.societyId));
   return ctx.db.insert("invoices", {
     societyId: row.societyId,
     sequence,
@@ -1032,6 +1050,8 @@ export async function duplicatePortable(ctx: PortableMutationCtx, { id }: { id: 
     reference: row.reference,
     currency: row.currency,
     documentTemplate: row.documentTemplate,
+    paymentMethods: row.paymentMethods ?? defaults.paymentMethods,
+    paymentInstructions: row.paymentInstructions ?? defaults.paymentInstructions,
     money: row.money, documentExtras: row.documentExtras,
     priceListId: row.priceListId,
     lines: (row.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line") })),
@@ -1361,6 +1381,8 @@ async function insertDuesDraft(
     currency: input.plan.currency ?? "CAD",
     lines,
     memo: settings?.defaultMemo,
+    ...defaultInvoicePayments(settings),
+    documentTemplate: await defaultDocumentTemplate(ctx, settings, societyId),
     totalCents: computeInvoiceTotals(lines).totalCents,
     paidCents: 0,
     payments: [],
@@ -1550,6 +1572,8 @@ export async function upsertSeriesPortable(ctx: PortableMutationCtx, args: Serie
   }
   const nextIssueDate = seriesNextIssueDate(schedule, issuedCount);
   const status = existing?.status === "paused" ? "paused" : nextIssueDate ? "active" : "ended";
+  const settings = await loadSettings(ctx, args.societyId);
+  const defaults = defaultInvoicePayments(settings);
   const fields = {
     name,
     ...schedule,
@@ -1561,7 +1585,9 @@ export async function upsertSeriesPortable(ctx: PortableMutationCtx, args: Serie
     terms,
     reference: cleanText(args.reference, 100),
     currency: invoiceCurrency(args.currency ?? existing?.currency ?? source?.currency),
-    documentTemplate: source?.documentTemplate ?? existing?.documentTemplate,
+    documentTemplate: source?.documentTemplate ?? existing?.documentTemplate ?? await defaultDocumentTemplate(ctx, settings, args.societyId),
+    paymentMethods: source?.paymentMethods ?? existing?.paymentMethods ?? defaults.paymentMethods,
+    paymentInstructions: source?.paymentInstructions ?? existing?.paymentInstructions ?? defaults.paymentInstructions,
     money: source?.money ?? existing?.money, documentExtras: source?.documentExtras ?? existing?.documentExtras,
     shipToName: source?.shipToName ?? existing?.shipToName,
     shipToAddress: source?.shipToAddress ?? existing?.shipToAddress,
@@ -1590,6 +1616,7 @@ export async function issueFromSeriesPortable(ctx: PortableMutationCtx, { id }: 
   if (!series.nextIssueDate || series.status === "ended") throw new Error("This series has no more invoices to issue.");
   const actor = await actorName(ctx, series.societyId);
   const issueDate = series.nextIssueDate;
+  const defaults = defaultInvoicePayments(await loadSettings(ctx, series.societyId));
   const { sequence, number } = await allocateNumber(ctx, series.societyId);
   const at = nowISO();
   const invoiceId = await ctx.db.insert("invoices", {
@@ -1611,6 +1638,8 @@ export async function issueFromSeriesPortable(ctx: PortableMutationCtx, { id }: 
     reference: series.reference,
     currency: series.currency,
     documentTemplate: series.documentTemplate,
+    paymentMethods: series.paymentMethods ?? defaults.paymentMethods,
+    paymentInstructions: series.paymentInstructions ?? defaults.paymentInstructions,
     money: series.money, documentExtras: series.documentExtras,
     lines: (series.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line") })),
     discount: series.discount,
@@ -1633,7 +1662,7 @@ export async function issueFromSeriesPortable(ctx: PortableMutationCtx, { id }: 
 
 export async function saveSettingsPortable(
   ctx: PortableMutationCtx,
-  args: { societyId: string; prefix: string; nextNumber: number; defaultTerms: string; paymentInstructions?: string; defaultMemo?: string; replyToEmail?: string },
+  args: { societyId: string; prefix: string; nextNumber: number; defaultTerms: string; paymentInstructions?: string; paymentMethods?: InvoiceReceivingMethod[]; defaultPaymentMethodIds?: string[]; defaultMemo?: string; replyToEmail?: string },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   const [settings, invoices] = await Promise.all([loadSettings(ctx, args.societyId), loadInvoices(ctx, args.societyId)]);
@@ -1643,7 +1672,11 @@ export async function saveSettingsPortable(
   if (nextNumber <= highest) throw new Error(`The next number must be above ${highest}, the highest number already used.`);
   const replyToEmail = cleanText(args.replyToEmail, 200);
   if (replyToEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyToEmail)) throw new Error("The reply-to email doesn't look right.");
+  const paymentMethods = cleanInvoicePaymentMethods(args.paymentMethods ?? settings?.paymentMethods ?? []);
+  const defaultPaymentMethodIds = args.defaultPaymentMethodIds ?? settings?.defaultPaymentMethodIds ?? [];
+  selectInvoicePaymentMethods(paymentMethods, defaultPaymentMethodIds);
   const fields = {
+    paymentMethods, defaultPaymentMethodIds,
     prefix: normalizeInvoicePrefix(args.prefix),
     nextNumber,
     defaultTerms: (INVOICE_TERMS as readonly string[]).includes(args.defaultTerms) && args.defaultTerms !== "custom" ? args.defaultTerms : DEFAULT_TERMS,

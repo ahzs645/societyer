@@ -72,6 +72,14 @@ export function Tooltip({ content, children, placement = "top", delay = 350, dur
     };
   }, []);
 
+  // A clicked information popover replaces its hover hint immediately.
+  useEffect(() => {
+    if (!disabled) return;
+    if (openTimer.current) window.clearTimeout(openTimer.current);
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    setOpen(false);
+  }, [disabled]);
+
   // Re-position on scroll/resize while visible; Esc dismisses it without
   // moving focus (the key still reaches the dialog or page underneath).
   useEffect(() => {

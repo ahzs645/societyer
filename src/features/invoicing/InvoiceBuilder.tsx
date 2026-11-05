@@ -1,3 +1,7 @@
+import { defaultInvoicePayments, type InvoiceReceivingMethod } from "../../../shared/invoicePaymentMethods";
+import { InvoicePaymentMethodsSelector } from "./InvoicePaymentMethodsSelector";
+import { InvoiceSettingsDrawer } from "./InvoiceSettingsDrawer";
+import { InvoicePdfPreview } from "./InvoicePdfPreview";
 import { DocumentExtrasFields } from "./DocumentExtrasFields";
 import { InvoiceMoneyFields } from "./InvoiceMoneyFields";
 import { cleanInvoiceMoney, type InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
@@ -31,7 +35,7 @@ import {
   type InvoiceLine,
 } from "../../../shared/invoicing";
 import { BillToPicker, type BillToValue } from "./BillToPicker";
-import { InvoiceDocument, InvoicePrintPortal } from "./InvoiceDocument";
+import { InvoicePrintPortal } from "./InvoiceDocument";
 import { InvoiceStatusPill } from "./InvoiceStatusPill";
 import { LineItemsEditor, blankLine, toLineDraft, type LineDraft } from "./LineItemsEditor";
 import { useFinanceTags } from "../financials/transactions/useFinanceTags";
@@ -46,6 +50,8 @@ type Draft = BillToValue & {
   money?: InvoiceMoneyOptions; documentExtras?: DocumentExtras;
   priceListId: string;
   documentTemplate: InvoiceTemplate;
+  paymentMethods: InvoiceReceivingMethod[];
+  paymentInstructions: string;
   issueDate: string;
   terms: string;
   dueDate: string;
@@ -64,6 +70,8 @@ function initialDraft(workspace: InvoiceWorkspace, invoice?: InvoiceRow | null, 
   if (invoice) {
     return {
       currency: invoice.currency, money: invoice.money, documentExtras: invoice.documentExtras, priceListId: invoice.priceListId ?? "", documentTemplate: cleanInvoiceTemplate(invoice.documentTemplate),
+      paymentMethods: invoice.paymentMethods ?? defaultInvoicePayments(workspace.settings).paymentMethods,
+      paymentInstructions: invoice.paymentInstructions ?? workspace.settings.paymentInstructions ?? "",
       partyKind: invoice.partyKind,
       memberId: invoice.memberId,
       counterpartyId: invoice.counterpartyId,
@@ -86,6 +94,7 @@ function initialDraft(workspace: InvoiceWorkspace, invoice?: InvoiceRow | null, 
   const terms = workspace.settings.defaultTerms || "net_30";
   return {
     currency: workspace.ledger.workspaceCurrency, priceListId: "", documentTemplate: cleanInvoiceTemplate(workspace.templates?.find((t) => t._id === workspace.settings.defaultTemplateId && t.active)?.config),
+    ...defaultInvoicePayments(workspace.settings),
     partyKind: "custom",
     billToName: "",
     ...(prefill ?? {}),
@@ -163,6 +172,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [paymentMethodsOpen, setPaymentMethodsOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
   // Soft duplicate check for a new invoice: same customer and total within 14 days.
   const [duplicateOk, setDuplicateOk] = useState(false);
@@ -208,6 +218,8 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     reference: draft.reference || undefined,
     currency: draft.currency,
     documentTemplate: draft.documentTemplate,
+    paymentMethods: draft.paymentMethods,
+    paymentInstructions: draft.paymentInstructions,
     money: draft.money, documentExtras: draft.documentExtras,
     billToName: draft.billToName,
     billToEmail: draft.billToEmail,
@@ -267,6 +279,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         terms: draft.terms,
         dueDate: draft.terms === "custom" ? draft.dueDate : undefined,
         reference: draft.reference || undefined,
+        paymentMethodIds: invoice && JSON.stringify(draft.paymentMethods) === JSON.stringify(invoice.paymentMethods ?? defaultInvoicePayments(workspace.settings).paymentMethods) ? undefined : draft.paymentMethods.map((method) => method.id),
         currency: draft.currency, documentTemplate: draft.documentTemplate, money: draft.money, documentExtras:draft.documentExtras, priceListId: draft.priceListId || null, repairJobId: invoice?.repairJobId,
         lines,
         discount,
@@ -581,9 +594,13 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
             <Field label="Memo shown on the invoice">
               <textarea className="input textarea" rows={3} value={draft.memo} disabled={readOnly} placeholder="A thank-you, what the invoice covers, or anything else the customer should know" onChange={(e) => update({ memo: e.target.value })} />
             </Field>
-            <p className="invoice-builder__hint">
-              Payment instructions come from invoice settings{workspace.settings.paymentInstructions ? "" : " (none set yet)"}.
-            </p>
+            <InvoicePaymentMethodsSelector
+              methods={(workspace.settings.paymentMethods ?? []).map((method) => invoice?.paymentMethods?.find((saved) => saved.id === method.id) ?? method)}
+              selected={draft.paymentMethods}
+              canWrite={!readOnly}
+              onChange={(paymentMethods) => update({ paymentMethods })}
+              onManage={() => setPaymentMethodsOpen(true)}
+            />
           </section>
 
           {!readOnly && !invoice?.seriesId && (
@@ -632,18 +649,27 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
 
         <aside className="invoice-builder__preview" aria-label="Invoice preview">
           <div className="invoice-builder__preview-head">
-            <span>Preview</span>
+            <span>PDF preview</span>
             <button type="button" className="btn btn--ghost btn--sm" disabled={busy || !canExport} onClick={() => void downloadPdf()}><Download size={14} aria-hidden="true" /> Download PDF</button>
             <button type="button" className="btn btn--ghost btn--sm" disabled={!canExport} onClick={() => window.print()}>
               <Printer size={14} aria-hidden="true" /> Print / Save as PDF
             </button>
           </div>
-          <div className="invoice-paper">
-            <InvoiceDocument invoice={previewData} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
+          <div className="invoice-paper invoice-paper--pdf">
+            <InvoicePdfPreview invoice={previewData} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
           </div>
         </aside>
       </div>
       <InvoicePrintPortal invoice={previewData} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
+      {paymentMethodsOpen && <InvoiceSettingsDrawer open paymentsOnly settings={workspace.settings} societyId={societyId} canWrite={!readOnly} onClose={() => setPaymentMethodsOpen(false)} onPaymentMethodsSaved={({ methods, addedIds, instructions }) => {
+        const retained = draft.paymentMethods.flatMap((method) => {
+          const saved = invoice?.paymentMethods?.find((item) => item.id === method.id);
+          const current = methods.find((item) => item.id === method.id);
+          return saved ?? current ?? [];
+        });
+        const added = methods.filter((method) => addedIds.includes(method.id) && !retained.some((item) => item.id === method.id));
+        update({ paymentMethods: [...retained, ...added], ...(!invoice ? { paymentInstructions: instructions } : {}) });
+      }} />}
       <Drawer open={deliveryOpen && Boolean(invoice?.seriesId)} title="Configure automatic delivery" onClose={() => setDeliveryOpen(false)}>
         {deliveryOpen && invoice?.seriesId && <BillingScheduleForm key={invoice.seriesId} societyId={societyId}
           schedule={{ kind: "recurring_invoice", sourceId: invoice.seriesId, name: `${invoice.seriesName ?? `${invoice.billToName} recurring invoice`} delivery`, recipients: invoice.billToEmail ? [invoice.billToEmail] : [], active: false, recipientsConfirmed: false }}

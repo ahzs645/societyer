@@ -1,3 +1,4 @@
+import { defaultInvoicePayments } from "../../../shared/invoicePaymentMethods";
 import { useEffect, useMemo, useState } from "react";
 import { Download, Pencil, RefreshCw } from "lucide-react";
 import { Modal } from "../../components/Modal";
@@ -25,7 +26,7 @@ export function DocumentTemplatePreview({ template, workspace, canWrite, onClose
       try {
         const bytes = sample.kind === "report"
           ? await (await import("../financials/reports/reportPdf")).buildBrandedReportPdf({ report: sample.report, template: template.config, organization: workspace.organization })
-          : await (await import("./invoicePdf")).buildInvoicePdf({ invoice: sample.invoice, organization: workspace.organization, paymentInstructions: workspace.settings.paymentInstructions || "Example: pay by bank transfer using the document number as reference." });
+          : await (await import("./invoicePdf")).buildInvoicePdf({ invoice: { ...sample.invoice, ...defaultInvoicePayments(workspace.settings) }, organization: workspace.organization, paymentInstructions: workspace.settings.paymentInstructions || "Example: pay by bank transfer using the document number as reference." });
         if (cancelled) return;
         url = URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }));
         setPdf({ url, bytes });
@@ -33,7 +34,7 @@ export function DocumentTemplatePreview({ template, workspace, canWrite, onClose
     };
     void render();
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
-  }, [sample, template.config, workspace.organization, workspace.settings.paymentInstructions, revision]);
+  }, [sample, template.config, workspace.organization, workspace.settings, revision]);
   const download = () => {
     if (!pdf) return;
     const filename = `SAMPLE-${template.name}-${kind}`.replace(/[^a-z0-9_-]/gi, "_");

@@ -42,7 +42,7 @@ export async function loadDocumentFonts(config?: Partial<InvoiceTemplate>): Prom
 export async function buildInvoicePdf(props: InvoicePdfProps): Promise<Uint8Array> {
   await ensureDocumentPdfEngine();
   const fonts = props.fonts ?? await loadDocumentFonts(props.invoice.documentTemplate);
-  const organization = await resolveDocumentOrganizationLogo(props.organization);
+  const organization = props.invoice.documentTemplate?.customLogo || props.invoice.documentTemplate?.brand || props.invoice.documentTemplate?.showLogo === false ? props.organization : await resolveDocumentOrganizationLogo(props.organization);
   const rendered = await renderDocumentWithLayout(createElement(InvoicePdfDocument, { ...props, organization, fonts }));
   const bytes = await appendDocumentAttachments(rendered.pdf, props.invoice);
   const data = documentPresentation(props.invoice);

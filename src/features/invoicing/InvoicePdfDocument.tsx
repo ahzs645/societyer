@@ -1,3 +1,4 @@
+import { invoicePaymentText } from "../../../shared/invoicePaymentMethods";
 import svgpath from "svgpath";
 import { Fragment, type ReactNode } from "react";
 import { invoiceBrandPdfSvg } from "../../../shared/invoiceBranding";
@@ -37,6 +38,7 @@ export function documentPaymentStubHeight(data: ReturnType<typeof documentPresen
 }
 /** Native Forme tables retain column widths and repeat their heading on every physical page. */
 function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }: InvoicePdfProps) {
+  paymentInstructions = invoicePaymentText(invoice, paymentInstructions);
   const data = documentPresentation(invoice), { config, design, advanced: a, extras, kind, title, columns, cellValue, summary, metadata, page } = data;
   const margin = { ...design.page.margins, bottom: design.page.margins.bottom + documentPaymentStubHeight(data) };
   const extraPageMargin = { ...design.page.margins, bottom: design.page.margins.bottom + (a.paymentStub.firstPageOnly ? 0 : documentPaymentStubHeight(data)) };
@@ -48,7 +50,7 @@ function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }
   const text = (value: string, style: Style = body) => <Text noMargin style={{ ...style }}>{value}</Text>;
   const block: Style = { marginBottom: 16 };
   const paragraphSection = (label: string, value: string, type: Style) => <View style={block}><NativeText style={{ ...type, minOrphanLines: 2, minWidowLines: 2 }}><Strong style={{ ...element("labels"), fontWeight: 700 }}>{label}</Strong>{"\n"}{value}</NativeText></View>;
-  const requestedWidth = Math.min(design.logo.width, contentWidth), aspectRatio = config.brand ? config.brand.logoWidth / config.brand.logoHeight : organization.logoAspectRatio, naturalHeight = aspectRatio ? requestedWidth / aspectRatio : a.logo.height || requestedWidth * 0.4;
+  const requestedWidth = Math.min(design.logo.width, contentWidth), aspectRatio = config.customLogo ? (() => { const size = documentImageDimensions(config.customLogo); return size.width / size.height; })() : config.brand ? config.brand.logoWidth / config.brand.logoHeight : organization.logoAspectRatio, naturalHeight = aspectRatio ? requestedWidth / aspectRatio : a.logo.height || requestedWidth * 0.4;
   const logoHeight = a.logo.height > 0 ? a.logo.height : naturalHeight;
   const logoWidth = a.logo.preserveAspectRatio && a.logo.height > 0 && aspectRatio ? Math.min(requestedWidth, a.logo.height * aspectRatio) : requestedWidth;
   const drawnHeight = a.logo.preserveAspectRatio && aspectRatio ? logoWidth / aspectRatio : logoHeight;
@@ -76,9 +78,9 @@ function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }
   const sections: Record<DocumentSectionKey, ReactNode> = {
     header: <View style={{ ...block, borderBottomWidth: 1, borderColor: a.colors.border, backgroundColor: a.backgrounds.header.color, minHeight: a.page.firstHeaderHeight || undefined, paddingBottom: config.layout === "compact" ? 8 : 14, position: "relative", ...(config.layout === "modern" ? { padding: 10, borderTopWidth: 3 } : {}) }}><DocumentArtworkPdf background={a.backgrounds.header} width={contentWidth} height={estimatedHeaderHeight} /><View wrap={false} style={{ flexDirection: stackedHeader ? "column" : "row" }}>
       <View style={{ flex: 1, ...(stackedHeader ? { marginBottom: 12, width: "100%" } : {}), alignItems: design.logo.alignment === "center" ? "center" : design.logo.alignment === "right" ? "flex-end" : "flex-start", paddingRight: 12 }}>
-        {config.showLogo && config.brand && <View style={{ padding: config.logoVariant === "reverse" ? 6 : 0, backgroundColor: config.logoVariant === "reverse" ? config.brand.primary : undefined }}><Svg width={logoWidth} height={drawnHeight} viewBox={`0 0 ${logoWidth} ${drawnHeight}`} content={sizedBrandSvg(config.brand, config.logoVariant, logoWidth, drawnHeight)} /></View>}
-        {config.showLogo && !config.brand && organization.logoUrl && <Image src={organization.logoUrl} width={logoWidth} {...(aspectRatio || a.logo.height > 0 ? { height: drawnHeight } : {})} />}
-        {config.showLogo && config.brand?.descriptor && text(config.brand.descriptor, { ...body, fontFamily: config.brand.font === "inter" ? documentPdfFontFamily("space_mono", fonts) : body.fontFamily, fontSize: 8, marginTop: 6 })}
+        {config.showLogo && !config.customLogo && config.brand && <View style={{ padding: config.logoVariant === "reverse" ? 6 : 0, backgroundColor: config.logoVariant === "reverse" ? config.brand.primary : undefined }}><Svg width={logoWidth} height={drawnHeight} viewBox={`0 0 ${logoWidth} ${drawnHeight}`} content={sizedBrandSvg(config.brand, config.logoVariant, logoWidth, drawnHeight)} /></View>}
+        {config.showLogo && (config.customLogo || (!config.brand && organization.logoUrl)) && <Image src={config.customLogo || organization.logoUrl!} width={logoWidth} {...(aspectRatio || a.logo.height > 0 ? { height: drawnHeight } : {})} />}
+        {config.showLogo && !config.customLogo && config.brand?.descriptor && text(config.brand.descriptor, { ...body, fontFamily: config.brand.font === "inter" ? documentPdfFontFamily("space_mono", fonts) : body.fontFamily, fontSize: 8, marginTop: 6 })}
       </View>
       <View style={{ width: stackedHeader ? "100%" : Math.max(130, contentWidth * 0.36), alignItems: "flex-end" }}>
         {a.visibility.title && text(title, element("title"))}

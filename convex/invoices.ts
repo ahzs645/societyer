@@ -32,7 +32,7 @@ import {
 } from "../shared/functions/invoices";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { invoiceMoneyValidator, invoiceDocumentExtrasValidator, invoiceTaxModeValidator } from "./tables/invoiceMoney";
-import { invoiceTemplateValidator, invoicePriceEntryValidator, repairStatusValidator, invoiceDiscountValidator } from "./tables/invoices";
+import { invoiceReceivingMethodValidator, invoiceTemplateValidator, invoicePriceEntryValidator, repairStatusValidator, invoiceDiscountValidator } from "./tables/invoices";
 
 // Lines arrive from the builder; the handler normalises and validates them.
 const clientLineValidator = v.object({
@@ -80,6 +80,7 @@ export const upsert = authorizedMutation("invoices:upsert", mutation)({
     shipToName: v.optional(v.string()),
     shipToAddress: v.optional(v.string()),
     documentTemplate: v.optional(invoiceTemplateValidator),
+    paymentMethodIds: v.optional(v.array(v.string())),
     money: v.optional(invoiceMoneyValidator), documentExtras: v.optional(invoiceDocumentExtrasValidator),
     priceListId: v.optional(v.union(v.id("invoicePriceLists"), v.null())),
     repairJobId: v.optional(v.id("repairJobs")),
@@ -267,6 +268,8 @@ export const saveSettings = authorizedMutation("invoices:saveSettings", mutation
     nextNumber: v.number(),
     defaultTerms: v.string(),
     paymentInstructions: v.optional(v.string()),
+    paymentMethods: v.optional(v.array(invoiceReceivingMethodValidator)),
+    defaultPaymentMethodIds: v.optional(v.array(v.string())),
     defaultMemo: v.optional(v.string()),
     replyToEmail: v.optional(v.string()),
   },

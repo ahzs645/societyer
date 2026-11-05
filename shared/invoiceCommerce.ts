@@ -1,3 +1,4 @@
+import { cleanDocumentImage } from "./documentRichContent";
 import { cleanInvoiceBrand, type InvoiceBrand } from "./invoiceBranding";
 import { cleanDocumentDesign, type DocumentDesign } from "./documentDesign";
 export * from "./documentDesign";
@@ -13,6 +14,7 @@ export function invoiceCurrency(value: unknown, fallback = "CAD"): string {
 export type InvoiceTemplate = {
   design?: DocumentDesign;
   brand?: InvoiceBrand;
+  customLogo?: string;
   logoVariant?: "primary" | "black" | "reverse";
   name: string;
   layout: "classic" | "modern" | "compact";
@@ -32,7 +34,7 @@ export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplate = {
 
 export function cleanInvoiceTemplate(input?: Partial<InvoiceTemplate> | null): InvoiceTemplate {
   if (input && (typeof input !== "object" || Array.isArray(input))) throw new Error("Choose a valid document template.");
-  const keys = [...Object.keys(DEFAULT_INVOICE_TEMPLATE), "brand", "design"];
+  const keys = [...Object.keys(DEFAULT_INVOICE_TEMPLATE), "brand", "design", "customLogo"];
   for (const key of Object.keys(input ?? {})) if (!keys.includes(key)) throw new Error(`Unknown template setting: ${key}.`);
   const value = { ...DEFAULT_INVOICE_TEMPLATE, ...input };
   for (const key of ["showLogo", "showDescription", "showPaymentInstructions"] as const) {
@@ -49,6 +51,7 @@ export function cleanInvoiceTemplate(input?: Partial<InvoiceTemplate> | null): I
     ...(value.design !== undefined ? { design: cleanDocumentDesign(value.design, value) } : {}),
     logoVariant: value.logoVariant === "black" || value.logoVariant === "reverse" ? value.logoVariant : "primary",
     ...(value.brand ? { brand: cleanInvoiceBrand(value.brand) } : {}),
+    ...(value.customLogo ? { customLogo: cleanDocumentImage(value.customLogo) } : {}),
     name: String(value.name).trim().slice(0, 100) || "Untitled template", layout: value.layout,
     accentColor: value.accentColor, title: String(value.title).trim().slice(0, 80) || "Invoice",
     footer: String(value.footer).trim().slice(0, 2000), showLogo: value.showLogo,

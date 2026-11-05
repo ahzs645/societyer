@@ -1,3 +1,5 @@
+import { defaultInvoicePayments } from "../../../shared/invoicePaymentMethods";
+import { cleanDocumentImage } from "../../../shared/documentRichContent";
 import ddcnorthBrand from "../../../shared/brandKits/ddcnorth.json";
 import { useEffect, useRef, useState } from "react";
 import { Download, FileSearch } from "lucide-react";
@@ -44,6 +46,7 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
 
   const preview: InvoiceDocumentData = {
     documentKind: kind,
+    ...defaultInvoicePayments(workspace.settings),
     number: kind === "receipt" ? "REC-PREVIEW" : kind === "work_order" ? "WO-PREVIEW" : kind === "quote" ? "QT-PREVIEW" : kind === "statement" ? "STMT-PREVIEW" : "INV-PREVIEW",
     issueDate: workspace.today, dueDate: workspace.today, terms: "due_on_receipt", currency: workspace.ledger.workspaceCurrency,
     reference: "PO-1024", billToName: "Sample customer", billToEmail: "customer@example.test", billToAddress: "100 Main Street\nVancouver, BC", shipToName: "Sample customer — receiving", shipToAddress: "200 Warehouse Road\nVancouver, BC",
@@ -71,7 +74,15 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
   };
   const applyBrand = (brand: InvoiceBrand) => {
     const advanced = design.advanced ?? resolveDocumentAdvanced(design);
-    onChange({ brand, accentColor: brand.primary, showLogo: true, design: { ...design, typography: { ...design.typography, header: { ...design.typography.header, color: brand.primary } }, advanced: { ...advanced, colors: { ...advanced.colors, tableHeaderBackground: brand.primary }, typography: { ...advanced.typography, title: { ...advanced.typography.title, color: brand.primary } } } } });
+    onChange({ brand, customLogo: undefined, accentColor: brand.primary, showLogo: true, design: { ...design, typography: { ...design.typography, header: { ...design.typography.header, color: brand.primary } }, advanced: { ...advanced, colors: { ...advanced.colors, tableHeaderBackground: brand.primary }, typography: { ...advanced.typography, title: { ...advanced.typography.title, color: brand.primary } } } } });
+  };
+  const changeAccent = (accentColor: string) => {
+    const advanced = design.advanced ?? resolveDocumentAdvanced(design);
+    onChange({ accentColor, design: { ...design,
+      typography: { ...design.typography, header: { ...design.typography.header, color: accentColor } },
+      advanced: { ...advanced, colors: { ...advanced.colors, tableHeaderBackground: accentColor },
+        typography: { ...advanced.typography, title: { ...advanced.typography.title, color: accentColor } } },
+    } });
   };
   const importBrand = async (file?: File) => {
     if (!file) return;
@@ -79,6 +90,20 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
       if (file.size > 2_000_000) throw new Error("Choose a Brandkit JSON profile smaller than 2 MB.");
       applyBrand(importInvoiceBrand(JSON.parse(await file.text()))); onError("");
     } catch (error) { onError(error instanceof Error ? error.message : "Could not import the Brandkit profile."); }
+  };
+
+  const uploadLogo = async (file?: File) => {
+    if (!file) return;
+    try {
+      if (file.size > 175000) throw new Error("Choose a PNG or JPEG logo smaller than 175 KB.");
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Could not read the logo."));
+        reader.readAsDataURL(file);
+      });
+      onChange({ customLogo: cleanDocumentImage(data), showLogo: true }); onError("");
+    } catch (error) { onError(error instanceof Error ? error.message : "Could not upload the logo."); }
   };
 
   return <div className="document-designer">
@@ -89,12 +114,14 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
       <DesignSection id="branding" title="Branding">
         <div className="invoice-brand-controls"><strong>Brand kit</strong><button className="btn btn--sm" type="button" onClick={() => { try { applyBrand(importInvoiceBrand(ddcnorthBrand, "https://projects.ahmadjalil.com/brandkit/?brand=ddcnorth")); onError(""); } catch (error) { onError(error instanceof Error ? error.message : "Could not apply brand."); } }}>Apply ddcnorth</button>
           <Field label="Import Brandkit profile" hint="Use source/consumer-profile.json from a Brandkit download. Existing circle-symbol brand.json files are also supported."><input className="input" type="file" accept=".json,application/json" onChange={(e) => { void importBrand(e.target.files?.[0]); e.target.value = ""; }} /></Field>
-          {config.brand && <div><p>{config.brand.name} · {config.brand.version}</p><p className="muted">Document body font: {invoiceBrandFontDescription(config.brand)}. Legal and contact details come from your organization.</p>{config.brand.sourceTypography && <p className="muted">Logo lettering is preserved as vector artwork. Heading and label fonts use the document typography controls; source font files are not imported.</p>}<div className="invoice-brand-swatches">{[config.brand.primary, config.brand.ink, config.brand.paper, config.brand.light].map((color, index) => <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />)}</div><button type="button" className="btn btn--sm" onClick={() => onChange({ brand: undefined })}>Use organization branding</button></div>}
+          {config.brand && <div><p>{config.brand.name} · {config.brand.version}</p><p className="muted">Document body font: {invoiceBrandFontDescription(config.brand)}. Legal and contact details come from your organization.</p>{config.brand.sourceTypography && <p className="muted">Logo lettering is preserved as vector artwork. Heading and label fonts use the document typography controls; source font files are not imported.</p>}<div className="invoice-brand-swatches">{[config.brand.primary, config.brand.ink, config.brand.paper, config.brand.light].map((color, index) => <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />)}</div><button type="button" className="btn btn--sm" onClick={() => onChange({ brand: undefined, customLogo: undefined })}>Use organization branding</button></div>}
         </div>
+        <Field label="Upload custom logo" hint="PNG or JPEG, up to 175 KB and 4096 pixels per side. Saved with this template and its invoices."><input className="input" type="file" accept="image/png,image/jpeg" onChange={(event) => { void uploadLogo(event.target.files?.[0]); event.target.value = ""; }} /></Field>
+        {config.customLogo && <div><p className="muted">Custom logo uploaded.</p><button type="button" className="btn btn--sm" onClick={() => onChange({ customLogo: undefined })}>Remove custom logo</button></div>}
         <Checkbox label="Show logo" checked={config.showLogo} onChange={(showLogo) => onChange({ showLogo })} />
-        {config.brand && <Field label="Logo color"><Select value={config.logoVariant ?? "primary"} onChange={(logoVariant) => onChange({ logoVariant: logoVariant as InvoiceTemplate["logoVariant"] })} options={[{ value: "primary", label: "Brand colors" }, { value: "black", label: "Black" }, { value: "reverse", label: "Reverse on brand color" }]} /></Field>}
+        {config.brand && !config.customLogo && <Field label="Logo color"><Select value={config.logoVariant ?? "primary"} onChange={(logoVariant) => onChange({ logoVariant: logoVariant as InvoiceTemplate["logoVariant"] })} options={[{ value: "primary", label: "Brand colors" }, { value: "black", label: "Black" }, { value: "reverse", label: "Reverse on brand color" }]} /></Field>}
         <div className="document-designer__grid"><DesignNumber label="Logo width (pt)" value={design.logo.width} min={24} max={280} onChange={(width) => update({ logo: { ...design.logo, width } })} /><Field label="Logo alignment"><Select value={design.logo.alignment} onChange={(alignment) => update({ logo: { ...design.logo, alignment: alignment as DocumentDesign["logo"]["alignment"] } })} options={[{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }]} /></Field></div>
-        <Field label="Accent color"><input className="input document-designer__color" type="color" value={config.accentColor} onChange={(e) => onChange({ accentColor: e.target.value })} /></Field>
+        <Field label="Accent color"><input className="input document-designer__color" type="color" value={config.accentColor} onChange={(e) => changeAccent(e.target.value)} /></Field>
       </DesignSection>
       <TypographyDesignControls {...controls} />
       <DocumentElementControls {...controls} />

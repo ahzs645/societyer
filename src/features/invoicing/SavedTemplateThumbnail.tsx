@@ -1,3 +1,4 @@
+import { defaultInvoicePayments } from "../../../shared/invoicePaymentMethods";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { InvoiceTemplate } from "../../../shared/invoiceCommerce";
 import { InvoiceDocument } from "./InvoiceDocument";
@@ -22,7 +23,7 @@ export function SavedTemplateThumbnail({ config, workspace, onPreview }: { confi
   const width = page.width * 96 / 72, height = page.height * 96 / 72;
   const scale = availableWidth / width;
   return <button type="button" className="document-template-saved-thumbnail" aria-label={`Preview saved ${config.name}`} onClick={onPreview}>
-    <span ref={frame} className="document-template-saved-thumbnail__frame" style={{ aspectRatio: `${width} / ${height}` }}><span className="document-template-saved-thumbnail__canvas" aria-hidden="true" style={{ width, minHeight: height, transform: `scale(${scale})` }}><InvoiceDocument invoice={sample.invoice} organization={workspace.organization} paymentInstructions={workspace.settings.paymentInstructions} /></span></span>
+    <span ref={frame} className="document-template-saved-thumbnail__frame" style={{ aspectRatio: `${width} / ${height}` }}><span className="document-template-saved-thumbnail__canvas" aria-hidden="true" style={{ width, minHeight: height, transform: `scale(${scale})` }}><InvoiceDocument invoice={{ ...sample.invoice, ...defaultInvoicePayments(workspace.settings) }} organization={workspace.organization} paymentInstructions={workspace.settings.paymentInstructions} /></span></span>
     <span className="document-template-gallery__preview-hint">Preview saved design</span>
   </button>;
 }

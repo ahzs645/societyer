@@ -89,15 +89,25 @@ export const invoiceTimelineEventValidator = v.object({
   amountCents: v.optional(v.number()),
 });
 
+export const invoiceReceivingMethodValidator = v.object({
+  id: v.string(), name: v.string(), details: v.string(),
+  type: v.union(v.literal("eft"), v.literal("e_transfer"), v.literal("cheque"), v.literal("cash"), v.literal("card"), v.literal("other")),
+});
+
 export const invoiceBrandValidator = v.object({
   id: v.string(), name: v.string(), version: v.string(), sourceUrl: v.optional(v.string()),
   primary: v.string(), ink: v.string(), paper: v.string(), muted: v.string(), light: v.string(),
   font: v.union(v.literal("inter"), v.literal("serif"), v.literal("sans")),
+  consumerProfileSchema: v.optional(v.literal("brandkit/consumer-profile/1")),
+  logoVariants: v.optional(v.object({ black: v.string(), reverse: v.string() })),
+  sourceTypography: v.optional(v.object({ body: v.string(), heading: v.string(), label: v.string() })),
+  provenance: v.optional(v.object({ source: v.optional(v.string()), status: v.optional(v.string()) })),
   logoSvg: v.string(), logoWidth: v.number(), logoHeight: v.number(), descriptor: v.optional(v.string()),
 });
 export const invoiceTemplateValidator = v.object({
   design: v.optional(documentDesignValidator),
   brand: v.optional(invoiceBrandValidator),
+  customLogo: v.optional(v.string()),
   logoVariant: v.optional(v.union(v.literal("primary"), v.literal("black"), v.literal("reverse"))),
   name: v.string(), layout: v.union(v.literal("classic"), v.literal("modern"), v.literal("compact")),
   accentColor: v.string(), title: v.string(), footer: v.string(), showLogo: v.boolean(),
@@ -126,6 +136,8 @@ export const invoiceTables = {
     reference: v.optional(v.string()),
     currency: v.string(),
     documentTemplate: v.optional(invoiceTemplateValidator),
+    paymentMethods: v.optional(v.array(invoiceReceivingMethodValidator)),
+    paymentInstructions: v.optional(v.string()),
     money: v.optional(invoiceMoneyValidator),
     documentExtras: v.optional(invoiceDocumentExtrasValidator),
     priceListId: v.optional(v.id("invoicePriceLists")),
@@ -228,6 +240,8 @@ export const invoiceTables = {
     reference: v.optional(v.string()),
     currency: v.string(),
     documentTemplate: v.optional(invoiceTemplateValidator),
+    paymentMethods: v.optional(v.array(invoiceReceivingMethodValidator)),
+    paymentInstructions: v.optional(v.string()),
     money: v.optional(invoiceMoneyValidator),
     documentExtras: v.optional(invoiceDocumentExtrasValidator),
     lines: v.array(invoiceLineValidator),
@@ -244,6 +258,8 @@ export const invoiceTables = {
     prefix: v.string(),
     nextNumber: v.number(),
     defaultTerms: v.string(),
+    paymentMethods: v.optional(v.array(invoiceReceivingMethodValidator)),
+    defaultPaymentMethodIds: v.optional(v.array(v.string())),
     paymentInstructions: v.optional(v.string()),
     defaultMemo: v.optional(v.string()),
     replyToEmail: v.optional(v.string()),
