@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 export default defineConfig({
   testDir: "tests",
@@ -13,7 +14,7 @@ export default defineConfig({
     name: `${browser}-${width}`,
     use: {
       browserName: browser as "chromium" | "firefox", viewport: { width, height: 900 }, hasTouch: width < 980,
-      launchOptions: browser === "chromium" && process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+      launchOptions: browser === "chromium" ? chromiumLaunchOptions() : undefined,
     },
   }))),
 });

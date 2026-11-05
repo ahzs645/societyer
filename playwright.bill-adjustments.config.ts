@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 export default defineConfig({
   testDir: "tests", testMatch: "bill-adjustments.spec.ts", timeout: 240_000,
@@ -8,7 +9,7 @@ export default defineConfig({
     baseURL: process.env.BILL_ADJUSTMENTS_URL ?? "http://127.0.0.1:4186", headless: true,
     actionTimeout: 30_000, navigationTimeout: 60_000,
     screenshot: "only-on-failure", trace: "retain-on-failure", viewport: { width: 1440, height: 1100 },
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: process.env.BILL_ADJUSTMENTS_URL ? undefined : {
     command: "SOCIETYER_FROZEN_QUALIFICATION=1 VITE_RUNTIME_MODE=local-indexeddb VITE_LOCAL_WORKSPACE_ID=bill-adjustments-playwright npx vite --host 127.0.0.1 --port 4186 --strictPort",

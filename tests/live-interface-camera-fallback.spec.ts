@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { assertScannerFallback, denyBrowserCamera } from "./helpers/cameraFallback";
 import { assertLiveFits, liveFixture, signInLive } from "./helpers/liveInterface";
 
-test.use({ channel: "chromium", launchOptions: { args: ["--use-fake-device-for-media-stream"] }, permissions: [] });
+test.use({ channel: process.platform === "darwin" ? "chrome" : "chromium", launchOptions: { chromiumSandbox: process.platform === "darwin", args: ["--use-fake-device-for-media-stream"] }, permissions: [] });
 test.beforeEach(async ({ page, baseURL }) => denyBrowserCamera(page, baseURL!));
 
 for (const role of ["Owner", "Viewer"]) {

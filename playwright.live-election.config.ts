@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 /** Dedicated actual Member fixture; kept outside the running main interface glob. */
 export default defineConfig({
@@ -10,7 +11,7 @@ export default defineConfig({
   retries: 0,
   outputDir: "tmp/live-election-browser-results",
   reporter: [["list"], ["json", { outputFile: "tmp/live-election-browser-results.json" }]],
-  use: { baseURL: "http://127.0.0.1:43477", screenshot: "only-on-failure", trace: "retain-on-failure", launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined },
+  use: { baseURL: "http://127.0.0.1:43477", screenshot: "only-on-failure", trace: "retain-on-failure", launchOptions: chromiumLaunchOptions() },
   projects: [
     { name: "narrow-phone", use: { browserName: "chromium", viewport: { width: 320, height: 740 }, isMobile: true, hasTouch: true } },
     { name: "phone", use: { browserName: "chromium", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },

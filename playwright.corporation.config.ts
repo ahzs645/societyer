@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 // Overridable so parallel checkouts on one machine do not collide.
 const PORT = Number(process.env.CORPORATION_FLOW_PORT ?? 4175);
@@ -13,7 +14,7 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     headless: true,
     screenshot: "only-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: {
     command: `VITE_RUNTIME_MODE=local-indexeddb VITE_E2E_TEST_HARNESS=1 VITE_LOCAL_WORKSPACE_ID=corporation-mvp-playwright npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,

@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 // Overridable so parallel checkouts on one machine do not collide.
 const PORT = Number(process.env.INTERFACE_AUDIT_PORT ?? 4177);
@@ -19,7 +20,7 @@ export default defineConfig({
     trace: "retain-on-failure",
     // Machines with a preinstalled Chromium (rather than `playwright install`)
     // point at it here; specs that set their own launchOptions keep it too.
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: process.env.INTERFACE_AUDIT_URL ? undefined : {
     command: `VITE_E2E_TEST_HARNESS=1 npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,

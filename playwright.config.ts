@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 export default defineConfig({
   testDir: "tests",
@@ -52,7 +53,7 @@ export default defineConfig({
     baseURL: "http://localhost:4173",
     headless: true,
     screenshot: "only-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: {
     command: "npm run build:pages && npx vite preview --port 4173",

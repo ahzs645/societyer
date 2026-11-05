@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 // Governance retest flows (committee quorum and cadence, per-body quorum,
 // recording a held AGM, coverage marks) on the persistent local runtime. Set
@@ -15,7 +16,7 @@ export default defineConfig({
     headless: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: process.env.GOVERNANCE_RETEST_URL ? undefined : {
     command: "VITE_RUNTIME_MODE=local-indexeddb VITE_LOCAL_WORKSPACE_ID=governance-retest-playwright npx vite --host 127.0.0.1 --port 4179 --strictPort",

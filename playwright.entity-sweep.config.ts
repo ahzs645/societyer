@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 // The sweep spec skips itself unless this is set, so the default
 // `playwright.config.ts` (static demo, no setup harness) never runs it.
@@ -33,7 +34,7 @@ export default defineConfig({
     headless: true,
     viewport: { width: 1440, height: 900 },
     screenshot: "only-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: {
     command: `VITE_E2E_TEST_HARNESS=1 npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,

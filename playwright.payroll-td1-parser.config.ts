@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 export default defineConfig({
   testDir: "tests",
@@ -10,9 +11,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:4207",
     headless: true,
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH
-      ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH }
-      : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: {
     command: "SOCIETYER_FROZEN_QUALIFICATION=1 VITE_RUNTIME_MODE=local-indexeddb VITE_LOCAL_WORKSPACE_ID=payroll-td1-parser-check npx vite --host 127.0.0.1 --port 4207 --strictPort",

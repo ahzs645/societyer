@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 // Overridable so parallel checkouts on one machine do not collide (like
 // INTERFACE_AUDIT_PORT); the spec reads the same variable.
@@ -9,7 +10,7 @@ export default defineConfig({
   expect: { timeout: 15_000 }, retries: 0,
   outputDir: process.env.GUIDED_SETUP_OUTPUT ?? "tmp/guided-setup-results",
   reporter: [["list"], ["json", { outputFile: process.env.GUIDED_SETUP_REPORT ?? "tmp/guided-setup-results.json" }]],
-  use: { baseURL: `http://127.0.0.1:${PORT}`, screenshot: "only-on-failure", trace: "retain-on-failure", launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined },
+  use: { baseURL: `http://127.0.0.1:${PORT}`, screenshot: "only-on-failure", trace: "retain-on-failure", launchOptions: chromiumLaunchOptions() },
   webServer: { command: `VITE_E2E_TEST_HARNESS=1 npx vite --host 127.0.0.1 --port ${PORT} --strictPort`, port: PORT, reuseExistingServer: false, timeout: 90_000 },
   projects: [
     { name: "narrow-phone", use: { viewport: { width: 320, height: 740 }, isMobile: true, hasTouch: true } },

@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 // WP-G meetings editing spec on the local runtime. Set MEETINGS_EDITING_URL to
 // reuse an already running local-runtime dev server.
@@ -16,7 +17,7 @@ export default defineConfig({
     timezoneId: "America/Vancouver",
     viewport: { width: 1440, height: 900 },
     screenshot: "only-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: existing ? undefined : {
     command: `VITE_RUNTIME_MODE=local-indexeddb VITE_LOCAL_WORKSPACE_ID=meetings-editing-playwright npx vite --host 127.0.0.1 --port ${port} --strictPort`,

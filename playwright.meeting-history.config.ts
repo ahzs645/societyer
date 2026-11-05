@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 export default defineConfig({
   testDir: "tests",
@@ -9,7 +10,7 @@ export default defineConfig({
     baseURL: "http://localhost:4176",
     headless: true,
     screenshot: "only-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: {
     command: "VITE_RUNTIME_MODE=local-indexeddb VITE_LOCAL_WORKSPACE_ID=meeting-history-playwright npx vite --host 127.0.0.1 --port 4176 --strictPort",

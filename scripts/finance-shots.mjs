@@ -36,7 +36,7 @@ const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844 },
 ];
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ ...(process.platform === "darwin" ? { channel: "chrome", chromiumSandbox: true } : {}) });
 try {
   for (const vp of VIEWPORTS) {
     const ctx = await browser.newContext({

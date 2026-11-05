@@ -4,7 +4,7 @@ import { chromium, devices } from "@playwright/test";
 const destination = "/workspace/scratch/payroll-responsive-roe-inspection",
   baseURL = process.env.PAYROLL_RESPONSIVE_ROE_URL ?? "http://127.0.0.1:4211";
 await mkdir(destination, { recursive: true });
-const browser = await chromium.launch({ headless: true }),
+const browser = await chromium.launch({ ...(process.platform === "darwin" ? { channel: "chrome", chromiumSandbox: true } : {}), headless: true }),
   results = [];
 try {
   for (const layout of [

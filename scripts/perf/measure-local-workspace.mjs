@@ -174,6 +174,7 @@ export async function measureRoute({ base, profile, route, timeoutMs, resolvedPa
     headless: true,
     // Preinstalled Chromium when provided (same variable as the Playwright configs); else Playwright's own.
     executablePath: process.env.SOCIETYER_CHROMIUM_PATH || undefined,
+    ...(process.platform === "darwin" && !process.env.SOCIETYER_CHROMIUM_PATH ? { channel: "chrome", chromiumSandbox: true } : {}),
     viewport: { width: 1440, height: 900 },
     args: ["--enable-precise-memory-info", "--js-flags=--expose-gc"],
   });

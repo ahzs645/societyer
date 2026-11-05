@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 /** This suite requires the actual isolated Convex backend and Better Auth broker.
  * No local-runtime/demo fallback or mocked query transport is allowed. */
@@ -16,7 +17,7 @@ export default defineConfig({
     baseURL: process.env.LIVE_INTERFACE_URL ?? "http://127.0.0.1:43477",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   projects: [
     { name: "narrow-phone", use: { browserName: "chromium", viewport: { width: 320, height: 740 }, isMobile: true, hasTouch: true } },

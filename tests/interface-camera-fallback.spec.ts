@@ -7,8 +7,8 @@ import { assertScannerFallback, denyBrowserCamera } from "./helpers/cameraFallba
 // configured browser path (SOCIETYER_CHROMIUM_PATH) over explicitly.
 const executablePath = process.env.SOCIETYER_CHROMIUM_PATH;
 test.use({
-  channel: "chromium",
-  launchOptions: { ...(executablePath ? { executablePath } : {}), args: ["--use-fake-device-for-media-stream"] },
+  channel: process.platform === "darwin" ? "chrome" : "chromium",
+  launchOptions: { ...(executablePath ? { executablePath } : {}), chromiumSandbox: process.platform === "darwin", args: ["--use-fake-device-for-media-stream"] },
   permissions: [],
 });
 test.beforeEach(async ({ page, baseURL }) => denyBrowserCamera(page, baseURL!));

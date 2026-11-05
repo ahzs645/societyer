@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ ...(process.platform === "darwin" ? { channel: "chrome", chromiumSandbox: true } : {}), headless: true });
 try {
   const context = await browser.newContext(), page = await context.newPage();
   const uncaught = []; page.on('pageerror', error => uncaught.push(error.message));

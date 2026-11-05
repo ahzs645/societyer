@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { chromiumLaunchOptions } from "./playwright.chromium";
 
 // WP-H browser flows (people merge, members & representatives, historical
 // actions) on the persistent local runtime. Set PEOPLE_IDENTITY_URL to reuse a
@@ -15,7 +16,7 @@ export default defineConfig({
     headless: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
+    launchOptions: chromiumLaunchOptions(),
   },
   webServer: process.env.PEOPLE_IDENTITY_URL ? undefined : {
     command: "VITE_RUNTIME_MODE=local-indexeddb VITE_LOCAL_WORKSPACE_ID=people-identity-playwright npx vite --host 127.0.0.1 --port 4178 --strictPort",
