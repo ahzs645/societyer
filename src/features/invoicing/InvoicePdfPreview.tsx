@@ -3,6 +3,13 @@ import type { InvoiceDocumentProps } from "./InvoiceDocument";
 
 const PdfPreview = lazy(() => import("../../components/PdfPreview").then((module) => ({ default: module.PdfPreview })));
 
+/** A finished PDF in the shared viewer, with its page and zoom controls. */
+export function DocumentPdfViewer({ blob, testId }: { blob: Blob; testId: string }) {
+  return <div className="invoice-pdf-preview">
+    <Suspense fallback={<p className="invoice-pdf-preview__state" role="status">Loading PDF viewer…</p>}><PdfPreview blob={blob} testId={testId} /></Suspense>
+  </div>;
+}
+
 /** Render the exported PDF at its original page geometry on every screen size. */
 export function InvoicePdfPreview(props: InvoiceDocumentProps) {
   const host = useRef<HTMLDivElement>(null);

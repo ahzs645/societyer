@@ -41,7 +41,7 @@ test("native quote acceptance converts once; payment receipt and dated statement
   await expect(page.locator(".invoice-card")).toContainText("Closing balance");
   await page.getByRole("button", { name: "Preview statement", exact: true }).click();
   preview = page.getByRole("dialog").last(); await expect(preview).toContainText("$75.00");
-  await preview.getByRole("button", { name: "Preview PDF", exact: true }).click(); await expect(preview.locator("iframe")).toHaveAttribute("src", /^blob:/);
+  await preview.getByRole("button", { name: "Preview PDF", exact: true }).click(); await expect(preview.getByTestId("billing-pdf-preview")).toBeVisible();
   await pdf(page, preview.getByRole("button", { name: "Download statement PDF", exact: true }), "/workspace/scratch/invoice-pdf/native-statement.pdf", [name, "Customer statement", "$75.00"]);
   await preview.getByRole("button", { name: "Close", exact: true }).first().click();
   await page.getByRole("button", { name: "Save statement snapshot", exact: true }).click();

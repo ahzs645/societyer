@@ -4,7 +4,7 @@ In **Invoices**, use **Items & services** to store products, parts, and labour w
 
 Use **Price lists** to set named rates for catalog items in a currency. Select the currency and price list before adding items to an invoice. The list applies to newly added lines; saved invoice rates remain unchanged. A blank list entry falls back to the catalog only when currencies match. No exchange rate or currency conversion is implied. Invoice summaries and customer balances use the selected currency. Foreign currency invoices still use the existing accounting review flow; automatic foreign currency ledger posting is not added here.
 
-Use **Import Brandkit** under **Invoices → Templates** to apply a Brandkit ZIP or JSON profile to your default document template. The starting designs inherit that template's brand. The portable profile preserves outlined logo lettering, multicolor artwork, and the supplied primary, black and reverse variants. See [Brandkit imports](brandkit-imports.md) for the supported formats and font mapping.
+Use **Import Brandkit** under **Invoices → Setup → Templates** to apply a Brandkit ZIP or JSON profile to your default document template. The starting designs inherit that template's brand. The portable profile preserves outlined logo lettering, multicolor artwork, and the supplied primary, black and reverse variants. See [Brandkit imports](brandkit-imports.md) for the supported formats and font mapping.
 
 The importer accepts passive vector geometry and rejects scripts, external assets and unsupported SVG features. Document text uses bundled fonts with an explicit fallback label; the profile does not download font files. The organization name, address, tax registration, and payment details continue to come from workspace records.
 

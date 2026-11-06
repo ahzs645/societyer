@@ -19,7 +19,7 @@ export function DocumentExtrasFields({ value = {}, onChange, disabled = false }:
       update({ attachments: [...value.attachments || [], ...additions] });
     } catch (problem) { setError(problem instanceof Error ? problem.message : "Could not attach file."); }
   };
-  return <details className="card invoice-card"><summary>Terms, payment details & attachments</summary><div className="form-stack" style={{ padding: 16 }}>
+  return <details className="card invoice-card disclosure"><summary>Terms, payment details & attachments</summary><div className="form-stack" style={{ padding: 16 }}>
     {error && <p className="field__error" role="alert">{error}</p>}
     <Field label="Terms and conditions"><textarea className="input textarea" disabled={disabled} value={value.termsAndConditions || ""} maxLength={12000} onChange={(event) => update({ termsAndConditions: event.target.value })} /></Field>
     <Field label="Online payment link"><div className="invoice-commerce-actions"><input className="input" type="url" disabled={disabled} value={paymentUrl} placeholder="https://" onChange={(event) => setPaymentUrl(event.target.value)} /><button type="button" className="btn btn--sm" disabled={disabled} onClick={() => update({ paymentUrl })}>Apply link</button></div></Field>

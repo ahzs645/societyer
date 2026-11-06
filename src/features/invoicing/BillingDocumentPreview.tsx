@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Download, Eye } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { InvoiceDocument, type InvoiceDocumentData } from "./InvoiceDocument";
+import { DocumentPdfViewer } from "./InvoicePdfPreview";
 import type { InvoiceOrganization } from "./types";
 
 type Props = {
@@ -20,16 +21,15 @@ export function BillingDocumentPreview({ title, document, organization, download
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [pdf, setPdf] = useState<{ key: string; url: string } | null>(null);
+  const [pdf, setPdf] = useState<{ key: string; blob: Blob } | null>(null);
   const documentKey = JSON.stringify({ document, organization });
-  useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf.url); }, [pdf]);
   const previewPdf = async () => {
     if (!canExport || busy) return;
     setBusy(true); setError("");
     try {
       const { buildInvoicePdf } = await import("./invoicePdf");
       const bytes = await buildInvoicePdf({ invoice: document, organization });
-      setPdf({ key: documentKey, url: URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" })) });
+      setPdf({ key: documentKey, blob: new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }) });
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not preview this document."); }
     finally { setBusy(false); }
   };
@@ -46,6 +46,6 @@ export function BillingDocumentPreview({ title, document, organization, download
   return <Modal open title={title} onClose={() => !busy && onClose()} size="xl" resizeKey="billing-document-preview" footer={<><button className="btn" disabled={busy} onClick={onClose}>Close</button><button className="btn" disabled={!canExport || busy} onClick={() => void previewPdf()}><Eye size={14} aria-hidden="true" />Preview PDF</button><button className="btn btn--accent" disabled={!canExport || busy} onClick={() => void download()}><Download size={14} aria-hidden="true" />{busy ? "Generating PDF…" : downloadLabel}</button></>}>
     {controls}
     {error && <p className="field__error" role="alert">{error}</p>}
-    {pdf?.key === documentKey ? <><button className="btn btn--sm" onClick={() => setPdf(null)}>Show document layout</button><iframe title={`${title} PDF preview`} src={pdf.url} style={{ width: "100%", height: "65vh", border: 0 }} /></> : <div className="invoice-paper" style={{ overflowX: "auto" }}><InvoiceDocument invoice={document} organization={organization} /></div>}
+    {pdf?.key === documentKey ? <><button className="btn btn--sm" onClick={() => setPdf(null)}>Show document layout</button><DocumentPdfViewer blob={pdf.blob} testId="billing-pdf-preview" /></> : <div className="invoice-paper" style={{ overflowX: "auto" }}><InvoiceDocument invoice={document} organization={organization} /></div>}
   </Modal>;
 }

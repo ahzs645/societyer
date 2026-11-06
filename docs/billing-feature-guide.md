@@ -4,7 +4,7 @@ The Invoices page combines the item/service catalog, price lists, customers, reu
 
 ## Documents and branding
 
-Invoices → Templates contains twelve starting designs, including six ddcnorth designs using the supplied brand kit and six organization-neutral designs. Every design can preview invoices, receipts, quotes, customer statements, work orders and financial reports. The gallery thumbnails are rendered PDFs; sample records are synthetic and do not create transactions.
+Invoices → Setup → Templates contains twelve starting designs, including six ddcnorth designs using the supplied brand kit and six organization-neutral designs. Every design can preview invoices, receipts, quotes, customer statements, work orders and financial reports. The gallery thumbnails are rendered PDFs; sample records are synthetic and do not create transactions.
 
 The shared designer supports custom paper dimensions, margins, independent logo dimensions, named bundled fonts, element typography, address formats and coordinates, page/background artwork, rich header/footer bands, section order, column order/widths/labels, tax summaries, payment links and QR codes, a payment stub, signature images and receiver signatures. Document-specific fields provide bank details, terms, inventory batch/serial tables, annexures and bounded passive PDF/image attachments. Rich HTML, links and artwork are validated; imported HTML cannot execute scripts. Size limits give actionable errors before saving an oversized record.
 

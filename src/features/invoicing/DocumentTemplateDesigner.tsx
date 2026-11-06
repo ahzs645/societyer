@@ -1,6 +1,6 @@
 import { defaultInvoicePayments } from "../../../shared/invoicePaymentMethods";
 import { cleanDocumentImage } from "../../../shared/documentRichContent";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Download, FileSearch } from "lucide-react";
 import { Field } from "../../components/ui";
 import { Select } from "../../components/Select";
@@ -17,6 +17,7 @@ import {
 import { DocumentGeometryControls, DocumentAddressControls, DocumentArtworkControls, DocumentElementControls, DocumentVisibilityControls, DocumentRichBandControls, DocumentPaymentControls, DocumentTaxDisplayControls, DocumentSignatureControls, DocumentAnnexControls } from "./DocumentAdvancedControls";
 import type { InvoiceWorkspace } from "./types";
 import { importBrandkitFile } from "./importBrandkit";
+import { DocumentPdfViewer } from "./InvoicePdfPreview";
 import "../../styles/_document-designer.scss";
 
 type PreviewKind = "invoice" | "receipt" | "work_order" | "quote" | "statement";
@@ -30,19 +31,36 @@ type Props = {
   onError: (error: string) => void;
 };
 
+/** The sample keeps its real page width and scales down, so narrow screens see the page, not a reflowed one. */
+function FittedPaper({ width, children }: { width: number; children: ReactNode }) {
+  const paper = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const element = paper.current;
+    if (!element) return;
+    const measure = () => setScale(Math.min(1, element.clientWidth / width));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [width]);
+  return <div ref={paper} className="document-designer__paper"><div style={{ width, zoom: scale }}>{children}</div></div>;
+}
+
 export function DocumentTemplateDesigner({ config, onChange, workspace, workspaceBrand, makeDefault, onDefaultChange, onError }: Props) {
   // Saved/opened drafts are normalized once. Keep in-progress text intact while typing.
   const design = config.design ?? resolveDocumentDesign(config);
   const [kind, setKind] = useState<PreviewKind>("invoice");
   const [longPreview, setLongPreview] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState("");
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [currentSection, setCurrentSection] = useState<string>("page");
+  const navRef = useRef<HTMLElement>(null);
   const [rendering, setRendering] = useState(false);
   const renderRevision = useRef(0);
   const update = (patch: Partial<DocumentDesign>) => onChange({ design: { ...design, ...patch } });
   const controls = { config, design, change: onChange, update };
 
-  useEffect(() => { renderRevision.current++; setPdfUrl(""); }, [config, kind, longPreview]);
-  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+  useEffect(() => { renderRevision.current++; setPdfBlob(null); }, [config, kind, longPreview]);
   useEffect(() => () => { renderRevision.current++; }, []);
 
   const preview: InvoiceDocumentData = {
@@ -69,7 +87,7 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, workspac
       if (revision !== renderRevision.current) return;
       const blob = new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" });
       if (download) triggerBlobDownload(blob, `${preview.number}.pdf`);
-      else setPdfUrl(URL.createObjectURL(blob));
+      else setPdfBlob(blob);
     } catch (error) { onError(error instanceof Error ? error.message : "Could not render sample PDF."); }
     finally { setRendering(false); }
   };
@@ -105,13 +123,29 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, workspac
     } catch (error) { onError(error instanceof Error ? error.message : "Could not upload the logo."); }
   };
 
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.isIntersecting) setCurrentSection(entry.target.id.replace("document-design-", ""));
+    }, { rootMargin: "-130px 0px -65% 0px" });
+    for (const [id] of DESIGN_SECTIONS) {
+      const section = document.getElementById(`document-design-${id}`);
+      if (section) observer.observe(section);
+    }
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const nav = navRef.current, chip = nav?.querySelector<HTMLElement>(".is-current");
+    if (nav && chip) nav.scrollTo({ left: chip.offsetLeft - nav.offsetLeft - 16 });
+  }, [currentSection]);
+  const pageWidth = design.page.orientation === "landscape" ? (config.paperSize === "a4" ? 1123 : 1056) : (config.paperSize === "a4" ? 794 : 816);
+  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
+
   return <div className="document-designer">
-    <div className="document-designer__settings">
-      <nav className="document-designer__nav" aria-label="Document designer sections">{DESIGN_SECTIONS.map(([id, title]) => <button type="button" className="btn btn--sm" key={id} onClick={() => document.getElementById(`document-design-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })}>{title}</button>)}</nav>
+    <div className="document-designer__settings" id="document-design-settings">
+      <nav ref={navRef} className="document-designer__nav" aria-label="Document designer sections">{DESIGN_SECTIONS.map(([id, title]) => <button type="button" className={`btn btn--sm${currentSection === id ? " is-current" : ""}`} aria-current={currentSection === id ? "true" : undefined} key={id} onClick={() => jumpTo(`document-design-${id}`)}>{title}</button>)}<button type="button" className="btn btn--sm btn--accent document-designer__narrow-only" onClick={() => jumpTo("document-design-preview")}>Preview</button></nav>
       <PageDesignControls {...controls} />
-      <DocumentGeometryControls {...controls} />
       <DesignSection id="branding" title="Branding">
-        <div className="invoice-brand-controls"><strong>Brand kit</strong>{workspaceBrand && <button className="btn btn--sm" type="button" onClick={() => applyBrand(workspaceBrand)}>Use workspace Brandkit</button>}
+        <div className="invoice-brand-controls"><strong>Brandkit</strong>{workspaceBrand && <button className="btn btn--sm" type="button" onClick={() => applyBrand(workspaceBrand)}>Use workspace Brandkit</button>}
           <Field label="Import Brandkit profile" hint="Choose a Brandkit ZIP or a JSON profile. Save this design as the default to use its Brandkit in the gallery."><input className="input" type="file" accept=".zip,.json,application/zip,application/json" onChange={(e) => { void importBrand(e.target.files?.[0]); e.target.value = ""; }} /></Field>
           {config.brand && <div><p>{config.brand.name} · {config.brand.version}</p><p className="muted">Document body font: {invoiceBrandFontDescription(config.brand)}. Legal and contact details come from your organization.</p>{config.brand.sourceTypography && <p className="muted">Logo lettering is preserved as vector artwork. Heading and label fonts use the document typography controls; source font files are not imported.</p>}<div className="invoice-brand-swatches">{[config.brand.primary, config.brand.ink, config.brand.paper, config.brand.light].map((color, index) => <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />)}</div><button type="button" className="btn btn--sm" onClick={() => onChange({ brand: undefined, customLogo: undefined })}>Use organization branding</button></div>}
         </div>
@@ -123,26 +157,28 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, workspac
         <Field label="Accent color"><input className="input document-designer__color" type="color" value={config.accentColor} onChange={(e) => changeAccent(e.target.value)} /></Field>
       </DesignSection>
       <TypographyDesignControls {...controls} />
-      <DocumentElementControls {...controls} />
       <FieldDesignControls {...controls} />
-      <DocumentVisibilityControls {...controls} />
-      <DocumentAddressControls {...controls} />
-      <DocumentArtworkControls {...controls} />
       <ColumnDesignControls {...controls} />
       <SectionOrderControls {...controls} />
       <HeaderDesignControls {...controls} />
-      <DocumentRichBandControls {...controls} />
       <TotalsDesignControls {...controls} />
-      <DocumentTaxDisplayControls {...controls} />
-      <DocumentPaymentControls {...controls} />
       <FooterDesignControls {...controls} />
+      <DocumentGeometryControls {...controls} />
+      <DocumentAddressControls {...controls} />
+      <DocumentArtworkControls {...controls} />
+      <DocumentElementControls {...controls} />
+      <DocumentVisibilityControls {...controls} />
+      <DocumentRichBandControls {...controls} />
+      <DocumentPaymentControls {...controls} />
+      <DocumentTaxDisplayControls {...controls} />
       <DocumentSignatureControls {...controls} />
       <DocumentAnnexControls {...controls} />
       <div className="document-designer__default"><Checkbox label="Use for new invoices by default" checked={makeDefault} onChange={onDefaultChange} /><p className="muted">The same design is available for receipts, repair work orders and report PDFs.</p></div>
     </div>
-    <aside className="document-designer__preview" aria-label="Document preview">
-      <div className="document-designer__preview-toolbar"><Field label="Preview document"><Select value={kind} onChange={(value) => setKind(value as PreviewKind)} options={[{ value: "invoice", label: "Invoice" }, { value: "receipt", label: "Payment receipt" }, { value: "work_order", label: "Work order" }, { value: "quote", label: "Quote" }, { value: "statement", label: "Customer statement" }]} /></Field><Checkbox label="Multi-page sample" checked={longPreview} onChange={setLongPreview} /><div className="invoice-commerce-actions"><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(false)}><FileSearch size={14} />{rendering ? "Rendering…" : "Preview PDF"}</button><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(true)}><Download size={14} /> Download sample PDF</button>{pdfUrl && <button type="button" className="btn btn--sm" onClick={() => setPdfUrl("")}>Live preview</button>}</div><p className="muted">{pdfUrl ? "Actual generated PDF, including pagination and continuation headers/footers." : "Live content preview. Preview PDF shows the exact page breaks, fonts and page numbers."}</p></div>
-      {pdfUrl ? <iframe className="document-designer__pdf" title="Generated document PDF preview" src={pdfUrl} /> : <div className="document-designer__paper"><InvoiceDocument invoice={preview} organization={workspace.organization} paymentInstructions={workspace.settings.paymentInstructions} /></div>}
+    <aside className="document-designer__preview" id="document-design-preview" aria-label="Document preview">
+      <button type="button" className="btn btn--sm document-designer__narrow-only" onClick={() => jumpTo("document-design-settings")}>Back to settings</button>
+      <div className="document-designer__preview-toolbar"><Field label="Preview document"><Select value={kind} onChange={(value) => setKind(value as PreviewKind)} options={[{ value: "invoice", label: "Invoice" }, { value: "receipt", label: "Payment receipt" }, { value: "work_order", label: "Work order" }, { value: "quote", label: "Quote" }, { value: "statement", label: "Customer statement" }]} /></Field><Checkbox label="Multi-page sample" checked={longPreview} onChange={setLongPreview} /><div className="invoice-commerce-actions"><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(false)}><FileSearch size={14} />{rendering ? "Rendering…" : "Preview PDF"}</button><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(true)}><Download size={14} /> Download sample PDF</button>{pdfBlob && <button type="button" className="btn btn--sm" onClick={() => setPdfBlob(null)}>Live preview</button>}</div><p className="muted">{pdfBlob ? "Actual generated PDF, including pagination and continuation headers/footers." : "Live content preview. Preview PDF shows the exact page breaks, fonts and page numbers."}</p></div>
+      {pdfBlob ? <DocumentPdfViewer blob={pdfBlob} testId="designer-pdf-preview" /> : <FittedPaper width={pageWidth}><InvoiceDocument invoice={preview} organization={workspace.organization} paymentInstructions={workspace.settings.paymentInstructions} /></FittedPaper>}
     </aside>
   </div>;
 }

@@ -148,3 +148,18 @@
   width: 18px;
   height: 18px;
 }
+
+// The page's main action, in the page header, is the one filled button. Dense
+// rows and card heads keep the quieter `.btn-action--primary` above.
+.page__actions .btn-action--primary {
+  background: token('accent');
+  border-color: token('accent');
+  color: token('accent-on');
+}
+@media (hover: hover) {
+  .page__actions .btn-action--primary:hover:not(:disabled) {
+    background: token('accent-hover');
+    border-color: token('accent-hover');
+    color: token('accent-on');
+  }
+}

@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { ArrowDown, ArrowUp, BookOpen, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { Menu } from "../../components/Menu";
 import { Money } from "../../components/Money";
 import { Select } from "../../components/Select";
+import { decodeTaxChoice, encodeTaxChoice, INVOICE_TAX_CHOICES, taxChoiceLabel } from "../../../shared/invoiceMoney";
+import { FinalPriceButton } from "./FinalPricePanel";
+import { useToast } from "../../components/Toast";
 import { formatMoney, parseMoneyInput } from "../../lib/money";
 import { INVOICE_LINE_DETAIL_KEYS, INVOICE_LINE_DETAIL_LABELS, cleanInvoiceLineDetails } from "../../../shared/invoiceLineDetails";
 import { lineAmountCents, type InvoiceLine } from "../../../shared/invoicing";
@@ -12,15 +15,6 @@ import { CatalogItemEditor, type CatalogItemSeed } from "./CatalogItemEditor";
 import type { CatalogItem } from "./types";
 
 export type LineDraft = InvoiceLine & { qtyInput: string; priceInput: string };
-
-const TAX_PRESETS: Array<{ label: string; rate: number }> = [
-  { label: "GST", rate: 5 },
-  { label: "HST", rate: 13 },
-  { label: "HST", rate: 14 },
-  { label: "HST", rate: 15 },
-  { label: "PST", rate: 7 },
-  { label: "QST", rate: 9.975 },
-];
 
 let lineCounter = 0;
 const newKey = () => `line_${Date.now().toString(36)}_${(lineCounter += 1)}`;
@@ -44,6 +38,7 @@ export function lineFromCatalog(item: CatalogItem): LineDraft {
     unitPriceCents: item.unitPriceCents,
     taxRatePercent: item.taxRatePercent,
     taxLabel: item.taxLabel,
+    additionalTaxes: item.additionalTaxes,
   });
 }
 
@@ -66,8 +61,13 @@ type Props = {
   tags?: FinanceTagsApi;
 };
 
+/** A line with anything filled in behind "More details" shows it, so nothing is hidden from view. */
+const hasLineDetails = (line: LineDraft) => Boolean(line.sku || (line.unit && line.unit !== "each") || line.taxMode || line.serialNumbers?.length || line.imageUrl || line.tagIds?.length || INVOICE_LINE_DETAIL_KEYS.some((key) => line[key]));
+
 /** Line items: add from the catalog, quantity × price, per-line tax and tags, reorder and remove. */
 export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, tags, currency = "CAD", catalogEditing, getCatalogRate }: Props) {
+  const toast = useToast();
+  const [detailKeys, setDetailKeys] = useState<{ openKeys: Set<string>; closedKeys: Set<string> }>({ openKeys: new Set(), closedKeys: new Set() });
   const showTags = Boolean(tags?.loaded && (tags.activeGroups.some((group) => group.tags.length > 0) || lines.some((line) => line.tagIds?.length)));
   const updateLine = (key: string, patch: Partial<LineDraft>) => onChange(lines.map((line) => (line.key === key ? { ...line, ...patch } : line)));
   const [newItem, setNewItem] = useState<{ seed: CatalogItemSeed; lineKey?: string } | null>(null);
@@ -97,10 +97,20 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
     onChange(next);
   };
 
+  const attachImage = (key: string, file?: File) => {
+    if (!file) return;
+    if (file.size > 100000) { toast.error("Choose an item image smaller than 100 KB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try { updateLine(key, cleanInvoiceLineDetails({ imageUrl: String(reader.result) })); }
+      catch (error) { toast.error(error instanceof Error ? error.message : "Invalid image"); }
+    };
+    reader.readAsDataURL(file);
+  };
   const taxOptions = (line: LineDraft) => {
-    const options = [{ value: "none", label: "No tax" }, ...TAX_PRESETS.map((tax) => ({ value: `${tax.label}|${tax.rate}`, label: `${tax.label} ${tax.rate}%` }))];
-    const current = line.taxRatePercent ? `${line.taxLabel ?? "Tax"}|${line.taxRatePercent}` : "none";
-    if (!options.some((option) => option.value === current)) options.push({ value: current, label: `${line.taxLabel ?? "Tax"} ${line.taxRatePercent}%` });
+    const options = [...INVOICE_TAX_CHOICES];
+    const current = encodeTaxChoice(line);
+    if (!options.some((option) => option.value === current)) options.push({ value: current, label: taxChoiceLabel(line) });
     return { options, current };
   };
 
@@ -108,43 +118,11 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
     <section className="invoice-builder__section" aria-labelledby="ib-lines">
       <div className="invoice-builder__heading-row">
         <h2 id="ib-lines" className="invoice-builder__heading">Line items</h2>
-        {!readOnly && (
-          <div className="invoice-builder__add">
-            {(catalog.length > 0 || catalogEditing) && (
-              <Menu
-                align="right"
-                minWidth={260}
-                trigger={
-                  <button type="button" className="btn btn--sm">
-                    <BookOpen size={14} aria-hidden="true" /> From catalog
-                  </button>
-                }
-                sections={[
-                  {
-                    id: "catalog",
-                    items: catalog.map((item) => ({
-                      id: item._id,
-                      label: item.name,
-                      hint: item.openPrice ? "No set price" : `${formatMoney(item.unitPriceCents, { currency })} / ${item.unit ?? "each"}`,
-                      onSelect: () => addFromCatalog(item),
-                    })),
-                  },
-                  ...(catalogEditing ? [{
-                    id: "new",
-                    items: [{ id: "new-item", label: "New item or service", icon: <Plus size={14} />, disabled: !catalogEditing.canWrite, onSelect: () => setNewItem({ seed: { currency } }) }],
-                  }] : []),
-                ]}
-              />
-            )}
-            <button type="button" className="btn btn--sm" onClick={() => onChange([...lines, blankLine()])}>
-              <Plus size={14} aria-hidden="true" /> Add line
-            </button>
-          </div>
-        )}
       </div>
       <ol className="line-editor">
         {lines.map((line, index) => {
           const tax = taxOptions(line);
+          const detailsOpen = !detailKeys.closedKeys.has(line.key) && (detailKeys.openKeys.has(line.key) || hasLineDetails(line));
           const priceInvalid = line.priceInput.trim() !== "" && parseMoneyInput(line.priceInput) == null;
           const openPrice = catalog.find((row) => row._id === line.catalogItemId)?.openPrice;
           const setPrice = setPriceFor(line);
@@ -196,11 +174,7 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                     disabled={readOnly}
                     aria-label={`Tax for line ${index + 1}`}
                     onChange={(value) => {
-                      if (value === "none") updateLine(line.key, { taxRatePercent: undefined, taxLabel: undefined });
-                      else {
-                        const [label, rate] = value.split("|");
-                        updateLine(line.key, { taxLabel: label, taxRatePercent: Number(rate) });
-                      }
+                      updateLine(line.key, decodeTaxChoice(value));
                     }}
                     options={tax.options}
                   />
@@ -210,51 +184,79 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                   <Money cents={lineAmountCents(line)} currency={currency} />
                 </div>
               </div>
-              <div className="line-editor__foot">
-                  {openPrice && !line.unitPriceCents && <p className="line-editor__price-note">No set price. Enter the amount for this invoice.</p>}
-                  {setPrice !== null && !overridden && <p className="line-editor__price-note">Set price. Change it here to override it on this invoice only.</p>}
-                  {overridden && !readOnly && (
-                    <p className="line-editor__price-note">
-                      Overridden on this invoice. The set price is <Money cents={setPrice} currency={currency} />.{" "}
-                      <button type="button" className="line-editor__price-reset" onClick={() => updateLine(line.key, { rateOverridden: false, unitPriceCents: setPrice, priceInput: (setPrice / 100).toFixed(2) })}>Use set price</button>
-                    </p>
-                  )}
-                {!readOnly && (
+              <div className="line-editor__actions">
+                <FinalPriceButton line={line} currency={currency} disabled={readOnly} onApply={(unitPriceCents) => updateLine(line.key, { unitPriceCents, priceInput: (unitPriceCents / 100).toFixed(2), rateOverridden: true })} />
+                {catalogEditing && !line.catalogItemId && line.item.trim() && !readOnly && <button type="button" className="btn btn--ghost btn--sm" disabled={!catalogEditing.canWrite} onClick={() => saveLineToCatalog(line)}><BookOpen size={14} aria-hidden="true" /> Save to catalog</button>}
+                <button type="button" className="btn btn--ghost btn--sm" aria-expanded={detailsOpen} onClick={() => setDetailKeys((current) => { const next = new Set(current.openKeys); const hide = new Set(current.closedKeys); if (detailsOpen) { next.delete(line.key); hide.add(line.key); } else { next.add(line.key); hide.delete(line.key); } return { openKeys: next, closedKeys: hide }; })}>More details <ChevronDown size={14} aria-hidden="true" className={detailsOpen ? "line-editor__chevron is-open" : "line-editor__chevron"} /></button>
+                {!readOnly && lines.length > 1 && (
                   <div className="line-editor__tools">
-                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} up`} disabled={index === 0} onClick={() => moveLine(index, -1)}>
-                      <ArrowUp size={14} />
-                    </button>
-                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} down`} disabled={index === lines.length - 1} onClick={() => moveLine(index, 1)}>
-                      <ArrowDown size={14} />
-                    </button>
-                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove line ${index + 1}`} disabled={lines.length === 1} onClick={() => onChange(lines.filter((row) => row.key !== line.key))}>
-                      <Trash2 size={14} />
-                    </button>
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} up`} disabled={index === 0} onClick={() => moveLine(index, -1)}><ArrowUp size={14} /></button>
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} down`} disabled={index === lines.length - 1} onClick={() => moveLine(index, 1)}><ArrowDown size={14} /></button>
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove line ${index + 1}`} onClick={() => onChange(lines.filter((row) => row.key !== line.key))}><Trash2 size={14} /></button>
                   </div>
                 )}
               </div>
-              <div className="line-editor__more">
-                <label className="line-editor__field"><span className="field__label">SKU</span><input className="input" value={line.sku ?? ""} disabled={readOnly} placeholder="Optional" onChange={(e) => updateLine(line.key, { sku: e.target.value })} /></label>
-                <label className="line-editor__field"><span className="field__label">Unit</span><input className="input" value={line.unit ?? "each"} disabled={readOnly} onChange={(e) => updateLine(line.key, { unit: e.target.value })} placeholder="each / hour" /></label>
-                <details className="line-editor__field"><summary>Item details and tax mode</summary><div className="form-stack">
-                  <label>Tax mode<Select value={line.taxMode??"invoice"} disabled={readOnly} onChange={value=>updateLine(line.key,{taxMode:value==="invoice"?undefined:value as "inclusive"|"exclusive"})} options={[{value:"invoice",label:"Use invoice tax mode"},{value:"exclusive",label:"Tax exclusive"},{value:"inclusive",label:"Tax inclusive"}]}/></label>
-                  {INVOICE_LINE_DETAIL_KEYS.map(key=><label key={key}>{INVOICE_LINE_DETAIL_LABELS[key]}<input className="input" disabled={readOnly} value={line[key]??""} onChange={event=>updateLine(line.key,{[key]:event.target.value})}/></label>)}
-                  <label>Serial numbers (one per line)<textarea className="input textarea" disabled={readOnly} value={line.serialNumbers?.join("\n")??""} onChange={event=>updateLine(line.key,{serialNumbers:event.target.value.split(/\r?\n/)})}/></label>
-                  <label>Item image<input className="input" type="file" accept="image/png,image/jpeg" disabled={readOnly} onChange={async event=>{const file=event.target.files?.[0];if(!file)return;if(file.size>100000){window.alert("Choose an item image smaller than 100 KB.");return;}const reader=new FileReader();reader.onload=()=>{try{updateLine(line.key,cleanInvoiceLineDetails({imageUrl:String(reader.result)}));}catch(error){window.alert(error instanceof Error?error.message:"Invalid image");}};reader.readAsDataURL(file);}}/></label>
-                  {line.imageUrl&&<><img src={line.imageUrl} width={64} alt="Item"/><button type="button" className="btn btn--sm" disabled={readOnly} onClick={()=>updateLine(line.key,{imageUrl:undefined})}>Remove image</button></>}
-                </div></details>
-                {catalogEditing && !line.catalogItemId && line.item.trim() && !readOnly && <button type="button" className="btn btn--ghost btn--sm" disabled={!catalogEditing.canWrite} onClick={() => saveLineToCatalog(line)}><BookOpen size={14} /> Save to catalog</button>}
-                {showTags && tags && (
-                  <div className="line-editor__field line-editor__field--tags">
-                    <span className="field__label">Tags</span>
-                    <TagPicker tagIds={line.tagIds} tags={tags} disabled={readOnly} onChange={(next) => updateLine(line.key, { tagIds: next.length ? next : undefined })} />
-                  </div>
-                )}
-              </div>
+              {openPrice && !line.unitPriceCents && <p className="line-editor__price-note">No set price. Enter the amount for this invoice.</p>}
+              {setPrice !== null && !overridden && <p className="line-editor__price-note">Set price. Change it here to override it on this invoice only.</p>}
+              {overridden && !readOnly && (
+                <p className="line-editor__price-note">
+                  Overridden on this invoice. The set price is <Money cents={setPrice} currency={currency} />.{" "}
+                  <button type="button" className="line-editor__price-reset" onClick={() => updateLine(line.key, { rateOverridden: false, unitPriceCents: setPrice, priceInput: (setPrice / 100).toFixed(2) })}>Use set price</button>
+                </p>
+              )}
+              {detailsOpen && (
+                <div className="line-editor__more">
+                  <label className="line-editor__field"><span className="field__label">SKU</span><input className="input" value={line.sku ?? ""} disabled={readOnly} placeholder="Optional" onChange={(e) => updateLine(line.key, { sku: e.target.value })} /></label>
+                  <label className="line-editor__field"><span className="field__label">Unit</span><input className="input" value={line.unit ?? "each"} disabled={readOnly} onChange={(e) => updateLine(line.key, { unit: e.target.value })} placeholder="each / hour" /></label>
+                  <label className="line-editor__field"><span className="field__label">Price entered</span><Select value={line.taxMode ?? "invoice"} disabled={readOnly} onChange={(value) => updateLine(line.key, { taxMode: value === "invoice" ? undefined : value as "inclusive" | "exclusive" })} options={[{ value: "invoice", label: "Same as invoice" }, { value: "exclusive", label: "Before tax" }, { value: "inclusive", label: "Tax included" }]} /></label>
+                  {INVOICE_LINE_DETAIL_KEYS.map((key) => <label key={key} className="line-editor__field"><span className="field__label">{INVOICE_LINE_DETAIL_LABELS[key]}</span><input className="input" disabled={readOnly} value={line[key] ?? ""} onChange={(event) => updateLine(line.key, { [key]: event.target.value })} /></label>)}
+                  <label className="line-editor__field line-editor__field--wide"><span className="field__label">Serial numbers (one per line)</span><textarea className="input textarea" disabled={readOnly} value={line.serialNumbers?.join("\n") ?? ""} onChange={(event) => updateLine(line.key, { serialNumbers: event.target.value.split(/\r?\n/) })} /></label>
+                  <label className="line-editor__field line-editor__field--wide"><span className="field__label">Item image</span><input className="input" type="file" accept="image/png,image/jpeg" disabled={readOnly} onChange={(event) => attachImage(line.key, event.target.files?.[0])} /></label>
+                  {line.imageUrl && <div className="line-editor__field--wide btn-row"><img src={line.imageUrl} width={64} alt="Item" /><button type="button" className="btn btn--sm" disabled={readOnly} onClick={() => updateLine(line.key, { imageUrl: undefined })}>Remove image</button></div>}
+                  {showTags && tags && (
+                    <div className="line-editor__field line-editor__field--tags">
+                      <span className="field__label">Tags</span>
+                      <TagPicker tagIds={line.tagIds} tags={tags} disabled={readOnly} onChange={(next) => updateLine(line.key, { tagIds: next.length ? next : undefined })} />
+                    </div>
+                  )}
+                </div>
+              )}
             </li>
           );
         })}
       </ol>
+      {!readOnly && (
+        <div className="invoice-builder__add">
+          {(catalog.length > 0 || catalogEditing) && (
+            <Menu
+              minWidth={260}
+              trigger={
+                <button type="button" className="btn btn--sm">
+                  <BookOpen size={14} aria-hidden="true" /> From catalog
+                </button>
+              }
+              sections={[
+                {
+                  id: "catalog",
+                  items: catalog.map((item) => ({
+                    id: item._id,
+                    label: item.name,
+                    hint: item.openPrice ? "No set price" : `${formatMoney(item.unitPriceCents, { currency })} / ${item.unit ?? "each"}`,
+                    onSelect: () => addFromCatalog(item),
+                  })),
+                },
+                ...(catalogEditing ? [{
+                  id: "new",
+                  items: [{ id: "new-item", label: "New item or service", icon: <Plus size={14} />, disabled: !catalogEditing.canWrite, onSelect: () => setNewItem({ seed: { currency } }) }],
+                }] : []),
+              ]}
+            />
+          )}
+          <button type="button" className="btn btn--sm" onClick={() => onChange([...lines, blankLine()])}>
+            <Plus size={14} aria-hidden="true" /> Add line
+          </button>
+        </div>
+      )}
       {gstHint && (
         <p className="invoice-builder__hint">
           Charging GST/HST? Add your registration number under Organization details (identifiers) so it prints on the invoice.

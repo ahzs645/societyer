@@ -1,3 +1,4 @@
+import { lineTaxes } from "../../../shared/invoiceMoney";
 import type { FontRegistration } from "@formepdf/react";
 import { cleanInvoiceTemplate, DEFAULT_DOCUMENT_DESIGN, resolveDocumentAdvanced, resolveDocumentDesign, type DocumentColumnKey, type DocumentDesign, type DocumentBackground, type DocumentAddressBlock } from "../../../shared/invoiceCommerce";
 import { computeInvoiceTotals, lineAmountCents, INVOICE_TERMS_LABEL, settlementTotals, convertInvoiceCents, type InvoiceTerms } from "../../../shared/invoicing";
@@ -44,7 +45,7 @@ export function documentPresentation(invoice: InvoiceDocumentData) {
       case "quantity": return `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 3 }).format(line.quantity)}${line.unit && !columns.some((c) => c.key === "unit") ? ` ${line.unit}` : ""}`;
       case "unit": return line.unit || "—";
       case "rate": return money(line.unitPriceCents);
-      case "tax": return line.taxRatePercent ? `${line.taxLabel || design.labels.tax} ${line.taxRatePercent}%${taxModes.size > 1 && (line.taxMode || invoice.money?.taxMode) === "inclusive" ? " incl." : ""}` : "—";
+      case "tax": return line.taxRatePercent ? `${line.additionalTaxes?.length ? lineTaxes(line).map((tax) => tax.label).join(" + ") : `${line.taxLabel || design.labels.tax} ${line.taxRatePercent}%`}${taxModes.size > 1 && (line.taxMode || invoice.money?.taxMode) === "inclusive" ? " incl." : ""}` : "—";
       case "amount": return money(lineAmountCents(line));
       case "image": return line.imageUrl || "";
       case "manufacturer": case "partNumber": case "upc": case "ean": case "isbn": case "customField": return line[key] || "—";

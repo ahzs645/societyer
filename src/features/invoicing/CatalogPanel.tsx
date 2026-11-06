@@ -1,3 +1,4 @@
+import { taxChoiceLabel } from "../../../shared/invoiceMoney";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { BookOpen, MoreHorizontal, Pencil, Plus, Power, Trash2 } from "lucide-react";
@@ -22,7 +23,7 @@ export function CatalogPanel({ items, societyId, canWrite, defaultCurrency }: { 
     <div className="card invoice-card">
       <div className="card__head">
         <div>
-          <h2 className="card__title">Catalog</h2>
+          <h2 className="card__title">Items &amp; services</h2>
           <span className="card__subtitle">Set a price once and add it to any invoice, or leave the price open for one-time fees.</span>
         </div>
         <button type="button" className="btn btn--sm btn--accent" disabled={!canWrite} onClick={() => setEditing({})}>
@@ -54,7 +55,7 @@ export function CatalogPanel({ items, societyId, canWrite, defaultCurrency }: { 
                 <td data-label="Type / SKU">{item.kind === "service" ? "Service" : "Item"}{item.sku ? ` · ${item.sku}` : ""}</td>
                 <td data-label="Category">{item.category ?? <span className="muted">—</span>}</td>
                 <td data-label="Price" className="num">{item.openPrice ? <span className="muted">Set on each invoice</span> : <><Money cents={item.unitPriceCents} currency={item.currency ?? defaultCurrency} /> {item.currency ?? defaultCurrency} / {item.unit ?? "each"}</>}</td>
-                <td data-label="Tax">{item.taxRatePercent ? `${item.taxLabel ?? "Tax"} ${item.taxRatePercent}%` : <span className="muted">None</span>}</td>
+                <td data-label="Tax">{item.taxRatePercent ? taxChoiceLabel(item) : <span className="muted">None</span>}</td>
                 <td className="invoice-table__actions">
                   <Menu
                     align="right"

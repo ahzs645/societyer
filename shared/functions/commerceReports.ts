@@ -18,7 +18,7 @@ const FIELDS: Record<CommerceSourceTable, string[]> = {
   fundRestrictions: ["name", "status"], financeTags: ["name", "groupId", "archived"], accountingCounterparties: ["name", "kind"], users: ["name", "displayName"],
 };
 const pick = (row: Record<string, any>, fields: readonly string[]) => Object.fromEntries(fields.filter((field) => row[field] !== undefined).map((field) => [field, row[field]]));
-const INVOICE_LINE_FIELDS = ["key", "item", "sku", "quantity", "unitPriceCents", "taxRatePercent", "taxLabel", "taxMode", "programCode", "fundRestrictionId", "tagIds"];
+const INVOICE_LINE_FIELDS = ["key", "item", "sku", "quantity", "unitPriceCents", "taxRatePercent", "taxLabel", "additionalTaxes", "taxMode", "programCode", "fundRestrictionId", "tagIds"];
 const BILL_LINE_FIELDS = ["key", "amountCents", "programCode", "fundRestrictionId", "tagIds"];
 const BANK_LINE_FIELDS = ["id", "amountCents", "category", "accountingAccountId", "fundRestrictionId", "tagIds", "memo"];
 const PAYMENT_FIELDS = ["key", "kind", "date", "amountCents", "reversedDate"];

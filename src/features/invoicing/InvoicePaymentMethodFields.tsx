@@ -16,7 +16,7 @@ export function InvoicePaymentMethodDetails({ method, saved = false }: { method:
 
 export function InvoicePaymentMethodFields({ methods, defaults, onChange, disabled }: Props) {
   return <section aria-label="Society payment methods">
-    <h3>Payment methods <InfoPopover label="About society payment methods" hover><p>These are your society's receiving instructions. Select one or more defaults for new invoices, then choose which methods to include on each invoice.</p><p>Saved invoices keep their existing details. Adding a receiving method does not initiate a bank transfer.</p></InfoPopover></h3>
+    <h3 className="invoice-section-heading">Payment methods <InfoPopover label="About society payment methods" hover><p>These are your society's receiving instructions. Select one or more defaults for new invoices, then choose which methods to include on each invoice.</p><p>Saved invoices keep their existing details. Adding a receiving method does not initiate a bank transfer.</p></InfoPopover></h3>
     <p className="muted">Save EFT details, e-transfer addresses, payment links or other ways to pay. Choose one or more defaults for new invoices.</p>
     {methods.map((method, index) => {
       const update = (patch: Partial<InvoiceReceivingMethod>) => onChange(methods.map((item) => item.id === method.id ? { ...item, ...patch } : item), defaults);

@@ -13,7 +13,7 @@ Saving a card method or HTTPS payment URL prints receiving information; it does 
 
 ## Branding and custom designs
 
-Open **Invoices → Templates**, start from the gallery or **New template**, and use the designer's Branding section:
+Open **Invoices → Setup → Templates**, start from the gallery or **New template**, and use the designer's Branding section:
 
 - **Import Brandkit** accepts a Brandkit ZIP or JSON profile with the logo and colors. Save the branded template as the default to use that brand in the gallery and on new documents. See [Brandkit imports](brandkit-imports.md) for supported geometry and font mappings.
 - **Upload custom logo** accepts PNG or JPEG files up to 175 KB, with at most 4096 pixels per side and 12 megapixels. The image is embedded in the template and copied to invoices, so it does not require a separate image-hosting service. A custom logo overrides the selected Brandkit logo while retaining the chosen document palette and typography. Remove the custom logo to restore the underlying brand or society logo.
@@ -27,6 +27,18 @@ The invoice editor and invoice-detail preview display the generated PDF with its
 Information icons beside each payment method show its receiving details on desktop hover, keyboard activation, or mobile tap. The selected method shows the saved details that will appear on that invoice. Click/tap again, press Escape, or click outside to close the detail popover.
 
 For long invoices, enable repeating headers/footers and page numbers in the template designer so continuation pages can be identified when printed or separated.
+
+## Taxes and final prices
+
+A line or catalog item can carry more than one tax, such as **GST 5% + PST 7%** in British Columbia. Each tax is calculated on the pre-tax amount, rounded per rate, and shown as its own amount on the invoice. Both post to **Sales tax collected** unless a tax has its own account: under **More actions → Edit GL account mapping → Sales tax by type**, choose a liability account for each tax you remit separately, such as a PST payable account. Mapping affects new postings only; existing entries stay where they are.
+
+Enter what the customer should pay at any of three levels. All three use the invoice totals calculation, so the preview matches what is saved:
+
+- **Catalog item:** choose the taxes, then set **Price entered** to **Tax included**, or use **Set final price** to work out a before-tax price.
+- **Invoice or quote line:** use **Set final price**. The final price covers the whole line, including its quantity.
+- **Whole invoice or quote:** use **Set final total** in the totals area. Line prices change in proportion, and shipping and discounts stay as entered. **Tax on all lines** can apply one tax choice first, or keep each line's own tax. Applying a total overrides those lines' price-list rates, like any manually entered price.
+
+Before-tax prices are in whole cents and each tax rounds separately, so a few totals cannot be reached and the closest is shown with the difference. Tax-included prices reach any total on a single line at quantity 1. Choosing a tax is your decision: Societyer does not know which goods or services are exempt from a tax, and the rates are presets to check against current rules.
 
 ## Saved documents and changed defaults
 
@@ -45,7 +57,7 @@ Payment details alone are enough to print receiving instructions. Accurate ledge
 - For same-currency invoices, destination accounts and linked deposits must match the invoice currency. For an invoice using explicit FX, receipts use the books currency and must match the converted settlement amount; enter the actual exchange rate and source in the receipt form. A foreign-currency price list does not imply a conversion.
 - Receiving instructions do not select a ledger deposit account automatically. When recording a receipt, select or confirm its destination, payment method and reference, or link the matching bank transaction.
 
-Ordinary **Mark sent** and reminder actions can create an Outbox draft; they do not prove an email was delivered. Set the customer's email and optional reply-to address, download the invoice PDF, attach it, send through the chosen mail workflow and record dispatch in the Outbox. The manual Outbox interface explicitly asks users to send from their own inbox. Billing Automation is a separate optional delivery feature requiring its own provider, recipient and scheduling setup; merely choosing a receiving method or recurring invoice does not configure delivery.
+Ordinary **Mark as sent** and reminder actions can create an Outbox draft; they do not prove an email was delivered. Set the customer's email and optional reply-to address, download the invoice PDF, attach it, send through the chosen mail workflow and record dispatch in the Outbox. The manual Outbox interface explicitly asks users to send from their own inbox. Billing Automation is a separate optional delivery feature requiring its own provider, recipient and scheduling setup; merely choosing a receiving method or recurring invoice does not configure delivery.
 
 ## Runtime and deployment requirements
 

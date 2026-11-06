@@ -1,5 +1,6 @@
 import { defaultInvoicePayments, cleanInvoicePaymentMethods, selectInvoicePaymentMethods, invoicePaymentText, type InvoiceReceivingMethod } from "../invoicePaymentMethods";
 import { cleanInvoiceMoney, convertInvoiceCents, settlementTotals, explicitFxQuote, type InvoiceMoneyOptions } from "../invoiceMoney";
+import { cleanAdditionalTaxes } from "../invoiceMoney";
 import { cleanDocumentExtras, type DocumentExtras } from "../documentExtras";
 import { cleanInvoiceLineDetails } from "../invoiceLineDetails";
 import { assertRepairBillablePortable, assertRepairApprovalPortable } from "./repairOperationsGuard";
@@ -72,6 +73,7 @@ import {
   foreignCurrencySummary,
   invoiceNeedsAction,
   normalizeRevenueCategory,
+  normalizeTaxLabel,
   paymentPostingLines,
   type InvoiceLedgerLine,
   type NeedsActionFlag,
@@ -194,6 +196,8 @@ function cleanLines(lines: any[]): InvoiceLine[] {
     if (Number.isFinite(rate) && rate > 0) {
       line.taxRatePercent = Math.round(rate * 1000) / 1000;
       line.taxLabel = cleanText(raw?.taxLabel, 20) ?? "Tax";
+      const additionalTaxes = cleanAdditionalTaxes(raw?.additionalTaxes);
+      if (additionalTaxes) line.additionalTaxes = additionalTaxes;
     }
     const tagIds: string[] = Array.isArray(raw?.tagIds) ? [...new Set<string>(raw.tagIds.map(String))].slice(0, 10) : [];
     if (tagIds.length) line.tagIds = tagIds;
@@ -1504,6 +1508,7 @@ export async function upsertCatalogItemPortable(
     openPrice: openPrice || undefined,
     taxRatePercent: rate > 0 ? rate : undefined,
     taxLabel: rate > 0 ? cleanText(args.taxLabel, 20) ?? "Tax" : undefined,
+    additionalTaxes: rate > 0 ? cleanAdditionalTaxes(args.additionalTaxes) : undefined,
     category: cleanText(args.category, 100),
     accountingAccountId: args.accountingAccountId || undefined,
     active: args.active ?? true,
@@ -1790,6 +1795,7 @@ type MappingArgs = {
   defaultRevenueAccountId?: string;
   depositAccountId?: string;
   categoryAccounts: Array<{ category: string; accountId?: string }>;
+  taxAccounts?: Array<{ taxLabel: string; accountId?: string }>;
   itemAccounts?: Array<{ catalogItemId: string; accountId?: string }>;
 };
 
@@ -1827,6 +1833,13 @@ export async function saveAccountMappingPortable(ctx: PortableMutationCtx, args:
     await requireAccountOfKind(ctx, societyId, row.accountId, "revenue");
     categories.set(normalizeRevenueCategory(category), { category, accountId: row.accountId });
   }
+  const taxAccounts = new Map<string, { taxLabel: string; accountId: string }>();
+  for (const row of (args.taxAccounts ?? []).slice(0, 20)) {
+    const taxLabel = cleanText(row.taxLabel, 20);
+    if (!taxLabel || !row.accountId) continue;
+    await requireAccountOfKind(ctx, societyId, row.accountId, "taxPayable");
+    taxAccounts.set(normalizeTaxLabel(taxLabel), { taxLabel: normalizeTaxLabel(taxLabel), accountId: row.accountId });
+  }
   const items = (args.itemAccounts ?? []).slice(0, 500);
   for (const row of items) {
     await getOwned(ctx, "invoiceCatalogItems", row.catalogItemId, societyId);
@@ -1839,6 +1852,7 @@ export async function saveAccountMappingPortable(ctx: PortableMutationCtx, args:
     defaultRevenueAccountId: args.defaultRevenueAccountId || undefined,
     depositAccountId: args.depositAccountId || undefined,
     categoryAccounts: [...categories.values()].sort((a, b) => a.category.localeCompare(b.category)),
+    ...(args.taxAccounts ? { taxAccounts: [...taxAccounts.values()].sort((a, b) => a.taxLabel.localeCompare(b.taxLabel)) } : {}),
     updatedAtISO: nowISO(),
   };
   const settings = await loadSettings(ctx, societyId);

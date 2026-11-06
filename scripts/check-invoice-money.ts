@@ -84,3 +84,73 @@ for(const entry of await db.query("journalEntries").withIndex("by_society",q=>q.
 const foreignAccount=await db.insert("financialAccounts",{societyId:"other_workspace",name:"Other bank",accountType:"Bank",currency:"CAD"});await assert.rejects(()=>inv.recordPaymentPortable(ctx,{id:other,date:today,amountCents:1,method:"cash",depositAccountId:foreignAccount}));
 await db.insert("accountingFiscalPeriods",{societyId,startDate:today,endDate:today,periodLabel:"Closed",status:"closed"});await assert.rejects(()=>inv.recordPaymentPortable(ctx,{id:other,date:today,amountCents:1,method:"cash",depositAccountId:bank}),/closed/i);
 console.log("Invoice money checks passed: inclusive/mixed rounding, shipping, withholding, integer FX, immutable quotes, gains/losses, partial/final settlements, revaluation reversal, credits/refunds/write-offs, audit reversals, idempotency, closed periods and workspace scope.");
+
+// Several taxes on one line, and final prices.
+{
+  const {solveFinalTotal}=await import("../shared/invoiceFinalPrice");
+  const {decodeTaxChoice,encodeTaxChoice,INVOICE_TAX_CHOICES}=await import("../shared/invoiceMoney");
+  const bc=(price:number,quantity=1,extra:Partial<InvoiceLine>={}):InvoiceLine=>({key:`bc${price}`,item:"Hall",quantity,unitPriceCents:price,...decodeTaxChoice("GST|5+PST|7"),...extra});
+  const taxed=computeInvoiceTotals([bc(10000)]);
+  assert.deepEqual(taxed.taxes.map(t=>[t.label,t.ratePercent,t.baseCents,t.cents]),[["GST",5,10000,500],["PST",7,10000,700]]);
+  assert.equal(taxed.totalCents,11200);assert.equal(taxed.lineTaxCents[0],1200);
+  const extracted=computeInvoiceTotals([bc(11200,1,{taxMode:"inclusive"})]);
+  assert.deepEqual([extracted.subtotalCents,extracted.taxCents,extracted.totalCents],[10000,1200,11200]);
+  assert.deepEqual(extracted.taxes.map(t=>t.cents),[500,700]);
+  const mixed=computeInvoiceTotals([bc(10000),item(10000,5)]);
+  assert.deepEqual(mixed.taxes.map(t=>[t.label,t.baseCents,t.cents]),[["GST",20000,1000],["PST",10000,700]]);
+  assert.equal(mixed.lineTaxCents.reduce((a,b)=>a+b,0),mixed.taxCents);
+  const discounted=computeInvoiceTotals([bc(10000)],{kind:"percent",value:10});
+  assert.deepEqual(discounted.taxes.map(t=>t.cents),[450,630]);
+  for(const choice of INVOICE_TAX_CHOICES)assert.equal(encodeTaxChoice(decodeTaxChoice(choice.value)),choice.value);
+  // GST and PST round separately, so before-tax prices skip a few totals by a cent. Tax-included prices never do.
+  const reachable=new Set<number>();
+  for(let price=0;price<=21000;price++)reachable.add(computeInvoiceTotals([bc(price)]).grossTotalCents);
+  for(let target=100;target<20000;target+=137){
+    const before=solveFinalTotal([bc(0)],target)!;
+    assert.equal(before.differenceCents===0,reachable.has(target),`before tax ${target}`);
+    assert.ok(Math.abs(before.differenceCents)<=1,`before tax ${target}`);
+    assert.equal(computeInvoiceTotals(before.lines).grossTotalCents,before.totalCents);
+    const included=solveFinalTotal([bc(0,1,{taxMode:"inclusive"})],target)!;
+    assert.equal(included.differenceCents,0,`tax included ${target}`);
+    assert.equal(computeInvoiceTotals(included.lines).grossTotalCents,target);
+  }
+  const stepped=solveFinalTotal([bc(100,3)],10000)!;assert.ok(Math.abs(stepped.differenceCents)<=2);assert.equal(computeInvoiceTotals(stepped.lines).grossTotalCents,stepped.totalCents);
+  // A whole invoice keeps its proportions and counts discount and shipping.
+  const whole=solveFinalTotal([bc(30000),{...bc(10000),key:"b"},{...item(5000,5),key:"c"}],50000,{kind:"percent",value:10},{shipping:{amountCents:1500,taxRatePercent:5,taxLabel:"GST"}})!;
+  assert.equal(whole.differenceCents,0);
+  assert.ok(Math.abs(whole.lines[0].unitPriceCents/whole.lines[1].unitPriceCents-3)<0.01);
+  assert.equal(solveFinalTotal([bc(1000)],1000,null,{shipping:{amountCents:5000}}),null);
+  assert.equal(solveFinalTotal([],1000),null);
+  console.log("Multi-tax lines and final prices verified.");
+}
+
+// Taxes remitted separately post to their own accounts, and everything built on the accrual follows.
+{
+  const {accrualPostingLines:accrual,unrecognisedInvoiceRevenue,taxAccountFor,normalizeTaxLabel}=await import("../shared/invoiceLedger");
+  const pst=await account("PST payable","Liability","sales_tax_payable");
+  const asset=await account("Not a liability","Asset");
+  await assert.rejects(inv.saveAccountMappingPortable(ctx,{societyId,receivableAccountId:ar,defaultRevenueAccountId:revenue,taxPayableAccountId:tax,depositAccountId:bank,categoryAccounts:[],taxAccounts:[{taxLabel:"PST",accountId:asset}]}));
+  await inv.saveAccountMappingPortable(ctx,{societyId,receivableAccountId:ar,defaultRevenueAccountId:revenue,taxPayableAccountId:tax,depositAccountId:bank,categoryAccounts:[],taxAccounts:[{taxLabel:"pst",accountId:pst},{taxLabel:"QST"}]});
+  assert.deepEqual((await inv.workspacePortable(ctx,{societyId})).settings.taxAccounts,[{taxLabel:"PST",accountId:pst}]);
+  assert.equal(taxAccountFor("Pst ",{taxAccounts:[{taxLabel:"PST",accountId:"p"}],taxPayableAccountId:"g"}),"p");assert.equal(normalizeTaxLabel(" gst"),"GST");
+  // An earlier check closes the current period, so reopen it for this one.
+  for(const period of await db.query("accountingFiscalPeriods").collect())if(period.societyId===societyId)await db.patch(period._id,{status:"open"});
+  const bcInvoice=await inv.upsertPortable(ctx,{societyId,partyKind:"custom",billToName:"BC customer",issueDate:today,terms:"net_30",currency:"CAD",lines:[{item:"Hall",quantity:1,unitPriceCents:10000,taxRatePercent:5,taxLabel:"GST",additionalTaxes:[{label:"PST",ratePercent:7}]}]});
+  await inv.markSentPortable(ctx,{societyId,ids:[bcInvoice]});
+  const posted=(await db.get(bcInvoice))!;assert.equal(posted.totalCents,11200);assert.ok(posted.journalEntryId);
+  const credited=async(entry:string,accountId:string)=>(await linesOf(entry)).filter((l:any)=>l.accountId===accountId).reduce((s:number,l:any)=>s+(l.side==="credit"?1:-1)*l.amountCents,0);
+  assert.equal(await credited(posted.journalEntryId,tax),500,"GST stays on the shared account");
+  assert.equal(await credited(posted.journalEntryId,pst),700,"PST lands on its own account");
+  const accrued=accrual(posted,()=> "revenue",{receivableAccountId:"ar",taxPayableAccountId:"gst",taxAccounts:[{taxLabel:"PST",accountId:"pst"}]});
+  const open=unrecognisedInvoiceRevenue(accrued,[],"ar");
+  assert.equal(open.find((l:any)=>l.accountId==="pst")?.remainingCents,700,"cash basis recognises PST from its own account");
+  assert.equal(open.find((l:any)=>l.accountId==="gst")?.remainingCents,500);
+  await inv.voidInvoicesPortable(ctx,{societyId,ids:[bcInvoice],reason:"Test"});
+  const entries=(await db.query("journalEntries").collect()).filter((e:any)=>e.societyId===societyId&&!["reversed","void"].includes(e.status));
+  let pstBalance=0,gstBalance=0;for(const e of entries){pstBalance+=await credited(e._id,pst);}
+  assert.equal(pstBalance,0,"voiding reverses PST on its own account");void gstBalance;
+  await inv.saveAccountMappingPortable(ctx,{societyId,receivableAccountId:ar,defaultRevenueAccountId:revenue,taxPayableAccountId:tax,depositAccountId:bank,categoryAccounts:[],taxAccounts:[]});
+  assert.equal(accrual(posted,()=> "revenue",{receivableAccountId:"ar",taxPayableAccountId:"gst"}).filter((l:any)=>l.accountId==="gst").reduce((s:number,l:any)=>s+l.amountCents,0),1200,"without a mapping both taxes use the shared account, as before");
+  console.log("Separate tax accounts verified.");
+}
+

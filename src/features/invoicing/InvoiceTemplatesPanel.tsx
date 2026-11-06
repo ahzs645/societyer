@@ -84,6 +84,7 @@ export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, c
     finally { setBusy(false); }
   };
   const templates = (workspace.templates ?? []).filter((template) => template.active || showArchived);
+  const hasSavedTemplates = Boolean(workspace.templates?.length);
   return <div className="card invoice-card">
     <div className="card__head"><div><h2 className="card__title">Document templates</h2><span className="card__subtitle">Design invoices, payment receipts, work orders and report PDFs. Issued invoices retain their saved design.</span></div><div className="document-designer__template-tools">
       <label className={`btn btn--sm document-designer__import${!canWrite ? " is-disabled" : ""}`}><Upload size={14} /> Import template JSON<input aria-label="Import template JSON" type="file" accept=".json,application/json" disabled={!canWrite || busy} onChange={(e) => { void importTemplate(e.target.files?.[0]); e.target.value = ""; }} /></label>
@@ -91,17 +92,29 @@ export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, c
       <button className="btn btn--sm btn--accent" disabled={!canWrite || busy} onClick={() => open({ config: brand ? applyDocumentBrand(DEFAULT_INVOICE_TEMPLATE, brand) : { ...DEFAULT_INVOICE_TEMPLATE }, makeDefault: false })}><Plus size={14} /> New template</button></div></div>
     {brand && <p className="muted document-template-gallery__brand">Workspace Brandkit · {brand.name}</p>}
     {!draft && error && <p className="field__error" role="alert">{error}</p>}
-    <DocumentTemplateGallery workspace={workspace} brand={brand} canWrite={canWrite && !busy} onPreview={setPreview} onUse={(config) => open({ config, makeDefault: false })} />
-    <h3>Your saved templates</h3>
-    <Checkbox label="Show archived templates" checked={showArchived} onChange={setShowArchived} />
+    {hasSavedTemplates ? <>
+    <div className="invoice-templates__saved-head"><h3 className="invoice-section-heading">Your saved templates</h3><Checkbox label="Show archived templates" checked={showArchived} onChange={setShowArchived} /></div>
     <div className="invoice-commerce-grid">{templates.map((template) => <div className="invoice-template-card" key={template._id} style={{ borderTopColor: template.config.accentColor }}>
       <SavedTemplateThumbnail config={template.config} workspace={workspace} onPreview={() => setPreview({ savedId: template._id, active: template.active, name: template.config.name, config: template.config })} />
-      <h3>{template.config.name}</h3><p className="muted">{template.config.layout} · {template.config.paperSize.toUpperCase()}{workspace.settings.defaultTemplateId === template._id ? " · Default" : ""}{!template.active ? " · Archived" : ""}</p>
+      <h3>{template.config.name}</h3><p className="muted invoice-template-card__meta">{template.config.layout} · {template.config.paperSize === "a4" ? "A4" : "Letter"}{workspace.settings.defaultTemplateId === template._id ? " · Default" : ""}{!template.active ? " · Archived" : ""}</p>
       <div className="invoice-commerce-actions"><button className="btn btn--sm" disabled={!canWrite || busy || !template.active} onClick={() => open({ id: template._id, config: template.config, makeDefault: workspace.settings.defaultTemplateId === template._id })}>Customize</button>
         <button className="btn btn--sm" disabled={!canWrite || busy} onClick={() => open({ config: { ...template.config, name: `${template.config.name} copy` }, makeDefault: false })}><Copy size={14} /> Duplicate</button>
         <button className="btn btn--sm" onClick={() => { try { exportTemplate(template.config); } catch (error) { setError(errorMessage(error, "Could not export template.")); } }}><Download size={14} /> Export JSON</button>
         <button className="btn btn--sm" disabled={!canWrite || busy} onClick={() => void setActive(template._id, template.config, !template.active)}><Archive size={14} />{template.active ? "Archive" : "Restore"}</button></div>
     </div>)}{!templates.length && <p className="muted">Choose a design above and save it to add your first template.</p>}</div>
+    <DocumentTemplateGallery workspace={workspace} brand={brand} canWrite={canWrite && !busy} onPreview={setPreview} onUse={(config) => open({ config, makeDefault: false })} />
+    </> : <>
+    <DocumentTemplateGallery workspace={workspace} brand={brand} canWrite={canWrite && !busy} onPreview={setPreview} onUse={(config) => open({ config, makeDefault: false })} />
+    <div className="invoice-templates__saved-head"><h3 className="invoice-section-heading">Your saved templates</h3><Checkbox label="Show archived templates" checked={showArchived} onChange={setShowArchived} /></div>
+    <div className="invoice-commerce-grid">{templates.map((template) => <div className="invoice-template-card" key={template._id} style={{ borderTopColor: template.config.accentColor }}>
+      <SavedTemplateThumbnail config={template.config} workspace={workspace} onPreview={() => setPreview({ savedId: template._id, active: template.active, name: template.config.name, config: template.config })} />
+      <h3>{template.config.name}</h3><p className="muted invoice-template-card__meta">{template.config.layout} · {template.config.paperSize === "a4" ? "A4" : "Letter"}{workspace.settings.defaultTemplateId === template._id ? " · Default" : ""}{!template.active ? " · Archived" : ""}</p>
+      <div className="invoice-commerce-actions"><button className="btn btn--sm" disabled={!canWrite || busy || !template.active} onClick={() => open({ id: template._id, config: template.config, makeDefault: workspace.settings.defaultTemplateId === template._id })}>Customize</button>
+        <button className="btn btn--sm" disabled={!canWrite || busy} onClick={() => open({ config: { ...template.config, name: `${template.config.name} copy` }, makeDefault: false })}><Copy size={14} /> Duplicate</button>
+        <button className="btn btn--sm" onClick={() => { try { exportTemplate(template.config); } catch (error) { setError(errorMessage(error, "Could not export template.")); } }}><Download size={14} /> Export JSON</button>
+        <button className="btn btn--sm" disabled={!canWrite || busy} onClick={() => void setActive(template._id, template.config, !template.active)}><Archive size={14} />{template.active ? "Archive" : "Restore"}</button></div>
+    </div>)}{!templates.length && <p className="muted">Choose a design above and save it to add your first template.</p>}</div>
+    </>}
     {preview && <DocumentTemplatePreview template={preview} workspace={workspace} canWrite={canWrite && !busy && preview.active !== false} onClose={() => setPreview(null)} onUse={(config) => { open({ id: preview.savedId, config: structuredClone(config), makeDefault: preview.savedId === workspace.settings.defaultTemplateId }); setPreview(null); }} />}
     <Drawer open={Boolean(draft)} size="wide" className="document-designer-drawer" title={draft?.id ? "Customize document template" : "New document template"} onClose={() => !busy && setDraft(null)} footer={<><button className="btn" disabled={busy} onClick={() => setDraft(null)}>Cancel</button>{draft && <button className="btn" disabled={busy} onClick={() => { try { exportTemplate(draft.config); } catch (error) { setError(errorMessage(error, "Could not export template.")); } }}>Export template JSON</button>}<button className="btn btn--accent" disabled={!canWrite || busy} onClick={() => void submit()}>Save template</button></>}>
       {error && <p className="field__error document-designer__error" role="alert">{error}</p>}

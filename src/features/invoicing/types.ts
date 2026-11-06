@@ -86,6 +86,7 @@ export type CatalogItem = Partial<Pick<InvoiceLine, "taxMode" | "imageUrl" | "ma
   openPrice?: boolean;
   taxRatePercent?: number;
   taxLabel?: string;
+  additionalTaxes?: Array<{ label: string; ratePercent: number }>;
   category?: string;
   accountingAccountId?: string;
   active: boolean;
@@ -171,6 +172,7 @@ export type InvoiceSettings = {
   defaultRevenueAccountId?: string;
   depositAccountId?: string;
   categoryAccounts?: CategoryAccount[];
+  taxAccounts?: Array<{ taxLabel: string; accountId: string }>;
 };
 
 export type LedgerAccountOption = { currency?: string; _id: string; label: string; accountType: string };

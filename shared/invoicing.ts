@@ -87,6 +87,8 @@ export type InvoiceLine = {
   taxRatePercent?: number;
   /** Shown on the invoice next to the tax, e.g. "GST" or "HST". */
   taxLabel?: string;
+  /** Further taxes on the same line, such as PST beside GST. Each is its own amount on the invoice. */
+  additionalTaxes?: Array<{ label: string; ratePercent: number }>;
   /** Reporting tags (at most one per tag group), copied onto the revenue line in the books. */
   tagIds?: string[];
 };
@@ -427,6 +429,7 @@ export function validateInvoiceLines(lines: InvoiceLine[]): string | null {
     if (!Number.isFinite(Number(line.unitPriceCents)) || Number(line.unitPriceCents) < 0) return `${label} needs a price of zero or more.`;
     const rate = Number(line.taxRatePercent ?? 0);
     if (!Number.isFinite(rate) || rate < 0 || rate > 30) return `${label} has a tax rate outside 0–30%.`;
+    if ((line.additionalTaxes ?? []).some((tax) => !Number.isFinite(Number(tax.ratePercent)) || tax.ratePercent <= 0 || tax.ratePercent > 30)) return `${label} has a tax rate outside 0–30%.`;
   }
   return null;
 }

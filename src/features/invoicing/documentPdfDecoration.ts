@@ -1,4 +1,4 @@
-import { pushGraphicsState, popGraphicsState, rectangle, clip, endPath, concatTransformationMatrix, PDFDocument, PDFArray, PDFDict, PDFString, PDFHexString, PDFName, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage, type PDFEmbeddedPage, type PDFNumber } from "pdf-lib";
+import { BlendMode, pushGraphicsState, popGraphicsState, rectangle, clip, endPath, concatTransformationMatrix, PDFDocument, PDFArray, PDFDict, PDFString, PDFHexString, PDFName, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage, type PDFEmbeddedPage, type PDFNumber } from "pdf-lib";
 import type { FontRegistration } from "@formepdf/react";
 import { createElement } from "react";
 import { Document, Page } from "@formepdf/react";
@@ -163,7 +163,17 @@ export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, pa
       page.drawLine({ start: { x: setting.x, y: size.height - top - 4 }, end: { x: setting.x + setting.width, y: size.height - top - 4 }, thickness: 0.5, color: color(advanced.colors.border) });
       await drawLines([{ value: receiver ? advanced.receiverSignature.name : design.signature.name, type }, { value: receiver ? advanced.receiverSignature.label : design.signature.label, type }], setting.x, top + 6, setting.width);
     }
-    if (advanced.visibility.statusStamp && (invoice.documentKind || "invoice") === "invoice" && invoice.status) {
+    if (advanced.visibility.statusStamp && (invoice.documentKind || "invoice") === "invoice" && invoice.status === "draft") {
+      // A draft is marked across every page, faintly, so it can't pass for an issued invoice.
+      const text = advanced.stamp.text || "DRAFT", font = await getFont(documentPdfFontFamily(design.typography.body.fontFamily, fonts));
+      for (const target of pages) {
+        const { width, height } = target.getSize(), diagonal = Math.SQRT1_2;
+        const fontSize = Math.min(150, Math.hypot(width, height) * 0.62 / font.widthOfTextAtSize(text, 1));
+        target.pushOperators(pushGraphicsState(), concatTransformationMatrix(diagonal, diagonal, -diagonal, diagonal, width / 2, height / 2));
+        target.drawText(text, { x: -font.widthOfTextAtSize(text, fontSize) / 2, y: -fontSize / 3, font, size: fontSize, color: color(advanced.stamp.color), opacity: 0.14, blendMode: BlendMode.Multiply });
+        target.pushOperators(popGraphicsState());
+      }
+    } else if (advanced.visibility.statusStamp && (invoice.documentKind || "invoice") === "invoice" && invoice.status) {
       let positions = layout;
       if (!positions) { const engine = await engineForRich(), { InvoicePdfDocument } = await import("./InvoicePdfDocument"); positions = (await engine.renderDocumentWithLayout(createElement(InvoicePdfDocument, { invoice, organization, fonts }))).layout; }
       const find = (nodes: ElementInfo[], parent?: ElementInfo): ElementInfo | undefined => { for (const node of nodes) { if ((node as ElementInfo & { bookmark?: string }).bookmark === "Societyer status stamp") return parent || node; const found = find(node.children || [], node); if (found) return found; } };

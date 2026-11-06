@@ -42,7 +42,7 @@ Accounting regressions exercise both cash and accrual views before and after ref
 
 ## Operation and review
 
-- Twelve editable presets are available in Invoices → Templates, across invoices, receipts, quotes, statements, work orders and reports. The shared designer keeps issued snapshots stable.
+- Twelve editable presets are available in Invoices → Setup → Templates, across invoices, receipts, quotes, statements, work orders and reports. The shared designer keeps issued snapshots stable.
 - Books → Report builder contains the report catalog and composer. Existing financial reports and the cash-flow Sankey retain their graph, drill-down and export flows.
 - Email delivery requires configured Resend or Microsoft 365 credentials and enabled sender/schedule settings. Provider acceptance is distinguished from recipient delivery. Hosted cron works while browsers are closed; local scheduling runs while the panel is open and requires a capable native transport. See [billing-automatic-delivery.md](billing-automatic-delivery.md).
 - This completion record covers the captured/requested features. It does not establish parity with unobserved live Zoho screens. The supplied archive has one usable page entry and a truncated second capture.

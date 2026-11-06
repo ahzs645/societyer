@@ -1,15 +1,17 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "convex/react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Drawer, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { useToast } from "../../components/Toast";
-import { normalizeRevenueCategory } from "../../../shared/invoiceLedger";
+import { normalizeRevenueCategory, normalizeTaxLabel } from "../../../shared/invoiceLedger";
 import type { InvoiceWorkspace, LedgerAccountOption } from "./types";
 
 type Props = { open: boolean; onClose: () => void; workspace: InvoiceWorkspace; societyId: string; canWrite: boolean };
 
+const TAX_TYPES = ["GST", "HST", "PST", "QST"];
 const options = (accounts: LedgerAccountOption[]) => accounts.map((account) => ({ value: account._id, label: account.label }));
 
 /**
@@ -29,10 +31,12 @@ export function InvoiceGlMappingDrawer({ open, onClose, workspace, societyId, ca
   const [categories, setCategories] = useState<Record<string, string>>(() =>
     Object.fromEntries((settings.categoryAccounts ?? []).map((row) => [normalizeRevenueCategory(row.category), row.accountId])),
   );
+  const [taxAccounts, setTaxAccounts] = useState<Record<string, string>>(() => Object.fromEntries((settings.taxAccounts ?? []).map((row) => [normalizeTaxLabel(row.taxLabel), row.accountId])));
   const [items, setItems] = useState<Record<string, string>>(() => Object.fromEntries(catalog.map((item) => [item._id, item.accountingAccountId ?? ""])));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const taxLabels = [...new Set([...TAX_TYPES, ...Object.keys(taxAccounts)])];
   const revenue = useMemo(() => options(ledger.accounts.revenue), [ledger.accounts.revenue]);
   const labelOf = (id: string | undefined) => ledger.accounts.revenue.find((account) => account._id === id)?.label;
   const defaultLabel = labelOf(defaultRevenue);
@@ -56,6 +60,7 @@ export function InvoiceGlMappingDrawer({ open, onClose, workspace, societyId, ca
         defaultRevenueAccountId: account(defaultRevenue),
         depositAccountId: account(deposit),
         categoryAccounts: ledger.categories.map((category) => ({ category, accountId: account(categories[normalizeRevenueCategory(category)] ?? "") })),
+        taxAccounts: taxLabels.map((taxLabel) => ({ taxLabel, accountId: account(taxAccounts[taxLabel] ?? "") })),
         itemAccounts: catalog
           .filter((item) => (item.accountingAccountId ?? "") !== (items[item._id] ?? ""))
           .map((item) => ({ catalogItemId: item._id as Id<"invoiceCatalogItems">, accountId: account(items[item._id] ?? "") })),
@@ -104,6 +109,28 @@ export function InvoiceGlMappingDrawer({ open, onClose, workspace, societyId, ca
             <Select value={deposit} onChange={setDeposit} options={options(ledger.accounts.deposit)} placeholder={fallbackLabel(ledger.defaults.deposit, "Undeposited funds")} clearable clearLabel="Use the default" searchable />
           </Field>
         </div>
+      </section>
+
+      <section className="invoice-glmap__section" aria-labelledby="glmap-taxes">
+        <h3 id="glmap-taxes" className="invoice-drawer__heading">Sales tax by type</h3>
+        <p className="muted">Give a tax its own account when it's remitted separately, such as PST to the province. Add the account in <Link to="/app/financials/chart-of-accounts">Chart of accounts</Link> first. Others use Sales tax collected.</p>
+        <ul className="invoice-glmap__list">
+          {taxLabels.map((taxLabel) => (
+            <li key={taxLabel} className="invoice-glmap__row">
+              <span className="invoice-glmap__name">{taxLabel}</span>
+              <Select
+                value={taxAccounts[taxLabel] ?? ""}
+                onChange={(value) => setTaxAccounts((current) => ({ ...current, [taxLabel]: value }))}
+                options={options(ledger.accounts.taxPayable)}
+                placeholder="Use Sales tax collected"
+                clearable
+                clearLabel="Use Sales tax collected"
+                searchable
+                aria-label={`Account for ${taxLabel}`}
+              />
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="invoice-glmap__section" aria-labelledby="glmap-categories">

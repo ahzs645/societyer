@@ -12,7 +12,7 @@ function Decimal({ value, change, disabled, label, scale = 1 }: { value:number;c
 export function InvoiceMoneyFields({value,onChange,currency,baseCurrency,date,disabled,fxLocked}:{value?:InvoiceMoneyOptions;onChange:(value:InvoiceMoneyOptions)=>void;currency:string;baseCurrency:string;date:string;disabled?:boolean;fxLocked?:boolean}) {
   const money=value??{},patch=(next:Partial<InvoiceMoneyOptions>)=>onChange({...money,...next});
   const foreign=currency!==baseCurrency,quote=money.fx;
-  return <section className="invoice-builder__section" aria-label="Tax, shipping, withholding and exchange rate"><h3>Tax and invoice charges</h3><div className="invoice-builder__row">
+  return <section className="invoice-builder__section" aria-label="Tax, shipping, withholding and exchange rate"><h3 className="invoice-builder__heading">Tax and invoice charges</h3><div className="invoice-builder__row">
     <Field label="Rates include tax"><Select value={money.taxMode??"exclusive"} disabled={disabled} onChange={taxMode=>patch({taxMode:taxMode as "exclusive"|"inclusive"})} options={[{value:"exclusive",label:"Tax exclusive — add tax"},{value:"inclusive",label:"Tax inclusive — extract tax"}]}/></Field>
     <Field label={`Shipping (${currency})`}><Decimal value={money.shipping?.amountCents??0} scale={100} change={amountCents=>patch({shipping:{...money.shipping,amountCents}})} disabled={disabled} label="Shipping amount"/></Field>
     <Field label="Shipping tax percent"><Decimal value={money.shipping?.taxRatePercent??0} change={taxRatePercent=>patch({shipping:{amountCents:money.shipping?.amountCents??0,...money.shipping,taxRatePercent}})} disabled={disabled} label="Shipping tax percent"/></Field>

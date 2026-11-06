@@ -1,3 +1,4 @@
+import { DocumentPdfViewer } from "./InvoicePdfPreview";
 import { defaultInvoicePayments } from "../../../shared/invoicePaymentMethods";
 import { useEffect, useMemo, useState } from "react";
 import { Download, Pencil, RefreshCw } from "lucide-react";
@@ -16,11 +17,11 @@ type Props = { template: TemplatePreviewChoice; workspace: InvoiceWorkspace; can
 export function DocumentTemplatePreview({ template, workspace, canWrite, onClose, onUse }: Props) {
   const [kind, setKind] = useState<DocumentKind>(template.kind ?? "invoice");
   const [revision, setRevision] = useState(0);
-  const [pdf, setPdf] = useState<{ url: string; bytes: Uint8Array } | null>(null);
+  const [pdf, setPdf] = useState<{ blob: Blob; bytes: Uint8Array } | null>(null);
   const [error, setError] = useState("");
   const sample = useMemo(() => documentTemplateSample(template.config, kind, { today: workspace.today, currency: workspace.ledger.workspaceCurrency }), [template.config, kind, workspace.today, workspace.ledger.workspaceCurrency]);
   useEffect(() => {
-    let cancelled = false, url = "";
+    let cancelled = false;
     setPdf(null); setError("");
     const render = async () => {
       try {
@@ -28,12 +29,11 @@ export function DocumentTemplatePreview({ template, workspace, canWrite, onClose
           ? await (await import("../financials/reports/reportPdf")).buildBrandedReportPdf({ report: sample.report, template: template.config, organization: workspace.organization })
           : await (await import("./invoicePdf")).buildInvoicePdf({ invoice: { ...sample.invoice, ...defaultInvoicePayments(workspace.settings) }, organization: workspace.organization, paymentInstructions: workspace.settings.paymentInstructions || "Example: pay by bank transfer using the document number as reference." });
         if (cancelled) return;
-        url = URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }));
-        setPdf({ url, bytes });
+        setPdf({ blob: new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }), bytes });
       } catch (failure) { if (!cancelled) setError(failure instanceof Error ? failure.message : "Could not generate the preview."); }
     };
     void render();
-    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+    return () => { cancelled = true; };
   }, [sample, template.config, workspace.organization, workspace.settings, revision]);
   const download = () => {
     if (!pdf) return;
@@ -46,7 +46,7 @@ export function DocumentTemplatePreview({ template, workspace, canWrite, onClose
       <Field label="Preview document"><Select value={kind} onChange={setKind} options={DOCUMENT_KINDS.map((value) => ({ value, label: TEMPLATE_KIND_LABELS[value] }))} /></Field>
     </div>
     {error ? <div className="document-template-preview__state"><p className="field__error" role="alert">{error}</p><button className="btn" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={14} /> Retry preview</button></div>
-      : pdf ? <iframe className="document-template-preview__pdf" src={pdf.url} title="Template PDF preview" />
+      : pdf ? <DocumentPdfViewer blob={pdf.blob} testId="template-pdf-preview" />
       : <div className="document-template-preview__state" role="status">Generating your sample PDF…</div>}
   </Modal>;
 }

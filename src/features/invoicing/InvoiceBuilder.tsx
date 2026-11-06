@@ -3,6 +3,7 @@ import { InvoicePaymentMethodsSelector } from "./InvoicePaymentMethodsSelector";
 import { InvoiceSettingsDrawer } from "./InvoiceSettingsDrawer";
 import { InvoicePdfPreview } from "./InvoicePdfPreview";
 import { DocumentExtrasFields } from "./DocumentExtrasFields";
+import { FinalTotalPanel } from "./FinalPricePanel";
 import { InvoiceMoneyFields } from "./InvoiceMoneyFields";
 import { cleanInvoiceMoney, type InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
 import { assignedPriceList, quantityCatalogRate, type BillingPricingWorkspace } from "../../../shared/billingPricing";
@@ -119,6 +120,7 @@ function cleanLines(lines: LineDraft[]): InvoiceLine[] {
     if (!out.taxRatePercent) {
       delete out.taxRatePercent;
       delete out.taxLabel;
+      delete out.additionalTaxes;
     }
     if (!out.catalogItemId) delete out.catalogItemId;
     if (!out.tagIds?.length) delete out.tagIds;
@@ -575,6 +577,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
                 </div>
               </Field>
             </div>
+            <FinalTotalPanel lines={draft.lines} discount={discount} money={draft.money} currency={draft.currency} disabled={readOnly} onApply={(next) => update({ lines: next.map((line) => ({ ...line, priceInput: (line.unitPriceCents / 100).toFixed(2), rateOverridden: true })) })} />
             <dl className="invoice-builder__totals" aria-live="polite">
               <div><dt>Subtotal</dt><dd><Money cents={totals.subtotalCents} currency={draft.currency} /></dd></div>
               {totals.discountCents > 0 && <div><dt>Discount</dt><dd><Money cents={-totals.discountCents} currency={draft.currency} /></dd></div>}

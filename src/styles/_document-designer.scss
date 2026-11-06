@@ -22,12 +22,16 @@
   min-width: 0;
 }
 .document-designer__settings { min-width: 0; border-right: 1px solid token(border); }
-.document-designer__nav { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 4px; padding: token(s-3); border-bottom: 1px solid token(border); background: token(bg-panel); max-height: 140px; overflow-y: auto; }
-.document-designer__section { padding: token(s-4); border-bottom: 1px solid token(border); scroll-margin-top: 120px; }
+.document-designer__nav { position: sticky; top: 0; z-index: 2; display: flex; gap: 4px; padding: token(s-2) token(s-3); border-bottom: 1px solid token(border); background: token(bg-panel); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.document-designer__nav > .btn { flex: none; }
+.document-designer__nav > .is-current { background: token(bg-selected-alpha); border-color: token(accent); color: token(accent); }
+.document-designer__section { padding: token(s-4); border-bottom: 1px solid token(border); scroll-margin-top: 56px; }
 .document-designer__section h3 { font-size: 15px; margin: 0 0 10px; }
 .document-designer__section > .muted { font-size: 12px; margin: 0 0 12px; }
-.document-designer__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.document-designer__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: end; }
 .document-designer__fieldset, .document-designer__column { margin: 0; padding: 10px; border: 1px solid token(border); border-radius: 6px; min-width: 0; }
+.document-designer .field__label { white-space: normal; overflow: visible; text-overflow: clip; }
+.document-designer__grid .field { margin-bottom: 0; }
 .document-designer__fieldset legend, .document-designer__column legend { padding: 0 5px; font-size: 12px; font-weight: 600; }
 .document-designer__column > .check-row { margin-bottom: 10px; }
 .document-designer__color { min-height: 36px; padding: 3px; }
@@ -42,9 +46,8 @@
 .document-designer__preview-toolbar > .field { max-width: 260px; }
 .document-designer__preview-toolbar .muted { font-size: 12px; margin: 0; }
 .document-designer__paper { background: white; border: 1px solid #d4d4d8; box-shadow: 0 2px 10px #00000012; overflow: auto; max-height: 72vh; }
-.document-designer__paper .invoice-doc { min-width: 500px; }
-.document-designer__pdf { display: block; width: 100%; height: 72vh; border: 1px solid token(border); background: #f4f4f5; }
 .document-designer__template-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+@media (min-width: 761px) { .document-designer__template-tools { flex: none; justify-content: flex-end; } }
 .document-designer__import { display: inline-flex; align-items: center; gap: 6px; position: relative; cursor: pointer; }
 .document-designer__import input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .document-designer__import:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
@@ -60,5 +63,20 @@
   .document-designer { grid-template-columns: minmax(0, 1fr); }
   .document-designer__settings { border-right: 0; }
   .document-designer__preview { position: static; }
-  .document-designer__paper .invoice-doc { min-width: 420px; }
+}
+
+/* Jump controls appear once the preview stacks below the settings. */
+.document-designer__narrow-only { display: none; }
+@media (max-width: 960px) {
+  .document-designer__narrow-only { display: inline-flex; flex: none; }
+  .document-designer__preview > .document-designer__narrow-only { margin-bottom: token(s-3); }
+  .document-designer__nav > .btn--accent { order: -1; }
+}
+
+/* The sample document is a page, not a data table: opt out of the touch rule
+ * that turns tables into nowrap sideways scrollers. */
+@media (pointer: coarse) {
+  .document-preview .document-preview__table { display: table; overflow: visible; max-width: none; }
+  .document-preview .document-preview__table > thead > tr > th { white-space: normal; }
+  .document-preview .document-preview__table > tbody > tr > td { min-width: 0; }
 }

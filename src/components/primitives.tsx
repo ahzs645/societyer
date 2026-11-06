@@ -24,6 +24,9 @@ export function Tabs<T extends string>({
   // has tabs scrolled out of sight.
   const listRef = useRef<HTMLDivElement>(null);
   const overflow = useScrollOverflow(listRef, [items.length]);
+  // Counts usually arrive after the first paint and widen the tabs, so a
+  // deep link to a late tab has to be measured again once they do.
+  const tabWidthsKey = items.map((item) => `${item.id}:${item.count ?? ""}`).join("|");
   useEffect(() => {
     const list = listRef.current;
     const active = list?.querySelector<HTMLElement>(".tab.is-active");
@@ -36,7 +39,7 @@ export function Tabs<T extends string>({
       const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       list.scrollTo({ left: Math.max(0, left - 24), behavior: reduceMotion ? "auto" : "smooth" });
     }
-  }, [value]);
+  }, [value, tabWidthsKey]);
   // Arrow keys / Home / End move between tabs. With tab roles this is the
   // ARIA tablist pattern: one tab stop (the selected tab) and arrows select.
   const hasSelected = items.some((it) => it.id === value);

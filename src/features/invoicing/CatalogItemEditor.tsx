@@ -1,3 +1,5 @@
+import { decodeTaxChoice, encodeTaxChoice, INVOICE_TAX_CHOICES, taxChoiceLabel } from "../../../shared/invoiceMoney";
+import { FinalPriceButton } from "./FinalPricePanel";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { Checkbox } from "../../components/Controls";
@@ -11,16 +13,6 @@ import { parseMoneyInput } from "../../lib/money";
 import { INVOICE_CURRENCIES } from "../../../shared/invoiceCommerce";
 import { INVOICE_LINE_DETAIL_KEYS, INVOICE_LINE_DETAIL_LABELS, cleanInvoiceLineDetails } from "../../../shared/invoiceLineDetails";
 import type { CatalogItem } from "./types";
-
-export const TAX_CHOICES = [
-  { value: "none", label: "No tax" },
-  { value: "GST|5", label: "GST 5%" },
-  { value: "HST|13", label: "HST 13%" },
-  { value: "HST|14", label: "HST 14%" },
-  { value: "HST|15", label: "HST 15%" },
-  { value: "PST|7", label: "PST 7%" },
-  { value: "QST|9.975", label: "QST 9.975%" },
-];
 
 /** A saved item to edit, or the starting values of a new one. */
 export type CatalogItemSeed = Partial<Omit<CatalogItem, "unitPriceCents">> & { unitPriceCents?: number };
@@ -39,7 +31,7 @@ function toDraft(item: CatalogItemSeed, defaultCurrency: string): Draft {
     description: item.description ?? "",
     openPrice: item.openPrice ?? false,
     priceInput: item.openPrice || item.unitPriceCents == null ? "" : (item.unitPriceCents / 100).toFixed(2),
-    tax: item.taxRatePercent ? `${item.taxLabel ?? "Tax"}|${item.taxRatePercent}` : "none",
+    tax: encodeTaxChoice(item),
     category: item.category ?? "",
     active: item.active ?? true,
   };
@@ -76,7 +68,6 @@ function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurre
     const cents = draft.openPrice ? 0 : parseMoneyInput(draft.priceInput);
     if (!draft.name.trim()) return setError("Give the item a name.");
     if (cents == null || cents < 0) return setError("Enter a price of zero or more.");
-    const [taxLabel, rate] = draft.tax === "none" ? [undefined, undefined] : draft.tax.split("|");
     const { rateOverridden: _override, ...details } = cleanInvoiceLineDetails(draft);
     const fields = {
       ...details,
@@ -88,8 +79,7 @@ function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurre
       description: draft.description || undefined,
       unitPriceCents: cents,
       openPrice: draft.openPrice || undefined,
-      taxRatePercent: rate ? Number(rate) : undefined,
-      taxLabel,
+      ...decodeTaxChoice(draft.tax),
       category: draft.category || undefined,
       active: draft.active,
     };
@@ -121,6 +111,7 @@ function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurre
   };
 
   const title = item._id ? "Edit catalog item" : "New catalog item";
+  const taxChoices = INVOICE_TAX_CHOICES.some((choice) => choice.value === draft.tax) ? INVOICE_TAX_CHOICES : [...INVOICE_TAX_CHOICES, { value: draft.tax, label: taxChoiceLabel(decodeTaxChoice(draft.tax)) }];
   const footer = (
     <>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
@@ -148,8 +139,9 @@ function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurre
       <Field label="SKU / code"><input className="input" value={draft.sku} onChange={(e) => update({ sku: e.target.value })} /></Field>
       <Field label="Unit"><input className="input" value={draft.unit} onChange={(e) => update({ unit: e.target.value })} placeholder="each / hour / day" /></Field>
       <Field label="Currency"><Select value={draft.currency} disabled={lockCurrency} onChange={(currency) => update({ currency })} options={INVOICE_CURRENCIES.map((value) => ({ value, label: value }))} /></Field>
-      <Field label="Sales tax"><Select value={draft.tax} onChange={(tax) => update({ tax })} options={TAX_CHOICES} /></Field>
-      <Field label="Rate tax mode"><Select value={draft.taxMode ?? "exclusive"} onChange={(value) => update({ taxMode: value as "exclusive" | "inclusive" })} options={[{ value: "exclusive", label: "Tax exclusive" }, { value: "inclusive", label: "Tax inclusive" }]} /></Field>
+      <Field label="Sales tax"><Select value={draft.tax} onChange={(tax) => update({ tax })} options={taxChoices} /></Field>
+      <Field label="Price entered" hint="Tax-included prices stay exact at any quantity."><Select value={draft.taxMode ?? "exclusive"} onChange={(value) => update({ taxMode: value as "exclusive" | "inclusive" })} options={[{ value: "exclusive", label: "Before tax" }, { value: "inclusive", label: "Tax included" }]} /></Field>
+      {!draft.openPrice && <FinalPriceButton line={{ quantity: 1, unitPriceCents: parseMoneyInput(draft.priceInput) ?? 0, taxMode: draft.taxMode, ...decodeTaxChoice(draft.tax) }} currency={draft.currency} onApply={(cents) => update({ priceInput: (cents / 100).toFixed(2) })} />}
       <details>
         <summary>Manufacturer, identifiers, image and tracking</summary>
         <div className="form-stack">

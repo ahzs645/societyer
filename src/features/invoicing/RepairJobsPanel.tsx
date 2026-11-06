@@ -71,11 +71,11 @@ export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, log
         <div><button type="button" className="btn btn--sm" onClick={() => { setTemplateId(workspace.settings.defaultTemplateId ?? ""); setWorkOrderId(detail._id); }}><Eye size={14} aria-hidden="true" />Preview work order</button></div>
         <Field label="Status"><Select value={detail.status} disabled={!canWrite || busy} onChange={(status) => void run(() => setStatus({ id: detail._id, status: status as RepairStatus }))} options={[detail.status, ...REPAIR_TRANSITIONS[detail.status]].map((value) => ({ value, label: REPAIR_STATUS_LABEL[value] }))} /></Field>
         <p>Received {formatDate(detail.receivedDate)}{detail.targetDate ? ` · Target ${formatDate(detail.targetDate)}` : ""}</p><p className="invoice-commerce-notes">{detail.notes}</p>
-        <h3>Parts and services</h3>{detail.lines.map((line) => <p key={line.key}>{line.item} · {line.quantity} {line.unit ?? "each"} × <Money cents={line.unitPriceCents} currency={detail.currency} /></p>)}
+        <h3 className="invoice-section-heading">Parts and services</h3>{detail.lines.map((line) => <p key={line.key}>{line.item} · {line.quantity} {line.unit ?? "each"} × <Money cents={line.unitPriceCents} currency={detail.currency} /></p>)}
         <strong>Estimate <Money cents={detail.totalCents} currency={detail.currency} /> {detail.currency}</strong>
         {detail.invoice && <p>Invoice {detail.invoice.number} · {detail.invoice.status} · Balance <Money cents={detail.invoice.balanceCents} currency={detail.invoice.currency} /></p>}
         <RepairOperationsPanel societyId={societyId} job={detail} today={workspace.today} canWrite={canWrite} />
-        <h3>History</h3>{detail.timeline.map((event, i) => <p key={`${event.atISO}-${i}`} className="muted">{formatDate(event.atISO.slice(0, 10))} · {event.label}{event.actorName ? ` · ${event.actorName}` : ""}</p>)}
+        <h3 className="invoice-section-heading">History</h3>{detail.timeline.map((event, i) => <p key={`${event.atISO}-${i}`} className="muted">{formatDate(event.atISO.slice(0, 10))} · {event.label}{event.actorName ? ` · ${event.actorName}` : ""}</p>)}
       </div>}
     </Drawer>
     <Drawer open={Boolean(draft)} title={draft?.id ? "Edit repair" : "New repair"} onClose={() => !busy && setDraft(null)} footer={<><button className="btn" disabled={busy} onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || busy} onClick={() => void submit()}>Save repair</button></>}>

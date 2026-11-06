@@ -5,7 +5,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../../components/Modal";
 import { Money } from "../../components/Money";
 import { useToast } from "../../components/Toast";
-import { pluralize } from "../../lib/format";
+import { formatDate, pluralize } from "../../lib/format";
 import type { InvoicePostingPreview } from "./types";
 
 type Props = { open: boolean; onClose: () => void; societyId: string; canPost: boolean; onOpenInvoice: (id: string) => void; onEditMapping: () => void };
@@ -59,7 +59,7 @@ export function PostExistingInvoicesModal({ open, onClose, societyId, canPost, o
           <p className="muted">
             Sent invoices that aren't in the books yet post their receivable and revenue on the issue date, and their payments on the payment
             date. Anything already posted is left alone, so this can be run again safely.
-            {preview.booksStart ? ` Activity on or before ${preview.booksStart.replace(/^the /, "")} belongs to the opening balances and is not posted.` : ""}
+            {preview.booksStart ? ` Activity on or before ${formatDate(preview.booksStart.replace(/^the /, ""))} belongs to the opening balances and is not posted.` : ""}
           </p>
           <dl className="invoice-backfill__figures">
             <div><dt>Invoices to post</dt><dd>{preview.invoiceCount} · <Money cents={preview.invoiceCents} /></dd></div>

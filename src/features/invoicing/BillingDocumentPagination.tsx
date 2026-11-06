@@ -14,6 +14,7 @@ export function useBillingDocumentPagination(scope: string) {
 
 type Props = { label: string; pagination: ReturnType<typeof useBillingDocumentPagination>; result?: { isDone: boolean; continueCursor: string } };
 export function BillingDocumentPagination({ label, pagination, result }: Props) {
+  if (pagination.page === 1 && (!result || result.isDone)) return null;
   return <nav className="invoice-commerce-actions" aria-label={`${label} pagination`}>
     <button className="btn btn--sm" aria-label={`Previous ${label} page`} disabled={pagination.page === 1 || !result} onClick={pagination.previous}>Previous</button>
     <span className="muted">Page {pagination.page}</span>

@@ -29,6 +29,23 @@
 /* ------------------------------------------------------------------ list */
 
 .invoices-page > .tabs { margin-bottom: token(s-4); }
+.invoices-page > .tabs:has(+ .invoice-subtabs) { margin-bottom: token(s-2); }
+/* Views inside a section: a quieter row under the section tabs. */
+.invoice-subtabs { margin-bottom: token(s-3); }
+.invoice-subtabs .tabs {
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: 2px;
+}
+.invoice-subtabs .tab { padding-inline: token(s-2); font-size: token(fs-sm); }
+.invoice-section-heading {
+  margin: 0 0 token(s-2);
+  font-size: token(fs-md);
+  font-weight: token(fw-semibold);
+  color: token(text-primary);
+}
 .invoice-stats { margin-bottom: token(s-4); }
 /* Phones: the four totals as a 2×2 grid rather than a swipe row whose last
  * tile ("Drafts $1,27…") is cut off at 360–390px. */
@@ -45,6 +62,9 @@
   }
 }
 .invoice-card { overflow-x: auto; container-type: inline-size; }
+/* The list card has no card head, so the default card padding would inset the
+ * table and push its last column out of view. */
+.invoices-page .card.invoice-card { padding: 0; }
 .invoice-card > .card__head { gap: token(s-3); }
 .invoice-card > .card__head > .btn { margin-left: auto; flex: none; }
 .invoice-table td[data-label="Issued"],
@@ -52,16 +72,17 @@
 .invoice-table td[data-label="Last invoice"],
 .invoice-table td.num { white-space: nowrap; overflow-wrap: normal; }
 
-/* When the invoice panel narrows the list, drop the least useful columns first. */
+/* When the invoice panel narrows the list, drop the least useful columns first
+ * and keep the balance and status in view. A custom view keeps every column the
+ * person chose and scrolls instead. */
 @media (min-width: 761px) {
   @container (max-width: 900px) {
-    .invoice-table--list th:nth-child(4),
-    .invoice-table--list td[data-label="Issued"] { display: none; }
+    .invoice-table--list:not(.invoice-table--custom-view) [data-column="issueDate"] { display: none; }
+    .invoice-table--list .invoice-table__sub { max-width: 170px; }
+    .invoice-table--list:not(.invoice-table--custom-view) :is(th, td) { padding-inline: token(s-2); }
   }
   @container (max-width: 720px) {
-    .invoice-table--list th:nth-child(6),
-    .invoice-table--list td[data-label="Amount"] { display: none; }
-    .invoice-table__sub { max-width: 200px; }
+    .invoice-table--list:not(.invoice-table--custom-view) :is([data-column="dueDate"], [data-column="total"]) { display: none; }
   }
 }
 
@@ -132,9 +153,9 @@
 .invoice-table tbody tr.is-void td,
 .invoice-table tbody tr.is-muted td { color: token(text-tertiary); }
 .invoice-table__check { width: 40px; }
-.invoice-table__number { white-space: nowrap; }
 .invoice-table__link {
   padding: 0;
+  white-space: nowrap;
   border: 0;
   background: none;
   color: token(text-primary);
@@ -375,20 +396,18 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 }
 .invoice-builder__row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
   gap: token(s-3);
-  align-items: end;
+  align-items: start;
 }
 .invoice-builder__due {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-height: token(control-h-md);
-  justify-content: flex-end;
-  padding-bottom: 6px;
   color: token(text-primary);
+  > :last-child { display: flex; align-items: center; min-height: token(control-h-md); }
 }
-.invoice-builder__add { display: flex; flex-wrap: wrap; gap: token(s-1); }
+.invoice-builder__add { display: flex; flex-wrap: wrap; gap: token(s-1); margin-top: token(s-2); }
 .invoice-builder__hint { margin: token(s-2) 0 0; color: token(text-tertiary); font-size: token(fs-xs); }
 .invoice-builder__autosend { grid-column: 1 / -1; }
 .invoice-builder__row .invoice-builder__hint { grid-column: 1 / -1; margin: 0; }
@@ -419,8 +438,9 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 .invoice-builder__preview-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: token(s-1);
   margin-bottom: token(s-2);
+  > span { margin-right: auto; }
   color: token(text-tertiary);
   font-size: token(fs-xs);
   font-weight: token(fw-semibold);
@@ -447,7 +467,7 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 }
 .line-editor__nums {
   display: grid;
-  grid-template-columns: 64px minmax(96px, 1fr) minmax(100px, 1fr) minmax(90px, auto);
+  grid-template-columns: 64px minmax(88px, 1fr) minmax(136px, 1.4fr) minmax(80px, auto);
   gap: token(s-2);
   align-items: end;
 }
@@ -458,7 +478,16 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   gap: token(s-2);
   align-items: start;
 }
-.line-editor__foot { display: flex; align-items: center; justify-content: flex-end; gap: token(s-2); }
+.line-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-1);
+  margin-inline: -4px;
+  > .invoice-final-price { flex: 1 1 100%; margin-inline: 4px; }
+}
+.line-editor__chevron { transition: transform token(motion-move-fast) token(ease-move); &.is-open { transform: rotate(180deg); } }
+.line-editor__field--wide { grid-column: 1 / -1; }
 .line-editor__price-note { flex: 1; min-width: 0; margin: 0; font-size: token(fs-xs); color: token(text-secondary); }
 .line-editor__price-reset { padding: 0; border: 0; background: none; color: token(accent); font: inherit; cursor: pointer; text-decoration: underline; }
 .line-editor__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -475,7 +504,7 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   .field__label { font-size: token(fs-xxs); }
   font-weight: token(fw-medium);
 }
-.line-editor__tools { display: flex; flex: none; align-items: center; gap: 2px; }
+.line-editor__tools { display: flex; flex: none; align-items: center; gap: 2px; margin-left: auto; }
 .input.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 1100px) {
@@ -494,7 +523,6 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   .line-editor__nums { grid-template-columns: 64px minmax(0, 1fr); }
   .line-editor__field--tax { grid-column: 1 / -1; }
   .line-editor__amount { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; min-height: 0; padding: 0; }
-  .line-editor__tools { justify-content: flex-end; }
   .invoice-builder__summary { grid-template-columns: minmax(0, 1fr); }
   .invoice-builder__preview-head {
     flex-wrap: wrap;
@@ -717,7 +745,6 @@ th.num .invoice-sort { flex-direction: row-reverse; }
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .invoice-print-portal .invoice-doc__stamp--draft { display: none; }
   @page { margin: 16mm 14mm; }
 }
 
@@ -745,6 +772,11 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   .is-overdue dd { color: token(orange-11); }
 }
 .invoice-drawer__actions { display: flex; flex-wrap: wrap; gap: token(s-1); padding: token(s-3) 0; }
+/* Phones: the main action gets its own row, so the overflow menu never drops
+ * onto a line by itself. */
+@media (max-width: 560px) {
+  .invoice-drawer__actions > .btn--accent { flex: 1 1 100%; justify-content: center; order: -1; }
+}
 .invoice-drawer__note { margin: 0 0 token(s-2); font-size: token(fs-sm); }
 .invoice-drawer__section { padding: token(s-3) 0; border-top: 1px solid token(border); }
 .invoice-drawer__heading { margin: 0 0 token(s-2); font-size: token(fs-sm); font-weight: token(fw-semibold); }
@@ -993,10 +1025,12 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 /* Saved invoice designs, reusable pricing, and repair workflow. */
 .invoice-commerce-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   gap: token(s-4);
   padding: token(s-4);
 }
+/* A card body already provides the gutter. */
+.card__body .invoice-commerce-grid { padding: 0; }
 .invoice-template-card {
   min-width: 0;
   padding: token(s-4);
@@ -1004,6 +1038,45 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   border-top: 4px solid token(border);
   border-radius: token(r-md);
   h3 { margin: 0 0 token(s-2); }
+}
+.invoice-template-card__meta::first-letter { text-transform: uppercase; }
+.invoice-templates__saved-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token(s-2) token(s-3);
+  padding: token(s-4) token(s-4) 0;
+  h3 { margin: 0; }
+}
+.invoice-automation__status { font-weight: token(fw-medium); }
+.drawer__body .invoice-schedule-actions {
+  position: sticky;
+  bottom: calc(-1 * #{token(s-4)});
+  z-index: 1;
+  justify-content: flex-end;
+  padding-block: token(s-3);
+  border-top: 1px solid token(border);
+  background: token(bg-panel);
+}
+.invoice-statement-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: token(s-3);
+  padding: token(s-3) token(s-4);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  background: token(bg-subtle);
+  color: token(text-secondary);
+  font-size: token(fs-xs);
+  strong { color: token(text-primary); font-size: token(fs-md); }
+}
+.page--invoice-builder details.card {
+  border: 1px solid token(border);
+  border-radius: token(r-card);
+  background: token(bg-panel);
+  box-shadow: token(elevation-1);
+  > summary { padding: token(s-3) token(s-4); font-size: token(fs-sm); }
 }
 .invoice-commerce-actions { display: flex; flex-wrap: wrap; gap: token(s-2); }
 .invoice-commerce-table { width: 100%; overflow-x: auto; }
@@ -1067,6 +1140,32 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 }
 .invoice-pdf-preview__state { margin: 0; padding: token(s-3); color: token(text-secondary); font-size: token(fs-sm); }
 
+/* Items and customers beside an open invoice panel. */
+.invoice-table--catalog td { overflow-wrap: break-word; }
+@media (min-width: 761px) {
+  @container (max-width: 760px) {
+    .invoice-table--catalog tr > :is(:nth-child(2), :nth-child(3)),
+    .invoice-table--customers tr > :is(:nth-child(2), :nth-child(3), :nth-child(5)) { display: none; }
+  }
+}
+
+/* Set a final price or total, taxes included. */
+.invoice-final-price {
+  display: flex;
+  flex-direction: column;
+  gap: token(s-2);
+  padding: token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  background: token(bg-panel);
+  .btn-row { justify-content: flex-end; }
+  .invoice-builder__hint { margin: 0; }
+  .field { margin-bottom: 0; }
+}
+.invoice-builder__summary > .invoice-final-price--total,
+.invoice-builder__summary > .invoice-final-price__open { grid-column: 1 / -1; }
+.invoice-builder__summary > .invoice-final-price__open { justify-self: start; }
+
 /* Customers */
 .invoice-customers__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: token(s-2); }
 .invoice-customers__search { position: relative; display: flex; align-items: center; color: token(text-secondary); }
@@ -1075,4 +1174,8 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 /* Laptop widths: keep the row actions in view. The card layout takes over on phones. */
 @media (min-width: 761px) and (max-width: 1360px) {
   .invoice-table--customers tr > :nth-child(5) { display: none; }
+  .invoice-table--customers .invoice-table__sub { max-width: 180px; }
+  .table:is(.invoice-table--customers, .invoice-table--catalog) :is(thead th, tbody td) { padding-inline: token(s-2); }
+  .invoice-table--customers .invoice-table__primary,
+  .invoice-table--customers .invoice-table__customer { min-width: 0; }
 }

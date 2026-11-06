@@ -26,6 +26,7 @@ export const invoiceLineValidator = v.object({
   unitPriceCents: v.number(),
   taxRatePercent: v.optional(v.number()),
   taxLabel: v.optional(v.string()),
+  additionalTaxes: v.optional(v.array(v.object({ label: v.string(), ratePercent: v.number() }))),
   // Reporting tags (at most one per tag group), copied onto the revenue line in the books.
   tagIds: v.optional(v.array(v.id("financeTags"))),
 });
@@ -193,6 +194,7 @@ export const invoiceTables = {
     currency: v.optional(v.string()),
     taxRatePercent: v.optional(v.number()),
     taxLabel: v.optional(v.string()),
+    additionalTaxes: v.optional(v.array(v.object({ label: v.string(), ratePercent: v.number() }))),
     category: v.optional(v.string()),
     accountingAccountId: v.optional(v.id("financialAccounts")),
     active: v.boolean(),
@@ -274,6 +276,7 @@ export const invoiceTables = {
     defaultRevenueAccountId: v.optional(v.id("financialAccounts")),
     depositAccountId: v.optional(v.id("financialAccounts")),
     categoryAccounts: v.optional(v.array(v.object({ category: v.string(), accountId: v.id("financialAccounts") }))),
+    taxAccounts: v.optional(v.array(v.object({ taxLabel: v.string(), accountId: v.id("financialAccounts") }))),
     updatedAtISO: v.string(),
   }).index("by_society", ["societyId"]),
 };

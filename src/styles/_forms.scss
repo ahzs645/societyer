@@ -1068,3 +1068,45 @@ select.select:hover:not(:disabled) {
   text-align: left;
   cursor: pointer;
 }
+
+// Stacked form and detail layouts, and a row of actions. Both classes were in
+// use across invoicing, bills, payroll and planning with no rules behind them,
+// so fields, cards and buttons sat wherever normal flow put them.
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-3');
+  min-width: 0;
+  > * { min-width: 0; }
+  > .field { margin-bottom: 0; }
+  > p { margin: 0; }
+  > :is(.btn, .btn-action) { align-self: flex-start; }
+}
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+}
+
+// File pickers keep the native input (and its label) but draw its button like
+// the app's small buttons instead of the browser's "Choose File".
+input[type="file"].input {
+  height: auto;
+  padding: 4px;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  &::file-selector-button {
+    height: token('control-h-sm');
+    margin-right: token('s-2');
+    padding: 0 token('s-2');
+    border: 1px solid token('border');
+    border-radius: token('r-md');
+    background: token('bg-base');
+    color: token('text-primary');
+    font: inherit;
+    font-weight: token('fw-medium');
+    cursor: pointer;
+  }
+  &:hover::file-selector-button { background: token('bg-hover-alpha'); }
+}

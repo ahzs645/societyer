@@ -50,6 +50,7 @@ export const INVOICE_POSTINGS = {
   bankTransfer: { source: "invoice_bank_transfer", basis: "both" },
 } as const;
 
+export type TaxAccount = { taxLabel: string; accountId: string };
 export type InvoicePostingKind = keyof typeof INVOICE_POSTINGS;
 
 /** Every source an invoice posting can carry (for lookups and gates). */
@@ -79,6 +80,8 @@ export type CategoryAccount = { category: string; accountId: string };
 export type InvoiceGlMapping = {
   receivableAccountId?: string | null;
   taxPayableAccountId?: string | null;
+  /** A tax that has its own account, such as PST owed to the province. Others use `taxPayableAccountId`. */
+  taxAccounts?: ReadonlyArray<TaxAccount> | null;
   defaultRevenueAccountId?: string | null;
   /** Where payments that aren't linked to a bank line are deposited (Undeposited funds when unset). */
   depositAccountId?: string | null;
@@ -160,6 +163,13 @@ function ledgerLineKey(line: { accountId: string; tagIds?: readonly string[] }):
   return `${line.accountId}|${JSON.stringify([...(line.tagIds ?? [])].map(String).sort())}`;
 }
 
+export const normalizeTaxLabel = (label: string) => label.trim().toUpperCase();
+
+/** The account a tax is collected to: its own if it has one, otherwise the shared sales tax account. */
+export function taxAccountFor(label: string, accounts: { taxPayableAccountId?: string | null; taxAccounts?: ReadonlyArray<TaxAccount> | null }) {
+  return accounts.taxAccounts?.find((row) => normalizeTaxLabel(row.taxLabel) === normalizeTaxLabel(label))?.accountId ?? accounts.taxPayableAccountId ?? undefined;
+}
+
 /**
  * The accrual: Dr receivable for the total; then the revenue and tax, netted
  * per account (and tags) so a negative line (a credit or refund) offsets the
@@ -172,7 +182,7 @@ function ledgerLineKey(line: { accountId: string; tagIds?: readonly string[] }):
 export function accrualPostingLines(
   invoice: InvoiceForPosting,
   revenueFor: (line: InvoiceLine, index: number) => string | null,
-  accounts: { receivableAccountId: string; taxPayableAccountId?: string | null; withholdingAccountId?: string; shippingRevenueAccountId?: string },
+  accounts: { receivableAccountId: string; taxPayableAccountId?: string | null; taxAccounts?: ReadonlyArray<TaxAccount> | null; withholdingAccountId?: string; shippingRevenueAccountId?: string },
 ): InvoiceLedgerLine[] {
   const totals = computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money);
   if (!(totals.grossTotalCents > 0)) throw new Error("Only invoices with a gross total above zero go into the books.");
@@ -199,8 +209,9 @@ export function accrualPostingLines(
   }
   for (const tax of totals.taxes) {
     if (!tax.cents) continue;
-    if (!accounts.taxPayableAccountId) throw new Error("Choose the account sales tax is collected to under Edit GL account mapping.");
-    add(accounts.taxPayableAccountId, tax.cents, `${tax.label} ${tax.ratePercent}% collected`);
+    const accountId = taxAccountFor(tax.label, accounts);
+    if (!accountId) throw new Error("Choose the account sales tax is collected to under Edit GL account mapping.");
+    add(accountId, tax.cents, `${tax.label} ${tax.ratePercent}% collected`);
   }
   const credits: InvoiceLedgerLine[] = [];
   for (const row of nets.values()) {

@@ -14,7 +14,10 @@ export type InvoiceDocumentExtras = {
   annexures?: Array<{ title: string; columns: string[]; rows: string[][] }>;
   attachments?: Array<{ name: string; mimeType: "application/pdf" | "image/png" | "image/jpeg"; dataUrl: string }>;
 };
-type MoneyLine = { quantity: number; unitPriceCents: number; taxRatePercent?: number; taxLabel?: string; taxMode?: InvoiceTaxMode };
+/** One sales tax on a line. Several taxes share the line's pre-tax amount: tax is never charged on tax. */
+export type InvoiceLineTax = { label: string; ratePercent: number };
+export type InvoiceLineTaxes = { taxRatePercent?: number; taxLabel?: string; additionalTaxes?: InvoiceLineTax[] };
+type MoneyLine = InvoiceLineTaxes & { quantity: number; unitPriceCents: number; taxMode?: InvoiceTaxMode };
 type Discount = { kind: "percent" | "amount"; value: number };
 const rounded = (value: number) => Math.sign(value) * Math.round(Math.abs(value));
 export function integerCents(value: unknown, label: string, min = 0): number {
@@ -69,22 +72,58 @@ export function cleanInvoiceMoney(value?: InvoiceMoneyOptions, currency?: string
   const fx = explicitFxQuote(value.fx, currency, baseCurrency);
   return { taxMode, ...(shipping ? { shipping } : {}), ...(withholding ? { withholding } : {}), ...(fx ? { fx } : {}) };
 }
+/** Every tax on a line, the existing single rate first. */
+export function lineTaxes(line: InvoiceLineTaxes): InvoiceLineTax[] {
+  const primary = (line.taxRatePercent ?? 0) > 0 ? [{ label: line.taxLabel || "Tax", ratePercent: line.taxRatePercent! }] : [];
+  return primary.length ? [...primary, ...(line.additionalTaxes ?? []).filter((tax) => tax.ratePercent > 0)] : [];
+}
+export function cleanAdditionalTaxes(value: unknown): InvoiceLineTax[] | undefined {
+  if (!Array.isArray(value) || !value.length) return undefined;
+  const taxes = value.slice(0, 3).map((tax) => ({ label: String(tax?.label ?? "Tax").trim().slice(0, 20) || "Tax", ratePercent: Math.round(Number(tax?.ratePercent) * 1000) / 1000 }));
+  if (taxes.some((tax) => !Number.isFinite(tax.ratePercent) || tax.ratePercent <= 0 || tax.ratePercent > 30)) throw new Error("Tax rates must be between 0 and 30%.");
+  return taxes;
+}
+/** Tax picks shared by the invoice lines and the catalog; `value` round-trips through the two helpers below. */
+export const INVOICE_TAX_CHOICES = [
+  { value: "none", label: "No tax" },
+  { value: "GST|5", label: "GST 5%" },
+  { value: "GST|5+PST|7", label: "GST 5% + PST 7%" },
+  { value: "HST|13", label: "HST 13%" },
+  { value: "HST|14", label: "HST 14%" },
+  { value: "HST|15", label: "HST 15%" },
+  { value: "PST|7", label: "PST 7%" },
+  { value: "QST|9.975", label: "QST 9.975%" },
+  { value: "GST|5+QST|9.975", label: "GST 5% + QST 9.975%" },
+];
+export function encodeTaxChoice(line: InvoiceLineTaxes): string {
+  return lineTaxes(line).map((tax) => `${tax.label}|${tax.ratePercent}`).join("+") || "none";
+}
+export function decodeTaxChoice(value: string): InvoiceLineTaxes {
+  if (value === "none") return { taxRatePercent: undefined, taxLabel: undefined, additionalTaxes: undefined };
+  const [first, ...rest] = value.split("+").map((part) => { const [label, rate] = part.split("|"); return { label, ratePercent: Number(rate) }; });
+  return { taxRatePercent: first.ratePercent, taxLabel: first.label, additionalTaxes: rest.length ? rest : undefined };
+}
+export const taxChoiceLabel = (line: InvoiceLineTaxes) => lineTaxes(line).map((tax) => `${tax.label} ${tax.ratePercent}%`).join(" + ");
+
 export function computeInvoiceMoneyTotals(lines: MoneyLine[], discount?: Discount | null, options?: InvoiceMoneyOptions | null) {
   const quotedAmounts = lines.map((line) => integerCents(rounded(line.quantity * line.unitPriceCents), "Line amount", -Number.MAX_SAFE_INTEGER));
   const bases = [...quotedAmounts];
   const inclusiveGroups = new Map<string, number[]>();
+  const taxesByLine = lines.map(lineTaxes);
+  const isInclusive = (line: MoneyLine) => (line.taxMode ?? options?.taxMode) === "inclusive";
   lines.forEach((line, index) => {
-    if ((line.taxMode ?? options?.taxMode) !== "inclusive" || !(line.taxRatePercent! > 0)) return;
-    const key = `${line.taxLabel || "Tax"}|${line.taxRatePercent}`;
+    if (!isInclusive(line) || !taxesByLine[index].length) return;
+    const key = taxesByLine[index].map((tax) => `${tax.label}|${tax.ratePercent}`).join("+");
     inclusiveGroups.set(key, [...(inclusiveGroups.get(key) ?? []), index]);
   });
-  const originalInclusiveTax = new Map<string, number>();
+  // Lines priced with the same taxes share one extraction; several taxes then split it by rate.
+  const originalInclusiveTax = new Map<string, number[]>();
   for (const [key, indices] of inclusiveGroups) {
-    const rate = lines[indices[0]].taxRatePercent!, gross = indices.reduce((sum, index) => sum + quotedAmounts[index], 0);
+    const taxes = taxesByLine[indices[0]], rate = taxes.reduce((sum, tax) => sum + tax.ratePercent, 0), gross = indices.reduce((sum, index) => sum + quotedAmounts[index], 0);
     const tax = rounded(gross * rate / (100 + rate));
     const baseShares = gross ? allocateMoney(gross - tax, indices.map((index) => quotedAmounts[index])) : indices.map((index) => quotedAmounts[index] - rounded(quotedAmounts[index] * rate / (100 + rate)));
     indices.forEach((index, at) => { bases[index] = baseShares[at]; });
-    originalInclusiveTax.set(key, tax);
+    originalInclusiveTax.set(key, taxes.length === 1 ? [tax] : allocateMoney(tax, taxes.map((entry) => entry.ratePercent)));
   }
   const subtotalCents = bases.reduce((a, b) => a + b, 0);
   const discountCents = discount && discount.value > 0 && subtotalCents > 0 ? Math.min(subtotalCents, discount.kind === "percent" ? rounded(subtotalCents * Math.min(discount.value, 100) / 100) : rounded(discount.value)) : 0;
@@ -92,23 +131,36 @@ export function computeInvoiceMoneyTotals(lines: MoneyLine[], discount?: Discoun
   const lineNetCents = bases.map((base, index) => base - lineDiscountCents[index]);
   const lineTaxCents = lines.map(() => 0);
   const groups = new Map<string, { label: string; ratePercent: number; baseCents: number; cents: number }>();
-  const byMode = new Map<string, number[]>();
-  lines.forEach((line, index) => {
-    const rate = line.taxRatePercent ?? 0;
-    if (!(rate > 0)) return;
-    const key = `${line.taxLabel || "Tax"}|${rate}`, mode = (line.taxMode ?? options?.taxMode) === "inclusive" ? "inclusive" : "exclusive";
-    const modeKey = `${mode}:${key}`;
-    byMode.set(modeKey, [...(byMode.get(modeKey) ?? []), index]);
-  });
-  for (const [modeKey, indices] of byMode) {
-    const line = lines[indices[0]], label = line.taxLabel || "Tax", rate = line.taxRatePercent!, key = `${label}|${rate}`;
+  const addTax = (tax: InvoiceLineTax, baseCents: number, cents: number) => {
+    const key = `${tax.label}|${tax.ratePercent}`;
+    const group = groups.get(key) ?? { label: tax.label, ratePercent: tax.ratePercent, baseCents: 0, cents: 0 };
+    group.baseCents += baseCents; group.cents += cents; groups.set(key, group);
+  };
+  if (!discountCents) for (const [key, indices] of inclusiveGroups) {
+    const amounts = originalInclusiveTax.get(key)!, total = amounts.reduce((sum, cents) => sum + cents, 0);
+    indices.forEach((index) => { lineTaxCents[index] = quotedAmounts[index] - bases[index]; });
+    lineTaxCents[indices[0]] += total - indices.reduce((sum, index) => sum + lineTaxCents[index], 0);
     const base = indices.reduce((sum, index) => sum + lineNetCents[index], 0);
-    const tax = modeKey.startsWith("inclusive:") && !discountCents ? originalInclusiveTax.get(key)! : rounded(base * rate / 100);
-    const shares = modeKey.startsWith("inclusive:") && !discountCents ? indices.map(index=>quotedAmounts[index]-bases[index]) : base ? allocateMoney(tax, indices.map((index) => lineNetCents[index])) : indices.map(index=>rounded(lineNetCents[index]*rate/100));
-    if(shares.length)shares[0]+=tax-shares.reduce((sum,value)=>sum+value,0);
-    indices.forEach((index, at) => { lineTaxCents[index] = shares[at]; });
-    const group = groups.get(key) ?? { label, ratePercent: rate, baseCents: 0, cents: 0 };
-    group.baseCents += base; group.cents += tax; groups.set(key, group);
+    taxesByLine[indices[0]].forEach((tax, at) => addTax(tax, base, amounts[at]));
+  }
+  const byMode = new Map<string, { tax: InvoiceLineTax; indices: number[] }>();
+  lines.forEach((line, index) => {
+    const inclusive = isInclusive(line);
+    if (inclusive && !discountCents) return;
+    for (const tax of taxesByLine[index]) {
+      const modeKey = `${inclusive ? "inclusive" : "exclusive"}:${tax.label}|${tax.ratePercent}`;
+      const entry = byMode.get(modeKey) ?? { tax, indices: [] };
+      entry.indices.push(index); byMode.set(modeKey, entry);
+    }
+  });
+  for (const { tax: lineTax, indices } of byMode.values()) {
+    const rate = lineTax.ratePercent;
+    const base = indices.reduce((sum, index) => sum + lineNetCents[index], 0);
+    const tax = rounded(base * rate / 100);
+    const shares = base ? allocateMoney(tax, indices.map((index) => lineNetCents[index])) : indices.map((index) => rounded(lineNetCents[index] * rate / 100));
+    if (shares.length) shares[0] += tax - shares.reduce((sum, value) => sum + value, 0);
+    indices.forEach((index, at) => { lineTaxCents[index] += shares[at]; });
+    addTax(lineTax, base, tax);
   }
   const shipping = options?.shipping;
   const shippingQuoted = shipping?.amountCents ?? 0, shippingRate = shipping?.taxRatePercent ?? 0;
@@ -116,9 +168,7 @@ export function computeInvoiceMoneyTotals(lines: MoneyLine[], discount?: Discoun
   const shippingTaxCents = shippingInclusive ? rounded(shippingQuoted * shippingRate / (100 + shippingRate)) : rounded(shippingQuoted * shippingRate / 100);
   const shippingCents = shippingQuoted - (shippingInclusive ? shippingTaxCents : 0);
   if (shippingRate > 0 && shippingQuoted) {
-    const label = shipping?.taxLabel || "Tax", key = `${label}|${shippingRate}`;
-    const group = groups.get(key) ?? { label, ratePercent: shippingRate, baseCents: 0, cents: 0 };
-    group.baseCents += shippingCents; group.cents += shippingTaxCents; groups.set(key, group);
+    addTax({ label: shipping?.taxLabel || "Tax", ratePercent: shippingRate }, shippingCents, shippingTaxCents);
   }
   const taxes = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label) || a.ratePercent - b.ratePercent);
   const taxCents = taxes.reduce((sum, tax) => sum + tax.cents, 0);

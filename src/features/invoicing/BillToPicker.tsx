@@ -171,7 +171,7 @@ export function BillToPicker({ value, onChange, members, organizations, showMemb
         value={query}
         disabled={disabled || creating}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(0); }}
-        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         onKeyDown={onKeyDown}
       />

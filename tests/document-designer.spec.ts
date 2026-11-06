@@ -82,8 +82,8 @@ test("designer settings persist through invoice, payment receipt and repair work
   await drawer.getByLabel("Item column label", { exact: true }).fill("Work performed");
   await drawer.getByLabel("Rate column label", { exact: true }).fill("Unit charge");
   await drawer.getByLabel("Item column width", { exact: true }).fill("45");
-  await check(drawer, "Show sku column");
-  await drawer.getByRole("button", { name: "Move sku column left", exact: true }).click();
+  await check(drawer, "Show SKU column");
+  await drawer.getByRole("button", { name: "Move SKU column left", exact: true }).click();
   await check(drawer, "Show tax column", false);
   await check(drawer, "Alternate row shading");
   await drawer.getByLabel("First page header text", { exact: true }).fill("SERVICE HEADER");
@@ -382,7 +382,7 @@ test("ready-made template gallery previews real designs before saving and respec
   let dialog = page.getByRole("dialog");
   await expect(dialog).toContainText(name);
   await expect(dialog.getByRole("button", { name: "Preview document", exact: true })).toContainText("Financial report");
-  await expect(dialog.getByTitle("Template PDF preview", { exact: true })).toHaveAttribute("src", /^blob:/);
+  await expect(dialog.getByTestId("template-pdf-preview")).toBeVisible();
   let downloading = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Download sample PDF", exact: true }).click();
   const reportDownload = await downloading;
@@ -394,7 +394,7 @@ test("ready-made template gallery previews real designs before saving and respec
   for (const value of ["Sample financial report", "Statement of operations", "Revenue and expenses", "Service income", "Q4"]) expect(reportText).toContain(value);
 
   await pick(page, dialog, "Preview document", "Payment receipt");
-  await expect(dialog.getByTitle("Template PDF preview", { exact: true })).toHaveAttribute("src", /^blob:/);
+  await expect(dialog.getByTestId("template-pdf-preview")).toBeVisible();
   downloading = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Download sample PDF", exact: true }).click();
   const receiptText = await pdfText(await downloadedBytes(await downloading));
@@ -413,7 +413,7 @@ test("ready-made template gallery previews real designs before saving and respec
   await saved.getByRole("button", { name: `Preview saved ${savedName}`, exact: true }).click();
   dialog = page.getByRole("dialog");
   await expect(dialog).toContainText(savedName);
-  await expect(dialog.getByTitle("Template PDF preview", { exact: true })).toHaveAttribute("src", /^blob:/);
+  await expect(dialog.getByTestId("template-pdf-preview")).toBeVisible();
   await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
   await expect(gallery.getByRole("article")).toHaveCount(12);
   await gallery.getByRole("heading", { name: "Choose a starting design", exact: true }).scrollIntoViewIfNeeded();
@@ -432,7 +432,7 @@ test("ready-made template gallery previews real designs before saving and respec
   await expect(gallery.getByRole("button", { name: `Use ${name}`, exact: true })).toBeDisabled();
   await gallery.getByRole("button", { name: `Preview ${name}`, exact: true }).click();
   dialog = page.getByRole("dialog");
-  await expect(dialog.getByTitle("Template PDF preview", { exact: true })).toHaveAttribute("src", /^blob:/);
+  await expect(dialog.getByTestId("template-pdf-preview")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Customize template", exact: true })).toBeDisabled();
   const denied = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDataClient.ts";

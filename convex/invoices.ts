@@ -49,6 +49,7 @@ const clientLineValidator = v.object({
   unitPriceCents: v.number(),
   taxRatePercent: v.optional(v.number()),
   taxLabel: v.optional(v.string()),
+  additionalTaxes: v.optional(v.array(v.object({ label: v.string(), ratePercent: v.number() }))),
   tagIds: v.optional(v.array(v.id("financeTags"))),
 });
 
@@ -207,6 +208,7 @@ export const upsertCatalogItem = authorizedMutation("invoices:upsertCatalogItem"
     openPrice: v.optional(v.boolean()),
     taxRatePercent: v.optional(v.number()),
     taxLabel: v.optional(v.string()),
+    additionalTaxes: v.optional(v.array(v.object({ label: v.string(), ratePercent: v.number() }))),
     category: v.optional(v.string()),
     accountingAccountId: v.optional(v.id("financialAccounts")),
     active: v.optional(v.boolean()),
@@ -316,6 +318,7 @@ export const saveAccountMapping = authorizedMutation("invoices:saveAccountMappin
     defaultRevenueAccountId: v.optional(v.id("financialAccounts")),
     depositAccountId: v.optional(v.id("financialAccounts")),
     categoryAccounts: v.array(v.object({ category: v.string(), accountId: v.optional(v.id("financialAccounts")) })),
+    taxAccounts: v.optional(v.array(v.object({ taxLabel: v.string(), accountId: v.optional(v.id("financialAccounts")) }))),
     itemAccounts: v.optional(v.array(v.object({ catalogItemId: v.id("invoiceCatalogItems"), accountId: v.optional(v.id("financialAccounts")) }))),
   },
   returns: v.any(),

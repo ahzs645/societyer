@@ -30,7 +30,7 @@ export function DocumentTemplateGallery({ workspace, brand, canWrite, onUse, onP
         <DocumentTemplateThumbnail config={preset.config} workspace={workspace} kind={preset.recommendedDocumentKind} fit />
         <span className="document-template-gallery__preview-hint"><Eye size={14} /> Preview</span>
       </button>
-      <div className="document-template-gallery__details"><div className="document-template-gallery__tags"><span>{TEMPLATE_KIND_LABELS[preset.recommendedDocumentKind]}</span><span>{brand?.name ?? "Organization branding"}</span></div><h4>{preset.name}</h4><p>{preset.description}</p><button className="btn btn--sm btn--accent" type="button" disabled={!canWrite} aria-label={`Use ${preset.name}`} onClick={() => onUse(preset.config)}>Use this design</button></div>
+      <div className="document-template-gallery__details"><div className="document-template-gallery__tags"><span>{TEMPLATE_KIND_LABELS[preset.recommendedDocumentKind]}</span>{brand && <span>{brand.name}</span>}</div><h4>{preset.name}</h4><p>{preset.description}</p><button className="btn btn--sm" type="button" disabled={!canWrite} aria-label={`Use ${preset.name}`} onClick={() => onUse(preset.config)}>Use this design</button></div>
     </article>)}</div>
     {!matches.length && <div className="document-template-gallery__empty"><p>No designs match these filters.</p><button className="btn btn--sm" onClick={() => { setSearch(""); setKind("all"); }}>Show all designs</button></div>}
   </section>;

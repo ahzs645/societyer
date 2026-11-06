@@ -53,6 +53,16 @@ function readView(params: URLSearchParams): InvoiceListView {
 
 const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "needs_action", "recurring", "customers", "catalog", "templates", "price_lists", "repairs", "quotes", "statements", "automation"];
 const LIST_TABS = new Set<InvoiceTab>(["all", "drafts", "outstanding", "overdue", "paid", "needs_action"]);
+const SECTIONS = [
+  { id: "invoices", label: "Invoices", tabs: ["all", "drafts", "outstanding", "overdue", "paid", "needs_action", "recurring"] },
+  { id: "quotes", label: "Quotes", tabs: ["quotes"] },
+  { id: "customers", label: "Customers", tabs: ["customers", "statements"] },
+  { id: "items", label: "Items & pricing", tabs: ["catalog", "price_lists"] },
+  { id: "repairs", label: "Repairs", tabs: ["repairs"] },
+  { id: "setup", label: "Setup", tabs: ["templates", "automation"] },
+] as const satisfies readonly { id: string; label: string; tabs: readonly InvoiceTab[] }[];
+type InvoiceSection = (typeof SECTIONS)[number]["id"];
+const sectionForTab = (tab: InvoiceTab) => SECTIONS.find((section) => (section.tabs as readonly InvoiceTab[]).includes(tab)) ?? SECTIONS[0];
 type SortKey = "number" | "customer" | "issueDate" | "dueDate" | "total" | "balance";
 
 function rowsForTab(rows: InvoiceRow[], tab: InvoiceTab): InvoiceRow[] {
@@ -346,31 +356,40 @@ export function InvoicesPage() {
       }
     : null;
   const duesCount = workspace?.duesCandidates.filter((c) => !c.existingInvoiceId).length ?? 0;
-  const invoiceTabs = (
-    <Tabs<InvoiceTab>
-      value={tab}
-      onChange={(next) => setTab(next)}
+  const section = sectionForTab(tab);
+  const sectionTabs = (
+    <Tabs<InvoiceSection>
+      value={section.id}
+      onChange={(next) => setTab(SECTIONS.find((item) => item.id === next)!.tabs[0])}
       tabRoles
-      ariaLabel="Invoice views"
+      ariaLabel="Invoice sections"
       items={[
-        { id: "all", label: "All", count: counts?.all ?? null },
-        { id: "drafts", label: "Drafts", count: counts?.drafts ?? null },
-        { id: "outstanding", label: "Outstanding", count: counts?.outstanding ?? null },
-        { id: "overdue", label: "Overdue", count: counts?.overdue ?? null },
-        { id: "paid", label: "Paid", count: counts?.paid ?? null },
-        { id: "needs_action", label: "Needs action", count: counts?.needs_action ?? null },
-        { id: "recurring", label: "Recurring", count: counts?.recurring ?? null },
-        { id: "customers", label: "Customers", count: counts?.customers ?? null },
-        { id: "catalog", label: "Items & services", count: counts?.catalog ?? null },
-        { id: "price_lists", label: "Price lists", count: counts?.price_lists ?? null },
-        { id: "templates", label: "Templates", count: counts?.templates ?? null },
-        { id: "repairs", label: "Repairs", count: counts?.repairs ?? null },
+        { id: "invoices", label: "Invoices", count: counts?.all ?? null },
         { id: "quotes", label: "Quotes" },
-        { id: "statements", label: "Statements" },
-        { id: "automation", label: "Automation" },
+        { id: "customers", label: "Customers", count: counts?.customers ?? null },
+        { id: "items", label: "Items & pricing", count: counts?.catalog ?? null },
+        { id: "repairs", label: "Repairs", count: counts?.repairs ?? null },
+        { id: "setup", label: "Setup" },
       ]}
     />
   );
+  const allViews: { id: InvoiceTab; label: string; count?: number | null }[] = [
+    { id: "all", label: "All", count: counts?.all ?? null },
+    { id: "drafts", label: "Drafts", count: counts?.drafts ?? null },
+    { id: "outstanding", label: "Outstanding", count: counts?.outstanding ?? null },
+    { id: "overdue", label: "Overdue", count: counts?.overdue ?? null },
+    { id: "paid", label: "Paid", count: counts?.paid ?? null },
+    { id: "needs_action", label: "Needs action", count: counts?.needs_action ?? null },
+    { id: "recurring", label: "Recurring", count: counts?.recurring ?? null },
+    { id: "customers", label: "All customers", count: counts?.customers ?? null },
+    { id: "statements", label: "Statements" },
+    { id: "catalog", label: "Items & services", count: counts?.catalog ?? null },
+    { id: "price_lists", label: "Price lists", count: counts?.price_lists ?? null },
+    { id: "templates", label: "Templates", count: counts?.templates ?? null },
+    { id: "automation", label: "Automation" },
+  ];
+  const views = allViews.filter((view) => (section.tabs as readonly InvoiceTab[]).includes(view.id));
+  const invoiceTabs = views.length > 1 ? <Tabs<InvoiceTab> value={tab} onChange={(next) => setTab(next)} tabRoles ariaLabel={`${section.label} views`} items={views} /> : null;
 
   return (
     <div className="page invoices-page">
@@ -387,7 +406,7 @@ export function InvoicesPage() {
         }
         actions={
           <>
-            <Select aria-label="Invoice list currency" value={currency} onChange={setCurrencyFilter} options={[...new Set([queriedWorkspace?.ledger.workspaceCurrency ?? "CAD", ...(queriedWorkspace?.invoices ?? []).map((row) => row.currency)])].map((value) => ({ value, label: value }))} />
+            <Select className="page-header-filter" aria-label="Invoice list currency" value={currency} onChange={setCurrencyFilter} options={[...new Set([queriedWorkspace?.ledger.workspaceCurrency ?? "CAD", ...(queriedWorkspace?.invoices ?? []).map((row) => row.currency)])].map((value) => ({ value, label: value }))} />
             <MoreActionsMenu
               items={[
                 ...(societyLike && workspace?.plans.length ? [{ id: "dues", label: "Generate dues invoices", hint: duesCount ? `${duesCount} this month` : undefined, icon: <Users size={14} />, disabled: !canWrite, onSelect: () => setParam({ dues: "1" }) }] : []),
@@ -405,7 +424,7 @@ export function InvoicesPage() {
         }
       />
 
-      <StatStrip className="invoice-stats" ariaLabel="Invoice summary">
+      {section.id === "invoices" && <StatStrip className="invoice-stats" ariaLabel="Invoice summary">
         <StatTile
           label="Outstanding"
           value={<Money currency={currency} cents={summary?.outstandingCents ?? null} variant="hero" />}
@@ -425,7 +444,7 @@ export function InvoicesPage() {
           actionLabel="Show overdue invoices"
         />
         <StatTile
-          label="Net received, last 30 days"
+          label="Net received, 30 days"
           value={<Money currency={currency} cents={summary?.paidLast30Cents ?? null} variant="hero" />}
           sub={summary ? pluralize(summary.paidLast30Count, "invoice") : undefined}
           onClick={() => { setTab("all"); setRecentOnly(true); }}
@@ -440,23 +459,24 @@ export function InvoicesPage() {
           pressed={tab === "drafts"}
           actionLabel="Show draft invoices"
         />
-      </StatStrip>
+      </StatStrip>}
 
-      {workspace && workspace.ledger.foreignCurrency.count > 0 && (
+      {section.id === "invoices" && workspace && workspace.ledger.foreignCurrency.count > 0 && (
         <Banner tone="warn" className="invoice-banner" title={`${pluralize(workspace.ledger.foreignCurrency.count, "invoice")} in ${workspace.ledger.foreignCurrency.currencies.join(", ")}`}>
           The books are kept in {workspace.ledger.workspaceCurrency}. Set an explicit invoice exchange rate and settlement rate to post foreign invoices and their exchange differences.{" "}
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setTab("needs_action")}>Show them</button>
         </Banner>
       )}
-      {workspace && workspace.ledger.readyCount > 0 && (
+      {section.id === "invoices" && workspace && workspace.ledger.readyCount > 0 && (
         <Banner tone="info" className="invoice-banner" title={`${pluralize(workspace.ledger.readyCount, "invoice")} not in the books yet`}>
           Sent invoices from before the books were connected, or recorded while their accounts weren't mapped, can be posted now.{" "}
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setPostExistingOpen(true)}>Post existing invoices</button>
         </Banner>
       )}
 
-      {isPhone ? (
-        <div className="invoice-tabs-row">
+      {sectionTabs}
+      {invoiceTabs && isPhone ? (
+        <div className="invoice-tabs-row invoice-subtabs">
           {invoiceTabs}
           {LIST_TABS.has(tab) && (
             <button
@@ -474,7 +494,7 @@ export function InvoicesPage() {
             </button>
           )}
         </div>
-      ) : invoiceTabs}
+      ) : invoiceTabs && <div className="invoice-subtabs">{invoiceTabs}</div>}
 
       {collections.loading && <p className="muted" role="status">Loading complete template, pricing and repair lists…</p>}
       {collections.error && <Banner tone="warn" title="Complete invoice lists could not load">{collections.error} <button className="btn btn--sm" onClick={collections.retry}>Retry loading lists</button></Banner>}
@@ -558,7 +578,7 @@ export function InvoicesPage() {
                   <Bell size={12} aria-hidden="true" /> Send reminder
                 </button>
                 <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkMarkSent()}>
-                  <Send size={12} aria-hidden="true" /> Mark sent
+                  <Send size={12} aria-hidden="true" /> Mark as sent
                 </button>
                 <button type="button" className="btn btn--sm" disabled={!canExport} onClick={() => void exportRows(selectedRows, "selected")}>
                   <Download size={12} aria-hidden="true" /> Export

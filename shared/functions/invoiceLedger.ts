@@ -43,6 +43,7 @@ import {
   type InvoiceGlMapping,
   type InvoiceLedgerLine,
   type InvoicePostingKind,
+  taxAccountFor,
 } from "../invoiceLedger";
 
 /* ------------------------------------------------------------------ rows */
@@ -134,6 +135,7 @@ export type InvoiceSettingsRow = {
   defaultRevenueAccountId?: string;
   depositAccountId?: string;
   categoryAccounts?: Array<{ category: string; accountId: string }>;
+  taxAccounts?: Array<{ taxLabel: string; accountId: string }>;
 };
 
 /* -------------------------------------------------------------- accounts */
@@ -235,6 +237,7 @@ export function mappingOf(settings: InvoiceSettingsRow | PortableDoc | null | un
     defaultRevenueAccountId: settings?.defaultRevenueAccountId,
     depositAccountId: settings?.depositAccountId,
     categoryAccounts: Array.isArray(settings?.categoryAccounts) ? settings.categoryAccounts : [],
+    taxAccounts: Array.isArray(settings?.taxAccounts) ? settings.taxAccounts : [],
   };
 }
 
@@ -294,8 +297,11 @@ export function accrualBlockers(invoice: StoredInvoice, lctx: InvoiceLedgerConte
     const account = mapped && lctx.accountsById.get(mapped.accountId);
     if (account?.currency && account.currency !== lctx.workspaceCurrency) reasons.push(`Revenue account ${account.name} must use books currency ${lctx.workspaceCurrency}.`);
   }
-  const taxAccount = lctx.mapping.taxPayableAccountId && lctx.accountsById.get(lctx.mapping.taxPayableAccountId);
-  if (taxAccount && taxAccount.currency && taxAccount.currency !== lctx.workspaceCurrency && computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money).taxes.some(tax => tax.cents !== 0)) reasons.push(`Tax account ${taxAccount.name} must use books currency ${lctx.workspaceCurrency}.`);
+  for (const tax of computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money).taxes) {
+    const taxAccountId = tax.cents !== 0 ? taxAccountFor(tax.label, lctx.mapping) : undefined;
+    const taxAccount = taxAccountId && lctx.accountsById.get(taxAccountId);
+    if (taxAccount && taxAccount.currency && taxAccount.currency !== lctx.workspaceCurrency) reasons.push(`Tax account ${taxAccount.name} must use books currency ${lctx.workspaceCurrency}.`);
+  }
   if (unmapped.length) reasons.push(`No revenue account for ${[...new Set(unmapped)].join(", ")}.`);
   const start = booksStartLabel(lctx.booksStart);
   if (start && isBeforeBooksStart(invoice.issueDate, lctx.booksStart)) reasons.push(`Issued before ${start}.`);
@@ -498,11 +504,14 @@ async function accountsForAccrual(ctx: PortableMutationCtx, invoice: StoredInvoi
   const mapped = (id: string | null | undefined) => (id && lctx.accountIds.has(id) ? id : undefined);
   const receivableAccountId = mapped(lctx.mapping.receivableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "receivable", lctx.workspaceCurrency))._id;
   const taxed = computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money).taxes.some((tax) => tax.cents !== 0);
-  const taxPayableAccountId = taxed ? mapped(lctx.mapping.taxPayableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "taxPayable", lctx.workspaceCurrency))._id : undefined;
   const totals = computeInvoiceTotals(invoice.lines, invoice.discount, invoice.money);
+  const taxAccounts = (lctx.mapping.taxAccounts ?? []).filter((row) => lctx.accountIds.has(row.accountId));
+  // The shared account is only needed, and only created, for a tax without its own.
+  const needsShared = taxed && totals.taxes.some((tax) => tax.cents !== 0 && !taxAccountFor(tax.label, { taxAccounts }));
+  const taxPayableAccountId = needsShared ? mapped(lctx.mapping.taxPayableAccountId) ?? (await ensureLedgerAccount(ctx, invoice.societyId, "taxPayable", lctx.workspaceCurrency))._id : mapped(lctx.mapping.taxPayableAccountId);
   const withholdingAccountId = totals.withholdingCents ? (await ensureLedgerAccount(ctx, invoice.societyId, "withholding", lctx.workspaceCurrency))._id : undefined;
   const shippingRevenueAccountId = totals.shippingCents ? (await ensureLedgerAccount(ctx, invoice.societyId, "shippingRevenue", lctx.workspaceCurrency))._id : undefined;
-  return { receivableAccountId, taxPayableAccountId, withholdingAccountId, shippingRevenueAccountId };
+  return { receivableAccountId, taxPayableAccountId, taxAccounts, withholdingAccountId, shippingRevenueAccountId };
 }
 
 export type AccrualOutcome = { entryId?: string; skipped?: string; changed: boolean };

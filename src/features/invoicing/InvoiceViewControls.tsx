@@ -27,7 +27,7 @@ export function InvoiceViewControls({ societyId, value, onChange }: { societyId:
     [columns[index], columns[next]] = [columns[next], columns[index]]; change({ columns });
   };
   return <div className="invoice-view-controls">
-    <label>Saved view <select className="input" aria-label="Saved invoice view" value={id} onChange={event => {
+    <label><span className="invoice-view-controls__label">Saved view</span> <select className="input" aria-label="Saved invoice view" value={id} onChange={event => {
       const found = data?.views.find(view => view._id === event.target.value);
       setId(found?._id ?? ""); setName(found?.name ?? ""); setError("");
       onChange(found ? cleanInvoiceListView(found.config) : cleanInvoiceListView(DEFAULT_INVOICE_LIST_VIEW));
@@ -43,7 +43,7 @@ export function InvoiceViewControls({ societyId, value, onChange }: { societyId:
           {([['fromDate', 'Issued from'], ['toDate', 'Issued to'], ['dueFrom', 'Due from'], ['dueTo', 'Due to']] as const).map(([key,label]) => <Field key={key} label={label}><input className="input" type="date" value={value[key]} onChange={e => change({ [key]: e.target.value })} /></Field>)}
           {([['minimumBalanceCents', 'Minimum balance'], ['maximumBalanceCents', 'Maximum balance']] as const).map(([key,label]) => <Field key={key} label={label}><input className="input" type="number" step="0.01" value={value[key] == null ? "" : value[key]! / 100} onChange={e => change({ [key]: e.target.value === "" ? null : parseMoneyInput(e.target.value) })} /></Field>)}
         </div>
-        <h3>Columns</h3><p className="muted">Visible columns, labels and order also control invoice list exports. Widths are in pixels.</p>
+        <h3 className="invoice-section-heading">Columns</h3><p className="muted">Visible columns, labels and order also control invoice list exports. Widths are in pixels.</p>
         {value.columns.map((column,index) => <div className="invoice-view-column" key={column.key}>
           <Checkbox checked={column.visible} label={DEFAULT_INVOICE_LIST_VIEW.columns.find(c => c.key === column.key)!.label} onChange={visible => change({ columns: value.columns.map(c => c.key === column.key ? { ...c, visible } : c) })} />
           <input className="input" aria-label={`${column.key} column label`} value={column.label} maxLength={80} onChange={e => change({ columns: value.columns.map(c => c.key === column.key ? { ...c, label: e.target.value } : c) })} />

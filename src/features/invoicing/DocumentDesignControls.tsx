@@ -34,7 +34,8 @@ export function DesignNumber({ label, value, min, max, step = 1, onChange }: { l
     onBlur={() => { const number = Number(raw); const next = raw === "" || !Number.isFinite(number) ? value : Math.max(min, Math.min(max, number)); setRaw(String(next)); if (next !== value) onChange(next); }} /></Field>;
 }
 
-const humanize = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase());
+const humanize = (value: string) => value === "sku" ? "SKU" : value.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase());
+const columnName = (key: string) => key === "sku" ? "SKU" : humanize(key).toLowerCase();
 function move<T>(values: T[], from: number, to: number): T[] {
   const result = [...values]; const [value] = result.splice(from, 1); result.splice(to, 0, value); return result;
 }
@@ -92,10 +93,10 @@ export function ColumnDesignControls({ config, design, change, update }: Props) 
   return <DesignSection id="columns" title="Item table" hint="Widths are relative shares of the available table width. Use the arrows to reorder columns.">
     <Checkbox label="Show item descriptions" checked={config.showDescription} onChange={(showDescription) => change({ showDescription, design: { ...design, table: { ...design.table, columns: columns.map((column) => column.key === "description" ? { ...column, visible: showDescription } : column) } } })} />
     {columns.map((column, index) => <fieldset key={column.key} className="document-designer__column"><legend>{humanize(column.key)} column</legend>
-      <Checkbox label={`Show ${humanize(column.key).toLowerCase()} column`} checked={column.visible} onChange={(visible) => change({ ...(column.key === "description" ? { showDescription: visible } : {}), design: { ...design, table: { ...design.table, columns: columns.map((entry) => entry.key === column.key ? { ...entry, visible } : entry) } } })} />
+      <Checkbox label={`Show ${columnName(column.key)} column`} checked={column.visible} onChange={(visible) => change({ ...(column.key === "description" ? { showDescription: visible } : {}), design: { ...design, table: { ...design.table, columns: columns.map((entry) => entry.key === column.key ? { ...entry, visible } : entry) } } })} />
       <div className="document-designer__grid"><Field label={`${humanize(column.key)} column label`}><input className="input" value={column.label} maxLength={80} onChange={(e) => update({ table: { ...design.table, columns: columns.map((entry) => entry.key === column.key ? { ...entry, label: e.target.value } : entry) } })} /></Field>
         <DesignNumber label={`${humanize(column.key)} column width`} value={column.width} min={1} max={1000} onChange={(width) => update({ table: { ...design.table, columns: columns.map((entry) => entry.key === column.key ? { ...entry, width } : entry) } })} /></div>
-      <div className="document-designer__reorder"><button className="btn btn--sm" type="button" aria-label={`Move ${column.key} column left`} disabled={index === 0} onClick={() => update({ table: { ...design.table, columns: move(columns, index, index - 1) } })}><ArrowUp size={13} /> Earlier</button><button className="btn btn--sm" type="button" aria-label={`Move ${column.key} column right`} disabled={index === columns.length - 1} onClick={() => update({ table: { ...design.table, columns: move(columns, index, index + 1) } })}><ArrowDown size={13} /> Later</button></div>
+      <div className="document-designer__reorder"><button className="btn btn--sm" type="button" aria-label={`Move ${columnName(column.key)} column left`} disabled={index === 0} onClick={() => update({ table: { ...design.table, columns: move(columns, index, index - 1) } })}><ArrowUp size={13} /> Earlier</button><button className="btn btn--sm" type="button" aria-label={`Move ${columnName(column.key)} column right`} disabled={index === columns.length - 1} onClick={() => update({ table: { ...design.table, columns: move(columns, index, index + 1) } })}><ArrowDown size={13} /> Later</button></div>
     </fieldset>)}
     <Checkbox label="Alternate row shading" checked={design.table.striped} onChange={(striped) => update({ table: { ...design.table, striped } })} />
     <DesignNumber label="Row padding (pt)" value={design.table.rowPadding} min={2} max={20} onChange={(rowPadding) => update({ table: { ...design.table, rowPadding } })} />

@@ -65,7 +65,8 @@ export function InvoiceDocument({ invoice, organization, paymentInstructions }: 
       {documentAddressLines(settings, source).split("\n").map((line, index) => <p key={index} style={element(line.includes(source.name || "\u0000") ? org ? "organizationName" : "customerName" : org ? "organizationAddress" : "customerAddress")}>{line}</p>)}
     </div>;
   };
-  const stamp = (where: typeof a.stamp.placement) => a.visibility.statusStamp && kind === "invoice" && invoice.status && where === a.stamp.placement ? <div className="document-preview__status" style={{ color: a.stamp.color, borderColor: a.stamp.color, transform: `rotate(${a.stamp.rotation}deg)` }}>{a.stamp.text || invoice.status.toUpperCase()}</div> : null;
+  const draftWatermark = a.visibility.statusStamp && kind === "invoice" && invoice.status === "draft";
+  const stamp = (where: typeof a.stamp.placement) => a.visibility.statusStamp && kind === "invoice" && invoice.status && !draftWatermark && where === a.stamp.placement ? <div className="document-preview__status" style={{ color: a.stamp.color, borderColor: a.stamp.color, transform: `rotate(${a.stamp.rotation}deg)` }}>{a.stamp.text || invoice.status.toUpperCase()}</div> : null;
   const signature = (receiver = false) => {
     const settings = receiver ? a.receiverSignature : a.signature;
     if (receiver ? !a.receiverSignature.enabled : !design.signature.enabled) return null;
@@ -101,6 +102,7 @@ export function InvoiceDocument({ invoice, organization, paymentInstructions }: 
   const margin = design.page.margins, advancedBlock = (placement: "before_items" | "after_items" | "after_totals" | "end") => <DocumentAdvancedBlocks data={data} placement={placement} />;
   return <article className={`invoice-doc document-preview document-preview--${config.layout}`} aria-label={`${title} ${invoice.number}`} data-document-kind={kind} style={{ ...typography("body"), "--invoice-accent": config.accentColor, background: a.backgrounds.body.color, boxSizing: "border-box", width: `${page.width}pt`, minHeight: `${page.height}pt`, maxWidth: "100%", padding: `${margin.top}pt ${margin.right}pt ${margin.bottom}pt ${margin.left}pt` } as CSSProperties}>
     <div aria-hidden="true" className="document-preview__artwork" style={{ ...documentBackgroundCss(a.backgrounds.body), opacity: a.backgrounds.body.opacity }} />
+    {draftWatermark && <div aria-hidden="true" className="document-preview__watermark" style={{ color: a.stamp.color }}><span>{a.stamp.text || "DRAFT"}</span></div>}
     {design.header.text && <div className="document-preview__band" style={typography("header")}>{design.header.text}</div>}{a.rich.headerHtml && <DocumentRichContent html={a.rich.headerHtml} />}
     {design.sections.map((key) => <div key={key} data-document-section={key}>{key === "items" && advancedBlock("before_items")}{key === "items" && data.taxModeLabel && <p style={element("labels")}>{data.taxModeLabel}</p>}{sections[key]}{key === "items" && advancedBlock("after_items")}{key === "totals" && advancedBlock("after_totals")}</div>)}{advancedBlock("end")}
     {design.fields.taxRegistration && organization.gstNumber && <div className="document-preview__tax" style={typography("footer")}>GST/HST registration no. {organization.gstNumber}</div>}
