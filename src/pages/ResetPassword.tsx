@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { AuthShell } from "../auth/AuthShell";
+import { AuthPending, AuthShell } from "../auth/AuthShell";
+import { useAuth } from "../auth/AuthProvider";
+import { useAuthCapabilities } from "../auth/authCapabilities";
 import { AuthFailure, authFailureFromResponse, toAuthFailure } from "../auth/authErrors";
 import { PasswordField } from "../auth/PasswordField";
 import { loadSessionAuthClient } from "../lib/sessionAuthClient";
@@ -10,18 +12,44 @@ const MIN_PASSWORD_LENGTH = 10;
 /** Landing page for a password-reset or operator-issued setup link. */
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { hash } = useLocation();
   const token = searchParams.get("token") ?? new URLSearchParams(hash.slice(1)).get("token");
+  return <ResetPasswordFlow key={token} token={token} linkError={searchParams.has("error")} />;
+}
+
+function ResetPasswordFlow({ token, linkError }: { token: string | null; linkError: boolean }) {
+  const navigate = useNavigate();
+  const { mode } = useAuth();
+  const capabilities = useAuthCapabilities();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AuthFailure | null>(null);
-  // Better Auth redirects here with `?error=INVALID_TOKEN` for an expired or
-  // used link; the server can also reject the token on submit.
-  const [tokenRejected, setTokenRejected] = useState(false);
+  const [check, setCheck] = useState<"checking" | "valid" | "invalid" | AuthFailure>("checking");
+  const [checkAttempt, setCheckAttempt] = useState(0);
   const errorRef = useRef<HTMLDivElement>(null);
   const focusAfterError = useRef(false);
+
+  useEffect(() => {
+    if (!token || linkError || token.length > 512) return;
+    const controller = new AbortController();
+    const fallback = "We couldn't check this link. Try again.";
+    void (async () => {
+      try {
+        const { authClient } = await loadSessionAuthClient();
+        if (controller.signal.aborted) return;
+        const result = await authClient.$fetch<{ valid: boolean }>("/check-password-reset-link", {
+          method: "POST", body: { token }, signal: controller.signal, timeout: 10_000,
+        });
+        if (result.error) throw authFailureFromResponse(result.error, fallback);
+        if (typeof result.data?.valid !== "boolean") throw new AuthFailure("other", fallback);
+        if (!controller.signal.aborted) setCheck(result.data.valid ? "valid" : "invalid");
+      } catch (cause) {
+        if (!controller.signal.aborted) setCheck(toAuthFailure(cause, fallback));
+      }
+    })();
+    return () => controller.abort();
+  }, [token, linkError, checkAttempt]);
 
   // The fields are disabled while busy; move focus to the error once they are live again.
   useEffect(() => {
@@ -32,7 +60,7 @@ export function ResetPasswordPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy || !token) return;
+    if (busy || !token || check !== "valid") return;
     if (password !== confirm) {
       focusAfterError.current = true;
       setError(new AuthFailure("other", "The passwords don't match."));
@@ -52,7 +80,7 @@ export function ResetPasswordPage() {
       if (failure.kind === "invalid-token") {
         setPassword("");
         setConfirm("");
-        setTokenRejected(true);
+        setCheck("invalid");
         return;
       }
       focusAfterError.current = true;
@@ -62,11 +90,9 @@ export function ResetPasswordPage() {
     }
   };
 
-  const linkUsable = Boolean(token) && !searchParams.get("error") && !tokenRejected;
-
-  if (!linkUsable) {
+  if (!token || linkError || token.length > 512 || check === "invalid") {
     // Better Auth sends `?error=INVALID_TOKEN` without a token for a dead link.
-    const lede = token || searchParams.get("error")
+    const lede = token || linkError
       ? "It may have expired or already been used. Reset links work once, for one hour."
       : "Part of the link is missing. Open it from your email again, or ask for a new one.";
     return (
@@ -76,7 +102,26 @@ export function ResetPasswordPage() {
         stateKey="link-broken"
         after={<p><Link to="/login" className="auth__link">Back to sign in</Link></p>}
       >
-        <Link to="/login?mode=forgot" className="btn btn--primary auth__submit">Send a new link</Link>
+        {mode === "convex" && capabilities?.emailDelivery !== true
+          ? <p>Ask your workspace administrator for a new link if you still need one.</p>
+          : <Link to="/login?mode=forgot" className="btn btn--primary auth__submit">Send a new link</Link>}
+      </AuthShell>
+    );
+  }
+
+  if (check === "checking") {
+    return <AuthShell title="Checking your link"><AuthPending>One moment…</AuthPending></AuthShell>;
+  }
+
+  if (check instanceof AuthFailure) {
+    return (
+      <AuthShell title="Couldn't check your link" lede={check.message}
+        after={<p><Link to="/login" className="auth__link">Back to sign in</Link></p>}
+      >
+        <button className="btn btn--primary auth__submit" type="button" onClick={() => {
+          setCheck("checking");
+          setCheckAttempt(attempt => attempt + 1);
+        }}>Try again</button>
       </AuthShell>
     );
   }

@@ -23,6 +23,7 @@ import authConfig from "./auth.config";
 import { authenticatorEnrollmentEnabled, hostedSessionConfiguration, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
 import { authInstanceDetails } from "../shared/authInstance";
 import { betterAuthMfaClaims, workspaceMfaProof } from "../shared/betterAuthMfa";
+import { PASSWORD_RESET_LINK_CHECK, passwordResetLink } from "../shared/passwordResetLink";
 import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage, manualAuthProvisioningEnabled } from "../shared/authEmailPolicy";
 import { emailProviderConfiguration } from "../shared/emailConfiguration";
 import { developmentMailConfigured, assertDevelopmentMail } from "../shared/developmentMailConfiguration";
@@ -72,6 +73,7 @@ const THROTTLES: Record<string, { email?: Allowance; ip?: Allowance }> = {
   "/request-password-reset": { email: { capacity: 3, perHour: 3 }, ip: { capacity: 10, perHour: 10 } },
   "/send-verification-email": { email: { capacity: 3, perHour: 3 }, ip: { capacity: 10, perHour: 10 } },
   "/reset-password": { ip: { capacity: 10, perHour: 10 } },
+  [PASSWORD_RESET_LINK_CHECK]: { ip: { capacity: 30, perHour: 30 } },
 };
 
 const throttleEmail = (body: unknown) => {
@@ -202,6 +204,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     plugins: [
       twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" }),
       workspaceMfaProof,
+      passwordResetLink,
       crossDomain({ siteUrl: siteUrls[0] }),
       convex({
         authConfig,

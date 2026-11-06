@@ -96,12 +96,28 @@ try {
       "run", "--env-file", selector, "hostedAuth:provisionAccount", JSON.stringify({ name, email }),
     ], { encoding: "utf8" }).trim());
     assert.equal(new URL(link).origin, origin);
+    const resetToken = new URLSearchParams(new URL(link).hash.slice(1)).get("token");
+    assert.ok(resetToken);
+    const stalePage = await browser.newPage();
+    await stalePage.goto(`${origin}/reset-password?${new URLSearchParams({ token: resetToken })}`);
+    await expect(stalePage.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
     await page.goto(link);
     await page.getByLabel("New password", { exact: true }).fill(password);
     await page.getByLabel("Confirm new password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Change password" }).click();
     await page.waitForURL(/\/login\?reset=1/);
+
+    // A link opened before the first reset still cannot be submitted twice.
+    await stalePage.getByLabel("New password", { exact: true }).fill(`${password}-replay`);
+    await stalePage.getByLabel("Confirm new password", { exact: true }).fill(`${password}-replay`);
+    await stalePage.getByRole("button", { name: "Change password" }).click();
+    await expect(stalePage.getByRole("heading", { name: "This reset link doesn't work" })).toBeVisible();
+    await stalePage.goto(link);
+    await expect(stalePage.getByRole("heading", { name: "This reset link doesn't work" })).toBeVisible();
+    await expect(stalePage.getByLabel("New password", { exact: true })).toHaveCount(0);
+    await stalePage.close();
     assert.equal((await signIn(page)).status(), 200);
+    console.log("convex: setup link opened once, rejected a stale-tab replay, and hid the form on reopening.");
   } else {
     await page.goto(origin + "/login?mode=sign-up&redirect=%2Faccount%2Fsecurity");
     await page.getByLabel("Full name", { exact: true }).fill(name);
