@@ -158,6 +158,14 @@ export function DocumentPreviewPane({
           setStatus(media.startsWith("audio/") ? "audio" : "video");
           return;
         }
+        if (ext === "eml" || mimeType?.split(";")[0].toLowerCase() === "message/rfc822") {
+          const { previewReceiptEmail } = await import("../lib/emailReceipt");
+          const emailText = await previewReceiptEmail(bytes);
+          if (cancelled) return;
+          setText(emailText);
+          setStatus("text");
+          return;
+        }
         if (/^(txt|csv|md|json|vtt|srt)$/.test(ext)) {
           setText(new TextDecoder().decode(bytes.slice(0, 200_000)));
           setStatus("text");

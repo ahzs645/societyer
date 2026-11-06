@@ -701,7 +701,7 @@ export async function payrollSyncDeadlinesPortable(ctx: PortableMutationCtx, { s
 async function cardTransactions(ctx: PortableQueryCtx, card: Row): Promise<Row[]> {
   if (!card.financialAccountId) return [];
   const txns = (await ctx.db.query("financialTransactions").withIndex("by_account", (q) => q.eq("accountId", card.financialAccountId)).collect()) as Row[];
-  return txns.filter((txn) => txn.societyId === card.societyId && belongsToCard(txn, card.last4));
+  return txns.filter((txn) => txn.societyId === card.societyId && (txn.corporateCardId ? txn.corporateCardId === card._id : belongsToCard(txn, card.last4)));
 }
 
 export async function cardsWorkspacePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {

@@ -22,6 +22,7 @@ import * as exp from "../shared/functions/expenseReports";
 import * as hub from "../shared/functions/financialHub";
 import { DEMO_MILEAGE_RATE_CENTS } from "../shared/demoData/banking";
 import { todayDateOnly } from "../shared/dateOnly";
+import { previewReceiptEmail } from "../src/lib/emailReceipt";
 
 /* ------------------------------------------------ file-name prefill */
 
@@ -225,6 +226,25 @@ const ctxFor = (userId: string): PortableMutationCtx => ({
 const mina = ctxFor(seed.users[0]._id);
 const jordan = ctxFor("static_user_treasurer");
 
+// RFC 822 receipt bodies are displayed as text; nothing in the message
+// supplies amounts to the ledger or runs when the preview opens.
+const previewBytes = new TextEncoder().encode([
+  "Subject: Payment receipt", "From: Example <receipt@example.com>", "Content-Type: text/html; charset=UTF-8", "",
+  '<script>doNotRun()</script><img src="https://example.com/tracker"><table><tr><td>Total paid</td><td>USD 20.00</td></tr></table>',
+].join("\r\n"));
+const preview = await previewReceiptEmail(previewBytes.buffer);
+assert.match(preview, /Subject: Payment receipt/);
+assert.match(preview, /Total paid\s+USD 20\.00/);
+assert.doesNotMatch(preview, /doNotRun|https:\/\/example.com\/tracker/);
+
+const newEmailReceipt = async () => {
+  const documentId = await db.insert("documents", { societyId: S, title: "Example receipt", category: "Receipt" });
+  const { ids } = await inbox.addPortable(mina, { societyId: S, items: [{ documentId, fileName: "2026-11-05_Example_20.00.eml" }] });
+  const id = ids[0];
+  assert.equal((await db.get(id))?.amountCents, undefined, "email receipt fields wait for manual entry");
+  return { documentId, id };
+};
+
 // Receipt inbox: two exact matches are high confidence; match all attaches them through updateTransaction.
 let box = await inbox.listPortable(mina, { societyId: S });
 assert.equal(box.counts.unmatched, 4);
@@ -418,4 +438,33 @@ await assert.rejects(budgets.removePortable(mina, { id: "static_spend_budget_fin
   assert.equal((await db.get(out[0]._id))?.spendBudgetId, undefined, "null clears the budget");
 }
 
-console.log("Banking workflow checks passed: receipt prefill and matching, month strip, running balance and auto-reconcile, Add account, mileage claims and spend budgets (claims and bank transactions).");
+{
+  const receipt = await newEmailReceipt();
+  const claimInput = { societyId: S, claimantName: "Example buyer", claimantUserId: seed.users[0]._id, title: "Web hosting", category: "Software", amountCents: 26107, currency: "usd", incurredAtISO: today, status: "Draft", receiptDocumentId: receipt.documentId, receiptInboxItemId: receipt.id };
+  const claimId = await exp.upsertPortable(mina, claimInput);
+  const saved = await db.get(claimId);
+  assert.deepEqual([saved?.amountCents, saved?.currency, saved?.receiptDocumentId, saved?.originalExpense], [26107, "USD", receipt.documentId, undefined]);
+  assert.equal((await inbox.listPortable(mina, { societyId: S })).rows.find((row) => row._id === receipt.id)?.matchedClaim?._id, claimId);
+  await assert.rejects(exp.upsertPortable(mina, claimInput), /no longer available/);
+  const { receiptInboxItemId: _usedInboxId, ...editableClaim } = claimInput;
+  await exp.upsertPortable(mina, { ...editableClaim, id: claimId, conversion: { currency: "CAD", rate: "1.375" } });
+  const converted = await db.get(claimId);
+  assert.deepEqual([converted?.amountCents, converted?.currency, converted?.originalExpense], [35897, "CAD", { amountCents: 26107, currency: "USD", rate: "1.375" }]);
+  await exp.removePortable(mina, { id: claimId });
+  assert.equal((await db.get(receipt.id))?.status, "unmatched");
+}
+{
+  const receipt = await newEmailReceipt();
+  const credit = (await db.query("financialAccounts").collect()).find((row) => row.societyId === S && row.currency === "CAD" && row.accountType === "Credit")!;
+  assert.ok(credit, "demo credit account");
+  const cardId = await db.insert("corporateCards", { societyId: S, financialAccountId: credit._id, status: "active", last4: "1234" });
+  const chargeInput = { societyId: S, date: today, description: "Web hosting", amountCents: -26107, currency: "USD", accountId: credit._id, corporateCardId: cardId, receiptInboxItemId: receipt.id };
+  await assert.rejects(recon.addManualTransactionPortable(mina, chargeInput), /currency/);
+  const txnId = await recon.addManualTransactionPortable(mina, { ...chargeInput, conversion: { currency: "CAD", rate: "1.375" } });
+  const txn = await db.get(txnId);
+  assert.deepEqual([txn?.amountCents, txn?.receiptDocumentId, txn?.corporateCardId, txn?.originalExpense], [-35897, receipt.documentId, cardId, { amountCents: -26107, currency: "USD", rate: "1.375" }]);
+  assert.equal((await db.get(receipt.id))?.matchedTransactionId, txnId);
+  assert.equal(scoreReceiptMatch({ merchant: "Example", date: today, amountCents: 100, currency: "USD" }, { _id: txnId, date: today, amountCents: -100, currency: "CAD", counterparty: "Example" })?.amountKind, "none");
+}
+
+console.log("Banking workflow checks passed: receipt preview, reimbursement and company card recording, FX, receipt matching, reconciliation and spend budgets.");

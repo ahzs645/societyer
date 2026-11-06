@@ -186,5 +186,6 @@ export const communicationsTables = {
     demo: v.boolean(),
   })
     .index("by_society", ["societyId"])
+    .index("by_society_provider", ["societyId", "provider"])
     .index("by_society_status", ["societyId", "status"]),
 };

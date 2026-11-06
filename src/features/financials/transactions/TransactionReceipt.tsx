@@ -57,10 +57,11 @@ export function TransactionReceipt({
   const library = useQuery(api.documents.listSummaries, picking ? { societyId: societyId as any } : "skip") as Array<{ _id: string; title?: string; category?: string; createdAtISO?: string }> | undefined;
   const storage = isDocumentVersionStorageEnabled();
 
-  const upload = async (file: File) => {
+  const upload = async (original: File) => {
     if (!canUpload || busy) return;
     setBusy(true);
     try {
+      const file = /\.eml$/i.test(original.name) ? (await import("../../../lib/emailReceipt")).normalizeEmailReceiptFile(original) : original;
       const title = `Receipt: ${payee} (${txn.date})`;
       const documentId = await createDocument({
         societyId: societyId as any,
@@ -126,11 +127,11 @@ export function TransactionReceipt({
           ariaLabel="Receipt upload"
           icon={<UploadCloud size={16} />}
           title="Drop a receipt here"
-          touchTitle="Add a receipt photo or PDF"
+          touchTitle="Add a receipt file or email"
           chooseLabel="Choose a file"
           busy={busy}
           busyLabel="Attaching…"
-          accept="image/*,application/pdf"
+          accept="image/*,application/pdf,.eml,message/rfc822"
           hint={
             txn.receiptStatus === "attached"
               ? "Marked as received in the bank feed. Add the file to keep it with this transaction."

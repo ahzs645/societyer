@@ -65,8 +65,13 @@ export const addManualTransaction = authorizedMutation("reconciliation:addManual
     counterparty: v.optional(v.string()),
     category: v.optional(v.string()),
     accountId: v.optional(v.id("financialAccounts")),
+    currency: v.optional(v.string()),
+    conversion: v.optional(v.object({ currency: v.string(), rate: v.string() })),
+    receiptInboxItemId: v.optional(v.id("receiptInboxItems")),
+    corporateCardId: v.optional(v.id("corporateCards")),
+    memo: v.optional(v.string()),
   },
-  returns: v.any(),
+  returns: v.id("financialTransactions"),
   handler: async (ctx, args) => addManualTransactionPortable(await toPortableMutationCtx(ctx), args),
 });
 

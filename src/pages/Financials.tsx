@@ -253,16 +253,18 @@ export function FinancialsPage() {
   const txnSurface = useTransactionsSurface({ societyId: society?._id, canWrite, transactions, tags: financeTags, reviewSegment: txnFilters.review });
   const runTransactionBulk = useTransactionBulkEdit(society?._id);
   const { decorate: decorateTransactions } = txnSurface;
+  const accountsById = useMemo(() => new Map((accounts ?? []).map((account) => [account._id, account])), [accounts]);
   const allRecords = useMemo(
     () => decorateTransactions((transactions ?? []).filter((t: any) => !focusedTransactionId || String(t._id) === focusedTransactionId).map((t: any) => ({
       ...t,
-      account: (accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "",
+      account: accountsById.get(t.accountId)?.name ?? "",
+      currency: accountsById.get(t.accountId)?.currency,
       items: new Set([
         ...(linksByTransactionId.get(t._id) ?? []).map((link: any) => String(link.assetId ?? link.inventoryItemId ?? link._id)),
         ...(assetsByTransactionId.get(t._id) ?? []).map((asset: any) => String(asset._id)),
       ]).size,
     }))),
-    [transactions, accounts, linksByTransactionId, assetsByTransactionId, focusedTransactionId, decorateTransactions],
+    [transactions, accountsById, linksByTransactionId, assetsByTransactionId, focusedTransactionId, decorateTransactions],
   );
   // A linked purchase (`?transaction=`) shows on its own, whatever the queue.
   const records = useMemo(
@@ -945,7 +947,7 @@ export function FinancialsPage() {
             <Link2 size={16} />
             <div className="callout__body">
               <strong className="callout__title">Linked accounting purchase</strong>
-              <div className="callout__note muted">{focusedTransaction.date} · {focusedTransaction.description} · {formatMoney(Math.abs(focusedTransaction.amountCents))}</div>
+              <div className="callout__note muted">{focusedTransaction.date} · {focusedTransaction.description} · {formatMoney(Math.abs(focusedTransaction.amountCents), { currency: accountsById.get(focusedTransaction.accountId)?.currency })}</div>
             </div>
             <button className="btn btn--sm" onClick={() => navigate("/app/financials?tab=transactions")}>Show all transactions</button>
           </div>
@@ -1012,7 +1014,7 @@ export function FinancialsPage() {
                       </span>
                     );
                   }
-                  if (field.name === "amountCents") return <Money cents={t.amountCents} tone={t.amountCents > 0 ? "in" : "auto"} />;
+                  if (field.name === "amountCents") return <Money cents={t.amountCents} currency={t.currency} tone={t.amountCents > 0 ? "in" : "auto"} />;
                   if (field.name === "fundRestrictionId") {
                     if (isSplitTransaction(t)) return <span className="muted">By line</span>;
                     return t.fundRestrictionId ? <span>{txnSurface.fundNames.get(String(t.fundRestrictionId)) ?? "Archived fund"}</span> : <span className="muted">Unrestricted</span>;

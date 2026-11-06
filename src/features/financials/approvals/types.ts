@@ -1,5 +1,6 @@
 import type { ApprovalRule, ApprovalRuleDiffLine, ApprovalVote, ApproverAccess } from "../../../../shared/expenseApprovals";
 import type { ClaimPolicyIssue, ExpenseClaimPolicy, MileageDetails } from "../../../../shared/expensePolicy";
+import type { OriginalExpense } from "../../../../shared/expenseCurrency";
 
 export type TrailEntry = { atISO: string; action: string; actorName: string; actorUserId?: string; note?: string };
 
@@ -11,6 +12,7 @@ export type QueueRow = {
   category: string;
   amountCents: number;
   currency: string;
+  originalExpense?: OriginalExpense;
   status: "Draft" | "Submitted" | "Approved" | "Paid" | "Rejected" | "Recalled" | string;
   incurredAtISO: string;
   submittedAtISO?: string;

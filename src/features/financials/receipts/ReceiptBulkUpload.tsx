@@ -8,10 +8,10 @@ import { usePermissions } from "../../../hooks/usePermissions";
 import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
 import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
 import { pluralize } from "../../../lib/format";
-import { parseReceiptFilename } from "../../../../shared/receiptMatching";
+import { parseReceiptFilename, type ReceiptPrefill } from "../../../../shared/receiptMatching";
 import { errorMessage } from "../banking/types";
 
-const ACCEPT = "image/*,application/pdf,.heic,.heif";
+const ACCEPT = "image/*,application/pdf,.heic,.heif,.eml,message/rfc822";
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_FILES = 50;
 
@@ -38,12 +38,14 @@ export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; 
     if (!canUpload || busy || !files.length) return;
     const batch = files.slice(0, MAX_FILES);
     setError(null);
-    const items: Array<{ documentId: string; fileName: string }> = [];
+    const items: Array<{ documentId: string; fileName: string } & ReceiptPrefill> = [];
     const failed: string[] = [];
-    for (const [index, file] of batch.entries()) {
+    for (const [index, original] of batch.entries()) {
       setBusy(`Uploading ${index + 1} of ${batch.length}…`);
       try {
-        const prefill = parseReceiptFilename(file.name);
+        const email = /\.eml$/i.test(original.name) || original.type === "message/rfc822" ? await import("../../../lib/emailReceipt") : undefined;
+        const file = email?.normalizeEmailReceiptFile(original) ?? original;
+        const prefill = email ? {} : parseReceiptFilename(file.name);
         const documentId: string = await createDocument({
           societyId,
           title: prefill.merchant ? `Receipt: ${prefill.merchant}${prefill.date ? ` (${prefill.date})` : ""}` : `Receipt: ${file.name}`,
@@ -54,9 +56,9 @@ export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; 
           retentionYears: 7,
         });
         await uploadDocumentVersion({ societyId, documentId, file, createDemoVersion, beginUpload, recordUploadedVersion, completeUpload });
-        items.push({ documentId: String(documentId), fileName: file.name });
+        items.push({ documentId: String(documentId), fileName: file.name, ...prefill });
       } catch (err: unknown) {
-        failed.push(`${file.name}: ${errorMessage(err) ?? "upload failed"}`);
+        failed.push(`${original.name}: ${errorMessage(err) ?? "upload failed"}`);
       }
     }
     try {
@@ -73,14 +75,14 @@ export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; 
   };
 
   const onReject = (rejections: FileRejection[]) => {
-    setError(rejections.map((rejection) => `${rejection.file.name}: ${rejection.reason === "size" ? "over 25 MB" : "not a PDF or image"}`).join(" "));
+    setError(rejections.map((rejection) => `${rejection.file.name}: ${rejection.reason === "size" ? "over 25 MB" : "choose a PDF, image or .eml email"}`).join(" "));
   };
 
   const hint = !storage
     ? "File upload is turned off on this deployment."
     : !canUpload
       ? "Uploading receipts needs finance and document edit access."
-      : "PDFs or photos, up to 25 MB each and 50 at a time. Names like 2026-10-12_Coastal-Hydro_161.38.pdf fill in the date, merchant and amount.";
+      : "PDFs, photos or .eml email receipts, up to 25 MB each and 50 at a time. Preview email receipts and enter their expense details.";
 
   return (
     <FileDropZone
@@ -92,7 +94,7 @@ export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; 
       chooseLabel="Choose files"
       busyLabel={busy ?? "Uploading…"}
       hint={hint}
-      touchHint={canUpload ? "Photos or PDFs, 25 MB each, up to 50 at a time." : undefined}
+      touchHint={canUpload ? "Photos, PDFs or .eml emails, 25 MB each, up to 50 at a time." : undefined}
       accept={ACCEPT}
       maxBytes={MAX_BYTES}
       multiple

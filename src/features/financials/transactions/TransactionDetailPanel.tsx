@@ -4,6 +4,7 @@ import { Drawer } from "../../../components/ui";
 import { Tabs } from "../../../components/primitives";
 import { NotesPanel } from "../../../components/NotesPanel";
 import { Money } from "../../../components/Money";
+import type { OriginalExpense } from "../../../../shared/expenseCurrency";
 import { ShortcutHint } from "../../../components/ShortcutHint";
 import { useToast } from "../../../components/Toast";
 import { formatDate, formatDateTime, pluralize } from "../../../lib/format";
@@ -45,6 +46,8 @@ export type PanelTransaction = {
   /** The payee to show (a rename rule's name, else the raw payee). */
   payeeName?: string;
   amountCents: number;
+  currency?: string;
+  originalExpense?: OriginalExpense;
   account?: string;
   method?: string;
   status?: string;
@@ -299,7 +302,8 @@ export function TransactionDetailPanel({
           {isIn ? <ArrowDownLeft size={14} aria-hidden="true" /> : <ArrowUpRight size={14} aria-hidden="true" />}
           {isIn ? "Money in" : "Money out"}
         </span>
-        <Money cents={record.amountCents} variant="hero" tone={isIn ? "in" : "out"} signDisplay="exceptZero" />
+        <Money cents={record.amountCents} currency={record.currency} variant="hero" tone={isIn ? "in" : "out"} signDisplay="exceptZero" />
+        {record.originalExpense && <p className="muted">Original: <Money cents={Math.abs(record.originalExpense.amountCents)} currency={record.originalExpense.currency} /> · 1 {record.originalExpense.currency} = {record.originalExpense.rate} {record.currency}</p>}
         {reasons.length > 0 && (
           <ul className="transaction-panel__attention" aria-label="Needs attention">
             {reasons.map((reason) => (
@@ -542,7 +546,7 @@ function OtherTransactionsSection({
                 <button type="button" className="transaction-panel__other" onClick={() => onNavigate(row)}>
                   <span className="transaction-panel__other-date">{formatDate(row.date)}</span>
                   <span className="transaction-panel__other-category">{splitLabel(row) ?? (row.category || "Uncategorised")}</span>
-                  <Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "out"} signDisplay="exceptZero" />
+                  <Money cents={row.amountCents} currency={row.currency} tone={row.amountCents > 0 ? "in" : "out"} signDisplay="exceptZero" />
                 </button>
               </li>
             ))}

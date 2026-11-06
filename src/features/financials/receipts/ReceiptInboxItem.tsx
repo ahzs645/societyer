@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "convex/react";
 import { Download, FileText, Link2, RotateCcw, Trash2, Undo2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { Badge } from "../../../components/ui";
 import { DatePicker } from "../../../components/DatePicker";
 import { Money } from "../../../components/Money";
 import { useToast } from "../../../components/Toast";
+import { DocumentPreviewByIdButton } from "../../../components/DocumentFilePreview";
 import { formatDate } from "../../../lib/format";
 import { centsToDollarInput } from "../../../lib/format";
 import { parseMoneyInput } from "../../../lib/money";
@@ -24,7 +26,7 @@ function TransactionLine({ txn }: { txn: InboxTransaction }) {
     <span className="receipt-inbox__txn">
       <span className="receipt-inbox__txn-name">{txn.counterparty || txn.description}</span>
       <span className="muted">{formatDate(txn.date)}{txn.accountName ? ` · ${txn.accountName}` : ""}</span>
-      <Money cents={txn.amountCents} />
+      <Money cents={txn.amountCents} currency={txn.currency} />
     </span>
   );
 }
@@ -34,7 +36,7 @@ function TransactionLine({ txn }: { txn: InboxTransaction }) {
  * the transactions it may belong to (confirm one to attach the receipt), or
  * the transaction it is attached to (unmatch).
  */
-export function ReceiptInboxItem({ item, canWrite }: { item: InboxItem; canWrite: boolean }) {
+export function ReceiptInboxItem({ item, canWrite, onClaim, onCard }: { item: InboxItem; canWrite: boolean; onClaim: () => void; onCard: () => void }) {
   const update = useMutation(api.receiptInbox.update);
   const confirmMatch = useMutation(api.receiptInbox.confirmMatch);
   const unmatch = useMutation(api.receiptInbox.unmatch);
@@ -43,9 +45,11 @@ export function ReceiptInboxItem({ item, canWrite }: { item: InboxItem; canWrite
   const toast = useToast();
   const [merchant, setMerchant] = useState(item.merchant ?? "");
   const [amount, setAmount] = useState(item.amountCents ? centsToDollarInput(item.amountCents) : "");
+  const [currency, setCurrency] = useState(item.currency ?? "");
   const [busy, setBusy] = useState(false);
   useEffect(() => setMerchant(item.merchant ?? ""), [item.merchant]);
   useEffect(() => setAmount(item.amountCents ? centsToDollarInput(item.amountCents) : ""), [item.amountCents]);
+  useEffect(() => setCurrency(item.currency ?? ""), [item.currency]);
   const editable = canWrite && item.status === "unmatched";
 
   const run = async (label: string, action: () => Promise<unknown>, success?: string) => {
@@ -87,6 +91,7 @@ export function ReceiptInboxItem({ item, canWrite }: { item: InboxItem; canWrite
             {item.uploadedByName ? `Uploaded by ${item.uploadedByName} · ` : ""}{formatDate(item.createdAtISO)}
           </span>
         </div>
+        <DocumentPreviewByIdButton documentId={item.documentId} label="Preview receipt" />
         <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Download ${item.fileName}`} onClick={() => void openFile(item.documentId)}>
           <Download size={14} />
         </button>
@@ -96,6 +101,13 @@ export function ReceiptInboxItem({ item, canWrite }: { item: InboxItem; canWrite
         <label className="receipt-inbox__field">
           <span>Merchant</span>
           <input className="input input--sm" value={merchant} disabled={!editable || busy} placeholder="Who was paid" onChange={(event) => setMerchant(event.target.value)} onBlur={saveMerchant} />
+        </label>
+        <label className="receipt-inbox__field">
+          <span>Currency</span>
+          <input className="input input--sm" value={currency} maxLength={3} disabled={!editable || busy} placeholder="e.g. USD" onChange={(event) => setCurrency(event.target.value.toUpperCase())} onBlur={() => {
+            if (currency === (item.currency ?? "")) return;
+            void run("save the currency", () => update({ id: item._id, currency: currency || null }));
+          }} />
         </label>
         <label className="receipt-inbox__field receipt-inbox__field--amount">
           <span>Amount</span>
@@ -108,10 +120,17 @@ export function ReceiptInboxItem({ item, canWrite }: { item: InboxItem; canWrite
       </div>
 
       <div className="receipt-inbox__match">
-        {item.status === "matched" && item.matchedTransaction ? (
+        {item.status === "matched" && item.matchedClaim ? (
+          <>
+            <span className="receipt-inbox__match-label"><Link2 size={12} aria-hidden="true" /> Linked to a reimbursement claim</span>
+            <Link to={`/app/approvals?claim=${encodeURIComponent(item.matchedClaim._id)}`}>{item.matchedClaim.title}</Link>
+            <span className="muted">{item.matchedClaim.status}</span>
+          </>
+        ) : item.status === "matched" && item.matchedTransaction ? (
           <>
             <span className="receipt-inbox__match-label"><Link2 size={12} aria-hidden="true" /> Attached to</span>
             <TransactionLine txn={item.matchedTransaction} />
+            <Link to={`/app/financials?tab=transactions&transactionId=${encodeURIComponent(item.matchedTransaction._id)}`}>View transaction</Link>
             <button type="button" className="btn btn--sm" disabled={!canWrite || busy} onClick={() => void run("unmatch the receipt", () => unmatch({ id: item._id }), "Receipt removed from the transaction")}>
               <Undo2 size={12} aria-hidden="true" /> Unmatch
             </button>
@@ -127,7 +146,7 @@ export function ReceiptInboxItem({ item, canWrite }: { item: InboxItem; canWrite
           <>
             {item.candidates.length === 0 ? (
               <span className="muted receipt-inbox__none">
-                {item.amountCents || item.date || item.merchant ? "No matching transactions in the last 18 months." : "Enter the amount and date to find its transaction."}
+                {item.amountCents || item.date || item.merchant ? "No matching transactions found." : "Enter payment details or choose how it was paid below."}
               </span>
             ) : (
               <ul className="receipt-inbox__candidates" aria-label="Suggested transactions">
@@ -145,6 +164,10 @@ export function ReceiptInboxItem({ item, canWrite }: { item: InboxItem; canWrite
                 ))}
               </ul>
             )}
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <button type="button" className="btn btn--sm" disabled={!canWrite || busy} onClick={onClaim}>Personal card · Reimburse</button>
+              <button type="button" className="btn btn--sm" disabled={!canWrite || busy} onClick={onCard}>Company card · Record charge</button>
+            </div>
             <button type="button" className="btn btn--ghost btn--sm receipt-inbox__discard" disabled={!canWrite || busy} onClick={() => void run("discard the receipt", () => setDiscarded({ id: item._id, discarded: true }), "Receipt discarded")}>
               <Trash2 size={12} aria-hidden="true" /> Discard
             </button>

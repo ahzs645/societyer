@@ -171,8 +171,8 @@ export function ClaimDetailDrawer({
       payment.expenseAccountId && payment.bankAccountId ? "The reimbursement was posted to the ledger." : undefined,
     );
 
-  const expenseAccounts = (accounts ?? []).filter((account) => account.accountType === "Expense");
-  const bankAccounts = (accounts ?? []).filter((account) => account.accountType === "Bank" || account.accountType === "Credit");
+  const expenseAccounts = (accounts ?? []).filter((account) => account.accountType === "Expense" && account.currency === row.currency);
+  const bankAccounts = (accounts ?? []).filter((account) => (account.accountType === "Bank" || account.accountType === "Credit" || account.accountType === "Cash") && account.currency === row.currency);
 
   const footer = (
     <>
@@ -214,6 +214,7 @@ export function ClaimDetailDrawer({
     <Drawer open onClose={onClose} title={row.title} footer={footer} className="claim-drawer">
       <div className="claim-drawer__hero">
         <Money cents={row.amountCents} currency={row.currency} variant="hero" />
+        {row.originalExpense && <span className="muted">Original: <Money cents={row.originalExpense.amountCents} currency={row.originalExpense.currency} /> · 1 {row.originalExpense.currency} = {row.originalExpense.rate} {row.currency}</span>}
         <span className="claim-drawer__badges">
           <Badge tone={CLAIM_STATUS_TONE[row.status] ?? "neutral"}>{CLAIM_STATUS_LABEL[row.status] ?? row.status}</Badge>
           {row.policyException && <Badge tone="warn">Policy exception</Badge>}

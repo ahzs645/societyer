@@ -6,6 +6,7 @@ export type InboxTransaction = {
   description: string;
   counterparty?: string;
   amountCents: number;
+  currency?: string;
   accountName?: string;
 };
 
@@ -26,6 +27,7 @@ export type InboxItem = {
   fileName: string;
   merchant?: string;
   amountCents?: number;
+  currency?: string;
   date?: string;
   status: "unmatched" | "matched" | "discarded";
   uploadedByName?: string;
@@ -33,6 +35,7 @@ export type InboxItem = {
   matchedAtISO?: string;
   matchedByName?: string;
   matchedTransaction: InboxTransaction | null;
+  matchedClaim: { _id: string; title: string; status: string } | null;
   candidates: InboxCandidate[];
 };
 

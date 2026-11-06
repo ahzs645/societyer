@@ -246,6 +246,8 @@ export const accountingTables = {
     // The receipt document attached from the transaction panel; receiptStatus
     // follows it (attached while set, missing once removed).
     receiptDocumentId: v.optional(v.id("documents")),
+    originalExpense: v.optional(v.object({ amountCents: v.number(), currency: v.string(), rate: v.string() })),
+    corporateCardId: v.optional(v.id("corporateCards")),
     // Line items. Absent (or a single line) means one line that mirrors
     // category / accountingAccountId / fundRestrictionId above; two or more
     // lines are a split whose amounts sum to amountCents, and the top-level

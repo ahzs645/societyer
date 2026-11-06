@@ -18,18 +18,17 @@ import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../port
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { updateTransactionPortable } from "./financialHub";
-import { highConfidencePairs, parseReceiptFilename, rankReceiptCandidates, scoreReceiptMatch, type TransactionForMatching } from "../receiptMatching";
+import { highConfidencePairs, parseReceiptFilename, rankReceiptCandidates, scoreReceiptMatch, type ReceiptPrefill, type TransactionForMatching } from "../receiptMatching";
 import { addDaysToDateOnly, isDateOnly, todayDateOnly } from "../dateOnly";
+import { expenseCurrency } from "../expenseCurrency";
 
-type InboxRow = PortableDoc & {
+type InboxRow = PortableDoc & ReceiptPrefill & {
   societyId: string;
   documentId: string;
   fileName: string;
-  merchant?: string;
-  amountCents?: number;
-  date?: string;
   status: string;
   matchedTransactionId?: string;
+  matchedExpenseReportId?: string;
   matchedAtISO?: string;
   matchedByName?: string;
   matchScore?: number;
@@ -48,10 +47,14 @@ async function actorName(ctx: PortableQueryCtx, societyId: string) {
   return { id: String(user._id), name: String(user.displayName ?? user.name ?? "Workspace owner") };
 }
 
-async function openTransactions(ctx: PortableQueryCtx, societyId: string): Promise<TxnRow[]> {
+async function openTransactions(ctx: PortableQueryCtx, societyId: string, accountCurrencies: Map<string, string>): Promise<TxnRow[]> {
   const from = addDaysToDateOnly(todayDateOnly(), -CANDIDATE_LOOKBACK_DAYS) ?? "0000-00-00";
-  const rows = await ctx.db.query<TxnRow>("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-  return rows.filter((row) => row.amountCents < 0 && !row.receiptDocumentId && row.date >= from);
+  const rows = await ctx.db.query<TxnRow>("financialTransactions").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("date", from)).order("desc").take(2000);
+  return rows.filter((row) => row.amountCents < 0 && !row.receiptDocumentId).map((row) => ({ ...row, currency: accountCurrencies.get(String(row.accountId)) }));
+}
+
+async function receiptAccounts(ctx: PortableQueryCtx, societyId: string) {
+  return ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(2000);
 }
 
 /**
@@ -60,26 +63,28 @@ async function openTransactions(ctx: PortableQueryCtx, societyId: string): Promi
  */
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const [items, allTxns, accounts] = await Promise.all([
+  const [items, accounts] = await Promise.all([
     ctx.db.query<InboxRow>("receiptInboxItems").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query<TxnRow>("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    receiptAccounts(ctx, societyId),
   ]);
   const accountName = new Map(accounts.map((row) => [String(row._id), String(row.name)]));
-  const txnById = new Map(allTxns.map((row) => [String(row._id), row]));
-  const open = await openTransactions(ctx, societyId);
+  const accountCurrencies = new Map(accounts.map((row) => [String(row._id), String(row.currency)]));
+  const open = await openTransactions(ctx, societyId, accountCurrencies);
+  const txnById = new Map(open.map((row) => [String(row._id), row]));
   const describeTxn = (txn: TxnRow) => ({
     _id: String(txn._id),
     date: txn.date,
     description: String(txn.description ?? ""),
     counterparty: txn.counterparty ?? undefined,
     amountCents: txn.amountCents,
+    currency: accountCurrencies.get(String(txn.accountId)),
     accountName: accountName.get(String(txn.accountId)),
   });
   const rows = await Promise.all(
     items.map(async (item) => {
       const document = await ctx.db.get(String(item.documentId), "documents").catch(() => null);
-      const matched = item.matchedTransactionId ? txnById.get(String(item.matchedTransactionId)) : undefined;
+      const matched = item.matchedTransactionId ? await ctx.db.get<TxnRow>(String(item.matchedTransactionId), "financialTransactions") : undefined;
+      const claim = item.matchedExpenseReportId ? await ctx.db.get(item.matchedExpenseReportId, "expenseReports") : null;
       const candidates = item.status === "unmatched"
         ? rankReceiptCandidates(item, open).map((candidate) => {
             const txn = txnById.get(candidate.transactionId);
@@ -95,13 +100,15 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
         fileName: item.fileName,
         merchant: item.merchant,
         amountCents: item.amountCents,
+        currency: item.currency,
         date: item.date,
         status: item.status,
         uploadedByName: item.uploadedByName,
         createdAtISO: item.createdAtISO,
         matchedAtISO: item.matchedAtISO,
         matchedByName: item.matchedByName,
-        matchedTransaction: matched ? describeTxn(matched) : null,
+        matchedTransaction: matched && String(matched.societyId) === societyId ? describeTxn(matched) : null,
+        matchedClaim: claim && String(claim.societyId) === societyId ? { _id: String(claim._id), title: String(claim.title), status: String(claim.status) } : null,
         candidates,
       };
     }),
@@ -115,12 +122,12 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
       matched: rows.filter((row) => row.status === "matched").length,
       discarded: rows.filter((row) => row.status === "discarded").length,
     },
-    highConfidenceCount: highConfidencePairs(unmatched.map((row) => ({ _id: row._id, merchant: row.merchant, amountCents: row.amountCents, date: row.date })), open).length,
+    highConfidenceCount: highConfidencePairs(unmatched, open).length,
   };
 }
 
-function cleanFields(input: { merchant?: string | null; amountCents?: number | null; date?: string | null }) {
-  const out: { merchant?: string; amountCents?: number; date?: string } = {};
+function cleanFields(input: { merchant?: string | null; amountCents?: number | null; date?: string | null; currency?: string | null }) {
+  const out: ReceiptPrefill = {};
   if (input.merchant !== undefined && input.merchant !== null) {
     const merchant = String(input.merchant).trim();
     if (merchant.length > 200) throw new Error("Keep the merchant under 200 characters.");
@@ -134,6 +141,7 @@ function cleanFields(input: { merchant?: string | null; amountCents?: number | n
     if (!isDateOnly(input.date)) throw new Error("Enter the receipt date as YYYY-MM-DD.");
     out.date = input.date;
   }
+  if (input.currency) out.currency = expenseCurrency(input.currency);
   return out;
 }
 
@@ -145,7 +153,7 @@ function cleanFields(input: { merchant?: string | null; amountCents?: number | n
  */
 export async function addPortable(
   ctx: PortableMutationCtx,
-  args: { societyId: string; items: Array<{ documentId: string; fileName: string; merchant?: string; amountCents?: number; date?: string }> },
+  args: { societyId: string; items: Array<{ documentId: string; fileName: string } & ReceiptPrefill> },
 ) {
   await requirePermissionPortable(ctx, args.societyId, "financials:write");
   if (!args.items.length) throw new Error("Choose at least one receipt.");
@@ -166,8 +174,9 @@ export async function addPortable(
       continue;
     }
     const fileName = String(input.fileName || "Receipt").slice(0, 240);
-    const prefill = parseReceiptFilename(fileName);
+    const prefill = /\.eml$/i.test(fileName) ? {} : parseReceiptFilename(fileName);
     const fields = cleanFields({
+      ...input,
       merchant: input.merchant ?? prefill.merchant,
       amountCents: input.amountCents ?? prefill.amountCents,
       date: input.date ?? prefill.date,
@@ -190,7 +199,7 @@ export async function addPortable(
 /** Correct an inbox item's merchant, amount or date (null clears it). */
 export async function updatePortable(
   ctx: PortableMutationCtx,
-  args: { id: string; merchant?: string | null; amountCents?: number | null; date?: string | null },
+  args: { id: string; merchant?: string | null; amountCents?: number | null; date?: string | null; currency?: string | null },
 ) {
   const item = await requireOwnedRow<InboxRow>(ctx, "receiptInboxItems", args.id);
   await requirePermissionPortable(ctx, item.societyId, "financials:write");
@@ -198,6 +207,7 @@ export async function updatePortable(
   if (args.merchant === null || args.merchant === "") patch.merchant = undefined;
   if (args.amountCents === null) patch.amountCents = undefined;
   if (args.date === null || args.date === "") patch.date = undefined;
+  if (args.currency === null || args.currency === "") patch.currency = undefined;
   await ctx.db.patch(args.id, patch);
   return args.id;
 }
@@ -216,12 +226,22 @@ export async function releaseInboxMatches(ctx: PortableMutationCtx, transactionI
   }
 }
 
+/** Return a receipt to the inbox if the claim drops it or is removed. */
+export async function releaseClaimReceipt(ctx: PortableMutationCtx, societyId: string, claimId: string, documentId: string) {
+  const items = await ctx.db.query<InboxRow>("receiptInboxItems").withIndex("by_document", (q) => q.eq("documentId", documentId)).take(20);
+  for (const item of items) {
+    if (item.societyId !== societyId || item.matchedExpenseReportId !== claimId) continue;
+    await ctx.db.patch(item._id, { status: "unmatched", matchedExpenseReportId: undefined, matchedAtISO: undefined, matchedByName: undefined, updatedAtISO: new Date().toISOString() });
+  }
+}
+
 async function attach(ctx: PortableMutationCtx, item: InboxRow, transactionId: string, actor: { name: string }) {
   const txn = await getOwned<TxnRow>(ctx, "financialTransactions", transactionId, item.societyId);
   if (txn.receiptDocumentId) throw new Error("That transaction already has a receipt. Remove it from the transaction first.");
   // The same path as attaching a receipt from the transaction panel.
   await updateTransactionPortable(ctx, { id: transactionId, patch: { receiptDocumentId: item.documentId } });
-  const score = scoreReceiptMatch(item, txn);
+  const account = await getOwned(ctx, "financialAccounts", txn.accountId, item.societyId);
+  const score = scoreReceiptMatch(item, { ...txn, currency: String(account.currency) });
   await ctx.db.patch(item._id, {
     status: "matched",
     matchedTransactionId: transactionId,
@@ -246,6 +266,7 @@ export async function unmatchPortable(ctx: PortableMutationCtx, { id }: { id: st
   const item = await requireOwnedRow<InboxRow>(ctx, "receiptInboxItems", id);
   await requirePermissionPortable(ctx, item.societyId, "financials:write");
   if (item.status !== "matched") throw new Error("This receipt isn't matched.");
+  if (item.matchedExpenseReportId) throw new Error("Edit the reimbursement claim to remove its receipt.");
   if (item.matchedTransactionId) {
     const txn = await ctx.db.get<TxnRow>(String(item.matchedTransactionId), "financialTransactions");
     // Only clear the receipt if it is still this document.
@@ -277,8 +298,9 @@ export async function setDiscardedPortable(ctx: PortableMutationCtx, { id, disca
 export async function matchAllHighConfidencePortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
   await requirePermissionPortable(ctx, societyId, "financials:write");
   const items = await ctx.db.query<InboxRow>("receiptInboxItems").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "unmatched")).collect();
-  const open = await openTransactions(ctx, societyId);
-  const pairs = highConfidencePairs(items.map((item) => ({ _id: String(item._id), merchant: item.merchant, amountCents: item.amountCents, date: item.date })), open);
+  const accounts = await receiptAccounts(ctx, societyId);
+  const open = await openTransactions(ctx, societyId, new Map(accounts.map((row) => [String(row._id), String(row.currency)])));
+  const pairs = highConfidencePairs(items, open);
   const actor = await actorName(ctx, societyId);
   const byId = new Map(items.map((item) => [String(item._id), item]));
   for (const pair of pairs) {

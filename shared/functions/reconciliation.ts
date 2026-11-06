@@ -36,6 +36,9 @@ import {
 } from "../reconciliationMonths";
 import { bankAccountBalanceCents } from "../bankAccounts";
 import { assertNativePayrollBankPatch } from "./payrollPaymentGuard";
+import { assertPeriodOpen } from "./accounting";
+import { requirePermissionPortable } from "./permissions";
+import { convertExpense, expenseCurrency, type ExpenseConversion } from "../expenseCurrency";
 
 /**
  * Returns every bank transaction with reconciliation status, plus a candidate
@@ -214,16 +217,41 @@ export async function addManualTransactionPortable(
     counterparty?: string;
     category?: string;
     accountId?: string;
+    currency?: string;
+    conversion?: ExpenseConversion;
+    receiptInboxItemId?: string;
+    corporateCardId?: string;
+    memo?: string;
   },
 ) {
-  await requireSocietyMembership(ctx, args.societyId);
-  if (args.accountId) await getOwned(ctx, "financialAccounts", args.accountId, args.societyId);
+  await requirePermissionPortable(ctx, args.societyId, "financials:write");
+  if (!isDateOnly(args.date)) throw new Error("Enter a valid transaction date.");
+  const description = args.description.trim();
+  if (!description) throw new Error("Enter a description.");
+  const selectedAccount = args.accountId ? await getOwned(ctx, "financialAccounts", args.accountId, args.societyId) : null;
+  const card = args.corporateCardId ? await getOwned(ctx, "corporateCards", args.corporateCardId, args.societyId) : null;
+  const sourceCurrency = expenseCurrency(args.currency ?? String(selectedAccount?.currency ?? "CAD"));
+  const money = convertExpense(args.amountCents, sourceCurrency, args.conversion);
+  if (selectedAccount && (money.currency !== selectedAccount.currency || !RECONCILABLE_ACCOUNT_TYPES.has(String(selectedAccount.accountType).toLowerCase()))) {
+    throw new Error("Choose a bank, credit or cash account in the currency you are recording.");
+  }
+  if (card && (!selectedAccount || card.status !== "active" || card.financialAccountId !== args.accountId || args.amountCents >= 0)) throw new Error("Choose an active company card linked to this payment account.");
+  const receipt = args.receiptInboxItemId ? await getOwned(ctx, "receiptInboxItems", args.receiptInboxItemId, args.societyId) : null;
+  let actorName: string | undefined;
+  if (receipt) {
+    if (receipt.status !== "unmatched") throw new Error("This receipt is no longer waiting to be matched.");
+    if (args.amountCents >= 0) throw new Error("Record the receipt as money out.");
+    if (!card && String(selectedAccount?.accountType).toLowerCase() !== "credit") throw new Error("Choose a company credit card account for this receipt.");
+    await getOwned(ctx, "documents", String(receipt.documentId), args.societyId);
+    const user = await requireSocietyMembership(ctx, args.societyId);
+    actorName = String(user.displayName ?? user.name ?? "Workspace owner");
+  }
+  await assertPeriodOpen(ctx, { societyId: args.societyId, date: args.date });
   const now = new Date().toISOString();
-  const connections = await ctx.db
+  let connection = await ctx.db
     .query("financialConnections")
-    .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-    .collect();
-  let connection: any = connections.find((c: Record<string, any>) => c.provider === "manual");
+    .withIndex("by_society_provider", (q) => q.eq("societyId", args.societyId).eq("provider", "manual"))
+    .first();
   if (!connection) {
     const connectionId = await ctx.db.insert("financialConnections", {
       societyId: args.societyId,
@@ -239,19 +267,20 @@ export async function addManualTransactionPortable(
 
   let accountId = args.accountId;
   if (!accountId) {
+    const externalId = money.currency === "CAD" ? "manual-bank" : `manual-bank-${money.currency.toLowerCase()}`;
     const accounts = await ctx.db
       .query("financialAccounts")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const existing = accounts.find((a: Record<string, any>) => a.connectionId === connection!._id && a.accountType === "Bank");
+      .withIndex("by_society_external", (q) => q.eq("societyId", args.societyId).eq("externalId", externalId))
+      .take(100);
+    const existing = accounts.find((a) => a.connectionId === connection!._id && a.accountType === "Bank" && a.currency === money.currency);
     accountId = existing
       ? existing._id
       : await ctx.db.insert("financialAccounts", {
           societyId: args.societyId,
           connectionId: connection!._id,
-          externalId: "manual-bank",
-          name: "Manual bank account",
-          currency: "CAD",
+          externalId,
+          name: money.currency === "CAD" ? "Manual bank account" : `Manual entries (${money.currency})`,
+          currency: money.currency,
           accountType: "Bank",
           balanceCents: 0,
           isRestricted: false,
@@ -265,12 +294,30 @@ export async function addManualTransactionPortable(
     accountId,
     externalId: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     date: args.date,
-    description: args.description,
-    amountCents: args.amountCents,
+    description,
+    amountCents: money.amountCents,
+    ...(money.originalExpense ? { originalExpense: money.originalExpense } : {}),
+    corporateCardId: args.corporateCardId,
     counterparty: args.counterparty,
     category: args.category,
+    memo: args.memo?.trim() || undefined,
+    ...(receipt ? { receiptDocumentId: receipt.documentId, receiptStatus: "attached" } : {}),
     ...(args.category ? { categorizedBy: "manual" } : {}),
   });
+  if (receipt) {
+    const amountCents = Math.abs(args.amountCents);
+    await ctx.db.patch(receipt._id, {
+      merchant: args.counterparty?.trim() || receipt.merchant,
+      date: args.date,
+      amountCents,
+      currency: sourceCurrency,
+      status: "matched",
+      matchedTransactionId: id,
+      matchedAtISO: now,
+      matchedByName: actorName,
+      updatedAtISO: now,
+    });
+  }
   await flagChangedPeriods(ctx, String(accountId), args.date);
   return id;
 }

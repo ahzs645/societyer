@@ -7,7 +7,7 @@ import { usePermissions } from "../../../hooks/usePermissions";
 import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
 import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
 
-const ACCEPT = "image/*,application/pdf,.heic,.heif";
+const ACCEPT = "image/*,application/pdf,.heic,.heif,.eml,message/rfc822";
 const MAX_BYTES = 25 * 1024 * 1024;
 
 /**
@@ -38,11 +38,12 @@ export function ReceiptDropZone({
   const canUpload = permissions.loaded && permissions.can("documents:write") && isDocumentVersionStorageEnabled();
   const off = disabled || busy || !canUpload;
 
-  const upload = async (file: File | undefined) => {
-    if (!file || off) return;
+  const upload = async (original: File | undefined) => {
+    if (!original || off) return;
     setError(null);
     setBusy(true);
     try {
+      const file = /\.eml$/i.test(original.name) ? (await import("../../../lib/emailReceipt")).normalizeEmailReceiptFile(original) : original;
       const title = claimTitle?.trim() ? `Receipt: ${claimTitle.trim()}` : file.name;
       const documentId: string = await createDocument({
         societyId: societyId as Id<"societies">,
@@ -67,7 +68,7 @@ export function ReceiptDropZone({
     setError(
       first.reason === "size"
         ? "That file is over 25 MB. Upload a smaller scan or photo."
-        : "That file type isn't supported. Upload a PDF or a photo of the receipt.",
+        : "Upload a PDF, photo or .eml email receipt.",
     );
   };
 
@@ -77,14 +78,14 @@ export function ReceiptDropZone({
       ? "File upload is turned off on this deployment. Link a receipt from Documents instead."
       : !permissions.can("documents:write")
         ? "Uploading receipts needs document edit access."
-        : "PDF or photo, up to 25 MB. You can also paste a screenshot. It's saved to Documents as a receipt.";
+        : "PDF, photo or .eml email, up to 25 MB. You can also paste a screenshot. It's saved to Documents as a receipt.";
 
   return (
     <FileDropZone
       className="receipt-drop"
       ariaLabel="Receipt upload"
       title="Drop a receipt here"
-      touchTitle="Add a receipt photo or PDF"
+      touchTitle="Add a receipt file or email"
       chooseLabel="Choose file"
       busyLabel="Uploading receipt…"
       hint={hint}

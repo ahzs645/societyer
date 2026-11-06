@@ -22,6 +22,7 @@ export type ReceiptPrefill = {
   merchant?: string;
   amountCents?: number;
   date?: string;
+  currency?: string;
 };
 
 const NOISE_WORDS = new Set(["receipt", "receipts", "invoice", "inv", "scan", "scanned", "img", "image", "photo", "copy", "final", "paid", "statement", "bill"]);
@@ -110,12 +111,14 @@ export type ReceiptForMatching = {
   merchant?: string | null;
   amountCents?: number | null;
   date?: string | null;
+  currency?: string | null;
 };
 
 export type TransactionForMatching = {
   _id: string;
   date: string;
   amountCents: number;
+  currency?: string | null;
   description?: string | null;
   counterparty?: string | null;
   receiptDocumentId?: string | null;
@@ -178,7 +181,9 @@ export function scoreReceiptMatch(
   const paid = Math.abs(txn.amountCents);
   let score = 0;
   let amountKind: ReceiptMatchScore["amountKind"] = "none";
-  const amount = receipt.amountCents ?? null;
+  // An identical number in another currency is not a payment match. Date
+  // and merchant can still suggest a foreign card charge for manual review.
+  const amount = receipt.currency && receipt.currency !== txn.currency ? null : receipt.amountCents ?? null;
   if (amount !== null && amount > 0) {
     const gap = Math.abs(paid - amount);
     if (gap === 0) {

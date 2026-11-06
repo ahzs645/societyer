@@ -563,6 +563,9 @@ export async function updateTransactionPortable(
   if (patch.amountCents !== undefined && patch.amountCents !== row.amountCents && isSplitTransaction({ lines: row.lines })) {
     throw new Error("This transaction is split into lines. Change the line amounts in the transaction panel so they still add up to the total.");
   }
+  if (row.originalExpense && patch.amountCents !== undefined && patch.amountCents !== row.amountCents) {
+    throw new Error("This amount was calculated from an exchange rate and cannot be edited directly.");
+  }
   if (patch.category !== undefined || patch.amountCents !== undefined || patch.date !== undefined) {
     await assertTransactionBooksOpen(ctx, String(row.societyId), id, patch.date);
   }

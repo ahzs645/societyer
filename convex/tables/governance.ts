@@ -39,6 +39,7 @@ export const governanceTables = {
     category: v.string(),
     amountCents: v.number(),
     currency: v.string(),
+    originalExpense: v.optional(v.object({ amountCents: v.number(), currency: v.string(), rate: v.string() })),
     incurredAtISO: v.string(),
     submittedAtISO: v.optional(v.string()),
     status: v.string(), // Draft | Submitted | Approved | Paid | Rejected | Recalled

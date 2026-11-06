@@ -44,9 +44,11 @@ export const bankingTables = {
     fileName: v.string(),
     merchant: v.optional(v.string()),
     amountCents: v.optional(v.number()),
+    currency: v.optional(v.string()),
     date: v.optional(v.string()),
     status: v.string(), // unmatched | matched | discarded
     matchedTransactionId: v.optional(v.id("financialTransactions")),
+    matchedExpenseReportId: v.optional(v.id("expenseReports")),
     matchedAtISO: v.optional(v.string()),
     matchedByName: v.optional(v.string()),
     matchScore: v.optional(v.number()),

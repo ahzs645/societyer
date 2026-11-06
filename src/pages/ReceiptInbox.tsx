@@ -5,12 +5,15 @@ import { ArrowLeft, Inbox, Wand2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { pluralize } from "../lib/format";
+import { centsToDollarInput, pluralize } from "../lib/format";
+import { ClaimEditorDrawer, type ClaimEditorDraft } from "../features/financials/approvals/ClaimEditorDrawer";
+import { AddBankTransactionDrawer } from "../features/financials/reconciliation/AddBankTransactionDrawer";
 import { ReceiptBulkUpload } from "../features/financials/receipts/ReceiptBulkUpload";
 import { ReceiptInboxItem } from "../features/financials/receipts/ReceiptInboxItem";
 import { errorMessage } from "../features/financials/banking/types";
@@ -19,8 +22,8 @@ import type { InboxItem, ReceiptInboxData } from "../features/financials/receipt
 type InboxTab = "unmatched" | "matched" | "discarded";
 
 const EMPTY: Record<InboxTab, { title: string; description: string }> = {
-  unmatched: { title: "No receipts waiting", description: "Drop receipt files above. Each one is matched to the bank transaction it paid for." },
-  matched: { title: "Nothing matched yet", description: "Receipts you match are attached to their transactions and listed here." },
+  unmatched: { title: "No receipts waiting", description: "Drop a receipt above, then link it to a reimbursement claim or a company payment." },
+  matched: { title: "Nothing linked yet", description: "Receipts linked to transactions or reimbursement claims appear here." },
   discarded: { title: "Nothing discarded", description: "Receipts you discard stay in Documents and can be restored." },
 };
 
@@ -31,6 +34,7 @@ const EMPTY: Record<InboxTab, { title: string; description: string }> = {
  */
 export function ReceiptInboxPage() {
   const society = useSociety();
+  const me = useCurrentUser();
   const { canWrite } = useFinancePermissions();
   const data = useQuery(api.receiptInbox.list, society ? { societyId: society._id } : "skip") as ReceiptInboxData | undefined;
   const matchAll = useMutation(api.receiptInbox.matchAllHighConfidence);
@@ -38,6 +42,10 @@ export function ReceiptInboxPage() {
   const toast = useToast();
   const [tab, setTab] = useState<InboxTab>("unmatched");
   const [busy, setBusy] = useState(false);
+  const [claim, setClaim] = useState<ClaimEditorDraft | null>(null);
+  const [cardReceipt, setCardReceipt] = useState<InboxItem | null>(null);
+  const users = useQuery(api.users.list, claim && society ? { societyId: society._id } : "skip");
+  const claims = useQuery(api.expenseReports.list, claim && society ? { societyId: society._id } : "skip");
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -69,13 +77,12 @@ export function ReceiptInboxPage() {
         title="Receipt inbox"
         icon={<Inbox size={16} />}
         iconColor="green"
-        subtitle="Upload receipts in bulk and attach each one to its bank transaction."
+        subtitle="Keep receipts with company payments or personal card reimbursements."
         info={
           <>
             <p>
               Receipts are saved to Documents. The inbox suggests transactions by amount (exact first, then close), how near
-              the dates are, and how alike the merchant and payee names are. Names like 2026-10-12_Coastal-Hydro_161.38.pdf
-              fill in the details; the files themselves aren't read.
+              the dates are, and how alike the merchant and payee names are. Preview .eml email receipts here and enter their details by hand.
             </p>
             <p>Forwarding receipts by email and matching from Gmail aren't available yet.</p>
           </>
@@ -99,7 +106,7 @@ export function ReceiptInboxPage() {
         ariaLabel="Receipt inbox"
         items={[
           { id: "unmatched", label: "To match", count: data?.counts.unmatched ?? null },
-          { id: "matched", label: "Matched", count: data?.counts.matched ?? null },
+          { id: "matched", label: "Linked", count: data?.counts.matched ?? null },
           { id: "discarded", label: "Discarded", count: data?.counts.discarded ?? null },
         ]}
       />
@@ -110,9 +117,16 @@ export function ReceiptInboxPage() {
         <div className="card"><div className="card__body"><EmptyState icon={<Inbox size={20} />} title={EMPTY[tab].title} description={EMPTY[tab].description} /></div></div>
       ) : (
         <ul className="receipt-inbox__list">
-          {rows.map((item) => <ReceiptInboxItem key={item._id} item={item} canWrite={canWrite} />)}
+          {rows.map((item) => <ReceiptInboxItem key={item._id} item={item} canWrite={canWrite} onCard={() => setCardReceipt(item)} onClaim={() => setClaim({
+            claimantName: me?.displayName ?? "", claimantUserId: me?._id ?? "", title: item.merchant ? `${item.merchant} expense` : "", category: "Other",
+            amountDollars: centsToDollarInput(item.amountCents), currency: item.currency ?? "CAD", incurredAtISO: item.date ?? "",
+            submittedAtISO: "", status: "Draft", receiptDocumentId: item.documentId, receiptInboxItemId: item._id, paymentReference: "", notes: "",
+          })} />)}
         </ul>
       )}
+      {claim && <ClaimEditorDrawer draft={claim} onChange={setClaim} onClose={() => setClaim(null)} onSaved={() => setTab("matched")} societyId={society._id}
+        users={users} claims={claims} documents={undefined} categories={["Program", "Travel", "Meals", "Supplies", "Software", "Facility", "Professional services", "Other"]} statuses={["Draft", "Submitted"]} />}
+      {cardReceipt && <AddBankTransactionDrawer open expense receipt={cardReceipt} canWrite={canWrite} societyId={society._id} onClose={() => setCardReceipt(null)} onSaved={() => setTab("matched")} />}
     </div>
   );
 }

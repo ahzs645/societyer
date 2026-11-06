@@ -23,9 +23,11 @@ import { getPortable as getAccessibleDocument, requireDocumentAccess } from "./d
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { hasPermission, requirePermissionPortable } from "./permissions";
-import { todayDateOnly } from "../dateOnly";
+import { isDateOnly, todayDateOnly } from "../dateOnly";
 import { assertBooksOpen } from "./booksLock";
 import { assertPeriodOpen } from "./accounting";
+import { convertExpense, expenseCurrency, type ExpenseConversion, type OriginalExpense } from "../expenseCurrency";
+import { releaseClaimReceipt } from "./receiptInbox";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import { prefAllows, type NotificationPrefRow } from "../notificationCatalog";
 import {
@@ -105,10 +107,12 @@ export async function upsertPortable(
     category: string;
     amountCents: number;
     currency: string;
+    conversion?: ExpenseConversion | null;
     incurredAtISO: string;
     submittedAtISO?: string;
     status: string;
     receiptDocumentId?: string;
+    receiptInboxItemId?: string;
     paymentReference?: string;
     notes?: string;
     actingUserId?: string;
@@ -132,10 +136,26 @@ export async function upsertPortable(
   ]);
   if (!args.title.trim()) throw new Error("Expense title is required.");
   if (!args.claimantName.trim()) throw new Error("Claimant name is required.");
-  if (args.amountCents < 0) throw new Error("Amount cannot be negative.");
+  if (!Number.isSafeInteger(args.amountCents) || args.amountCents < 0) throw new Error("Enter a valid expense amount.");
   const existing: any = args.id ? await ctx.db.get(args.id, "expenseReports") : null;
+  const inbox = args.receiptInboxItemId ? await getOwned(ctx, "receiptInboxItems", args.receiptInboxItemId, args.societyId) : null;
+  if (inbox && (args.id || inbox.status !== "unmatched" || inbox.documentId !== args.receiptDocumentId)) throw new Error("This receipt is no longer available for a new claim.");
+  if (inbox && (!args.amountCents || !isDateOnly(args.incurredAtISO))) throw new Error("Enter the expense amount and incurred date.");
   const pricing = await mileagePricing(ctx, args, existing);
   if (pricing) args = { ...args, amountCents: pricing.amountCents };
+  if (pricing && args.conversion) throw new Error("Mileage uses the policy rate and cannot be converted here.");
+  const sourceCurrency = expenseCurrency(args.currency);
+  const sourceAmountCents = args.amountCents;
+  let originalExpense: OriginalExpense | undefined;
+  if (args.conversion) {
+    const converted = convertExpense(args.amountCents, sourceCurrency, args.conversion);
+    args = { ...args, amountCents: converted.amountCents, currency: converted.currency };
+    originalExpense = converted.originalExpense;
+  } else {
+    args = { ...args, currency: sourceCurrency };
+    if (args.conversion === undefined && existing?.amountCents === args.amountCents && existing?.currency === args.currency) originalExpense = existing?.originalExpense;
+  }
+  if (existing?.status === "Paid" && (existing.amountCents !== args.amountCents || existing.currency !== args.currency)) throw new Error("A paid claim's amount and currency cannot be changed.");
   // Checked when the budget (or who it's charged for) changes, not on every save: an old
   // claim stays editable after its budget is archived or the claimant leaves the committee.
   const budgetChanged = String(args.spendBudgetId ?? "") !== String(existing?.spendBudgetId ?? "") || String(args.claimantUserId ?? "") !== String(existing?.claimantUserId ?? "");
@@ -147,7 +167,7 @@ export async function upsertPortable(
   const nowISO = new Date().toISOString();
   const actor = await actorFor(ctx, args.societyId);
   const workflow: Record<string, unknown> = {};
-  if (existing && (existing.approvals?.length || existing.status === "Approved") && existing.amountCents !== args.amountCents && existing.status !== "Paid") {
+  if (existing && (existing.approvals?.length || existing.status === "Approved") && (existing.amountCents !== args.amountCents || existing.currency !== args.currency) && existing.status !== "Paid") {
     // A changed amount needs fresh approvals under the rule for the new amount.
     if (status === "Approved") status = "Submitted";
     workflow.approvals = [];
@@ -173,6 +193,7 @@ export async function upsertPortable(
     category: args.category,
     amountCents: args.amountCents,
     currency: args.currency,
+    originalExpense,
     incurredAtISO: args.incurredAtISO,
     submittedAtISO: args.submittedAtISO,
     status,
@@ -188,12 +209,19 @@ export async function upsertPortable(
   };
   if (args.id) {
     await ctx.db.patch(args.id, payload);
+    if (existing?.receiptDocumentId && existing.receiptDocumentId !== args.receiptDocumentId) await releaseClaimReceipt(ctx, args.societyId, args.id, existing.receiptDocumentId);
     return args.id;
   }
-  return await ctx.db.insert("expenseReports", {
+  const id = await ctx.db.insert("expenseReports", {
     ...payload,
     createdAtISO: nowISO,
   });
+  if (inbox) await ctx.db.patch(inbox._id, {
+    status: "matched", matchedExpenseReportId: id, matchedAtISO: nowISO, matchedByName: actor.name, updatedAtISO: nowISO,
+    ...(sourceAmountCents > 0 ? { amountCents: sourceAmountCents, currency: sourceCurrency } : {}),
+    date: args.incurredAtISO.slice(0, 10),
+  });
+  return id;
 }
 
 /**
@@ -308,6 +336,9 @@ export async function setStatusPortable(
         getOwned(ctx, "financialAccounts", expenseAccountId, societyId),
         getOwned(ctx, "financialAccounts", bankAccountId, societyId),
       ]);
+      if (expenseAccount.currency !== report.currency || bankAccount.currency !== report.currency) {
+        throw new Error("Choose reimbursement accounts in the claim currency, or enter a conversion before recording payment.");
+      }
       if (
         expenseAccount?.societyId === report.societyId &&
         bankAccount?.societyId === report.societyId
@@ -344,7 +375,8 @@ export async function setStatusPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "expenseReports", id);
+  const row = await requireOwnedRow(ctx, "expenseReports", id);
+  if (row.receiptDocumentId) await releaseClaimReceipt(ctx, String(row.societyId), id, String(row.receiptDocumentId));
   await ctx.db.delete(id);
 }
 
@@ -536,6 +568,7 @@ export async function approvalQueuePortable(ctx: PortableQueryCtx, { societyId }
         category: report.category,
         amountCents: report.amountCents,
         currency: report.currency ?? "CAD",
+        originalExpense: report.originalExpense,
         status: report.status,
         incurredAtISO: report.incurredAtISO,
         submittedAtISO: report.submittedAtISO,
@@ -688,6 +721,7 @@ export async function attachReceiptPortable(ctx: PortableMutationCtx, { id, rece
   const document: any = await getOwned(ctx, "documents", receiptDocumentId, societyId);
   if (report.status === "Paid") throw new Error("Paid claims are closed; attach the receipt to the journal entry instead.");
   const actor = await actorFor(ctx, societyId);
+  if (report.receiptDocumentId && report.receiptDocumentId !== receiptDocumentId) await releaseClaimReceipt(ctx, societyId, id, String(report.receiptDocumentId));
   await ctx.db.patch(id, {
     receiptDocumentId,
     approvalTrail: withTrail(report, trailEntry(actor, "receipt", String(document?.title ?? "Receipt"))),
