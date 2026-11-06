@@ -1,4 +1,5 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
+import { NaicsSectorField } from "../features/organizationProfile/NaicsSectorField";
 import { isModuleEnabled } from "../lib/modules";
 import { MonthDayPicker } from "../components/MonthDayPicker";
 import { formatAddressText } from "../../shared/structuredAddress";
@@ -346,6 +347,7 @@ export function SocietyPage() {
         continuanceDate: form.continuanceDate,
         amalgamationDate: form.amalgamationDate,
         naicsCode: form.naicsCode,
+        naicsSector: form.naicsSector,
         niceClassification: form.niceClassification,
         isCharity: form.isCharity,
         isMemberFunded: form.isMemberFunded,
@@ -719,6 +721,14 @@ export function SocietyPage() {
               </div>
             </div>
           </div>
+          <NaicsSectorField
+            key={form._id}
+            value={form.naicsSector}
+            detailedCode={form.naicsCode}
+            onChange={(value) => set("naicsSector", value)}
+            onCodeChange={(value) => set("naicsCode", value)}
+            disabled={!canEdit}
+          />
         </main>
 
         <aside className="society-layout__side">
@@ -953,9 +963,6 @@ export function SocietyPage() {
               </div>
               <div className="card__body">
                 <div className="org-details-field-grid">
-                  <Field label="NAICS code">
-                    <input className="input" value={form.naicsCode ?? ""} onChange={(e) => set("naicsCode", e.target.value)} />
-                  </Field>
                   <Field label="Nice classification">
                     <input className="input" value={form.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
                   </Field>
