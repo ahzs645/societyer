@@ -67,6 +67,17 @@ import { procurementTables } from "./tables/procurement";
 import { procurementAnalyticsTables } from "./tables/procurementAnalytics";
 
 export default defineSchema({
+  workspaceMfaPolicies: defineTable({
+    societyId: v.id("societies"),
+    policy: v.union(v.literal("optional"), v.literal("owners-admins"), v.literal("everyone")),
+  }).index("by_society", ["societyId"]),
+  clerkMfaSessions: defineTable({
+    issuer: v.string(),
+    subject: v.string(),
+    sessionId: v.string(),
+    expiresAt: v.number(),
+  }).index("by_issuer_subject_sessionId", ["issuer", "subject", "sessionId"])
+    .index("by_expiresAt", ["expiresAt"]),
   authEmailOutbox: defineTable({
     to: v.string(), subject: v.string(), text: v.optional(v.string()), html: v.optional(v.string()), tag: v.string(),
     status: v.union(v.literal("queued"), v.literal("sending"), v.literal("accepted"), v.literal("failed")),

@@ -19,10 +19,24 @@ JWKS endpoint remains available to Convex.
 1. Create a development application in the Clerk dashboard and select your
    desired sign-in methods. Configure the deployed application domain before
    using production keys.
-2. Create a JWT template named `convex` using Clerk's Convex preset. Its audience
-   must be `convex`. Keep the preset's identity and verified-email claims;
-   invitation acceptance requires a verified email address. Do not put workspace
-   roles or tenant IDs into client-controlled metadata to authorize access.
+2. [Activate Clerk's native Convex integration](https://clerk.com/docs/guides/development/integrations/databases/convex)
+   and keep its `aud: "convex"` session claim. Add these claims in **Sessions →
+   Customize session token** so invitations and new workspace memberships
+   continue to receive the user's identity. Enable the MFA methods you want to
+   offer in Clerk's dashboard.
+
+   ```json
+   {
+     "aud": "convex",
+     "email": "{{user.primary_email_address}}",
+     "email_verified": "{{user.email_verified}}",
+     "name": "{{user.full_name}}"
+   }
+   ```
+
+   Leave `VITE_CLERK_JWT_TEMPLATE` unset for native session tokens. An existing
+   `convex` JWT template continues to work for Optional workspaces. You can
+   explicitly select a legacy template using `VITE_CLERK_JWT_TEMPLATE`.
 3. Copy the publishable key, backend secret key, and the exact HTTPS issuer URL
    for this instance. Development and production instances have different
    issuers and subjects.
@@ -36,7 +50,6 @@ These placeholders are not working credentials:
 AUTH_MODE=clerk
 VITE_AUTH_MODE=clerk
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_REPLACE
-VITE_CLERK_JWT_TEMPLATE=convex
 CLERK_SECRET_KEY=sk_test_REPLACE
 CLERK_JWT_ISSUER_DOMAIN=https://YOUR-INSTANCE.clerk.accounts.dev
 CLERK_AUTHORIZED_PARTIES=http://127.0.0.1:5173,http://localhost:5173
@@ -107,8 +120,8 @@ explicitly for each workspace membership; no email-based bulk reassignment runs.
 ## Container and Kubernetes builds
 
 The frontend embeds public Clerk configuration at build time. Supply
-`VITE_AUTH_MODE=clerk`, `VITE_CLERK_PUBLISHABLE_KEY`, and
-`VITE_CLERK_JWT_TEMPLATE=convex` when building `docker/frontend.Dockerfile`.
+`VITE_AUTH_MODE=clerk` and `VITE_CLERK_PUBLISHABLE_KEY` when building
+`docker/frontend.Dockerfile`.
 Changing only a running container's environment does not update a built SPA.
 The production Compose file forwards these build arguments and the gateway's
 runtime variables. Pass the chosen environment file explicitly to Compose if

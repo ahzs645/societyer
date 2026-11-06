@@ -79,6 +79,7 @@ const HANDLER_POLICIES = new Set([
   "files:getUrl", "users:ensureCurrentMembership", "users:recordLogin", "users:get", "users:getByAuthSubject", "users:getByEmail",
   "invitations:accept", "invitations:getByToken", "invitations:pendingForAccount", "invitations:acceptForAccount", "invitations:resend", "permissions:myPermissions", "permissions:check", "permissions:listAll",
   "society:createWorkspace", "society:create", "society:list", "society:listMine", "society:current", "firm:list", "firm:organizations",
+  "workspaceMfa:getPolicy", "workspaceMfa:setPolicy",
   "http:workspaceCreationAccess", "http:currentPrincipalMemberships", "http:me", "http:gatewayApiPrincipal", "http:gatewayWorkflowBinding", "http:gatewayGeneratedDocumentAccess",
 ]);
 // Public intake/token routes retain their existing narrow, handler-level policy.

@@ -35,6 +35,7 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
       tokenIdentifier: identity.tokenIdentifier,
       email: identity.email,
       emailVerified: identity.emailVerified,
+      ...(identity.societyer_mfa_verified === true ? { secondFactorVerified: true } : {}),
       ...(identity.name ? { name: identity.name } : {}),
     };
   }
@@ -61,6 +62,9 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
     tokenIdentifier: identity.tokenIdentifier,
     email: identity.email,
     emailVerified: identity.emailVerified,
+    ...(isBetterAuth && !bridgeIssuer && identity.societyer_mfa_verified === true ? { secondFactorVerified: true } : {}),
+    ...(isClerk && typeof identity.sid === "string" ? { authSessionId: identity.sid } : {}),
+    ...(bridgeIssuer ? { gatewayService: true } : {}),
     ...(identity.name ? { name: identity.name } : {}),
   };
 }

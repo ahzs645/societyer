@@ -15,6 +15,8 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   // Operator credentials and deployment identity policy stay on the host.
   "apiPlatform:bootstrapUserIdentity",
   "apiPlatform:migrateUserToClerk",
+  "workspaceMfa:getPolicy",
+  "workspaceMfa:setPolicy",
   // AI connector tokens serve the hosted /mcp endpoint, which the local runtimes don't have.
   "agentConnectors:overview",
   "agentConnectors:setEnabled",

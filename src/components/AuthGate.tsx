@@ -4,6 +4,7 @@ import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
 import { DeploymentCapabilitiesGate } from "./DeploymentCapabilities";
 import { PendingInvitations } from "./PendingInvitations";
+import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
 
 export function AuthGate({ children, allowWorkspaceCreation = false }: { children: React.ReactNode; allowWorkspaceCreation?: boolean }) {
   const auth = useAuth();
@@ -56,6 +57,14 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
   }
 
   if (auth.membershipState !== "ready" || auth.membershipStatus !== "bound") {
+    if (auth.membershipStatus === "mfa-required") {
+      return (
+        <AuthMessage title="Two-factor authentication required"
+          message={`Verify a second factor to access ${auth.lockedWorkspaces.map(({ name }) => name).join(", ")}. Set up two-factor authentication in your account, or sign in again if it’s already set up.`}>
+          <WorkspaceMfaActions />
+        </AuthMessage>
+      );
+    }
     if (auth.membershipStatus === "needs-invitation") {
       if (invitations === undefined) return <AuthMessage title="Checking invitations" message="Looking for invitations sent to your verified email…" />;
       if (invitations.length) return <div className="page"><h1>Join your workspace</h1><PendingInvitations /><button className="btn" onClick={() => void auth.signOut()}>Sign out</button></div>;

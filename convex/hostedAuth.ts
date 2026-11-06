@@ -22,6 +22,7 @@ import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import { authenticatorEnrollmentEnabled, hostedSessionConfiguration, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
 import { authInstanceDetails } from "../shared/authInstance";
+import { betterAuthMfaClaims, workspaceMfaProof } from "../shared/betterAuthMfa";
 import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage, manualAuthProvisioningEnabled } from "../shared/authEmailPolicy";
 import { emailProviderConfiguration } from "../shared/emailConfiguration";
 import { developmentMailConfigured, assertDevelopmentMail } from "../shared/developmentMailConfiguration";
@@ -139,7 +140,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
   const checkEmail = (email: unknown) => {
     if (!authEmailAllowed(email, domains)) throw new APIError("FORBIDDEN", { message: authEmailPolicyMessage(domains) });
   };
-  return betterAuth({
+  const auth = betterAuth({
     baseURL: process.env.CONVEX_SITE_URL,
     secret: secret || "inactive-convex-broker-placeholder-secret-0000",
     trustedOrigins: siteUrls,
@@ -200,6 +201,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     hooks: throttleHooks(ctx, domains, signUpEnabled),
     plugins: [
       twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" }),
+      workspaceMfaProof,
       crossDomain({ siteUrl: siteUrls[0] }),
       convex({
         authConfig,
@@ -207,11 +209,15 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
           expirationSeconds: 5 * 60,
           // Convex passes custom-JWT claims through under their own names, so
           // `emailVerified` (not OIDC's `email_verified`) is what identity exposes.
-          definePayload: ({ user }) => ({ email: user.email, emailVerified: user.emailVerified === true, name: user.name }),
+          definePayload: async ({ user, session }): Promise<Record<string, unknown>> => ({
+            email: user.email, emailVerified: user.emailVerified === true, name: user.name,
+            ...await betterAuthMfaClaims((await auth.$context).adapter, user, session),
+          }),
         },
       }),
     ],
   });
+  return auth;
 };
 
 type HostedAuthAdapter = Awaited<ReturnType<typeof createAuth>["$context"]>["internalAdapter"];

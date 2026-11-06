@@ -7,6 +7,9 @@ import { parseEnv } from "node:util";
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { chromium, expect, type Page } from "@playwright/test";
+import { ConvexHttpClient } from "convex/browser";
+import { decodeJwt } from "jose";
+import { api } from "../convex/_generated/api";
 import { chromiumLaunchOptions } from "../playwright.chromium";
 
 function loopback(value: string | undefined) {
@@ -40,6 +43,29 @@ async function verifyNoToken(page: Page) {
     return { session: Boolean((await authClient.getSession()).data), token: Boolean(await fetchConvexToken()) };
   }, broker);
   assert.deepEqual(result, { session: false, token: false });
+}
+
+async function workspaceSession(page: Page, verified: boolean) {
+  const { url, token } = await page.evaluate(async (mode) => {
+    const path = mode === "convex" ? "/src/lib/convexAuthClient.ts" : "/src/lib/authClient.ts";
+    const runtimePath = "/src/lib/appRuntime.ts";
+    const { fetchConvexToken } = await import(path);
+    const { resolvedConvexUrl } = await import(runtimePath);
+    return { url: resolvedConvexUrl(), token: await fetchConvexToken() };
+  }, broker);
+  assert.ok(token, "Expected a signed Convex token for the browser's current session");
+  assert.equal(decodeJwt(token).societyer_mfa_verified === true, verified);
+  const client = new ConvexHttpClient(loopback(url), { logger: false });
+  client.setAuth(token);
+  return client;
+}
+
+async function verifyChallenge(page: Page, path: "verify-totp" | "verify-backup-code") {
+  const response = page.waitForResponse(item => new URL(item.url()).pathname === `/api/auth/two-factor/${path}` && item.request().method() === "POST");
+  await page.getByRole("button", { name: "Verify and sign in" }).click();
+  const result = await response;
+  assert.equal(result.status(), 200, result.ok() ? undefined : (await result.json().catch(() => ({}))).code);
+  await expect(page.getByText("Two-factor authentication is on.")).toBeVisible({ timeout: 15000 });
 }
 
 async function signIn(page: Page) {
@@ -84,6 +110,11 @@ try {
     await page.getByRole("button", { name: "Create account" }).click();
   }
   await expect(page.getByRole("heading", { name: "Account security" })).toBeVisible();
+  const passwordOnly = await workspaceSession(page, false);
+  const { societyId: primary } = await passwordOnly.mutation(api.society.createWorkspace, { name: `Protected ${email}`, seedDocumentPackets: false });
+  const { societyId: secondary } = await passwordOnly.mutation(api.society.createWorkspace, { name: `Optional ${email}`, seedDocumentPackets: false });
+  assert.equal(await passwordOnly.query(api.workspaceMfa.getPolicy, { societyId: primary }), "optional");
+  await assert.rejects(passwordOnly.mutation(api.workspaceMfa.setPolicy, { societyId: primary, policy: "everyone" }), /Verify two-factor/);
 
   await page.getByRole("button", { name: "Set up authenticator" }).click();
   await page.getByLabel("Current password", { exact: true }).fill(password);
@@ -99,6 +130,21 @@ try {
   assert.ok(backupCode);
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByText("Two-factor authentication is on.")).toBeVisible();
+  const verified = await workspaceSession(page, true);
+  await page.goto(origin + "/app/users");
+  await expect(page.getByRole("heading", { name: "Require 2FA" })).toBeVisible({ timeout: 20000 });
+  await page.getByRole("button", { name: "Require 2FA", exact: true }).click();
+  await page.getByText("Owners and Admins", { exact: true }).click();
+  await page.getByRole("button", { name: "Save 2FA policy" }).click();
+  await expect(page.getByText("Workspace 2FA policy saved")).toBeVisible();
+  const policies = await Promise.all([primary, secondary].map(societyId => verified.query(api.workspaceMfa.getPolicy, { societyId })));
+  assert.deepEqual([...policies].sort(), ["optional", "owners-admins"]);
+  const [protectedId, optionalId] = policies[0] === "owners-admins" ? [primary, secondary] : [secondary, primary];
+  const access = await passwordOnly.query(api.http.currentPrincipalMemberships, {});
+  assert.deepEqual(access.memberships.map((membership: any) => membership.society._id), [optionalId]);
+  assert.deepEqual(access.lockedWorkspaces.map((workspace: any) => workspace.id), [protectedId]);
+  await assert.rejects(passwordOnly.query(api.society.getById, { id: protectedId }), /two-factor|not found/i);
+  await page.goto(origin + "/account/security");
 
   if (broker === "convex" && selector) {
     // Closing new enrollment must not turn off challenges for existing users.
@@ -108,15 +154,16 @@ try {
   const totpPage = await browser.newPage();
   await expectChallenge(totpPage);
   await totpPage.getByLabel("Authenticator code").fill(await authenticator.totp());
-  await totpPage.getByRole("button", { name: "Verify and sign in" }).click();
-  await expect(totpPage.getByText("Two-factor authentication is on.")).toBeVisible();
+  await verifyChallenge(totpPage, "verify-totp");
+  const totpSession = await workspaceSession(totpPage, true);
+  assert.equal(await totpSession.query(api.workspaceMfa.getPolicy, { societyId: protectedId }), "owners-admins");
 
   const recoveryPage = await browser.newPage();
   await expectChallenge(recoveryPage);
   await recoveryPage.getByRole("button", { name: "Use a backup code" }).click();
   await recoveryPage.getByLabel("Backup code").fill(backupCode);
-  await recoveryPage.getByRole("button", { name: "Verify and sign in" }).click();
-  await expect(recoveryPage.getByText("Two-factor authentication is on.")).toBeVisible();
+  await verifyChallenge(recoveryPage, "verify-backup-code");
+  await workspaceSession(recoveryPage, true);
 
   const replayPage = await browser.newPage();
   await expectChallenge(replayPage);
@@ -130,6 +177,10 @@ try {
   await page.getByLabel("Current password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Turn off two-factor authentication" }).click();
   await expect(page.getByText("Two-factor authentication is off.")).toBeVisible();
+  const disabled = await workspaceSession(page, false);
+  const afterDisabling = await disabled.query(api.http.currentPrincipalMemberships, {});
+  assert.deepEqual(afterDisabling.memberships.map((membership: any) => membership.society._id), [optionalId]);
+  assert.deepEqual(afterDisabling.lockedWorkspaces.map((workspace: any) => workspace.id), [protectedId]);
   if (enrollmentClosed) {
     await expect(page.getByText("Authenticator enrollment is closed for this instance.")).toBeVisible();
     const denied = await page.evaluate(async currentPassword => {
@@ -139,7 +190,13 @@ try {
     }, password);
     assert.equal(denied, 403);
   }
-  console.log(`${broker}: QR enrollment, pre-MFA token denial, TOTP sign-in, single-use recovery, and disabling 2FA passed.`);
+  await page.goto(origin + "/app/users");
+  await expect(page.getByRole("heading", { name: "Require 2FA" })).toBeVisible({ timeout: 20000 });
+  await page.getByRole("button", { name: new RegExp(`select workspace.*${afterDisabling.memberships[0].society.name}`, "i") }).click();
+  const locked = page.getByRole("region", { name: "Workspaces requiring two-factor authentication" });
+  await expect(locked).toContainText(`Two-factor authentication required for ${afterDisabling.lockedWorkspaces[0].name}.`);
+  await expect(locked.getByRole("link", { name: "Manage account security" })).toBeVisible();
+  console.log(`${broker}: QR enrollment, workspace policy, tenant isolation, TOTP sign-in, single-use recovery, and disabling 2FA passed.`);
 } finally {
   await browser.close();
   if (selector && enrollmentClosed) setConvexEnrollment(selector, true);

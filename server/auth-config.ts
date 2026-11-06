@@ -7,6 +7,7 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { jwt, twoFactor } from "better-auth/plugins";
 import { authenticatorEnrollmentEnabled, authSessionDurationSeconds, resolveAuthIssuer, validateHostedAuth, type SessionBroker } from "../shared/authConfiguration";
 import { authInstanceDetails } from "../shared/authInstance";
+import { betterAuthMfaClaims, workspaceMfaProof } from "../shared/betterAuthMfa";
 import { createMicrosoftSsoProvider, getMicrosoftSsoConfig, microsoftAccountSubject } from "./microsoft-sso";
 
 const DEVELOPMENT_AUTH_SECRET =
@@ -77,11 +78,17 @@ export const auth = betterAuth({
     }),
   },
   plugins: [
-    ...(managesUserSignIn ? [twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" })] : []),
+    ...(managesUserSignIn ? [twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" }), workspaceMfaProof] : []),
     ...(microsoftSsoConfig ? [microsoftAccountSubject] : []),
     jwt({
       jwks: { keyPairConfig: { alg: "ES256" } },
-      jwt: { issuer: authIssuer, audience: authIssuer, expirationTime: "5m" },
+      jwt: {
+        issuer: authIssuer, audience: authIssuer, expirationTime: "5m",
+        definePayload: async ({ user, session }): Promise<Record<string, unknown>> => ({
+          ...user,
+          ...await betterAuthMfaClaims((await auth.$context).adapter, user, session),
+        }),
+      },
     }),
   ],
   user: {

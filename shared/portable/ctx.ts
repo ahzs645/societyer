@@ -53,6 +53,9 @@ export type PortablePrincipal =
       tokenIdentifier?: string;
       email?: string;
       emailVerified?: boolean;
+      secondFactorVerified?: boolean;
+      authSessionId?: string;
+      gatewayService?: boolean;
       name?: string;
       userId?: string;
       societyId?: string;

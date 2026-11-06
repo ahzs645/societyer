@@ -19,7 +19,7 @@ import { validateIntegrationSettings, type IntegrationSettings } from "../integr
 import { isValidFiscalYearEnd } from "../entitySetup";
 import { requirePermissionPortable } from "./permissions";
 import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
-import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership } from "./access";
+import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership, WorkspaceMfaRequiredError } from "./access";
 
 export type WorkspaceCreationAccess = { allowed: boolean; reason: string };
 
@@ -172,12 +172,20 @@ async function principalMemberships(ctx: PortableQueryCtx): Promise<PortableDoc[
     (membership) => matchesVerifiedIdentity(membership, principal) && (!membership.status || membership.status === "Active"),
   );
   if (!activeMemberships.length) throw new Error("Society membership not found.");
-  return Promise.all(activeMemberships.map((membership) => requireSocietyMembership(ctx, String(membership.societyId))));
+  const accessible = await Promise.all(activeMemberships.map(async (membership) => {
+    try {
+      return await requireSocietyMembership(ctx, String(membership.societyId));
+    } catch (error) {
+      if (error instanceof WorkspaceMfaRequiredError) return null;
+      throw error;
+    }
+  }));
+  return accessible.filter((membership) => membership !== null);
 }
 
 export async function getPortable(ctx: PortableQueryCtx, _args: Record<string, never>) {
   const [membership] = await principalMemberships(ctx);
-  return withLogoUrl(ctx, await ctx.db.get(String(membership.societyId), "societies"));
+  return withLogoUrl(ctx, membership ? await ctx.db.get(String(membership.societyId), "societies") : null);
 }
 
 /** Current authorized organization rows, without invoking branding storage. */

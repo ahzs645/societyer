@@ -71,7 +71,7 @@ export function LoginPage() {
     auth.session &&
     auth.convexAuthStatus === "authenticated" &&
     auth.membershipState === "ready" &&
-    auth.membershipStatus === "needs-invitation"
+    (auth.membershipStatus === "needs-invitation" || auth.membershipStatus === "mfa-required")
   ) {
     return <Navigate to={safeRedirect} replace />;
   }

@@ -12,7 +12,7 @@ import { buildICalendar } from "../shared/icalendar";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { hasPermission } from "../shared/functions/permissions";
 import { requireDocumentAccess } from "../shared/functions/documents";
-import { requireSocietyMembership } from "../shared/functions/access";
+import { hasVerifiedSecondFactor, requireSocietyMembership, WorkspaceMfaRequiredError } from "../shared/functions/access";
 import { toPortableQueryCtx } from "./lib/portable";
 import type { Doc, Id } from "./_generated/dataModel";
 import { hostedPrincipal } from "./lib/authIdentity";
@@ -31,6 +31,7 @@ import { registerMcpOAuthRoutes } from "./mcpOAuthHttp";
 import { developmentMailConfigured } from "../shared/developmentMailConfiguration";
 
 import { registerMeetingTranscriptionRoutes } from "./meetingTranscriptionHttp";
+import { registerWorkspaceMfaRoutes } from "./workspaceMfaHttp";
 
 const http = httpRouter();
 registerMeetingTranscriptionRoutes(http);
@@ -39,6 +40,7 @@ registerProcurementReviewRoutes(http);
 registerMeetingSourceRoutes(http);
 registerMcpRoutes(http);
 registerMcpOAuthRoutes(http);
+registerWorkspaceMfaRoutes(http);
 // Convex-hosted login (AUTH_MODE=convex) serves Better Auth from this
 // deployment's /api/auth/*. Other brokers keep these routes absent; like
 // auth.config.ts, changing AUTH_MODE takes effect on the next deploy.
@@ -114,6 +116,7 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
           ? "membership-disabled"
           : "needs-invitation",
         memberships: [],
+        workspaceMfaAvailable: true,
       };
     }
 
@@ -127,10 +130,18 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
         letterheadUrl?: string;
       };
     }> = [];
+    const lockedWorkspaces: Array<{ id: Id<"societies">; name: string }> = [];
     const portableCtx = await toPortableQueryCtx(ctx);
     for (const user of activeRows) {
       // Membership/lifecycle checks also apply to the picker and direct HTTP endpoints.
-      await requireSocietyMembership(portableCtx, String(user.societyId));
+      try {
+        await requireSocietyMembership(portableCtx, String(user.societyId));
+      } catch (error) {
+        if (!(error instanceof WorkspaceMfaRequiredError)) throw error;
+        const society = await ctx.db.get(user.societyId);
+        if (society) lockedWorkspaces.push({ id: society._id, name: society.name });
+        continue;
+      }
       const society = await ctx.db.get(user.societyId);
       if (!society) continue;
       const [logoUrl, logoDarkUrl, letterheadUrl] = await Promise.all([
@@ -151,11 +162,14 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
       });
     }
     return {
-      status: memberships.length > 0 ? "bound" : "needs-invitation",
+      status: memberships.length > 0 ? "bound" : lockedWorkspaces.length > 0 ? "mfa-required" : "needs-invitation",
       authSubject: principal.subject,
       authIssuer: principal.issuer,
       authProvider: principal.authProvider,
       memberships,
+      workspaceMfaAvailable: true,
+      lockedWorkspaces,
+      secondFactorVerified: await hasVerifiedSecondFactor(portableCtx),
     };
   },
 });

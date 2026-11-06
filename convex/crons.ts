@@ -3,6 +3,8 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
+crons.hourly("purge expired Clerk second-factor proofs", { minuteUTC: 25 }, internal.workspaceMfa.purgeExpiredClerkSessions, {});
+
 // Clear sign-in throttle buckets that have long since refilled.
 crons.daily(
   "purge idle sign-in throttles",

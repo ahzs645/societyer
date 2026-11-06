@@ -34,7 +34,7 @@ const ClerkAuthProvider = lazy(() => import("./ClerkAuthProvider"));
 export type AuthStage = "idle" | "loading" | "ready" | "error";
 export type SessionStatus = "loading" | "authenticated" | "unauthenticated" | "error";
 export type ConvexAuthStatus = "idle" | "loading" | "authenticated" | "unauthenticated" | "error";
-export type MembershipStatus = MembershipResolution["status"] | "membership-revoked";
+export type MembershipStatus = MembershipResolution["status"] | "membership-revoked" | "mfa-required";
 export type AuthFailureKind =
   | "expired-session"
   | "jwks-token"
@@ -59,6 +59,9 @@ type MembershipLookup = {
   status: MembershipStatus;
   authSubject?: string;
   memberships: PrincipalMembership[];
+  lockedWorkspaces?: Array<{ id: Id<"societies">; name: string }>;
+  workspaceMfaAvailable?: boolean;
+  secondFactorVerified?: boolean;
 };
 
 type AuthContextValue = {
@@ -69,6 +72,9 @@ type AuthContextValue = {
   membershipState: AuthStage;
   membershipStatus: MembershipStatus | null;
   societies: Doc<"societies">[] | undefined;
+  lockedWorkspaces: NonNullable<MembershipLookup["lockedWorkspaces"]>;
+  workspaceMfaAvailable: boolean;
+  secondFactorVerified: boolean;
   fatalError: AuthFailure | null;
   isPending: boolean;
   isAuthenticated: boolean;
@@ -114,6 +120,9 @@ function NoAuthProvider({
       membershipState: "ready",
       membershipStatus: "bound",
       societies: undefined,
+      lockedWorkspaces: [],
+      workspaceMfaAvailable: false,
+      secondFactorVerified: false,
       fatalError: null,
       isPending: false,
       isAuthenticated: true,
@@ -284,6 +293,9 @@ function MembershipProviderReady({
   const [membershipFailure, setMembershipFailure] = useState<AuthFailure | null>(null);
   const [membershipStatus, setMembershipStatus] = useState<MembershipStatus | null>(null);
   const [memberships, setMemberships] = useState<PrincipalMembership[] | null>(null);
+  const [lockedWorkspaces, setLockedWorkspaces] = useState<AuthContextValue["lockedWorkspaces"]>([]);
+  const [workspaceMfaAvailable, setWorkspaceMfaAvailable] = useState(false);
+  const [secondFactorVerified, setSecondFactorVerified] = useState(false);
   const [membershipRefresh, setMembershipRefresh] = useState(0);
   const hadSessionRef = useRef(false);
   const hadMembershipRef = useRef(false);
@@ -328,6 +340,9 @@ function MembershipProviderReady({
       setStoredUserId(null);
       setMemberships(null);
       setMembershipStatus(null);
+      setLockedWorkspaces([]);
+      setWorkspaceMfaAvailable(false);
+      setSecondFactorVerified(false);
       setMembershipFailure(null);
       return;
     }
@@ -335,23 +350,31 @@ function MembershipProviderReady({
     let active = true;
     setMemberships(null);
     setMembershipStatus(null);
+    setLockedWorkspaces([]);
+    setSecondFactorVerified(false);
     setMembershipFailure(null);
     const timeout = setTimeout(() => {
       if (!active) return;
       active = false;
       setMembershipFailure({ kind: "network", message: "Your workspace access could not be checked. Check your connection and retry.", retryable: true });
     }, 30_000);
-    convex
-      .query(api.http.currentPrincipalMemberships, {})
-      .then((lookup: MembershipLookup) => {
-        if (!active) return;
+    const watch = convex.watchQuery(api.http.currentPrincipalMemberships, {});
+    const onMembershipUpdate = () => {
+      if (!active) return;
+      try {
+        const lookup: MembershipLookup | undefined = watch.localQueryResult();
+        if (!lookup) return;
         clearTimeout(timeout);
+        setMembershipFailure(null);
         const resolvedStatus =
           lookup.status === "needs-invitation" && hadMembershipRef.current
             ? "membership-revoked"
             : lookup.status;
         setMembershipStatus(resolvedStatus);
         setMemberships(lookup.memberships);
+        setLockedWorkspaces(lookup.lockedWorkspaces ?? []);
+        setWorkspaceMfaAvailable(lookup.workspaceMfaAvailable === true);
+        setSecondFactorVerified(lookup.secondFactorVerified === true);
 
         setMembershipSocietyIds(lookup.memberships.map((membership) => ({
           societyId: membership.society._id,
@@ -372,9 +395,7 @@ function MembershipProviderReady({
         preferredSocietyIdRef.current = null;
         setStoredSocietyId(selected.society._id);
         setStoredUserId(selected.userId);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
+      } catch (error) {
         clearTimeout(timeout);
         console.error("[societyer-auth] failed to resolve principal memberships", error);
         setMembershipSocietyIds(null);
@@ -382,12 +403,19 @@ function MembershipProviderReady({
         // A failed lookup does not establish that the saved workspace is foreign.
         setStoredUserId(null);
         setMemberships([]);
+        setLockedWorkspaces([]);
+        setWorkspaceMfaAvailable(false);
+        setSecondFactorVerified(false);
         setMembershipFailure(authFailure(error, "Your workspace membership could not be checked."));
-      });
+      }
+    };
+    const unsubscribe = watch.onUpdate(onMembershipUpdate);
+    onMembershipUpdate();
 
     return () => {
       active = false;
       clearTimeout(timeout);
+      unsubscribe();
     };
   }, [convex, convexAuth.isAuthenticated, membershipRefresh, sessionKey, sessionSignedOut]);
 
@@ -430,6 +458,9 @@ function MembershipProviderReady({
       membershipState,
       membershipStatus,
       societies: memberships?.map((membership) => membership.society),
+      lockedWorkspaces,
+      workspaceMfaAvailable,
+      secondFactorVerified,
       fatalError,
       isPending:
         sessionStatus === "loading" ||
@@ -459,6 +490,9 @@ function MembershipProviderReady({
         setStoredUserId(null);
         setMemberships(null);
         setMembershipStatus(null);
+        setLockedWorkspaces([]);
+        setWorkspaceMfaAvailable(false);
+        setSecondFactorVerified(false);
         setTokenFailure(null);
         setMembershipFailure(null);
         await providerSignOut();
@@ -473,6 +507,9 @@ function MembershipProviderReady({
       membershipState,
       membershipStatus,
       memberships,
+      lockedWorkspaces,
+      workspaceMfaAvailable,
+      secondFactorVerified,
       mode,
       session,
       sessionStatus,

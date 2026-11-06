@@ -25,6 +25,7 @@ jobs:
       - name: Verify authentication boundaries
         run: |
           npm run test:clerk-auth
+          npm run test:workspace-mfa
           npm run test:clerk-gateway
           npm run test:auth-token
           npm run test:microsoft-sso
@@ -57,7 +58,7 @@ jobs:
               VITE_CONVEX_URL=http://societyer.k8s.home:3220
               VITE_AUTH_MODE=${{ vars.SOCIETYER_AUTH_MODE || 'none' }}
               VITE_CLERK_PUBLISHABLE_KEY=${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
-              VITE_CLERK_JWT_TEMPLATE=${{ vars.VITE_CLERK_JWT_TEMPLATE || 'convex' }}
+              VITE_CLERK_JWT_TEMPLATE=${{ vars.VITE_CLERK_JWT_TEMPLATE }}
           - name: societyer-connector-runner
             dockerfile: services/connector-runner/Dockerfile
             build_args: ""

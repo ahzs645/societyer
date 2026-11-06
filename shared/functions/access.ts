@@ -1,8 +1,8 @@
 /**
  * PORTABLE ACCESS CONTROL: role ranking + `requireRole`.
  *
- * `requireRolePortable` is a pure `ctx.db` reader (it only consults the `users`
- * table), so it runs unchanged on hosted Convex, the local Dexie runtime, and
+ * `requireRolePortable` is a pure `ctx.db` reader, so it runs unchanged on
+ * hosted Convex, the local Dexie runtime, and
  * the convex-test oracle. This is the seam that lets role-gated mutations be
  * ported to the portable contract: a portable handler calls
  * `requireRolePortable(ctx, ...)` directly, and the Convex `requireRole` wrapper
@@ -33,6 +33,33 @@ import type {
 import { matchesVerifiedIdentity, assertExternalIdentityActive } from "./identity";
 import { PORTABLE_ACCESS_ENFORCEMENT } from "../portable/define";
 import { matchesAuthBinding } from "./identity";
+import { workspaceRequiresMfa, type WorkspaceMfaPolicy } from "../workspaceMfa";
+
+export class WorkspaceMfaRequiredError extends Error {
+  constructor() {
+    super("This workspace requires two-factor authentication. Sign in with a second factor to continue.");
+  }
+}
+
+export async function hasVerifiedSecondFactor(ctx: PortableQueryCtx): Promise<boolean> {
+  const principal = ctx.principal;
+  if (principal.kind !== "user" || principal.assurance !== "verified-jwt" || principal.gatewayService) return false;
+  if (principal.secondFactorVerified === true) return true;
+  if (principal.authProvider !== "clerk" || !principal.authSessionId || !principal.issuer) return false;
+  const proof = await ctx.db.query("clerkMfaSessions")
+    .withIndex("by_issuer_subject_sessionId", (q) => q
+      .eq("issuer", principal.issuer)
+      .eq("subject", principal.subject)
+      .eq("sessionId", principal.authSessionId))
+    .unique();
+  return Boolean(proof && proof.expiresAt > Date.now());
+}
+
+export async function workspaceMfaPolicy(ctx: PortableQueryCtx, societyId: string) {
+  return ctx.db.query<PortableDoc & { policy: WorkspaceMfaPolicy }>("workspaceMfaPolicies")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .unique();
+}
 
 export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
 export type Role = (typeof ROLES)[number];
@@ -100,7 +127,16 @@ export async function resolvePrincipalUser(
     .collect();
   const bindings = matches.filter((user) => user.societyId === societyId && (principal.assurance === "trusted-workspace" || matchesVerifiedIdentity(user, principal)));
   if (bindings.length !== 1 || (principal.userId && principal.userId !== bindings[0]._id)) return null;
-  if (principal.assurance !== "trusted-workspace") await assertExternalIdentityActive(ctx.db, bindings[0]);
+  if (principal.assurance === "verified-jwt") {
+    const membership = bindings[0];
+    await assertExternalIdentityActive(ctx.db, membership);
+    if (!principal.gatewayService && isActiveMembership(membership)) {
+      const policy = await workspaceMfaPolicy(ctx, societyId);
+      if (workspaceRequiresMfa(policy?.policy, membership.role) && !await hasVerifiedSecondFactor(ctx)) {
+        throw new WorkspaceMfaRequiredError();
+      }
+    }
+  }
   return bindings[0];
 }
 

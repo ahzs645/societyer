@@ -191,6 +191,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { BottomNavIndicator } from "./BottomNavIndicator";
 import { PendingInvitations } from "./PendingInvitations";
 import { useAuth } from "../auth/AuthProvider";
+import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
 
 export function Layout() {
   const auth = useAuth();
@@ -1863,6 +1864,12 @@ export function Layout() {
                 );
                 });
               })()}
+              {auth.lockedWorkspaces.length > 0 && (
+                <section aria-label="Workspaces requiring two-factor authentication" style={{ padding: "10px 12px", borderTop: "1px solid var(--border)" }}>
+                  <p className="muted">Two-factor authentication required for {auth.lockedWorkspaces.map(({ name }) => name).join(", ")}.</p>
+                  <WorkspaceMfaActions />
+                </section>
+              )}
               {(!societies || societies.length === 0) && (
                 <div className="empty-state empty-state--sm empty-state--start">
                   {t("sidebar.noSocieties")}

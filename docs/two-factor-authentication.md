@@ -16,11 +16,28 @@ and store the one-time backup codes privately. From then on, a fresh sign-in
 asks for an authenticator code or a backup code before issuing workspace access.
 Microsoft single sign-on follows the Entra tenant's MFA policy.
 
-Enrollment is voluntary. Closing enrollment on a Better Auth deployment
-prevents new setups while enrolled accounts continue to receive challenges.
-An enrolled user can regenerate backup codes or turn off their authenticator
-from **Account security**. A password reset still requires the enrolled second
-factor at the next sign-in.
+## Workspace policy
+
+In **Users & access → Require 2FA**, a workspace Owner can choose **Optional**,
+**Owners and Admins**, or **Everyone**. Existing and new workspaces start as
+Optional. An Owner must verify a second factor in their current session before
+changing the setting. The Convex backend checks the session and the member's
+role for that workspace. If a member belongs to several workspaces, the picker
+keeps the workspaces their session can access available.
+
+Better Auth accepts verification with an authenticator or a one-time backup
+code. Accounts that enrolled before this feature can sign in again to verify
+their current session. Microsoft single sign-on by itself does not supply
+Societyer with verified second-factor proof for workspace access.
+
+Requiring 2FA in a Clerk workspace uses the native Convex integration and the
+session claims in [Clerk setup](./clerk-setup.md). Legacy Clerk JWT templates continue to
+support Optional workspaces.
+
+Closing enrollment on a Better Auth deployment prevents new setups while
+enrolled accounts continue to receive challenges. An enrolled user can
+regenerate backup codes or turn off their authenticator from **Account security**.
+A password reset still requires the enrolled second factor at the next sign-in.
 
 ## Rollout
 

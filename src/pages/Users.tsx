@@ -15,6 +15,9 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
+import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
+import type { WorkspaceMfaPolicy } from "../../shared/workspaceMfa";
+import type { Id } from "../../convex/_generated/dataModel";
 import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
 import { organizationKind } from "../../shared/organizationDomain";
@@ -86,6 +89,9 @@ export function UsersPage() {
       />
 
       {society.accessRecoveryRequired && <div className="card"><div className="card__body">This workspace requires controlled access recovery. A security disable removed its last Active Owner. An authorized operator must establish a new owner; disabled identities keep no access.</div></div>}
+
+      {auth.workspaceMfaAvailable && permissionsLoaded && myRole === "Owner" &&
+        <WorkspaceMfaSettings key={society._id} societyId={society._id} />}
 
       {myRole && (
         <details className="card access-summary">
@@ -363,6 +369,53 @@ export function UsersPage() {
         )}
       </Drawer>
     </div>
+  );
+}
+
+const MFA_OPTIONS: Array<{ value: WorkspaceMfaPolicy; label: string }> = [
+  { value: "optional", label: "Optional" },
+  { value: "owners-admins", label: "Owners and Admins" },
+  { value: "everyone", label: "Everyone" },
+];
+
+function WorkspaceMfaSettings({ societyId }: { societyId: Id<"societies"> }) {
+  const auth = useAuth();
+  const current = useQuery(api.workspaceMfa.getPolicy, { societyId }) as WorkspaceMfaPolicy | undefined;
+  const setPolicy = useMutation(api.workspaceMfa.setPolicy);
+  const [draft, setDraft] = useState<WorkspaceMfaPolicy | null>(null);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const selection = draft ?? current ?? "optional";
+
+  return (
+    <section className="card" aria-labelledby="workspace-mfa-title">
+      <div className="card__head"><h2 className="card__title" id="workspace-mfa-title">Require 2FA</h2></div>
+      <div className="card__body">
+        <p>Choose who must verify a second factor to access this workspace. Each of their other workspaces has its own policy.</p>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <Select aria-label="Require 2FA" options={MFA_OPTIONS} value={selection} onChange={setDraft}
+            disabled={current === undefined || saving} />
+          <button className="btn btn--accent" type="button"
+            disabled={current === undefined || selection === current || saving || !auth.secondFactorVerified}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await setPolicy({ societyId, policy: selection });
+                setDraft(null);
+                toast.success("Workspace 2FA policy saved");
+              } catch (error) {
+                toast.error("Could not save the 2FA policy", error instanceof Error ? error.message : undefined);
+              } finally {
+                setSaving(false);
+              }
+            }}>Save 2FA policy</button>
+        </div>
+        {!auth.secondFactorVerified && <>
+          <p className="muted">Verify a second factor in your own session before changing this policy.</p>
+          <WorkspaceMfaActions />
+        </>}
+      </div>
+    </section>
   );
 }
 
