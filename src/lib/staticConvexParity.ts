@@ -31,6 +31,8 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "communications:sendCampaign",
   "communications:sendMeetingNotice",
   "documentVersions:beginUpload",
+  // Receipt uploads on hosted deployments without a configured version store.
+  "files:attachUploadedFileToDocument",
   "filingBot:run",
   // Server-side intake field extraction; the local runtime extracts in a browser worker instead.
   "intakeActions:extractRun",

@@ -1,13 +1,6 @@
 import PostalMime from "postal-mime";
 
-const EMAIL_MIME = "message/rfc822";
 const MAX_EMAIL_BYTES = 25 * 1024 * 1024;
-
-export function normalizeEmailReceiptFile(file: File) {
-  return /\.eml$/i.test(file.name) && file.type !== EMAIL_MIME
-    ? new File([file], file.name, { type: EMAIL_MIME, lastModified: file.lastModified })
-    : file;
-}
 
 // Only produce text; never render the email's HTML, fetch images, or activate links.
 function readableEmailText(html: string) {

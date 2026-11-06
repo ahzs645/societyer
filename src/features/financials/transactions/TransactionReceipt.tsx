@@ -1,6 +1,6 @@
 import { DocumentPreviewByIdButton } from "../../../components/DocumentFilePreview";
 import { useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { FileText, Paperclip, UploadCloud, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -8,7 +8,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { FileDropZone } from "../../../components/FileDropZone";
 import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
-import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
+import { useCreateReceiptDocument } from "../receipts/useCreateReceiptDocument";
 import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
 import { RECEIPT_ATTENTION_THRESHOLD_CENTS } from "../../../../shared/transactionAttention";
 import { formatMoney } from "../../../lib/money";
@@ -46,11 +46,7 @@ export function TransactionReceipt({
   const { loaded, can } = usePermissions();
   const canUpload = canWrite && loaded && can("documents:write");
   const toast = useToast();
-  const createDocument = useMutation(api.documents.create);
-  const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
-  const recordUploadedVersion = useMutation(api.documentVersions.recordUploadedVersion);
-  const beginUpload = useAction(api.documentVersions.beginUpload);
-  const completeUpload = useAction(api.documentVersions.completeUpload);
+  const createReceipt = useCreateReceiptDocument(societyId);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const attached = useQuery(api.documents.get, txn.receiptDocumentId ? { id: txn.receiptDocumentId as any } : "skip") as { _id: string; title?: string; fileName?: string } | null | undefined;
@@ -61,28 +57,9 @@ export function TransactionReceipt({
     if (!canUpload || busy) return;
     setBusy(true);
     try {
-      const file = /\.eml$/i.test(original.name) ? (await import("../../../lib/emailReceipt")).normalizeEmailReceiptFile(original) : original;
-      const title = `Receipt: ${payee} (${txn.date})`;
-      const documentId = await createDocument({
-        societyId: societyId as any,
-        title,
-        category: "Receipt",
-        fileName: file.name,
-        mimeType: file.type || undefined,
-        tags: ["receipt"],
-        retentionYears: RECEIPT_RETENTION_YEARS,
-      });
-      await uploadDocumentVersion({
-        societyId,
-        documentId,
-        file,
-        createDemoVersion,
-        beginUpload,
-        recordUploadedVersion,
-        completeUpload,
-      });
-      await onAttach(String(documentId));
-      toast.success("Receipt attached", file.name);
+      const documentId = await createReceipt(original, `Receipt: ${payee} (${txn.date})`, ["receipt"], RECEIPT_RETENTION_YEARS);
+      await onAttach(documentId);
+      toast.success("Receipt attached", original.name);
     } catch (error: any) {
       toast.error("Could not attach the receipt", error?.message);
     } finally {

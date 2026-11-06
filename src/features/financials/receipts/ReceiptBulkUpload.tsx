@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useAction, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { Inbox } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { FileDropZone, type FileRejection } from "../../../components/FileDropZone";
 import { useToast } from "../../../components/Toast";
 import { usePermissions } from "../../../hooks/usePermissions";
-import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
+import { useCreateReceiptDocument } from "./useCreateReceiptDocument";
 import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
 import { pluralize } from "../../../lib/format";
 import { parseReceiptFilename, type ReceiptPrefill } from "../../../../shared/receiptMatching";
@@ -22,11 +22,7 @@ const MAX_FILES = 50;
  */
 export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; canWrite: boolean }) {
   const permissions = usePermissions();
-  const createDocument = useMutation(api.documents.create);
-  const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
-  const beginUpload = useAction(api.documentVersions.beginUpload);
-  const completeUpload = useAction(api.documentVersions.completeUpload);
-  const recordUploadedVersion = useMutation(api.documentVersions.recordUploadedVersion);
+  const createReceipt = useCreateReceiptDocument(societyId);
   const addToInbox = useMutation(api.receiptInbox.add);
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,20 +39,10 @@ export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; 
     for (const [index, original] of batch.entries()) {
       setBusy(`Uploading ${index + 1} of ${batch.length}…`);
       try {
-        const email = /\.eml$/i.test(original.name) || original.type === "message/rfc822" ? await import("../../../lib/emailReceipt") : undefined;
-        const file = email?.normalizeEmailReceiptFile(original) ?? original;
-        const prefill = email ? {} : parseReceiptFilename(file.name);
-        const documentId: string = await createDocument({
-          societyId,
-          title: prefill.merchant ? `Receipt: ${prefill.merchant}${prefill.date ? ` (${prefill.date})` : ""}` : `Receipt: ${file.name}`,
-          category: "Receipt",
-          fileName: file.name,
-          mimeType: file.type || undefined,
-          tags: ["receipt", "inbox"],
-          retentionYears: 7,
-        });
-        await uploadDocumentVersion({ societyId, documentId, file, createDemoVersion, beginUpload, recordUploadedVersion, completeUpload });
-        items.push({ documentId: String(documentId), fileName: file.name, ...prefill });
+        const prefill = /\.eml$/i.test(original.name) || original.type === "message/rfc822" ? {} : parseReceiptFilename(original.name);
+        const title = prefill.merchant ? `Receipt: ${prefill.merchant}${prefill.date ? ` (${prefill.date})` : ""}` : `Receipt: ${original.name}`;
+        const documentId = await createReceipt(original, title, ["receipt", "inbox"], 7);
+        items.push({ documentId, fileName: original.name, ...prefill });
       } catch (err: unknown) {
         failed.push(`${original.name}: ${errorMessage(err) ?? "upload failed"}`);
       }

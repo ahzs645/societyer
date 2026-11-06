@@ -1,10 +1,7 @@
 import { useState } from "react";
-import { useAction, useMutation } from "convex/react";
-import { api } from "@/lib/convexApi";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { FileDropZone, type FileRejection } from "../../../components/FileDropZone";
 import { usePermissions } from "../../../hooks/usePermissions";
-import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
+import { useCreateReceiptDocument } from "../receipts/useCreateReceiptDocument";
 import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
 
 const ACCEPT = "image/*,application/pdf,.heic,.heif,.eml,message/rfc822";
@@ -27,11 +24,7 @@ export function ReceiptDropZone({
   disabled?: boolean;
 }) {
   const permissions = usePermissions();
-  const createDocument = useMutation(api.documents.create);
-  const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
-  const beginUpload = useAction(api.documentVersions.beginUpload);
-  const completeUpload = useAction(api.documentVersions.completeUpload);
-  const recordUploadedVersion = useMutation(api.documentVersions.recordUploadedVersion);
+  const createReceipt = useCreateReceiptDocument(societyId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,18 +36,8 @@ export function ReceiptDropZone({
     setError(null);
     setBusy(true);
     try {
-      const file = /\.eml$/i.test(original.name) ? (await import("../../../lib/emailReceipt")).normalizeEmailReceiptFile(original) : original;
-      const title = claimTitle?.trim() ? `Receipt: ${claimTitle.trim()}` : file.name;
-      const documentId: string = await createDocument({
-        societyId: societyId as Id<"societies">,
-        title,
-        category: "Receipt",
-        fileName: file.name,
-        mimeType: file.type || undefined,
-        tags: ["receipt", "expense-claim"],
-        retentionYears: 7,
-      });
-      await uploadDocumentVersion({ societyId, documentId, file, createDemoVersion, beginUpload, recordUploadedVersion, completeUpload });
+      const title = claimTitle?.trim() ? `Receipt: ${claimTitle.trim()}` : original.name;
+      const documentId = await createReceipt(original, title, ["receipt", "expense-claim"], 7);
       await onUploaded(documentId, title);
     } catch (err: unknown) {
       setError(err instanceof Error && err.message ? err.message : "The receipt could not be uploaded.");
