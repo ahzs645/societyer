@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Plus, Trash2 } from "lucide-react";
 import { Menu } from "../../components/Menu";
 import { Money } from "../../components/Money";
 import { Select } from "../../components/Select";
 import { formatMoney, parseMoneyInput } from "../../lib/money";
-import { cleanInvoiceLineDetails } from "../../../shared/invoiceLineDetails";
+import { INVOICE_LINE_DETAIL_KEYS, INVOICE_LINE_DETAIL_LABELS, cleanInvoiceLineDetails } from "../../../shared/invoiceLineDetails";
 import { lineAmountCents, type InvoiceLine } from "../../../shared/invoicing";
 import { TagPicker } from "../financials/transactions/TagPicker";
 import type { FinanceTagsApi } from "../financials/transactions/useFinanceTags";
+import { CatalogItemEditor, type CatalogItemSeed } from "./CatalogItemEditor";
 import type { CatalogItem } from "./types";
 
 export type LineDraft = InvoiceLine & { qtyInput: string; priceInput: string };
@@ -24,13 +26,14 @@ let lineCounter = 0;
 const newKey = () => `line_${Date.now().toString(36)}_${(lineCounter += 1)}`;
 
 export function toLineDraft(line: InvoiceLine): LineDraft {
-  return { ...line, key: line.key || newKey(), qtyInput: String(line.quantity), priceInput: (line.unitPriceCents / 100).toFixed(2) };
+  return { ...line, key: line.key || newKey(), qtyInput: String(line.quantity), priceInput: line.unitPriceCents ? (line.unitPriceCents / 100).toFixed(2) : "" };
 }
 
 export function lineFromCatalog(item: CatalogItem): LineDraft {
   return toLineDraft({
     ...cleanInvoiceLineDetails(item),
-    rateOverridden: false,
+    // An open price is the user's to enter, so re-pricing must leave it alone.
+    rateOverridden: Boolean(item.openPrice),
     key: newKey(),
     catalogItemId: item._id,
     item: item.name,
@@ -54,7 +57,8 @@ type Props = {
   catalog: CatalogItem[];
   currency?: string;
   getCatalogRate?: (line: InvoiceLine, quantity: number) => number | null;
-  onSaveItem?: (line: LineDraft) => Promise<void>;
+  /** Lets items be added to the catalog from here, in the document's currency. */
+  catalogEditing?: { societyId: string; canWrite: boolean; asModal?: boolean };
   readOnly: boolean;
   /** Show the "add your GST/HST number" hint (taxed lines, no number on file). */
   gstHint: boolean;
@@ -63,9 +67,29 @@ type Props = {
 };
 
 /** Line items: add from the catalog, quantity × price, per-line tax and tags, reorder and remove. */
-export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, tags, currency = "CAD", onSaveItem, getCatalogRate }: Props) {
+export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, tags, currency = "CAD", catalogEditing, getCatalogRate }: Props) {
   const showTags = Boolean(tags?.loaded && (tags.activeGroups.some((group) => group.tags.length > 0) || lines.some((line) => line.tagIds?.length)));
   const updateLine = (key: string, patch: Partial<LineDraft>) => onChange(lines.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+  const [newItem, setNewItem] = useState<{ seed: CatalogItemSeed; lineKey?: string } | null>(null);
+  const hasContent = (line: LineDraft) => Boolean(line.item || line.unitPriceCents);
+  const addFromCatalog = (item: CatalogItem) => onChange([...lines.filter(hasContent), lineFromCatalog(item)]);
+  const saveLineToCatalog = (line: LineDraft) => setNewItem({
+    lineKey: line.key,
+    seed: { ...cleanInvoiceLineDetails(line), name: line.item, description: line.description, sku: line.sku, unit: line.unit, unitPriceCents: line.unitPriceCents || undefined, taxRatePercent: line.taxRatePercent, taxLabel: line.taxLabel, currency },
+  });
+  const onItemSaved = (item: CatalogItem) => {
+    if (!newItem?.lineKey) return addFromCatalog(item);
+    onChange(lines.map((line) => {
+      if (line.key !== newItem.lineKey) return line;
+      if (item.openPrice) return { ...line, catalogItemId: item._id, item: item.name, rateOverridden: true };
+      return { ...lineFromCatalog(item), key: line.key, quantity: line.quantity, qtyInput: line.qtyInput, tagIds: line.tagIds };
+    }));
+  };
+  const setPriceFor = (line: LineDraft) => {
+    const item = catalog.find((row) => row._id === line.catalogItemId);
+    if (!line.catalogItemId || item?.openPrice) return null;
+    return getCatalogRate ? getCatalogRate(line, line.quantity) : item?.unitPriceCents ?? null;
+  };
   const moveLine = (index: number, delta: number) => {
     const next = [...lines];
     const [line] = next.splice(index, 1);
@@ -86,7 +110,7 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
         <h2 id="ib-lines" className="invoice-builder__heading">Line items</h2>
         {!readOnly && (
           <div className="invoice-builder__add">
-            {catalog.length > 0 && (
+            {(catalog.length > 0 || catalogEditing) && (
               <Menu
                 align="right"
                 minWidth={260}
@@ -95,15 +119,21 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                     <BookOpen size={14} aria-hidden="true" /> From catalog
                   </button>
                 }
-                sections={[{
-                  id: "catalog",
-                  items: catalog.map((item) => ({
-                    id: item._id,
-                    label: item.name,
-                    hint: `${formatMoney(item.unitPriceCents, { currency })} / ${item.unit ?? "each"}`,
-                    onSelect: () => onChange([...lines.filter((line) => line.item || line.unitPriceCents), lineFromCatalog(item)]),
-                  })),
-                }]}
+                sections={[
+                  {
+                    id: "catalog",
+                    items: catalog.map((item) => ({
+                      id: item._id,
+                      label: item.name,
+                      hint: item.openPrice ? "No set price" : `${formatMoney(item.unitPriceCents, { currency })} / ${item.unit ?? "each"}`,
+                      onSelect: () => addFromCatalog(item),
+                    })),
+                  },
+                  ...(catalogEditing ? [{
+                    id: "new",
+                    items: [{ id: "new-item", label: "New item or service", icon: <Plus size={14} />, disabled: !catalogEditing.canWrite, onSelect: () => setNewItem({ seed: { currency } }) }],
+                  }] : []),
+                ]}
               />
             )}
             <button type="button" className="btn btn--sm" onClick={() => onChange([...lines, blankLine()])}>
@@ -116,6 +146,9 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
         {lines.map((line, index) => {
           const tax = taxOptions(line);
           const priceInvalid = line.priceInput.trim() !== "" && parseMoneyInput(line.priceInput) == null;
+          const openPrice = catalog.find((row) => row._id === line.catalogItemId)?.openPrice;
+          const setPrice = setPriceFor(line);
+          const overridden = setPrice !== null && Boolean(line.rateOverridden) && setPrice !== line.unitPriceCents;
           return (
             <li key={line.key} className="line-editor__row">
               <div className="line-editor__main">
@@ -127,23 +160,6 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                   <span className="field__label">Description</span>
                   <input className="input" value={line.description ?? ""} disabled={readOnly} placeholder="Optional" onChange={(e) => updateLine(line.key, { description: e.target.value })} />
                 </label>
-                <label className="line-editor__field"><span className="field__label">SKU</span><input className="input" value={line.sku ?? ""} disabled={readOnly} placeholder="Optional" onChange={(e) => updateLine(line.key, { sku: e.target.value })} /></label>
-                <label className="line-editor__field"><span className="field__label">Unit</span><input className="input" value={line.unit ?? "each"} disabled={readOnly} onChange={(e) => updateLine(line.key, { unit: e.target.value })} placeholder="each / hour" /></label>
-                <details className="line-editor__field"><summary>Item details and tax mode</summary><div className="form-stack">
-                  <label>Tax mode<Select value={line.taxMode??"invoice"} disabled={readOnly} onChange={value=>updateLine(line.key,{taxMode:value==="invoice"?undefined:value as "inclusive"|"exclusive"})} options={[{value:"invoice",label:"Use invoice tax mode"},{value:"exclusive",label:"Tax exclusive"},{value:"inclusive",label:"Tax inclusive"}]}/></label>
-                  {(["manufacturer","partNumber","upc","ean","isbn","customField","batchNumber"] as const).map(key=><label key={key}>{({manufacturer:"Manufacturer",partNumber:"Part number",upc:"UPC",ean:"EAN",isbn:"ISBN",customField:"Custom detail",batchNumber:"Batch number"})[key]}<input className="input" disabled={readOnly} value={line[key]??""} onChange={event=>updateLine(line.key,{[key]:event.target.value})}/></label>)}
-                  <label>Serial numbers (one per line)<textarea className="input textarea" disabled={readOnly} value={line.serialNumbers?.join("\n")??""} onChange={event=>updateLine(line.key,{serialNumbers:event.target.value.split(/\r?\n/)})}/></label>
-                  <label>Item image<input className="input" type="file" accept="image/png,image/jpeg" disabled={readOnly} onChange={async event=>{const file=event.target.files?.[0];if(!file)return;if(file.size>100000){window.alert("Choose an item image smaller than 100 KB.");return;}const reader=new FileReader();reader.onload=()=>{try{updateLine(line.key,cleanInvoiceLineDetails({imageUrl:String(reader.result)}));}catch(error){window.alert(error instanceof Error?error.message:"Invalid image");}};reader.readAsDataURL(file);}}/></label>
-                  {line.imageUrl&&<><img src={line.imageUrl} width={64} alt="Item"/><button type="button" className="btn btn--sm" disabled={readOnly} onClick={()=>updateLine(line.key,{imageUrl:undefined})}>Remove image</button></>}
-                  {line.rateOverridden&&getCatalogRate&&line.catalogItemId&&<button className="btn btn--sm" type="button" disabled={readOnly} onClick={()=>{const rate=getCatalogRate(line,line.quantity);if(rate!==null)updateLine(line.key,{rateOverridden:false,unitPriceCents:rate,priceInput:(rate/100).toFixed(2)});}}>Use current price-list rate</button>}
-                </div></details>
-                {onSaveItem && !line.catalogItemId && line.item.trim() && !readOnly && <button type="button" className="btn btn--ghost btn--sm" onClick={() => void onSaveItem(line)}><BookOpen size={14} /> Save to catalog</button>}
-                {showTags && tags && (
-                  <div className="line-editor__field line-editor__field--tags">
-                    <span className="field__label">Tags</span>
-                    <TagPicker tagIds={line.tagIds} tags={tags} disabled={readOnly} onChange={(next) => updateLine(line.key, { tagIds: next.length ? next : undefined })} />
-                  </div>
-                )}
               </div>
               <div className="line-editor__nums">
                 <label className="line-editor__field line-editor__field--qty">
@@ -161,7 +177,7 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                   />
                 </label>
                 <label className="line-editor__field line-editor__field--price">
-                  <span className="field__label">Rate ({currency})</span>
+                  <span className="field__label">Price ({currency})</span>
                   <input
                     className="input num"
                     inputMode="decimal"
@@ -194,19 +210,47 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                   <Money cents={lineAmountCents(line)} currency={currency} />
                 </div>
               </div>
-              {!readOnly && (
-                <div className="line-editor__tools">
-                  <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} up`} disabled={index === 0} onClick={() => moveLine(index, -1)}>
-                    <ArrowUp size={14} />
-                  </button>
-                  <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} down`} disabled={index === lines.length - 1} onClick={() => moveLine(index, 1)}>
-                    <ArrowDown size={14} />
-                  </button>
-                  <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove line ${index + 1}`} disabled={lines.length === 1} onClick={() => onChange(lines.filter((row) => row.key !== line.key))}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              )}
+              <div className="line-editor__foot">
+                  {openPrice && !line.unitPriceCents && <p className="line-editor__price-note">No set price. Enter the amount for this invoice.</p>}
+                  {setPrice !== null && !overridden && <p className="line-editor__price-note">Set price. Change it here to override it on this invoice only.</p>}
+                  {overridden && !readOnly && (
+                    <p className="line-editor__price-note">
+                      Overridden on this invoice. The set price is <Money cents={setPrice} currency={currency} />.{" "}
+                      <button type="button" className="line-editor__price-reset" onClick={() => updateLine(line.key, { rateOverridden: false, unitPriceCents: setPrice, priceInput: (setPrice / 100).toFixed(2) })}>Use set price</button>
+                    </p>
+                  )}
+                {!readOnly && (
+                  <div className="line-editor__tools">
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} up`} disabled={index === 0} onClick={() => moveLine(index, -1)}>
+                      <ArrowUp size={14} />
+                    </button>
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Move line ${index + 1} down`} disabled={index === lines.length - 1} onClick={() => moveLine(index, 1)}>
+                      <ArrowDown size={14} />
+                    </button>
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove line ${index + 1}`} disabled={lines.length === 1} onClick={() => onChange(lines.filter((row) => row.key !== line.key))}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="line-editor__more">
+                <label className="line-editor__field"><span className="field__label">SKU</span><input className="input" value={line.sku ?? ""} disabled={readOnly} placeholder="Optional" onChange={(e) => updateLine(line.key, { sku: e.target.value })} /></label>
+                <label className="line-editor__field"><span className="field__label">Unit</span><input className="input" value={line.unit ?? "each"} disabled={readOnly} onChange={(e) => updateLine(line.key, { unit: e.target.value })} placeholder="each / hour" /></label>
+                <details className="line-editor__field"><summary>Item details and tax mode</summary><div className="form-stack">
+                  <label>Tax mode<Select value={line.taxMode??"invoice"} disabled={readOnly} onChange={value=>updateLine(line.key,{taxMode:value==="invoice"?undefined:value as "inclusive"|"exclusive"})} options={[{value:"invoice",label:"Use invoice tax mode"},{value:"exclusive",label:"Tax exclusive"},{value:"inclusive",label:"Tax inclusive"}]}/></label>
+                  {INVOICE_LINE_DETAIL_KEYS.map(key=><label key={key}>{INVOICE_LINE_DETAIL_LABELS[key]}<input className="input" disabled={readOnly} value={line[key]??""} onChange={event=>updateLine(line.key,{[key]:event.target.value})}/></label>)}
+                  <label>Serial numbers (one per line)<textarea className="input textarea" disabled={readOnly} value={line.serialNumbers?.join("\n")??""} onChange={event=>updateLine(line.key,{serialNumbers:event.target.value.split(/\r?\n/)})}/></label>
+                  <label>Item image<input className="input" type="file" accept="image/png,image/jpeg" disabled={readOnly} onChange={async event=>{const file=event.target.files?.[0];if(!file)return;if(file.size>100000){window.alert("Choose an item image smaller than 100 KB.");return;}const reader=new FileReader();reader.onload=()=>{try{updateLine(line.key,cleanInvoiceLineDetails({imageUrl:String(reader.result)}));}catch(error){window.alert(error instanceof Error?error.message:"Invalid image");}};reader.readAsDataURL(file);}}/></label>
+                  {line.imageUrl&&<><img src={line.imageUrl} width={64} alt="Item"/><button type="button" className="btn btn--sm" disabled={readOnly} onClick={()=>updateLine(line.key,{imageUrl:undefined})}>Remove image</button></>}
+                </div></details>
+                {catalogEditing && !line.catalogItemId && line.item.trim() && !readOnly && <button type="button" className="btn btn--ghost btn--sm" disabled={!catalogEditing.canWrite} onClick={() => saveLineToCatalog(line)}><BookOpen size={14} /> Save to catalog</button>}
+                {showTags && tags && (
+                  <div className="line-editor__field line-editor__field--tags">
+                    <span className="field__label">Tags</span>
+                    <TagPicker tagIds={line.tagIds} tags={tags} disabled={readOnly} onChange={(next) => updateLine(line.key, { tagIds: next.length ? next : undefined })} />
+                  </div>
+                )}
+              </div>
             </li>
           );
         })}
@@ -215,6 +259,18 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
         <p className="invoice-builder__hint">
           Charging GST/HST? Add your registration number under Organization details (identifiers) so it prints on the invoice.
         </p>
+      )}
+      {catalogEditing && (
+        <CatalogItemEditor
+          item={newItem?.seed ?? null}
+          societyId={catalogEditing.societyId}
+          canWrite={catalogEditing.canWrite}
+          defaultCurrency={currency}
+          lockCurrency
+          asModal={catalogEditing.asModal}
+          onClose={() => setNewItem(null)}
+          onSaved={onItemSaved}
+        />
       )}
     </section>
   );

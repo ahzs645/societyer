@@ -47,7 +47,7 @@ test('customer assignment and quantity tiers update rates while preserving manua
   const rate=form.locator('.line-editor__field--price input'),qty=form.locator('.line-editor__field--qty input');
   await expect(rate).toHaveValue('90.00');await qty.fill('5');await expect(rate).toHaveValue('75.00');
   await rate.fill('67.00');await qty.fill('10');await expect(rate).toHaveValue('67.00');
-  await form.getByText('Item details and tax mode',{exact:true}).click();await form.getByRole('button',{name:'Use current price-list rate',exact:true}).click();await expect(rate).toHaveValue('75.00');
+  await form.getByRole('button',{name:'Use set price',exact:true}).click();await expect(rate).toHaveValue('75.00');
   expect(errors).toEqual([]);
 });
 

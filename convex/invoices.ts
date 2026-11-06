@@ -19,6 +19,7 @@ import {
   generateDuesInvoicesPortable,
   undoDuesBatchPortable,
   upsertCatalogItemPortable,
+  upsertCustomerPortable,
   setCatalogItemActivePortable,
   removeCatalogItemPortable,
   upsertSeriesPortable,
@@ -203,6 +204,7 @@ export const upsertCatalogItem = authorizedMutation("invoices:upsertCatalogItem"
     taxMode: v.optional(invoiceTaxModeValidator),
     imageUrl: v.optional(v.string()), manufacturer: v.optional(v.string()), partNumber: v.optional(v.string()), upc: v.optional(v.string()), ean: v.optional(v.string()), isbn: v.optional(v.string()), customField: v.optional(v.string()), batchNumber: v.optional(v.string()), serialNumbers: v.optional(v.array(v.string())), unit: v.optional(v.string()), currency: v.optional(v.string()),
     unitPriceCents: v.number(),
+    openPrice: v.optional(v.boolean()),
     taxRatePercent: v.optional(v.number()),
     taxLabel: v.optional(v.string()),
     category: v.optional(v.string()),
@@ -211,6 +213,23 @@ export const upsertCatalogItem = authorizedMutation("invoices:upsertCatalogItem"
   },
   returns: v.any(),
   handler: async (ctx, args) => upsertCatalogItemPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const upsertCustomer = authorizedMutation("invoices:upsertCustomer", mutation)({
+  args: {
+    id: v.optional(v.id("accountingCounterparties")),
+    societyId: v.id("societies"),
+    name: v.string(),
+    contactName: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    oneOffName: v.optional(v.string()),
+    updateSentInvoices: v.optional(v.boolean()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => upsertCustomerPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setCatalogItemActive = authorizedMutation("invoices:setCatalogItemActive", mutation)({

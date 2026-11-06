@@ -80,7 +80,7 @@ export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, log
     </Drawer>
     <Drawer open={Boolean(draft)} title={draft?.id ? "Edit repair" : "New repair"} onClose={() => !busy && setDraft(null)} footer={<><button className="btn" disabled={busy} onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || busy} onClick={() => void submit()}>Save repair</button></>}>
       {error && <p className="field__error" role="alert">{error}</p>}{draft && <div className="form-stack">
-        <BillToPicker value={draft} onChange={(party) => update({ ...party })} members={workspace.parties.members} organizations={workspace.parties.organizations} showMembers={workspace.parties.members.length > 0} onCreateOrganization={canWrite ? createCustomer : undefined} disabled={billed} />
+        <BillToPicker value={draft} onChange={(party) => update({ ...party })} members={workspace.parties.members} organizations={workspace.parties.organizations} showMembers={workspace.parties.members.length > 0} onCreateOrganization={canWrite ? createCustomer : undefined} customerEditing={{ societyId, canWrite }} disabled={billed} />
         <Field label="Equipment / item"><input className="input" value={draft.asset} onChange={(e) => update({ asset: e.target.value })} /></Field>
         <Field label="Serial number"><input className="input" value={draft.serialNumber} onChange={(e) => update({ serialNumber: e.target.value })} /></Field>
         <Field label="Problem reported"><textarea className="input textarea" rows={3} value={draft.problem} onChange={(e) => update({ problem: e.target.value })} /></Field>
@@ -88,7 +88,7 @@ export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, log
         <Field label="Target date"><DatePicker value={draft.targetDate} min={draft.receivedDate} onChange={(targetDate) => update({ targetDate })} /></Field>
         <Field label="Currency"><Select value={draft.currency} disabled={billed || draft.lines.length > 0} onChange={(currency) => update({ currency })} options={INVOICE_CURRENCIES.map((value) => ({ value, label: value }))} /></Field>
         {billed && <p className="muted">Billing is on the linked invoice. You can continue updating repair notes and status here.</p>}
-        <LineItemsEditor lines={draft.lines} onChange={(lines) => update({ lines })} catalog={workspace.catalog.filter((item) => item.active && (item.currency ?? workspace.ledger.workspaceCurrency) === draft.currency)} currency={draft.currency} readOnly={billed} gstHint={false} />
+        <LineItemsEditor lines={draft.lines} onChange={(lines) => update({ lines })} catalog={workspace.catalog.filter((item) => item.active && (item.currency ?? workspace.ledger.workspaceCurrency) === draft.currency)} catalogEditing={{ societyId, canWrite, asModal: true }} currency={draft.currency} readOnly={billed} gstHint={false} />
         <Field label="Work notes"><textarea className="input textarea" rows={4} value={draft.notes} onChange={(e) => update({ notes: e.target.value })} /></Field>
       </div>}
     </Drawer>

@@ -10,7 +10,7 @@ import { cleanInvoiceTemplate, invoiceCurrency, REPAIR_TRANSITIONS, REPAIR_STATU
  * workspace / upsert / markSent / voidInvoices / restoreVoided / duplicate /
  * remove / recordPayment / removePayment / revertToUnpaid / sendReminders /
  * billMemberDues / generateDuesInvoices / undoDuesBatch /
- * upsertCatalogItem / setCatalogItemActive / removeCatalogItem /
+ * upsertCustomer / upsertCatalogItem / setCatalogItemActive / removeCatalogItem /
  * upsertSeries / setSeriesStatus / issueFromSeries / saveSettings.
  *
  * Invoices store their lifecycle (draft | sent | void) and payments; paid,
@@ -35,6 +35,7 @@ import { cleanInvoiceTemplate, invoiceCurrency, REPAIR_TRANSITIONS, REPAIR_STATU
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireOwnedRow, requireRolePortable, requireSocietyMembership } from "./access";
 import { flagChangedPeriods } from "./reconciliation";
+import { assertValid, validateCounterpartyInput } from "../recordValidation";
 import { assertPeriodOpen, TRANSACTION_BACKFILL_SOURCE, BILL_BANK_RESTORATION_SOURCE, INVOICE_BANK_RESTORATION_SOURCE } from "./accounting";
 import { journalBasisOf, type JournalBasis } from "../booksReports";
 import { assertBooksOpen } from "./booksLock";
@@ -367,6 +368,10 @@ function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<strin
 }
 
 /** The GL account mapping drawer: the mapping, the accounts to choose from and what is used when unset. */
+function partyFromCounterparty(row: Row) {
+  return { _id: row._id, name: row.name, email: row.email, address: row.address, phone: row.phone, contactName: row.contactName, notes: row.notes, kind: row.kind };
+}
+
 function ledgerView(lctx: InvoiceLedgerContext, catalog: Row[]) {
   const options = (filter: (account: LedgerAccount) => boolean) =>
     lctx.accounts.filter(filter).map((account) => ({ _id: account._id, label: accountLabel(account)!, accountType: account.accountType, currency: account.currency ?? lctx.workspaceCurrency })).sort((a, b) => a.label.localeCompare(b.label));
@@ -565,10 +570,10 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
         }))
         .sort((a, b) => a.name.localeCompare(b.name)),
       organizations: (counterparties as Row[])
-        .map((row) => ({ _id: row._id, name: row.name, email: row.email, kind: row.kind }))
+        .map(partyFromCounterparty)
         .sort((a, b) => a.name.localeCompare(b.name)),
     },
-    customers: summarizeCustomers(decorated),
+    customers: summarizeCustomers(decorated, (counterparties as Row[]).map(partyFromCounterparty)),
     transactions: moneyIn,
     plans: activePlans.map((plan) => ({ _id: plan._id, name: plan.name, priceCents: plan.priceCents, interval: plan.interval, membershipClass: plan.membershipClass, currency: plan.currency })),
     duesCandidates,
@@ -675,7 +680,8 @@ async function invoiceFields(ctx: PortableQueryCtx, args: InvoiceArgs, original:
   if (args.repairJobId) {
     await assertRepairBillablePortable(ctx, args.repairJobId);
     const job = await getOwned<Row>(ctx, "repairJobs", args.repairJobId, args.societyId);
-    if (job.currency !== currency || job.billToName !== party.billToName || job.partyKind !== party.partyKind || job.memberId !== party.memberId || job.counterpartyId !== party.counterpartyId) throw new Error("The repair customer and currency must match the invoice.");
+    // A saved customer can be renamed after the repair was approved; its id still identifies them.
+    if (job.currency !== currency || (!job.counterpartyId && job.billToName !== party.billToName) || job.partyKind !== party.partyKind || job.memberId !== party.memberId || job.counterpartyId !== party.counterpartyId) throw new Error("The repair customer and currency must match the invoice.");
     if (job.status === "cancelled") throw new Error("A cancelled repair cannot be invoiced.");
     const siblings = await ctx.db.query("invoices").withIndex("by_repair_job", (q) => q.eq("repairJobId", args.repairJobId)).take(100);
     if (siblings.some((row) => row._id !== args.id && row.status !== "void")) throw new Error("This repair already has an invoice.");
@@ -1471,12 +1477,13 @@ export async function undoDuesBatchPortable(ctx: PortableMutationCtx, { societyI
 
 export async function upsertCatalogItemPortable(
   ctx: PortableMutationCtx,
-  args: Partial<InvoiceLine> & { id?: string; societyId: string; name: string; description?: string; kind?: "item" | "service"; sku?: string; unit?: string; currency?: string; unitPriceCents: number; taxRatePercent?: number; taxLabel?: string; category?: string; accountingAccountId?: string; active?: boolean },
+  args: Partial<InvoiceLine> & { id?: string; societyId: string; name: string; description?: string; kind?: "item" | "service"; sku?: string; unit?: string; currency?: string; unitPriceCents: number; openPrice?: boolean; taxRatePercent?: number; taxLabel?: string; category?: string; accountingAccountId?: string; active?: boolean },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   const name = cleanText(args.name, 200);
   if (!name) throw new Error("Give the item a name.");
-  const unitPriceCents = Math.round(Number(args.unitPriceCents));
+  const openPrice = args.openPrice === true;
+  const unitPriceCents = openPrice ? 0 : Math.round(Number(args.unitPriceCents));
   if (!Number.isFinite(unitPriceCents) || unitPriceCents < 0) throw new Error("Enter a price of zero or more.");
   const rate = Number(args.taxRatePercent ?? 0);
   if (!Number.isFinite(rate) || rate < 0 || rate > 30) throw new Error("Tax rate must be between 0 and 30%.");
@@ -1490,6 +1497,7 @@ export async function upsertCatalogItemPortable(
     kind: args.kind === "service" ? "service" : "item", sku: cleanText(args.sku, 80), unit: cleanText(args.unit, 30) ?? "each",
     currency: invoiceCurrency(args.currency),
     unitPriceCents,
+    openPrice: openPrice || undefined,
     taxRatePercent: rate > 0 ? rate : undefined,
     taxLabel: rate > 0 ? cleanText(args.taxLabel, 20) ?? "Tax" : undefined,
     category: cleanText(args.category, 100),
@@ -1520,6 +1528,83 @@ export async function removeCatalogItemPortable(ctx: PortableMutationCtx, { id }
   ]);
   if ([...invoices, ...series, ...repairs].some((row) => (row.lines ?? []).some((line: InvoiceLine) => line.catalogItemId === id)) || lists.some((list) => list.entries.some((entry: any) => entry.catalogItemId === id))) throw new Error("This item is in use. Mark it inactive to preserve its billing history.");
   await ctx.db.delete(id);
+}
+
+type CustomerArgs = {
+  id?: string;
+  societyId: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  /** Saves a one-off bill-to under this name as a customer and links its billing. */
+  oneOffName?: string;
+  /** Also corrects the name on invoices that have already been sent. */
+  updateSentInvoices?: boolean;
+};
+
+/**
+ * Add or edit a customer. Drafts, recurring series and draft quotes follow the
+ * new details, except where a value was typed for that one document. Sent
+ * invoices keep the name they were issued with unless the caller opts in.
+ * Repairs keep theirs too, because a customer's approval covers that name; the
+ * invoice raised from a repair uses the customer's current name.
+ */
+export async function upsertCustomerPortable(ctx: PortableMutationCtx, args: CustomerArgs) {
+  const { societyId } = args;
+  await requireSocietyMembership(ctx, societyId);
+  assertValid(validateCounterpartyInput(args));
+  const name = cleanText(args.name, 200)!;
+  const fields = {
+    name,
+    contactName: cleanText(args.contactName, 200),
+    email: cleanText(args.email, 200),
+    phone: cleanText(args.phone, 60),
+    address: cleanText(args.address, 500),
+    notes: cleanText(args.notes, 2000),
+    updatedAtISO: nowISO(),
+  };
+  const before = args.id ? await getOwned<Row>(ctx, "accountingCounterparties", args.id, societyId) : null;
+  const customers = await ctx.db.query("accountingCounterparties").withIndex("by_society_kind", (q) => q.eq("societyId", societyId).eq("kind", "customer")).collect();
+  if (customers.some((row) => row._id !== args.id && row.name.trim().toLowerCase() === name.toLowerCase())) throw new Error(`A customer named ${name} already exists.`);
+  const id: string = args.id ?? await ctx.db.insert("accountingCounterparties", { societyId, ...fields, kind: "customer", provider: "societyer", createdAtISO: nowISO() });
+  if (before) await ctx.db.patch(id, fields);
+
+  const oneOffKey = args.oneOffName?.trim().toLowerCase();
+  const isTheirs = (row: Row) => oneOffKey ? row.partyKind === "custom" && row.billToName.trim().toLowerCase() === oneOffKey : row.counterpartyId === id;
+  const link = oneOffKey ? { partyKind: "organization", counterpartyId: id } : {};
+  const follow = (current: string | undefined, previous: string | undefined, next: string | undefined) => !current || current === previous ? next : current;
+  const details = (row: Row) => ({
+    billToName: follow(row.billToName, before?.name ?? row.billToName, name),
+    billToEmail: follow(row.billToEmail, before?.email, fields.email),
+    billToAddress: follow(row.billToAddress, before?.address, fields.address),
+  });
+
+  const actor = await actorName(ctx, societyId);
+  for (const row of await loadInvoices(ctx, societyId)) {
+    // A repair invoice must stay on the repair's party, so a one-off's stays one-off.
+    if (!isTheirs(row) || (oneOffKey && row.repairJobId)) continue;
+    if (row.status === "draft") {
+      await ctx.db.patch(row._id, { ...link, ...details(row), updatedAtISO: nowISO() });
+      continue;
+    }
+    const rename = args.updateSentInvoices && row.status !== "void" && row.billToName !== name;
+    if (!rename && !oneOffKey) continue;
+    await ctx.db.patch(row._id, { ...link, ...(rename ? { billToName: name, timeline: [...row.timeline, event("customer_updated", `Customer name changed to ${name}`, actor)] } : {}), updatedAtISO: nowISO() });
+  }
+  for (const row of (await ctx.db.query("invoiceSeries").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(1000)) as Row[]) {
+    if (isTheirs(row)) await ctx.db.patch(row._id, { ...link, ...details(row), updatedAtISO: nowISO() });
+  }
+  for (const quote of await ctx.db.query("billingQuotes").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(1000)) {
+    if (quote.status === "draft" && isTheirs(quote.fields)) await ctx.db.patch(quote._id, { fields: { ...quote.fields, ...link, ...details(quote.fields) } });
+  }
+  if (oneOffKey) {
+    const pricing = await ctx.db.query("billingCustomerPricing").withIndex("by_society_partyKey", (q) => q.eq("societyId", societyId).eq("partyKey", `name:${oneOffKey}`)).first();
+    if (pricing) await ctx.db.patch(pricing._id, { partyKey: `organization:${id}`, updatedAtISO: nowISO() });
+  }
+  return id;
 }
 
 type SeriesArgs = PartyArgs & {
@@ -1925,7 +2010,8 @@ export async function invoiceRepairJobPortable(ctx: PortableMutationCtx, { id }:
   const active = existing.find((row) => row.status !== "void");
   if (active) return active._id;
   const settings = await loadSettings(ctx, job.societyId);
-  const invoiceId = await upsertPortable(ctx, { societyId: job.societyId, partyKind: job.partyKind, memberId: job.memberId, counterpartyId: job.counterpartyId, billToName: job.billToName, billToEmail: job.billToEmail, billToAddress: job.billToAddress, issueDate: await organizationToday(ctx, job.societyId), terms: settings?.defaultTerms ?? DEFAULT_TERMS, reference: job.number, currency: job.currency, repairJobId: id, lines: job.lines, memo: `${job.asset}${job.serialNumber ? ` (${job.serialNumber})` : ""}\n${job.problem}` });
+  const customer: Row | null = job.counterpartyId ? await ctx.db.get(job.counterpartyId, "accountingCounterparties") : null;
+  const invoiceId = await upsertPortable(ctx, { societyId: job.societyId, partyKind: job.partyKind, memberId: job.memberId, counterpartyId: job.counterpartyId, billToName: customer?.name ?? job.billToName, billToEmail: job.billToEmail, billToAddress: job.billToAddress, issueDate: await organizationToday(ctx, job.societyId), terms: settings?.defaultTerms ?? DEFAULT_TERMS, reference: job.number, currency: job.currency, repairJobId: id, lines: job.lines, memo: `${job.asset}${job.serialNumber ? ` (${job.serialNumber})` : ""}\n${job.problem}` });
   await ctx.db.patch(id, { updatedAtISO: nowISO(), timeline: [...job.timeline, event("invoiced", "Invoice created", await actorName(ctx, job.societyId))] });
   return invoiceId;
 }

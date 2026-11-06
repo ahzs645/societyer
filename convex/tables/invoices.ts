@@ -183,6 +183,8 @@ export const invoiceTables = {
     name: v.string(),
     description: v.optional(v.string()),
     unitPriceCents: v.number(),
+    // No set price: the amount is entered on each invoice (unitPriceCents stays 0).
+    openPrice: v.optional(v.boolean()),
     kind: v.optional(v.union(v.literal("item"), v.literal("service"))),
     sku: v.optional(v.string()),
     taxMode: v.optional(invoiceTaxModeValidator),

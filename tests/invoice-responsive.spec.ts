@@ -109,7 +109,7 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   await activate(page.getByRole("button", { name: "New item", exact: true }));
   drawer = page.getByRole("dialog").last();
   await fill(drawer.getByLabel("Name", { exact: true }), itemName);
-  await fill(drawer.getByLabel(/^Unit rate/), "85.00");
+  await fill(drawer.getByLabel(/^Unit price/), "85.00");
   await fill(drawer.getByLabel("Unit", { exact: true }), "hour");
   await fill(drawer.getByLabel("SKU / code", { exact: true }), "BRAKE-LABOUR");
   await pick(drawer, "Type", "Service / labour");
@@ -129,7 +129,7 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
     await activate(page.getByRole("menuitem", { name: "Edit", exact: true }));
     drawer = page.getByRole("dialog").last();
     await expect(drawer.getByLabel("Name", { exact: true })).toHaveValue(itemName);
-    await expect(drawer.getByLabel(/^Unit rate/)).toHaveValue("85.00");
+    await expect(drawer.getByLabel(/^Unit price/)).toHaveValue("85.00");
     await activate(drawer.getByRole("button", { name: "Cancel", exact: true }));
   }
 

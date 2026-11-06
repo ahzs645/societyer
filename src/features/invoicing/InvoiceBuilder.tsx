@@ -8,7 +8,6 @@ import { cleanInvoiceMoney, type InvoiceMoneyOptions } from "../../../shared/inv
 import { assignedPriceList, quantityCatalogRate, type BillingPricingWorkspace } from "../../../shared/billingPricing";
 import { partyKey as billingPartyKey } from "../../../shared/invoicing";
 import type { DocumentExtras } from "../../../shared/documentExtras";
-import { cleanInvoiceLineDetails } from "../../../shared/invoiceLineDetails";
 import { INVOICE_CURRENCIES, catalogRate, cleanInvoiceTemplate, resolveDocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
@@ -156,7 +155,6 @@ type Props = {
 /** Full-page invoice builder with a live, printable preview. */
 export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl, showMembers, canWrite, canExport, onClose, onSaved, onOpenBuilder }: Props) {
   const upsert = useMutation(api.invoices.upsert);
-  const saveCatalogItem = useMutation(api.invoices.upsertCatalogItem);
   const markSent = useMutation(api.invoices.markSent);
   const duplicate = useMutation(api.invoices.duplicate);
   const remove = useMutation(api.invoices.remove);
@@ -206,7 +204,8 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const priceList = workspace.priceLists?.find((list) => list._id === draft.priceListId);
   const activeCatalog = workspace.catalog.filter((item) => item.active).flatMap((item) => {
     const rate = quantityCatalogRate(item,1,draft.currency,draft.issueDate,priceList,pricing??{profiles:[],assignments:[]},workspace.ledger.workspaceCurrency);
-    return rate === null ? [] : [{ ...item, unitPriceCents: rate }];
+    // A price-list rate gives an open-priced item a set price.
+    return rate === null ? [] : [{ ...item, unitPriceCents: rate, openPrice: item.openPrice && !rate }];
   });
   const hasTax = totals.taxes.length > 0;
 
@@ -332,6 +331,11 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
 
   const sendNow = async (draftEmail: boolean, force = false) => {
     if (!force && guardDuplicate(() => void sendNow(draftEmail, true))) return;
+    const unpriced = lines.find((line) => !line.unitPriceCents && activeCatalog.some((item) => item._id === line.catalogItemId && item.openPrice));
+    if (unpriced) {
+      setError(`${unpriced.item} has no set price. Enter the amount before sending.`);
+      return;
+    }
     const id = await save();
     if (!id) return;
     try {
@@ -397,14 +401,6 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     try { const { downloadInvoicePdf } = await import("./invoicePdf"); await downloadInvoicePdf(previewData, organization, workspace.settings.paymentInstructions); }
     catch (e) { toast.error("Could not generate PDF", e instanceof Error ? e.message : undefined); }
     finally { setBusy(false); }
-  };
-  const saveItem = async (line: LineDraft) => {
-    try {
-      const {rateOverridden:_override,...catalogDetails}=cleanInvoiceLineDetails(line);
-      const id: string = await saveCatalogItem({ societyId, name: line.item, ...catalogDetails, description: line.description, sku: line.sku, unit: line.unit ?? "each", currency: draft.currency, unitPriceCents: line.unitPriceCents, taxRatePercent: line.taxRatePercent, taxLabel: line.taxLabel });
-      update({ lines: draft.lines.map((row) => row.key === line.key ? { ...row, catalogItemId: id } : row) });
-      toast.success("Item saved to catalog");
-    } catch (e) { toast.error("Could not save item", e instanceof Error ? e.message : undefined); }
   };
   const title = invoice ? `${invoice.lifecycle === "draft" ? "Edit draft" : "Edit invoice"} ${invoice.number}` : `New invoice ${number}`;
 
@@ -491,6 +487,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
               organizations={workspace.parties.organizations}
               showMembers={showMembers}
               onCreateOrganization={createOrganization}
+              customerEditing={{ societyId, canWrite }}
               disabled={readOnly}
             />
             <details style={{ marginTop: 12 }} open={draft.shipToName || draft.shipToAddress ? true : undefined}>
@@ -501,6 +498,18 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
               </div>
             </details>
           </section>
+
+          <LineItemsEditor
+            lines={draft.lines}
+            onChange={(next) => update({ lines: next })}
+            catalog={activeCatalog}
+            readOnly={readOnly}
+            gstHint={hasTax && !workspace.organization.gstNumber}
+            currency={draft.currency}
+            getCatalogRate={(line,quantity)=>{const item=workspace.catalog.find(item=>item._id===line.catalogItemId);return item?quantityCatalogRate(item,quantity,draft.currency,draft.issueDate,priceList,pricing??{profiles:[],assignments:[]},workspace.ledger.workspaceCurrency):null;}}
+            catalogEditing={{ societyId, canWrite }}
+            tags={financeTags}
+          />
 
           <section className="invoice-builder__section invoice-builder__dates" aria-labelledby="ib-dates">
             <h2 id="ib-dates" className="invoice-builder__heading">Dates and terms</h2>
@@ -542,17 +551,6 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
           </section>
           <InvoiceMoneyFields value={draft.money} onChange={money=>update({money})} currency={draft.currency} baseCurrency={workspace.ledger.workspaceCurrency} date={draft.issueDate} disabled={readOnly} fxLocked={Boolean(invoice&&invoice.lifecycle!=="draft")}/>
           <DocumentExtrasFields value={draft.documentExtras} disabled={readOnly} onChange={documentExtras=>{const design=resolveDocumentDesign(draft.documentTemplate),advanced=design.advanced!;update({documentExtras,documentTemplate:{...draft.documentTemplate,design:{...design,advanced:{...advanced,terms:{...advanced.terms,enabled:Boolean(documentExtras.termsAndConditions)||advanced.terms.enabled},bank:{...advanced.bank,enabled:Boolean(documentExtras.bankDetails?.length)||advanced.bank.enabled},onlinePayment:{...advanced.onlinePayment,enabled:Boolean(documentExtras.paymentUrl)||advanced.onlinePayment.enabled},annexures:{...advanced.annexures,enabled:Boolean(documentExtras.annexures?.length||documentExtras.attachments?.length)||advanced.annexures.enabled}}}}});}}/>
-          <LineItemsEditor
-            lines={draft.lines}
-            onChange={(next) => update({ lines: next })}
-            catalog={activeCatalog}
-            readOnly={readOnly}
-            gstHint={hasTax && !workspace.organization.gstNumber}
-            currency={draft.currency}
-            getCatalogRate={(line,quantity)=>{const item=workspace.catalog.find(item=>item._id===line.catalogItemId);return item?quantityCatalogRate(item,quantity,draft.currency,draft.issueDate,priceList,pricing??{profiles:[],assignments:[]},workspace.ledger.workspaceCurrency):null;}}
-            onSaveItem={saveItem}
-            tags={financeTags}
-          />
 
           <section className="invoice-builder__section invoice-builder__summary" aria-labelledby="ib-totals">
             <h2 id="ib-totals" className="invoice-builder__heading">Discount and totals</h2>

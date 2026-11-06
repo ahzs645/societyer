@@ -82,6 +82,8 @@ export type CatalogItem = Partial<Pick<InvoiceLine, "taxMode" | "imageUrl" | "ma
   unit?: string;
   currency?: string;
   unitPriceCents: number;
+  /** No set price: the amount is entered on each invoice. */
+  openPrice?: boolean;
   taxRatePercent?: number;
   taxLabel?: string;
   category?: string;
@@ -206,7 +208,7 @@ export type InvoiceOrganization = {
   gstNumber?: string;
 };
 
-export type PartyOption = { _id: string; name: string; email?: string; address?: string; membershipClass?: string; status?: string; kind?: string };
+export type PartyOption = { _id: string; name: string; email?: string; address?: string; phone?: string; contactName?: string; notes?: string; membershipClass?: string; status?: string; kind?: string };
 
 export type InvoiceWorkspace = {
   today: string;

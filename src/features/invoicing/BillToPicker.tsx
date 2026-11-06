@@ -1,5 +1,6 @@
 import { useId, useMemo, useRef, useState } from "react";
-import { Building2, Plus, User, UserRound, X } from "lucide-react";
+import { Building2, Pencil, Plus, User, UserRound, X } from "lucide-react";
+import { CustomerEditor, type CustomerDetails } from "./CustomerEditor";
 import type { PartyOption } from "./types";
 
 export type BillToValue = {
@@ -26,6 +27,8 @@ type Props = {
   showMembers: boolean;
   /** Creates an organization customer and resolves to its id; omitted when the user can't. */
   onCreateOrganization?: (name: string) => Promise<string | undefined>;
+  /** Lets a chosen customer's saved details be edited from here. */
+  customerEditing?: { societyId: string; canWrite: boolean };
   disabled?: boolean;
 };
 
@@ -34,11 +37,12 @@ type Props = {
  * one-off name. The chosen party fills the email and address, which stay
  * editable for this invoice.
  */
-export function BillToPicker({ value, onChange, members, organizations, showMembers, onCreateOrganization, disabled }: Props) {
+export function BillToPicker({ value, onChange, members, organizations, showMembers, onCreateOrganization, customerEditing, disabled }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<CustomerDetails | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const hasParty = Boolean(value.billToName);
@@ -62,7 +66,7 @@ export function BillToPicker({ value, onChange, members, organizations, showMemb
     if (option.kind === "member") {
       onChange({ partyKind: "member", memberId: option.party._id, billToName: option.party.name, billToEmail: option.party.email, billToAddress: option.party.address });
     } else if (option.kind === "organization") {
-      onChange({ partyKind: "organization", counterpartyId: option.party._id, billToName: option.party.name, billToEmail: option.party.email, billToAddress: value.billToAddress });
+      onChange({ partyKind: "organization", counterpartyId: option.party._id, billToName: option.party.name, billToEmail: option.party.email, billToAddress: option.party.address ?? value.billToAddress });
     } else if (option.kind === "custom") {
       onChange({ partyKind: "custom", billToName: option.name, billToEmail: value.billToEmail, billToAddress: value.billToAddress });
     } else if (onCreateOrganization) {
@@ -97,12 +101,23 @@ export function BillToPicker({ value, onChange, members, organizations, showMemb
 
   if (hasParty) {
     const Icon = value.partyKind === "member" ? UserRound : value.partyKind === "organization" ? Building2 : User;
+    const saved = value.partyKind === "organization" ? organizations.find((party) => party._id === value.counterpartyId) : undefined;
     return (
       <div className="billto">
         <div className="billto__chosen">
           <span className="billto__icon" aria-hidden="true"><Icon size={14} /></span>
           <span className="billto__name">{value.billToName}</span>
           <span className="billto__kind">{value.partyKind === "member" ? "Member" : value.partyKind === "organization" ? "Customer" : "One-off"}</span>
+          {!disabled && saved && customerEditing && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Edit customer ${value.billToName}`}
+              onClick={() => setEditing({ id: saved._id, name: saved.name, contactName: saved.contactName, email: saved.email, phone: saved.phone, address: saved.address, notes: saved.notes })}
+            >
+              <Pencil size={14} />
+            </button>
+          )}
           {!disabled && (
             <button
               type="button"
@@ -127,6 +142,16 @@ export function BillToPicker({ value, onChange, members, organizations, showMemb
             <textarea className="input textarea" rows={2} value={value.billToAddress ?? ""} disabled={disabled} placeholder="Street, city, province, postal code" onChange={(e) => onChange({ ...value, billToAddress: e.target.value })} />
           </label>
         </div>
+        {customerEditing && (
+          <CustomerEditor
+            customer={editing}
+            societyId={customerEditing.societyId}
+            canWrite={customerEditing.canWrite}
+            asModal
+            onClose={() => setEditing(null)}
+            onSaved={(customer) => onChange({ partyKind: "organization", counterpartyId: customer.id, billToName: customer.name, billToEmail: customer.email, billToAddress: customer.address })}
+          />
+        )}
       </div>
     );
   }

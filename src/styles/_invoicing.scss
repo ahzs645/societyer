@@ -432,7 +432,7 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 .line-editor { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: token(s-2); }
 .line-editor__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: token(s-2) token(s-3);
   padding: token(s-3);
   border: 1px solid token(border-alpha);
@@ -447,10 +447,20 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 }
 .line-editor__nums {
   display: grid;
-  grid-template-columns: 72px minmax(96px, 1fr) minmax(120px, 1fr) minmax(90px, auto);
+  grid-template-columns: 64px minmax(96px, 1fr) minmax(100px, 1fr) minmax(90px, auto);
   gap: token(s-2);
   align-items: end;
 }
+.line-editor__more {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: token(s-2);
+  align-items: start;
+}
+.line-editor__foot { display: flex; align-items: center; justify-content: flex-end; gap: token(s-2); }
+.line-editor__price-note { flex: 1; min-width: 0; margin: 0; font-size: token(fs-xs); color: token(text-secondary); }
+.line-editor__price-reset { padding: 0; border: 0; background: none; color: token(accent); font: inherit; cursor: pointer; text-decoration: underline; }
 .line-editor__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .line-editor__field--tags { grid-column: 1 / -1; }
 .line-editor__field .field__label { font-size: token(fs-xxs); }
@@ -465,7 +475,7 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   .field__label { font-size: token(fs-xxs); }
   font-weight: token(fw-medium);
 }
-.line-editor__tools { display: flex; align-items: flex-end; gap: 2px; }
+.line-editor__tools { display: flex; flex: none; align-items: center; gap: 2px; }
 .input.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 1100px) {
@@ -480,8 +490,7 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   .invoice-builder__actions .btn { flex: 1; justify-content: center; }
   .invoice-builder__actions .btn--icon { flex: none; }
   .invoice-builder__section { padding: token(s-3); }
-  .line-editor__main { grid-template-columns: minmax(0, 1fr); }
-  .line-editor__row { grid-template-columns: minmax(0, 1fr); }
+  .line-editor__main, .line-editor__more { grid-template-columns: minmax(0, 1fr); }
   .line-editor__nums { grid-template-columns: 64px minmax(0, 1fr); }
   .line-editor__field--tax { grid-column: 1 / -1; }
   .line-editor__amount { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; min-height: 0; padding: 0; }
@@ -1057,3 +1066,13 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   .pdf-preview__viewport { height: 100%; }
 }
 .invoice-pdf-preview__state { margin: 0; padding: token(s-3); color: token(text-secondary); font-size: token(fs-sm); }
+
+/* Customers */
+.invoice-customers__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: token(s-2); }
+.invoice-customers__search { position: relative; display: flex; align-items: center; color: token(text-secondary); }
+.invoice-customers__search svg { position: absolute; left: token(s-2); pointer-events: none; }
+.invoice-customers__search .input { width: 200px; padding-left: calc(#{token(s-2)} + 20px); }
+/* Laptop widths: keep the row actions in view. The card layout takes over on phones. */
+@media (min-width: 761px) and (max-width: 1360px) {
+  .invoice-table--customers tr > :nth-child(5) { display: none; }
+}

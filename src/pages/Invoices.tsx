@@ -95,7 +95,7 @@ export function InvoicesPage() {
   const workspace = useMemo(() => queriedWorkspace ? { ...queriedWorkspace,
     invoices: queriedWorkspace.invoices.filter((row) => row.currency === currency),
     summary: invoiceCurrencySummary(queriedWorkspace.invoices, currency, queriedWorkspace.today),
-    customers: summarizeCustomers(queriedWorkspace.invoices.filter((row) => row.currency === currency)),
+    customers: summarizeCustomers(queriedWorkspace.invoices.filter((row) => row.currency === currency), queriedWorkspace.parties.organizations),
   } : undefined, [queriedWorkspace, currency]);
   const markSent = useMutation(api.invoices.markSent);
   const sendReminders = useMutation(api.invoices.sendReminders);
@@ -494,6 +494,8 @@ export function InvoicesPage() {
         <CustomersPanel
           currency={currency}
           customers={workspace.customers}
+          organizations={workspace.parties.organizations}
+          societyId={society._id}
           canWrite={canWrite}
           onShowInvoices={showCustomer}
           onStatement={customer => setParam({ tab: "statements", statementCustomer: customer.key })}
@@ -503,7 +505,7 @@ export function InvoicesPage() {
             counterpartyId: customer.counterpartyId,
             billToName: customer.name,
             billToEmail: customer.email,
-            billToAddress: workspace.invoices.find((row) => partyKey(row) === customer.key && row.billToAddress)?.billToAddress,
+            billToAddress: customer.address,
           })}
         />
       ) : tab === "quotes" ? (
@@ -519,7 +521,7 @@ export function InvoicesPage() {
       ) : tab === "repairs" ? (
         <RepairJobsPanel key={params.get("repair")} workspace={workspace} societyId={society._id} canWrite={canWrite} canExport={canExport} logoUrl={(society as any).logoUrl ?? null} focusId={params.get("repair")} onOpenInvoice={(id) => setParam({ invoice: id, builder: null })} />
       ) : tab === "catalog" ? (
-        <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} />
+        <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} defaultCurrency={workspace.ledger.workspaceCurrency} />
       ) : LIST_TABS.has(tab) ? (
         <div className="card invoice-card">
           <InvoiceViewControls societyId={society._id} value={listView} onChange={applyView} />

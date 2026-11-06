@@ -804,6 +804,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invoices:generateDuesInvoices", handler: invoicesFns.generateDuesInvoicesPortable }),
   definePortableMutation({ name: "invoices:undoDuesBatch", handler: invoicesFns.undoDuesBatchPortable }),
   definePortableMutation({ name: "invoices:upsertCatalogItem", handler: invoicesFns.upsertCatalogItemPortable }),
+  definePortableMutation({ name: "invoices:upsertCustomer", handler: invoicesFns.upsertCustomerPortable }),
   definePortableMutation({ name: "invoices:setCatalogItemActive", handler: invoicesFns.setCatalogItemActivePortable }),
   definePortableMutation({ name: "invoices:removeCatalogItem", handler: invoicesFns.removeCatalogItemPortable }),
   definePortableMutation({ name: "invoices:upsertSeries", handler: invoicesFns.upsertSeriesPortable }),

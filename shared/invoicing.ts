@@ -353,6 +353,7 @@ export type CustomerSummary = {
   key: string;
   name: string;
   email?: string;
+  address?: string;
   partyKind: string;
   memberId?: string;
   counterpartyId?: string;
@@ -363,9 +364,14 @@ export type CustomerSummary = {
   lastIssueDate?: string;
 };
 
-/** Bill-to parties with what they have been billed and still owe (drafts and voids excluded). */
+/**
+ * Bill-to parties with what they have been billed and still owe (drafts and
+ * voids excluded). Saved customers are listed even before their first invoice,
+ * and their current record wins over the name printed on older invoices.
+ */
 export function summarizeCustomers(
-  invoices: Array<PartyLike & { status: InvoiceStatus; totalCents: number; balanceCents: number; issueDate: string }>,
+  invoices: Array<PartyLike & { status: InvoiceStatus; totalCents: number; balanceCents: number; issueDate: string; billToAddress?: string }>,
+  saved: ReadonlyArray<{ _id: string; name: string; email?: string; address?: string; kind?: string }> = [],
 ): CustomerSummary[] {
   const map = new Map<string, CustomerSummary>();
   for (const invoice of invoices) {
@@ -375,6 +381,7 @@ export function summarizeCustomers(
       key,
       name: invoice.billToName,
       email: invoice.billToEmail,
+      address: invoice.billToAddress,
       partyKind: invoice.partyKind ?? "custom",
       memberId: invoice.memberId,
       counterpartyId: invoice.counterpartyId,
@@ -391,8 +398,15 @@ export function summarizeCustomers(
       row.lastIssueDate = invoice.issueDate;
       row.name = invoice.billToName;
       row.email = invoice.billToEmail ?? row.email;
+      row.address = invoice.billToAddress ?? row.address;
     }
     map.set(key, row);
+  }
+  for (const party of saved) {
+    const key = partyKey({ partyKind: "organization", counterpartyId: party._id, billToName: party.name });
+    const row = map.get(key);
+    if (row) Object.assign(row, { name: party.name, email: party.email ?? row.email, address: party.address ?? row.address });
+    else if (party.kind === "customer") map.set(key, { key, name: party.name, email: party.email, address: party.address, partyKind: "organization", counterpartyId: party._id, invoiceCount: 0, billedCents: 0, outstandingCents: 0, overdueCents: 0 });
   }
   return [...map.values()].sort((a, b) => b.outstandingCents - a.outstandingCents || a.name.localeCompare(b.name));
 }

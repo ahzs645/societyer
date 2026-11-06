@@ -1,6 +1,7 @@
 import { cleanDocumentImage } from "./documentRichContent";
 import type { InvoiceLine } from "./invoicing";
 export const INVOICE_LINE_DETAIL_KEYS = ["manufacturer", "partNumber", "upc", "ean", "isbn", "customField", "batchNumber"] as const;
+export const INVOICE_LINE_DETAIL_LABELS: Record<(typeof INVOICE_LINE_DETAIL_KEYS)[number], string> = { manufacturer: "Manufacturer", partNumber: "Part number", upc: "UPC", ean: "EAN", isbn: "ISBN", customField: "Custom detail", batchNumber: "Batch number" };
 export function cleanInvoiceLineDetails(raw: Partial<InvoiceLine>): Partial<InvoiceLine> {
   const result: Partial<InvoiceLine> = {};
   for (const key of INVOICE_LINE_DETAIL_KEYS) if (raw[key] !== undefined) {

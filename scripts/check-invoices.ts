@@ -119,6 +119,11 @@ const line = (quantity: number, unitPriceCents: number, taxRatePercent?: number,
   ]);
   assert.equal(customers.length, 1);
   assert.deepEqual([customers[0].invoiceCount, customers[0].billedCents, customers[0].outstandingCents, customers[0].overdueCents], [2, 150, 100, 100]);
+  const withSaved = summarizeCustomers(
+    [{ partyKind: "organization", counterpartyId: "c1", billToName: "Old name", status: "sent", totalCents: 100, balanceCents: 100, issueDate: "2026-01-01" }],
+    [{ _id: "c1", name: "New name", kind: "customer" }, { _id: "c2", name: "No invoices yet", kind: "customer" }, { _id: "v1", name: "A vendor", kind: "vendor" }],
+  );
+  assert.deepEqual(withSaved.map((row) => [row.name, row.invoiceCount]), [["New name", 1], ["No invoices yet", 0]], "the saved record names the customer, and vendors stay out");
 }
 
 // ---- portable handlers on the demo seed
@@ -234,4 +239,41 @@ assert.equal(advanced.nextIssueDate, seriesOccurrenceDate(series, 7));
 // settings: the next number can't go backwards
 await assert.rejects(() => inv.saveSettingsPortable(ctx, { societyId: S, prefix: "RCS-", nextNumber: 3, defaultTerms: "net_30" }), /above/);
 
-console.log("Invoice checks passed: totals, tax, status, terms, numbering, recurrence and handlers.");
+// catalog: an item can leave its price open for each invoice
+const openId = await inv.upsertCatalogItemPortable(ctx, { societyId: S, name: "One-time fee", unitPriceCents: 999, openPrice: true });
+assert.deepEqual([(await db.get(openId)).unitPriceCents, (await db.get(openId)).openPrice], [0, true], "an open-priced item stores no price");
+await inv.upsertCatalogItemPortable(ctx, { id: openId, societyId: S, name: "One-time fee", unitPriceCents: 1500 });
+assert.deepEqual([(await db.get(openId)).unitPriceCents, (await db.get(openId)).openPrice], [1500, undefined], "setting a price closes it again");
+
+// customers: saved before any invoice, and renames reach what hasn't been issued
+const party = (customerId: string, billToName: string, billToEmail?: string) => ({ societyId: S, partyKind: "organization", counterpartyId: customerId, billToName, billToEmail, issueDate: today, terms: "net_30", currency: "CAD", lines: [line(1, 1000)] });
+const customerId = await inv.upsertCustomerPortable(ctx, { societyId: S, name: "Acme Sevices", email: "ap@acme.example" });
+ws = await inv.workspacePortable(ctx, { societyId: S });
+assert.equal(ws.customers.find((row: any) => row.counterpartyId === customerId).invoiceCount, 0);
+assert.equal((await db.get(customerId)).kind, "customer");
+await assert.rejects(() => inv.upsertCustomerPortable(ctx, { societyId: S, name: "acme sevices" }), /already exists/);
+const acmeDraft = await inv.upsertPortable(ctx, party(customerId, "Acme Sevices", "ap@acme.example"));
+const acmeOwnEmail = await inv.upsertPortable(ctx, party(customerId, "Acme Sevices", "typed-for-this-one@acme.example"));
+const acmeSent = await inv.upsertPortable(ctx, party(customerId, "Acme Sevices"));
+await inv.markSentPortable(ctx, { societyId: S, ids: [acmeSent] });
+await inv.upsertCustomerPortable(ctx, { id: customerId, societyId: S, name: "Acme Services", email: "billing@acme.example", address: "1 Main St" });
+assert.deepEqual([(await db.get(acmeDraft)).billToName, (await db.get(acmeDraft)).billToEmail, (await db.get(acmeDraft)).billToAddress], ["Acme Services", "billing@acme.example", "1 Main St"], "drafts follow the customer");
+assert.equal((await db.get(acmeOwnEmail)).billToEmail, "typed-for-this-one@acme.example", "a value typed for one draft stays");
+assert.equal((await db.get(acmeSent)).billToName, "Acme Sevices", "sent invoices keep the name they were issued with");
+ws = await inv.workspacePortable(ctx, { societyId: S });
+assert.equal(ws.customers.find((row: any) => row.counterpartyId === customerId).name, "Acme Services", "the list shows the current name");
+await inv.upsertCustomerPortable(ctx, { id: customerId, societyId: S, name: "Acme Services Ltd", email: "billing@acme.example", address: "1 Main St", updateSentInvoices: true });
+assert.equal((await db.get(acmeSent)).billToName, "Acme Services Ltd", "the opt-in corrects sent invoices");
+assert.ok((await db.get(acmeSent)).timeline.some((event: any) => event.kind === "customer_updated"), "and records it on the invoice");
+await assert.rejects(() => inv.upsertCustomerPortable(ctx, { id: customerId, societyId: "other_society", name: "Taken over" }));
+
+// customers: a one-off becomes a saved customer and keeps its history
+const oneOffInvoice = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Walk-in Wes", issueDate: today, terms: "net_30", currency: "CAD", lines: [line(1, 2500)] });
+await inv.markSentPortable(ctx, { societyId: S, ids: [oneOffInvoice] });
+const savedOneOff = await inv.upsertCustomerPortable(ctx, { societyId: S, name: "Wes Walker", oneOffName: "walk-in wes " });
+assert.deepEqual([(await db.get(oneOffInvoice)).partyKind, (await db.get(oneOffInvoice)).counterpartyId, (await db.get(oneOffInvoice)).billToName], ["organization", savedOneOff, "Walk-in Wes"]);
+ws = await inv.workspacePortable(ctx, { societyId: S });
+assert.equal(ws.customers.find((row: any) => row.counterpartyId === savedOneOff).billedCents, 2500);
+assert.ok(!ws.customers.some((row: any) => row.key === "name:walk-in wes"), "no duplicate one-off row remains");
+
+console.log("Invoice checks passed: totals, tax, status, terms, numbering, recurrence, catalog pricing, customers and handlers.");
