@@ -76,9 +76,14 @@ for (const preset of DOCUMENT_TEMPLATE_PRESETS) {
         const page = await inspected.getPage(pageNumber), content = await page.getTextContent();
         const viewport = page.getViewport({ scale: 1 });
         for (const item of content.items as any[]) if (item.str?.trim()) {
-          const [x, y] = [item.transform[4], item.transform[5]];
+          const [a, b, , , x, y] = item.transform;
           assert.ok(Number.isFinite(x) && Number.isFinite(y), `${preset.id}/${kind}: finite text coordinates`);
-          assert.ok(x >= -1 && y >= -1 && y <= viewport.height + 1 && x + item.width <= viewport.width + 3,
+          // PDF.js measures text width along the baseline, including rotated draft watermarks.
+          const baselineLength = Math.hypot(a, b);
+          const endX = baselineLength ? x + item.width * a / baselineLength : x;
+          const endY = baselineLength ? y + item.width * b / baselineLength : y;
+          assert.ok(Math.min(x, endX) >= -1 && Math.min(y, endY) >= -1 &&
+            Math.max(y, endY) <= viewport.height + 1 && Math.max(x, endX) <= viewport.width + 3,
             `${preset.id}/${kind}: text must remain on page ${pageNumber}: ${item.str} (${x}, ${y}, width ${item.width})`);
         }
         texts.push(content.items.map((item: any) => item.str ?? "").join(" "));
