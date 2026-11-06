@@ -1,6 +1,6 @@
 import { cleanDocumentImage } from "./documentRichContent";
 import { cleanInvoiceBrand, type InvoiceBrand } from "./invoiceBranding";
-import { cleanDocumentDesign, type DocumentDesign } from "./documentDesign";
+import { cleanDocumentDesign, resolveDocumentAdvanced, resolveDocumentDesign, type DocumentDesign } from "./documentDesign";
 export * from "./documentDesign";
 /** Invoice presentation and catalog pricing shared by all runtimes. Amounts are integer cents. */
 export const INVOICE_CURRENCIES = ["CAD", "USD", "EUR", "GBP", "AUD", "NZD", "CHF", "HKD", "SGD"] as const;
@@ -31,6 +31,37 @@ export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplate = {
   logoVariant: "primary", name: "Classic", layout: "classic", accentColor: "#245c46", title: "Invoice", footer: "",
   showLogo: true, showDescription: true, showPaymentInstructions: true, paperSize: "letter",
 };
+
+export function applyDocumentBrand(config: InvoiceTemplate, brand: InvoiceBrand): InvoiceTemplate {
+  const design = resolveDocumentDesign(config);
+  const advanced = resolveDocumentAdvanced(design);
+  const luminance = [0.2126, 0.7152, 0.0722].reduce((sum, weight, index) => {
+    const channel = parseInt(brand.primary.slice(1 + index * 2, 3 + index * 2), 16) / 255;
+    return sum + weight * (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  }, 0);
+  const typography = Object.fromEntries(Object.entries(design.typography).map(([role, style]) =>
+    [role, { ...style, color: role === "header" ? brand.primary : role === "footer" ? brand.muted : brand.ink }],
+  )) as typeof design.typography;
+  const elementTypography = Object.fromEntries(Object.entries(advanced.typography).map(([role, style]) =>
+    [role, { ...style, color: role === "title" ? brand.primary : role === "columnHeader" ? (luminance > 0.179 ? "#000000" : "#FFFFFF") : brand.ink }],
+  )) as typeof advanced.typography;
+  return {
+    ...config, brand, customLogo: undefined, accentColor: brand.primary, showLogo: true,
+    design: {
+      ...design,
+      typography,
+      advanced: {
+        ...advanced,
+        colors: {
+          border: brand.light, tableHeaderBackground: brand.primary, alternateRowBackground: brand.light,
+          sectionBackground: brand.paper, rowBackground: brand.paper, totalsBackground: brand.paper, balanceBackground: brand.light,
+        },
+        backgrounds: { ...advanced.backgrounds, body: { ...advanced.backgrounds.body, color: brand.paper } },
+        typography: elementTypography,
+      },
+    },
+  };
+}
 
 export function cleanInvoiceTemplate(input?: Partial<InvoiceTemplate> | null): InvoiceTemplate {
   if (input && (typeof input !== "object" || Array.isArray(input))) throw new Error("Choose a valid document template.");

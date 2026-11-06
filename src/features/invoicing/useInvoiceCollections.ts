@@ -44,7 +44,9 @@ export function useInvoiceCollections(workspace:InvoiceWorkspace|undefined,socie
   },[client,societyId,templates,priceLists,repairJobs,refresh]);
   const complete=useMemo(()=>{
     if(!workspace||!loaded||loaded.societyId!==societyId)return workspace;
-    return {...workspace,...loaded.data,repairJobs:(loaded.data.repairJobs??[]).map(job=>({...job,totalCents:computeInvoiceTotals(job.lines??[]).totalCents,invoice:workspace.invoices.find(invoice=>invoice.repairJobId===job._id&&invoice.lifecycle!=='void')??null}))};
+    const currentTemplates = new Map((loaded.data.templates ?? []).map(template => [template._id, template]));
+    for (const template of workspace.templates ?? []) currentTemplates.set(template._id, template);
+    return {...workspace,...loaded.data,templates:[...currentTemplates.values()],repairJobs:(loaded.data.repairJobs??[]).map(job=>({...job,totalCents:computeInvoiceTotals(job.lines??[]).totalCents,invoice:workspace.invoices.find(invoice=>invoice.repairJobId===job._id&&invoice.lifecycle!=='void')??null}))};
   },[workspace,loaded,societyId]);
   const ready=Boolean(loaded&&loaded.societyId===societyId&&loaded.refresh===refresh&&loaded.sourceTemplates===templates&&loaded.sourcePriceLists===priceLists&&loaded.sourceRepairs===repairJobs);
   return {workspace:complete,ready,loading,error,retry:()=>setRefresh(value=>value+1)};

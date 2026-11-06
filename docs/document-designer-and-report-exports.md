@@ -4,18 +4,18 @@ The **Templates** tab in Invoices now opens a sectioned document designer. It re
 
 ## Ready-made template gallery
 
-The Templates tab includes 12 visible starter designs: six ddcnorth styles and six designs that inherit your organization's branding. Browse invoices, receipts, quotes, customer statements, repair work orders, and financial reports with the type filters or search by name/style. The thumbnails are actual PDF renders. **Preview** opens a full-size, downloadable PDF with your organization's details and clearly marked sample customer/financial data; the document selector can preview any of the six document types.
+The Templates tab includes 12 starting designs that use the workspace's default Brandkit or organization logo. Browse invoices, receipts, quotes, customer statements, repair work orders and financial reports with the type filters, or search by name or style. The thumbnails update when the workspace brand changes. **Preview** opens a full-size, downloadable PDF with your organization's details and sample data. The document selector can preview any of the six document types.
 
 Choose **Use this design** or **Customize template** to open an editable copy, then **Save template**. Browsing and previewing create no records and do not change the default template. Saved designs have their own live thumbnails and full-size PDF previews. Readers can browse and preview, while saving requires the existing write permission. Archived saved designs can be previewed and restored.
 
-`npm run render:template-gallery` regenerates the 12 first-page image assets from the shared presets and sample data, and writes sample PDFs, larger previews, a contact sheet, and a ZIP to `/workspace/scratch/document-template-gallery`. `npm run test:template-gallery` validates the presets, clone isolation, and all four PDF document types for every design.
+`npm run render:template-gallery` exports sample PDFs, images, a contact sheet and a ZIP. `npm run test:template-gallery` validates the presets and renders all six PDF document types for each design.
 
 ## Designer
 
-Use **New template**, **Customize**, or **Use ddcnorth brand**. The designer includes:
+Use **New template**, **Customize**, or **Import Brandkit**. The designer includes:
 
 - Letter/A4 paper, portrait/landscape orientation, and four independently editable margins in points.
-- Brand JSON import, the corrected ddcnorth vector logo, logo variants, width/alignment, and accent color.
+- Brandkit ZIP and JSON import, vector logo variants, width and alignment, and accent color.
 - Independent body, header, customer, table, totals, and footer font family, size, and color.
 - Invoice, receipt, work-order, and report titles; customer/shipping/date/terms/reference/notes/tax-registration visibility and editable labels.
 - Nine item columns: number, SKU, item, description, quantity, unit, rate, tax, and amount. Each has visibility, label, relative width, and order controls. Tables support alternate row shading and row padding.

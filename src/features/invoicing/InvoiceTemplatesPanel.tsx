@@ -1,5 +1,3 @@
-import ddcnorthBrand from "../../../shared/brandKits/ddcnorth.json";
-import { importInvoiceBrand } from "../../../shared/invoiceBranding";
 import { useMemo, useState } from "react";
 import { useMutation } from "convex/react";
 import { Archive, Copy, Download, Plus, Upload } from "lucide-react";
@@ -8,12 +6,13 @@ import { Drawer } from "../../components/ui";
 import { Checkbox } from "../../components/Controls";
 import { useToast } from "../../components/Toast";
 import { triggerBlobDownload } from "../../lib/zip";
-import { DEFAULT_INVOICE_TEMPLATE, cleanInvoiceTemplate, resolveDocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
+import { applyDocumentBrand, DEFAULT_INVOICE_TEMPLATE, cleanInvoiceTemplate, resolveDocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
 import { DocumentTemplateDesigner } from "./DocumentTemplateDesigner";
 import { DocumentTemplateGallery } from "./DocumentTemplateGallery";
 import { DocumentTemplatePreview, type TemplatePreviewChoice } from "./DocumentTemplatePreview";
 import { SavedTemplateThumbnail } from "./SavedTemplateThumbnail";
 import type { InvoiceWorkspace } from "./types";
+import { importBrandkitFile } from "./importBrandkit";
 
 type Draft = { id?: string; config: InvoiceTemplate; makeDefault: boolean };
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
@@ -33,15 +32,21 @@ export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, c
   const [busy, setBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [preview, setPreview] = useState<TemplatePreviewChoice | null>(null);
+  const defaultTemplate = workspace.templates?.find(template => template.active && template._id === workspace.settings.defaultTemplateId);
+  const brand = defaultTemplate?.config.brand;
   const open = (next: Draft) => {
     try { setDraft({ ...next, config: cleanInvoiceTemplate({ ...next.config, design: resolveDocumentDesign(next.config) }) }); setError(""); }
     catch (error) { setError(errorMessage(error, "Could not open template.")); }
   };
-  const applyBrand = () => {
+  const importWorkspaceBrand = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
     try {
-      const brand = importInvoiceBrand(ddcnorthBrand, "https://projects.ahmadjalil.com/brandkit/?brand=ddcnorth");
-      open({ config: { ...DEFAULT_INVOICE_TEMPLATE, name: `${brand.name} invoice`, brand, accentColor: brand.primary }, makeDefault: false });
-    } catch (error) { setError(errorMessage(error, "Could not apply brand kit.")); }
+      const uploaded = await importBrandkitFile(file);
+      const config = defaultTemplate?.config ?? { ...DEFAULT_INVOICE_TEMPLATE, name: `${uploaded.name.slice(0, 92)} invoice` };
+      open({ id: defaultTemplate?._id, config: applyDocumentBrand(config, uploaded), makeDefault: true });
+    } catch (error) { setError(errorMessage(error, "Could not import the Brandkit.")); }
+    finally { setBusy(false); }
   };
   const importTemplate = async (file?: File) => {
     if (!file) return;
@@ -82,10 +87,11 @@ export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, c
   return <div className="card invoice-card">
     <div className="card__head"><div><h2 className="card__title">Document templates</h2><span className="card__subtitle">Design invoices, payment receipts, work orders and report PDFs. Issued invoices retain their saved design.</span></div><div className="document-designer__template-tools">
       <label className={`btn btn--sm document-designer__import${!canWrite ? " is-disabled" : ""}`}><Upload size={14} /> Import template JSON<input aria-label="Import template JSON" type="file" accept=".json,application/json" disabled={!canWrite || busy} onChange={(e) => { void importTemplate(e.target.files?.[0]); e.target.value = ""; }} /></label>
-      <button className="btn btn--sm" disabled={!canWrite || busy} onClick={applyBrand}>Use ddcnorth brand</button>
-      <button className="btn btn--sm btn--accent" disabled={!canWrite || busy} onClick={() => open({ config: { ...DEFAULT_INVOICE_TEMPLATE }, makeDefault: false })}><Plus size={14} /> New template</button></div></div>
+      <label className={`btn btn--sm document-designer__import${!canWrite || busy ? " is-disabled" : ""}`}><Upload size={14} /> Import Brandkit<input aria-label="Import workspace Brandkit" type="file" accept=".zip,.json,application/zip,application/json" disabled={!canWrite || busy} onChange={event => { void importWorkspaceBrand(event.target.files?.[0]); event.target.value = ""; }} /></label>
+      <button className="btn btn--sm btn--accent" disabled={!canWrite || busy} onClick={() => open({ config: brand ? applyDocumentBrand(DEFAULT_INVOICE_TEMPLATE, brand) : { ...DEFAULT_INVOICE_TEMPLATE }, makeDefault: false })}><Plus size={14} /> New template</button></div></div>
+    {brand && <p className="muted document-template-gallery__brand">Workspace Brandkit · {brand.name}</p>}
     {!draft && error && <p className="field__error" role="alert">{error}</p>}
-    <DocumentTemplateGallery canWrite={canWrite && !busy} onPreview={setPreview} onUse={(config) => open({ config, makeDefault: false })} />
+    <DocumentTemplateGallery workspace={workspace} brand={brand} canWrite={canWrite && !busy} onPreview={setPreview} onUse={(config) => open({ config, makeDefault: false })} />
     <h3>Your saved templates</h3>
     <Checkbox label="Show archived templates" checked={showArchived} onChange={setShowArchived} />
     <div className="invoice-commerce-grid">{templates.map((template) => <div className="invoice-template-card" key={template._id} style={{ borderTopColor: template.config.accentColor }}>
@@ -99,7 +105,7 @@ export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, c
     {preview && <DocumentTemplatePreview template={preview} workspace={workspace} canWrite={canWrite && !busy && preview.active !== false} onClose={() => setPreview(null)} onUse={(config) => { open({ id: preview.savedId, config: structuredClone(config), makeDefault: preview.savedId === workspace.settings.defaultTemplateId }); setPreview(null); }} />}
     <Drawer open={Boolean(draft)} size="wide" className="document-designer-drawer" title={draft?.id ? "Customize document template" : "New document template"} onClose={() => !busy && setDraft(null)} footer={<><button className="btn" disabled={busy} onClick={() => setDraft(null)}>Cancel</button>{draft && <button className="btn" disabled={busy} onClick={() => { try { exportTemplate(draft.config); } catch (error) { setError(errorMessage(error, "Could not export template.")); } }}>Export template JSON</button>}<button className="btn btn--accent" disabled={!canWrite || busy} onClick={() => void submit()}>Save template</button></>}>
       {error && <p className="field__error document-designer__error" role="alert">{error}</p>}
-      {draft && <DocumentTemplateDesigner config={draft.config} workspace={workspace} onChange={change} makeDefault={draft.makeDefault} onDefaultChange={(makeDefault) => setDraft({ ...draft, makeDefault })} onError={setError} />}
+      {draft && <DocumentTemplateDesigner config={draft.config} workspace={workspace} workspaceBrand={brand} onChange={change} makeDefault={draft.makeDefault} onDefaultChange={(makeDefault) => setDraft({ ...draft, makeDefault })} onError={setError} />}
     </Drawer>
   </div>;
 }

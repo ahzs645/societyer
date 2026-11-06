@@ -170,8 +170,10 @@ test("actual PDF pages retain export geometry, navigation and zoom on desktop an
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/app/invoices?tab=templates");
-  await activate(page.getByRole("button", { name: "Use ddcnorth brand", exact: true }), hasTouch);
+  await activate(page.getByRole("button", { name: "New template", exact: true }), hasTouch);
   const designer = page.getByRole("dialog");
+  await designer.getByLabel("Import Brandkit profile", { exact: true }).setInputFiles("scripts/fixtures/brandkit/ddcnorth.json");
+  await expect(designer.getByRole("img", { name: "ddcnorth logo", exact: true })).toBeVisible();
   await designer.getByLabel("Template name", { exact: true }).fill("Actual PDF preview design");
   await activate(designer.getByText("Use for new invoices by default", { exact: true }), hasTouch);
   await activate(designer.getByRole("button", { name: "Save template", exact: true }), hasTouch);

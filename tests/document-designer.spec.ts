@@ -63,8 +63,10 @@ test("designer settings persist through invoice, payment receipt and repair work
   page.on("pageerror", (error) => errors.push(error.message));
   const name = `Designer integration ${Date.now()}`;
   await page.goto("/app/invoices?tab=templates");
-  await page.getByRole("button", { name: "Use ddcnorth brand", exact: true }).click();
+  await page.getByRole("button", { name: "New template", exact: true }).click();
   let drawer = page.getByRole("dialog");
+  await drawer.getByLabel("Import Brandkit profile", { exact: true }).setInputFiles("scripts/fixtures/brandkit/ddcnorth.json");
+  await expect(drawer.getByRole("img", { name: "ddcnorth logo", exact: true })).toBeVisible();
   await drawer.getByLabel("Template name", { exact: true }).fill(name);
   await pick(page, drawer, "Orientation", "Landscape");
   await drawer.getByLabel("Top margin (pt)", { exact: true }).fill("36");
@@ -367,19 +369,14 @@ test("ready-made template gallery previews real designs before saving and respec
   });
   expect(savedBefore).toBe(0);
 
-  // Lazy-loaded thumbnails are real rendered documents, available before the first saved template.
-  await expect(gallery.locator("img")).toHaveCount(12);
-  for (const image of await gallery.locator("img").all()) {
-    await image.scrollIntoViewIfNeeded();
-    await expect.poll(() => image.evaluate((node) => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 100)).toBe(true);
-  }
+  await expect(gallery.locator(".document-template-thumbnail .document-preview")).toHaveCount(12);
   const filters = gallery.getByRole("group", { name: "Template type", exact: true });
   await filters.getByRole("button", { name: "Reports", exact: true }).click();
   expect(await gallery.getByRole("article").count()).toBeGreaterThan(0);
   expect(await gallery.getByRole("article").count()).toBeLessThan(12);
   await gallery.getByRole("textbox", { name: "Search templates", exact: true }).fill("Landscape financials");
   await expect(gallery.getByRole("article")).toHaveCount(1);
-  const name = "ddcnorth · Landscape financials";
+  const name = "Landscape financials";
   const card = gallery.getByRole("article", { name, exact: true });
   await card.getByRole("button", { name: `Preview ${name}`, exact: true }).click();
   let dialog = page.getByRole("dialog");

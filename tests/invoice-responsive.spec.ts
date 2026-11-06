@@ -81,8 +81,10 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   };
 
   await page.goto("/app/invoices?tab=templates");
-  await activate(page.getByRole("button", { name: "Use ddcnorth brand", exact: true }));
+  await activate(page.getByRole("button", { name: "New template", exact: true }));
   let drawer = page.getByRole("dialog").last();
+  await drawer.getByLabel("Import Brandkit profile", { exact: true }).setInputFiles("scripts/fixtures/brandkit/ddcnorth.json");
+  await expect(drawer.getByRole("img", { name: "ddcnorth logo", exact: true })).toBeVisible();
   await fit("template designer", drawer);
   await fill(drawer.getByLabel("Template name", { exact: true }), templateName);
   await fill(drawer.getByLabel("Document title", { exact: true }), "Workshop service invoice");

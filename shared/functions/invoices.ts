@@ -526,6 +526,10 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
   const duesCandidates = buildDuesCandidates(today, subscriptions as Row[], activePlans, feePeriods as Row[], members as Row[], decorated);
   const gst = (identifiers as Row[]).find((row) => row.kind === "gst" && row.status !== "inactive")
     ?? (identifiers as Row[]).find((row) => row.kind === "business_number" && row.status !== "inactive" && /RT\d{4}/i.test(String(row.number)));
+  const defaultId = settings?.defaultTemplateId;
+  const defaultTemplate = defaultId && !templates.some(template => template._id === defaultId)
+    ? await ctx.db.get(defaultId, "invoiceTemplates")
+    : null;
 
   return {
     today,
@@ -538,7 +542,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       email: (organization as any)?.publicContactEmail ?? (organization as any)?.officialEmail ?? (organization as any)?.primaryContactEmail,
       gstNumber: gst?.number,
     },
-    templates,
+    templates: defaultTemplate?.societyId === societyId ? [...templates, defaultTemplate] : templates,
     priceLists,
     repairJobs: repairJobs.map((job) => ({ ...job, totalCents: computeInvoiceTotals(job.lines ?? []).totalCents,
       invoice: decorated.find((invoice) => invoice.repairJobId === job._id && invoice.lifecycle !== "void") ?? null })),

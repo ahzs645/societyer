@@ -2,20 +2,23 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
+import JSZip from "jszip";
 
 async function pick(page: Page, scope: Locator, label: string, option: string) {
   await scope.getByLabel(label, { exact: true }).click();
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-test("reusable templates and rates persist; repair billing links payments and downloads a PDF", async ({ page }) => {
+test("reusable templates and rates persist; repair billing links payments and downloads a PDF", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.setDefaultTimeout(30_000);
   const name = `Workshop ${Date.now()}`;
   await page.goto("/app/invoices?tab=templates");
-  await page.getByRole("button", { name: "Use ddcnorth brand", exact: true }).click();
+  await page.getByRole("button", { name: "New template", exact: true }).click();
   let drawer = page.getByRole("dialog");
+  await drawer.getByLabel("Import Brandkit profile", { exact: true }).setInputFiles("scripts/fixtures/brandkit/ddcnorth.json");
+  await expect(drawer.getByRole("img", { name: "ddcnorth logo", exact: true })).toBeVisible();
   await expect(drawer).toContainText("Document body font: Inter.");
   await drawer.getByLabel("Template name", { exact: true }).fill(name);
   await pick(page, drawer, "Layout", "Modern");
@@ -74,7 +77,7 @@ test("reusable templates and rates persist; repair billing links payments and do
   const downloading = page.waitForEvent("download");
   await page.getByRole("menuitem", { name: "Download PDF", exact: true }).click();
   const download = await downloading;
-  await download.saveAs("/workspace/scratch/invoice-pdf/ddcnorth-browser.pdf");
+  await download.saveAs(testInfo.outputPath("ddcnorth-browser.pdf"));
   expect(download.suggestedFilename()).toMatch(/\.pdf$/);
   const path = await download.path();
   const pdf = await PDFDocument.load(await readFile(path!));
@@ -120,4 +123,35 @@ test("portable Brandkit profiles import, preview and persist with explicit font 
   await card.getByRole("button", { name: "Customize", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Inter (fallback for Sora)");
   expect(errors).toEqual([]);
+});
+
+test("a Brandkit ZIP sets the workspace brand for all twelve starting designs", async ({ page }) => {
+  const firstForm = JSON.parse(await readFile(new URL("../scripts/fixtures/brandkit/firstform.json", import.meta.url), "utf8"));
+  const zip = new JSZip();
+  zip.file("brandkit-pack.json", JSON.stringify({ format: "brandkit-pack", version: 1, menuLogo: "logo-menu.svg" }));
+  zip.file("brand.json", JSON.stringify({
+    schema: "brandkit/1", id: firstForm.id, name: firstForm.name, version: firstForm.version,
+    colours: firstForm.colours, roles: Object.fromEntries(Object.keys(firstForm.colours).map(key => [key, key])),
+    typography: { body: firstForm.typography.body, headlines: firstForm.typography.heading, labels: firstForm.typography.label },
+  }));
+  zip.file("logo-menu.svg", firstForm.logos.primary.svg.replace("<svg ", '<svg aria-hidden="true" ').replaceAll('fill="#000000"', 'fill="currentColor"'));
+  const buffer = process.env.INVOICE_BRANDKIT_TEST_ZIP ? await readFile(process.env.INVOICE_BRANDKIT_TEST_ZIP)
+    : await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+
+  await page.goto("/app/invoices?tab=templates");
+  const gallery = page.getByRole("region", { name: "Template gallery" });
+  await expect(gallery.getByRole("article")).toHaveCount(12);
+  await expect(gallery.getByText("ddcnorth", { exact: false })).toHaveCount(0);
+  await page.getByLabel("Import workspace Brandkit").setInputFiles({ name: "firstform.zip", mimeType: "application/zip", buffer });
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByRole("img", { name: "First Form logo" })).toBeVisible();
+  await expect(drawer.getByRole("checkbox", { name: "Use for new invoices by default" })).toBeChecked();
+  await drawer.getByRole("button", { name: "Save template", exact: true }).click();
+  await expect(drawer).toBeHidden();
+  await page.reload();
+  await expect(gallery.getByText("First Form", { exact: true })).toHaveCount(12);
+  await expect(gallery.locator('.document-template-gallery__thumbnail img[alt="First Form logo"]')).toHaveCount(12);
+  await gallery.getByRole("button", { name: "Use Landscape financials", exact: true }).click();
+  await expect(drawer.getByRole("img", { name: "First Form logo" })).toBeVisible();
+  await expect(drawer.getByLabel("Accent color", { exact: true })).toHaveValue("#000000");
 });

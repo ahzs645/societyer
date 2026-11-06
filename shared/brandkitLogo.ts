@@ -64,9 +64,13 @@ function choice(value: string, fallback: string, allowed: string[]): string {
   if (!allowed.includes(value)) throw vectorError();
   return value;
 }
-function paintFor(element: Element, inherited: Paint): Paint {
+function paintFor(element: Element, inherited: Paint, currentColor?: string): Paint {
+  const paint = (name: string, fallback: string) => {
+    const value = element.getAttribute(name) ?? "";
+    return value === "currentColor" && currentColor ? currentColor : colour(value, fallback);
+  };
   return {
-    fill: colour(element.getAttribute("fill") ?? "", inherited.fill), stroke: colour(element.getAttribute("stroke") ?? "", inherited.stroke),
+    fill: paint("fill", inherited.fill), stroke: paint("stroke", inherited.stroke),
     width: scalar(element.getAttribute("stroke-width") ?? "", inherited.width, true),
     rule: choice(element.getAttribute("fill-rule") ?? "", inherited.rule, ["evenodd", "nonzero"]),
     cap: choice(element.getAttribute("stroke-linecap") ?? "", inherited.cap, ["butt", "round", "square"]),
@@ -86,17 +90,39 @@ function shapePath(element: Element): string {
   return rx && ry ? `M${x - rx} ${y}A${rx} ${ry} 0 1 0 ${x + rx} ${y}A${rx} ${ry} 0 1 0 ${x - rx} ${y}Z` : "";
 }
 
-/** Parse passive Brandkit artwork into the same flat path subset used by HTML and PDF. */
-export function normalizeBrandkitLogo(svg: unknown, expectedViewBox: LogoViewBox): string {
+function parseBrandkitLogo(svg: unknown): Element {
   if (typeof svg !== "string" || svg.length > 200000 || /<!|<\?/.test(svg)) throw vectorError();
-  const viewBox = brandkitViewBox(expectedViewBox);
   let document;
   try { document = new DOMParser({ onError: () => { throw vectorError(); } }).parseFromString(svg, "image/svg+xml"); }
   catch { throw vectorError(); }
   const root = document.documentElement;
   if (!root || root.tagName !== "svg" || root.namespaceURI !== svgNamespace) throw vectorError();
+  return root;
+}
+
+/** Parse passive Brandkit artwork into the same flat path subset used by HTML and PDF. */
+export function normalizeBrandkitLogo(svg: unknown, expectedViewBox: LogoViewBox): string {
+  const viewBox = brandkitViewBox(expectedViewBox);
+  const root = parseBrandkitLogo(svg);
   const declared = numbers(root.getAttribute("viewBox") ?? "");
   if (declared.length !== 4 || declared.some((n, i) => Math.abs(n - viewBox[i]) > 0.000001)) throw vectorError();
+  return flattenBrandkitLogo(root, viewBox);
+}
+
+/** Pack exports supply themeable artwork. Resolve its paint and derive printable variants. */
+export function brandkitPackLogos(svg: unknown, primary: string) {
+  const root = parseBrandkitLogo(svg);
+  const viewBox = brandkitViewBox(numbers(root.getAttribute("viewBox") ?? ""));
+  const artwork = flattenBrandkitLogo(root, viewBox, colour(primary, "#000000"));
+  const recolor = (paint: string) => artwork.replace(/\b(fill|stroke)="#[0-9A-F]{6}"/gi, `$1="${paint}"`);
+  return {
+    primary: { svg: artwork, viewBox },
+    black: { svg: recolor("#000000"), viewBox },
+    reverse: { svg: recolor("#FFFFFF"), viewBox },
+  };
+}
+
+function flattenBrandkitLogo(root: Element, viewBox: LogoViewBox, currentColor?: string): string {
   const result: string[] = [];
   let count = 0, segments = 0;
   const common = ["fill", "stroke", "stroke-width", "fill-rule", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "transform"];
@@ -106,10 +132,10 @@ export function normalizeBrandkitLogo(svg: unknown, expectedViewBox: LogoViewBox
     for (let i = 0; i < element.attributes.length; i++) {
       const attr = element.attributes.item(i)!;
       if (attr.name === "xmlns" && element === root && attr.value === svgNamespace) continue;
-      if (!common.includes(attr.name) && !attributes[element.tagName].includes(attr.name) && !/^(?:aria-label|role|id|data-[a-z0-9-]+)$/.test(attr.name)) throw vectorError();
+      if (!common.includes(attr.name) && !attributes[element.tagName].includes(attr.name) && !/^(?:aria-label|aria-hidden|role|id|data-[a-z0-9-]+)$/.test(attr.name)) throw vectorError();
     }
     const matrix = multiply(parentMatrix, transform(element.getAttribute("transform") ?? ""));
-    const paint = paintFor(element, inherited);
+    const paint = paintFor(element, inherited, currentColor);
     const metadata = element.tagName === "title" || element.tagName === "desc";
     const container = element.tagName === "svg" || element.tagName === "g";
     if (!metadata && !container) {
@@ -135,7 +161,7 @@ export function normalizeBrandkitLogo(svg: unknown, expectedViewBox: LogoViewBox
       else if (node.nodeType !== 3 || (!metadata && node.textContent?.trim())) throw vectorError();
     }
   };
-  visit(root, identity, { fill: "#000000", stroke: "none", width: 1, rule: "nonzero", cap: "butt", join: "miter", miter: 4 }, 0);
+  visit(root, identity, { fill: currentColor ?? "#000000", stroke: "none", width: 1, rule: "nonzero", cap: "butt", join: "miter", miter: 4 }, 0);
   if (!result.length) throw vectorError();
   const output = `<svg xmlns="${svgNamespace}" viewBox="${viewBox.join(" ")}">${result.join("")}</svg>`;
   if (output.length > 200000) throw vectorError();

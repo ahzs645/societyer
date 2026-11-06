@@ -515,7 +515,7 @@ export function InvoicesPage() {
       ) : tab === "automation" ? (
         <BillingAutomationPanel societyId={society._id} canWrite={canWrite} />
       ) : tab === "templates" ? (
-        <InvoiceTemplatesPanel workspace={workspace} societyId={society._id} canWrite={canWrite} logoUrl={(society as any).logoUrl ?? null} />
+        <InvoiceTemplatesPanel key={society._id} workspace={workspace} societyId={society._id} canWrite={canWrite} logoUrl={(society as any).logoUrl ?? null} />
       ) : tab === "price_lists" ? (
         <PriceListsPanel workspace={workspace} societyId={society._id} canWrite={canWrite} />
       ) : tab === "repairs" ? (

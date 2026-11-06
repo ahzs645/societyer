@@ -1,5 +1,3 @@
-import ddcnorthKit from "./brandKits/ddcnorth.json";
-import { importInvoiceBrand } from "./invoiceBranding";
 import {
   cleanInvoiceTemplate, cleanDocumentAdvanced, DEFAULT_INVOICE_TEMPLATE, resolveDocumentDesign,
   type DocumentColumnKey, type DocumentDesign, type DocumentKind, type DocumentTypography,
@@ -14,8 +12,6 @@ export type DocumentTemplatePreset = {
   recommendedDocumentKind: DocumentKind;
   config: InvoiceTemplate;
 };
-
-const ddcnorth = importInvoiceBrand(ddcnorthKit, "https://projects.ahmadjalil.com/brandkit/?brand=ddcnorth");
 
 function columns(design: DocumentDesign, visible: DocumentColumnKey[], widths: Partial<Record<DocumentColumnKey, number>> = {}, order: DocumentColumnKey[] = []) {
   const keys = [...order, ...design.table.columns.map((column) => column.key).filter((key) => !order.includes(key))];
@@ -44,10 +40,10 @@ function make(name: string, options: Partial<InvoiceTemplate>, customize: (desig
 
 const presets: DocumentTemplatePreset[] = [
   {
-    id: "ddcnorth-signature", name: "ddcnorth · Signature", recommendedDocumentKind: "invoice",
-    description: "Midnight brand color, generous spacing, and a prominent primary logo for project invoices.",
-    tags: ["ddcnorth", "invoice", "portrait", "spacious"],
-    config: make("ddcnorth · Signature", { brand: ddcnorth, accentColor: ddcnorth.primary, layout: "classic" }, (design) => {
+    id: "ddcnorth-signature", name: "Signature", recommendedDocumentKind: "invoice",
+    description: "Generous spacing and a prominent logo for project invoices.",
+    tags: ["organization", "invoice", "portrait", "spacious"],
+    config: make("Signature", { accentColor: "#26384a", layout: "classic" }, (design) => {
       design.page.margins = { top: 42, right: 44, bottom: 52, left: 44 };
       design.logo.width = 210;
       design.typography.header.fontSize = 26;
@@ -57,10 +53,10 @@ const presets: DocumentTemplatePreset[] = [
     }),
   },
   {
-    id: "ddcnorth-studio", name: "ddcnorth · Studio", recommendedDocumentKind: "quote",
-    description: "Reversed white logo on midnight, a larger title, and striped service rows on A4 paper.",
-    tags: ["ddcnorth", "invoice", "reverse logo", "a4"],
-    config: make("ddcnorth · Studio", { brand: ddcnorth, logoVariant: "reverse", accentColor: ddcnorth.primary, layout: "modern", paperSize: "a4" }, (design) => {
+    id: "ddcnorth-studio", name: "Studio", recommendedDocumentKind: "quote",
+    description: "A reversed logo, a larger title, and striped service rows on A4 paper.",
+    tags: ["organization", "invoice", "reverse logo", "a4"],
+    config: make("Studio", { logoVariant: "reverse", accentColor: "#26384a", layout: "modern", paperSize: "a4" }, (design) => {
       design.page.margins = { top: 36, right: 36, bottom: 48, left: 36 };
       design.logo = { width: 225, alignment: "center" };
       design.typography.header.fontSize = 30;
@@ -75,16 +71,16 @@ const presets: DocumentTemplatePreset[] = [
     }),
   },
   {
-    id: "ddcnorth-compact-services", name: "ddcnorth · Compact services", recommendedDocumentKind: "invoice",
+    id: "ddcnorth-compact-services", name: "Compact services", recommendedDocumentKind: "invoice",
     description: "Small logo, tight rows, separate units, and a service code column for longer rate tables.",
-    tags: ["ddcnorth", "invoice", "compact", "rates"],
-    config: make("ddcnorth · Compact services", { brand: ddcnorth, accentColor: ddcnorth.primary, layout: "compact", showDescription: false }, (design) => {
+    tags: ["organization", "invoice", "compact", "rates"],
+    config: make("Compact services", { accentColor: "#26384a", layout: "compact", showDescription: false }, (design) => {
       design.page.margins = { top: 28, right: 28, bottom: 38, left: 28 };
       design.logo.width = 145;
       design.typography.body.fontSize = 9;
       design.typography.header.fontSize = 19;
       design.typography.customer.fontSize = 8;
-      design.typography.table = { fontFamily: "mono", fontSize: 8, color: ddcnorth.primary };
+      design.typography.table = { fontFamily: "mono", fontSize: 8, color: "#26384a" };
       design.typography.totals.fontSize = 9;
       design.table.rowPadding = 4;
       columns(design, ["sku", "item", "quantity", "unit", "rate", "amount"], { sku: 12, item: 34, quantity: 9, unit: 10, rate: 16, amount: 19 });
@@ -95,10 +91,10 @@ const presets: DocumentTemplatePreset[] = [
     }),
   },
   {
-    id: "ddcnorth-payment-receipt", name: "ddcnorth · Payment receipt", recommendedDocumentKind: "receipt",
+    id: "ddcnorth-payment-receipt", name: "Payment receipt", recommendedDocumentKind: "receipt",
     description: "A centered primary logo, reduced date details, and clear received-from and payment labels.",
-    tags: ["ddcnorth", "receipt", "payment", "portrait"],
-    config: make("ddcnorth · Payment receipt", { brand: ddcnorth, accentColor: ddcnorth.primary, layout: "classic", showPaymentInstructions: false, showDescription: false }, (design) => {
+    tags: ["organization", "receipt", "payment", "portrait"],
+    config: make("Payment receipt", { accentColor: "#26384a", layout: "classic", showPaymentInstructions: false, showDescription: false }, (design) => {
       design.page.margins = { top: 52, right: 54, bottom: 52, left: 54 };
       design.logo = { width: 165, alignment: "center" };
       design.typography.header.fontSize = 24;
@@ -118,10 +114,10 @@ const presets: DocumentTemplatePreset[] = [
     }),
   },
   {
-    id: "ddcnorth-repair-order", name: "ddcnorth · Repair work order", recommendedDocumentKind: "work_order",
+    id: "ddcnorth-repair-order", name: "Repair work order", recommendedDocumentKind: "work_order",
     description: "Black brand logo, numbered parts and labour, notes before charges, and an approval signature line.",
-    tags: ["ddcnorth", "work_order", "repair", "signature"],
-    config: make("ddcnorth · Repair work order", { brand: ddcnorth, logoVariant: "black", accentColor: "#20262d", layout: "compact", showPaymentInstructions: false }, (design) => {
+    tags: ["organization", "work_order", "repair", "signature"],
+    config: make("Repair work order", { logoVariant: "black", accentColor: "#20262d", layout: "compact", showPaymentInstructions: false }, (design) => {
       design.page.margins = { top: 32, right: 32, bottom: 44, left: 32 };
       design.logo.width = 175;
       design.typography.header = { fontFamily: "brand", fontSize: 22, color: "#20262d" };
@@ -140,17 +136,17 @@ const presets: DocumentTemplatePreset[] = [
     }),
   },
   {
-    id: "ddcnorth-landscape-financials", name: "ddcnorth · Landscape financials", recommendedDocumentKind: "report",
+    id: "ddcnorth-landscape-financials", name: "Landscape financials", recommendedDocumentKind: "report",
     description: "Wide A4 pages, compact financial tables, muted section type, and continuation page numbers.",
-    tags: ["ddcnorth", "report", "landscape", "a4"],
-    config: make("ddcnorth · Landscape financials", { brand: ddcnorth, accentColor: ddcnorth.primary, layout: "modern", paperSize: "a4" }, (design) => {
+    tags: ["organization", "report", "landscape", "a4"],
+    config: make("Landscape financials", { accentColor: "#26384a", layout: "modern", paperSize: "a4" }, (design) => {
       design.page.orientation = "landscape";
       design.page.margins = { top: 34, right: 34, bottom: 42, left: 34 };
       design.logo = { width: 170, alignment: "left" };
       design.typography.header.fontSize = 21;
       design.typography.body.fontSize = 9;
       design.typography.table.fontSize = 8;
-      design.typography.customer.color = ddcnorth.muted;
+      design.typography.customer.color = "#4b5563";
       design.table.rowPadding = 5;
       design.table.striped = true;
       design.header.repeat = true;
@@ -162,7 +158,7 @@ const presets: DocumentTemplatePreset[] = [
   },
   {
     id: "classic-serif", name: "Classic serif", recommendedDocumentKind: "invoice",
-    description: "Traditional serif typography, wide margins, and a quiet slate accent using your organization's identity.",
+    description: "Traditional serif typography and wide margins.",
     tags: ["organization", "invoice", "serif", "classic"],
     config: make("Classic serif", { accentColor: "#384452", layout: "classic" }, (design) => {
       font(design, "serif", "#282d34");
@@ -233,10 +229,10 @@ const presets: DocumentTemplatePreset[] = [
     }),
   },
   {
-    id: "friendly-green", name: "Friendly green", recommendedDocumentKind: "receipt",
-    description: "Warm green accents, generous readable type, and a simple receipt layout with a friendly closing note.",
-    tags: ["organization", "receipt", "green", "spacious"],
-    config: make("Friendly green", { accentColor: "#276653", layout: "modern", showPaymentInstructions: false }, (design) => {
+    id: "friendly-green", name: "Friendly receipt", recommendedDocumentKind: "receipt",
+    description: "Generous readable type and a simple receipt layout with a friendly closing note.",
+    tags: ["organization", "receipt", "spacious"],
+    config: make("Friendly receipt", { accentColor: "#276653", layout: "modern", showPaymentInstructions: false }, (design) => {
       font(design, "sans", "#244139");
       design.typography.header = { fontFamily: "sans", fontSize: 28, color: "#276653" };
       design.typography.customer.fontSize = 11;
@@ -257,7 +253,7 @@ const presets: DocumentTemplatePreset[] = [
   },
   {
     id: "formal-financial-report", name: "Formal financial report", recommendedDocumentKind: "report",
-    description: "Portrait A4 with serif headings, compact sans-serif tables, restrained blue, and numbered continuation pages.",
+    description: "Portrait A4 with serif headings, compact sans-serif tables, and numbered continuation pages.",
     tags: ["organization", "report", "a4", "formal"],
     config: make("Formal financial report", { accentColor: "#34495e", layout: "classic", paperSize: "a4" }, (design) => {
       font(design, "serif", "#263442");

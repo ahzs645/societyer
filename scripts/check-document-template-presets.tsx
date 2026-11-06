@@ -5,7 +5,9 @@ import { resolve } from "node:path";
 import type { FontRegistration } from "@formepdf/react";
 import { PDFDocument } from "pdf-lib";
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { DOCUMENT_KINDS, cleanInvoiceTemplate, resolveDocumentDesign, type InvoiceTemplate } from "../shared/invoiceCommerce";
+import { applyDocumentBrand, DOCUMENT_KINDS, cleanInvoiceTemplate, resolveDocumentDesign, type InvoiceTemplate } from "../shared/invoiceCommerce";
+import { importInvoiceBrand } from "../shared/invoiceBranding";
+import firstForm from "../shared/brandKits/firstform.json";
 import { DOCUMENT_TEMPLATE_PRESETS, freshDocumentTemplatePreset } from "../shared/documentTemplatePresets";
 import { documentTemplateSample } from "../src/features/invoicing/documentTemplateSamples";
 import { renderSampleDocumentPdf } from "./lib/render-document-sample";
@@ -33,7 +35,8 @@ assert.equal(DOCUMENT_TEMPLATE_PRESETS.length, 12, "the visible library contains
 assert.equal(new Set(DOCUMENT_TEMPLATE_PRESETS.map((preset) => preset.id)).size, 12, "preset IDs are unique");
 assert.equal(new Set(DOCUMENT_TEMPLATE_PRESETS.map((preset) => preset.name)).size, 12, "preset names are unique");
 assert.deepEqual(new Set(DOCUMENT_TEMPLATE_PRESETS.map((preset) => preset.recommendedDocumentKind)), new Set(DOCUMENT_KINDS), "the library covers every document type");
-assert.equal(DOCUMENT_TEMPLATE_PRESETS.filter((preset) => preset.config.brand).length, 6, "six curated ddcnorth designs and six neutral designs are available");
+assert.ok(DOCUMENT_TEMPLATE_PRESETS.every((preset) => !preset.config.brand), "starting designs use workspace branding");
+const brand = importInvoiceBrand(firstForm);
 assert.throws(() => freshDocumentTemplatePreset("missing-preset"), /template|preset|unknown|found/i);
 
 const organization = { name: "Sample organization", address: "10 Example Avenue", email: "accounts@example.test", gstNumber: "SAMPLE-TAX" };
@@ -53,7 +56,7 @@ for (const preset of DOCUMENT_TEMPLATE_PRESETS) {
   assert.deepEqual(freshDocumentTemplatePreset(preset.id), fresh, `${preset.id}: a second user gets an independent pristine design`);
 
   for (const kind of DOCUMENT_KINDS) {
-    const config = freshDocumentTemplatePreset(preset.id);
+    const config = applyDocumentBrand(freshDocumentTemplatePreset(preset.id), brand);
     const design = resolveDocumentDesign(config), fonts = fontsFor(config);
     const sample = documentTemplateSample(config, kind, { today: "2026-10-22", currency: "CAD" });
     if (sample.kind === "receipt") assert.equal(computeInvoiceTotals(sample.invoice.lines, sample.invoice.discount).totalCents, 15000, "the sample receipt acknowledges only its individual payment");

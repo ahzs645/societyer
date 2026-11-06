@@ -1,14 +1,13 @@
 import { defaultInvoicePayments } from "../../../shared/invoicePaymentMethods";
 import { cleanDocumentImage } from "../../../shared/documentRichContent";
-import ddcnorthBrand from "../../../shared/brandKits/ddcnorth.json";
 import { useEffect, useRef, useState } from "react";
 import { Download, FileSearch } from "lucide-react";
 import { Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { Checkbox } from "../../components/Controls";
 import { triggerBlobDownload } from "../../lib/zip";
-import { importInvoiceBrand, invoiceBrandFontDescription, type InvoiceBrand } from "../../../shared/invoiceBranding";
-import { resolveDocumentDesign, resolveDocumentAdvanced, type DocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
+import { invoiceBrandFontDescription, type InvoiceBrand } from "../../../shared/invoiceBranding";
+import { applyDocumentBrand, resolveDocumentDesign, resolveDocumentAdvanced, type DocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
 import { InvoiceDocument, type InvoiceDocumentData } from "./InvoiceDocument";
 import {
   DESIGN_SECTIONS, DesignNumber, DesignSection, PageDesignControls, TypographyDesignControls,
@@ -17,6 +16,7 @@ import {
 } from "./DocumentDesignControls";
 import { DocumentGeometryControls, DocumentAddressControls, DocumentArtworkControls, DocumentElementControls, DocumentVisibilityControls, DocumentRichBandControls, DocumentPaymentControls, DocumentTaxDisplayControls, DocumentSignatureControls, DocumentAnnexControls } from "./DocumentAdvancedControls";
 import type { InvoiceWorkspace } from "./types";
+import { importBrandkitFile } from "./importBrandkit";
 import "../../styles/_document-designer.scss";
 
 type PreviewKind = "invoice" | "receipt" | "work_order" | "quote" | "statement";
@@ -24,12 +24,13 @@ type Props = {
   config: InvoiceTemplate;
   onChange: (patch: Partial<InvoiceTemplate>) => void;
   workspace: InvoiceWorkspace;
+  workspaceBrand?: InvoiceBrand;
   makeDefault: boolean;
   onDefaultChange: (value: boolean) => void;
   onError: (error: string) => void;
 };
 
-export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefault, onDefaultChange, onError }: Props) {
+export function DocumentTemplateDesigner({ config, onChange, workspace, workspaceBrand, makeDefault, onDefaultChange, onError }: Props) {
   // Saved/opened drafts are normalized once. Keep in-progress text intact while typing.
   const design = config.design ?? resolveDocumentDesign(config);
   const [kind, setKind] = useState<PreviewKind>("invoice");
@@ -73,8 +74,7 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
     finally { setRendering(false); }
   };
   const applyBrand = (brand: InvoiceBrand) => {
-    const advanced = design.advanced ?? resolveDocumentAdvanced(design);
-    onChange({ brand, customLogo: undefined, accentColor: brand.primary, showLogo: true, design: { ...design, typography: { ...design.typography, header: { ...design.typography.header, color: brand.primary } }, advanced: { ...advanced, colors: { ...advanced.colors, tableHeaderBackground: brand.primary }, typography: { ...advanced.typography, title: { ...advanced.typography.title, color: brand.primary } } } } });
+    onChange(applyDocumentBrand(config, brand));
   };
   const changeAccent = (accentColor: string) => {
     const advanced = design.advanced ?? resolveDocumentAdvanced(design);
@@ -87,8 +87,7 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
   const importBrand = async (file?: File) => {
     if (!file) return;
     try {
-      if (file.size > 2_000_000) throw new Error("Choose a Brandkit JSON profile smaller than 2 MB.");
-      applyBrand(importInvoiceBrand(JSON.parse(await file.text()))); onError("");
+      applyBrand(await importBrandkitFile(file));
     } catch (error) { onError(error instanceof Error ? error.message : "Could not import the Brandkit profile."); }
   };
 
@@ -112,8 +111,8 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, makeDefa
       <PageDesignControls {...controls} />
       <DocumentGeometryControls {...controls} />
       <DesignSection id="branding" title="Branding">
-        <div className="invoice-brand-controls"><strong>Brand kit</strong><button className="btn btn--sm" type="button" onClick={() => { try { applyBrand(importInvoiceBrand(ddcnorthBrand, "https://projects.ahmadjalil.com/brandkit/?brand=ddcnorth")); onError(""); } catch (error) { onError(error instanceof Error ? error.message : "Could not apply brand."); } }}>Apply ddcnorth</button>
-          <Field label="Import Brandkit profile" hint="Use source/consumer-profile.json from a Brandkit download. Existing circle-symbol brand.json files are also supported."><input className="input" type="file" accept=".json,application/json" onChange={(e) => { void importBrand(e.target.files?.[0]); e.target.value = ""; }} /></Field>
+        <div className="invoice-brand-controls"><strong>Brand kit</strong>{workspaceBrand && <button className="btn btn--sm" type="button" onClick={() => applyBrand(workspaceBrand)}>Use workspace Brandkit</button>}
+          <Field label="Import Brandkit profile" hint="Choose a Brandkit ZIP or a JSON profile. Save this design as the default to use its Brandkit in the gallery."><input className="input" type="file" accept=".zip,.json,application/zip,application/json" onChange={(e) => { void importBrand(e.target.files?.[0]); e.target.value = ""; }} /></Field>
           {config.brand && <div><p>{config.brand.name} · {config.brand.version}</p><p className="muted">Document body font: {invoiceBrandFontDescription(config.brand)}. Legal and contact details come from your organization.</p>{config.brand.sourceTypography && <p className="muted">Logo lettering is preserved as vector artwork. Heading and label fonts use the document typography controls; source font files are not imported.</p>}<div className="invoice-brand-swatches">{[config.brand.primary, config.brand.ink, config.brand.paper, config.brand.light].map((color, index) => <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />)}</div><button type="button" className="btn btn--sm" onClick={() => onChange({ brand: undefined, customLogo: undefined })}>Use organization branding</button></div>}
         </div>
         <Field label="Upload custom logo" hint="PNG or JPEG, up to 175 KB and 4096 pixels per side. Saved with this template and its invoices."><input className="input" type="file" accept="image/png,image/jpeg" onChange={(event) => { void uploadLogo(event.target.files?.[0]); event.target.value = ""; }} /></Field>

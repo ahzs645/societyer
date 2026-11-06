@@ -276,8 +276,10 @@ test("public demo creates an issued Brandkit invoice with society EFT instructio
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/demo/app/invoices?tab=templates");
-  await page.getByRole("button", { name: "Use ddcnorth brand", exact: true }).click();
+  await page.getByRole("button", { name: "New template", exact: true }).click();
   const drawer = page.getByRole("dialog");
+  await drawer.getByLabel("Import Brandkit profile", { exact: true }).setInputFiles("scripts/fixtures/brandkit/ddcnorth.json");
+  await expect(drawer.getByRole("img", { name: "ddcnorth logo", exact: true })).toBeVisible();
   await drawer.getByLabel("Template name", { exact: true }).fill("Public demo Brandkit invoice");
   await drawer.getByText("Use for new invoices by default", { exact: true }).click();
   await drawer.getByRole("button", { name: "Save template", exact: true }).click();

@@ -1,6 +1,8 @@
 # Brandkit imports for document templates
 
-In **Invoices → Templates → Branding**, use **Import Brandkit profile** to select `source/consumer-profile.json` from a [Brandkit](https://projects.ahmadjalil.com/brandkit/) download. Review the live preview and **Preview PDF**, then save the template. Applying a profile changes the selected document template's artwork and presentation colors. Legal names, addresses, tax registration, customer details, payment instructions and invoice amounts continue to come from workspace records. Each invoice keeps its saved template snapshot, so selecting a different brand for a reusable template does not restyle an already issued invoice.
+Open **Invoices → Templates → Import Brandkit** and choose a [Brandkit](https://projects.ahmadjalil.com/brandkit/) ZIP or JSON profile. The designer opens the workspace's default template with the imported artwork and colors. Review the preview and save the template as the default to apply its brand to the workspace's starting designs for invoices, receipts, work orders, quotes, statements and reports. Inside a template, **Import Brandkit profile** applies the same upload to that design. **Use workspace Brandkit** applies the current default brand to the design you're editing.
+
+The ZIP importer uses the portable profile when included. Brandkit packs such as First Form's can supply `brand.json` and the vector artwork listed in `brandkit-pack.json`. The importer reads only those entries and uses the pack's palette to resolve the logo colors. Legal and payment details come from workspace records. Issued invoices retain their saved design.
 
 ## Portable profile
 
