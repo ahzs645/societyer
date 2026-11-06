@@ -18,11 +18,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { hostedPrincipal } from "./lib/authIdentity";
 import { assertExternalIdentityActive, matchesAuthBinding } from "../shared/functions/identity";
 import { workspaceCreationAccessPortable } from "../shared/functions/society";
-import { resolveSessionBroker } from "../shared/authConfiguration";
+import { authenticatorEnrollmentEnabled, resolveSessionBroker } from "../shared/authConfiguration";
 import { allowedAuthEmailDomains } from "../shared/authEmailPolicy";
 import { authInstanceDetails } from "../shared/authInstance";
 import { deploymentCapabilities as resolveDeploymentCapabilities } from "../shared/deploymentCapabilities";
-import { authComponent, createAuth, hostedAuthEmailConfigured } from "./hostedAuth";
+import { authComponent, createAuth, hostedAuthEmailConfigured, hostedAuthSignUpEnabled } from "./hostedAuth";
 import { registerSharePointRoutes } from "./sharePointHttp";
 import { registerProcurementReviewRoutes } from "./procurementReviewHttp";
 import { registerMeetingSourceRoutes } from "./meetingSourceHttp";
@@ -61,6 +61,7 @@ export const authCapabilities = authorizedQuery("http:authCapabilities", query)(
     emailDelivery: v.boolean(),
     allowedEmailDomains: v.array(v.string()),
     signUpEnabled: v.boolean(),
+    authenticatorEnrollment: v.optional(v.boolean()),
     developmentMail: v.optional(v.boolean()),
     // SOCIETYER_AUTH_INSTANCE_NAME / SOCIETYER_AUTH_SUPPORT_EMAIL; omitted when unset.
     instanceName: v.optional(v.string()),
@@ -70,7 +71,8 @@ export const authCapabilities = authorizedQuery("http:authCapabilities", query)(
     mode: resolveSessionBroker(process.env),
     emailDelivery: hostedAuthEmailConfigured(),
     allowedEmailDomains: allowedAuthEmailDomains(process.env),
-    signUpEnabled: !allowedAuthEmailDomains(process.env).length || hostedAuthEmailConfigured(),
+    signUpEnabled: hostedAuthSignUpEnabled(),
+    ...(resolveSessionBroker(process.env) === "convex" && authenticatorEnrollmentEnabled(process.env) ? { authenticatorEnrollment: true } : {}),
     ...(developmentMailConfigured(process.env) ? { developmentMail: true } : {}),
     ...authInstanceDetails(process.env),
   }),

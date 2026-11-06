@@ -1,0 +1,6 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "societyer-firstform",
+  "pages_build_output_dir": "../../tmp/firstform-dist",
+  "compatibility_date": "2026-11-05"
+}

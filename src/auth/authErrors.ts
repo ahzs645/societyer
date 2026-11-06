@@ -44,6 +44,9 @@ export function authFailureFromResponse(
   { minPasswordLength = 10 }: { minPasswordLength?: number } = {},
 ): AuthFailure {
   const code = error.code ?? "";
+  if (code === "ACCOUNT_TEMPORARILY_LOCKED") {
+    return new AuthFailure("rate-limit", "Too many verification attempts. Your account is temporarily locked. Try again later.");
+  }
   if (error.status === 429 || code === "TOO_MANY_REQUESTS" || /too many/i.test(error.message ?? "")) {
     return new AuthFailure("rate-limit", rateLimitMessage(error.message));
   }

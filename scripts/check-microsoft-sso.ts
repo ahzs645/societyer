@@ -84,6 +84,19 @@ try {
       assert.equal(Boolean(auth.options.socialProviders?.microsoft), ${mode === "better-auth"});
       assert.equal(auth.options.account.accountLinking.enabled, false);
       assert.equal(auth.options.account.accountLinking.disableImplicitLinking, true);
+      if (getAuthMode() === "better-auth") {
+        const { getMigrations } = await import("better-auth/db/migration");
+        await (await getMigrations(auth.options)).runMigrations();
+        const provider = (await auth.$context).socialProviders.find(item => item.id === "microsoft");
+        assert.ok(provider);
+        assert.equal(await provider.accountSubject({ profile: { sub: "existing-subject", oid: "directory-id" }, tokens: {} }), "existing-subject");
+        const direct = await auth.handler(new Request(microsoftSsoConfig.baseURL + "/api/auth/sign-in/social", {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: microsoftSsoConfig.baseURL },
+          body: JSON.stringify({ provider: "microsoft", idToken: { token: "direct-token" } }),
+        }));
+        assert.equal((await direct.json()).code, "ID_TOKEN_NOT_SUPPORTED");
+      }
     `;
     execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", checkServerConfiguration], {
       cwd: projectDirectory,
@@ -106,8 +119,6 @@ try {
 
 const providerOptions = createMicrosoftSsoProvider(config);
 const provider = microsoft(providerOptions);
-assert.equal(await provider.verifyIdToken("a-directly-submitted-id-token", "nonce"), false,
-  "Direct ID-token sign-in stays disabled; use browser authorization-code, state, and PKCE");
 const redirectURI = `${config.baseURL}/api/auth/callback/microsoft`;
 const authorizeURL = await provider.createAuthorizationURL({
   state: "local-test-state", codeVerifier: "local-test-code-verifier-at-least-43-characters", redirectURI,
@@ -154,7 +165,7 @@ async function signedToken(claims: JWTPayload = {}, options: { issuer?: string; 
 try {
   const authenticated = await provider.getUserInfo({ idToken: await signedToken(), accessToken: "unused-test-access-token" });
   assert.ok(authenticated);
-  assert.equal(authenticated.user.id, baseClaims.sub);
+  assert.equal(authenticated.data.sub, baseClaims.sub);
   assert.equal(authenticated.user.email, baseClaims.email, "UPN never replaces the token email");
   assert.equal(authenticated.user.emailVerified, false, "Tenant authentication alone does not verify mailbox ownership");
   assert.equal(authenticated.user.appRoleHint, undefined, "Entra roles must not become Societyer workspace roles");

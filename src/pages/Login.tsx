@@ -6,7 +6,7 @@ import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
 import { AuthPending, AuthShell, BusyLabel } from "../auth/AuthShell";
 import { CheckEmailBody, checkEmailShell, type SentState } from "../auth/CheckEmail";
-import { authEmailDomainHint, useAuthCapabilities } from "../auth/authCapabilities";
+import { authEmailDomainHint, useAuthCapabilities, useGatewayAuthProviders } from "../auth/authCapabilities";
 import { AuthFailure, authFailureFromResponse, toAuthFailure } from "../auth/authErrors";
 import { PasswordField } from "../auth/PasswordField";
 import { getSafeAuthRedirect } from "../lib/authRedirect";
@@ -14,10 +14,11 @@ import { loadSessionAuthClient } from "../lib/sessionAuthClient";
 import { authEmailAllowed, authEmailPolicyMessage } from "../../shared/authEmailPolicy";
 
 const ClerkLogin = lazy(() => import("../auth/ClerkLogin"));
+const SecondFactorPrompt = lazy(() => import("../auth/SecondFactorPrompt"));
 
 type Mode = "sign-in" | "sign-up" | "forgot";
 
-const SIGN_UP_UNAVAILABLE = "Sign-up is temporarily unavailable while email verification is being configured.";
+const SIGN_UP_UNAVAILABLE = "Public sign-up is closed. Contact your workspace administrator for an account.";
 
 /** Absolute app URL for links in auth emails; the auth server is on another origin. */
 function appUrl(path: string) {
@@ -28,6 +29,7 @@ function appUrl(path: string) {
 export function LoginPage() {
   const auth = useAuth();
   const [searchParams] = useSearchParams();
+  const [needsSecondFactor, setNeedsSecondFactor] = useState(false);
 
   if (auth.mode === "none") {
     return <Navigate to="/app" replace />;
@@ -50,6 +52,13 @@ export function LoginPage() {
           </button>
         )}
       </AuthShell>
+    );
+  }
+  if (needsSecondFactor && !auth.session) {
+    return (
+      <Suspense fallback={<AuthShell title="Verify your sign-in"><AuthPending>Loading verification…</AuthPending></AuthShell>}>
+        <SecondFactorPrompt onCancel={() => setNeedsSecondFactor(false)} />
+      </Suspense>
     );
   }
   if (auth.isPending) {
@@ -87,10 +96,10 @@ export function LoginPage() {
     );
   }
 
-  return <EmailSignIn safeRedirect={safeRedirect} />;
+  return <EmailSignIn safeRedirect={safeRedirect} onSecondFactor={() => setNeedsSecondFactor(true)} />;
 }
 
-function EmailSignIn({ safeRedirect }: { safeRedirect: string }) {
+function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; onSecondFactor: () => void }) {
   const auth = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   // `?mode=sign-up` / `?mode=forgot` select the form, as in ClerkLogin, so a
@@ -124,7 +133,7 @@ function EmailSignIn({ safeRedirect }: { safeRedirect: string }) {
   const [sent, setSent] = useState<SentState | null>(null);
   const [resent, setResent] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
+  const microsoftEnabled = useGatewayAuthProviders()?.microsoft?.enabled === true;
   // Convex-hosted sign-in can only verify emails and reset passwords when the
   // deployment has a mail sender configured.
   const capabilities = useAuthCapabilities();
@@ -140,28 +149,6 @@ function EmailSignIn({ safeRedirect }: { safeRedirect: string }) {
 
   const errorRef = useRef<HTMLDivElement>(null);
   const focusAfterError = useRef(false);
-
-  useEffect(() => {
-    if (auth.mode !== "better-auth") return;
-    const controller = new AbortController();
-    void (async () => {
-      try {
-        const { authClient } = await import("../lib/authClient");
-        if (controller.signal.aborted) return;
-        const { data } = await authClient.$fetch<{
-          mode: string;
-          microsoft: { enabled: boolean };
-        }>("/providers", { signal: controller.signal });
-        if (!controller.signal.aborted) {
-          setMicrosoftEnabled(data?.mode === "better-auth" && data.microsoft?.enabled === true);
-        }
-      } catch {
-        // An unavailable provider endpoint leaves email sign-in usable.
-        if (!controller.signal.aborted) setMicrosoftEnabled(false);
-      }
-    })();
-    return () => controller.abort();
-  }, [auth.mode]);
 
   // `verified`, `reset` and `sso` are one-shot messages, read into state
   // above; drop them so a reload or a bookmark doesn't repeat a stale notice.
@@ -252,7 +239,12 @@ function EmailSignIn({ safeRedirect }: { safeRedirect: string }) {
           minPasswordLength: passwordMinLength,
         });
       }
-      if (mode === "sign-up" && auth.mode === "convex" && emailDelivery && !result.data?.token) {
+      if (mode === "sign-in" && result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect === true) {
+        setPassword("");
+        onSecondFactor();
+        return;
+      }
+      if (mode === "sign-up" && auth.mode === "convex" && emailDelivery && !(result.data && "token" in result.data && result.data.token)) {
         showSent("verify");
       }
     } catch (err: unknown) {

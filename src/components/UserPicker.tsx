@@ -10,9 +10,11 @@ import {
   setStoredUserId,
 } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, ShieldCheck } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+import { useAuthenticatorEnrollment } from "../auth/authCapabilities";
+import { usesBetterAuthClient } from "../lib/authMode";
 import { useDialogFocus } from "../lib/useDialogFocus";
 
 const ClerkAccountButton = lazy(() => import("../auth/ClerkAccountButton"));
@@ -48,6 +50,7 @@ export function actAsLocalUser(id: string) {
 
 export function UserPicker() {
   const auth = useAuth();
+  const authenticatorEnrollment = useAuthenticatorEnrollment();
   const society = useSociety();
   const users = useLocalActorChoices();
   const current = useCurrentUser();
@@ -140,6 +143,9 @@ export function UserPicker() {
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
           {auth.mode === "clerk" && (
             <Suspense fallback={null}><ClerkAccountButton /></Suspense>
+          )}
+          {usesBetterAuthClient(auth.mode) && (authenticatorEnrollment || auth.session?.user.twoFactorEnabled) && (
+            <Link to="/account/security" className="btn btn--ghost btn--sm"><ShieldCheck size={12} /> Account security</Link>
           )}
           {current?.memberId && (
             <Link to="/portal" className="btn btn--ghost btn--sm">

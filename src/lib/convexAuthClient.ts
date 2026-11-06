@@ -1,4 +1,5 @@
 import { createAuthClient } from "better-auth/react";
+import { twoFactorClient } from "better-auth/client/plugins";
 import { convexClient, crossDomainClient } from "@convex-dev/better-auth/client/plugins";
 import { convexAuthSiteUrl } from "./convexSite";
 
@@ -11,7 +12,7 @@ export const authClient = createAuthClient({
   baseURL: convexAuthSiteUrl(),
   // Renew an active persistent session and recheck it after focus/reconnect.
   sessionOptions: { refetchInterval: 300, refetchOnWindowFocus: true, refetchWhenOffline: false },
-  plugins: [convexClient(), crossDomainClient()],
+  plugins: [convexClient(), crossDomainClient(), twoFactorClient()],
 });
 
 export type BetterAuthSession = typeof authClient.$Infer.Session;

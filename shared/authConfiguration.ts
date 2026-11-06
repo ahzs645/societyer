@@ -3,6 +3,11 @@
  * `convex` runs Better Auth inside the Convex deployment itself (no Node auth server).
  */
 export type SessionBroker = "none" | "better-auth" | "clerk" | "convex";
+
+/** Allow new authenticator enrollment without disabling challenges for enrolled users. */
+export function authenticatorEnrollmentEnabled(env: Record<string, string | undefined>): boolean {
+  return env.SOCIETYER_AUTH_TOTP_ENROLLMENT === "1";
+}
 export type AuthEnvironment = Record<string, string | undefined>;
 export const DEFAULT_AUTH_ISSUER = "http://127.0.0.1:5173";
 

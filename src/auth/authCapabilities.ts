@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/convexApi";
 import { useAuth } from "./AuthProvider";
 
@@ -10,6 +11,36 @@ import { useAuth } from "./AuthProvider";
 export function useAuthCapabilities() {
   const auth = useAuth();
   return useQuery(api.http.authCapabilities, auth.mode === "convex" ? {} : "skip");
+}
+
+type GatewayAuthProviders = {
+  mode: string;
+  microsoft?: { enabled: boolean };
+  authenticatorEnrollment?: boolean;
+};
+
+export function useGatewayAuthProviders() {
+  const { mode } = useAuth();
+  const [providers, setProviders] = useState<GatewayAuthProviders | null>(null);
+  useEffect(() => {
+    if (mode !== "better-auth") return;
+    const controller = new AbortController();
+    void import("../lib/authClient").then(async ({ authClient }) => {
+      if (controller.signal.aborted) return;
+      const { data } = await authClient.$fetch<GatewayAuthProviders>("/providers", { signal: controller.signal });
+      if (!controller.signal.aborted && data?.mode === "better-auth") setProviders(data);
+    }).catch(() => {
+      // Email sign-in remains available when provider discovery is unavailable.
+    });
+    return () => controller.abort();
+  }, [mode]);
+  return mode === "better-auth" ? providers : null;
+}
+
+export function useAuthenticatorEnrollment() {
+  const hosted = useAuthCapabilities();
+  const gateway = useGatewayAuthProviders();
+  return hosted?.authenticatorEnrollment === true || gateway?.authenticatorEnrollment === true;
 }
 
 /**

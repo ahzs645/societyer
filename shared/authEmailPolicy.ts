@@ -1,4 +1,9 @@
-/** Server-owned instance access policy. An empty allowlist preserves open registration. */
+/** In manual mode an operator vouches for each account before the user sets a password. */
+export function manualAuthProvisioningEnabled(env: Record<string, string | undefined>): boolean {
+  return env.SOCIETYER_AUTH_MANUAL_PROVISIONING === "1";
+}
+
+/** Server-owned email domain policy. */
 export function allowedAuthEmailDomains(env: Record<string, string | undefined>): string[] {
   const configured = env.SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS;
   if (configured === undefined) return [];

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthShell } from "../auth/AuthShell";
 import { AuthFailure, authFailureFromResponse, toAuthFailure } from "../auth/authErrors";
 import { PasswordField } from "../auth/PasswordField";
@@ -7,11 +7,12 @@ import { loadSessionAuthClient } from "../lib/sessionAuthClient";
 
 const MIN_PASSWORD_LENGTH = 10;
 
-/** Landing page for a password-reset email link (Convex-hosted sign-in). */
+/** Landing page for a password-reset or operator-issued setup link. */
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token");
+  const { hash } = useLocation();
+  const token = searchParams.get("token") ?? new URLSearchParams(hash.slice(1)).get("token");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);

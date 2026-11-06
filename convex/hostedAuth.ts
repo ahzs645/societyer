@@ -11,15 +11,18 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth/minimal";
+import { twoFactor } from "better-auth/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import { APIError, createAuthMiddleware, createEmailVerificationToken } from "better-auth/api";
 import { components, internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import { internalAction, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { z } from "zod";
 import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
-import { hostedSessionConfiguration, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
-import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage } from "../shared/authEmailPolicy";
+import { authenticatorEnrollmentEnabled, hostedSessionConfiguration, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
+import { authInstanceDetails } from "../shared/authInstance";
+import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage, manualAuthProvisioningEnabled } from "../shared/authEmailPolicy";
 import { emailProviderConfiguration } from "../shared/emailConfiguration";
 import { developmentMailConfigured, assertDevelopmentMail } from "../shared/developmentMailConfiguration";
 
@@ -29,6 +32,10 @@ export const authComponent = createClient<DataModel>(components.betterAuth);
 export function hostedAuthEmailConfigured(env: Record<string, string | undefined> = process.env): boolean {
   if (env.SOCIETYER_AUTH_DEVELOPMENT_MAIL === "1") return developmentMailConfigured(env);
   return emailProviderConfiguration(env).live;
+}
+
+export function hostedAuthSignUpEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return !manualAuthProvisioningEnabled(env) && (!allowedAuthEmailDomains(env).length || hostedAuthEmailConfigured(env));
 }
 
 function escapeHtml(value: string) {
@@ -77,17 +84,20 @@ async function clientIp(ctx: GenericCtx<DataModel>): Promise<string | null> {
   return meta?.getRequestMetadata ? (await meta.getRequestMetadata()).ip : null;
 }
 
-function throttleHooks(ctx: GenericCtx<DataModel>, domains: readonly string[], emailConfigured: boolean) {
+function throttleHooks(ctx: GenericCtx<DataModel>, domains: readonly string[], signUpEnabled: boolean) {
   // Only HTTP requests (actions) reach these routes; other callers build a static instance.
   if (!("runMutation" in ctx)) return {};
   return {
     before: createAuthMiddleware(async (hook) => {
+      if (hook.path === "/two-factor/enable" && !authenticatorEnrollmentEnabled(process.env)) {
+        throw new APIError("FORBIDDEN", { message: "Authenticator enrollment is closed for this instance." });
+      }
       if (domains.length && ["/sign-up/email", "/sign-in/email", "/change-email"].includes(hook.path)) {
         const email = hook.path === "/change-email" ? hook.body?.newEmail : hook.body?.email;
         if (!authEmailAllowed(email, domains)) throw new APIError("FORBIDDEN", { message: authEmailPolicyMessage(domains) });
-        if (hook.path === "/sign-up/email" && !emailConfigured) {
-          throw new APIError("FORBIDDEN", { message: "Sign-up is temporarily unavailable while email verification is being configured." });
-        }
+      }
+      if (hook.path === "/sign-up/email" && !signUpEnabled) {
+        throw new APIError("FORBIDDEN", { message: "Public sign-up is closed for this instance." });
       }
       const rule = THROTTLES[hook.path];
       if (!rule) return;
@@ -125,6 +135,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
   }
   const emailConfigured = hostedAuthEmailConfigured();
   const domains = allowedAuthEmailDomains(process.env);
+  const signUpEnabled = hostedAuthSignUpEnabled();
   const checkEmail = (email: unknown) => {
     if (!authEmailAllowed(email, domains)) throw new APIError("FORBIDDEN", { message: authEmailPolicyMessage(domains) });
   };
@@ -141,13 +152,13 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     },
     emailAndPassword: {
       enabled: true,
-      disableSignUp: domains.length > 0 && !emailConfigured,
+      disableSignUp: !signUpEnabled,
       minPasswordLength: 10,
       // A reset ends every session, including one an attacker may hold.
       revokeSessionsOnPasswordReset: true,
       // With mail configured, an account must prove its mailbox before it can
       // sign in. Invitations always require a verified email.
-      requireEmailVerification: emailConfigured || domains.length > 0,
+      requireEmailVerification: emailConfigured || domains.length > 0 || manualAuthProvisioningEnabled(process.env),
       ...(emailConfigured ? {
         // Duplicate signup deliberately returns generic success. Resend a link
         // for an existing unverified account instead of silently doing nothing.
@@ -186,8 +197,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     // `throttleHooks` limits by account and by Convex's own client IP instead.
     rateLimit: { enabled: false },
     advanced: { ipAddress: { disableIpTracking: true } },
-    hooks: throttleHooks(ctx, domains, emailConfigured),
+    hooks: throttleHooks(ctx, domains, signUpEnabled),
     plugins: [
+      twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" }),
       crossDomain({ siteUrl: siteUrls[0] }),
       convex({
         authConfig,
@@ -201,6 +213,47 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     ],
   });
 };
+
+type HostedAuthAdapter = Awaited<ReturnType<typeof createAuth>["$context"]>["internalAdapter"];
+
+async function savePasswordResetToken(adapter: HostedAuthAdapter, userId: string, token: string) {
+  await adapter.createVerificationValue({
+    identifier: `reset-password:${token}`,
+    value: userId,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  });
+}
+
+/** Create a login for an operator-confirmed address and return its private setup link. */
+export const provisionAccount = internalAction({
+  args: { email: v.string(), name: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> =>
+    ctx.runMutation(internal.hostedAuth.createProvisionedAccount, { ...args, token: generateRandomString(32) }),
+});
+
+export const createProvisionedAccount = internalMutation({
+  args: { email: v.string(), name: v.string(), token: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    if (resolveSessionBroker(process.env) !== "convex" || !manualAuthProvisioningEnabled(process.env)) {
+      throw new Error("Manual account provisioning is disabled on this deployment.");
+    }
+    const email = args.email.trim().toLowerCase();
+    const name = args.name.trim();
+    if (!z.string().email().max(320).safeParse(email).success) throw new Error("Enter a valid email address.");
+    if (!name || name.length > 100) throw new Error("Enter a name of at most 100 characters.");
+    const domains = allowedAuthEmailDomains(process.env);
+    if (!authEmailAllowed(email, domains)) throw new Error(authEmailPolicyMessage(domains));
+
+    const base = resolveConvexAuthSiteUrls(process.env)[0];
+    const { internalAdapter } = await createAuth(ctx).$context;
+    if (await internalAdapter.findUserByEmail(email)) throw new Error("An account already uses this email address.");
+    const user = await internalAdapter.createUser({ email, name, emailVerified: true }, { method: "admin" });
+    await savePasswordResetToken(internalAdapter, user.id, args.token);
+    return `${base.replace(/\/+$/, "")}/reset-password#token=${encodeURIComponent(args.token)}`;
+  },
+});
 
 /**
  * Operator-only recovery when the deployment has no mail sender: returns a
@@ -222,15 +275,11 @@ export const issuePasswordResetLink = internalAction({
     const authContext = await auth.$context;
     const account = await authContext.internalAdapter.findUserByEmail(email.trim().toLowerCase());
     if (!account) throw new Error(`No account uses ${email.trim()}.`);
-    const token = generateRandomString(32);
-    await authContext.internalAdapter.createVerificationValue({
-      identifier: `reset-password:${token}`,
-      value: account.user.id,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-    });
     // The app's own reset page; pass appUrl when it is served under a sub-path.
-    const base = (appUrl ?? resolveConvexAuthSiteUrls(process.env)[0]).replace(/\/+$/, "");
+    const base = appUrl ?? resolveConvexAuthSiteUrls(process.env)[0];
+    const token = generateRandomString(32);
+    await savePasswordResetToken(authContext.internalAdapter, account.user.id, token);
     console.log(`Issued a password-reset link for account ${account.user.id}.`);
-    return `${base}/reset-password?token=${encodeURIComponent(token)}`;
+    return `${base.replace(/\/+$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
   },
 });

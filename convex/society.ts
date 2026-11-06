@@ -40,6 +40,7 @@ import {
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { linkGoverningDocumentPortable } from "../shared/functions/governingDocuments";
 import { createWorkspacePortable } from "../shared/functions/societyCreate";
+import { installInitialInvoiceTemplate } from "./lib/initialInvoiceTemplate";
 import { buildConvexCapabilities } from "./providers/capabilities";
 import { getOwned, requireAuthenticated, requireSocietyMembership } from "../shared/functions/access";
 import { PORTABLE_ACCESS_ENFORCEMENT } from "../shared/portable/define";
@@ -264,12 +265,13 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     // Seed an Owner user so the workspace has an admin actor from the start
     // (matches createWorkspace). Without this the Users page is stranded.
     const ownerEmail = rest.officialEmail || `owner@${rest.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`;
-    await seedNewSocietyOwnerPortable(await toPortableMutationCtx(ctx), {
+    await seedNewSocietyOwnerPortable(portable, {
       societyId: newId,
       placeholderEmail: ownerEmail,
       placeholderDisplayName: rest.privacyOfficerName || "Owner",
       createdAtISO: new Date().toISOString(),
     });
+    await installInitialInvoiceTemplate(portable, newId);
     return newId;
   },
 });
@@ -333,10 +335,14 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
   }),
   // One handler for hosted Convex and the local runtime (A4); record-table
   // metadata definitions live here, so the wrapper seeds them.
-  handler: async (ctx, args) =>
-    createWorkspacePortable(await toPortableMutationCtx(ctx), args, {
+  handler: async (ctx, args) => {
+    const portable = await toPortableMutationCtx(ctx);
+    const workspace = await createWorkspacePortable(portable, args, {
       seedRecordTableMetadata: (societyId) => seedSociety(ctx, societyId),
-    }),
+    });
+    await installInitialInvoiceTemplate(portable, workspace.societyId);
+    return workspace;
+  },
 });
 
 export const updateModules = authorizedMutation("society:updateModules", mutation)({

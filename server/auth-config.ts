@@ -3,9 +3,11 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
-import { jwt } from "better-auth/plugins";
-import { authSessionDurationSeconds, resolveAuthIssuer, validateHostedAuth, type SessionBroker } from "../shared/authConfiguration";
-import { createMicrosoftSsoProvider, getMicrosoftSsoConfig } from "./microsoft-sso";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { jwt, twoFactor } from "better-auth/plugins";
+import { authenticatorEnrollmentEnabled, authSessionDurationSeconds, resolveAuthIssuer, validateHostedAuth, type SessionBroker } from "../shared/authConfiguration";
+import { authInstanceDetails } from "../shared/authInstance";
+import { createMicrosoftSsoProvider, getMicrosoftSsoConfig, microsoftAccountSubject } from "./microsoft-sso";
 
 const DEVELOPMENT_AUTH_SECRET =
   "societyer-dev-secret-change-me-before-production-use";
@@ -48,7 +50,8 @@ export function createAuthDatabase() {
   return new DatabaseSync(filePath);
 }
 
-export const microsoftSsoConfig = getAuthMode() === "better-auth" ? getMicrosoftSsoConfig() : undefined;
+const managesUserSignIn = getAuthMode() === "better-auth";
+export const microsoftSsoConfig = managesUserSignIn ? getMicrosoftSsoConfig() : undefined;
 
 export const auth = betterAuth({
   baseURL: authIssuer,
@@ -66,7 +69,16 @@ export const auth = betterAuth({
     accountLinking: { enabled: false, disableImplicitLinking: true, trustedProviders: [] },
   },
   session: { expiresIn: authSessionDurationSeconds(process.env), disableSessionRefresh: true },
+  hooks: {
+    before: createAuthMiddleware(async ({ path }) => {
+      if (path === "/two-factor/enable" && !authenticatorEnrollmentEnabled(process.env)) {
+        throw new APIError("FORBIDDEN", { message: "Authenticator enrollment is closed for this instance." });
+      }
+    }),
+  },
   plugins: [
+    ...(managesUserSignIn ? [twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" })] : []),
+    ...(microsoftSsoConfig ? [microsoftAccountSubject] : []),
     jwt({
       jwks: { keyPairConfig: { alg: "ES256" } },
       jwt: { issuer: authIssuer, audience: authIssuer, expirationTime: "5m" },

@@ -14,6 +14,8 @@
     "build": "npm run convex:typecheck && tsc -b && vite build",
     "build:ddcnorth": "npm run convex:typecheck && tsc -b && vite build --mode ddcnorth",
     "deploy:ddcnorth": "npm run build:ddcnorth && CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b wrangler pages deploy dist --project-name societyer-ddcnorth --branch main --commit-dirty=true",
+    "build:firstform": "npm run convex:typecheck && tsc -b && vite build --mode firstform --outDir tmp/firstform-dist",
+    "deploy:firstform": "npm run build:firstform && CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b wrangler pages deploy --cwd deploy/firstform --project-name societyer-firstform --branch main",
     "desktop:typecheck": "tsc -p tsconfig.electron.json --noEmit",
     "desktop:metadata": "node scripts/write-electron-build-metadata.mjs",
     "desktop:build": "npm run desktop:metadata && tsc -p tsconfig.electron.json && VITE_RUNTIME_MODE=electron-local VITE_DOCUMENT_STORAGE_PROVIDER=local-filesystem VITE_BASE_PATH=./ vite build",
@@ -232,6 +234,7 @@
     "test:authorization-policy": "tsx scripts/check-authorization-policy.ts",
     "test:hosted-identity": "tsx scripts/check-hosted-identity.ts",
     "test:auth-broker": "tsx scripts/check-auth-broker.ts",
+    "test:authenticator-browser": "tsx scripts/check-authenticator-browser.ts",
     "test:document-security": "tsx scripts/check-document-security.ts",
     "test:document-upload-binding": "tsx scripts/check-document-upload-binding.ts",
     "test:integration-settings": "tsx scripts/check-integration-settings.ts",
@@ -458,7 +461,7 @@
     "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@clerk/backend": "^3.22.0",
     "@clerk/react": "^6.17.5",
-    "@convex-dev/better-auth": "^0.12.5",
+    "@convex-dev/better-auth": "~0.13.0",
     "@formepdf/core": "0.29.0",
     "@formepdf/react": "0.29.0",
     "@kenjiuno/msgreader": "^1.28.0",
@@ -483,7 +486,7 @@
     "@xmldom/xmldom": "^0.9.12",
     "@xyflow/react": "^12.10.2",
     "ai": "^6.0.177",
-    "better-auth": "^1.6.3",
+    "better-auth": "~1.7.18",
     "bwip-js": "^4.10.1",
     "concurrently": "^9.2.1",
     "convex": "^1.17.4",
@@ -539,10 +542,5 @@
     "vite": "^5.4.11",
     "wait-on": "^9.0.10",
     "wrangler": "^4.151.1"
-  },
-  "overrides": {
-    "@convex-dev/better-auth": {
-      "convex-helpers": "0.1.120"
-    }
   }
 }

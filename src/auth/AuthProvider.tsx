@@ -25,7 +25,7 @@ import {
 } from "../hooks/useSociety";
 
 export type AuthSession = {
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; twoFactorEnabled?: boolean | null };
   session?: { id: string };
 };
 

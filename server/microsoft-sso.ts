@@ -1,4 +1,5 @@
-import type { MicrosoftOptions } from "better-auth/social-providers";
+import type { MicrosoftEntraIDProfile, MicrosoftOptions } from "better-auth/social-providers";
+import type { BetterAuthPlugin } from "better-auth";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,9 +76,9 @@ export function createMicrosoftSsoProvider(config: MicrosoftSsoConfig): Microsof
     disableIdTokenSignIn: true,
     async getUserInfo(tokens) {
       if (!tokens.idToken) return null;
-      let claims: Record<string, unknown>;
+      let claims: MicrosoftEntraIDProfile;
       try {
-        const verified = await jwtVerify(tokens.idToken, keys, {
+        const verified = await jwtVerify<MicrosoftEntraIDProfile>(tokens.idToken, keys, {
           algorithms: ["RS256"],
           audience: config.clientId,
           issuer,
@@ -99,7 +100,6 @@ export function createMicrosoftSsoProvider(config: MicrosoftSsoConfig): Microsof
       const verifiedSecondary = Array.isArray(claims.verified_secondary_email) && claims.verified_secondary_email.includes(email);
       return {
         user: {
-          id: claims.sub,
           name: typeof claims.name === "string" ? claims.name : "",
           email,
           emailVerified: claims.email_verified === true || verifiedPrimary || verifiedSecondary,
@@ -109,3 +109,21 @@ export function createMicrosoftSsoProvider(config: MicrosoftSsoConfig): Microsof
     },
   };
 }
+
+// Existing Societyer accounts use the verified Entra sub. Better Auth 1.7
+// defaults to oid, which would otherwise break those account bindings.
+export const microsoftAccountSubject = {
+  id: "societyer-microsoft-account-subject",
+  init(ctx) {
+    return { context: {
+      socialProviders: ctx.socialProviders.map(provider => provider.id === "microsoft" ? {
+        ...provider,
+        accountSubject: ({ profile }) => {
+          const sub = (profile as { sub?: unknown }).sub;
+          if (typeof sub !== "string" || !sub) throw new Error("Microsoft account subject is missing.");
+          return sub;
+        },
+      } : provider),
+    } };
+  },
+} satisfies BetterAuthPlugin;

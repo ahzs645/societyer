@@ -6,6 +6,7 @@ import { auth, getAuthMode, microsoftSsoConfig } from "./auth-config";
 import { mountApiGateway } from "./api-gateway";
 import { clerkVerificationConfig } from "./clerk-auth";
 import { microsoftProviderDiscovery } from "./microsoft-sso";
+import { authenticatorEnrollmentEnabled } from "../shared/authConfiguration";
 
 const port = Number(process.env.AUTH_SERVER_PORT ?? 8787);
 
@@ -24,7 +25,10 @@ async function main() {
 
   app.get("/api/auth/providers", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
-    res.json(microsoftProviderDiscovery(authMode, microsoftSsoConfig));
+    res.json({
+      ...microsoftProviderDiscovery(authMode, microsoftSsoConfig),
+      ...(authMode === "better-auth" && authenticatorEnrollmentEnabled(process.env) ? { authenticatorEnrollment: true } : {}),
+    });
   });
 
   if (authMode === "better-auth" || authMode === "clerk") {
