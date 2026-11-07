@@ -12179,9 +12179,27 @@
     ]
   },
   {
+    "key": "convex:hostedAuth:createProvisionedAccount",
+    "surface": "convex",
+    "name": "hostedAuth:createProvisionedAccount",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/hostedAuth.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:hostedAuth:issuePasswordResetLink",
     "surface": "convex",
     "name": "hostedAuth:issuePasswordResetLink",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/hostedAuth.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:hostedAuth:provisionAccount",
+    "surface": "convex",
+    "name": "hostedAuth:provisionAccount",
     "kind": "action",
     "access": "service",
     "source": "convex/hostedAuth.ts",
@@ -14937,6 +14955,28 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:upsertCustomer",
+    "surface": "convex",
+    "name": "invoices:upsertCustomer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "accountingCounterparties",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -28503,6 +28543,56 @@
     ]
   },
   {
+    "key": "convex:workspaceMfa:getPolicy",
+    "surface": "convex",
+    "name": "workspaceMfa:getPolicy",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/workspaceMfa.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceMfa:purgeExpiredClerkSessions",
+    "surface": "convex",
+    "name": "workspaceMfa:purgeExpiredClerkSessions",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceMfa.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceMfa:recordClerkSession",
+    "surface": "convex",
+    "name": "workspaceMfa:recordClerkSession",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceMfa.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceMfa:setPolicy",
+    "surface": "convex",
+    "name": "workspaceMfa:setPolicy",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/workspaceMfa.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:writtenResolutions:certifyVoteCount",
     "surface": "convex",
     "name": "writtenResolutions:certifyVoteCount",
@@ -41817,6 +41907,28 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:upsertCustomer",
+    "surface": "portable",
+    "name": "invoices:upsertCustomer",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "accountingCounterparties",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
