@@ -1,4 +1,5 @@
 import { privacyAssessmentValidators } from "./lib/privacyValidators";
+import { naicsSectorValidator } from "./lib/naics";
 import { normalizeAddressText } from "../shared/structuredAddress";
 import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../shared/onboarding";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
@@ -155,6 +156,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     continuanceDate: v.optional(v.string()),
     amalgamationDate: v.optional(v.string()),
     naicsCode: v.optional(v.string()),
+    naicsSector: naicsSectorValidator,
     niceClassification: v.optional(v.string()),
     isCharity: v.boolean(),
     isMemberFunded: v.boolean(),

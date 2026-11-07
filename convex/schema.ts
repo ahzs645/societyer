@@ -4,6 +4,7 @@ import { payrollRuleTables } from "./tables/payrollRules";
 import { payrollTd1Tables } from "./tables/payrollTd1";
 import { meetingTranscriptionTables } from "./tables/meetingTranscription";
 import { privacyAssessmentValidators } from "./lib/privacyValidators";
+import { naicsSectorValidator } from "./lib/naics";
 import {personHistoryTables} from './tables/personHistory';
 import { reviewEvidenceTables } from "./tables/reviewEvidence";
 import { defineSchema, defineTable } from "convex/server";
@@ -176,6 +177,7 @@ export default defineSchema({
     continuanceDate: v.optional(v.string()),
     amalgamationDate: v.optional(v.string()),
     naicsCode: v.optional(v.string()),
+    naicsSector: naicsSectorValidator,
     niceClassification: v.optional(v.string()),
     isCharity: v.boolean(),
     isMemberFunded: v.boolean(),
