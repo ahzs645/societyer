@@ -242,22 +242,19 @@ export function DeadlinesPage() {
                 aria-label="Show deadlines"
               />
             )}
+            {!isPhone && (
+              <Segmented<StatusFilter>
+                value={statusFilter}
+                onChange={setStatusFilter}
+                items={STATUS_FILTER_ITEMS}
+              />
+            )}
             <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
               <Plus size={12} /> New deadline
             </button>
           </>
         }
       />
-
-        {!isPhone && (
-        <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "var(--s-2)" }}>
-          <Segmented<StatusFilter>
-            value={statusFilter}
-            onChange={setStatusFilter}
-            items={STATUS_FILTER_ITEMS}
-          />
-        </div>
-        )}
 
       {(
         showMetadataWarning ? (

@@ -8,23 +8,54 @@
 // this workspace's documents; on phones it is the full-width bottom sheet.
 // ============================================================
 
-// Actions sit under the label: the card is a narrow column on desktop and
-// the full width of a phone, so the table never scrolls sideways.
-.table.society-doc-table {
-  // Fill the card and wrap long document titles instead of scrolling.
+// One entry per document: name with its status badge at the right edge, and
+// the actions below at the card's full width, so three or four fit one line
+// in the narrow desktop column and on a 320px phone.
+.table-wrap > .table.society-doc-table,
+.society-doc-table tbody {
+  display: block;
   width: 100%;
+  min-width: 0;
 }
-.society-doc-table thead th:last-child {
-  text-align: left;
+.card__body > .table-wrap.society-doc-table-wrap {
+  margin-inline: 0;
+  width: auto;
 }
-.society-doc-table .gov-doc-row td {
-  vertical-align: top;
-  padding-block: token('s-2');
+.society-doc-table thead {
+  display: none;
 }
-.society-doc-table .gov-doc-row td:first-child {
+.society-doc-table .gov-doc-row {
+  display: block;
+  position: relative;
+  border-bottom: 1px solid token('border');
+}
+.society-doc-table .gov-doc-row:last-child {
+  border-bottom: 0;
+}
+.society-doc-table-wrap .table.society-doc-table .gov-doc-row > td {
+  display: block;
+  position: static;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: auto;
+  padding: token('s-2') 0;
+  border: 0;
+  box-shadow: none;
+}
+.table.society-doc-table .gov-doc-row td:first-child {
   min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+.table.society-doc-table .gov-doc-row td:first-child > strong {
+  display: block;
+  padding-right: 72px;
+}
+.table.society-doc-table .gov-doc-row td:last-child {
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 .gov-doc-row__title,
 .gov-doc-row__note {
@@ -44,7 +75,22 @@
   flex-wrap: wrap;
   align-items: center;
   gap: token('s-1');
-  margin-top: token('s-2');
+  margin-top: token('s-1');
+}
+// Ghost actions line up with the name above them.
+.gov-doc-row__actions > .btn--ghost:first-child {
+  margin-left: -8px;
+}
+@media (max-width: 560px) {
+  .gov-doc-row__actions > .btn--ghost {
+    padding-inline: 6px;
+  }
+  .gov-doc-row__actions > .btn--ghost:first-child {
+    margin-left: -6px;
+  }
+  .gov-doc-row__actions > .btn--ghost svg {
+    display: none;
+  }
 }
 
 // ------------------------------------------------------------ the picker

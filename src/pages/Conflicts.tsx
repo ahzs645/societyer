@@ -16,6 +16,7 @@ import { Plus, AlertTriangle } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { RegisterPhoneCard } from "../features/registers/RegisterPhoneCard";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -23,6 +24,7 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  recordText,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -154,6 +156,19 @@ export function ConflictsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || conflicts === undefined}
+            renderPhoneCard={(record) => (
+              <RegisterPhoneCard
+                title={recordText(record.contractOrMatter)}
+                badge={record.resolvedAt
+                  ? <Badge tone="success">Resolved {formatDate(recordText(record.resolvedAt))}</Badge>
+                  : <Badge tone="warn">Open</Badge>}
+                meta={`${recordText(record.director)} · Declared ${formatDate(recordText(record.declaredAt))}`}
+                detail={`Abstained: ${record.abstainedFromVote ? "Yes" : "No"} · Left room: ${record.leftRoom ? "Yes" : "No"}`}
+                action={!record.resolvedAt ? (
+                  <button className="btn btn--sm" disabled={!canWrite} onClick={() => resolve({ id: record._id as Id<"conflicts">, resolvedAt: todayDateOnly() })}>Resolve</button>
+                ) : null}
+              />
+            )}
             renderCell={({ record, field }) => {
               if (field.name === "status") {
                 return record.resolvedAt

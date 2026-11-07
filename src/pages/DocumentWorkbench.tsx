@@ -16,6 +16,7 @@ import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
+import { useIsMobile } from "../lib/useIsMobile";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
@@ -59,6 +60,7 @@ import {
 } from "lucide-react";
 
 export function DocumentWorkbenchPage() {
+  const isMobile = useIsMobile();
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
@@ -192,6 +194,18 @@ export function DocumentWorkbenchPage() {
   };
 
   const reviewStatus = normalizeDocumentReviewStatus(document.reviewStatus);
+  const changeReviewStatus = async (status: (typeof DOCUMENT_REVIEW_STATUSES)[number]) => {
+    try {
+      await updateReviewStatus({
+        id: document._id,
+        reviewStatus: status === "none" ? undefined : status,
+        actorName: user?.displayName,
+      });
+      toast.success("Review status updated", documentReviewStatusLabel(status));
+    } catch (error: any) {
+      toast.error("Could not update review status", error?.message ?? String(error));
+    }
+  };
   const openComments = (comments ?? []).filter((comment: any) => comment.status !== "resolved").length;
   const downloadAvailable = Boolean(openable && documentHasFile(openable)) || Boolean(legacyUrl);
   const fileName = document.fileName ?? latest?.fileName;
@@ -228,7 +242,7 @@ export function DocumentWorkbenchPage() {
             <p className="muted document-metadata-note" role="note">No file is attached to this document — it is a metadata record. Its source and content are shown below.</p>
           ) : (
           <div className="card">
-            <div className="card__head">
+            <div className="card__head document-workbench-head">
               <h2 className="card__title">Review workbench</h2>
               {openable && downloadAvailable && <DocumentPreviewButton document={openable} label="Expand preview" />}
               <span className="card__subtitle">
@@ -346,30 +360,29 @@ export function DocumentWorkbenchPage() {
           <div className="card">
             <div className="card__head"><h2 className="card__title">Review status</h2></div>
             <div className="card__body">
-              <div className="row document-status-buttons" style={{ gap: 6, flexWrap: "wrap" }} role="group" aria-label="Review status">
-                {DOCUMENT_REVIEW_STATUSES.map((status) => (
-                  <button
-                    key={status}
-                    className={`btn btn--sm ${reviewStatus === status ? "btn--accent" : "btn--ghost"}`}
-                    aria-pressed={reviewStatus === status}
-                    disabled={!canEdit}
-                    onClick={async () => {
-                      try {
-                        await updateReviewStatus({
-                          id: document._id,
-                          reviewStatus: status === "none" ? undefined : status,
-                          actorName: user?.displayName,
-                        });
-                        toast.success("Review status updated", documentReviewStatusLabel(status));
-                      } catch (error: any) {
-                        toast.error("Could not update review status", error?.message ?? String(error));
-                      }
-                    }}
-                  >
-                    {documentReviewStatusLabel(status)}
-                  </button>
-                ))}
-              </div>
+              {isMobile ? (
+                <Select
+                  aria-label="Review status"
+                  value={reviewStatus}
+                  disabled={!canEdit}
+                  options={DOCUMENT_REVIEW_STATUSES.map((status) => ({ value: status, label: documentReviewStatusLabel(status) }))}
+                  onChange={(status) => { void changeReviewStatus(status); }}
+                />
+              ) : (
+                <div className="row document-status-buttons" style={{ gap: 6, flexWrap: "wrap" }} role="group" aria-label="Review status">
+                  {DOCUMENT_REVIEW_STATUSES.map((status) => (
+                    <button
+                      key={status}
+                      className={`btn btn--sm ${reviewStatus === status ? "btn--accent" : "btn--ghost"}`}
+                      aria-pressed={reviewStatus === status}
+                      disabled={!canEdit}
+                      onClick={() => { void changeReviewStatus(status); }}
+                    >
+                      {documentReviewStatusLabel(status)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="card">

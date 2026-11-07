@@ -1,7 +1,7 @@
-import { Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { InfoPopover } from "../components/InfoPopover";
 import { ReactNode, useState, createElement, useLayoutEffect, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -10,7 +10,8 @@ import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/ro
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { getRuntimeMode } from "../lib/runtimeMode";
 import { useTranslation } from "react-i18next";
-import { useScrollOverflow } from "../hooks/useScrollOverflow";
+import { Menu } from "../components/Menu";
+import { useIsMobile } from "../lib/useIsMobile";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
@@ -101,11 +102,26 @@ const RELATED_DOCUMENT_VIEWS = [
 
 export function RelatedDocumentViews({ current }: { current: (typeof RELATED_DOCUMENT_VIEWS)[number]["to"] }) {
   const links = RELATED_DOCUMENT_VIEWS.filter((view) => view.to !== current);
-  // Phones scroll the row sideways; data-overflow fades whichever edge is cut.
-  const rowRef = useRef<HTMLDivElement>(null);
-  const overflow = useScrollOverflow(rowRef, [links.length]);
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  // The chips can't fit a phone's width, so they fold into one menu.
+  if (isMobile) {
+    return (
+      <div className="related-views">
+        <Menu
+          label="Related views"
+          trigger={
+            <button type="button" className="btn-action">
+              Related <ChevronDown size={12} aria-hidden="true" />
+            </button>
+          }
+          sections={[{ id: "related", items: links.map((view) => ({ id: view.to, label: view.label, onSelect: () => navigate(view.to) })) }]}
+        />
+      </div>
+    );
+  }
   return (
-    <div ref={rowRef} data-overflow={overflow} className="row muted related-views" style={{ gap: 6, alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
+    <div className="row muted related-views" style={{ gap: 6, alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
       <span>Related:</span>
       {links.map((view) => (
         <Link key={view.to} to={view.to} className="chip chip--sm">

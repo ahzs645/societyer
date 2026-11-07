@@ -535,7 +535,7 @@ export function CommunicationsPage() {
         </p>
       )}
 
-      <div style={{ margin: "0 0 12px", overflowX: "auto", maxWidth: "100%" }}>
+      <div className="comms-sections" style={{ margin: "0 0 12px", maxWidth: "100%" }}>
         <Segmented<CommsSection>
           value={section}
           onChange={setSection}

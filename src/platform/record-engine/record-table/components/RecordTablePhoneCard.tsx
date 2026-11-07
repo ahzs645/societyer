@@ -27,7 +27,8 @@ export function RecordTablePhoneCard({
   badge?: ReactNode;
   /** Secondary facts, joined with " · " on one line; empty entries are dropped. */
   meta?: ReactNode[];
-  onOpen: () => void;
+  /** Leave out for records with no detail view: the card reads as text, with no chevron. */
+  onOpen?: () => void;
   /** While selecting, the card list's overlay takes taps; keep the card out of the tab order. */
   selecting?: boolean;
   /** Names the actions menu ("Row actions for <name>"); defaults to a string title, else the record's title field. */
@@ -36,8 +37,8 @@ export function RecordTablePhoneCard({
   variant?: "page" | "auto";
 }) {
   const facts = Children.toArray(meta ?? []).filter((fact) => fact !== "" && fact != null);
-  const card = (
-    <button type="button" className="record-phone-card" onClick={onOpen} tabIndex={selecting ? -1 : undefined}>
+  const body = (
+    <>
       <span className="record-phone-card__title">{title}</span>
       {facts.length > 0 && (
         <span className="record-phone-card__meta">
@@ -50,8 +51,13 @@ export function RecordTablePhoneCard({
         </span>
       )}
       {badge ? <span className="record-phone-card__badge">{badge}</span> : null}
-      <ChevronRight size={16} aria-hidden="true" className="record-phone-card__chevron" />
-    </button>
+      {onOpen && <ChevronRight size={16} aria-hidden="true" className="record-phone-card__chevron" />}
+    </>
+  );
+  const card = onOpen ? (
+    <button type="button" className="record-phone-card" onClick={onOpen} tabIndex={selecting ? -1 : undefined}>{body}</button>
+  ) : (
+    <div className="record-phone-card">{body}</div>
   );
   const actions = useRecordTableCardActions();
   if (!actions) return card;

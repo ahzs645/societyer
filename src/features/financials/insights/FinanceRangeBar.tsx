@@ -57,7 +57,8 @@ export function FinanceRangeBar({
               title={item.title}
               onClick={() => onCompare(item.id)}
             >
-              {item.label}
+              <span className="finance-label-wide">{item.label}</span>
+              <span className="finance-label-narrow" aria-hidden="true">{item.shortLabel}</span>
             </button>
           ))}
         </div>

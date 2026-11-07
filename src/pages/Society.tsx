@@ -1004,6 +1004,7 @@ export function SocietyPage() {
                   rows={detail?.registrations ?? []}
                   empty="No external or extra-provincial registrations yet."
                   columns={["Jurisdiction", "Registration", "Dates", "Status", ""]}
+                  tableClassName="table--stack-mobile"
                   render={(row: any) => [
                     <div key="j">
                       <strong>{optionLabel("entityJurisdictions", row.jurisdiction)}</strong>
@@ -1027,6 +1028,7 @@ export function SocietyPage() {
                   rows={detail?.identifiers ?? []}
                   empty="No tax or registry identifiers yet."
                   columns={["Kind", "Number", "Jurisdiction", "Status", ""]}
+                  tableClassName="table--stack-mobile"
                   render={(row: any) => [
                     optionLabel("taxNumberTypes", row.kind),
                     row.accessLevel === "restricted" || !row.number
@@ -1176,7 +1178,7 @@ function SimpleTable({ rows, columns, render, empty, tableClassName }: any) {
       <thead><tr>{columns.map((column: string) => <th key={column}>{column}</th>)}</tr></thead>
       <tbody>
         {rows.map((row: any) => (
-          <tr key={row._id}>{render(row).map((cell: any, index: number) => <td key={index}>{cell}</td>)}</tr>
+          <tr key={row._id}>{render(row).map((cell: any, index: number) => <td key={index} data-label={columns[index] || undefined}>{cell}</td>)}</tr>
         ))}
       </tbody>
     </table>
@@ -1185,7 +1187,7 @@ function SimpleTable({ rows, columns, render, empty, tableClassName }: any) {
 
 function RowActions({ onEdit, onRemove }: { onEdit: () => void; onRemove: () => void }) {
   return (
-    <div className="row" style={{ justifyContent: "flex-end" }}>
+    <div className="row org-row-actions">
       <button className="btn btn--ghost btn--sm" onClick={onEdit}>Edit</button>
       <button className="btn btn--ghost btn--sm btn--icon" aria-label="Remove" onClick={onRemove}><Trash2 size={12} /></button>
     </div>

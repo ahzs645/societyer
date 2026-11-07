@@ -31,7 +31,7 @@ export function SpendBudgetDetail({ budget, canWrite, onClose, onEdit }: { budge
       className="spend-budget-detail"
       footer={
         <>
-          <button className="btn" type="button" onClick={onClose}>Close</button>
+          <button className="btn drawer-footer-close" type="button" onClick={onClose}>Close</button>
           <button className="btn btn--accent" type="button" disabled={!canWrite} onClick={onEdit}><Pencil size={12} aria-hidden="true" /> Edit</button>
         </>
       }

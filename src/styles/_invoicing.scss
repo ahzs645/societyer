@@ -771,11 +771,27 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   dd { margin: 0; }
   .is-overdue dd { color: token(orange-11); }
 }
+.invoice-drawer__balance { font-weight: token(fw-semibold); }
 .invoice-drawer__actions { display: flex; flex-wrap: wrap; gap: token(s-1); padding: token(s-3) 0; }
-/* Phones: the main action gets its own row, so the overflow menu never drops
- * onto a line by itself. */
+.invoice-drawer__action-short { display: none; }
+/* Phones: one row, even at 320px. The main action comes first and takes the
+ * spare width; Edit drops to its pencil and "Record payment" to "Payment". */
 @media (max-width: 560px) {
-  .invoice-drawer__actions > .btn--accent { flex: 1 1 100%; justify-content: center; order: -1; }
+  .invoice-drawer__figures {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    > div { align-items: flex-start; }
+  }
+  .invoice-drawer__actions { flex-wrap: nowrap; }
+  .invoice-drawer__actions > .btn { flex: none; justify-content: center; }
+  .invoice-drawer__actions > .btn--accent { flex: 1 1 auto; order: -1; }
+  .invoice-drawer__action-wide { display: none; }
+  .invoice-drawer__action-short { display: inline; }
+}
+/* The narrowest phones lose the icons beside labels; the words carry the row. */
+@media (max-width: 340px) {
+  .invoice-drawer__actions > .btn:not(.invoice-drawer__action-edit) > svg { display: none; }
 }
 .invoice-drawer__note { margin: 0 0 token(s-2); font-size: token(fs-sm); }
 .invoice-drawer__section { padding: token(s-3) 0; border-top: 1px solid token(border); }
@@ -924,7 +940,8 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 }
 .series-card__due { color: token(orange-11); }
 .series-card__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: token(s-2); }
-.series-card__note { display: inline-flex; align-items: center; gap: 4px; font-size: token(fs-xs); }
+/* A wrapping note, so the two buttons stay on its row instead of below it. */
+.series-card__note { display: inline-flex; flex: 1 1 280px; align-items: center; gap: 4px; font-size: token(fs-xs); }
 @media (max-width: 560px) {
   .series-card__figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .series-card__foot .btn { width: 100%; justify-content: center; }
@@ -1167,10 +1184,27 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 .invoice-builder__summary > .invoice-final-price__open { justify-self: start; }
 
 /* Customers */
-.invoice-customers__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: token(s-2); }
+.invoice-customers__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: token(s-2); margin-left: auto; }
 .invoice-customers__search { position: relative; display: flex; align-items: center; color: token(text-secondary); }
 .invoice-customers__search svg { position: absolute; left: token(s-2); pointer-events: none; }
 .invoice-customers__search .input { width: 200px; padding-left: calc(#{token(s-2)} + 20px); }
+/* Phones: the tab already says Customers. Search and Add share one row, and a
+ * panel's single head button stays beside its title. */
+@media (max-width: 560px) {
+  .invoice-customers__intro {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .invoice-customers__tools { flex: 1 1 100%; flex-wrap: nowrap; margin-left: 0; }
+  .invoice-customers__tools > :first-child:not(.btn) { flex: 1 1 auto; min-width: 0; }
+  .invoice-customers__search .input { width: 100%; }
+  .invoice-card > .card__head:has(> .btn) { flex-wrap: nowrap; align-items: flex-start; }
+  .invoice-card > .card__head:has(> .btn) > :first-child { flex: 1 1 auto; min-width: 0; }
+}
 /* Laptop widths: keep the row actions in view. The card layout takes over on phones. */
 @media (min-width: 761px) and (max-width: 1360px) {
   .invoice-table--customers tr > :nth-child(5) { display: none; }

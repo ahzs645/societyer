@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { BudgetBars, ChartCard } from "../../../components/charts";
+import { MobileFold } from "../../../components/MobileFold";
 import { formatMoney } from "../../../lib/money";
 
 const FUNDED_STATUSES = new Set(["Awarded", "Active", "Closed", "Completed"]);
@@ -38,10 +39,13 @@ export function GrantFundingCard({ societyId }: { societyId: string }) {
   const committed = rows.reduce((sum, r) => sum + r.planned, 0);
   const spent = rows.reduce((sum, r) => sum + r.actual, 0);
 
+  const summary = loading ? undefined : `${formatMoney(spent, { trimWholeCents: true })} spent of ${formatMoney(committed, { trimWholeCents: true })} awarded · ${formatMoney(committed - spent, { trimWholeCents: true, signDisplay: "auto" })} remaining`;
+
   return (
+    <MobileFold title="Grant funds" summary={summary}>
     <ChartCard
       title="Grant funds: committed, spent and remaining"
-      subtitle={loading ? undefined : `${formatMoney(spent, { trimWholeCents: true })} spent of ${formatMoney(committed, { trimWholeCents: true })} awarded · ${formatMoney(committed - spent, { trimWholeCents: true, signDisplay: "auto" })} remaining`}
+      subtitle={summary}
       loading={loading}
       height={120}
       className="grant-funding-card"
@@ -62,5 +66,6 @@ export function GrantFundingCard({ societyId }: { societyId: string }) {
         labels={{ planned: "Awarded", favourable: "remaining", unfavourable: "overspent" }}
       />
     </ChartCard>
+    </MobileFold>
   );
 }

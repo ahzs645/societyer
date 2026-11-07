@@ -941,8 +941,12 @@ select.select:hover:not(:disabled) {
     padding-bottom: max(token('s-3'), env(safe-area-inset-bottom, 0px));
   }
 
+  /* Natural widths, so actions share a row whenever they fit and fill it. */
   .drawer__footer > * {
-    flex: 1 1 140px;
+    flex: 1 1 auto;
+  }
+  .drawer__footer > .btn--icon {
+    flex: none;
   }
 
   .drawer__body .row {

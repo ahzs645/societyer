@@ -257,7 +257,8 @@ export function AgmWorkflowPage() {
 
       {isLocalDataRuntime() && !meetingHeld && <p className="muted" role="status">Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.</p>}
 
-      <div className="card">
+      <div className="agm-workflow__layout">
+      <div className="card agm-workflow__posture">
         <div className="card__head"><h2 className="card__title">Compliance posture</h2></div>
         <div className="card__body col" style={{ gap: 8 }}>
           <Item label="Notice timing"
@@ -322,7 +323,7 @@ export function AgmWorkflowPage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card agm-workflow__steps">
         <div className="card__head"><h2 className="card__title">Steps</h2></div>
         <div className="card__body" style={{ padding: 0 }}>
           {steps.map((s, i) => {
@@ -338,8 +339,8 @@ export function AgmWorkflowPage() {
             const active = !done && ((!run && i === 0) || (run != null && i === currentIdx + 1));
             const Icon = s.icon;
             return (
-              <div key={s.id} style={{
-                display: "flex", gap: 12, padding: "14px 16px",
+              <div key={s.id} className="agm-workflow__step" style={{
+                display: "flex", gap: 12,
                 borderBottom: i < steps.length - 1 ? "1px solid var(--border)" : "none",
                 background: active ? "var(--accent-soft)" : undefined,
               }}>
@@ -491,9 +492,7 @@ export function AgmWorkflowPage() {
         </div>
       </div>
 
-      <div className="spacer-6" />
-
-      <div className="card">
+      <div className="card agm-workflow__log">
         <div className="card__head">
           <h2 className="card__title">Notice delivery log</h2>
           <span className="card__subtitle">{deliveries?.length ?? 0} {(deliveries?.length ?? 0) === 1 ? "delivery record" : "delivery records"}</span>
@@ -520,6 +519,7 @@ export function AgmWorkflowPage() {
           </tbody>
         </table>
         </div>
+      </div>
       </div>
     </div>
   );

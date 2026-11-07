@@ -51,6 +51,8 @@ function readView(params: URLSearchParams): InvoiceListView {
   catch { return cleanInvoiceListView(DEFAULT_INVOICE_LIST_VIEW); }
 }
 
+const DEFAULT_VIEW_JSON = JSON.stringify(cleanInvoiceListView(DEFAULT_INVOICE_LIST_VIEW));
+
 const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "needs_action", "recurring", "customers", "catalog", "templates", "price_lists", "repairs", "quotes", "statements", "automation"];
 const LIST_TABS = new Set<InvoiceTab>(["all", "drafts", "outstanding", "overdue", "paid", "needs_action"]);
 const SECTIONS = [
@@ -158,11 +160,14 @@ export function InvoicesPage() {
   };
 
   const listView: InvoiceListView = { ...advancedView, tab: LIST_TABS.has(tab) ? tab as InvoiceListView["tab"] : "all", currency: currencyFilter, search, customerKey: customerFilter?.key ?? "", seriesId: seriesFilter?.id ?? "", recentOnly, sortKey: sort.key, sortDirection: sort.dir };
-  const viewJson = JSON.stringify(listView);
+  // The tab has its own param, so an untouched view leaves the address clean.
+  const viewJson = JSON.stringify({ ...listView, tab: "all" }) === DEFAULT_VIEW_JSON ? null : JSON.stringify(listView);
   useEffect(() => {
     setParams(previous => {
       if (previous.get("view") === viewJson) return previous;
-      const next = new URLSearchParams(previous); next.set("view", viewJson); return next;
+      const next = new URLSearchParams(previous);
+      if (viewJson) next.set("view", viewJson); else next.delete("view");
+      return next;
     }, { replace: true });
   }, [viewJson, setParams]);
   const applyView = (value: InvoiceListView) => {
@@ -388,6 +393,7 @@ export function InvoicesPage() {
     { id: "templates", label: "Templates", count: counts?.templates ?? null },
     { id: "automation", label: "Automation" },
   ];
+  const currencyChoices = [...new Set([queriedWorkspace?.ledger.workspaceCurrency ?? "CAD", ...(queriedWorkspace?.invoices ?? []).map((row) => row.currency), ...(currencyFilter ? [currencyFilter] : [])])];
   const views = allViews.filter((view) => (section.tabs as readonly InvoiceTab[]).includes(view.id));
   const invoiceTabs = views.length > 1 ? <Tabs<InvoiceTab> value={tab} onChange={(next) => setTab(next)} tabRoles ariaLabel={`${section.label} views`} items={views} /> : null;
 
@@ -406,7 +412,7 @@ export function InvoicesPage() {
         }
         actions={
           <>
-            <Select className="page-header-filter" aria-label="Invoice list currency" value={currency} onChange={setCurrencyFilter} options={[...new Set([queriedWorkspace?.ledger.workspaceCurrency ?? "CAD", ...(queriedWorkspace?.invoices ?? []).map((row) => row.currency)])].map((value) => ({ value, label: value }))} />
+            {currencyChoices.length > 1 && <Select className="page-header-filter" aria-label="Invoice list currency" value={currency} onChange={setCurrencyFilter} options={currencyChoices.map((value) => ({ value, label: value }))} />}
             <MoreActionsMenu
               items={[
                 ...(societyLike && workspace?.plans.length ? [{ id: "dues", label: "Generate dues invoices", hint: duesCount ? `${duesCount} this month` : undefined, icon: <Users size={14} />, disabled: !canWrite, onSelect: () => setParam({ dues: "1" }) }] : []),
@@ -493,6 +499,7 @@ export function InvoicesPage() {
               <Search size={15} />
             </button>
           )}
+          {LIST_TABS.has(tab) && <InvoiceViewControls compact societyId={society._id} value={listView} onChange={applyView} />}
         </div>
       ) : invoiceTabs && <div className="invoice-subtabs">{invoiceTabs}</div>}
 
@@ -544,7 +551,6 @@ export function InvoicesPage() {
         <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} defaultCurrency={workspace.ledger.workspaceCurrency} assessmentDate={workspace.today} organization={workspace.organization} />
       ) : LIST_TABS.has(tab) ? (
         <div className="card invoice-card">
-          <InvoiceViewControls societyId={society._id} value={listView} onChange={applyView} />
           {(!isPhone || phoneSearchShown || recentOnly || customerFilter || seriesFilter) && (
           <div className="invoice-toolbar">
             {(!isPhone || phoneSearchShown) && (
@@ -554,6 +560,7 @@ export function InvoicesPage() {
               <input ref={searchInputRef} className="input" type="search" value={search} placeholder="Search number, customer, item" onChange={(e) => setSearch(e.target.value)} />
             </label>
             )}
+            {!isPhone && <InvoiceViewControls societyId={society._id} value={listView} onChange={applyView} />}
             <div className="invoice-chips">
               {recentOnly && <FilterChip label="Cash activity in the last 30 days" onClear={() => setRecentOnly(false)} />}
               {customerFilter && <FilterChip label={customerFilter.name} onClear={() => setCustomerFilter(null)} />}

@@ -328,6 +328,14 @@
 // Phones: the switch takes the head's full width on its own line and its
 // three segments share it, so "Dismissed (0)" is never cut off at 320px.
 @media (max-width: 760px) {
+  // The switch says what the list holds; keep the heading for screen readers.
+  .notifications__recent-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
   .notifications__head-actions {
     flex: 1 1 100%;
     flex-wrap: wrap;

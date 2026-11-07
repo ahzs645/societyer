@@ -404,7 +404,7 @@ export function WaveAccountDetailPage() {
             <Link className="btn-action" to="/app/financials/wave/account">
               <ArrowLeft size={12} /> Accounts
             </Link>
-            <Link className="btn-action" to="/app/financials">
+            <Link className="btn-action finance-crumb-duplicate" to="/app/financials">
               Financials
             </Link>
           </>
@@ -566,7 +566,7 @@ export function WaveResourceDetailPage() {
             <Link className="btn-action" to={`/app/financials/wave/${resource.resourceType}`}>
               <ArrowLeft size={12} /> {waveTypeLabel(resource.resourceType)}
             </Link>
-            <Link className="btn-action" to="/app/financials">
+            <Link className="btn-action finance-crumb-duplicate" to="/app/financials">
               Financials
             </Link>
           </>

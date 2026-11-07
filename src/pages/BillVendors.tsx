@@ -7,7 +7,7 @@ import { ObjectRecordTable, RecordTableEmpty } from "@/platform/record-engine";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
 import { Money } from "../components/Money";
 import { pluralize } from "../lib/format";
 import { BILL_PAYMENT_METHOD_LABEL, isBillPaymentMethod } from "../../shared/bills";
@@ -68,11 +68,11 @@ export function BillVendorsPage() {
         }
       />
 
-      <div className="stat-grid" role="group" aria-label="Vendor summary">
+      <StatStrip className="stat-grid--3 stat-strip--fit" ariaLabel="Vendor summary">
         <StatTile label="Outstanding" icon={<Wallet size={14} />} value={<Money variant="hero" cents={workspace ? totals.outstanding : null} />} sub={workspace ? `Owed to ${pluralize(owed, "vendor")}` : undefined} href="/app/bills?tab=open" actionLabel="Show open bills" />
         <StatTile label="Overdue" icon={<AlertTriangle size={14} />} value={<Money variant="hero" cents={workspace ? totals.overdue : null} />} tone={totals.overdue ? "danger" : "neutral"} href="/app/bills?tab=overdue" actionLabel="Show overdue bills" />
         <StatTile label="Total paid" icon={<CheckCircle2 size={14} />} value={<Money variant="hero" cents={workspace ? totals.paid : null} />} sub="Across every bill" href="/app/bills?tab=paid" actionLabel="Show paid bills" />
-      </div>
+      </StatStrip>
 
       <ObjectRecordTable
         societyId={society._id}

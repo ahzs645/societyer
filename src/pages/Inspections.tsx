@@ -13,6 +13,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Plus, Eye, Trash2 } from "lucide-react";
 import { dollarInputToCents, formatDate, money } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { RegisterPhoneCard } from "../features/registers/RegisterPhoneCard";
 import { useMemo } from "react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -21,11 +22,13 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  recordText,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
+import { MobileFold } from "../components/MobileFold";
 import { legalCopyForOrganization } from "../lib/legalCopy";
 
 export function InspectionsPage() {
@@ -115,7 +118,9 @@ export function InspectionsPage() {
         }
       />
 
-      <LegalRecordsRequirements organization={society} inspection />
+      <MobileFold title="Inspection rights by record category" summary="Who may inspect each kind of record">
+        <LegalRecordsRequirements organization={society} inspection />
+      </MobileFold>
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="records inspection" />
@@ -140,6 +145,23 @@ export function InspectionsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || items === undefined}
+            renderPhoneCard={(record) => (
+              <RegisterPhoneCard
+                title={recordText(record.inspectorName)}
+                badge={record.isMember ? <Badge tone="info">{insiderLabel}</Badge> : <Badge>Public</Badge>}
+                meta={[formatDate(recordText(record.inspectedAtISO)), recordText(record.recordsRequested)].filter(Boolean).join(" · ")}
+                detail={[
+                  record.deliveryMethod === "electronic" ? "Electronic" : "In-person",
+                  `Fee ${money(Number(record.feeCents ?? 0))}`,
+                  record.copyPages ? `Copies ${recordText(record.copies)}` : "",
+                ].filter(Boolean).join(" · ")}
+                action={(
+                  <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete inspection by ${recordText(record.inspectorName)}`} disabled={!canWrite} onClick={() => remove({ id: record._id as Id<"inspections"> })}>
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              />
+            )}
             renderCell={({ record, field }) => {
               if (field.name === "inspectedAtISO") return <span>{formatDate(record.inspectedAtISO)}</span>;
               if (field.name === "inspectorType") return record.isMember ? <Badge tone="info">{insiderLabel}</Badge> : <Badge>Public</Badge>;

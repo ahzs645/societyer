@@ -161,7 +161,7 @@ export function WaveCacheExplorer({
                     </td>
                     <td>{row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{humanizeWaveEnum(row.status)}</Badge> : "—"}</td>
                     <td className="num"><WaveResourceValue row={row} /></td>
-                    <td>{row.dateValue ?? "—"}</td>
+                    <td className={row.dateValue ? undefined : "wave-cache-table__empty"}>{row.dateValue ?? "—"}</td>
                     <td style={{ textAlign: "right" }}>
                       <Link
                         className="btn btn--ghost btn--sm"
@@ -432,7 +432,7 @@ function WaveCacheControls({
   const showAccountViews = mode === "resources" && (resourceType === "account" || resourceType === "all");
 
   return (
-    <div className="card__body" style={{ display: "grid", gap: 12 }}>
+    <div className="card__body wave-controls" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12 }}>
       {mode === "resources" && (
         <>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -496,7 +496,7 @@ function WaveCacheControls({
 
 function ControlGroupLabel({ children }: { children: string }) {
   return (
-    <span className="muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0, textTransform: "uppercase" }}>
+    <span className="muted wave-controls__label" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0, textTransform: "uppercase" }}>
       {children}
     </span>
   );

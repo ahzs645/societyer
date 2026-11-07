@@ -78,7 +78,7 @@ export function MonthTransactionsTable({
                       onSelect(line._id);
                     }}
                   >
-                    <GitCompareArrows size={12} aria-hidden="true" /> Match
+                    <GitCompareArrows size={12} aria-hidden="true" /> <span className="recon-month-table__match-label">Match</span>
                   </button>
                 )}
               </td>

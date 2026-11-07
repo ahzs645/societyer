@@ -100,7 +100,7 @@ export function ChartOfAccountsPage() {
         }
         actions={
           <>
-            <FinanceCreateMenu />
+            <FinanceCreateMenu hideOnPhone />
             <button type="button" className="btn-action btn-action--primary" disabled={!canWrite || rows === undefined} onClick={() => setDrawer({ id: null })}>
               <Plus size={12} aria-hidden="true" /> New account
             </button>

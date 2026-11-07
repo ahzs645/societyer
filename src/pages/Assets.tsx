@@ -399,7 +399,7 @@ export function AssetsPage() {
         }
       />
 
-      <StatStrip ariaLabel="Asset summary">
+      <StatStrip className="stat-strip--fit" ariaLabel="Asset summary">
         <StatTile label="Assets" value={stats.total} sub={`${stats.active} active`} />
         <StatTile label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
         <StatTile label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />

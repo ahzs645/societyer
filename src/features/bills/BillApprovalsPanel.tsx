@@ -65,7 +65,7 @@ export function BillApprovalsPanel({ rows, loading }: { rows: BillRow[]; loading
         <span>{mine ? <><strong>{pluralize(mine, "bill")}</strong> {mine === 1 ? "needs" : "need"} your approval.</> : "Nothing needs your approval right now."}</span>
         <span className="muted approvals-policy__rules"><Link to="/app/bills?tab=approval">Open in Bills</Link></span>
       </div>
-      <table className="table table--comfortable approvals-table">
+      <table className="table table--comfortable approvals-table approvals-table--bills">
         <thead>
           <tr>
             <th>Bill</th>

@@ -567,6 +567,16 @@
 .org-detail-section .table td {
   overflow-wrap: anywhere;
 }
+.org-row-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: token('s-1');
+}
+@media (max-width: 760px) {
+  .org-detail-section .table--stack-mobile .org-row-actions {
+    justify-content: flex-start;
+  }
+}
 .org-address-table th:nth-child(1) { width: 150px; }
 .org-address-table th:nth-child(2) { width: 110px; }
 .org-address-table th:nth-child(4) { width: 130px; }
@@ -640,13 +650,22 @@
   .org-address-table tbody tr:last-child {
     border-bottom: 0;
   }
-  .org-address-table tbody td {
+  .org-detail-section .table.org-address-table tbody td {
     display: grid;
     grid-template-columns: 92px minmax(0, 1fr);
     gap: token('s-2');
+    width: auto;
+    min-width: 0;
+    height: auto;
     padding: 0;
-    border-bottom: 0;
+    border: 0;
+    box-shadow: none;
     align-items: start;
+    white-space: normal;
+    line-height: 1.4;
+  }
+  .org-address-table tbody td .badge {
+    justify-self: start;
   }
   .org-address-table tbody td::before {
     font-size: token('fs-xs');
@@ -659,7 +678,7 @@
   .org-address-table tbody td:nth-child(3)::before { content: "Address"; }
   .org-address-table tbody td:nth-child(4)::before { content: "Effective"; }
   .org-address-table tbody td:nth-child(5)::before { content: ""; }
-  .org-address-table tbody td:nth-child(5) {
+  .org-detail-section .table.org-address-table tbody td:nth-child(5) {
     grid-template-columns: 1fr;
   }
   .org-address-table tbody td:nth-child(5) .row {
@@ -978,6 +997,8 @@
     position: static;
     gap: token('s-4');
   }
+  // The outline repeats what the choices below say; get to them sooner.
+  .app-setup__steps { display: none; }
   .app-setup__actions .btn {
     flex: 1 1 auto;
     justify-content: center;

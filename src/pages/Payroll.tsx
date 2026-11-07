@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useSearchParams } from "react-router-dom";
-import { CalendarClock, ClipboardCheck, FileText, FileUp, Landmark, Plus, Settings2, Users, Wallet } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Calculator, CalendarClock, ClipboardCheck, FileText, FileUp, Landmark, Plus, Settings2, Users, Wallet } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { ObjectRecordTable, RecordTableEmpty } from "@/platform/record-engine";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
@@ -11,7 +11,9 @@ import { useUrlTab } from "../hooks/useUrlTab";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Tabs } from "../components/primitives";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
+import { MobileFold } from "../components/MobileFold";
+import { useIsMobile } from "../lib/useIsMobile";
 import { Money } from "../components/Money";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
@@ -46,6 +48,8 @@ const SLIP_TONE: Record<string, "success" | "warn" | "neutral"> = { filed: "succ
 export function PayrollPage() {
   const society = useSociety();
   const toast = useToast();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { canWrite } = useFinancePermissions();
   const workspace = useQuery(api.payroll.workspace, society ? { societyId: society._id } : "skip") as PayrollWorkspace | undefined;
   const generateSlips = usePermissionedMutation(api.payroll.generateSlips, canWrite);
@@ -128,11 +132,18 @@ export function PayrollPage() {
         }
         actions={
           <>
-            <Link className="btn btn--sm" to="/app/payroll/calculator">Payroll calculator</Link>
-            <Link className="btn btn--sm" to="/app/payroll/calculator?tab=tools">Payroll tools</Link>
-            <Link className="btn btn--sm" to="/app/financials/planning"><CalendarClock size={14} aria-hidden="true" />Semester cost planner</Link>
+            <Link className="btn btn--sm" to="/app/payroll/calculator" aria-label="Payroll calculator">{isMobile ? "Calculator" : "Payroll calculator"}</Link>
+            {/* Phones: these two move into the menu so the header keeps to the title's row. */}
+            {!isMobile && <Link className="btn btn--sm" to="/app/payroll/calculator?tab=tools">Payroll tools</Link>}
+            {!isMobile && <Link className="btn btn--sm" to="/app/financials/planning"><CalendarClock size={14} aria-hidden="true" />Semester cost planner</Link>}
             <MoreActionsMenu
               items={[
+                ...(isMobile
+                  ? [
+                      { id: "tools", label: "Payroll tools", icon: <Calculator size={14} />, onSelect: () => navigate("/app/payroll/calculator?tab=tools") },
+                      { id: "planner", label: "Semester cost planner", icon: <CalendarClock size={14} />, onSelect: () => navigate("/app/financials/planning") },
+                    ]
+                  : []),
                 { id: "import", label: "Import pay runs from CSV", icon: <FileUp size={14} />, disabled: !canWrite, onSelect: () => setDrawer({ kind: "import" }) },
                 { id: "slips", label: `Prepare T4 slips for ${prepYear}`, icon: <FileText size={14} />, disabled: !canWrite || !workspace?.runs.some((run) => run.payDate.startsWith(String(prepYear)) && run.lines.length), onSelect: () => void generate(prepYear) },
                 { id: "settings", label: "Payroll settings", icon: <Settings2 size={14} />, onSelect: () => setDrawer({ kind: "settings" }) },
@@ -145,7 +156,7 @@ export function PayrollPage() {
         }
       />
 
-      <div className="stat-grid" role="group" aria-label="Payroll summary">
+      <StatStrip className="payroll-stats" ariaLabel="Payroll summary">
         <StatTile
           label={`Gross pay, ${currentYear}`}
           icon={<Wallet size={14} />}
@@ -192,7 +203,7 @@ export function PayrollPage() {
           pressed={tab === "runs"}
           actionLabel="Show CPP2 pay run amounts"
         />
-      </div>
+      </StatStrip>
 
       {employees && employees.length === 0 && (
         <p className="register-hint register-hint--banner">
@@ -200,7 +211,9 @@ export function PayrollPage() {
         </p>
       )}
 
-      <PayrollSetupPanel societyId={society._id} onOpenSettings={() => setDrawer({ kind: "settings" })} />
+      <MobileFold title="Payroll setup" summary="Employees, provider, CRA and workers' compensation">
+        <PayrollSetupPanel societyId={society._id} onOpenSettings={() => setDrawer({ kind: "settings" })} />
+      </MobileFold>
 
       <Tabs<PayrollTab>
         value={tab}

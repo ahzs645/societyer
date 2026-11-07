@@ -235,7 +235,7 @@ export function MeetingSidebarColumn({
                     <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
                       {selectedMinutesExportStyle.tone}
                     </p>
-                    <div className="col" style={{ gap: 6 }}>
+                    <div className="minutes-preview-options">
                       {(minutes?.sourceMeetingRecord || minutes?.sourceTransposition) && <Checkbox
                         checked={sourceFidelityInExport && !publicCopyMode && minutesExportStyle !== "board-public"}
                         onChange={setSourceFidelityInExport}

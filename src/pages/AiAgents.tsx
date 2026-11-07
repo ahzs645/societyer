@@ -435,18 +435,20 @@ export function AiAgentsPage() {
             </InfoPopover>
           </div>
           <div className="card__body col ai-setup-form" style={{ gap: 14 }}>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <div className="row ai-setup-form__status">
               <Badge tone={effectiveProvider ? "success" : "warn"}>
                 <KeyRound size={10} /> {effectiveProvider ? `${effectiveProvider.label} · ${effectiveProvider.modelId}` : "No live provider configured"}
               </Badge>
               {effectiveProvider?.scope && <Badge tone="info">{effectiveProvider.scope}</Badge>}
               {effectiveProvider?.validationStatus && <Badge tone="success">{effectiveProvider.validationStatus}</Badge>}
+              <span className="row ai-setup-form__progress">
+                <Badge tone={aiSetup.apiKey.trim() || savedProviderReady ? "success" : "neutral"}>1. Add key</Badge>
+                <Badge tone={setupEditable ? "success" : "neutral"}>2. Choose model</Badge>
+                <Badge tone={setupEditable && aiSetup.modelId.trim() ? "info" : "neutral"}>3. Save</Badge>
+              </span>
             </div>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <Badge tone={aiSetup.apiKey.trim() || savedProviderReady ? "success" : "neutral"}>1. Add key</Badge>
-              <Badge tone={setupEditable ? "success" : "neutral"}>2. Choose model</Badge>
-              <Badge tone={setupEditable && aiSetup.modelId.trim() ? "info" : "neutral"}>3. Save</Badge>
-            </div>
+            <div className="ai-setup-form__steps">
+            <div className="col ai-setup-form__step">
             <div className="settings-pair">
               <Field label="Scope">
                 <Select
@@ -518,7 +520,9 @@ export function AiAgentsPage() {
             <button className="btn btn--accent" disabled={!canConfigureProvider || setupBusy || !aiSetup.apiKey.trim()} onClick={validateProviderAndLoadModels}>
               <ShieldCheck size={12} /> {setupBusy ? "Validating..." : "Validate key and load models"}
             </button>
-            <div style={{ height: 1, background: "var(--border)" }} />
+            </div>
+            <div className="ai-setup-form__divider" aria-hidden="true" />
+            <div className="col ai-setup-form__step">
             <div className="settings-pair">
               <Field label="Label">
                 <input className="input" value={aiSetup.label} onChange={(event) => setAiSetup((draft) => ({ ...draft, label: event.target.value }))} disabled={!setupEditable} />
@@ -555,6 +559,8 @@ export function AiAgentsPage() {
             <button className="btn btn--accent" disabled={setupBusy || !setupEditable || !aiSetup.modelId.trim()} onClick={saveValidatedProvider}>
               <SlidersHorizontal size={12} /> {setupBusy ? "Saving..." : "Save AI provider"}
             </button>
+            </div>
+            </div>
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { SlidersHorizontal } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Drawer, Field } from "../../components/ui";
 import { Checkbox } from "../../components/Controls";
@@ -8,7 +9,13 @@ import { parseMoneyInput } from "../../lib/money";
 import { cleanInvoiceListView, DEFAULT_INVOICE_LIST_VIEW, type InvoiceListView } from "../../../shared/billingPricing";
 
 type SavedView = { _id: string; name: string; config: InvoiceListView };
-export function InvoiceViewControls({ societyId, value, onChange }: { societyId: string; value: InvoiceListView; onChange: (value: InvoiceListView) => void }) {
+export function InvoiceViewControls({ societyId, value, onChange, compact = false }: {
+  societyId: string;
+  value: InvoiceListView;
+  onChange: (value: InvoiceListView) => void;
+  /** Phones: a single icon button in the tab row. Saved views move into its drawer. */
+  compact?: boolean;
+}) {
   const data = useQuery(api.invoicePreferences.workspace, { societyId }) as { views: SavedView[] } | undefined;
   const save = useMutation(api.invoicePreferences.saveView), remove = useMutation(api.invoicePreferences.removeView);
   const toast = useToast();
@@ -26,16 +33,28 @@ export function InvoiceViewControls({ societyId, value, onChange }: { societyId:
     if (next < 0 || next >= columns.length) return;
     [columns[index], columns[next]] = [columns[next], columns[index]]; change({ columns });
   };
-  return <div className="invoice-view-controls">
-    <label><span className="invoice-view-controls__label">Saved view</span> <select className="input" aria-label="Saved invoice view" value={id} onChange={event => {
-      const found = data?.views.find(view => view._id === event.target.value);
+  const savedViews = data?.views ?? [];
+  const activeFilters = [value.fromDate, value.toDate, value.dueFrom, value.dueTo, value.minimumBalanceCents, value.maximumBalanceCents].filter(entry => entry !== "" && entry != null).length;
+  // Only worth showing once there is a saved view to switch to.
+  const viewPicker = (savedViews.length > 0 || id) ? <label><span className="invoice-view-controls__label">Saved view</span> <select className="input" aria-label="Saved invoice view" value={id} onChange={event => {
+      const found = savedViews.find(view => view._id === event.target.value);
       setId(found?._id ?? ""); setName(found?.name ?? ""); setError("");
       onChange(found ? cleanInvoiceListView(found.config) : cleanInvoiceListView(DEFAULT_INVOICE_LIST_VIEW));
-    }}><option value="">Default view</option>{data?.views.map(view => <option key={view._id} value={view._id}>{view.name}</option>)}</select></label>
-    <button className="btn btn--sm" onClick={() => { setError(""); setOpen(true); }}>Filters and columns</button>
+    }}><option value="">Default view</option>{savedViews.map(view => <option key={view._id} value={view._id}>{view.name}</option>)}</select></label> : null;
+  return <div className={`invoice-view-controls${compact ? " invoice-view-controls--compact" : ""}`}>
+    {!compact && viewPicker}
+    <button
+      className={compact ? "btn btn--ghost btn--icon invoice-view-controls__toggle" : "btn btn--sm"}
+      aria-label={activeFilters ? `Filters and columns, ${activeFilters} active` : "Filters and columns"}
+      onClick={() => { setError(""); setOpen(true); }}
+    >
+      {compact ? <SlidersHorizontal size={15} aria-hidden="true" /> : "Filters and columns"}
+      {compact && activeFilters > 0 && <span className="invoice-view-controls__dot" aria-hidden="true" />}
+    </button>
     <Drawer title="Invoice view" open={open} onClose={() => !busy && setOpen(false)} footer={<button className="btn btn--accent" onClick={() => {try {onChange(cleanInvoiceListView(value));setOpen(false);}catch(e){setError(e instanceof Error ? e.message : "Choose a valid view.");}}}>Apply view</button>}>
       <div className="form-stack">
         {error && <p role="alert" className="field__error">{error}</p>}
+        {compact && viewPicker}
         <p className="muted">Filters persist in the page address. Save named views to your own account for reuse.</p>
         <Field label="View name"><input className="input" value={name} onChange={e => setName(e.target.value)} maxLength={100} /></Field>
         <div className="invoice-view-actions"><button className="btn" disabled={busy || !name.trim()} onClick={() => void submit(false)}>{id ? "Update saved view" : "Save view"}</button>{id && <><button className="btn" disabled={busy || !name.trim()} onClick={() => void submit(true)}>Save copy</button><button className="btn btn--danger" disabled={busy} onClick={async () => { setBusy(true); try { await remove({ societyId, id }); setId(""); setName(""); toast.success("View removed"); } catch (e) { setError(e instanceof Error ? e.message : "Could not remove view."); } finally { setBusy(false); } }}>Delete saved view</button></>}</div>

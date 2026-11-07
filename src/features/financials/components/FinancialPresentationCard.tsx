@@ -125,7 +125,7 @@ export function FinancialPresentationCard({
             disabled={!canWrite || documents === undefined}
           />
         </Field>
-        {selectedDocument && <><Link to={`/app/documents/${selectedDocument._id}`} className="muted" style={{ fontSize: 12 }}>Open {selectedDocument.title}</Link><DocumentPreviewByIdButton documentId={selectedDocument._id} /></>}
+        {selectedDocument && <div className="finance-inspector__doc-link"><Link to={`/app/documents/${selectedDocument._id}`} className="muted" style={{ fontSize: 12 }}>Open {selectedDocument.title}</Link><DocumentPreviewByIdButton documentId={selectedDocument._id} /></div>}
         {canWrite && (
           <div>
             <button className="btn btn--accent btn--sm" onClick={() => void save()} disabled={!dirty || saving}>

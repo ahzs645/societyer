@@ -17,6 +17,81 @@
 .bank-accounts-table__reason { display: block; max-width: 22ch; margin-top: 2px; color: token(text-secondary); font-size: token(fs-xs); }
 .bank-accounts-table__actions { width: 1%; text-align: right; white-space: nowrap; }
 
+// Phones: a card per account, so the name, balance and actions stay in view.
+@media (max-width: 760px) {
+  .card > .table.bank-accounts-table {
+    display: block;
+    min-width: 0;
+    thead {
+      display: none;
+    }
+    tbody,
+    tfoot {
+      display: block;
+    }
+    tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: start;
+      gap: 2px token(s-2);
+      padding: token(s-3);
+      border-top: 1px solid token(border-color-light);
+    }
+    td {
+      display: block;
+      height: auto;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      white-space: normal;
+    }
+    td[data-label='Account'] { grid-column: 1; }
+    td[data-label='Balance'] {
+      grid-column: 2;
+      grid-row: 1;
+      font-weight: token(fw-semibold);
+    }
+    td.bank-accounts-table__actions {
+      grid-column: 3;
+      grid-row: 1;
+    }
+    // Source and the status badge share a row; a long reason takes its own.
+    td[data-label='Source'] {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      justify-self: start;
+      color: token(text-secondary);
+      font-size: token(fs-sm);
+    }
+    td[data-label='Status'] {
+      display: contents;
+      > span:first-child {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-self: end;
+      }
+    }
+    td[data-label='Last activity'],
+    td[data-label='Ledger account'] {
+      grid-column: 1 / -1;
+      color: token(text-secondary);
+      font-size: token(fs-sm);
+    }
+    td[data-label='Ledger account']::before {
+      content: 'Ledger: ';
+      color: token(text-tertiary);
+    }
+    .bank-accounts-table__reason {
+      grid-column: 1 / -1;
+      max-width: none;
+      margin-top: 0;
+    }
+    tfoot tr { grid-template-columns: minmax(0, 1fr) auto; }
+    tfoot td { border: 0; }
+    tfoot td:empty { display: none; }
+  }
+}
+
 .bank-account-drawer__intro { margin: 0 0 token(s-3); font-size: token(fs-sm); }
 .bank-account-drawer__row {
   display: grid;
@@ -71,7 +146,7 @@
   gap: 2px;
   min-width: 0;
   min-height: 52px;
-  padding: token(s-2);
+  padding: token(s-2) 6px;
   border: 1px solid token(border);
   border-radius: token(r-md);
   background: token(bg-panel);
@@ -90,21 +165,37 @@
 }
 .recon-month-strip--loading .recon-month { cursor: default; background: token(bg-subtle); }
 .recon-month__name { font-size: token(fs-sm); font-weight: token(fw-semibold); white-space: nowrap; }
+// Wraps rather than truncates: "Difference −$89.60" lost its amount otherwise.
 .recon-month__status {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
-  overflow: hidden;
   font-size: token(fs-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+}
+// Twelve across: the colour and word carry the status, the icon took the room
+// that "Not started" and "Reconciled" need.
+@media (min-width: 1101px) {
+  .recon-month__status svg { display: none; }
 }
 @media (max-width: 1100px) {
   .recon-month-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
-  .recon-month-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  // One swipeable row, not four rows of three above the month's figures.
+  .recon-month-strip {
+    position: relative;
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    &[data-overflow='end'] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+    &[data-overflow='start'] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+    &[data-overflow='both'] { mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+  }
+  .recon-month { flex: 0 0 104px; }
   .recon-month-view { padding: token(s-3); }
   .recon-month-view__balance { margin-left: 0; }
 }
@@ -131,7 +222,8 @@
 .recon-month-summary__auto.is-ready { color: token(success); font-weight: token(fw-medium); }
 .period-pill--not-started { background: token(bg-subtle); color: token(text-secondary); border-color: token(border); }
 @media (max-width: 560px) {
-  .recon-month-summary__figures { grid-template-columns: minmax(0, 1fr); }
+  .recon-month-summary__figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .recon-month-summary__figures > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 
 .recon-month-table { overflow-x: auto; }
@@ -146,6 +238,50 @@
 .recon-month-table__receipt { margin-left: 4px; color: token(text-tertiary); vertical-align: -1px; }
 .recon-month-table__match { width: 1%; text-align: right; white-space: nowrap; }
 .recon-month-table__cleared { display: inline-flex; align-items: center; gap: 4px; color: token(success); font-size: token(fs-xs); }
+
+// Phones: each line is two rows, so Amount no longer sits past the screen edge.
+@media (max-width: 560px) {
+  .recon-month-table__table thead { display: none; }
+  .recon-month-table__table,
+  .recon-month-table__table tbody { display: block; width: 100%; }
+  .recon-month-table__table tbody tr {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 2px token(s-2);
+    padding: token(s-2) token(s-3);
+    border-bottom: 1px solid token(border);
+  }
+  .recon-month-table__table tbody tr:last-child { border-bottom: 0; }
+  .recon-month-table__table tbody tr.is-selected { background: token(bg-selected-alpha); }
+  .recon-month-table__table tbody td,
+  .recon-month-table__table tbody tr:hover td,
+  .recon-month-table__table tbody tr.is-selected td {
+    display: block;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .recon-month-table__table tbody td:empty { display: none; }
+  .recon-month-table__table tbody tr.recon-month-table__opening { grid-template-columns: minmax(0, 1fr) auto; }
+  .recon-month-table__table td[data-label="Date"] { grid-column: 1; grid-row: 1; color: token(text-secondary); font-size: token(fs-xs); }
+  .recon-month-table__table td[data-label="Description"] { grid-column: 2 / span 2; grid-row: 1; }
+  .recon-month-table__table td[data-label="Amount"] { grid-column: 4; grid-row: 1; }
+  .recon-month-table__table td[data-label="Ledger account"] { grid-column: 1 / span 2; grid-row: 2; color: token(text-secondary); font-size: token(fs-xs); }
+  .recon-month-table__table td[data-label="Balance"] {
+    grid-column: 3;
+    grid-row: 2;
+    color: token(text-secondary);
+    font-size: token(fs-xs);
+    white-space: nowrap;
+    &::before { content: "Balance "; }
+  }
+  .recon-month-table__match { grid-column: 4; grid-row: 2; text-align: right; }
+  .recon-month-table__match-label { display: none; }
+}
 
 /* ------------------------------------------------------------ receipt inbox */
 
@@ -232,7 +368,7 @@
 
 /* ------------------------------------------------------------ spend budgets */
 
-.spend-budgets-card { margin-top: token(s-3); }
+.spend-budgets-card { margin-top: token(s-3); container: spend-budgets / inline-size; }
 .spend-budgets-table {
   td { vertical-align: top; }
   tbody tr { cursor: pointer; }
@@ -242,6 +378,46 @@
 .spend-budgets-table__spend .progress { margin: 4px 0 2px; }
 .spend-budgets-table__figures { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 token(s-1); font-size: token(fs-sm); strong { margin-left: auto; } }
 .spend-budgets-table__actions { width: 1%; text-align: right; white-space: nowrap; }
+
+// Seven columns don't fit a phone or the list beside the budget drawer: the
+// name broke letter by letter and Status clipped. Each budget becomes a card.
+@container spend-budgets (max-width: 760px) {
+  .spend-budgets-table thead { display: none; }
+  .spend-budgets-table,
+  .spend-budgets-table tbody { display: block; width: 100%; }
+  .spend-budgets-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token(s-1) token(s-2);
+    padding: token(s-3) token(s-4);
+    border-bottom: 1px solid token(border);
+  }
+  .spend-budgets-table tbody tr:last-child { border-bottom: 0; }
+  .spend-budgets-table tbody tr:hover { background: token(bg-hover); }
+  .spend-budgets-table tbody tr td,
+  .table.spend-budgets-table tbody tr:hover td {
+    display: block;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .spend-budgets-table td[data-label="Budget"] { flex: 1 1 0; order: 1; }
+  .spend-budgets-table td[data-label="Status"] { order: 2; }
+  .spend-budgets-table td.spend-budgets-table__actions { order: 3; width: auto; }
+  .spend-budgets-table td[data-label="Spent this cycle"] { flex: 0 0 100%; order: 4; }
+  .spend-budgets-table td[data-label="Assigned to"],
+  .spend-budgets-table td[data-label="Resets"] { order: 5; color: token(text-secondary); font-size: token(fs-xs); }
+  .spend-budgets-table td[data-label="Resets"]::before { content: "· "; }
+  .spend-budgets-table td[data-label="Remaining"] {
+    order: 6;
+    margin-left: auto;
+    white-space: nowrap;
+    &::before { content: "Remaining "; color: token(text-secondary); font-size: token(fs-xs); }
+  }
+}
 
 .spend-budget-drawer__people { display: flex; flex-wrap: wrap; align-items: center; gap: token(s-1); }
 .spend-budget-drawer__person {

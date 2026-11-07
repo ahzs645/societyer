@@ -277,7 +277,7 @@ export function IntakeRunsPage() {
                 </InfoPopover>
               </div>
               {ocrEnabled && (
-                <div className="intake-llm__grid">
+                <div className="intake-llm__grid intake-llm__grid--inline">
                   <Field label="Most pages to read by OCR in this run" hint="A page takes a few seconds; pages past the limit stay marked as needing OCR.">
                     <input className="input" style={{ width: 120, maxWidth: "100%" }} type="number" min={1} max={5000} step={10} value={ocrPageBudget} onChange={(event) => { const next = Math.min(5000, Math.max(1, Number(event.target.value) || 1)); setOcrPageBudget(next); writeOcrPrefs({ enabled: true, pageBudget: next }); }} disabled={busy} />
                   </Field>
@@ -354,7 +354,7 @@ export function IntakeRunsPage() {
           </div>
         </section>
 
-        <section className="card intake-progress" aria-labelledby="intake-progress-title" aria-live="polite">
+        <section className={`card intake-progress${progress ? "" : " intake-progress--idle"}`} aria-labelledby="intake-progress-title" aria-live="polite">
           <div className="card__head">
             <h2 className="card__title" id="intake-progress-title">Progress</h2>
             {activeRunId && progress?.stage === "done" && <Link className="btn btn--sm btn--accent" to={`/app/intake/${activeRunId}/review`}>Review results</Link>}
@@ -409,12 +409,14 @@ export function IntakeRunsPage() {
             }}>Forget cached originals</button>
           )}
         </div>
+        {runs && allRuns.length === 0 ? (
+          <p className="muted intake-runs-empty">No intake runs yet.</p>
+        ) : (
         <div className="table-wrap">
           <table className="table intake-runs-table">
             <thead><tr><th>Run</th><th>Status</th><th>Files</th><th>Reviewed</th><th>Native coverage</th><th>Record gaps</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {runs === undefined && <tr><td colSpan={7} className="muted">Loading…</td></tr>}
-              {runs && allRuns.length === 0 && <tr><td colSpan={7} className="muted" style={{ textAlign: "center", padding: 24 }}>No intake runs yet.</td></tr>}
               {allRuns.map((run: any) => {
                 const summaryRow = summariesById.get(String(run._id));
                 const coverage = run.coverage?.coverage;
@@ -425,10 +427,10 @@ export function IntakeRunsPage() {
                       <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{relative(run.createdAtISO)} · {run.engine?.llm ? `${run.engine.llm.provider} ${run.engine.llm.model}` : run.engine?.minutes ?? "deterministic"}</div>
                     </td>
                     <td><Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{STATUS_LABEL[run.status] ?? run.status}</Badge></td>
-                    <td className="mono">{run.stats?.files ?? "—"}</td>
-                    <td className="mono">{summaryRow ? `${summaryRow.promoted}/${summaryRow.extractions} promoted` : "—"}</td>
-                    <td className="mono" title="Reviewed: promoted fields ÷ extracted facts. Extractable: native-mappable share at extraction time.">{typeof summaryRow?.promotedCoverage === "number" ? `${Math.round(summaryRow.promotedCoverage * 100)}%` : "—"}<div className="muted" style={{ fontSize: 11 }}>{typeof coverage === "number" ? `${Math.round(coverage * 100)}% extractable` : ""}</div></td>
-                    <td className="mono">{run.recordGaps || 0}</td>
+                    <td className="mono" data-label="Files">{run.stats?.files ?? "—"}</td>
+                    <td className="mono" data-label="Reviewed">{summaryRow ? `${summaryRow.promoted}/${summaryRow.extractions} promoted` : "—"}</td>
+                    <td className="mono" data-label="Native coverage" title="Reviewed: promoted fields ÷ extracted facts. Extractable: native-mappable share at extraction time.">{typeof summaryRow?.promotedCoverage === "number" ? `${Math.round(summaryRow.promotedCoverage * 100)}%` : "—"}<div className="muted" style={{ fontSize: 11 }}>{typeof coverage === "number" ? `${Math.round(coverage * 100)}% extractable` : ""}</div></td>
+                    <td className="mono" data-label="Record gaps">{run.recordGaps || 0}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <Link className="btn btn--sm btn--accent" to={`/app/intake/${run._id}/review`}>Review</Link>{" "}
                       <button type="button" className="btn btn--sm" onClick={() => setDetailRunId(run._id)}>Details</button>
@@ -439,6 +441,7 @@ export function IntakeRunsPage() {
             </tbody>
           </table>
         </div>
+        )}
       </section>
 
       <RunDetailDrawer societyId={society._id} runId={detailRunId} onClose={() => setDetailRunId(null)} />

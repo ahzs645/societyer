@@ -1,6 +1,6 @@
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { CreateMenu } from "../components/CreateMenu";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -59,7 +59,8 @@ import {
 import { CountEntry, TabButton } from "./inventory/components";
 import { CountsTab, LocationsTab, LotsTab, StockTab } from "./inventory/tabs";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
+import { useScrollOverflow } from "../hooks/useScrollOverflow";
 
 export function InventoryPage() {
   const { canWrite, canExport } = useFinancePermissions();
@@ -102,6 +103,8 @@ export function InventoryPage() {
   const deleteConnection = useMutation(api.inventoryHub.deleteConnection);
 
   const [tab, setTab] = useState<TabKey>("stock");
+  const sectionsRef = useRef<HTMLDivElement>(null);
+  const sectionsOverflow = useScrollOverflow(sectionsRef, [society]);
   const [drawer, setDrawer] = useState<
     "movement" | "openboxes" | "item" | "location" | "link" | "lot" | "count-start" | "count-entry" | "location-detail" | "location-label" | "connection" | null
   >(null);
@@ -659,12 +662,12 @@ export function InventoryPage() {
 
       {/* Compact KPI row — the actionable alerts (expiring lots, count
           variances) surface as callouts below rather than as zero-value tiles. */}
-      <div className="stat-grid">
+      <StatStrip className="stat-strip--fit" ariaLabel="Inventory summary">
         <StatTile label="Tracked records" value={(items ?? []).length} />
         <StatTile label="Locations & bins" value={(locations ?? []).length} />
         <StatTile label="On hand" value={formatQuantity(totalOnHand, "")} />
         <StatTile label="Low stock" value={lowStock.length} tone={lowStock.length ? "warn" : undefined} />
-      </div>
+      </StatStrip>
 
       {lowStock.length > 0 && (
         <div className="callout callout--warn">
@@ -763,10 +766,12 @@ export function InventoryPage() {
       )}
 
       <div className="tab-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 4px", alignItems: "center" }}>
+        <div className="inventory-sections" ref={sectionsRef} data-overflow={sectionsOverflow}>
         <TabButton active={tab === "stock"} onClick={() => setTab("stock")} icon={<Package size={13} />} label="Stock & items" />
         <TabButton active={tab === "locations"} onClick={() => setTab("locations")} icon={<MapPin size={13} />} label={`Locations & bins (${(locations ?? []).length})`} />
         <TabButton active={tab === "lots"} onClick={() => setTab("lots")} icon={<Layers size={13} />} label={`Lots & serials (${lotRows.length})`} />
         <TabButton active={tab === "counts"} onClick={() => setTab("counts")} icon={<ClipboardList size={13} />} label={`Physical counts (${openCounts.length})`} />
+        </div>
         <div style={{ flex: 1 }} />
         {tab === "locations" && collapsedLocationIds.size > 0 && <button className="btn btn--sm" onClick={() => setCollapsedLocationIds(new Set())}>Expand all</button>}
         {tab === "locations" && <button className="btn btn--sm" onClick={() => setCollapsedLocationIds(new Set(((locations ?? []) as any[]).filter((l) => ((locations ?? []) as any[]).some((c) => String(c.parentLocationId) === String(l._id))).map((l) => String(l._id))))}>Collapse all</button>}

@@ -56,6 +56,33 @@
   font-size: token('fs-xs');
   white-space: nowrap;
 }
+// A button's full label for wide screens; phones keep it for screen readers
+// and show the short word instead.
+.finance-label-narrow {
+  display: none;
+}
+@media (max-width: 560px) {
+  .finance-label-wide {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .finance-label-narrow {
+    display: inline;
+  }
+  .finance-label-capitalize {
+    text-transform: capitalize;
+  }
+}
+// A header link the phone breadcrumb already offers ("← Financials").
+@media (max-width: 760px) {
+  .finance-crumb-duplicate {
+    display: none;
+  }
+}
 .finance-report-note {
   margin: 0;
   color: token('text-tertiary');
@@ -176,6 +203,65 @@
   width: 100%;
   min-width: max-content;
 }
+// Phones: the wrap scrolls, so the table stays a real table and its label
+// column stays in view (a block table would be the sticky column's scroll box).
+@media (max-width: 760px) {
+  .table.finance-table--sticky-label {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    overflow: visible;
+    thead th:first-child,
+    tbody td:first-child,
+    tfoot th:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      max-width: 44vw;
+      border-right: 1px solid token('border-color-light');
+      background: token('bg-panel');
+      white-space: normal;
+    }
+    thead th:first-child {
+      z-index: 2;
+    }
+  }
+  // Year-over-year: the auditor's name mustn't push the figures off-screen.
+  .yoy-audit {
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: 140px;
+  }
+  .yoy-audit__by {
+    text-align: right;
+    white-space: normal;
+  }
+}
+@media (max-width: 560px) {
+  // Three short columns fit a phone once their text can wrap.
+  .table.financials-restricted-table {
+    display: table;
+    width: 100%;
+    min-width: 0;
+    td,
+    th {
+      padding-inline: 6px;
+      white-space: normal;
+    }
+  }
+  // New statement and the grant prefill share a row.
+  .year-end-program-start {
+    flex-wrap: nowrap !important;
+    .field {
+      flex: 1 1 0;
+      min-width: 0;
+      margin: 0;
+    }
+    .btn-action {
+      flex: none;
+    }
+  }
+}
 .finance-table td.num,
 .finance-table th.num {
   text-align: right;
@@ -268,6 +354,84 @@
   font-size: token('fs-xs');
 }
 
+// Year-end exports: the PDF row, then Word and Print, all on one row when they fit.
+.year-end-controls .input {
+  max-width: 220px;
+}
+.year-end-controls .meta {
+  align-self: center;
+  margin: 0;
+}
+.year-end-program-start .field {
+  flex: 0 1 320px;
+  margin: 0;
+}
+.year-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: token('s-2');
+  .books-report-pdf-actions {
+    margin-block: 0;
+  }
+}
+@media (max-width: 560px) {
+  .year-end-actions {
+    width: 100%;
+    justify-content: flex-start;
+    .books-report-pdf-actions {
+      display: contents;
+    }
+    .finance-report-control {
+      flex: 1 1 100%;
+    }
+    .check-row {
+      margin-right: auto;
+    }
+    .btn,
+    .btn-action {
+      flex: 0 1 auto;
+    }
+  }
+  // The narrowest phones keep Print as its icon so the row still fits.
+  @media (max-width: 360px) {
+    .year-end-actions__print {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+  }
+  // The two pickers share a row; the currency note sits under them.
+  .year-end-controls {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: token('s-2') !important;
+    .field {
+      margin: 0;
+    }
+    .input {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+    }
+    .meta {
+      grid-column: 1 / -1;
+    }
+  }
+}
+// The print preview is a white page in every theme, so its text can't inherit.
+.card.year-end-preview__sheet {
+  padding: token('s-4');
+  overflow-x: auto;
+  background: #fff;
+  color: #1a1a1a;
+  h1, h2, h3, h4, p, th, td, li, strong, span, div {
+    color: inherit;
+  }
+}
 // Year-end reports: the exported document sits collapsed under the table.
 .year-end-preview {
   > summary {

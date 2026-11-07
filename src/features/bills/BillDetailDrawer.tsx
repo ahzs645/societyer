@@ -139,8 +139,8 @@ export function BillDetailDrawer({
   const footer = (
     <>
       {canWrite && bill.status !== "canceled" && !bill.payments.some((payment) => !payment.reversedDate) && (
-        <button type="button" className="btn btn--ghost btn--danger-text" disabled={busy} onClick={() => void cancelBill()}>
-          <Ban size={12} aria-hidden="true" /> Cancel bill
+        <button type="button" className="btn btn--ghost btn--danger-text" aria-label="Cancel bill" disabled={busy} onClick={() => void cancelBill()}>
+          <Ban size={12} aria-hidden="true" /> <span className="bill-detail__action-label">Cancel bill</span>
         </button>
       )}
       <span className="register-drawer__spacer" />
@@ -150,8 +150,8 @@ export function BillDetailDrawer({
         </button>
       )}
       {(awaiting || bill.status === "draft") && canWrite && (
-        <button type="button" className="btn" disabled={busy} onClick={onEdit}>
-          <Pencil size={12} aria-hidden="true" /> Edit
+        <button type="button" className="btn" aria-label="Edit" disabled={busy} onClick={onEdit}>
+          <Pencil size={12} aria-hidden="true" /> <span className="bill-detail__action-label">Edit</span>
         </button>
       )}
       {/* Who may approve is the server's call (a rule may let the submitter approve, and an editor may not). */}

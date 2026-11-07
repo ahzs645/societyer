@@ -4,7 +4,7 @@ import { CheckCircle2, Circle, Settings2, Users, Wallet } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { REMITTER_TYPE_LABEL, type RemitterType } from "../../../../shared/businessRegisters";
-import { formatDate } from "../../../lib/format";
+import { formatDate, pluralize } from "../../../lib/format";
 
 export type PayrollPlanningReadiness = {
   settingsSaved: boolean; providerName?: string; hasPayrollAccount: boolean;
@@ -32,12 +32,12 @@ export function PayrollSetupPanel({ societyId, onOpenSettings }: { societyId: st
   const settingsAction = onOpenSettings
     ? <button type="button" className="btn btn--sm" onClick={onOpenSettings}><Settings2 size={14} aria-hidden="true" />Review payroll settings</button>
     : <Link className="btn btn--sm" to="/app/payroll?setup=1"><Settings2 size={14} aria-hidden="true" />Review payroll settings</Link>;
-  return <section className="card" aria-labelledby="planning-payroll-setup">
+  return <section className="card payroll-setup-panel" aria-labelledby="planning-payroll-setup">
     <div className="card__head"><div><h2 className="card__title" id="planning-payroll-setup"><Wallet size={16} aria-hidden="true" /> Payroll setup</h2><p className="card__subtitle">Keep staff forecasts connected to your employment records and actual payroll process.</p></div>{settingsAction}</div>
     <div className="card__body form-stack">
       {!workspace ? <p className="muted" role="status">Loading payroll setup…</p> : readiness == null ? <p className="muted">Employee read permission is required to view payroll setup details. You can still plan manual or vacant positions using reviewed cost assumptions.</p> : <>
         <div className="register-field-row">
-          <div>{mark(Boolean(employees?.page.length))}<h3>Employee records</h3><p>{employees ? employees.page.length ? "Staff records available" : employees.isDone ? "No employee records yet" : "More employee records are available" : "Loading employee choices…"}</p><p className="muted">{employees?.page.length ? `${employees.page.length} records on the first page${employees.isDone ? "." : "; the staff picker can load more."} Link a staff cost to reuse employment dates, or keep a vacant position manual.` : "Add current staff records when they are ready. Vacant positions can be planned without creating an employee."}</p></div>
+          <div>{mark(Boolean(employees?.page.length))}<h3>Employee records</h3><p>{employees ? employees.page.length ? "Staff records available" : employees.isDone ? "No employee records yet" : "More employee records are available" : "Loading employee choices…"}</p><p className="muted">{employees?.page.length ? `${pluralize(employees.page.length, "record")} on the first page${employees.isDone ? "." : "; the staff picker can load more."} Link a staff cost to reuse employment dates, or keep a vacant position manual.` : "Add current staff records when they are ready. Vacant positions can be planned without creating an employee."}</p></div>
           <div>{mark(providerReady)}<h3>Payroll provider</h3><p>{readiness.providerName || "Provider not recorded"}</p><p className="muted">Record the provider or service used to prepare actual pay runs. Enter or import the resulting gross pay and deductions on Payroll.</p></div>
         </div>
         <div className="register-field-row">

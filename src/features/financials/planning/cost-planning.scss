@@ -39,7 +39,7 @@
     padding: 12px 0;
   }
   &__toolbar > label,
-  &__section-heading > label {
+  &__section-heading > label:not(.check-row) {
     display: grid;
     gap: 5px;
     min-width: 180px;

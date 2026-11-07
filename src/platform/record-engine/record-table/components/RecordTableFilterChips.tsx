@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownUp, X } from "lucide-react";
-import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
+import { computeIsSortEdited, useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { RecordField, ViewFilter, ViewFilterGroup } from "../../types";
 import { describeFilter } from "../utils/filterLabels";
 import { childFilterGroups, removeFilter, removeFilterGroup, rootFilterGroup } from "../utils/filterTree";
@@ -41,6 +41,7 @@ export function RecordTableFilterChips() {
   const filterGroups = useRecordTableState((s) => s.filterGroups);
   const columns = useRecordTableState((s) => s.columns);
   const sorts = useRecordTableState((s) => s.sorts);
+  const sortEdited = useRecordTableState(computeIsSortEdited);
   const isPhone = useIsBottomSheet();
   const handle = useRecordTableStoreHandle();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,7 +80,8 @@ export function RecordTableFilterChips() {
         });
       }
     }
-    if (isPhone && sorts.length > 0) {
+    // A view's own sort needs no row of its own on a phone.
+    if (isPhone && sortEdited && sorts.length > 0) {
       const names = sorts.map((sort) => {
         const label = columnFor(sort.fieldMetadataId)?.field.label ?? "Field";
         return `${label} ${sort.direction === "desc" ? "↓" : "↑"}`;
@@ -93,7 +95,7 @@ export function RecordTableFilterChips() {
       });
     }
     return result;
-  }, [columns, filterGroups, filters, handle, isPhone, sorts]);
+  }, [columns, filterGroups, filters, handle, isPhone, sortEdited, sorts]);
   const filterChipCount = chips.filter((chip) => !chip.sort).length;
 
   const rootOperator = rootFilterGroup(filterGroups)?.logicalOperator;

@@ -326,7 +326,7 @@ export function MeetingMinutesPreviewPage() {
               className="input"
             />
           </Field>
-          <div className="col" style={{ gap: 6 }}>
+          <div className="minutes-preview-options">
             {(minutes.sourceMeetingRecord || minutes.sourceTransposition) && <label><input type="checkbox" checked={sourceFidelityInExport && !publicCopy} disabled={publicCopy} onChange={(event) => setSourceFidelityInExport(event.target.checked)} /> Complete source record</label>}
             <label><input type="checkbox" checked={includeTranscriptInExport} onChange={(event) => setIncludeTranscriptInExport(event.target.checked)} /> Include transcript</label>
             <label><input type="checkbox" checked={includeActionItemsInExport} onChange={(event) => setIncludeActionItemsInExport(event.target.checked)} /> Include action items</label>

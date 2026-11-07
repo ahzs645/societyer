@@ -50,9 +50,9 @@ export function PersonReviewPage(){
    </>}
   />
   {(data.people.length>0||data.occurrences.length>0)&&<p className="muted" style={{margin:'0 0 12px',fontSize:'var(--fs-sm)'}}>{data.people.length} profile{data.people.length===1?'':'s'} · {data.occurrences.length} mention{data.occurrences.length===1?'':'s'} · {confirmed} confirmed{assumed?` · ${assumed} test assumption${assumed===1?'':'s'}`:''}</p>}
-  <div className="row" style={{gap:8,flexWrap:'wrap',marginBottom:16}}>
-   <input className="input" style={{flex:'1 1 220px',maxWidth:360}} aria-label="Search people and evidence" placeholder="Search names or notes" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/>
-   <Select size="sm" aria-label="Identity review filter" value={status} onChange={v=>{setStatus(v);setPage(0);}} style={{width:200}} options={REVIEW_FILTERS.map(([value,label])=>({value,label}))}/>
+  <div className="row" style={{gap:8,marginBottom:16}}>
+   <input className="input" style={{flex:'1 1 0',minWidth:0,maxWidth:360}} aria-label="Search people and evidence" placeholder="Search names or notes" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/>
+   <Select size="sm" aria-label="Identity review filter" value={status} onChange={v=>{setStatus(v);setPage(0);}} style={{flex:'none',width:'min(200px,42%)'}} options={REVIEW_FILTERS.map(([value,label])=>({value,label}))}/>
   </div>
   {data.people.length>0&&<section className="card" style={{marginBottom:16}}>
    <div className="card__head"><h2 className="card__title">Profiles</h2><span className="card__subtitle">{profiles.length}</span></div>

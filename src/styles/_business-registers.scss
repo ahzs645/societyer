@@ -16,6 +16,24 @@
   align-items: start;
 }
 
+// Five totals: one row, not four and an orphan beside empty space.
+@media (min-width: 1280px) {
+  .payroll-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .payroll-stats .stat-tile__label-text { white-space: normal; }
+}
+
+// The readiness mark sits beside its heading, not on a line of its own.
+.payroll-setup-panel .register-field-row > div {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: token(s-2);
+  align-items: baseline;
+  margin-bottom: token(s-3);
+  > svg { grid-row: 1; align-self: center; color: token(text-tertiary); }
+  > :not(svg) { grid-column: 2; margin: 0; }
+  > h3 { font-size: token(fs-sm); font-weight: token(fw-semibold); }
+}
+
 .register-money-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

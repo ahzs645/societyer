@@ -24,9 +24,35 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTablePhoneCard,
+  recordText,
   useObjectRecordTableData,
+  type RecordTableCardRecord,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+
+type ResolutionStatusRecord = {
+  status?: string;
+  circulatedAtISO?: string;
+  noticeProgress?: { overdue?: boolean };
+  nonSignerNoticeStatus?: string;
+};
+
+function resolutionStatusBadge(record: ResolutionStatusRecord) {
+  if (record.status === "Review required") return <Badge tone="warn">Review required</Badge>;
+  if (record.status === "Count certification required") return <Badge tone="warn">Voting closed · certify count</Badge>;
+  if (record.noticeProgress?.overdue) return <Badge tone="danger">{record.status} · notice overdue</Badge>;
+  if (record.nonSignerNoticeStatus === "Required") return <Badge tone="warn">{record.status} · notice required</Badge>;
+  if (record.nonSignerNoticeStatus === "Deadline review required") return <Badge tone="warn">{record.status} · notice date review</Badge>;
+  if (record.nonSignerNoticeStatus === "Complete late") return <Badge tone="warn">{record.status} · notice recorded late</Badge>;
+  const daysCirculating = record.circulatedAtISO
+    ? Math.floor((Date.now() - new Date(record.circulatedAtISO).getTime()) / 86_400_000)
+    : null;
+  const isStale = record.status === "Circulating" && daysCirculating !== null && daysCirculating > 30;
+  // A long-circulating resolution says so in its status chip rather than in a second red line.
+  if (isStale) return <Badge tone="danger">{`Circulating · ${daysCirculating} days`}</Badge>;
+  return <Badge tone={record.status === "Carried" ? "success" : record.status === "Failed" ? "danger" : "warn"}>{record.status}</Badge>;
+}
 
 function localDateTimeInput(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -170,6 +196,16 @@ export function WrittenResolutionsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || items === undefined}
+            renderPhoneCard={(record: RecordTableCardRecord, { selecting }) => (
+              <RecordTablePhoneCard
+                title={recordText(record.title)}
+                badge={resolutionStatusBadge(record as ResolutionStatusRecord)}
+                meta={[recordText(record.kind), formatDate(recordText(record.circulatedAtISO))]}
+                onOpen={() => setDetails(record)}
+                selecting={selecting}
+                variant="auto"
+              />
+            )}
             renderCell={({ record, field }) => {
               if (field.name === "kind") return <Badge tone={record.kind === "Special" ? "warn" : "neutral"}>{record.kind}</Badge>;
               if (field.name === "circulatedAtISO") return <span style={{ whiteSpace: "nowrap" }}>{formatDate(record.circulatedAtISO)}</span>;
@@ -186,21 +222,7 @@ export function WrittenResolutionsPage() {
                   </div>
                 );
               }
-              if (field.name === "status") {
-                if (record.status === "Review required") return <Badge tone="warn">Review required</Badge>;
-                if (record.status === "Count certification required") return <Badge tone="warn">Voting closed · certify count</Badge>;
-                if (record.noticeProgress?.overdue) return <Badge tone="danger">{record.status} · notice overdue</Badge>;
-                if (record.nonSignerNoticeStatus === "Required") return <Badge tone="warn">{record.status} · notice required</Badge>;
-                if (record.nonSignerNoticeStatus === "Deadline review required") return <Badge tone="warn">{record.status} · notice date review</Badge>;
-                if (record.nonSignerNoticeStatus === "Complete late") return <Badge tone="warn">{record.status} · notice recorded late</Badge>;
-                const daysCirculating = record.circulatedAtISO
-                  ? Math.floor((Date.now() - new Date(record.circulatedAtISO).getTime()) / 86_400_000)
-                  : null;
-                const isStale = record.status === "Circulating" && daysCirculating !== null && daysCirculating > 30;
-                // A long-circulating resolution says so in its status chip rather than in a second red line.
-                if (isStale) return <Badge tone="danger">{`Circulating · ${daysCirculating} days`}</Badge>;
-                return <Badge tone={record.status === "Carried" ? "success" : record.status === "Failed" ? "danger" : "warn"}>{record.status}</Badge>;
-              }
+              if (field.name === "status") return resolutionStatusBadge(record);
               return undefined;
             }}
             renderRowActions={(r) => (

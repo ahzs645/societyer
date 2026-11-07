@@ -225,7 +225,7 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
 
       {recordFocused && detailSection}
       <section className="card">
-        <div className="card__head">
+        <div className="card__head coverage-head--inline">
           <h2 className="card__title">Backlog by information type</h2>
           <InfoPopover label="About system gaps">
             <p>Details from source files that Societyer can't hold as structured data yet. Gaps appear here from imports, preflight checks and reviewer entries, ranked by open count.</p>

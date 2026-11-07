@@ -154,7 +154,7 @@ export function NotificationsPage() {
       {tab === "settings" ? <NotificationSettings society={society} /> : (
       <div className="card">
         <div className="card__head">
-          <h2 className="card__title">Recent</h2>
+          <h2 className="card__title notifications__recent-title">Recent</h2>
           <div className="notifications__head-actions">
             {scope === "dismissed" && dismissedCount > 0 && (
               <button

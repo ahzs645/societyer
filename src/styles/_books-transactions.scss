@@ -196,6 +196,8 @@ $tag-dot-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pin
   align-items: center;
 }
 
+.txn-lines__grid .btn svg { flex: none; }
+
 .txn-lines__memo { width: 100%; }
 
 .txn-lines__line-foot {
@@ -357,6 +359,8 @@ $tag-dot-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pin
 }
 
 .books-tags__count {
+  flex: none;
+  white-space: nowrap;
   margin-left: auto;
   font-size: token(fs-sm);
   font-variant-numeric: tabular-nums;
@@ -381,8 +385,29 @@ $tag-dot-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pin
 }
 
 @media (max-width: 640px) {
-  .txn-filter-bar__manage { margin-left: 0; }
-  .txn-filter-bar .select-trigger { flex: 1 1 140px; max-width: none; }
-  .txn-summary__item--count { margin-left: 0; text-align: left; }
-  .txn-lines__grid { grid-template-columns: minmax(0, 1fr); }
+  // Both pickers and Manage tags share a row; the link keeps its name as an icon.
+  .txn-filter-bar > .segmented { flex: 1 1 100%; }
+  .txn-filter-bar .select-trigger { flex: 1 1 0; min-width: 0; max-width: none; }
+  .txn-filter-bar__manage {
+    flex: none;
+    margin-left: 0;
+    padding-inline: token(s-2);
+  }
+  // Three figures across, with the count on one line beneath.
+  .txn-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, auto));
+    justify-content: space-between;
+    gap: token(s-1) token(s-2);
+    padding: token(s-2);
+  }
+  .txn-summary__item dd { font-size: token(fs-sm); }
+  .txn-summary__item--count {
+    flex-direction: row;
+    grid-column: 1 / -1;
+    gap: token(s-1);
+    margin-left: 0;
+    text-align: left;
+    dd { font-size: token(fs-xs); }
+  }
 }

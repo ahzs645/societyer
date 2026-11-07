@@ -371,6 +371,7 @@ export function RoleHoldersPage() {
         {showMetadataWarning ? (
           <RecordTableMetadataEmpty societyId={society._id} objectLabel="role holder" />
         ) : tableData.objectMetadata ? (
+          <div className="role-holders-register">
           <RecordTableScope
             tableId="role-holders"
             objectMetadata={tableData.objectMetadata}
@@ -425,6 +426,7 @@ export function RoleHoldersPage() {
               )}
             />
           </RecordTableScope>
+          </div>
         ) : (
           <div className="record-table__loading">
             {Array.from({ length: 6 }).map((_, index) => (

@@ -4356,6 +4356,8 @@ const tables: Record<string, any[]> = {
       _id: "static_volunteer_application",
       societyId: SOCIETY_ID,
       applicantName: "Riley Chen",
+      firstName: "Riley",
+      lastName: "Chen",
       email: "riley@example.org",
       status: "Submitted",
       interests: ["Events", "Food program"],

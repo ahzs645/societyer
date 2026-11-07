@@ -11,7 +11,7 @@ import { Select } from "../components/Select";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
 import { Boxes, GitCompareArrows, Scale, Link2, Undo2, Plus, Wand2 } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -299,14 +299,14 @@ export function ReconciliationPage() {
         />
       )}
 
-      {!activePeriod && view === "statements" && <div className="stat-grid">
+      {!activePeriod && view === "statements" && <StatStrip className="stat-strip--fit" ariaLabel="Reconciliation summary">
         <StatTile label="Transactions" value={summary.total} />
         <StatTile label="Reconciled" value={summary.reconciled} tone={summary.reconciled ? "ok" : "neutral"} sub={`${percent}% of total`} />
         <StatTile label="With suggestion" value={summary.withSuggestions} tone={summary.withSuggestions ? "info" : "neutral"} sub="One click to apply" />
         <StatTile label="Unmatched" value={summary.unmatched} tone={summary.unmatched ? "danger" : "neutral"} sub="Need a manual note" />
-      </div>}
+      </StatStrip>}
 
-      <div className="two-col">
+      <div className={`two-col${view === "statements" && !selectedRow ? " reconciliation-layout--full" : ""}`}>
         <div>
           {!activePeriod && view === "month" ? (
             monthView.monthAccounts.length > 0 && <MonthTransactionsTable detail={monthData?.detail} selectedId={selected} onSelect={selectForMatching} />

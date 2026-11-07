@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { runRowAction } from "./helpers/rowActions";
+import { recordRows, runRowAction } from "./helpers/rowActions";
 
 test.setTimeout(90_000);
 
@@ -274,7 +274,7 @@ test("a synthetic donation receipt can be issued and voided while keeping its or
   await fits(page);
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  const row = page.locator("tr", { hasText: "Synthetic operations receipt audit" });
+  const row = recordRows(page).filter({ hasText: "Synthetic operations receipt audit" });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("000001");
   await runRowAction(row, "Void");
@@ -377,7 +377,7 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     }
     await navigate("receipts");
     await expect(page.getByRole("button", { name: "Issue receipt", exact: true })).toBeDisabled();
-    const issuedReceipt = page.locator("tr", { hasText: "Synthetic restricted-role receipt" });
+    const issuedReceipt = recordRows(page).filter({ hasText: "Synthetic restricted-role receipt" });
     await expect(issuedReceipt).toHaveCount(1);
     await expect(issuedReceipt).toContainText("Issued");
     await expect(issuedReceipt.getByRole("button", { name: "Void", exact: true, includeHidden: true })).toBeDisabled();

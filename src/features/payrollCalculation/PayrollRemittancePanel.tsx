@@ -59,9 +59,6 @@ function RemittanceList({
         <p>Loading {collection}…</p>
       ) : (
         <>
-          <p className="payroll-remittance__table-hint">
-            Swipe the table horizontally for dates, balances and review actions.
-          </p>
           <div
             className="payroll-calculator__table-wrap"
             role="region"
@@ -94,11 +91,11 @@ function RemittanceList({
                     <td>
                       {r.periodStart}–{r.periodEnd}
                     </td>
-                    <td>
+                    <td data-label={collection === "obligations" ? "Due" : "Intended date"}>
                       {r.dueDate ?? r.scheduledDate ?? "Schedule unconfirmed"}
                     </td>
-                    <td>{money(r.amountDueCents ?? r.amountCents)}</td>
-                    <td>
+                    <td data-label="Amount">{money(r.amountDueCents ?? r.amountCents)}</td>
+                    <td data-label={collection === "obligations" ? "Recorded / remaining" : "Status"}>
                       {collection === "obligations"
                         ? `${money(r.paidCents)} / ${money(Math.max(0, r.amountDueCents - r.paidCents))}`
                         : r.status.replaceAll("_", " ")}

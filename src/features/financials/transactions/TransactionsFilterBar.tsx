@@ -73,7 +73,7 @@ export function TransactionsFilterBar({
         </button>
       )}
       <Link className="btn btn--ghost btn--sm txn-filter-bar__manage" to="/app/financials/tags">
-        <Tags size={12} aria-hidden="true" /> Manage tags
+        <Tags size={12} aria-hidden="true" /> <span><span className="finance-label-wide">Manage </span><span className="finance-label-capitalize">tags</span></span>
       </Link>
     </div>
   );

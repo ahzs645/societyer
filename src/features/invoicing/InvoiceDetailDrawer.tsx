@@ -179,15 +179,15 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
           <div><dt>Paid</dt><dd><Money cents={invoice.paidCents} currency={invoice.currency} /></dd></div>
           <div className={invoice.status === "overdue" ? "is-overdue" : undefined}>
             <dt>Balance due</dt>
-            <dd><Money cents={invoice.status === "void" ? 0 : invoice.balanceCents} currency={invoice.currency} variant="hero" /></dd>
+            <dd className="invoice-drawer__balance"><Money cents={invoice.status === "void" ? 0 : invoice.balanceCents} currency={invoice.currency} /></dd>
           </div>
         </dl>
       </section>
 
       <div className="invoice-drawer__actions">
         {invoice.lifecycle !== "void" && (
-          <button type="button" className="btn btn--sm" disabled={!canWrite} onClick={() => onEdit(invoice._id)}>
-            <Pencil size={14} aria-hidden="true" /> Edit
+          <button type="button" className="btn btn--sm invoice-drawer__action-edit" aria-label="Edit" disabled={!canWrite} onClick={() => onEdit(invoice._id)}>
+            <Pencil size={14} aria-hidden="true" /> <span className="invoice-drawer__action-wide">Edit</span>
           </button>
         )}
         {invoice.lifecycle === "draft" && (
@@ -196,8 +196,8 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
           </button>
         )}
         {(open || invoice.lifecycle === "draft") && invoice.balanceCents > 0 && (
-          <button type="button" className={`btn btn--sm${invoice.lifecycle === "draft" ? "" : " btn--accent"}`} disabled={!canWrite} aria-expanded={paying} onClick={() => setPaying((v) => !v)}>
-            <Wallet size={14} aria-hidden="true" /> Record payment
+          <button type="button" className={`btn btn--sm${invoice.lifecycle === "draft" ? "" : " btn--accent"}`} aria-label="Record payment" disabled={!canWrite} aria-expanded={paying} onClick={() => setPaying((v) => !v)}>
+            <Wallet size={14} aria-hidden="true" /> <span className="invoice-drawer__action-wide">Record payment</span><span className="invoice-drawer__action-short">Payment</span>
           </button>
         )}
         {open && (

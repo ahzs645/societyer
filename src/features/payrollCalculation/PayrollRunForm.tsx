@@ -225,7 +225,7 @@ export function PayrollRunForm({
           {error}
         </p>
       )}
-      <div className="payroll-calculator__form-grid">
+      <div className="payroll-calculator__form-grid payroll-calculator__form-grid--run">
         <TextInput
           label="Pay period start"
           name="periodStart"

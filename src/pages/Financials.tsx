@@ -496,7 +496,7 @@ export function FinancialsPage() {
           activeConnection ? (
             <>
               <FinanceCreateMenu />
-              <span title={`Connected to ${providerLabel(activeConnection.provider)}`}>
+              <span className="financials-provider-badge" title={`Connected to ${providerLabel(activeConnection.provider)}`}>
                 <Badge tone="success">{providerLabel(activeConnection.provider)}</Badge>
               </span>
               <MoreActionsMenu
@@ -580,9 +580,20 @@ export function FinancialsPage() {
       </div>
 
       {tab === "transactions" && <TransactionRulesBar societyId={society._id} />}
-      {tab === "transactions" && <MatchReceiptsButton societyId={society._id} />}
-
-      {(tab === "transactions" || tab === "overview") && <div className="books-report__note" role="status">{transactions ? `Complete transaction snapshot: ${transactions.length.toLocaleString()} records. Summary currency: ${completeTransactions.currency}.` : `Loading complete transaction history: ${completeTransactions.progress.toLocaleString()} records…`} <select className="input" style={{ width: 100 }} aria-label="Summary currency" value={completeTransactions.currency} onChange={(event) => setOverviewCurrency(event.target.value)}>{completeTransactions.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select><button className="btn btn--sm" onClick={completeTransactions.refresh}>Refresh complete transactions</button>{completeTransactions.error && <span className="field__error">{completeTransactions.error}</span>}</div>}
+      {(tab === "transactions" || tab === "overview") && (
+        <div className={`financials-snapshot financials-snapshot--${tab}`} role="status">
+          <span className="financials-snapshot__text">
+            {transactions
+              ? <>Complete transaction snapshot: {transactions.length.toLocaleString()} records.<span className="finance-label-wide"> Summary currency: {completeTransactions.currency}.</span></>
+              : `Loading complete transaction history: ${completeTransactions.progress.toLocaleString()} records…`}
+          </span>
+          {/* One currency leaves nothing to pick; the sentence above names it. */}
+          {completeTransactions.currencies.length > 1 && <select className="input financials-snapshot__currency" aria-label="Summary currency" value={completeTransactions.currency} onChange={(event) => setOverviewCurrency(event.target.value)}>{completeTransactions.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>}
+          <button className="btn btn--sm" onClick={completeTransactions.refresh}><span>Refresh<span className="finance-label-wide"> complete transactions</span></span></button>
+          {tab === "transactions" && <MatchReceiptsButton societyId={society._id} />}
+          {completeTransactions.error && <span className="field__error">{completeTransactions.error}</span>}
+        </div>
+      )}
       {tab === "transactions" && (accounts ?? []).length > 0 && (
         <BankCsvImportCard
           societyId={society._id}
@@ -709,7 +720,7 @@ export function FinancialsPage() {
             </InfoPopover>
           </div>
           <div className="finance-table-wrap">
-            <table className="table finance-table">
+            <table className="table finance-table financials-restricted-table">
               <thead>
                 <tr>
                   <SortableTh column="fund" sort={restrictedSort.sort} onSort={restrictedSort.toggle}>Fund</SortableTh>
@@ -763,7 +774,7 @@ export function FinancialsPage() {
               </div>
             </div>
             <div className="finance-table-wrap">
-            <table className="table finance-table">
+            <table className="table finance-table finance-table--sticky-label">
               <thead>
                 <tr>
                   <SortableTh column="category" sort={budgetSort.sort} onSort={budgetSort.toggle}>Category</SortableTh>
@@ -1104,7 +1115,7 @@ export function FinancialsPage() {
               <h2 className="card__title">Remuneration disclosure — FY {latest.fiscalYear}</h2>
               <span className="card__subtitle">Top employees/contractors paid ≥ $75,000 (s.36 Societies Act).</span>
             </div>
-            <table className="table finance-table">
+            <table className="table finance-table finance-table--sticky-label">
               <thead>
                 <tr><th>Position</th><th className="num">Total compensation</th></tr>
               </thead>
@@ -1328,7 +1339,9 @@ function BankCsvImportCard({
   const [busy, setBusy] = useState(false);
   // The finance Create menu's "Import → Bank CSV" lands here.
   const cardRef = useRef<HTMLDivElement>(null);
+  const [foldOpen, setFoldOpen] = useState(false);
   useCreateIntent("import-csv", "financials:write", () => {
+    setFoldOpen(true);
     cardRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     cardRef.current?.focus({ preventScroll: true });
   });
@@ -1374,48 +1387,58 @@ function BankCsvImportCard({
   };
 
   return (
-    <div className="card" style={{ marginBottom: 16 }} ref={cardRef} tabIndex={-1} aria-label="Import bank / credit-card CSV">
-      <div className="card__head">
-        <h2 className="card__title">Import bank / credit-card CSV</h2>
-        <span className="card__subtitle">
-          Get real statement history in (Wave's API can't export ledger rows). Deduped per account.
-        </span>
-      </div>
-      <div className="card__body row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <Select
-          value={accountId}
-          onChange={setAccountId}
-          options={[
-            { value: "", label: "Choose account…" },
-            ...accounts.map((a: any) => ({ value: a._id, label: a.name })),
-          ]}
-          className="input"
-          style={{ flex: "1 1 200px", minWidth: 0 }}
-        />
-        {/* A styled button over the native picker, which ignored the theme. */}
-        <label className="btn btn--sm bank-csv-import__file">
-          <FileUp size={12} aria-hidden="true" /> {fileName ? "Choose another file" : "Choose CSV file"}
-          <input
-            className="bank-csv-import__file-input"
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void onFile(file);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        {fileName && (
-          <span className="muted bank-csv-import__file-name" title={fileName}>
-            {fileName}
-            {parsed && ` · ${parsed.length} row${parsed.length === 1 ? "" : "s"} ready`}
-          </span>
-        )}
-        <button className="btn btn--accent" disabled={!canWrite || (busy || !accountId || !parsed?.length)} onClick={doImport}>
-          Import
-        </button>
-      </div>
+    <div ref={cardRef} tabIndex={-1}>
+      {/* An occasional task: on phones it stays folded above the transactions. */}
+      <MobileFold title="Import bank / credit-card CSV" summary="Statement history, deduped per account" open={foldOpen} onOpenChange={setFoldOpen}>
+        <div className="card" style={{ marginBottom: 16 }} aria-label="Import bank / credit-card CSV">
+          <div className="card__head">
+            <h2 className="card__title">Import bank / credit-card CSV</h2>
+            <span className="card__subtitle">
+              Get real statement history in (Wave's API can't export ledger rows). Deduped per account.
+            </span>
+          </div>
+          <div className="card__body row bank-csv-import" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Select
+              value={accountId}
+              onChange={setAccountId}
+              options={[
+                { value: "", label: "Choose account…" },
+                ...accounts.map((a: any) => ({ value: a._id, label: a.name })),
+              ]}
+              className="input bank-csv-import__account"
+              style={{ flex: "1 1 200px", minWidth: 0 }}
+            />
+            {/* A styled button over the native picker, which ignored the theme. */}
+            <label className="btn btn--sm bank-csv-import__file">
+              <FileUp size={12} aria-hidden="true" />
+              <span>
+                {fileName
+                  ? <><span className="finance-label-wide">Choose another </span><span className="finance-label-capitalize">file</span></>
+                  : <><span className="finance-label-wide">Choose </span>CSV file</>}
+              </span>
+              <input
+                className="bank-csv-import__file-input"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void onFile(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {fileName && (
+              <span className="muted bank-csv-import__file-name" title={fileName}>
+                {fileName}
+                {parsed && ` · ${parsed.length} row${parsed.length === 1 ? "" : "s"} ready`}
+              </span>
+            )}
+            <button className="btn btn--accent" disabled={!canWrite || (busy || !accountId || !parsed?.length)} onClick={doImport}>
+              Import
+            </button>
+          </div>
+        </div>
+      </MobileFold>
     </div>
   );
 }

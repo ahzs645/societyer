@@ -83,7 +83,7 @@ export function TransactionRulesBar({ societyId }: { societyId: string }) {
         <Link className="btn btn--ghost btn--sm" to="/app/transaction-rules">{activeRules === 0 ? "Create a rule" : "Manage rules"}</Link>
         {activeRules > 0 && (
           <button type="button" className="btn btn--sm btn--accent" disabled={!canWrite || busy || pending === 0} onClick={() => void apply()}>
-            Apply rules to uncategorised
+            <span>Apply rules<span className="finance-label-wide"> to uncategorised</span></span>
           </button>
         )}
       </div>

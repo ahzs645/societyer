@@ -180,7 +180,7 @@ export function UsersPage() {
                     <Avatar label={u.displayName || u.email || "?"} />
                     <span className="users-table__identity">
                       <strong>{u.displayName}</strong>
-                      <span className="users-table__email">{u.email}</span>
+                      <span className="users-table__email" title={u.email}>{u.email}</span>
                       {auth.mode !== "none" && !u.authSubject && <span className="muted">No linked sign-in</span>}
                     </span>
                     {status !== "Active" && (
@@ -231,7 +231,7 @@ export function UsersPage() {
                       }}
                       title="Act as this user"
                     >
-                      <KeyRound size={12} /> Act as
+                      <KeyRound size={12} /> <span className="users-table__act-label">Act as</span>
                     </button>
                   )}
                   <Menu
@@ -515,7 +515,7 @@ function InvitationsPanel({
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="card__head">
+      <div className="card__head users-invitations__head">
         <h2 className="card__title">Invitations</h2>
         <span className="card__subtitle">
           {hosted ? "Email invitations are emailed even if the person has no account yet. They verify that email and join this workspace directly." : "Copy invitation links and send them to the person you're inviting."} Share links must be sent yourself and can't grant Owner or Admin.

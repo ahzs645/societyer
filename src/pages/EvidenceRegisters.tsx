@@ -534,18 +534,20 @@ function RegisterTable({
       {rows.length === 0 ? (
         <div className="card__body muted">{restricted ? "This section requires additional access." : empty}</div>
       ) : (
-        <table className="table">
+        <div className="table-wrap">
+        <table className="table table--stack-mobile register-table">
           <thead>
             <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
           </thead>
           <tbody>
             {pageRows.map((row) => (
               <tr key={row._id}>
-                {render(row).map((cell, index) => <td key={index}>{cell}</td>)}
+                {render(row).map((cell, index) => <td key={index} data-label={index > 0 ? columns[index] : undefined}>{cell}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
       {filtered.length>25&&<div className="card__body row" style={{gap:12,flexWrap:"wrap"}}><button className="btn" disabled={!safePage} onClick={()=>setPage(safePage-1)}>Previous</button><span>Page {safePage+1} of {Math.ceil(filtered.length/25)} · {filtered.length} matching rows</span><button className="btn" disabled={(safePage+1)*25>=filtered.length} onClick={()=>setPage(safePage+1)}>Next</button></div>}
     </div>

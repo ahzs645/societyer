@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { BookOpen } from "lucide-react";
 import { ReportTable, type ReportColumn, type ReportRow } from "../../../components/ReportTable";
 import { EmptyState } from "../../../components/ui";
-import { formatDate } from "../../../lib/format";
+import { formatDate, formatDateTime } from "../../../lib/format";
 import { buildBooksReport, buildReportPeriods, type BooksReport, type BooksReportRow, type ReportPeriod } from "../../../../shared/booksReports";
 import { useCompleteBooks } from "./useCompleteBooks";
 import { ReportChartStrip } from "./ReportChartStrip";
@@ -171,7 +171,14 @@ export function MultiPeriodReport({
         actions={actions}
       />
 
-      <div className="books-report__note" role="status">{complete.books ? `Complete source snapshot loaded at ${complete.books.loadedAtISO}. Refresh after posting or editing entries.` : `Loading complete ledger: ${complete.progress.toLocaleString()} records…`} <button className="btn btn--sm" onClick={complete.refresh}>Refresh complete report</button></div>
+      <div className="financials-snapshot books-report__note" role="status">
+        <span className="financials-snapshot__text">
+          {complete.books
+            ? <>Complete source snapshot loaded at {formatDateTime(complete.books.loadedAtISO)}.<span className="finance-label-wide"> Refresh after posting or editing entries.</span></>
+            : `Loading complete ledger: ${complete.progress.toLocaleString()} records…`}
+        </span>
+        <button className="btn btn--sm" onClick={complete.refresh}><span>Refresh<span className="finance-label-wide"> complete report</span></span></button>
+      </div>
       {complete.error && <p className="field__error" role="alert">{complete.error}</p>}
       {context.canExport && !problem && <ReportPdfDownload societyId={context.societyId} report={pdfReport} filename={`${title} ${state.range.from} to ${state.range.to}`} />}
 

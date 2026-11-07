@@ -35,10 +35,11 @@ export function ReportPdfDownload({ societyId, report, filename, disabled, label
       toast.error("PDF download failed", error instanceof Error ? error.message : undefined);
     } finally { setBusy(false); }
   };
-  return <div className="books-report-pdf-actions" role="group" aria-label="Branded report PDF" style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap", marginBlock: 12 }}>
-    <label className="finance-report-control"><span className="finance-report-control__label">PDF template</span><Select aria-label="PDF template" size="sm" disabled={!collection.ready || busy} value={selected ? templateId : "__organization"} onChange={setChosen} options={[{ value: "__organization", label: collection.ready ? "Organization branding" : "Loading templates…" }, ...templates.map((item) => ({ value: item._id, label: item.config.name }))]} /></label>
-    {Boolean(report?.charts?.length || report?.blocks?.some((block) => block.kind === "chart")) && <Checkbox label="Include graphs" checked={includeGraphs} onChange={setIncludeGraphs} disabled={busy} />}
+  return <div className="books-report-pdf-actions" role="group" aria-label="Branded report PDF">
+    {/* Without saved templates the picker has one choice, so only offer it once there's more. */}
+    {(!collection.ready || templates.length > 0) && <label className="finance-report-control"><span className="finance-report-control__label">PDF template</span><Select aria-label="PDF template" size="sm" disabled={!collection.ready || busy} value={selected ? templateId : "__organization"} onChange={setChosen} options={[{ value: "__organization", label: collection.ready ? "Organization branding" : "Loading templates…" }, ...templates.map((item) => ({ value: item._id, label: item.config.name }))]} /></label>}
+    {Boolean(report?.charts?.length || report?.blocks?.some((block) => block.kind === "chart")) && <Checkbox label={<><span className="finance-label-wide">Include </span><span className="finance-label-capitalize">graphs</span></>} checked={includeGraphs} onChange={setIncludeGraphs} disabled={busy} />}
     {collection.error && <span role="alert">{collection.error} <button type="button" className="btn btn--sm" onClick={collection.retry}>Retry templates</button></span>}
-    <button type="button" className="btn btn--sm" disabled={disabled || !report || !workspace || !collection.ready || busy} aria-busy={busy || !collection.ready || undefined} onClick={() => void run()}><FileDown size={14} aria-hidden="true" />{busy ? "Generating PDF…" : label}</button>
+    <button type="button" className="btn btn--sm" disabled={disabled || !report || !workspace || !collection.ready || busy} aria-busy={busy || !collection.ready || undefined} onClick={() => void run()}><FileDown size={14} aria-hidden="true" />{busy ? "Generating PDF…" : <><span className="finance-label-wide">{label}</span><span className="finance-label-narrow" aria-hidden="true">PDF</span></>}</button>
   </div>;
 }

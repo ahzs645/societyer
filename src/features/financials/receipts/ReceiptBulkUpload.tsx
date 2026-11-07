@@ -88,10 +88,11 @@ export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; 
       ariaLabel="Upload receipts"
       icon={<Inbox size={16} />}
       title="Drop receipts here"
-      touchTitle="Add receipt photos or PDFs"
+      touchTitle="Add receipts"
       chooseLabel="Choose files"
       busyLabel={busy ?? "Uploading…"}
       hint={hint}
+      touchHint={canUpload ? "Photos or PDFs, 25 MB each, up to 50 at a time." : undefined}
       accept={ACCEPT}
       maxBytes={MAX_BYTES}
       multiple

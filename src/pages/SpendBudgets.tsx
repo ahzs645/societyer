@@ -10,7 +10,7 @@ import { Badge, EmptyState } from "../components/ui";
 import { Progress, Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { Money } from "../components/Money";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatDate, pluralize } from "../lib/format";
@@ -94,12 +94,12 @@ export function SpendBudgetsPage() {
         }
       />
 
-      <div className="stat-grid">
+      <StatStrip className="stat-strip--fit" ariaLabel="Spend budget summary">
         <StatTile label="Active budgets" value={summary?.activeCount ?? "—"} sub={summary?.upcomingCount ? `${summary.upcomingCount} upcoming` : undefined} />
         <StatTile label="Limit this cycle" value={<Money variant="hero" trimWholeCents cents={summary?.limitCents} />} />
         <StatTile label="Spent" value={<Money variant="hero" trimWholeCents cents={summary?.spentCents} />} sub={summary?.limitCents ? `${Math.round(((summary.spentCents ?? 0) / summary.limitCents) * 100)}% of active limits` : undefined} />
         <StatTile label="Remaining" value={<Money variant="hero" trimWholeCents cents={summary?.remainingCents} />} tone={summary?.overLimitCount ? "danger" : "neutral"} sub={summary?.overLimitCount ? `${pluralize(summary.overLimitCount, "budget")} over the limit` : "Across active budgets"} />
-      </div>
+      </StatStrip>
 
       <Tabs<BudgetTab>
         value={tab}

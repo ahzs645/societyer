@@ -325,14 +325,26 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  // Type and presenter share the line under the title.
   .meeting-template-section-item .meeting-minutes-section-item__title-edit {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 3fr) minmax(0, 4fr);
+  }
+
+  .meeting-template-section-item .meeting-minutes-section-item__title-input {
+    grid-column: 2 / -1;
   }
 
   .meeting-template-section-item__type,
   .meeting-template-section-item .meeting-minutes-section-item__title-presenter {
-    grid-column: 2 / -1;
     width: 100%;
+  }
+
+  .meeting-template-section-item__type {
+    grid-column: 2;
+  }
+
+  .meeting-template-section-item .meeting-minutes-section-item__title-presenter {
+    grid-column: 3;
   }
 
   .meeting-template-builder__library {

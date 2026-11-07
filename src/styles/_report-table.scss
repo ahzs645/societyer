@@ -297,6 +297,10 @@
 }
 
 @media (max-width: 760px) {
+  // Half-width indents leave the sticky label column room for the names.
+  .report-table__row[data-depth="2"] .report-table__label-inner { padding-left: token('s-4'); }
+  .report-table__row[data-depth="3"] .report-table__label-inner { padding-left: token('s-6'); }
+  .report-table__row[data-depth="4"] .report-table__label-inner { padding-left: token('s-8'); }
   .report-table__label-head {
     min-width: 140px;
   }

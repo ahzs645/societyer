@@ -444,3 +444,23 @@
     flex-direction: column;
   }
 }
+
+/* ---------------------------------------------------------------- inventory */
+
+.inventory-sections { display: contents; }
+/* Phones: the four sections stay on one swipeable row instead of a 2×2 block. */
+@media (max-width: 560px) {
+  .inventory-sections {
+    display: flex;
+    flex: 1 1 100%;
+    gap: token(s-2);
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    > .btn { flex: none; }
+    &[data-overflow='end'] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+    &[data-overflow='start'] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+    &[data-overflow='both'] { mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+  }
+}

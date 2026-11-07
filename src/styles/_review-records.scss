@@ -151,7 +151,7 @@ a.minute-book-bundle-row:active { background: token('bg-hover'); }
 
   @media (max-width: 760px) {
     > :not(.research-filters__search) { flex: 1 1 calc(50% - #{token('s-2')}); }
-    .research-filters__search { flex-basis: 100%; }
+    .research-filters__search { flex-basis: calc(50% - #{token('s-2')}); }
   }
 }
 
@@ -554,13 +554,45 @@ details.exports-tables {
   background: token('border');
 }
 
+// Phones: two pickers in place of a long sideways strip of chips.
+.documents-facets-compact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-2');
+  margin-bottom: token('s-3');
+  .chip { grid-column: 1 / -1; justify-self: start; }
+}
+
 @media (max-width: 760px) {
   // Document workbench: the viewer fills its section instead of sitting in a second box.
+  // Tall enough for a whole page at phone width, with the next card in reach.
   .document-workbench-page .document-preview-pane {
+    height: 62dvh;
+    max-height: 62dvh;
     padding: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
+  }
+  // Comment form: the short page number sits beside its anchor text.
+  .document-workbench-page .structured-minutes-editor__grid {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: token('s-2');
+  }
+  // The page title names the document; counts and Expand preview share a line.
+  .document-workbench-head {
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: token('s-2');
+    .card__title {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    .card__subtitle { order: -1; min-width: 0; }
   }
 
   // Library: documents and packets are rows of their section on phones.

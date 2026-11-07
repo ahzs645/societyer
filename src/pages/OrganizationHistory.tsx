@@ -408,7 +408,7 @@ export function OrganizationHistoryPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page org-history-page">
       <PageHeader
         title="Org history"
         icon={<Newspaper size={16} />}
@@ -693,7 +693,7 @@ export function OrganizationHistoryPage() {
             <h2 className="card__title">Budget snapshots</h2>
           </div>
           <TableScroll>
-            <table className="table">
+            <table className="table table--stack-mobile org-history__budgets">
               <thead>
                 <tr>
                   <th>Fiscal year</th>
@@ -708,7 +708,7 @@ export function OrganizationHistoryPage() {
               <tbody>
                 {budgets.map((budget: any) => (
                   <tr key={budget._id}>
-                    <td className="table__cell--mono">{budgetFiscalYearLabel(budget)}</td>
+                    <td data-label="Fiscal year" className="table__cell--mono">{budgetFiscalYearLabel(budget)}</td>
                     <td>
                       <Link
                         to={`/app/org-history/budgets/${budget._id}`}
@@ -722,9 +722,9 @@ export function OrganizationHistoryPage() {
                         </span>
                       </Link>
                     </td>
-                    <td className="table__cell--mono">{formatCents(budget.totalIncomeCents, budget.currency)}</td>
-                    <td className="table__cell--mono">{formatCents(budget.totalExpenseCents, budget.currency)}</td>
-                    <td className="table__cell--mono">{formatCents(budget.endingBalanceCents, budget.currency)}</td>
+                    <td data-label="Income" className="table__cell--mono">{formatCents(budget.totalIncomeCents, budget.currency)}</td>
+                    <td data-label="Expenses" className="table__cell--mono">{formatCents(budget.totalExpenseCents, budget.currency)}</td>
+                    <td data-label="Ending balance" className="table__cell--mono">{formatCents(budget.endingBalanceCents, budget.currency)}</td>
                     <td><SourceBadges ids={budget.sourceIds} sourceById={sourceById} /></td>
                     <td>
                       <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
@@ -1290,7 +1290,7 @@ export function OrganizationHistoryBudgetPage() {
                             <span className="org-history__budget-group-count">{group.lines.length}</span>
                           </button>
                         </td>
-                        <td><Badge>{formatBudgetSection(group.section)}</Badge></td>
+                        <td className="org-history__budget-cell--repeat"><Badge>{formatBudgetSection(group.section)}</Badge></td>
                         <td className="table__cell--mono">{formatCents(group.totalCents, budget.currency)}</td>
                         <td className="muted">{group.hasExplicitTotal ? "Source total" : "Calculated from visible lines"}</td>
                       </tr>
@@ -1302,9 +1302,9 @@ export function OrganizationHistoryBudgetPage() {
                               {line.rawLabel && line.rawLabel !== line.label && <span className="muted">{line.rawLabel}</span>}
                             </div>
                           </td>
-                          <td>{formatBudgetLineType(line.lineType ?? line.section)}</td>
+                          <td className={formatBudgetLineType(line.lineType ?? line.section) === group.label ? "org-history__budget-cell--repeat" : undefined}>{formatBudgetLineType(line.lineType ?? line.section)}</td>
                           <td className="table__cell--mono">{formatCents(line.amountCents, budget.currency)}</td>
-                          <td className="muted">{line.notes || "-"}</td>
+                          <td className={line.notes ? "muted" : "muted org-history__budget-cell--repeat"}>{line.notes || "-"}</td>
                         </tr>
                       ))}
                     </Fragment>

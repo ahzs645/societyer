@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { DatePicker } from "../../../components/DatePicker";
 import { InfoPopover } from "../../../components/InfoPopover";
 import { Menu, type MenuSection } from "../../../components/Menu";
 import { Segmented } from "../../../components/primitives";
 import { Select, type SelectOption } from "../../../components/Select";
+import { useIsMobile } from "../../../lib/useIsMobile";
 import { FundFilterChips, ReportControl } from "../components/FinanceReportControls";
 import type { AccountingBasis, ReportFrequency } from "../../../../shared/booksReports";
 import { BASIS_LABELS, FREQUENCY_LABELS, type ReportFilterState } from "./reportFilters";
@@ -192,14 +193,30 @@ export function ReportFilterControls({
   /** Extra controls placed before the basis (the ledger account picker). */
   children?: ReactNode;
 }) {
-  return (
-    <ReportToolbar label="Report filters">
-      {children}
-      <BasisControl basis={basis} defaultBasis={defaultBasis} onChange={actions.setBasis} />
+  const isMobile = useIsMobile();
+  const secondary = (
+    <>
       <ProgramControl programs={programs} value={filter.dimensions.programCode?.[0] ?? null} onChange={(value) => actions.setDimension("programCode", value)} />
       <TagControl tags={tags} value={filter.dimensions.tag ?? []} onChange={(value) => actions.setDimension("tag", value)} />
       <CurrencyControl currencies={currencies} value={currency} onChange={actions.setCurrency} />
       <FundFilterChips funds={funds} value={filter.fund} onChange={actions.setFund} />
+    </>
+  );
+  const hasSecondary = programs.length > 0 || tags.groups.length > 0 || currencies.length > 1 || funds.length > 0;
+  const activeCount = (filter.dimensions.programCode?.length ? 1 : 0) + (filter.dimensions.tag?.length ?? 0) + (filter.fund === "all" ? 0 : 1);
+  return (
+    <ReportToolbar label="Report filters">
+      {children}
+      <BasisControl basis={basis} defaultBasis={defaultBasis} onChange={actions.setBasis} />
+      {/* Phones keep the report itself near the top: the narrower filters open from one button. */}
+      {isMobile && hasSecondary ? (
+        <details className="books-report-filters">
+          <summary className="btn btn--sm">
+            <SlidersHorizontal size={12} aria-hidden="true" /> Filters{activeCount > 0 && <span className="books-report-filters__count">{activeCount}</span>}
+          </summary>
+          <div className="books-report-filters__body">{secondary}</div>
+        </details>
+      ) : secondary}
     </ReportToolbar>
   );
 }

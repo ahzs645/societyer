@@ -291,3 +291,13 @@
 .privacy-main-col > .privacy-mobile-first {
   order: -1;
 }
+
+// Desktop: the checklist leads too, and the long scope assessment follows the
+// two columns; the status line's Confirm button scrolls down to it.
+.privacy-main-col > .privacy-setup-card {
+  order: -1;
+}
+.privacy-scope-section {
+  margin-top: token('s-4');
+  scroll-margin-top: token('s-4');
+}

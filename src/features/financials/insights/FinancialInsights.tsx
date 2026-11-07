@@ -122,7 +122,6 @@ export function FinancialInsights({
 
   return (
     <section className="insights" aria-label="Financial trends">
-      <div className="row" style={{ gap: 12, marginBottom: 10, flexWrap: "wrap" }}><label>Chart currency <select className="input" aria-label="Chart currency" value={data.currency} onChange={(event) => { setCurrencyChoice(event.target.value); setSelection(null); }}>{data.availableCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><button className="btn btn--sm" onClick={data.refreshSource}>Refresh complete chart sources</button>{data.loading && <span>Loading {data.sourceProgress.toLocaleString()} records…</span>}{data.sourceError && <span role="alert" className="field__error">{data.sourceError}</span>}</div>
       <FinanceRangeBar
         preset={preset}
         onPreset={(next) => {
@@ -136,7 +135,11 @@ export function FinancialInsights({
         onClearSelection={() => setSelection(null)}
         compareNote={compareMode !== "off" && !data.loading && !view.previousCovered ? UNCOVERED_NOTE[compareMode] : undefined}
       />
-      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}>
+      <div className="insights__tools">
+        {data.availableCurrencies.length > 1 && <label className="finance-report-control"><span className="finance-report-control__label">Chart currency</span><select className="input" aria-label="Chart currency" value={data.currency} onChange={(event) => { setCurrencyChoice(event.target.value); setSelection(null); }}>{data.availableCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label>}
+        <button className="btn btn--sm" onClick={data.refreshSource}><span>Refresh<span className="finance-label-wide"> complete chart sources</span><span className="finance-label-narrow" aria-hidden="true"> charts</span></span></button>
+        {data.loading && <span>Loading {data.sourceProgress.toLocaleString()} records…</span>}
+        {data.sourceError && <span role="alert" className="field__error">{data.sourceError}</span>}
         <ReportPdfDownload societyId={society._id} report={overviewReport} filename={`financial-overview-${focus.start}-${focus.end}`} disabled={data.loading || !canExport} label="Overview PDF" />
       </div>
       {showStats && (

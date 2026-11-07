@@ -34,6 +34,11 @@
   min-width: 0;
   margin-top: 2px;
 }
+// A citation too long for one line wraps left-aligned under its icon.
+.settings-deadlines__sources .citation-badge,
+.annual-cycle-sources .citation-badge {
+  text-align: left;
+}
 
 // Settings-style pages (Settings, API keys, Custom fields, AI agents,
 // Integrations, Browser apps, Workflow packages) share PageHeader's title

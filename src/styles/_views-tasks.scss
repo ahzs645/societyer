@@ -141,6 +141,21 @@
   color: token('text-tertiary');
 }
 .task-scope-bar__group .select-trigger { min-width: 128px; }
+/* Desktop: "By Status" in place of a separate label keeps the chips and the
+ * picker on one line; the select's aria-label carries the full name. */
+@media (min-width: 761px) {
+  .task-scope-bar__group > span:first-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .task-scope-bar__group .select-trigger__label::before {
+    content: "By ";
+    color: token('text-tertiary');
+  }
+}
 .task-scope-chip {
   @include inline-flex-center;
   gap: 5px;

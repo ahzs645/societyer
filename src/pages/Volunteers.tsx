@@ -22,6 +22,7 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTablePhoneCard,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -201,6 +202,14 @@ export function VolunteersPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={applicationsTable.loading || applications === undefined}
+            renderPhoneCard={(record, { selecting }) => (
+              <RecordTablePhoneCard
+                title={`${record.firstName ?? ""} ${record.lastName ?? ""}`.trim() || "Unnamed applicant"}
+                badge={<Badge tone={record.status === "Converted" ? "success" : record.status === "Declined" ? "danger" : "warn"}>{String(record.status)}</Badge>}
+                meta={[record.roleWanted as string | undefined, record.email as string | undefined]}
+                selecting={selecting}
+              />
+            )}
             renderCell={({ record, field }) => {
               if (field.name === "applicant") return (
                 <div className="record-table__identifier-lines">

@@ -41,7 +41,7 @@ export function CustomersPanel({ currency = "CAD", customers, organizations, soc
   return (
     <div className="card invoice-card">
       <div className="card__head">
-        <div>
+        <div className="invoice-customers__intro">
           <h2 className="card__title">Customers</h2>
           <span className="card__subtitle">Keep customer details up to date and see what each one owes.</span>
         </div>

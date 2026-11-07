@@ -9,6 +9,7 @@ import { api } from "@/lib/convexApi";
 import { useOrganizationWorkspace } from "../hooks/useOrganizationWorkspace";
 import { Badge } from "../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ExpandableText } from "../components/ExpandableText";
 import { complianceFactsForOrganization, computeComplianceObligations, filterApplicableCompliancePacks } from "../lib/compliance";
 import type { ComplianceFacts, ComplianceObligationStatus } from "../lib/compliance";
 import { formatDate, relative } from "../lib/format";
@@ -244,8 +245,10 @@ export function ComplianceObligationsPage() {
       />
 
       <p className="muted" role="status">
-        These calculated dates require review of statutory holidays, the applicable location, filing-office closures and submission-channel rules.
-        A rule-pack or workflow review does not establish the final legal deadline. Filing completion is recorded separately from its timeliness.
+        <ExpandableText lines={6} phoneLines={2} label="the review note">
+          These calculated dates require review of statutory holidays, the applicable location, filing-office closures and submission-channel rules.
+          A rule-pack or workflow review does not establish the final legal deadline. Filing completion is recorded separately from its timeliness.
+        </ExpandableText>
       </p>
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>

@@ -35,6 +35,14 @@
 .intake-llm legend { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; padding: 0 4px; }
 .intake-llm__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 12px; align-items: end; }
 .intake-llm__note { font-size: var(--fs-xs); margin: 0; }
+@media (max-width: 760px) {
+  /* Phones: the page limit sits beside its label; an idle Progress card only
+     pushes the runs list down, so it appears once a run starts. */
+  .intake-llm__grid--inline .field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; margin-bottom: 0; }
+  .intake-llm__grid--inline .field > :not(label, input) { grid-column: 1 / -1; }
+  .intake-llm__grid--inline .field__label { white-space: normal; }
+  .intake-progress--idle { display: none; }
+}
 
 .intake-stages { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .intake-stage { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; color: var(--text-tertiary); }
@@ -252,3 +260,34 @@ mark.intake-hl, .intake-hl {
 .intake-compact { border: 1px solid var(--border); border-radius: var(--r-md, 8px); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .intake-compact__title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-md, 14px); }
 .intake-compact__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+
+.intake-runs-empty { margin: 0; padding: 20px 16px; text-align: center; }
+
+/* Phones: each run is a card (name and status, its counts, then actions) in
+   place of a seven-column table. */
+@media (max-width: 760px) {
+  .intake-runs-table,
+  .intake-runs-table tbody { display: block; }
+  .intake-runs-table thead { display: none; }
+  .intake-runs-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .intake-runs-table tbody td { display: block; padding: 0; border: 0; min-width: 0; white-space: normal; }
+  .intake-runs-table tbody td[data-label] {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 12px;
+    font-size: var(--fs-sm);
+  }
+  .intake-runs-table td[data-label]::before {
+    content: attr(data-label);
+    margin-right: auto;
+    color: var(--text-secondary);
+    font-family: var(--font-sans, inherit);
+  }
+  .intake-runs-table tbody td:last-child { grid-column: 1 / -1; }
+}

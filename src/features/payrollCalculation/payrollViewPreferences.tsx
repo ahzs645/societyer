@@ -113,7 +113,10 @@ export function PayrollViewSettings({
       </p>
       {error && <p role="status">{error}</p>}
       <div className="payroll-calculator__table-wrap">
-        <table className="table" aria-label="Payroll view preferences">
+        <table
+          className="table payroll-calculator__view-prefs"
+          aria-label="Payroll view preferences"
+        >
           <thead>
             <tr>
               <th>View</th>
@@ -139,7 +142,9 @@ export function PayrollViewSettings({
                           toggle("hidden", id, !event.target.checked)
                         }
                       />
-                      {view.required ? "Required" : "Shown in navigation"}
+                      <span className="payroll-calculator__view-prefs-note">
+                        {view.required ? "Required" : "Shown in navigation"}
+                      </span>
                     </label>
                   </td>
                   <td>

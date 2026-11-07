@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { Menu } from "../../../components/Menu";
+import { formatDateTime } from "../../../lib/format";
 import { Select, type SelectOption } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { SkeletonRows } from "../../../components/ui";
@@ -145,7 +146,14 @@ export function GeneralLedgerReport({
         <AccountControl accounts={accounts} value={accountId} onChange={actions.setAccount} />
       </ReportFilterControls>
 
-      <div className="books-report__note" role="status">{complete.books ? `Complete ledger snapshot loaded at ${complete.books.loadedAtISO}. Exports contain every matching line.` : `Loading complete ledger: ${complete.progress.toLocaleString()} records…`} <button className="btn btn--sm" onClick={complete.refresh}>Refresh complete report</button></div>
+      <div className="financials-snapshot books-report__note" role="status">
+        <span className="financials-snapshot__text">
+          {complete.books
+            ? <>Complete ledger snapshot loaded at {formatDateTime(complete.books.loadedAtISO)}.<span className="finance-label-wide"> Exports contain every matching line.</span></>
+            : `Loading complete ledger: ${complete.progress.toLocaleString()} records…`}
+        </span>
+        <button className="btn btn--sm" onClick={complete.refresh}><span>Refresh<span className="finance-label-wide"> complete report</span></span></button>
+      </div>
       {complete.error && <p className="field__error" role="alert">{complete.error}</p>}
       {context.canExport && !problem && <ReportPdfDownload societyId={context.societyId} report={pdfReport} filename={`General ledger ${state.range.from} to ${state.range.to}`} />}
 

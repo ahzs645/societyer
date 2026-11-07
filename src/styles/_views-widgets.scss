@@ -397,6 +397,15 @@
   font-weight: 500;
   transition: background token('anim-fast') token('anim-ease'), color token('anim-fast') token('anim-ease'), border-color token('anim-fast') token('anim-ease');
 }
+// Communications' five sections wrap on phones rather than run off the edge.
+@media (max-width: 760px) {
+  .comms-sections .segmented {
+    display: flex;
+    flex-wrap: wrap;
+    border-radius: 14px;
+  }
+  .comms-sections .segmented__btn { flex: 1 1 auto; padding-inline: 6px; }
+}
 .segmented__btn:hover:not(.is-active) {
   background: token('bg-hover-alpha');
   color: token('text-primary');

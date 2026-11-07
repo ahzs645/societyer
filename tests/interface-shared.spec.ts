@@ -543,7 +543,7 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   await form.getByLabel("Eligible amount", { exact: true }).fill("100");
   await form.getByRole("button", { name: "Issue", exact: true }).click();
   await expect(form).toBeHidden();
-  const receipt = page.locator("tr", { hasText: "Synthetic touch row action receipt" });
+  const receipt = recordRows(page).filter({ hasText: "Synthetic touch row action receipt" });
   await act(receipt, "Void");
   await page.getByPlaceholder("Reason (required)").fill("Synthetic interface regression; no real donation");
   await page.getByRole("button", { name: "Void receipt", exact: true }).click();

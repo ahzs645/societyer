@@ -56,8 +56,9 @@ test("setup destinations work for a corporation that is preparing incorporation"
   await expect(page.locator("#more-organization-details")).toHaveJSProperty("open", true);
   await expect(page.getByRole("button", { name: "Address", exact: true })).toBeInViewport();
   if (phone) {
-    // The formatting toolbar scrolls sideways with a faded edge.
-    await expect(page.locator(".markdown-editor__toolbar").first()).toHaveAttribute("data-overflow", "end");
+    // The everyday formatting buttons fit; the rest wait behind "More formatting".
+    await expect(page.getByRole("button", { name: "More formatting", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Heading 1", exact: true })).toHaveCount(0);
   }
   await fits(page);
   const articlesRow = page.locator(".society-doc-table tr", { hasText: "Articles" });

@@ -677,7 +677,8 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
     position: static;
   }
   .minutes-preview__toolbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 }
 .structured-minutes-editor {

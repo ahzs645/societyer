@@ -39,7 +39,41 @@
 }
 @media (max-width: 560px) {
   .agm-workflow__posture-item {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 104px minmax(0, 1fr);
+    column-gap: token('s-2');
+  }
+}
+
+// AGM workflow: posture and the delivery log sit beside the steps, so a
+// finished AGM's log isn't six steps down the page.
+.agm-workflow__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: token('s-4');
+  > .card {
+    margin: 0;
+    min-width: 0;
+  }
+}
+.agm-workflow__step {
+  padding: 14px token('s-4');
+}
+@media (min-width: 1101px) {
+  .agm-workflow__layout {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "steps posture"
+      "steps log";
+    align-items: start;
+  }
+  .agm-workflow__steps { grid-area: steps; }
+  .agm-workflow__posture { grid-area: posture; }
+  .agm-workflow__log { grid-area: log; }
+}
+@media (max-width: 560px) {
+  .agm-workflow__step {
+    padding: 10px token('s-3');
   }
 }
 
@@ -239,5 +273,60 @@
   }
   .meeting-detail-page > .tabs .tab::after {
     top: 0;
+  }
+}
+
+// Phone card for a register with no detail view (features/registers).
+.register-phone-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-card');
+  background: token('bg-panel');
+}
+.register-phone-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-2');
+}
+.register-phone-card__title {
+  min-width: 0;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+  line-height: 1.3;
+}
+.register-phone-card__badge {
+  flex: none;
+  display: inline-flex;
+}
+.register-phone-card__meta {
+  min-width: 0;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  line-height: 1.35;
+}
+.register-phone-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+}
+
+// Record categories take two columns when the card is wide enough.
+.legal-records__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  column-gap: token('s-6');
+}
+
+// Role-holder register: the card goes flush on phones, so its toolbar and
+// record cards need the page gutter the card's heading already has.
+@media (max-width: 760px) {
+  .role-holders-register {
+    padding-inline: token('s-3');
   }
 }

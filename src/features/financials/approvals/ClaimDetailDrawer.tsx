@@ -176,7 +176,7 @@ export function ClaimDetailDrawer({
 
   const footer = (
     <>
-      <button className="btn" type="button" onClick={onClose}>Close</button>
+      <button className="btn drawer-footer-close" type="button" onClick={onClose}>Close</button>
       {row.status === "Draft" && (
         <button className="btn btn--accent" type="button" disabled={!canWrite || busy} onClick={() => void submit("submit", "Claim submitted for approval")}>
           <Send size={12} aria-hidden="true" /> Submit for approval

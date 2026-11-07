@@ -266,7 +266,7 @@ function AddressFields({
   prefix: string;
 }) {
   return (
-    <div className="form-grid">
+    <div className="form-grid payroll-filing__address">
       {(
         [
           ["line1", "Street address"],
@@ -430,6 +430,45 @@ function informationMoney(
     );
   return amount;
 }
+const VISIBLE_MESSAGES = 3;
+
+/**
+ * One bad source can raise the same blocker or warning for every run in a
+ * year; show a few, the rest on request. The CSV export keeps them all.
+ */
+function PayrollMessageList({
+  messages,
+  kind,
+}: {
+  messages: string[];
+  kind: "blocker" | "warning";
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const hidden = messages.length - VISIBLE_MESSAGES;
+  return (
+    <>
+      {messages.slice(0, showAll ? undefined : VISIBLE_MESSAGES).map((message, index) => (
+        <p
+          className={kind === "blocker" ? "payroll-calculator__blockers" : "muted"}
+          key={index}
+        >
+          {message}
+        </p>
+      ))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          className="btn btn--sm"
+          aria-expanded={showAll}
+          onClick={() => setShowAll((value) => !value)}
+        >
+          {showAll ? `Show fewer ${kind}s` : `Show ${hidden} more ${kind}s`}
+        </button>
+      )}
+    </>
+  );
+}
+
 function FilingEditor({
   societyId,
   year,
@@ -942,16 +981,8 @@ function FilingEditor({
         {context.payrollAccountLast4 &&
           `RP account ending ${context.payrollAccountLast4}.`}
       </p>
-      {context.blockers.map((message, index) => (
-        <p className="payroll-calculator__blockers" key={index}>
-          {message}
-        </p>
-      ))}
-      {context.warnings.map((message, index) => (
-        <p className="muted" key={index}>
-          {message}
-        </p>
-      ))}
+      <PayrollMessageList kind="blocker" messages={context.blockers} />
+      <PayrollMessageList kind="warning" messages={context.warnings} />
       <div className="form-grid">
         <Field label="Filing format">
           <select
@@ -1023,7 +1054,7 @@ function FilingEditor({
       </div>
       <fieldset>
         <legend>Legal employer and contact</legend>
-        <div className="form-grid">
+        <div className="form-grid payroll-filing__contact">
           <TextField
             label="Legal employer name"
             value={employerName}

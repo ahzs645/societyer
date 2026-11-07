@@ -1,5 +1,6 @@
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, Circle, Sparkles } from "lucide-react";
+import { useScrollOverflow } from "../../../hooks/useScrollOverflow";
 import type { MonthStatusRow } from "./types";
 
 const ICONS = {
@@ -30,6 +31,14 @@ export function MonthStrip({
   currentMonth: string;
   onSelect: (month: string) => void;
 }) {
+  const stripRef = useRef<HTMLDivElement>(null);
+  const overflow = useScrollOverflow(stripRef, [months.length]);
+  // Phones scroll the year sideways: keep the chosen month in view.
+  useEffect(() => {
+    const strip = stripRef.current;
+    const month = strip?.querySelector<HTMLElement>(`[data-month="${selected}"]`);
+    if (strip && month && strip.scrollWidth > strip.clientWidth) strip.scrollLeft = month.offsetLeft - (strip.clientWidth - month.offsetWidth) / 2;
+  }, [selected, months.length]);
   const choosable = months.filter((row) => row.kind !== "upcoming");
   const tabStop = choosable.some((row) => row.month === selected) ? selected : choosable[0]?.month;
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -46,7 +55,7 @@ export function MonthStrip({
     event.currentTarget.querySelector<HTMLButtonElement>(`[data-month="${month}"]`)?.focus();
   };
   return (
-    <div className="recon-month-strip" role="tablist" aria-label="Months" onKeyDown={onKeyDown}>
+    <div ref={stripRef} className="recon-month-strip" role="tablist" aria-label="Months" data-overflow={overflow} onKeyDown={onKeyDown}>
       {months.map((row) => {
         const Icon = row.kind === "reconciled" && row.auto ? Sparkles : ICONS[row.kind];
         const isSelected = row.month === selected;
@@ -67,7 +76,8 @@ export function MonthStrip({
             <span className="recon-month__name">{monthName(row.month)}{row.month === currentMonth ? " – Now" : ""}</span>
             <span className="recon-month__status">
               <Icon size={12} aria-hidden="true" />
-              {upcoming ? "—" : row.label}
+              {/* The word joiner keeps "−$89.60" whole when the label wraps. */}
+              <span>{upcoming ? "—" : row.label.replace("−", "−\u2060")}</span>
             </span>
           </button>
         );

@@ -22,9 +22,11 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTablePhoneCard,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import { Tabs } from "../components/primitives";
+import { useIsMobile } from "../lib/useIsMobile";
 import { CreateMenu } from "../components/CreateMenu";
 import { MotionBacklogPage } from "./MotionBacklog";
 import { MotionLibraryPage } from "./MotionLibrary";
@@ -150,7 +152,9 @@ function MotionsTableTab() {
   const toast = useToast();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [tagDraft, setTagDraft] = useState<Record<string, string>>({});
+  const [labelsRowId, setLabelsRowId] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState<MotionForm | null>(null);
 
@@ -303,6 +307,44 @@ function MotionsTableTab() {
     resolutionTypeLabel: editing?.resolutionTypeLabel,
   }).length > 0 : false;
 
+  const labelEditor = (row: any) => (
+    <div
+      className="row"
+      style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {(row.tags ?? []).map((tag: string) => (
+        <Badge key={tag} tone="neutral">
+          <span className="row" style={{ gap: 2, alignItems: "center" }}>
+            <TagIcon size={10} /> {motionTagLabel(tag)}
+            <button
+              className="btn btn--ghost btn--icon"
+              style={{ padding: 0, height: 14 }}
+              aria-label={`Remove label ${motionTagLabel(tag)}`}
+              onClick={() => removeTag(row, tag)}
+            disabled={!canWrite}
+           >
+              <X size={10} />
+            </button>
+          </span>
+        </Badge>
+      ))}
+      <input
+        className="input input--compact"
+        style={{ width: 90, height: 24 }}
+        value={tagDraft[String(row._id)] ?? ""}
+        onChange={(e) => setTagDraft({ ...tagDraft, [String(row._id)]: e.target.value })}
+        onKeyDown={(e) => { if (e.key === "Enter") addTag(row); }}
+        placeholder="+ label"
+        aria-label="Add label"
+        enterKeyHint="done"
+        title="Type a label and press Enter"
+        disabled={!canWrite}
+      />
+    </div>
+  );
+  const labelsRow = labelsRowId ? records.find((row: any) => String(row._id) === labelsRowId) : undefined;
+
   return (
     <>
       {showMetadataWarning ? (
@@ -313,6 +355,7 @@ function MotionsTableTab() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={hydratedView}
           records={records}
+          recordPreview={isMobile}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -345,70 +388,57 @@ function MotionsTableTab() {
                   </Link>
                 );
               }
-              if (field.name === "tags") {
-                return (
-                  <div
-                    className="row"
-                    style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {(row.tags ?? []).map((tag: string) => (
-                      <Badge key={tag} tone="neutral">
-                        <span className="row" style={{ gap: 2, alignItems: "center" }}>
-                          <TagIcon size={10} /> {motionTagLabel(tag)}
-                          <button
-                            className="btn btn--ghost btn--icon"
-                            style={{ padding: 0, height: 14 }}
-                            aria-label={`Remove label ${motionTagLabel(tag)}`}
-                            onClick={() => removeTag(row, tag)}
-                          disabled={!canWrite}
-                         >
-                            <X size={10} />
-                          </button>
-                        </span>
-                      </Badge>
-                    ))}
-                    <input
-                      className="input input--compact"
-                      style={{ width: 90, height: 24 }}
-                      value={tagDraft[String(row._id)] ?? ""}
-                      onChange={(e) => setTagDraft({ ...tagDraft, [String(row._id)]: e.target.value })}
-                      onKeyDown={(e) => { if (e.key === "Enter") addTag(row); }}
-                      placeholder="+ label"
-                      aria-label="Add label"
-                      enterKeyHint="done"
-                      title="Type a label and press Enter"
-                      disabled={!canWrite}
-                    />
-                  </div>
-                );
-              }
+              if (field.name === "tags") return labelEditor(row);
               return undefined;
             }}
-            renderRowActions={(row) =>
-              canWrite && canEditMotion(row) ? (
-                <button
-                  className="btn btn--ghost btn--sm"
-                  onClick={(e) => { e.stopPropagation(); openEdit(row); }}
-                disabled={!canWrite}
-               >
-                  <Pencil size={12} /> Edit
-                </button>
-              ) : row.primaryMeetingId ? (
-                <Link
-                  className="btn btn--ghost btn--sm"
-                  to={`/app/meetings/${row.primaryMeetingId}?tab=motions&motion=${encodeURIComponent(String(row._id))}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Open meeting
-                </Link>
-              ) : null
-            }
+            renderPhoneCard={(row, helpers) => (
+              <RecordTablePhoneCard
+                title={String(row.title || truncate(String(row.text ?? ""), 70))}
+                badge={<Badge tone="neutral">{String(row.status ?? "Draft")}</Badge>}
+                meta={[row.outcome ? String(row.outcome) : "", row.meeting ? String(row.meeting) : ""]}
+                onOpen={helpers.open}
+                selecting={helpers.selecting}
+              />
+            )}
+            renderRowActions={(row) => (
+              <>
+                {canWrite && canEditMotion(row) ? (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={(e) => { e.stopPropagation(); openEdit(row); }}
+                  disabled={!canWrite}
+                 >
+                    <Pencil size={12} /> Edit
+                  </button>
+                ) : row.primaryMeetingId ? (
+                  <Link
+                    className="btn btn--ghost btn--sm"
+                    to={`/app/meetings/${row.primaryMeetingId}?tab=motions&motion=${encodeURIComponent(String(row._id))}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Open meeting
+                  </Link>
+                ) : null}
+                {/* Cards have no Labels cell, so phones edit them from here. */}
+                {isMobile && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={(e) => { e.stopPropagation(); setLabelsRowId(String(row._id)); }}
+                  >
+                    <TagIcon size={12} /> Labels
+                  </button>
+                )}
+              </>
+            )}
           />
         </RecordTableScope>
       ) : (
         <PageLoading />
       )}
+
+      <Drawer open={!!labelsRow} onClose={() => setLabelsRowId(null)} title="Labels">
+        {labelsRow ? labelEditor(labelsRow) : null}
+      </Drawer>
 
       <Drawer
         open={!!editing}

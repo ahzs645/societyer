@@ -2,8 +2,13 @@
 
 @media(max-width:760px){.invoice-table--custom-view{display:table!important;min-width:650px}.invoice-table--custom-view thead{display:table-header-group!important}.invoice-table--custom-view tbody{display:table-row-group!important}.invoice-table--custom-view tr,.invoice-table--custom-view tbody tr{display:table-row!important}.invoice-table--custom-view th,.invoice-table--custom-view tbody td{display:table-cell!important;position:static!important;padding:12px!important;text-align:left;vertical-align:top}.invoice-table--custom-view tbody td::before{display:none!important}.invoice-table--custom-view .invoice-table__link::after{display:none!important}.invoice-table--custom-view tbody td.num{text-align:right}.invoice-table--custom-view th:first-child,.invoice-table--custom-view td:first-child{min-width:38px}}
 
-/* List controls share one gutter with the search row below them. */
-.invoice-view-controls { padding-bottom: 0; }
+/* Desktop: the view controls sit in the search row. Phones: one icon button in
+ * the tab row, so neither size spends a row on them. */
+.invoice-view-controls { padding: 0; flex-wrap: nowrap; }
+.invoice-toolbar .invoice-view-controls__label { display: none; }
+.invoice-view-controls--compact { flex: none; }
+.invoice-view-controls__toggle { position: relative; }
+.invoice-view-controls__dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .invoice-view-column > * { min-width: 0; }
 @media (max-width: 560px) {
   .invoice-view-controls { flex-wrap: nowrap; }

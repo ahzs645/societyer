@@ -379,7 +379,7 @@
 
 .grant-format-library__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 8px;
 }
 
@@ -754,3 +754,5 @@
   margin: token('s-1') 0 token('s-2');
   font-size: token('fs-sm');
 }
+
+.grants-stats { margin-bottom: token(s-4); }

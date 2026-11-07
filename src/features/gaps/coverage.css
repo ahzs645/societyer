@@ -19,6 +19,13 @@
   white-space: nowrap;
 }
 
+/* Phones: every view stays on screen, in two rows, instead of a cut-off strip. */
+@media (max-width: 760px) {
+  .coverage-tabs { flex-wrap: wrap; width: auto; overflow: visible; border-radius: 14px; }
+  .coverage-tabs .segmented__btn { flex: 1 1 auto; justify-content: center; padding-inline: 6px; }
+  .coverage-tabs .segmented__btn svg { display: none; }
+}
+
 .coverage-status-summary {
   display: flex;
   flex-wrap: wrap;
@@ -270,10 +277,16 @@
 }
 
 @media (max-width: 640px) {
-  .continuity-grid { --continuity-label: 132px; }
-  .continuity-grid__label { min-width: 0; max-width: 132px; padding: 6px; }
+  /* Ten years fit a 390px phone without sideways scrolling. */
+  .continuity-grid { --continuity-label: 116px; --continuity-col: 24px; }
+  .continuity-grid__label { min-width: 0; max-width: 116px; padding: 6px; }
+  .continuity-cell { min-width: 0; }
   .coverage-gap-row { grid-template-columns: minmax(0, 1fr); }
 }
 
 .coverage-root .card__head { flex-wrap: wrap; row-gap: 4px; }
 .coverage-root .card__title { flex-shrink: 0; }
+/* Title, info and one action fit a phone: the title wraps before the action does. */
+.coverage-root .coverage-head--inline { flex-wrap: nowrap; align-items: center; }
+.coverage-root .coverage-head--inline .card__title { flex-shrink: 1; min-width: 0; }
+.coverage-root .coverage-head--inline .btn-action { flex: none; }

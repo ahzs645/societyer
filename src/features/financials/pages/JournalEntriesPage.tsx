@@ -146,7 +146,7 @@ export function JournalEntriesPage() {
         }
         actions={
           <>
-            <FinanceCreateMenu />
+            <FinanceCreateMenu hideOnPhone />
             <button type="button" className="btn-action btn-action--primary" disabled={!canWrite || chartAccounts === undefined} onClick={openNew}>
               <Plus size={12} aria-hidden="true" /> New journal entry
             </button>

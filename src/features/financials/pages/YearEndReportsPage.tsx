@@ -120,15 +120,15 @@ function ReportActions({ title, filenameBase, bodyHtml, report }: { title: strin
   const { canExport } = useFinancePermissions();
   const society = useSociety();
   return (
-    <div className="row" style={{ gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-      <button className="btn-action btn-action--primary" onClick={() => void exportWordDocx({ filename: `${filenameBase}.docx`, title, bodyHtml })} disabled={!canExport}>
-        <FileDown size={12} /> Export Word
-      </button>
+    <div className="year-end-actions">
       {report && society ? <ReportPdfDownload societyId={society._id} report={report} filename={filenameBase} disabled={!canExport} /> : <button className="btn-action" onClick={() => void exportPdfDownload({ filename: `${filenameBase}.pdf`, title, bodyHtml })} disabled={!canExport}>
         <FileDown size={12} /> Download PDF
       </button>}
+      <button className="btn-action btn-action--primary" onClick={() => void exportWordDocx({ filename: `${filenameBase}.docx`, title, bodyHtml })} disabled={!canExport}>
+        <FileDown size={12} /> <span><span className="finance-label-wide">Export </span>Word</span>
+      </button>
       <button className="btn-action" onClick={() => void printPdfDocument({ title, bodyHtml })} disabled={!canExport}>
-        <Printer size={12} /> Print
+        <Printer size={12} /> <span className="year-end-actions__print">Print</span>
       </button>
     </div>
   );
@@ -147,8 +147,7 @@ function DocumentPreview({ bodyHtml }: { bodyHtml: string }) {
 function PreviewBox({ bodyHtml }: { bodyHtml: string }) {
   return (
     <div
-      className="card"
-      style={{ padding: 16, background: "#fff", overflowX: "auto" }}
+      className="card year-end-preview__sheet"
       dangerouslySetInnerHTML={{ __html: bodyHtml }}
     />
   );
@@ -310,7 +309,7 @@ export function YearEndReportsPage() {
         }
       />
 
-      <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 12 }}>
+      <div className="row year-end-controls" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 12 }}>
         <Field label="Fiscal year">
           <select className="input year-end-fy-select" value={fiscalYear ?? ""} onChange={(e) => setSelectedYear(e.target.value)}>
             {fiscalYears.map((y) => (
@@ -470,7 +469,7 @@ export function YearEndReportsPage() {
           <p className="meta">Program forms are recorded in the workspace base currency ({baseCurrency}). Grant prefills include only {baseCurrency} grants and their matching source transactions.</p>
           {!edit ? (
             <>
-              <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div className="row year-end-program-start" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
                 <button className="btn-action btn-action--primary" onClick={startNew} disabled={!canEditSettings}>
                   <Plus size={12} /> New statement
                 </button>

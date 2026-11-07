@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useIsMobile } from "../lib/useIsMobile";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Plus, Receipt, FileDown } from "lucide-react";
@@ -25,6 +26,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableEmpty,
+  RecordTablePhoneCard,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -43,6 +45,9 @@ export function ReceiptsPage() {
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  // Phones: a record preview swaps the column table, whose amounts and actions
+  // sat off-screen, for cards with the row actions behind "…".
+  const isMobile = useIsMobile();
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -127,6 +132,7 @@ export function ReceiptsPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
+          recordPreview={isMobile}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -161,6 +167,19 @@ export function ReceiptsPage() {
               if (field.name === "status") return record.voidedAtISO ? <Badge tone="danger">Voided</Badge> : <Badge tone="success">Issued</Badge>;
               return undefined;
             }}
+            renderPhoneCard={(record, helpers) => (
+              <RecordTablePhoneCard
+                title={String(record.donorName ?? "")}
+                badge={record.voidedAtISO ? <Badge tone="danger">Voided</Badge> : <Badge tone="success">Issued</Badge>}
+                meta={[
+                  <Money key="amount" cents={Number(record.amountCents)} struck={Boolean(record.voidedAtISO)} />,
+                  <span key="number" className="mono">{String(record.receiptNumber ?? "")}</span>,
+                  formatDate(String(record.receivedOnISO ?? "")),
+                ]}
+                onOpen={helpers.open}
+                selecting={helpers.selecting}
+              />
+            )}
             renderRowActions={(r) => (
               <>
                 <button className="btn btn--ghost btn--sm" onClick={() => exportReceipt(r)} disabled={!canExport}>

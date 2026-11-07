@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useLayoutEffect, useRef } from "react";
 import type { ContinuityPeriod, ContinuityRow, ContinuityStatus } from "../../../shared/continuity";
 import { SEVERITY_LABELS, STATUS_META, STATUS_ORDER, worstStatus } from "./statusMeta";
 
@@ -45,12 +45,18 @@ export function ContinuityHeatmap({
   year: number;
   onSelect: HeatmapSelect;
 }) {
+  // A grid wider than the screen opens on its latest columns.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+  }, [mode, fromYear, toYear, rows.length]);
   if (!rows.length) return <div className="muted">No expectations apply yet. Add one on the Expectations tab.</div>;
   const columns = mode === "years" ? Array.from({ length: toYear - fromYear + 1 }, (_, i) => fromYear + i) : MONTH_LABELS.map((_, i) => i + 1);
   const colWidth = mode === "years" ? 38 : 46;
   return (
-    <div className="continuity-scroll" role="region" aria-label="Record continuity heat-map" tabIndex={0}>
-      <div className="continuity-grid" style={{ gridTemplateColumns: `var(--continuity-label, minmax(200px, 260px)) repeat(${columns.length}, ${colWidth}px)` }}>
+    <div ref={scrollRef} className="continuity-scroll" role="region" aria-label="Record continuity heat-map" tabIndex={0}>
+      <div className="continuity-grid" style={{ gridTemplateColumns: `var(--continuity-label, minmax(200px, 260px)) repeat(${columns.length}, var(--continuity-col, ${colWidth}px))` }}>
         <div className="continuity-grid__head continuity-grid__corner" style={{ gridColumn: 1, gridRow: 1 }}>Body and expectation</div>
         {columns.map((column, index) => (
           <div key={column} className="continuity-grid__head" style={{ gridColumn: index + 2, gridRow: 1 }}>

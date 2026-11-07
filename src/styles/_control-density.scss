@@ -772,6 +772,9 @@ $tap-block: (
 .related-views {
   flex-wrap: wrap;
 }
+@media (max-width: 760px) {
+  .related-views { margin-bottom: token('s-3'); }
+}
 // A filter picker that moves onto the page title's row (Deadlines' status).
 .page__actions .page-header-filter {
   width: auto;
@@ -821,34 +824,6 @@ $tap-block: (
     }
     > .stat:last-child {
       border-right: 0;
-    }
-  }
-  // "Related: Library · Minute book …" scrolls on one line, and the cut edge
-  // fades (data-overflow from RelatedDocumentViews) so a clipped chip reads as
-  // "swipe for more" rather than a layout bug.
-  .related-views {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    padding-block: 6px;
-    margin-block: -6px 6px !important;
-    white-space: nowrap;
-    &::-webkit-scrollbar { display: none; }
-    > * { flex: none; }
-    &[data-overflow='end'] {
-      mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
-    }
-    &[data-overflow='start'] {
-      mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
-    }
-    &[data-overflow='both'] {
-      mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
-    }
-    // The last chip can scroll clear of the fade.
-    &::after {
-      content: '';
-      flex: 0 0 24px;
     }
   }
   // Invoice cards: at true text sizes "RCS-0025 Recurring" no longer fits

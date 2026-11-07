@@ -12,13 +12,17 @@ import { FileText } from "lucide-react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
+  RecordTablePhoneCard,
   RecordTableScope,
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  recordText,
   useObjectRecordTableData,
+  type RecordTableCardRenderer,
 } from "@/platform/record-engine";
 import { useState } from "react";
+import { RegisterPhoneCard } from "../features/registers/RegisterPhoneCard";
 import type { Id } from "../../convex/_generated/dataModel";
 
 export function MinutesPage() {
@@ -79,6 +83,24 @@ export function MinutesPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  // Phones: the card opens the meeting, as the table's meeting link does.
+  const minutesPhoneCard: RecordTableCardRenderer = (record, { selecting }) => {
+    const held = formatDate(recordText(record.heldAt));
+    const quorum = recordText(record.quorum);
+    const approval = record.approvedAt ? `Approved ${recordText(record.approved)}` : record.notHeldYet ? "" : "Approval pending";
+    const met = recordedMinutesQuorum(record as { quorumStatus?: string | null; quorumMet?: boolean | null });
+    if (record.meetingDeleted) return <RegisterPhoneCard title="Deleted meeting" meta={held} badge={<Badge tone="neutral">{quorum}</Badge>} />;
+    return (
+      <RecordTablePhoneCard
+        title={recordText(record.meeting)}
+        badge={<Badge tone={record.notHeldYet || met === null ? "neutral" : met ? "success" : "danger"}>{quorum}</Badge>}
+        meta={[held, approval]}
+        onOpen={() => navigate(`/app/meetings/${recordText(record.meetingId)}`)}
+        selecting={selecting}
+      />
+    );
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -122,6 +144,7 @@ export function MinutesPage() {
                 action={<Link className="btn btn--accent" to="/app/meetings">Go to meetings</Link>}
               />
             }
+            renderPhoneCard={minutesPhoneCard}
             renderCell={({ record, field }) => {
               if (field.name === "meeting") {
                 if (record.meetingDeleted) {

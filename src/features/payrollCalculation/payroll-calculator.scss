@@ -7,6 +7,14 @@
     min-width: 0;
     max-width: 100%;
   }
+  // A confirmation checkbox, each on its own line.
+  .register-check {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-block: 8px;
+    input { flex: none; margin-top: 3px; }
+  }
   &__heading,
   &__actions,
   &__toolbar {
@@ -173,11 +181,106 @@
       max-width: none;
     }
   }
+  // Phones: one swiping section row, and the year beside its settings link.
+  @media (max-width: 760px) {
+    &__tabs {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      margin-inline: -16px;
+      padding-inline: 16px;
+      > button { flex: none; }
+      &::-webkit-scrollbar { display: none; }
+      &[data-overflow='end'] {
+        mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+      }
+      &[data-overflow='start'] {
+        mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+      }
+      &[data-overflow='both'] {
+        mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+      }
+    }
+    &__toolbar {
+      flex-wrap: nowrap;
+      align-items: flex-end;
+      .field {
+        flex: 0 0 150px;
+        margin: 0;
+      }
+      .field__hint { display: none; }
+      > a {
+        flex: 1 1 0;
+        min-width: 0;
+        font-size: token(fs-sm);
+      }
+    }
+    // Closed, a folded notice is only its one tappable line.
+    details#{&}__notice {
+      padding-block: 0;
+      > summary {
+        padding-block: 11px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      > p { margin-block: 0 12px; }
+      > :last-child { margin-bottom: 12px; }
+    }
+    // The checkboxes and Up/Down fit the width; the row's name says what they do.
+    &__table-wrap > table#{&}__view-prefs {
+      min-width: 0;
+      width: 100%;
+      table-layout: fixed;
+      th, td {
+        padding-inline: 4px;
+        overflow-wrap: normal;
+      }
+      // The controls keep their width; the names take what's left and wrap at spaces.
+      thead th:nth-child(2) { width: 56px; }
+      thead th:nth-child(3) { width: 64px; }
+      thead th:nth-child(4) { width: 100px; }
+      td:last-child { white-space: nowrap; }
+      .btn {
+        padding-inline: 6px;
+        white-space: nowrap;
+      }
+      // A 320px phone can't fit the names beside the controls; this settings
+      // table scrolls inside its panel there.
+      @media (max-width: 360px) { min-width: 320px; }
+    }
+    &__view-prefs-note { display: none; }
+  }
   @media (max-width: 650px) {
     &__form-grid,
     &__columns,
     &__stats {
       grid-template-columns: minmax(0, 1fr);
+    }
+    // Filings: short address and phone fields share a row; labels may wrap,
+    // so inputs line up along the bottom.
+    .payroll-filing__address,
+    .payroll-filing__contact {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: end;
+    }
+    // Half-width labels wrap rather than cut off ("Contact seven-digit phone").
+    :is(.payroll-filing__address, .payroll-filing__contact) .field__label {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
+    .payroll-filing__address > :nth-child(-n + 2),
+    .payroll-filing__contact > :nth-child(-n + 3),
+    .payroll-filing__contact > :nth-child(6) {
+      grid-column: 1 / -1;
+    }
+    // The run's dates and type pair up where a date input fits half the width.
+    @media (min-width: 375px) {
+      &__form-grid--run {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        > :nth-child(n + 5) { grid-column: 1 / -1; }
+      }
     }
     &__panel {
       padding: 12px;

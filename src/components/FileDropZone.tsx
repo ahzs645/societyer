@@ -305,6 +305,8 @@ export type FileDropZoneProps = UseFileDropOptions & {
   /** Shown instead of `title` on touch screens, where nothing can be dragged. */
   touchTitle?: ReactNode;
   hint?: ReactNode;
+  /** Hint on touch screens, where drag-in and file-name tips don't apply. */
+  touchHint?: ReactNode;
   chooseLabel?: string;
   busy?: boolean;
   busyLabel?: string;
@@ -330,6 +332,7 @@ export function FileDropZone({
   title,
   touchTitle,
   hint,
+  touchHint,
   chooseLabel = "Choose file",
   busy = false,
   busyLabel = "Uploading…",
@@ -382,7 +385,16 @@ export function FileDropZone({
             {chooseLabel}
           </button>
         )}
-        {hint && <span id={hintId} className="file-drop__hint muted">{hint}</span>}
+        {hint && (
+          <span id={hintId} className="file-drop__hint muted">
+            {touchHint ? (
+              <>
+                <span className="file-drop__title-pointer">{hint}</span>
+                <span className="file-drop__title-touch">{touchHint}</span>
+              </>
+            ) : hint}
+          </span>
+        )}
         {busy && (
           <span
             className={`file-drop__progress${determinate ? "" : " is-indeterminate"}`}

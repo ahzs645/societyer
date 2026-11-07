@@ -10,7 +10,7 @@ import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Tabs } from "../components/primitives";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
 import { Money } from "../components/Money";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -175,7 +175,7 @@ export function BillsPage() {
         }
       />
 
-      <div className="stat-grid" role="group" aria-label="Payables summary">
+      <StatStrip className="stat-grid--3 stat-strip--fit" ariaLabel="Payables summary">
         <StatTile
           label="Total outstanding"
           icon={<Wallet size={14} />}
@@ -205,7 +205,7 @@ export function BillsPage() {
           onClick={() => setTab("open")}
           actionLabel="Show open bills"
         />
-      </div>
+      </StatStrip>
 
       <Tabs<BillTab>
         value={tab}

@@ -2917,7 +2917,6 @@ function MeetingDetailWorkspace() {
                 <div className="minutes-preview__toolbar">
                   <div>
                     <strong>{selectedMinutesExportStyle.label}</strong>
-                    <p className="muted">{selectedMinutesExportStyle.tone}</p>
                   </div>
                   <button className="btn-action" onClick={openMinutesPreviewPage} disabled={!minutes}>
                     <ExternalLink size={12} /> Open separate page

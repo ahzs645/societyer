@@ -49,6 +49,13 @@ import { SOURCE_VERSION_STATUS_LABELS, type SourceVersionStatus } from "../../sh
 
 type ShowFilter = "all" | "needs_review" | "duplicates" | "versions";
 
+const SHOW_FILTERS: [ShowFilter, string, ReactNode][] = [
+  ["all", "All", undefined],
+  ["needs_review", "Needs review", <ClipboardCheck key="r" size={12} />],
+  ["duplicates", "Duplicates", <Copy key="d" size={12} />],
+  ["versions", "Version groups", <Layers key="v" size={12} />],
+];
+
 export function DocumentsPage() {
   const [previewFile, setPreviewFile] = useState<any | null>(null);
   const society = useSociety();
@@ -82,6 +89,7 @@ export function DocumentsPage() {
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const categoryParam = searchParams.get("category");
+  const isMobile = useIsMobile();
   const categoryKey = categoryParam ? documentCategoryGroupKey(categoryParam) : null;
   const show = (searchParams.get("show") as ShowFilter | null) ?? "all";
   const showArchived = searchParams.get("archived") === "1";
@@ -367,15 +375,39 @@ export function DocumentsPage() {
         </div>
       )}
 
-      {browse && (
+      {browse && isMobile && (
+        <div className="documents-facets-compact" aria-label="Document filters">
+          <Select
+            size="sm"
+            aria-label="Show"
+            value={show}
+            onChange={(value) => setParam("show", value === "all" ? null : value)}
+            options={SHOW_FILTERS
+              .filter(([value]) => value === "all" || show === value || showCounts[value] > 0)
+              .map(([value, label]) => ({ value, label: `${label} (${showCounts[value].toLocaleString()})` }))}
+          />
+          <Select
+            size="sm"
+            aria-label="Category"
+            value={facets.find((facet) => facet.key === categoryKey)?.value ?? ""}
+            onChange={(value) => setParam("category", value || null)}
+            options={[
+              { value: "", label: "All categories" },
+              ...facets.map((facet) => ({ value: facet.value, label: `${facet.label} (${facet.count.toLocaleString()})` })),
+            ]}
+          />
+          {showArchived && (
+            <button type="button" className="chip is-active" aria-pressed="true" onClick={() => setParam("archived", null)}>
+              <Layers size={12} /> Including archived ×
+            </button>
+          )}
+        </div>
+      )}
+
+      {browse && !isMobile && (
         <div className="documents-facets documents-facets--single" aria-label="Document filters">
           <div className="documents-facets__row" role="group" aria-label="Show">
-            {([
-              ["all", "All", undefined],
-              ["needs_review", "Needs review", <ClipboardCheck key="r" size={12} />],
-              ["duplicates", "Duplicates", <Copy key="d" size={12} />],
-              ["versions", "Version groups", <Layers key="v" size={12} />],
-            ] as [ShowFilter, string, ReactNode][])
+            {SHOW_FILTERS
               // Empty queues add nothing to choose from; keep the active one so it can be cleared.
               .filter(([value]) => value === "all" || show === value || showCounts[value] > 0)
               .map(([value, label, icon]) => (

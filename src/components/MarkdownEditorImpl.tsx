@@ -25,13 +25,14 @@ import {
   ListChecks,
   ListOrdered,
   Minus,
+  MoreHorizontal,
   Quote,
   Strikethrough,
   Table as TableIcon,
 } from "lucide-react";
 import { usePrompt } from "./Modal";
 import { Tooltip } from "./Tooltip";
-import { useScrollOverflow } from "../hooks/useScrollOverflow";
+import { useIsMobile } from "../lib/useIsMobile";
 
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
@@ -133,6 +134,9 @@ function getMarkRange(
   }
   return { from, to };
 }
+
+/** The buttons a phone shows before "More formatting". */
+const PHONE_TOOLBAR_IDS = new Set(["bold", "italic", "link", "bullet", "ordered"]);
 
 const TOOLBAR_ITEMS: ToolbarItem[] = [
   {
@@ -572,9 +576,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     ref,
   ) {
     const editorHostRef = useRef<HTMLDivElement | null>(null);
-    // Phones scroll the toolbar sideways; fade whichever edge has buttons out of sight.
-    const toolbarRef = useRef<HTMLDivElement | null>(null);
-    const toolbarOverflow = useScrollOverflow(toolbarRef);
+    // Phones show the everyday buttons; the rest open on a second row.
+    const isMobile = useIsMobile();
+    const [moreOpen, setMoreOpen] = useState(false);
     const crepeRef = useRef<Crepe | null>(null);
     const pendingFocusRef = useRef(false);
     const pendingMarkdownRef = useRef<string | undefined>(undefined);
@@ -961,8 +965,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid || undefined}
       >
-        <div ref={toolbarRef} className="markdown-editor__toolbar" role="toolbar" aria-label="Formatting" data-overflow={toolbarOverflow}>
-          {TOOLBAR_ITEMS.map((item) => {
+        <div className="markdown-editor__toolbar" role="toolbar" aria-label="Formatting">
+          {(() => {
+          const renderItem = (item: ToolbarItem) => {
             const Icon = item.icon;
             const isActive = item.isActive(active);
             const headline = item.shortcut ? `${item.label} (${item.shortcut})` : item.label;
@@ -991,8 +996,31 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
                 </button>
               </Tooltip>
             );
-          })}
-          <TableButton onInsert={insertTable} disabled={readOnly} />
+          };
+          const table = <TableButton onInsert={insertTable} disabled={readOnly} />;
+          if (!isMobile) return <>{TOOLBAR_ITEMS.map(renderItem)}{table}</>;
+          const extras = TOOLBAR_ITEMS.filter((item) => !PHONE_TOOLBAR_IDS.has(item.id));
+          return (
+            <>
+              {TOOLBAR_ITEMS.filter((item) => PHONE_TOOLBAR_IDS.has(item.id)).map(renderItem)}
+              <button
+                type="button"
+                className={`markdown-editor__toolbar-button${moreOpen || extras.some((item) => item.isActive(active)) ? " is-active" : ""}`}
+                aria-label="More formatting"
+                aria-expanded={moreOpen}
+                disabled={readOnly}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setMoreOpen((open) => !open);
+                }}
+              >
+                <MoreHorizontal size={14} aria-hidden="true" />
+              </button>
+              {moreOpen && extras.map(renderItem)}
+              {moreOpen && table}
+            </>
+          );
+          })()}
         </div>
         <div
           ref={editorHostRef}

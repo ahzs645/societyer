@@ -81,10 +81,10 @@ export function previousRange(range: DateRange): DateRange {
 /** The overview's "Compare to" choice: off, the previous period, or the same period last year. */
 export type CompareChoice = "off" | CompareMode;
 
-export const COMPARE_CHOICES: Array<{ id: CompareChoice; label: string; title: string }> = [
-  { id: "off", label: "Off", title: "No comparison" },
-  { id: "previous", label: "Previous period", title: "The equally long period just before" },
-  { id: "lastYear", label: "Same period last year", title: "The same dates one year earlier" },
+export const COMPARE_CHOICES: Array<{ id: CompareChoice; label: string; shortLabel: string; title: string }> = [
+  { id: "off", label: "Off", shortLabel: "Off", title: "No comparison" },
+  { id: "previous", label: "Previous period", shortLabel: "Previous", title: "The equally long period just before" },
+  { id: "lastYear", label: "Same period last year", shortLabel: "Last year", title: "The same dates one year earlier" },
 ];
 
 /** Series, column and tile label for a comparison. */

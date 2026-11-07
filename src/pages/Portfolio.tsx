@@ -149,7 +149,7 @@ export function PortfolioPage() {
           {/* Batch generate (Multiple_Copy) */}
           <div className="portfolio-batch" role="group" aria-label="Batch generate a document">
             <span className="portfolio-batch__label">
-              <ListChecks size={14} aria-hidden="true" /> Batch generate
+              <ListChecks size={14} aria-hidden="true" /> <span className="portfolio-batch__title">Batch generate</span>
               <InfoPopover label="About batch generate">
                 <p>Tick entities in the table, pick a packet, then generate. A packet only applies to its entity kind; mismatched entities are skipped and reported.</p>
               </InfoPopover>

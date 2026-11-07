@@ -28,6 +28,7 @@ import { formatMoney } from "../lib/money";
 import { Money } from "../components/Money";
 import { Tabs } from "../components/primitives";
 import { useUrlTab } from "../hooks/useUrlTab";
+import { useIsMobile } from "../lib/useIsMobile";
 import {
   buildGrantPayload,
   buildReportPayload,
@@ -63,6 +64,9 @@ type GrantTab = (typeof GRANT_TABS)[number];
 export function GrantsPage() {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("grants:write");
+  // Phones: a record preview gives these tables cards, with row actions behind
+  // "…", instead of columns with the status and actions off-screen.
+  const isMobile = useIsMobile();
   const society = useSociety();
   const capabilities = useDeploymentCapabilities();
   const navigate = useNavigate();
@@ -356,6 +360,7 @@ export function GrantsPage() {
           objectMetadata={applicationsTable.objectMetadata}
           hydratedView={applicationsTable.hydratedView}
           records={applicationRows}
+          recordPreview={isMobile}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -552,6 +557,7 @@ export function GrantsPage() {
           objectMetadata={ledgerTable.objectMetadata}
           hydratedView={ledgerTable.hydratedView}
           records={ledgerRows}
+          recordPreview={isMobile}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -614,6 +620,7 @@ export function GrantsPage() {
           objectMetadata={reportsTable.objectMetadata}
           hydratedView={reportsTable.hydratedView}
           records={reportRows}
+          recordPreview={isMobile}
         >
           <RecordTableViewToolbar
             societyId={society._id}

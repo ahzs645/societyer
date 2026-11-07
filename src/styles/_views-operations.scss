@@ -49,7 +49,7 @@
   /* Each user is one row: who on the left, role and actions on the right. */
   .users-table tbody tr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 6px 10px;
     padding: 10px 16px;
@@ -65,9 +65,33 @@
   .users-table .users-table__wide { display: none; }
   .users-table__narrow-status { display: inline-flex; margin-left: auto; }
   .users-table__role { width: auto; grid-column: 2; grid-row: 1; }
-  .users-table__actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 4px; }
+  .users-table__actions { grid-column: 3; grid-row: 1; display: flex; justify-content: flex-end; gap: 0; }
   .users-table td[colspan] { grid-column: 1 / -1; }
   .users-table .avatar { font-size: token('fs-tiny'); }
+  /* The key icon stands in for "Act as" (still its accessible name). */
+  .users-table__act-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .page .table.users-table > tbody > tr > td { min-width: 0; }
+  .users-table__actions > .btn { padding-inline: 8px; }
+  .users-table__email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Too narrow for name, role and actions together: role drops to a second line. */
+  @media (max-width: 360px) {
+    .users-table tbody tr { grid-template-columns: auto minmax(0, 1fr); }
+    .page .table.users-table > tbody > tr > td:first-child { grid-column: 1 / -1; }
+    .users-table__role { grid-column: 1; grid-row: 2; }
+    .users-table__actions { grid-column: 2; grid-row: 2; }
+  }
+  .users-invitations__head .card__title { flex: 1 1 0; }
+  .users-invitations__head .card__subtitle { order: 1; flex: 1 1 100%; }
 }
 
 // Accounting backfill review.
@@ -150,8 +174,10 @@
 @media (max-width: 560px) {
   .portfolio-table .portfolio-table__wide { display: none; }
   .portfolio-table__narrow { display: inline; }
-  .portfolio-batch__packet { flex: 1 1 100%; order: 2; }
-  .portfolio-batch__label { flex: 1 1 auto; }
+  // Packet picker and Generate share the line; the group's aria-label names it.
+  .portfolio-batch__packet { flex: 1 1 0; }
+  .portfolio-batch__title { display: none; }
+  .portfolio-batch__label { margin-right: 0; }
 }
 .portfolio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .portfolio-table__name {

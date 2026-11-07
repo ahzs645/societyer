@@ -762,6 +762,11 @@ export function computeIsViewEdited(s: RecordTableState): boolean {
   );
 }
 
+/** Whether the sort on show is one the person chose, not the view's own. */
+export function computeIsSortEdited(s: RecordTableState): boolean {
+  return !s.savedView || !sortsEqual(s.sorts, s.savedView.sorts);
+}
+
 export function useRecordTableIsViewEdited(): boolean {
   return useRecordTableState(computeIsViewEdited);
 }

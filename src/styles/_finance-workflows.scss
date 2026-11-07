@@ -83,6 +83,18 @@
 .rules-bar__text { flex: 1 1 220px; min-width: 0; color: token(text-secondary); }
 .rules-bar__text strong { color: token(text-primary); }
 .rules-bar__actions { display: flex; flex-wrap: wrap; gap: token(s-2); }
+@media (max-width: 560px) {
+  // The two actions share a row: Apply first, taking the spare width.
+  .rules-bar {
+    margin-bottom: token(s-3);
+    padding: token(s-3);
+  }
+  .rules-bar__actions {
+    flex: 1 1 100%;
+    flex-flow: row-reverse nowrap;
+    .btn--accent { flex: 1 1 auto; justify-content: center; }
+  }
+}
 .rules-apply-preview {
   margin: token(s-2) 0;
   padding-left: token(s-5);
@@ -155,6 +167,18 @@
 .rule-row__meta { color: token(text-tertiary); font-size: token(fs-xs); }
 .rule-row__meta strong { color: token(accent); font-weight: token(fw-medium); }
 .rule-row__controls { display: flex; align-items: center; gap: token(s-1); }
+/* Phones: the handle and controls sit on the name's line, so the rule's
+ * sentence gets the full width instead of a 220px column between them. */
+@media (max-width: 560px) {
+  .rule-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .rule-row > * { grid-row: 1; }
+  .rule-row__handle,
+  .rule-row__controls { position: relative; z-index: 1; align-self: start; }
+  .rule-row__handle { grid-column: 1; }
+  .rule-row__controls { grid-column: 3; min-height: 36px; }
+  .rule-row__main { grid-column: 1 / -1; }
+  .rule-row__name { display: flex; align-items: center; min-height: 36px; padding: 0 76px 0 52px; }
+}
 
 .rule-suggestions__grid {
   display: grid;
@@ -276,10 +300,37 @@
   .rule-editor__match-date { display: none; }
 }
 
+/* Reconciliation: with no line chosen, the statement table gets the width the
+ * match panel's placeholder held, so Counterparty and Match stay in view. */
+.two-col.reconciliation-layout--full { grid-template-columns: minmax(0, 1fr); }
+.reconciliation-layout--full .reconciliation-match-placeholder { display: none; }
+
+/* ------------------------------------------------------- summary tiles */
+
+/* Phones: up to four totals share one row with every figure in view. Labels
+ * wrap instead of truncating ("Due in the next 7 da…") and the icon gives its
+ * width to the label. Below what the words need, the StatStrip row scrolls. */
+@media (max-width: 560px) {
+  .stat-grid.stat-grid--scroll-phone.stat-strip--fit > .stat {
+    flex: 1 1 min-content;
+    min-width: min-content;
+    justify-content: space-between;
+    .stat__label,
+    .stat-tile__label-text { white-space: normal; overflow-wrap: normal; }
+    .stat-tile__icon { display: none; }
+  }
+}
+
+/* The ✕ in the head already closes these drawers: on a phone the footer's
+ * Close only pushed the real actions onto a second row. */
+@media (max-width: 560px) {
+  .drawer__footer > .drawer-footer-close:not(:last-child) { display: none; }
+}
+
 /* ------------------------------------------------------------- approvals */
 
 .approvals-page > .tabs { margin-bottom: token(s-4); }
-.approvals-card { overflow-x: auto; }
+.approvals-card { overflow-x: auto; container: approvals-card / inline-size; }
 .approvals-policy {
   display: flex;
   flex-wrap: wrap;
@@ -333,7 +384,9 @@
 .approvals-table__category { display: block; font-size: token(fs-xs); }
 .approvals-table__actions { width: 1%; white-space: nowrap; text-align: right; }
 
-@media (max-width: 760px) {
+// A container query, so the open claim drawer gets the same cards as a phone:
+// beside it the table clipped Approvals and hid the row's actions.
+@container approvals-card (max-width: 760px) {
   .approvals-table thead { display: none; }
   .approvals-table,
   .approvals-table tbody { display: block; }
@@ -377,6 +430,23 @@
   .table.approvals-table tbody tr:hover > td,
   .table.approvals-table tbody tr.is-selected > td,
   .table.approvals-table tbody tr.is-selected:hover > td { background: transparent; }
+
+  // Bills: no checkbox column, and two buttons that would squeeze the title
+  // in the claim layout. Due and progress sit left of them.
+  .approvals-table--bills tbody tr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .approvals-table--bills td[data-label="Bill"] { grid-column: 1 / span 2; grid-row: 1; }
+  .approvals-table--bills td[data-label="Amount"] { grid-column: 3; grid-row: 1; }
+  .approvals-table--bills td[data-label="Due"],
+  .approvals-table--bills td[data-label="Approvals"] {
+    grid-column: 1;
+    color: token(text-secondary);
+    font-size: token(fs-xs);
+  }
+  .approvals-table--bills td[data-label="Due"] { grid-row: 2; }
+  .approvals-table--bills td[data-label="Approvals"] { grid-row: 3; }
+  .approvals-table--bills td[data-label="Due"]::before,
+  .approvals-table--bills td[data-label="Approvals"]::before { content: attr(data-label) " "; }
+  .approvals-table--bills .approvals-table__actions { grid-column: 2 / span 2; grid-row: 2 / span 2; justify-self: end; align-self: end; }
 }
 
 .approval-progress {
@@ -771,4 +841,27 @@
  * phone it is just an empty card under a long table. */
 @media (max-width: 760px) {
   .reconciliation-match-placeholder { display: none; }
+}
+
+// Fiscal year source documents, phones: title on top, then its category, date
+// and link on one row, in place of a five-column table.
+@media (max-width: 760px) {
+  .fy-docs-table,
+  .fy-docs-table tbody { display: block; }
+  .fy-docs-table thead { display: none; }
+  .fy-docs-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token('s-1') token('s-2');
+    padding: token('s-3') token('s-4');
+  }
+  .fy-docs-table tbody td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .fy-docs-table tbody td.fy-docs-table__no-source { display: none; }
+  .fy-docs-table tbody td:first-child { flex: 1 0 100%; }
+  .fy-docs-table tbody td:last-child { margin-left: auto; }
 }

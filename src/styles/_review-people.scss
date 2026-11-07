@@ -38,3 +38,17 @@
     min-width: 0;
   }
 }
+
+// The two evidence actions share a line; on a phone they fill it, one above
+// the other, because the labels don't fit side by side.
+.insurance-operations__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+@media (max-width: 560px) {
+  .insurance-operations__actions > .btn-action {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}

@@ -56,11 +56,54 @@
 }
 
 /* ---------- AI agents setup form ---------- */
-.ai-setup-form > * {
-  max-width: 640px;
+.ai-setup-form__status,
+.ai-setup-form__progress {
+  gap: token('s-2');
+  flex-wrap: wrap;
 }
-.ai-setup-form > .btn {
+.ai-setup-form__progress {
+  margin-left: auto;
+}
+.ai-setup-form__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ai-setup-form__step {
+  gap: 14px;
+  max-width: 640px;
+  min-width: 0;
+}
+.ai-setup-form__step > .btn {
   align-self: flex-start;
+}
+.ai-setup-form__divider {
+  height: 1px;
+  background: token('border');
+}
+/* Short pickers and fields stay in pairs, on phones too. */
+.ai-setup-form__steps .settings-pair {
+  gap: token('s-3');
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Wide screens: connect on the left, choose and save on the right. */
+@media (min-width: 981px) {
+  .ai-setup-form__steps {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+    gap: token('s-5');
+  }
+  .ai-setup-form__step {
+    max-width: none;
+  }
+  .ai-setup-form__divider {
+    height: auto;
+  }
+}
+@media (max-width: 760px) {
+  .ai-setup-form__progress {
+    margin-left: 0;
+  }
 }
 .ai-setup-form__number .input {
   max-width: 120px;

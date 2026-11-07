@@ -141,6 +141,23 @@
   gap: 6px;
 }
 
+/* Desktop: an alert's action sits beside it rather than on a row of its own.
+ * The rows share the card's action column, so the alerts stay one width. */
+@media (min-width: 761px) {
+  :has(> .dashboard-remediation) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    > * { grid-column: 1 / -1; }
+  }
+  .dashboard-remediation {
+    align-items: center;
+    grid-template-columns: subgrid;
+    > .flag { grid-column: 1; grid-row: 1 / span 3; }
+    > :not(.flag) { grid-column: 2; padding: 0; }
+  }
+  .dashboard-remediation:not(:has(> :nth-child(2))) > .flag { grid-column: 1 / -1; }
+}
+
 .dashboard-remediation__meta {
   align-items: center;
   color: token('text-tertiary');

@@ -50,6 +50,7 @@ import { citationIdsForOrganization } from "../lib/regulatoryCitations";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { PrivacyScopeAssessment, privacyJurisdictionSummary, privacyStatusText } from "../components/PrivacyScopeAssessment";
 import { MobileFold } from "../components/MobileFold";
+import { useIsMobile } from "../lib/useIsMobile";
 import type { ResolvedPrivacyProfile } from "../../shared/privacyRuleProfiles";
 import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
 import { privacyRecordTemplate, type PrivacyRecordTemplateKind } from "../../shared/privacyRecordTemplates";
@@ -117,6 +118,7 @@ export function PrivacyPage() {
   const [privacyForm, setPrivacyForm] = useState<any>(null);
   const [privacySaving, setPrivacySaving] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (society && (!privacyForm || String(privacyForm._id) !== String(society._id))) {
@@ -414,6 +416,18 @@ export function PrivacyPage() {
     }
   };
 
+  const scopeSection = (
+      <MobileFold
+        id="privacy-scope"
+        title="Where privacy law applies"
+        summary={`${scopeProfile.operatingJurisdictions.length ? `Applies in: ${privacyJurisdictionSummary(scopeProfile.operatingJurisdictions)}` : "Provinces not recorded"}${scopeProfile.unresolvedFacts.length ? ` · ${scopeProfile.unresolvedFacts.length} facts to confirm` : ""}`}
+        open={scopeOpen}
+        onOpenChange={setScopeOpen}
+      >
+        <PrivacyScopeAssessment organization={privacyOpsForm} canEdit={canWriteSociety} saving={privacySaving} onChange={setPrivacyField} onSave={savePrivacyOperations} />
+      </MobileFold>
+  );
+
   return (
     <div className="page">
       <PageHeader
@@ -427,30 +441,22 @@ export function PrivacyPage() {
         </>}
         actions={
           <>
-            <button className="btn-action btn-action--primary" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
-              {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
-              {policyDraft ? canWriteDocuments ? "Edit policy draft" : "View policy draft" : "Create policy draft"}
-            </button>
             {communicationsEnabled && (
               <Link className="btn-action" to="/app/communications">
                 Manage consent
               </Link>
             )}
+            <button className="btn-action btn-action--primary" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
+              {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
+              {policyDraft ? canWriteDocuments ? "Edit policy draft" : "View policy draft" : "Create policy draft"}
+            </button>
           </>
         }
       />
 
       <PrivacyStatusLine profile={privacyProfile} onConfirm={openScopeAssessment} />
 
-      <MobileFold
-        id="privacy-scope"
-        title="Where privacy law applies"
-        summary={`${scopeProfile.operatingJurisdictions.length ? `Applies in: ${privacyJurisdictionSummary(scopeProfile.operatingJurisdictions)}` : "Provinces not recorded"}${scopeProfile.unresolvedFacts.length ? ` · ${scopeProfile.unresolvedFacts.length} facts to confirm` : ""}`}
-        open={scopeOpen}
-        onOpenChange={setScopeOpen}
-      >
-        <PrivacyScopeAssessment organization={privacyOpsForm} canEdit={canWriteSociety} saving={privacySaving} onChange={setPrivacyField} onSave={savePrivacyOperations} />
-      </MobileFold>
+      {isMobile && scopeSection}
 
       <div className="two-col privacy-layout">
         <div className="col privacy-main-col">
@@ -817,6 +823,8 @@ export function PrivacyPage() {
           </MobileFold>
         </div>
       </div>
+
+      {!isMobile && <div id="privacy-scope" className="privacy-scope-section">{scopeSection}</div>}
 
       <Modal
         open={!!draftEditor}

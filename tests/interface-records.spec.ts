@@ -134,7 +134,13 @@ test("document metadata opens its review workbench and validates page comments",
   await expect(page.getByText("Comment added", { exact: true })).toBeVisible();
   await expect(page.locator(".panel").filter({ hasText: "Synthetic page review note for interface verification." })).toBeVisible();
   await expect(page.locator("[contenteditable=true]").first()).toHaveText("");
-  await page.getByRole("button", { name: "In review", exact: true }).click();
+  // Phones pick the status from a menu; wider layouts keep the button row.
+  if (page.viewportSize()!.width <= 760) {
+    await page.getByLabel("Review status", { exact: true }).click();
+    await page.getByRole("option", { name: "In review", exact: true }).click();
+  } else {
+    await page.getByRole("button", { name: "In review", exact: true }).click();
+  }
   await expect(page.getByText("Review status updated", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Resolve", exact: true }).click();
   await expect(page.locator(".panel").filter({ hasText: "Synthetic page review note for interface verification." }).getByText("Resolved", { exact: true })).toBeVisible();
@@ -174,7 +180,9 @@ test("document metadata opens its review workbench and validates page comments",
   await expect(page.getByRole("heading", { name: "Current bylaws", exact: true })).toBeVisible();
   await expect(page.getByText("Your role can read this document. Document editing permission is required to change review status or comments.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add comment", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "In review", exact: true })).toBeDisabled();
+  await expect(page.viewportSize()!.width <= 760
+    ? page.getByLabel("Review status", { exact: true })
+    : page.getByRole("button", { name: "In review", exact: true })).toBeDisabled();
   await openNavigation(page);
   const recordsGroup = page.getByRole("button", { name: "Compliance", exact: true }).first();
   if (await recordsGroup.getAttribute("aria-expanded") !== "true") await recordsGroup.click();

@@ -1,6 +1,8 @@
 import {
   Suspense,
   lazy,
+  useEffect,
+  useRef,
   useState,
   type ComponentType,
   type LazyExoticComponent,
@@ -12,6 +14,8 @@ import type {
 } from "../../../shared/payrollCalculation";
 import { usePermissions } from "../../hooks/usePermissions";
 import { Field } from "../../components/ui";
+import { useScrollOverflow } from "../../hooks/useScrollOverflow";
+import { useIsMobile } from "../../lib/useIsMobile";
 import { PayrollSourcesPanel } from "./PayrollSourcesPanel";
 import {
   PayrollQueryBoundary,
@@ -77,6 +81,72 @@ const PANELS: Record<
     })),
   ),
 };
+/** What the calculator covers. Phones fold the detail under its headline. */
+function PayrollCoverageNotice({ folded }: { folded: boolean }) {
+  const headline = "Native coverage: ordinary British Columbia employment, 2026.";
+  const detail =
+    "Earnings use work-date rules; deductions use the payment-year and January/July CRA edition. Unsupported dates, provinces, missing history, or unreviewed assumptions block approval. Preview and finalization do not initiate deposits or external filings.";
+  if (folded)
+    return (
+      <details className="payroll-calculator__notice">
+        <summary>{headline}</summary>
+        <p>{detail}</p>
+      </details>
+    );
+  return (
+    <div className="payroll-calculator__notice">
+      <strong>{headline}</strong> {detail}
+    </div>
+  );
+}
+
+/**
+ * The calculator's sections. They wrap on wide screens; phones get one row that
+ * swipes sideways, with the current section kept in view.
+ */
+function PayrollSectionNav({
+  items,
+  activeId,
+  favorites,
+  onSelect,
+}: {
+  items: ReadonlyArray<{ id: PayrollViewId; label: string }>;
+  activeId: PayrollViewId;
+  favorites: readonly PayrollViewId[];
+  onSelect: (id: PayrollViewId) => void;
+}) {
+  const navRef = useRef<HTMLElement>(null);
+  const overflow = useScrollOverflow(navRef, [items.length]);
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!nav || !active || nav.scrollWidth <= nav.clientWidth) return;
+    const offset = active.getBoundingClientRect().left - nav.getBoundingClientRect().left;
+    nav.scrollLeft += offset - (nav.clientWidth - active.offsetWidth) / 2;
+  }, [activeId]);
+  return (
+    <nav
+      ref={navRef}
+      className="payroll-calculator__tabs"
+      aria-label="Payroll calculator sections"
+      data-overflow={overflow}
+    >
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className="btn btn--sm"
+          aria-pressed={activeId === item.id}
+          onClick={() => onSelect(item.id)}
+        >
+          {favorites.includes(item.id) && <span aria-hidden="true">★ </span>}
+          {item.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 export function PayrollCalculatorWorkspace({
   societyId,
 }: {
@@ -84,7 +154,8 @@ export function PayrollCalculatorWorkspace({
 }) {
   const permissions = usePermissions(),
     canWrite = permissions.can("financials:write"),
-    [params, setParams] = useSearchParams();
+    [params, setParams] = useSearchParams(),
+    isMobile = useIsMobile();
   const view = payrollView(params.get("tab")),
     canAccess = view.permissions.every(permissions.can),
     presentation = usePayrollViewPreferences(societyId);
@@ -214,15 +285,7 @@ export function PayrollCalculatorWorkspace({
           </a>
         </div>
       </header>
-      <div className="payroll-calculator__notice">
-        <strong>
-          Native coverage: ordinary British Columbia employment, 2026.
-        </strong>{" "}
-        Earnings use work-date rules; deductions use the payment-year and
-        January/July CRA edition. Unsupported dates, provinces, missing history,
-        or unreviewed assumptions block approval. Preview and finalization do
-        not initiate deposits or external filings.
-      </div>
+      <PayrollCoverageNotice folded={isMobile} />
       {!canWrite && (
         <p className="payroll-calculator__notice">
           Read-only access. Finance write permission is required to change
@@ -259,33 +322,18 @@ export function PayrollCalculatorWorkspace({
           Registered payroll account and provider settings
         </a>
       </div>
+      <PayrollSectionNav
+        items={visiblePayrollViews(presentation.preferences, permissions.can)}
+        activeId={view.id}
+        favorites={presentation.preferences.favorites}
+        onSelect={(id) => navigate(id)}
+      />
       <PayrollViewSettings
         preferences={presentation.preferences}
         onChange={presentation.update}
         onReset={presentation.reset}
         error={presentation.error}
       />
-      <nav
-        className="payroll-calculator__tabs"
-        aria-label="Payroll calculator sections"
-      >
-        {visiblePayrollViews(presentation.preferences, permissions.can).map(
-          (item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="btn btn--sm"
-              aria-pressed={view.id === item.id}
-              onClick={() => navigate(item.id)}
-            >
-              {presentation.preferences.favorites.includes(item.id) && (
-                <span aria-hidden="true">★ </span>
-              )}
-              {item.label}
-            </button>
-          ),
-        )}
-      </nav>
       {presentation.preferences.hidden.includes(view.id) && (
         <p className="payroll-calculator__notice">
           {view.label} is hidden from your navigation; this direct link remains

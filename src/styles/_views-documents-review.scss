@@ -330,13 +330,14 @@
   align-items: center;
   gap: token('s-2');
 }
+/* Status and search on the first line, the six selects evenly on the next. */
 .import-queue__select {
-  flex: 0 1 190px;
+  flex: 1 1 140px;
   width: auto;
   min-width: 0;
 }
 .import-queue__search {
-  flex: 1 1 220px;
+  flex: 1 1 calc(100% - 330px);
   width: auto;
   min-width: 0;
 }

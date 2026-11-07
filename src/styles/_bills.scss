@@ -74,6 +74,19 @@
 
 /* -------------------------------------------------------------- bill panel */
 
+/* Phones: Cancel and Edit drop to icons so the decision shares their row. */
+@media (max-width: 560px) {
+  .bill-detail .drawer__footer {
+    > * { flex: 1 1 auto; min-width: 0; }
+    > .register-drawer__spacer { display: none; }
+    > .btn:has(.bill-detail__action-label) { flex: 0 0 auto; }
+  }
+  .bill-detail__action-label { display: none; }
+}
+@media (max-width: 360px) {
+  .bill-detail .drawer__footer > .btn { padding-inline: token(s-2); }
+}
+
 .bill-approvals__progress { margin: 0; font-size: token(fs-sm); }
 
 .bill-detail__lines {

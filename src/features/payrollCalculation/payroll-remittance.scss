@@ -14,17 +14,46 @@
       max-width: none;
     }
   }
-  .payroll-remittance__table-hint {
-    display: none;
-  }
+  // Phones: each obligation or plan is a card (period, labelled facts, then
+  // its action at full width) instead of a table to swipe sideways.
   @media (max-width: 650px) {
-    .payroll-remittance__table-hint {
-      display: block;
-      margin-block: 10px 0;
-      font-size: 13px;
+    .payroll-calculator__table-wrap {
+      overflow-x: visible;
+      touch-action: auto;
     }
-    .payroll-calculator__table-wrap td:first-child {
-      white-space: nowrap;
+    .payroll-calculator__table-wrap > table {
+      display: block;
+      min-width: 0;
+      thead { display: none; }
+      tbody { display: block; }
+      tr {
+        display: grid;
+        gap: 4px;
+        padding-block: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      tbody td {
+        display: block;
+        padding: 0;
+        border: 0;
+        white-space: normal;
+      }
+      tbody td:first-child { font-weight: 600; }
+      tbody td[data-label] {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      tbody td[data-label]::before {
+        content: attr(data-label);
+        color: var(--text-secondary);
+      }
+      tbody td:last-child { margin-top: 4px; }
+      tbody td:last-child .btn {
+        width: 100%;
+        min-height: 44px;
+        justify-content: center;
+      }
     }
   }
 }

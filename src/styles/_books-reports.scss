@@ -37,6 +37,85 @@
   span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
+// Phones: program, tag, currency and fund filters open from one Filters button.
+.books-report-filters {
+  min-width: 0;
+  > summary {
+    list-style: none;
+    cursor: pointer;
+    &::-webkit-details-marker { display: none; }
+  }
+  &[open] {
+    flex: 1 1 100%;
+    > summary { border-color: token('accent'); }
+  }
+}
+.books-report-filters__count {
+  min-width: 16px;
+  padding-inline: 4px;
+  border-radius: token('r-pill');
+  background: token('accent-soft');
+  color: token('text-primary');
+  font-size: token('fs-xs');
+  text-align: center;
+}
+.books-report-filters__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+  margin-top: token('s-2');
+}
+@media (max-width: 560px) {
+  // Labels go: "All programs" and "This fiscal year" name themselves. Each
+  // control's <label> or group name still carries its name for screen readers.
+  .books-report-toolbar {
+    gap: token('s-2');
+    .finance-report-control__label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .segmented__btn { padding-inline: 5px; }
+  }
+}
+
+// ---------- Report catalog ----------
+.commerce-report-card {
+  padding: token('s-4');
+  h3, p { margin-top: 0; }
+}
+.commerce-saved__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2') token('s-3');
+  margin-bottom: token('s-3');
+  h2 {
+    flex: 1 1 auto;
+    margin: 0;
+  }
+}
+@media (max-width: 560px) {
+  // The title and a short Build share a row, the description under them.
+  .commerce-report-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: token('s-1') token('s-2');
+    padding: token('s-3');
+    h3 { margin: 0; }
+    p {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      margin: 0;
+    }
+  }
+}
+
 // ---------- Notes (filters, warnings, truncation) ----------
 .books-report__note {
   margin: 0;
@@ -49,6 +128,39 @@
   border-radius: token('r-md');
   background: token('warn-soft');
   color: token('text-primary');
+}
+
+// ---------- Branded PDF: template, graphs and download ----------
+.books-report-pdf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: token('s-2') token('s-3');
+  margin-block: token('s-2');
+}
+@media (max-width: 560px) {
+  // One line on phones: the template takes the spare width, its label stays on the trigger.
+  .books-report-pdf-actions {
+    flex-wrap: nowrap;
+    gap: token('s-2');
+    margin-block: 0;
+
+    .finance-report-control {
+      flex: 1 1 0;
+      .select-trigger { width: 100%; }
+    }
+    .finance-report-control__label { display: none; }
+    .check-row,
+    .btn { flex: none; }
+    // Without a template picker the download is the row's main action.
+    &:not(:has(.finance-report-control)) .btn {
+      flex: 1 1 auto;
+      justify-content: center;
+    }
+    &:has(span[role='alert']) { flex-wrap: wrap; }
+    span[role='alert'] { flex: 1 1 100%; }
+  }
 }
 
 // ---------- Summary chart strip ----------
@@ -130,6 +242,31 @@
   tfoot tr + tr td,
   tfoot tr + tr th {
     border-top: 1px solid token('border-color-light');
+  }
+}
+// Phones keep the account in view while the memo and amounts scroll under it.
+@media (max-width: 760px) {
+  // A block table would become the sticky column's scroll box and break it.
+  .table.books-ledger__table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    overflow: visible;
+    thead th:nth-child(2),
+    td.books-ledger__account {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      min-width: 136px;
+      max-width: 42vw;
+      border-right: 1px solid token('border-color-light');
+      background: token('bg-panel');
+      white-space: normal;
+    }
+    thead th:nth-child(2) {
+      z-index: 2;
+      white-space: nowrap;
+    }
   }
 }
 .books-ledger__balance-row {

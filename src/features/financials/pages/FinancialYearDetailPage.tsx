@@ -81,7 +81,7 @@ export function FinancialYearDetailPage() {
       subtitle={financial ? `Period end ${formatDate(financial.periodEnd)}` : "Import evidence without an approved financial row."}
       icon={<PiggyBank size={16} />}
       iconColor="green"
-      actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Back</Link>}
+      actions={<Link className="btn-action finance-crumb-duplicate" to="/app/financials"><ArrowLeft size={12} /> Back</Link>}
       chips={
         <>
           {financial && <Badge tone={auditStatusTone(financial.auditStatus)}>{auditStatusLabel(financial.auditStatus)}</Badge>}
@@ -101,6 +101,8 @@ export function FinancialYearDetailPage() {
         { label: "Restricted", value: financial ? moneyDetailed(financial.restrictedFundsCents) : "—" },
         { label: "Board approval", value: financial?.approvedByBoardAt ? formatDate(financial.approvedByBoardAt) : "—" },
       ]}
+      // Open on the first tab with something in it, not an empty "Tables".
+      defaultTab={lineCount > 0 ? "tables" : documents.length > 0 ? "docs" : imports.length > 0 ? "imports" : "tables"}
       tabs={[
         {
           id: "tables",
@@ -139,7 +141,7 @@ export function FinancialYearDetailPage() {
         <FinancialPresentationCard societyId={society._id} financial={financial} canWrite={canWrite} />
         <section className="finance-inspector__section">
           <h2 className="finance-inspector__title">Evidence status</h2>
-          <div className="col">
+          <div className="finance-inspector__facts">
             <DetailCell label="Financial statements" value={financial ? "Recorded" : "Not created"} />
             <DetailCell label="Matched imports" value={String(exactImports.length)} />
             <DetailCell label="Related imports" value={String(relatedImports.length)} />
@@ -250,7 +252,7 @@ function SourceDocumentsTable({ documents }: { documents: any[] }) {
         <h2 className="card__title">Source documents</h2>
         <span className="card__subtitle">{documents.length} linked document{documents.length === 1 ? "" : "s"}</span>
       </div>
-      <table className="table">
+      <table className="table fy-docs-table">
         <thead>
           <tr>
             <SortableTh column="title" sort={sort} onSort={toggle}>Title</SortableTh>
@@ -267,7 +269,7 @@ function SourceDocumentsTable({ documents }: { documents: any[] }) {
                 <strong>{doc.title}</strong>
                 {doc.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{doc.fileName}</div>}
               </td>
-              <td className="table__cell--mono">{documentExternalId(doc) ?? "—"}</td>
+              <td className={`table__cell--mono${documentExternalId(doc) ? "" : " fy-docs-table__no-source"}`}>{documentExternalId(doc) ?? "—"}</td>
               <td><Badge tone={documentCategoryTone(doc.category)}>{doc.category ?? "Document"}</Badge></td>
               <td>{formatDate(doc.createdAtISO)}</td>
               <td>

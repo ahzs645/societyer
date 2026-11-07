@@ -607,7 +607,7 @@ export function AccountingWorkbenchPage() {
           </div>
           <div className="accounting-list">
             {(periods ?? []).map((period: any) => (
-              <div className="accounting-row" key={period._id}>
+              <div className="accounting-row accounting-row--period" key={period._id}>
                 <div>
                   <strong>{period.periodLabel}</strong>
                   <div className="muted">{formatDate(period.startDate)} to {formatDate(period.endDate)}</div>

@@ -238,12 +238,12 @@ export function CommitteeDetailPage() {
             </p>
           )}
           <div className="table-wrap">
-          <table className="table">
+          <table className="table table--stack-mobile committee-table">
             <thead><tr><th>Name</th><th>Role</th><th>Organization</th><th>Joined</th><th>Left</th><th>Review</th><th /></tr></thead>
             <tbody>
               {sortedMembers.map((m: any) => (
                 <tr key={m._id} style={{ opacity: m.leftAt ? 0.7 : 1 }}>
-                  <td>
+                  <td className="committee-table__lead">
                     <div className="row">
                       <span className="avatar">{initials(m.name.split(" ")[0], m.name.split(" ")[1])}</span>
                       {m.personId ? (
@@ -256,11 +256,11 @@ export function CommitteeDetailPage() {
                     </div>
                   </td>
                   <td><Badge tone={m.role === "Chair" ? "accent" : "neutral"}>{m.role}</Badge></td>
-                  <td className="muted">{m.representedOrganization ?? "—"}</td>
-                  <td>{displayDate(m.joinedAt)}</td>
-                  <td>{m.leftAt ? displayDate(m.leftAt) : "—"}</td>
+                  <td className={`muted${m.representedOrganization ? "" : " committee-table__blank"}`}>{m.representedOrganization ?? "—"}</td>
+                  <td data-label="Joined">{displayDate(m.joinedAt)}</td>
+                  <td data-label="Left" className={m.leftAt ? undefined : "committee-table__blank"}>{m.leftAt ? displayDate(m.leftAt) : "—"}</td>
                   <td>{m.reviewStatus === "pending" ? <Badge tone="warn" >From roster · pending</Badge> : <Badge tone="success">Confirmed</Badge>}</td>
-                  <td className="table__actions">
+                  <td className="table__actions committee-table__actions">
                     <button
                       className="btn btn--ghost btn--sm btn--icon"
                       disabled={!canWrite}
@@ -303,24 +303,26 @@ export function CommitteeDetailPage() {
   const meetingsContent = (
         <div className="card">
           <div className="card__head"><h2 className="card__title">Meetings</h2></div>
-          <table className="table">
-            <thead><tr><th>Title</th><th>When</th><th>Location</th><th>Status</th><th>Minutes</th></tr></thead>
+          <div className="table-wrap">
+          <table className="table table--stack-mobile committee-table">
+            {meetings.length > 0 && <thead><tr><th>Title</th><th>When</th><th>Location</th><th>Status</th><th>Minutes</th></tr></thead>}
             <tbody>
               {meetings
                 .slice()
                 .sort((a: any, b: any) => b.scheduledAt.localeCompare(a.scheduledAt))
                 .map((m: any) => (
                   <tr key={m._id}>
-                    <td><Link to={`/app/meetings/${m._id}`}><strong>{m.title}</strong></Link></td>
+                    <td className="committee-table__lead"><Link to={`/app/meetings/${m._id}`}><strong>{m.title}</strong></Link></td>
                     <td>{formatMeetingDate(m)}</td>
-                    <td>{m.location ?? "—"} {m.electronic && <Badge tone="info">Electronic</Badge>}</td>
+                    <td className={m.location || m.electronic ? undefined : "committee-table__blank"}>{m.location ?? "—"} {m.electronic && <Badge tone="info">Electronic</Badge>}</td>
                     <td><Badge tone={m.status === "Held" ? "success" : "warn"}>{m.status}</Badge></td>
-                    <td>{m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>}</td>
+                    <td className={m.status === "Held" ? undefined : "committee-table__blank"}>{m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>}</td>
                   </tr>
                 ))}
               {meetings.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No meetings yet.</td></tr>}
             </tbody>
           </table>
+          </div>
         </div>
   );
   const tasksContent = (
@@ -337,16 +339,17 @@ export function CommitteeDetailPage() {
               </button>
             </div>
           </div>
-          <table className="table">
+          <div className="table-wrap">
+          <table className="table table--stack-mobile committee-table">
             <thead><tr><th /><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
             <tbody>
               {operationalTasks.map((t: any) => (
                 <tr key={t._id}>
-                  <td><span className={`priority-dot priority-${t.priority}`} /></td>
-                  <td><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</td>
-                  <td>{t.assignee ?? "—"}</td>
-                  <td>{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
-                  <td>
+                  <td className="committee-table__dot"><span className={`priority-dot priority-${t.priority}`} /></td>
+                  <td className="committee-table__lead committee-table__lead--task"><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</td>
+                  <td className={t.assignee ? undefined : "committee-table__blank"}>{t.assignee ?? "—"}</td>
+                  <td data-label="Due" className={t.dueDate ? undefined : "committee-table__blank"}>{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
+                  <td className="committee-table__status">
                     <Select
                       size="sm"
                       disabled={!canWriteTasks}
@@ -361,6 +364,7 @@ export function CommitteeDetailPage() {
               {operationalTasks.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks yet.{historicalTaskCount > 0 && <> <Link to={`/app/tasks?register=historical&committeeId=${committee._id}`}>See {historicalTaskCount} historical source actions</Link>.</>}</td></tr>}
             </tbody>
           </table>
+          </div>
         </div>
   );
   const goalsContent = (

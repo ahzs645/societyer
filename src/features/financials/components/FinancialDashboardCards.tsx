@@ -36,7 +36,7 @@ export function OperatingSubscriptionsCard({
         <span className="card__subtitle">
           Recurring software, services, and operating subscriptions converted to monthly equivalents.
         </span>
-        <div style={{ marginLeft: "auto" }}>
+        <div className="financials-subscriptions__actions">
           <Link className="btn-action" to="/app/financials/planning">Plan period costs</Link>
           <button className="btn-action" onClick={onNew}>
             <PlusCircle size={12} /> Add subscription
@@ -44,14 +44,14 @@ export function OperatingSubscriptionsCard({
         </div>
       </div>
 
-      <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
-        <StatTile label="Active monthly" value={<Money variant="hero" trimWholeCents cents={activeMonthlyCents} />} />
-        <StatTile label="Planned monthly" value={<Money variant="hero" trimWholeCents cents={plannedMonthlyCents} />} />
-        <StatTile label="Projected monthly" value={<Money variant="hero" trimWholeCents cents={projectedMonthlyCents} />} />
-        <StatTile label="Annual run-rate" value={<Money variant="hero" trimWholeCents cents={projectedMonthlyCents * 12} />} />
+      <div className="stat-grid" style={{ margin: 16 }}>
+        <StatTile label="Active monthly" value={<Money variant="hero" cents={activeMonthlyCents} />} />
+        <StatTile label="Planned monthly" value={<Money variant="hero" cents={plannedMonthlyCents} />} />
+        <StatTile label="Projected monthly" value={<Money variant="hero" cents={projectedMonthlyCents} />} />
+        <StatTile label="Annual run-rate" value={<Money variant="hero" cents={projectedMonthlyCents * 12} />} />
       </div>
 
-      <table className="table">
+      <table className="table table--comfortable financials-subscriptions-table">
         <thead>
           <tr>
             <th>Service</th>
@@ -70,17 +70,17 @@ export function OperatingSubscriptionsCard({
                 <strong>{row.name}</strong>
                 {row.vendorName && <div className="muted" style={{ fontSize: 12 }}>{row.vendorName}</div>}
               </td>
-              <td><span className="cell-tag">{row.category}</span></td>
-              <td><Badge tone={operatingSubscriptionStatusTone(row.status)}>{row.status}</Badge></td>
-              <td>
+              <td className="financials-subscriptions-table__category"><span className="cell-tag">{row.category}</span></td>
+              <td className="financials-subscriptions-table__status"><Badge tone={operatingSubscriptionStatusTone(row.status)}>{row.status}</Badge></td>
+              <td className="financials-subscriptions-table__billing">
                 <Money cents={row.amountCents} currency={row.currency} />
                 <span className="muted"> / {operatingSubscriptionIntervalLabel(row.interval)}</span>
               </td>
-              <td className="num">
+              <td className="num financials-subscriptions-table__monthly">
                 <Money cents={row.monthlyEstimateCents ?? monthlyEstimateCents(row)} currency={row.currency} />
               </td>
-              <td>{row.nextRenewalDate ? formatDate(row.nextRenewalDate) : "—"}</td>
-              <td className="num">
+              <td className="financials-subscriptions-table__renewal">{row.nextRenewalDate ? formatDate(row.nextRenewalDate) : "—"}</td>
+              <td className="num financials-subscriptions-table__actions">
                 <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}>
                   Edit
                 </button>

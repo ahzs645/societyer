@@ -252,6 +252,7 @@ export function ImportReviewQueue({
             Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
           </button>
         )}
+        <input className="input import-queue__search" aria-label="Search candidates" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search title, file, path, source id…" />
         {(!isMobile || filtersOpen) && (
           <>
             <Select aria-label="Record type" className="import-queue__select" value={filters.recordKind ?? ""} onChange={(value) => setFilter({ recordKind: value || undefined })} searchable options={facetOptions(data?.facets?.kinds, importKindLabel, "All record types")} />
@@ -262,7 +263,6 @@ export function ImportReviewQueue({
             <Select aria-label="Order" className="import-queue__select" value={filters.sort ?? "priority"} onChange={(value) => setFilter({ sort: value as QueueFilters["sort"] })} options={[{ value: "priority", label: "Priority first" }, { value: "session", label: "Session order" }]} />
           </>
         )}
-        <input className="input import-queue__search" aria-label="Search candidates" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search title, file, path, source id…" />
       </div>
       <div className="card__body import-queue__toolbar">
         <span className="muted import-queue__count" aria-live="polite">
