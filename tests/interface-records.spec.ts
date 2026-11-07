@@ -134,9 +134,13 @@ test("company certificate writes remain disabled for its Viewer", async ({ page 
   await page.goto("/demo/app");
   await selectDemoOrganization(page, "company");
   await page.goto("/demo/app/certificate-register");
-  const roleTrigger = page.getByRole("button", { name: /^Viewing as .*\. Switch role$/ });
+  await expect(page.getByRole("heading", { name: "Certificate register", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Issue certificate", exact: true })).toBeEnabled();
+  const roleTrigger = page.getByRole("button", { name: "Viewing as Owner. Switch role", exact: true });
+  const compactRoleTrigger = page.getByRole("button", { name: "Demo controls. Viewing as Owner", exact: true });
+  await expect.poll(async () => await roleTrigger.isVisible() || await compactRoleTrigger.isVisible()).toBe(true);
   if (await roleTrigger.isVisible()) await roleTrigger.click();
-  else await page.getByRole("button", { name: /^Demo controls\. Viewing as/ }).click();
+  else await compactRoleTrigger.click();
   // Arjun Mehta is the populated Federal CBCA demo's existing Viewer.
   await page.getByRole("menuitem", { name: /^Arjun Mehta/ }).click();
   await expect(page.locator(".demo-banner")).toContainText("as Viewer");
