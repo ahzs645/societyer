@@ -222,6 +222,13 @@ test("acknowledgement becomes a separately signed official receipt without chang
   expect(official.sourceAcknowledgementId).toBe(original._id);
   expect(official.signedCopySnapshot.documentVersionId).toBeTruthy();
   expect(official.issuerSnapshot.name).toBe(name);
+  await expect(page.getByRole("heading", { name: "Donations and receipts", exact: true })).toBeVisible();
+  const acknowledgementRow = page.getByRole("row").filter({ has: page.getByRole("gridcell", { name: original.receiptNumber, exact: true }) });
+  const officialRow = page.getByRole("row").filter({ has: page.getByRole("gridcell", { name: official.receiptNumber, exact: true }) });
+  await expect(acknowledgementRow).toContainText("Acknowledgement");
+  await expect(officialRow).toContainText("Official receipt · signed issue recorded");
+  await expect(await receiptAction(page, official.receiptNumber, "Signed copy")).toBeEnabled();
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: testInfo.outputPath("donation-receipt-lifecycle.png"), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   expect(errors).toEqual([]);
