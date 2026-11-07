@@ -3,6 +3,7 @@ import {
 } from "./incorporationPreparation";
 import { organizationLabel, type LegalEntityLike } from "./organizationDomain";
 import { articlesAdoptionSentence } from "./operativeArticles";
+import { FEDERAL_BC_PREPARATION } from "./federalBcIncorporation";
 
 type PreparationGuide = NonNullable<ReturnType<typeof incorporationPreparationForOrganization>>;
 
@@ -36,6 +37,7 @@ export function incorporationWorksheetText(
       "Outstanding decision: ____________________",
     ]),
     ...articlesWorksheetLines(guide, organization),
+    ...federalBcWorksheetLines(guide, organization),
     "",
     "OFFICIAL FILING",
     guide.filingChannel.summary,
@@ -50,6 +52,50 @@ export function incorporationWorksheetText(
     ...guide.sources.map((source) => `${source.label}: ${source.url}${source.evidenceDate ? ` (repository evidence dated ${source.evidenceDate})` : " (verify current instructions)"}`),
     "",
   ].join("\n");
+}
+
+/** Static field inventory only: do not serialize private workspace or role-holder records. */
+function federalBcWorksheetLines(guide: PreparationGuide, organization: LegalEntityLike): string[] {
+  if (guide.id !== "federal_cbca" || incorporationPreparationForOrganization(organization)?.id !== "federal_cbca") return [];
+  const preparation = FEDERAL_BC_PREPARATION;
+  const requirementLabels = { required: "Required", conditional: "Conditional", decision: "Founder decision", recommended: "Recommended" };
+  const visibilityLabels = { "public-filing": "Public filing", restricted: "Restricted record", internal: "Internal record", mixed: "Public and private parts" };
+  return [
+    "",
+    "DETAILED FEDERAL AND BC PREPARATION INVENTORY",
+    preparation.title,
+    preparation.scope,
+    `This detailed inventory was reviewed on ${preparation.reviewedOn}. The review date applies to this inventory; check the official instructions when filing.`,
+    preparation.privacyNote,
+    "This section supplies blank planning prompts. Private founder, tax-account and registry-credential records are not automatically included.",
+    "",
+    "FILING AND ORGANIZATION SEQUENCE",
+    ...preparation.sequence.flatMap((step, index) => [
+      "", `${index + 1}. ${step.title}`, step.detail,
+      `Sources: ${step.sourceIds.join(", ")}`,
+      "Owner / target date / evidence reference: ____________________",
+    ]),
+    ...preparation.sections.flatMap((section, index) => [
+      "", `SECTION ${index + 1}. ${section.title}`, section.summary,
+      ...section.fields.flatMap((field) => [
+        "", `${field.label} [${requirementLabels[field.requirement]}; ${visibilityLabels[field.visibility]}]`,
+        ...(field.appliesWhen ? [`Applies when: ${field.appliesWhen}`] : []),
+        field.detail,
+        `Sources: ${field.sourceIds.join(", ")}`,
+        field.visibility === "restricted" || field.visibility === "mixed"
+          ? "Restricted record reference (keep personal information separately): ____________________"
+          : "Response / supporting record reference: ____________________",
+        "Outstanding decision / reviewer: ____________________",
+      ]),
+    ]),
+    "", "RULES AND DECISIONS TO CHECK",
+    ...preparation.rules.flatMap((rule) => [
+      "", rule.title, rule.detail, `Sources: ${rule.sourceIds.join(", ")}`,
+      "Review / evidence reference: ____________________",
+    ]),
+    "", "SOURCES FOR THE DETAILED INVENTORY",
+    ...preparation.sources.map((source) => `[${source.id}] ${source.label}: ${source.url}`),
+  ];
 }
 
 export function incorporationWorksheetFileName(guide: PreparationGuide, organization: LegalEntityLike): string {
