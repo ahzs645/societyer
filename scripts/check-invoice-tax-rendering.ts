@@ -15,6 +15,16 @@ register(`data:text/javascript,${encodeURIComponent('export async function load(
 const { InvoiceDocument } = await import("../src/features/invoicing/InvoiceDocument");
 const { InvoicePdfDocument } = await import("../src/features/invoicing/InvoicePdfDocument");
 
+// The builder constructs its own document projection. Guard that integration
+// separately: direct renderer fixtures cannot catch a dropped saved snapshot.
+const builderSource = await readFile(new URL("../src/features/invoicing/InvoiceBuilder.tsx", import.meta.url), "utf8");
+const builderPreview = builderSource.match(/const previewData = \{([\s\S]*?)\n  \};/)?.[1];
+assert.ok(builderPreview, "the builder document projection is present");
+assert.match(builderPreview, /issuerTaxRegistrationsSnapshot:\s*invoice\?\.issuerTaxRegistrationsSnapshot\s*[,\n]/, "builder preview, download and print retain the saved issuer registrations instead of falling back to current organization data");
+assert.match(builderSource, /downloadInvoicePdf\(previewData,/, "PDF download uses the guarded projection");
+assert.match(builderSource, /<InvoicePdfPreview invoice=\{previewData\}/, "PDF preview uses the guarded projection");
+assert.match(builderSource, /<InvoicePrintPortal invoice=\{previewData\}/, "printing uses the guarded projection");
+
 const date = "2026-11-06";
 const answers = { ...defaultTaxAnswers("transaction", date), jurisdictionCode: "CA-BC", itemCategory: "goods", sellerKind: "business", scopeConfirmed: "yes", federalException: "none", gstRegistration: "registered", provincialException: "category", pstRegistration: "registered", customerRelief: "none" };
 const standard = assessTax(answers, true);

@@ -234,6 +234,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     memo: draft.memo || undefined,
     payments: invoice?.payments,
     status: invoice?.status ?? "draft",
+    issuerTaxRegistrationsSnapshot: invoice?.issuerTaxRegistrationsSnapshot,
   };
   const organization = { ...workspace.organization, logoUrl };
   const partyKey = (party: { partyKind: string; memberId?: string; counterpartyId?: string; billToName: string }) =>
