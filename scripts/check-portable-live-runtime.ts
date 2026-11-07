@@ -14,9 +14,11 @@ import type { PortableDoc } from "../shared/portable/index";
 import { portableTestSeed } from "./portable-test-fixture";
 
 const societyId = "soc_riverside";
+const companyIdentity = { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" };
 function buildSeed(): Record<string, PortableDoc[]> {
   return {
     ...portableTestSeed(societyId),
+    societies: [{ _id: societyId, name: "Riverside Holdings Inc.", ...companyIdentity }],
     rightsClasses: [
       { _id: "classA", societyId, className: "Class A", votesPerShare: 10 },
       { _id: "classB", societyId, className: "Class B", votingRights: "Non-Voting" },
@@ -131,6 +133,7 @@ const watch = client.watchQuery("legalOperations:votingPower", { societyId });
   const fresh = new StaticConvexClient({
     seed: {
       ...portableTestSeed(soc),
+      societies: [{ _id: soc, name: "Transfer Runtime Holdings Inc.", ...companyIdentity }],
       roleHolders: [{ _id: "rh_x", societyId: soc, fullName: "Transfer recipient", status: "current" }],
     },
     databaseName: "portable-transfer-live",
@@ -140,6 +143,7 @@ const watch = client.watchQuery("legalOperations:votingPower", { societyId });
   });
   await fresh.mutation("legalOperations:upsertRightsholdingTransfer", {
     societyId: soc, transferType: "issuance", status: "posted", rightsClassId: classId, destinationRoleHolderId: "rh_x", quantity: 40, transferDate: "2026-02-01",
+    considerationType: "cash", fullyPaidConfirmedAt: "2026-02-01",
   });
   // rightsLedger is the (non-portable) mirror query — it reads the same store the
   // portable transfer wrote its derived holdings to.

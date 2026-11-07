@@ -1,0 +1,71 @@
+name: Organization workflows
+
+on:
+  pull_request:
+    paths:
+      - "shared/**"
+      - "convex/**"
+      - "src/components/**"
+      - "src/pages/Society.tsx"
+      - "src/pages/Receipts.tsx"
+      - "src/pages/Settings.tsx"
+      - "src/features/invoicing/**"
+      - "src/lib/donationReceiptDocument.ts"
+      - "src/lib/routeIdentity.ts"
+      - "src/lib/modules.ts"
+      - "src/lib/staticLegacyDispatch.ts"
+      - "src/lib/staticConvexClient.ts"
+      - "src/main.tsx"
+      - "scripts/check-organization-*"
+      - "scripts/check-receipt-*"
+      - "scripts/check-tax-organization-facts.ts"
+      - "scripts/check-local-write-dispatch.ts"
+      - "tests/organization-workflows.spec.ts"
+      - "playwright.organization-workflows.config.ts"
+      - "package*.json"
+      - ".github/workflows/organization-workflows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workflows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Workflow, evidence, receipt and tax contracts
+        run: npm run test:organization-workflows
+      - name: Organization identity and setup regressions
+        run: |
+          npm run test:organization-capabilities
+          npm run test:organization-vocabulary
+          npm run test:organization-setup-steps
+          npm run test:organization-setup-flow
+      - name: Authorization and portable wrapper parity
+        run: |
+          npm run test:authorization-policy
+          npm run test:permissioned-mutation
+          npm run test:portable-manifest
+      - name: Install browser
+        if: ${{ !cancelled() }}
+        run: npx playwright install --with-deps chromium
+      - name: Organization registration and signed receipts on desktop and phone
+        if: ${{ !cancelled() }}
+        run: npm run test:organization-workflows-ui
+      - name: Browser evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: organization-workflows-browser-results
+          path: test-results/organization-workflows
+          if-no-files-found: ignore
+          retention-days: 7

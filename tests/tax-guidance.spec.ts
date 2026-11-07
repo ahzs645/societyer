@@ -27,6 +27,19 @@ test("catalog guidance persists; invoice assessment distinguishes exemptions and
   await drawer.getByRole("button", { name: "Guide me through tax", exact: true }).click();
   let guide = drawer.getByRole("region", { name: "Tax decision guide" });
   await ordinary(page, guide);
+  // The legacy demo claims charitable registration without reviewed evidence.
+  // An ordinary supplier answer cannot silently bypass that organization fact.
+  await expect(guide.getByTestId("tax-supplier-facts")).toContainText("claims charity registration");
+  await expect(guide.getByRole("button", { name: "Confirm and apply tax treatment", exact: true })).toBeDisabled();
+  await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const organization: any = await client.query("society:get", {});
+    await client.mutation("society:upsert", { id: organization._id, name: organization.name, isCharity: false, isMemberFunded: false, charityStatus: "not_applied" });
+  });
+  await expect(guide).not.toBeVisible();
+  await drawer.getByRole("button", { name: "Guide me through tax", exact: true }).click();
+  guide = drawer.getByRole("region", { name: "Tax decision guide" });
+  await ordinary(page, guide);
   await expect(guide).toContainText("GST: 5%"); await expect(guide).toContainText("PST: 7%");
   await expect(guide.getByRole("button", { name: "Confirm and apply tax treatment", exact: true })).toBeEnabled();
   await guide.getByRole("button", { name: "Confirm and apply tax treatment", exact: true }).click();

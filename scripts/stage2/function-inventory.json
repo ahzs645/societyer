@@ -23513,6 +23513,50 @@
     ]
   },
   {
+    "key": "convex:receipts:evidenceForReview",
+    "surface": "convex",
+    "name": "receipts:evidenceForReview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/receipts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentIds",
+        "table": "documents",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receipts:finalizeOfficial",
+    "surface": "convex",
+    "name": "receipts:finalizeOfficial",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receipts.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "donationReceipts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "signedCopyDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:receipts:issue",
     "surface": "convex",
     "name": "receipts:issue",
@@ -23525,6 +23569,18 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceAcknowledgementId",
+        "table": "donationReceipts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "replacesReceiptId",
+        "table": "donationReceipts",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -23532,6 +23588,50 @@
     "key": "convex:receipts:list",
     "surface": "convex",
     "name": "receipts:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/receipts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:receipts:recordRegistration",
+    "surface": "convex",
+    "name": "receipts:recordRegistration",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/receipts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "expectedRevisionId",
+        "table": "organizationTaxRegistrations",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "evidenceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:receipts:registrationHistory",
+    "surface": "convex",
+    "name": "receipts:registrationHistory",
     "kind": "query",
     "access": "authenticated",
     "source": "convex/receipts.ts",
@@ -48447,6 +48547,50 @@
     ]
   },
   {
+    "key": "portable:receipts:evidenceForReview",
+    "surface": "portable",
+    "name": "receipts:evidenceForReview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentIds",
+        "table": "documents",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receipts:finalizeOfficial",
+    "surface": "portable",
+    "name": "receipts:finalizeOfficial",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "donationReceipts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "signedCopyDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:receipts:issue",
     "surface": "portable",
     "name": "receipts:issue",
@@ -48459,6 +48603,18 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceAcknowledgementId",
+        "table": "donationReceipts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "replacesReceiptId",
+        "table": "donationReceipts",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -48466,6 +48622,50 @@
     "key": "portable:receipts:list",
     "surface": "portable",
     "name": "receipts:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:receipts:recordRegistration",
+    "surface": "portable",
+    "name": "receipts:recordRegistration",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "expectedRevisionId",
+        "table": "organizationTaxRegistrations",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "evidenceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:receipts:registrationHistory",
+    "surface": "portable",
+    "name": "receipts:registrationHistory",
     "kind": "query",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

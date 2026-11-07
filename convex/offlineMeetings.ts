@@ -10,6 +10,7 @@ import { assertNativeFileStorageEnabled } from "./providers/env";
 import { requirePermissionPortable } from "../shared/functions/permissions";
 import { claimStorageId, getOwned, WorkspaceMfaRequiredError } from "../shared/functions/access";
 import { requireDocumentAccess } from "../shared/functions/documents";
+import { assertReceiptEvidenceContentUnchanged } from "../shared/functions/receiptRetention";
 import { documentAccessContextForActor } from "./lib/access/documentAccess";
 import { canAccessMeetingMaterial } from "./lib/access/materialAccess";
 import { runMeetingCommand } from "../shared/offline/meetingDomain";
@@ -117,7 +118,7 @@ export const commitFile = authorizedMutation("offlineMeetings:commitFile", mutat
   if (!document || !materialMapping || !meeting) throw new Error("FILE_WRITE_DENIED");
   const material = await getOwned(portable, "meetingMaterials", materialMapping.nativeId, args.societyId);
   if (material.documentId !== document.nativeId || material.meetingId !== meeting.nativeId) throw new Error("FILE_WRITE_DENIED");
-  await requireDocumentAccess(portable, document.nativeId, "manage");
+  const fileDocument = await requireDocumentAccess(portable, document.nativeId, "manage");
   const accessContext = await documentAccessContextForActor(ctx, args.societyId);
   if (!accessContext || !canAccessMeetingMaterial(material, accessContext, "manage")) throw new Error("FILE_WRITE_DENIED");
   const stored = await ctx.db.system.get(args.storageId);
@@ -125,6 +126,7 @@ export const commitFile = authorizedMutation("offlineMeetings:commitFile", mutat
   const storedHash = stored ? Array.from(atob(stored.sha256), char => char.charCodeAt(0).toString(16).padStart(2, "0")).join("") : undefined;
   if (!stored || storedHash !== file.sha256 || stored.size !== file.size) throw new Error("FILE_HASH_MISMATCH");
   if (aggregate.fileStorageId) return { accepted: true, storageId: aggregate.fileStorageId }; // Immutable content hash already attached.
+  await assertReceiptEvidenceContentUnchanged(portable, fileDocument, { storageId: args.storageId, fileSizeBytes: file.size });
   await claimStorageId(portable, args.storageId, args.societyId);
   await portable.db.patch(document.nativeId, { storageId: args.storageId, fileSizeBytes: file.size });
   await portable.db.patch(materialMapping.nativeId, { syncStatus: "synced" });

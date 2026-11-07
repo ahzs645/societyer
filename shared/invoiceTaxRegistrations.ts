@@ -7,10 +7,17 @@ export type IssuerTaxRegistration = {
   jurisdiction?: string;
 };
 
+export type InvoiceSupplierTaxSnapshot = {
+  charityRegistrationStatus: "registered" | "not_registered" | "unknown" | "conflict";
+  charityRegistrationRevisionId?: string;
+  organizationFactsKey: string;
+};
+
 export type InvoiceIssuerTaxSnapshot = {
   capturedAtISO: string;
   effectiveDate: string;
   registrations: IssuerTaxRegistration[];
+  supplierFacts?: InvoiceSupplierTaxSnapshot;
 };
 
 type Identifier = {
@@ -68,7 +75,7 @@ export function guidedTaxIdsToCollect(lines: TaxLine[]): string[] {
 }
 
 /** Validate before posting any ledger entries, including portable batch sends. */
-export function captureIssuerTaxRegistrations(identifiers: Identifier[], lines: TaxLine[], effectiveDate: string, capturedAtISO: string): InvoiceIssuerTaxSnapshot {
+export function captureIssuerTaxRegistrations(identifiers: Identifier[], lines: TaxLine[], effectiveDate: string, capturedAtISO: string, supplierFacts?: InvoiceSupplierTaxSnapshot): InvoiceIssuerTaxSnapshot {
   const registrations = selectIssuerTaxRegistrations(identifiers, effectiveDate);
   // Check each eligible identifier independently: conflicting branch numbers
   // must not turn a registered seller into an apparently unregistered one.
@@ -86,7 +93,7 @@ export function captureIssuerTaxRegistrations(identifiers: Identifier[], lines: 
       throw new Error(`This invoice collects ${label}. Save one active ${label} registration effective on ${effectiveDate} in Organization → Identifiers. Resolve missing, invalid or conflicting numbers before issuing it.`);
     }
   }
-  return { capturedAtISO, effectiveDate, registrations };
+  return { capturedAtISO, effectiveDate, registrations, ...(supplierFacts ? { supplierFacts } : {}) };
 }
 
 /** Drafts use current registrations; issued invoices use only their recorded

@@ -11,6 +11,8 @@ import { isMeetingHeld } from "../meetingStatus";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { requirePermissionPortable } from "./permissions";
 import { bcSocietyPreparationKind, CRA_PRE_FILL_KINDS, filingDueDateMonthsAfter } from "../filingPreparation";
+import { loadOrganizationTaxContext } from "./organizationTaxFacts";
+import { charityRegistrationAtDate } from "../receipting/registration";
 
 /**
  * Returns JSON payloads matching the field shape of Societies Online filing
@@ -137,16 +139,24 @@ export async function craPreFillPortable(
   ).find((f: Record<string, any>) => f.fiscalYear === fiscalYear);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found");
-  if (kind === "T3010" && !society.isCharity) return { kind, fiscalYear, error: "T3010 applies to registered charities. Confirm charity registration in entity settings first." };
   if (!financials) {
     return { kind, fiscalYear, error: "No financial statements on file for that year." };
   }
 
   if (kind === "T3010") {
+    const context = await loadOrganizationTaxContext(ctx, societyId);
+    const registration = charityRegistrationAtDate(context.charityRegistrations, String(financials.periodEnd ?? ""));
+    if (registration.status !== "registered") {
+      return { kind, fiscalYear, error: "T3010 preparation is for registered charities. Review the charity-registration evidence for this fiscal period. A period outside the recorded registration dates or a partial-period case needs a separate filing review." };
+    }
     await requirePermissionPortable(ctx, societyId, "directors:read");
     return {
       form: "CRA T3010 Registered Charity Information Return",
-      charityName: society.name,
+      charityName: registration.revision!.registeredName,
+      charityRegistrationNumber: registration.revision!.charityNumber,
+      charityRegistrationRevisionId: registration.revision!._id,
+      registrationAssessmentDate: financials.periodEnd,
+      reviewNote: "Registration evidence was checked at the recorded period end. Confirm the complete reporting period and any registration-change obligations before filing.",
       fiscalPeriodEnd: financials.periodEnd,
       totalRevenue: financials.revenueCents / 100,
       totalExpenditures: financials.expensesCents / 100,

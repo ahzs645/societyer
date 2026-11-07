@@ -55,7 +55,8 @@ test("corporation MVP flow renders obligations, share register, registration, an
   }
   const sidebar = page.locator(".sidebar").first();
   await expect(sidebar.getByRole("link", { name: "Role holders" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: /^(Members|Member proposals|Donation receipts|Membership & billing)$/ })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: /^(Members|Member proposals|Membership & billing)$/ })).toHaveCount(0);
+  await expect(sidebar.locator('a[href="/app/receipts"]')).toBeVisible();
   await expect(sidebar.getByRole("link", { name: /^Society$/ })).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText("Societies Act");
   await expect(page.locator("body")).not.toContainText("s.40 requires");

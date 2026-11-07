@@ -40,6 +40,7 @@ export const documentTables = {
     tags: v.array(v.string()),
   })
     .index("by_society", ["societyId"])
+    .index("by_storage", ["storageId"])
     .index("by_society_category", ["societyId", "category"])
     .index("by_import_session", ["importSessionId"])
     .index("by_committee", ["committeeId"])

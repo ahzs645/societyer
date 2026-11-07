@@ -1,5 +1,6 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
 import { NaicsSectorField } from "../features/organizationProfile/NaicsSectorField";
+import { OrganizationRegistrationProfile } from "../components/OrganizationRegistrationProfile";
 import { isModuleEnabled } from "../lib/modules";
 import { MonthDayPicker } from "../components/MonthDayPicker";
 import { formatAddressText } from "../../shared/structuredAddress";
@@ -261,9 +262,8 @@ export function SocietyPage() {
   const jurisdictionModule = jurisdictionModuleContract(form);
   const governance = workspaceGovernanceCopy(form);
   const corporate = isCorporation(form);
-  // Wording follows the entity being edited; registered-charity and
-  // member-funded status are society concepts and stay hidden for corporations
-  // (the stored fields are untouched).
+  // Legal vocabulary follows the entity. Charity registration has its own
+  // dated evidence history below; member-funded status remains Act-specific.
   const vocab = organizationVocabulary(form);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : k === "formationStatus" ? { organizationStatus: organizationStatusForFormation(v, f.organizationStatus) } : {}) }));
   // Saved state decides the locks: before incorporation (or while a field is
@@ -583,6 +583,8 @@ export function SocietyPage() {
         </>
       )}
 
+      <OrganizationRegistrationProfile key={society._id} organization={society} />
+
       <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div className="society-layout">
         <main className="society-layout__main">
@@ -695,19 +697,13 @@ export function SocietyPage() {
                   />
                 </Field>
 
-                {!corporate && <LockedField
-                  label="Status flags"
+                {vocab.societyLaw && <LockedField
+                  label="Society classification"
                   requireUnlock={!savedPreparing}
-                  reason="Charity status is controlled by the CRA. Jurisdiction-specific status flags should be reviewed against the governing statute and filed documents."
+                  reason="Member-funded classification should be reviewed against the governing statute and filed documents."
                 >
                   {(locked) => (
                     <div className="society-toggle-stack">
-                      <Toggle
-                        checked={!!form.isCharity}
-                        onChange={(v) => set("isCharity", v)}
-                        disabled={locked}
-                        label="Registered CRA charity"
-                      />
                       {/* Member-funded is a BC Societies Act subtype. */}
                       {vocab.societyLaw && <Toggle
                         checked={!!form.isMemberFunded}

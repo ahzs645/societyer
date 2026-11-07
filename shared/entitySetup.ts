@@ -38,6 +38,19 @@ export const ENTITY_SETUP_FIELDS = [...ENTITY_SETUP_STRING_FIELDS, "certificateE
 export function entitySetupFields(source: Record<string, any>) {
   return Object.fromEntries(ENTITY_SETUP_FIELDS.map((key) => [key, source[key]]));
 }
+
+/** Legacy flags are claims, not registration evidence. Reject contradictory
+ * claims on a new save while leaving old records readable for explicit review. */
+export function charityStatusConflict(source: { isCharity?: unknown; charityStatus?: unknown }): string | undefined {
+  if (source.charityStatus === "registered" && source.isCharity === false) {
+    return "Charity status says registered, but the charity flag says no. Resolve both fields together; registration evidence is recorded separately.";
+  }
+  if (source.isCharity === true && ["not_applied", "application_pending", "revoked"].includes(String(source.charityStatus))) {
+    return "The charity flag conflicts with the recorded charity status. Resolve both fields together; a pending application does not establish registration.";
+  }
+  return undefined;
+}
+
 export function validateEntitySetup(source: Record<string, any>) {
   const choices: Record<string, readonly { value: string }[]> = {
     formationStatus: FORMATION_STATUS_OPTIONS,
@@ -56,6 +69,8 @@ export function validateEntitySetup(source: Record<string, any>) {
   for (const { value } of [...ENTITY_DATE_FIELDS, { value: "certificateDate" }]) {
     if (source[value] && (!/^\d{4}-\d{2}-\d{2}$/.test(source[value]) || Number.isNaN(Date.parse(source[value])) || new Date(source[value]).toISOString().slice(0, 10) !== source[value])) throw new Error(`${value} must be a valid YYYY-MM-DD date.`);
   }
+  const charityConflict = charityStatusConflict(source);
+  if (charityConflict) throw new Error(charityConflict);
   if ((source.legalSubtype === "member_funded_society" || source.isMemberFunded) && (source.isCharity || source.charityStatus === "registered")) throw new Error("A BC member-funded society cannot be a registered charity. Review the classification.");
 }
 export function entityPreparationDecision(organization?: (LegalEntityLike & Record<string, any>) | null) {

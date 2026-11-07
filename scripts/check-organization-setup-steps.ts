@@ -304,6 +304,20 @@ for (const [label, organization, answers] of ORGS) {
   assert.equal(stepOf(progress, "constitution").state, "done");
 }
 
+/* ---------------- Tax registration lifecycle ---------------- */
+{
+  const tax = (organization: SetupOrganization, charityRegistration?: OrganizationSetupFacts["charityRegistration"]) => stepOf(evaluateOrganizationSetup(facts({ ...bcSociety, ...organization }, { charityRegistration })), "tax");
+  assert.equal(tax({ craBnStatus: "pending", charityStatus: "application_pending" }).state, "in_progress", "recording pending applications must not complete the tax step");
+  assert.equal(tax({ craBnStatus: "confirmed", charityStatus: "application_pending" }).state, "in_progress");
+  assert.equal(tax({ craBnStatus: "pending", charityStatus: "not_applied" }).state, "in_progress");
+  assert.equal(tax({ isCharity: false, charityStatus: "unknown", craBnStatus: "unknown" }).state, "todo", "false/default is not an established status");
+  assert.equal(tax({ isCharity: true, charityStatus: "registered", craBnStatus: "confirmed" }).state, "in_progress", "legacy registered flag alone is not reviewed registration evidence");
+  assert.equal(tax({ isCharity: false, charityStatus: "registered", craBnStatus: "confirmed" }).state, "in_progress");
+  assert.equal(tax({ isCharity: false, charityStatus: "not_applied", craBnStatus: "confirmed" }).state, "done");
+  assert.equal(tax({ isCharity: false, charityStatus: "application_pending", craBnStatus: "confirmed" }, { status: "registered", hasHistory: true }).state, "done", "reviewed dated history resolves the earlier application claim");
+  assert.equal(tax({ isCharity: true, charityStatus: "registered", craBnStatus: "confirmed" }, { status: "conflict", hasHistory: true }).state, "in_progress");
+}
+
 /* ---------------- Existing BC company ---------------- */
 {
   const existing = { ...bcCompany, formationStatus: "unverified_existing", organizationStatus: "active", incorporationNumber: "BC1234567", registeredOfficeAddress: "1 Main St" };

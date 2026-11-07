@@ -100,6 +100,8 @@
     "test:dashboard-compliance": "tsx scripts/check-dashboard-compliance-rules.ts && tsx scripts/check-entity-rule-scope.ts",
     "test:entity-rule-scope": "tsx scripts/check-entity-rule-scope.ts",
     "test:organization-vocabulary": "tsx scripts/check-organization-vocabulary.ts",
+    "test:organization-workflows": "node --import tsx scripts/check-organization-workflows.ts && node --import tsx scripts/check-receipt-workflows.ts && node --import tsx scripts/check-receipt-workflows-convex.ts && node --import tsx scripts/check-receipt-evidence-retention.ts && node --import tsx scripts/check-tax-organization-facts.ts && node --import tsx scripts/check-local-write-dispatch.ts",
+    "test:organization-workflows-ui": "playwright test --config playwright.organization-workflows.config.ts",
     "test:jurisdiction-guides": "tsx scripts/validate-jurisdiction-guide-packs.ts && tsx scripts/check-jurisdiction-guide-tracks.ts",
     "test:compliance-rules": "tsx scripts/validate-compliance-rule-packs.ts && tsx scripts/check-compliance-obligations.ts && tsx scripts/check-static-corporation-obligations.ts",
     "test:create-workspace-onboarding": "tsx scripts/check-create-workspace-onboarding.ts",

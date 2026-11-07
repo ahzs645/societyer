@@ -39,6 +39,7 @@ import { assertNativePayrollBankPatch } from "./payrollPaymentGuard";
 import { assertPeriodOpen } from "./accounting";
 import { requirePermissionPortable } from "./permissions";
 import { convertExpense, expenseCurrency, type ExpenseConversion } from "../expenseCurrency";
+import { recordedDonationGifts } from "../receipting/policy";
 
 /**
  * Returns every bank transaction with reconciliation status, plus a candidate
@@ -70,6 +71,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   const days = (a: string, b: string) =>
     Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86_400_000;
 
+  const observedGifts = recordedDonationGifts(receipts).filter(receipt => !receipt.isNonCash);
   const enriched = txns.map((t: Record<string, any>) => {
     const candidates: { kind: string; id: string; label: string; score: number }[] = [];
 
@@ -89,7 +91,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
         });
       }
       // Donation receipts — inflow, exact amount within 14 days.
-      for (const r of receipts) {
+      for (const r of observedGifts) {
         if (t.amountCents !== r.amountCents) continue;
         if (t.amountCents < 0) continue;
         const d = days(t.date, r.receivedOnISO);
@@ -170,7 +172,17 @@ export async function matchPortable(
       : args.matchedKind === "payroll"
         ? "employees"
         : null;
-  if (matchedTable) await getOwned(ctx, matchedTable, args.matchedId, candidate.societyId);
+  if (matchedTable) {
+    const target = await getOwned(ctx, matchedTable, args.matchedId, candidate.societyId);
+    if (matchedTable === "donationReceipts") {
+      if (target.voidedAtISO || target.isNonCash || (target.documentKind === "official_tax_receipt" && target.issueStatus !== "issued")) throw new Error("Match a recorded cash gift, not a voided record or unsigned receipt preparation.");
+      if (target.giftRecordId) {
+        const related = await ctx.db.query("donationReceipts").withIndex("by_gift_record", q => q.eq("giftRecordId", target.giftRecordId)).take(201);
+        if (related.length > 200) throw new Error("This gift's receipt history needs review before reconciliation.");
+        if (recordedDonationGifts(related.filter(row => row.societyId === candidate.societyId))[0]?._id !== target._id) throw new Error("Match the gift's active acknowledgement to avoid counting its official receipt separately.");
+      }
+    }
+  }
   await ctx.db.patch(args.txnId, {
     reconciledAtISO: new Date().toISOString(),
     reconciledByName: String(principal.displayName ?? principal.name ?? "You"),

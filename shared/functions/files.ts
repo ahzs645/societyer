@@ -8,11 +8,12 @@
  * native blobs remains on Convex.
  */
 
-import type { PortableQueryCtx, PortableMutationCtx } from "../portable/ctx";
+import type { PortableDoc, PortableQueryCtx, PortableMutationCtx } from "../portable/ctx";
 import { documentAccessPredicate } from "./documents";
 import { requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { uploadPermission, type UploadPurpose } from "./uploadPolicy";
+import { retainedReceiptEvidenceDocumentIds } from "./receiptRetention";
 
 export async function generateUploadUrlPortable(ctx: PortableMutationCtx, args: { societyId: string; purpose?: UploadPurpose }) {
   if (!args.societyId) throw new Error("An authorized workspace is required.");
@@ -38,13 +39,22 @@ export async function getUrlPortable(ctx: PortableQueryCtx, { storageId }: { sto
     }
     try {
       await requireSocietyMembership(ctx, societyId);
-      const documents = await ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-      const linked = documents.filter((document) => String(document.storageId ?? "") === storageId);
+      const retainedParentIds = await retainedReceiptEvidenceDocumentIds(ctx, societyId, storageId);
+      let linked: PortableDoc[];
+      if (retainedParentIds.length) {
+        const parents = await Promise.all(retainedParentIds.map(id => ctx.db.get(id, "documents")));
+        linked = parents.filter((document): document is NonNullable<typeof document> => document?.societyId === societyId);
+        if (!linked.length) throw new Error("storageOwnership not found.");
+      } else {
+        const currentParents = await ctx.db.query("documents").withIndex("by_storage", q => q.eq("storageId", storageId)).take(201);
+        if (currentParents.length > 200) throw new Error("storageOwnership not found.");
+        linked = currentParents.filter(document => document.societyId === societyId);
+      }
       if (linked.length) {
         const allows = await documentAccessPredicate(ctx, societyId);
         if (!linked.some((document) => allows(document))) throw new Error("storageOwnership not found.");
       }
-      // Unattached document blobs are not downloadable. Branding is a separate,
+      // Unattached and unretained document blobs are not downloadable. Branding is a separate,
       // society-wide presentation resource and has an explicit parent reference.
       if (!linked.length) {
         const society = await ctx.db.get(societyId, "societies");

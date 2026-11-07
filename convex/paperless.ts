@@ -28,6 +28,7 @@ import {
   recordVerifiedConnectionTestPortable,
 } from "../shared/functions/paperless";
 import { requireDocumentAccess } from "../shared/functions/documents";
+import { assertReceiptEvidenceContentUnchanged } from "../shared/functions/receiptRetention";
 import { requirePermissionPortable } from "../shared/functions/permissions";
 import { requireOperatorPaperlessWorkspace, providerDeploymentEnv } from "../shared/providerWorkspaceBindings";
 import { requireFunctionAction } from "../shared/functions/actionPolicy";
@@ -308,21 +309,23 @@ export const recordPulledSourceDocument = authorizedMutation("paperless:recordPu
     const document = await getOwned(portableCtx, "documents", args.documentId, args.societyId);
     await requirePermissionPortable(portableCtx, args.societyId, "settings:write");
     await requireDocumentAccess(portableCtx, String(args.documentId), "edit");
-    await claimStorageId(portableCtx, args.storageId, args.societyId);
     const existingContent = parseJsonObject(document.content);
+    const content = JSON.stringify({
+      ...existingContent,
+      externalSystem: existingContent.externalSystem ?? "paperless",
+      externalId: existingContent.externalId ?? args.externalId,
+      paperlessDocumentUrl: args.paperlessDocumentUrl,
+      paperlessPulledAtISO: new Date().toISOString(),
+      paperlessMetadata: args.metadata,
+    });
+    await assertReceiptEvidenceContentUnchanged(portableCtx, document, { ...args, content });
+    await claimStorageId(portableCtx, args.storageId, args.societyId);
     await ctx.db.patch(args.documentId, {
       storageId: args.storageId,
       fileName: args.fileName,
       mimeType: args.mimeType,
       fileSizeBytes: args.fileSizeBytes,
-      content: JSON.stringify({
-        ...existingContent,
-        externalSystem: existingContent.externalSystem ?? "paperless",
-        externalId: existingContent.externalId ?? args.externalId,
-        paperlessDocumentUrl: args.paperlessDocumentUrl,
-        paperlessPulledAtISO: new Date().toISOString(),
-        paperlessMetadata: args.metadata,
-      }),
+      content,
       tags: unique([
         ...(document.tags ?? []),
         "paperless-import",

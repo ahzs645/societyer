@@ -5,6 +5,7 @@ import type { InvoiceTemplate, InvoicePriceList, RepairStatus } from "../../../s
 import type { CustomerSummary, InvoiceLine, InvoicePayment, InvoiceStatus, InvoiceTotals } from "../../../shared/invoicing";
 import type { BooksStart, CategoryAccount, NeedsActionFlag } from "../../../shared/invoiceLedger";
 import type { InvoiceIssuerTaxSnapshot, IssuerTaxRegistration } from "../../../shared/invoiceTaxRegistrations";
+import type { CharityRegistrationProjection } from "../../../shared/receipting/registration";
 
 export type InvoicePaymentView = InvoicePayment & {
   recordedByName?: string;
@@ -215,6 +216,7 @@ export type InvoiceOrganization = {
   taxRegistrations?: IssuerTaxRegistration[];
   isCharity?: boolean;
   charityStatus?: string;
+  charityRegistrations?: CharityRegistrationProjection[];
   gstHstStatus?: string;
 };
 

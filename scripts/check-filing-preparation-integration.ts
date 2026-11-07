@@ -9,6 +9,7 @@ import { societiesOnlinePreFillPortable, craPreFillPortable } from "../shared/fu
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { STATIC_DEMO_SOCIETY_ID } from "../src/lib/staticIds";
 import { bcSocietyPreparationKind, bcSocietyBotKind, filingDueDateMonthsAfter } from "../shared/filingPreparation";
+import { receiptEvidenceFingerprint } from "../shared/receipting/evidence";
 
 const native = convexTest(schema, {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
@@ -75,6 +76,29 @@ const tax = await admin.query(api.filingExports.craPreFill, { societyId: fixture
 assert.equal(tax.dueDate, "2027-02-28");
 const charity = await admin.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "T3010", fiscalYear: "2026" });
 assert.match(charity.error, /registered charities/);
+await native.run(ctx => ctx.db.patch(fixture.societyId, { isCharity: true }));
+assert.match((await admin.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "T3010", fiscalYear: "2026" })).error, /registration.*evidence/, "a legacy flag does not authorize charity prefill");
+const charityRevision = await native.run(async ctx => {
+  const content = "Synthetic retained charity decision for the filing-period regression fixture.";
+  const evidenceId = await ctx.db.insert("documents", { societyId: fixture.societyId, title: "Synthetic CRA decision", category: "Finance", content, createdAtISO: "2026-01-01T00:00:00Z", flaggedForDeletion: false, tags: [] });
+  await ctx.db.patch(fixture.societyId, { isCharity: false });
+  return ctx.db.insert("organizationTaxRegistrations", {
+    societyId: fixture.societyId, registrationType: "CA-CRA-CHARITY", revisionNumber: 1, status: "registered", evidenceReviewed: true,
+    charityNumber: "123456789RR0001", registeredName: "Historical registered charity name", registeredAddress: "Synthetic registered address", effectiveFrom: "2025-01-01",
+    evidenceDocumentIds: [evidenceId], recordedByUserId: String(fixture.adminUserId), recordedAtISO: "2026-01-01T00:00:00Z", reviewedByUserId: String(fixture.adminUserId), reviewedAtISO: "2026-01-01T00:00:00Z",
+    evidenceSnapshots: [{ documentId: evidenceId, fingerprint: await receiptEvidenceFingerprint({ documentId: evidenceId, content }) }],
+  });
+});
+const reviewedCharity = await admin.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "T3010", fiscalYear: "2026" });
+assert.equal(reviewedCharity.charityName, "Historical registered charity name");
+assert.equal(reviewedCharity.charityRegistrationRevisionId, charityRevision);
+await native.run(async ctx => {
+  const { _id, _creationTime, ...fields } = (await ctx.db.get(charityRevision))!;
+  await ctx.db.insert("organizationTaxRegistrations", { ...fields, revisionNumber: 2, supersedesId: charityRevision, status: "inactive", effectiveTo: "2026-10-31" });
+  await ctx.db.insert("financials", { societyId: fixture.societyId, fiscalYear: "2027", periodEnd: "2027-08-31", revenueCents: 120000, expensesCents: 40000, netAssetsCents: 80000, auditStatus: "Unaudited", remunerationDisclosures: [] });
+});
+assert.equal((await admin.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "T3010", fiscalYear: "2026" })).charityRegistrationNumber, "123456789RR0001", "current inactivity does not erase reviewed historical periods");
+assert.match((await admin.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "T3010", fiscalYear: "2027" })).error, /outside the recorded registration dates/);
 await assert.rejects(() => admin.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "Unsupported", fiscalYear: "2026" }), /Unsupported/);
 await assert.rejects(() => admin.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "T2", fiscalYear: "invalid" }), /four-digit/);
 await assert.rejects(() => member.query(api.filingExports.craPreFill, { societyId: fixture.societyId, kind: "T2", fiscalYear: "2026" }));

@@ -35,7 +35,7 @@ import { matchPath } from "react-router-dom";
 import fs from "node:fs";
 import path from "node:path";
 import { INTERFACE_ROUTES } from "./helpers/interfaceRoutes";
-import { isAllowed, partitionPrivacySummaryText, scan, type AllowList, type Finding, type WorkspaceKey } from "./helpers/entityCopyScanner";
+import { isAllowed, partitionEntityGateText, partitionPrivacySummaryText, scan, type AllowList, type Finding, type WorkspaceKey } from "./helpers/entityCopyScanner";
 export { isAllowed } from "./helpers/entityCopyScanner";
 import { chooseGuidedSetupAct, type GuidedSetupAct } from "./helpers/guidedSetup";
 
@@ -263,9 +263,15 @@ async function collect(page: Page) {
     const privacySummaries = Array.from(main?.querySelectorAll(".privacy-scope-assessment details:not([open]) > summary") ?? [])
       .filter((summary) => summary.getClientRects().length > 0 && getComputedStyle(summary).visibility === "visible")
       .map(visibleText);
-    return { main: visibleText(main), privacySummaries, chrome, sidebar: visibleText(sidebar), toggles: toggles.join("\n"), titles: titles.join("\n"), navHrefs };
+    const entityGateExplanations = Array.from(main?.querySelectorAll('[data-testid="entity-kind-unavailable"]') ?? [])
+      .filter((gate) => /^(?:Members|Membership & billing) is not used for this kind of organization$/.test(visibleText(gate.querySelector(".card__title")).trim()))
+      .flatMap((gate) => Array.from(gate.querySelectorAll(".card__head > .card__subtitle")))
+      .filter((subtitle) => subtitle.getClientRects().length > 0 && getComputedStyle(subtitle).visibility === "visible")
+      .map(visibleText);
+    return { main: visibleText(main), privacySummaries, entityGateExplanations, chrome, sidebar: visibleText(sidebar), toggles: toggles.join("\n"), titles: titles.join("\n"), navHrefs };
   });
-  return { ...text, ...partitionPrivacySummaryText(text.main, text.privacySummaries) };
+  const privacy = partitionPrivacySummaryText(text.main, text.privacySummaries);
+  return { ...text, ...privacy, ...partitionEntityGateText(privacy.main, text.entityGateExplanations) };
 }
 
 async function collectPopovers(page: Page) {
@@ -382,6 +388,7 @@ test.describe("entity copy sweep", () => {
           const inNav = navHrefs.has(route) || navHrefs.has(finalPath);
           findings.push(...scan(workspace, route, "main", text.main, inNav));
           for (const summary of text.privacySummaries) findings.push(...scan(workspace, route, "main", summary, inNav, "privacy-summary"));
+          for (const explanation of text.entityGateExplanations) findings.push(...scan(workspace, route, "main", explanation, inNav, "entity-kind-applicability"));
           findings.push(...scan(workspace, route, "chrome", text.chrome, inNav));
           findings.push(...scan(workspace, route, "popover", popovers, inNav));
           findings.push(...scan(workspace, route, "toggle", text.toggles, inNav));

@@ -66,7 +66,7 @@ for (const organization of [
   assert.equal(unsupported.preparation.supported, false, JSON.stringify(organization));
   assert.equal(unsupported.reviewRequired, true);
   assert.deepEqual(unsupported.governance.records, []);
-  assert.ok(unsupported.nextSteps.some((step) => step.key === "identity"));
+  assert.ok(unsupported.nextSteps.some((step) => step.key === (unsupported.identity.status === "recorded" ? "coverage" : "identity")));
   assert.ok(!unsupported.nextSteps.some((step) => step.key === "prepare"));
 }
 
@@ -76,6 +76,8 @@ assert.deepEqual(organizationCapabilities({ ...company, jurisdictionCode: "CA-ON
 const nonprofit = organizationCapabilities({ jurisdictionCode: "CA-FED", entityType: "corporation__nfp_", actFormedUnder: "canada_not_for_profit_corporations_act" });
 assert.equal(nonprofit.entityLabel, "Nonprofit corporation");
 assert.ok(!nonprofit.features.some((feature) => feature.key === "shares"));
+assert.ok(nonprofit.features.some((feature) => feature.key === "members" && feature.to === "/app/members"));
+assert.equal(nonprofit.workflows.find(workflow => workflow.action === "members.record")?.coverage, "records_only");
 assert.match(nonprofit.nextSteps.find((step) => step.key === "tax")!.detail, /separate decisions/);
 const charityConflict = organizationCapabilities({ ...society, legalSubtype: "member_funded_society", isMemberFunded: true, isCharity: true });
 assert.equal(charityConflict.preparation.supported, false);

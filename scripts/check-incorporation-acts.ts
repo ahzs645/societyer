@@ -1,7 +1,7 @@
 /**
  * Incorporation-Act catalogue gate (shared/incorporationActs.ts).
  *
- * - Every Act with full guidance maps to exactly the setup values its
+ * - Every Act with core governance coverage maps to exactly the setup values its
  *   registered pathway produced in the old "pathway" picker, and still resolves
  *   to the same reviewed legal profile, pathway and jurisdiction module.
  * - Every other Act (and "Another Act" per jurisdiction) maps to a
@@ -55,7 +55,7 @@ for (const act of INCORPORATION_ACTS) {
 }
 
 // ---------------------------------------------------------------------------
-// Full guidance: same values the old pathway picker produced
+// Core governance coverage: same values the old pathway picker produced
 // ---------------------------------------------------------------------------
 const full = INCORPORATION_ACTS.filter((act) => act.support === "full");
 check(full.map((act) => act.pathwayKey).sort().join() === PATHWAY_REGISTRY.map((pathway) => pathway.key).sort().join(), "Every registered pathway has exactly one full-guidance Act.");
@@ -177,4 +177,4 @@ if (problems.length) {
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
 }
-console.log(`Incorporation-Act catalogue: ${INCORPORATION_ACTS.length} Acts across ${INCORPORATION_JURISDICTIONS.length} jurisdictions; ${full.length} with full guidance map to their pathways, the rest (and "Another Act") are records only.`);
+console.log(`Incorporation-Act catalogue: ${INCORPORATION_ACTS.length} Acts across ${INCORPORATION_JURISDICTIONS.length} jurisdictions; ${full.length} with core governance profiles map to their recorded identities, the rest (and "Another Act") are records only. Preparation coverage is assessed separately.`);

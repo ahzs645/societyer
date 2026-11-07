@@ -43,6 +43,19 @@ async function openAllSidebarGroups(page: Page) {
   }
 }
 
+async function expectAcknowledgementsWithoutOfficialPrivilege(page: Page) {
+  await expect(page.getByRole("heading", { name: "Donations and receipts", exact: true })).toBeVisible();
+  await expect(page.getByText("Acknowledgements available", { exact: true })).toBeVisible();
+  await expect(page.getByText("Official receipt preparation available", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "New donation record", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Record donation acknowledgement", exact: true });
+  await expect(drawer.getByRole("combobox")).toHaveValue("acknowledgement");
+  await expect(drawer.locator('option[value="official_tax_receipt"]')).toBeDisabled();
+  await expect(drawer.getByRole("button", { name: "Record acknowledgement", exact: true })).toBeEnabled();
+  await expect(drawer).toContainText("makes no tax-deductibility claim");
+  await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
+}
+
 test("governance and people pages show no Societies Act copy for a CBCA corporation", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -161,7 +174,6 @@ test("a CBCA corporation sees corporate profile, communications, workflow, resea
   for (const [path, label] of [
     ["/app/members", "Members"],
     ["/app/membership", "Membership & billing"],
-    ["/app/receipts", "Donation receipts"],
     ["/app/proposals", "Member proposals"],
   ] as const) {
     await visit(path, `${label} is not used for this kind of organization`);
@@ -169,6 +181,11 @@ test("a CBCA corporation sees corporate profile, communications, workflow, resea
   }
   await visit("/app/members", "Members is not used for this kind of organization");
   await expect(page.getByRole("link", { name: "Open role holders" })).toHaveAttribute("href", "/app/role-holders");
+
+  // Contributions are cross-form. A business label does not grant official
+  // receipting eligibility without independently reviewed registration facts.
+  await visit("/app/receipts", "Donations and receipts");
+  await expectAcknowledgementsWithoutOfficialPrivilege(page);
 
   // Item 8: eligible voters come from the share register (Sera holds 100 voting shares).
   await visit("/app/written-resolutions", "Written resolutions");
@@ -236,7 +253,8 @@ test("a BC company keeps BC privacy wording without society-only fields", async 
   expect(await pageText(page)).not.toContain("s.20");
   await visit("/app/conflicts", "Conflicts of interest");
   expect(await pageText(page)).not.toContain("(s.56)");
-  await visit("/app/receipts", "Donation receipts is not used for this kind of organization");
+  await visit("/app/receipts", "Donations and receipts");
+  await expectAcknowledgementsWithoutOfficialPrivilege(page);
 
   expect(errors).toEqual([]);
 });
