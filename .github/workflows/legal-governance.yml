@@ -64,8 +64,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: npx playwright test -c playwright.corporation.config.ts
         timeout-minutes: 15
+      # PRs run these same desktop specs in interaction-audit / existing-browser.
+      # Keep this coverage here for main pushes and standalone manual runs.
       - name: Legal record forms and tasks (desktop)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
         run: npx playwright test -c playwright.interface.config.ts tests/interface-records.spec.ts tests/interface-tasks.spec.ts --project=desktop
         timeout-minutes: 15
       - name: Upload browser results
