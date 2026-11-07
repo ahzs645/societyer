@@ -261,26 +261,32 @@ test("disconnecting Wave preserves the cache while disabling refresh and showing
   await expect(page.getByText("Operating chequing", { exact: true }).first()).toBeVisible();
 });
 
-test("a synthetic donation receipt can be issued and voided while keeping its original audit record", async ({ page }) => {
+/** Records a donation acknowledgement (the receipts page's first step since official receipts need registration evidence). */
+async function recordDonation(page: Page, donor: string) {
+  await page.getByRole("button", { name: "New donation record", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Record donation acknowledgement", exact: true });
+  await drawer.getByLabel("Donor full name", { exact: true }).fill(donor);
+  await drawer.getByLabel("Donor address", { exact: true }).fill("200 Test Street, Prince George, BC V2L 1A1, Canada");
+  await drawer.getByLabel("Gift amount (CAD)", { exact: true }).fill("100.00");
+  await drawer.getByLabel("Place of issue", { exact: true }).fill("Prince George, BC");
+  await drawer.getByRole("button", { name: "Record acknowledgement", exact: true }).click();
+  await expect(drawer).toBeHidden();
+}
+
+test("a synthetic donation record can be recorded and voided while keeping its original audit record", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await visit(page, "receipts");
-  await page.getByRole("button", { name: "Issue receipt", exact: true }).click();
-  await input(page, "Charity registration #").fill("000000000RR0001");
-  await input(page, "Donor name").fill("Synthetic operations receipt audit");
-  await input(page, "Amount").fill("100");
-  await input(page, "Eligible amount").fill("100");
-  await fits(page);
-  await page.getByRole("button", { name: "Issue", exact: true }).click();
+  await recordDonation(page, "Synthetic operations receipt audit");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const row = recordRows(page).filter({ hasText: "Synthetic operations receipt audit" });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("000001");
   await runRowAction(row, "Void");
-  await page.getByPlaceholder("Reason (required)").fill("Synthetic browser audit — no real donation");
+  await page.getByPlaceholder("Reason").fill("Synthetic browser audit — no real donation");
   await fits(page);
-  await page.getByRole("button", { name: "Void receipt", exact: true }).click();
+  await page.getByRole("button", { name: "Void record", exact: true }).click();
   await expect(row).toContainText("Voided");
   await page.reload();
   await expect(row).toContainText("000001");
@@ -335,12 +341,7 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await visit(page, "receipts");
-    await page.getByRole("button", { name: "Issue receipt", exact: true }).click();
-    await input(page, "Charity registration #").fill("000000000RR0001");
-    await input(page, "Donor name").fill("Synthetic restricted-role receipt");
-    await input(page, "Amount").fill("100");
-    await input(page, "Eligible amount").fill("100");
-    await page.getByRole("button", { name: "Issue", exact: true }).click();
+    await recordDonation(page, "Synthetic restricted-role receipt");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await visit(page, "users");
     const name = `Operations Interface ${role}`;
@@ -376,10 +377,10 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
       return;
     }
     await navigate("receipts");
-    await expect(page.getByRole("button", { name: "Issue receipt", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "New donation record", exact: true })).toBeDisabled();
     const issuedReceipt = recordRows(page).filter({ hasText: "Synthetic restricted-role receipt" });
     await expect(issuedReceipt).toHaveCount(1);
-    await expect(issuedReceipt).toContainText("Issued");
+    await expect(issuedReceipt).toContainText("Acknowledgement");
     await expect(issuedReceipt.getByRole("button", { name: "Void", exact: true, includeHidden: true })).toBeDisabled();
     await navigate("reconciliation");
     await expect(page.getByRole("button", { name: "Auto-match high confidence", exact: true })).toBeDisabled();
@@ -397,8 +398,9 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     // Row edits sit in each asset's menu; none of them may be enabled.
     await expect(page.getByRole("main").locator("button:enabled", { hasText: /^Edit$/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Scan", exact: true })).toBeEnabled();
+    // Dividends belong to corporations; a society sees why instead of a register.
     await navigate("dividends");
-    await expect(page.getByRole("button", { name: "New declaration", exact: true })).toBeDisabled();
+    await expect(page.getByRole("heading", { name: "Dividends is not used for this kind of organization", exact: true })).toBeVisible();
     await navigate("treasurer");
     await expect(page.getByRole("button", { name: "Quick entry", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();

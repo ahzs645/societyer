@@ -14,9 +14,17 @@ async function date(page: Page, scope: Locator, label: string, value: string) {
   await expect(input).not.toBeVisible();
 }
 
-/** RecordTable pins actions in a row menu when the available width needs it. */
+/**
+ * RecordTable pins actions in a row menu when the available width needs it;
+ * phones show each record as a card whose actions sit behind the same button.
+ */
+function receiptRow(page: Page, receiptNumber: string) {
+  return page.getByRole("row").filter({ has: page.getByRole("gridcell", { name: receiptNumber, exact: true }) })
+    .or(page.locator(".record-cards__item").filter({ has: page.getByText(receiptNumber, { exact: true }) }));
+}
+
 async function receiptAction(page: Page, receiptNumber: string, name: string) {
-  const row = page.getByRole("row").filter({ has: page.getByRole("gridcell", { name: receiptNumber, exact: true }) });
+  const row = receiptRow(page, receiptNumber);
   await expect(row).toBeVisible();
   const trigger = row.getByRole("button", { name: /^Row actions for / });
   if (await trigger.isVisible()) {
@@ -223,8 +231,8 @@ test("acknowledgement becomes a separately signed official receipt without chang
   expect(official.signedCopySnapshot.documentVersionId).toBeTruthy();
   expect(official.issuerSnapshot.name).toBe(name);
   await expect(page.getByRole("heading", { name: "Donations and receipts", exact: true })).toBeVisible();
-  const acknowledgementRow = page.getByRole("row").filter({ has: page.getByRole("gridcell", { name: original.receiptNumber, exact: true }) });
-  const officialRow = page.getByRole("row").filter({ has: page.getByRole("gridcell", { name: official.receiptNumber, exact: true }) });
+  const acknowledgementRow = receiptRow(page, original.receiptNumber);
+  const officialRow = receiptRow(page, official.receiptNumber);
   await expect(acknowledgementRow).toContainText("Acknowledgement");
   await expect(officialRow).toContainText("Official receipt · signed issue recorded");
   await expect(await receiptAction(page, official.receiptNumber, "Signed copy")).toBeEnabled();
