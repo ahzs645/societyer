@@ -1,7 +1,9 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { requireSocietyMembership, principalUserId } from "./access";
 import { requirePermissionPortable } from "./permissions";
-import { issueFromSeriesPortable, markSentPortable } from "./invoices";
+import { issueFromSeriesPortable, markSentPortable, loadIssuerTaxIdentifiers } from "./invoices";
+import { captureIssuerTaxRegistrations } from "../invoiceTaxRegistrations";
+import { assertInvoiceTaxAssessments } from "../tax";
 import { cleanInvoiceTemplate } from "../invoiceCommerce";
 import { billingRetryAt, billingWallTime, cleanBillingEmail, cleanBillingRecipients, nextBillingDate, validateBillingTimezone, automationError, type BillingAutomationKind, type BillingCadence } from "../billingAutomation";
 
@@ -79,6 +81,10 @@ async function invoiceSnapshot(ctx: PortableQueryCtx, invoice: any, templateId?:
   const template = templateId ? await owned(ctx, "invoiceTemplates", templateId, invoice.societyId) : null;
   const settings = await ctx.db.query("invoiceSettings").withIndex("by_society", (q) => q.eq("societyId", invoice.societyId)).first();
   const { _id, _creationTime, societyId, ...document } = invoice;
+  if (document.status === "draft") {
+    assertInvoiceTaxAssessments(document.lines ?? [], document.issueDate);
+    document.issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, invoice.societyId), document.lines ?? [], document.issueDate, now());
+  }
   return { kind: "invoice", invoice: { ...document, status: document.status === "draft" ? "sent" : document.status, documentTemplate: cleanInvoiceTemplate(template?.config ?? invoice.documentTemplate) }, organization: { name: society?.name ?? "Organization", address: society?.mailingAddress ?? society?.registeredOfficeAddress, email: society?.publicContactEmail ?? society?.officialEmail, registrationNumber: society?.incorporationNumber, logoStorageId: society?.logoStorageId }, paymentInstructions: settings?.paymentInstructions };
 }
 /** Atomic issuance and occurrence recording: overlapping cron scans cannot duplicate an invoice. */
@@ -114,8 +120,18 @@ export async function prepareDuePortable(ctx: PortableMutationCtx, { societyId, 
         if (series.status === "paused") continue;
         if (series.status !== "active" || !series.nextIssueDate) { await ctx.db.patch(schedule._id, { active: false, updatedAtISO: now() }); continue; }
         if (series.nextIssueDate !== schedule.nextLocalDate) { await ctx.db.patch(schedule._id, { nextLocalDate: series.nextIssueDate, nextRunAtISO: billingWallTime(series.nextIssueDate, schedule.localTime, schedule.timezone), updatedAtISO: now() }); continue; }
+        if ((series.lines ?? []).some((line: any) => line.taxAssessment)) {
+          const reason = "This recurring series uses guided tax decisions. Its delivery schedule is paused: issue the next occurrence as a draft from Recurring, review its tax guidance, and send it after confirmation.";
+          const reviewKey = `${occurrenceKey}:tax-review`;
+          const previousReview = await ctx.db.query("billingAutomationRuns").withIndex("by_schedule_occurrence", q => q.eq("scheduleId", schedule._id).eq("occurrenceKey", reviewKey)).unique();
+          if (!previousReview) await ctx.db.insert("billingAutomationRuns", { societyId, scheduleId: schedule._id, occurrenceKey: reviewKey, dueAtISO: schedule.nextRunAtISO, status: "skipped", attempts: 0, nextAttemptAtISO: at, createdAtISO: at, updatedAtISO: at, createdByUserId: schedule.createdByUserId, deliveries: [], lastError: reason, history: [{ atISO: at, event: "tax_review_required", detail: reason }] });
+          await ctx.db.patch(schedule._id, { active: false, updatedAtISO: at });
+          continue;
+        }
         invoiceId = await issueFromSeriesPortable(ownerCtx, { id: series._id });
         snapshot = await invoiceSnapshot(ctx, await ctx.db.get(invoiceId, "invoices"), schedule.templateId);
+        // The prepared PDF is frozen before delivery; finalization must keep its seller numbers.
+        await ctx.db.patch(invoiceId, { issuerTaxRegistrationsSnapshot: snapshot.invoice.issuerTaxRegistrationsSnapshot });
       } else if (schedule.kind === "invoice_reminder") {
         const invoice = await owned(ctx, "invoices", schedule.sourceId, societyId); invoiceId = invoice._id;
         if (["draft", "void"].includes(invoice.status) || Number(invoice.totalCents) <= Number(invoice.paidCents ?? 0)) skip = "Invoice is paid, void or unissued.";

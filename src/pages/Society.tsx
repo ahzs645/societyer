@@ -1258,16 +1258,20 @@ function IdentifierFields({ draft, setDraft }: any) {
   return (
     <>
       <div className="row" style={{ gap: 12 }}>
-        <OptionSelect label="Kind" setName="taxNumberTypes" value={draft.kind ?? ""} onChange={(value) => setDraft({ ...draft, kind: value })} />
+        <OptionSelect label="Kind" setName="taxNumberTypes" value={draft.kind ?? ""} onChange={(value) => setDraft({ ...draft, kind: value, ...(value === "pst" ? { jurisdiction: "CA-BC" } : {}) })} />
         <OptionSelect label="Status" setName="identifierStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
       </div>
       <Field label="Number"><input className="input mono" value={draft.number ?? ""} onChange={(e) => setDraft({ ...draft, number: e.target.value })} /></Field>
+      {["gst", "pst", "sales_tax"].includes(draft.kind) && <p className="muted" style={{ fontSize: 13 }}>
+        {draft.kind === "gst" ? "Use the full GST/HST account number, such as 123456789RT0001. A nine-digit business number alone is not a GST/HST account." : draft.kind === "pst" ? "Use the BC PST number, such as PST-1234-5678." : "For invoice use, choose GST/HST registration or BC PST registration and save each number separately."}
+        {" "}Only active registrations effective on the invoice date are used. New issued invoices save these numbers. Keep unconfirmed numbers marked Needs review.
+      </p>}
       <div className="row" style={{ gap: 12 }}>
         <OptionSelect label="Jurisdiction" setName="entityJurisdictions" value={draft.jurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, jurisdiction: value })} emptyLabel="No jurisdiction" />
         <Field label="Foreign jurisdiction"><input className="input" value={draft.foreignJurisdiction ?? ""} onChange={(e) => setDraft({ ...draft, foreignJurisdiction: e.target.value })} /></Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Registered at"><DatePicker value={draft.registeredAt ?? ""} onChange={(value) => setDraft({ ...draft, registeredAt: value })} /></Field>
+        <Field label={draft.kind === "gst" || draft.kind === "pst" ? "Registration effective date" : "Registered at"}><DatePicker value={draft.registeredAt ?? ""} onChange={(value) => setDraft({ ...draft, registeredAt: value })} /></Field>
         <OptionSelect label="Access level" setName="accessLevels" value={draft.accessLevel ?? ""} onChange={(value) => setDraft({ ...draft, accessLevel: value })} />
       </div>
       <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>

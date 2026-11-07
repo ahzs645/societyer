@@ -8,6 +8,8 @@ import { Text } from "../../components/pdf/text/text";
 import { professionalTheme } from "../../lib/pdf-themes/professional";
 import type { DocumentSectionKey } from "../../../shared/invoiceCommerce";
 import { cleanDocumentImage, documentImageDimensions } from "../../../shared/documentRichContent";
+import { invoiceIssuerTaxRegistrations, registrationDisplayLines, guidedTaxIdsToCollect } from "../../../shared/invoiceTaxRegistrations";
+import { invoiceTaxDisclosureLines } from "../../../shared/tax";
 import type { InvoiceDocumentData } from "./InvoiceDocument";
 import type { InvoiceOrganization } from "./types";
 import { documentPdfFontFamily, documentPresentation, numericDocumentColumn, documentAddressLines } from "./documentPresentation";
@@ -40,6 +42,9 @@ export function documentPaymentStubHeight(data: ReturnType<typeof documentPresen
 function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }: InvoicePdfProps) {
   paymentInstructions = invoicePaymentText(invoice, paymentInstructions);
   const data = documentPresentation(invoice), { config, design, advanced: a, extras, kind, title, columns, cellValue, summary, metadata, page } = data;
+  const registrationLines = registrationDisplayLines(invoiceIssuerTaxRegistrations(invoice, organization));
+  const showRegistrations = design.fields.taxRegistration || guidedTaxIdsToCollect(invoice.lines).length > 0;
+  const taxDisclosures = invoiceTaxDisclosureLines(invoice.lines);
   const margin = { ...design.page.margins, bottom: design.page.margins.bottom + documentPaymentStubHeight(data) };
   const extraPageMargin = { ...design.page.margins, bottom: design.page.margins.bottom + (a.paymentStub.firstPageOnly ? 0 : documentPaymentStubHeight(data)) };
   const contentWidth = page.width - margin.left - margin.right;
@@ -58,7 +63,7 @@ function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }
   const estimatedHeaderHeight = Math.max(a.page.firstHeaderHeight, drawnHeight + 20, a.typography.title.fontSize + metadata.length * (a.typography.labels.fontSize + 3) + 20);
   const address = (key: "organization" | "billing" | "shipping") => {
     const settings = a.addresses[key], org = key === "organization";
-    const source = org ? { name: a.visibility.organizationName ? organization.name || "Your organization" : "", address: a.visibility.organizationAddress ? organization.address : "", email: a.visibility.organizationAddress ? organization.email : "", registrationNumber: a.visibility.organizationAddress ? organization.registrationNumber : "", taxNumber: organization.gstNumber } : key === "billing" ? { name: invoice.billToName || "—", address: invoice.billToAddress, email: design.fields.customerEmail ? invoice.billToEmail : "" } : { name: invoice.shipToName, address: invoice.shipToAddress };
+    const source = org ? { name: a.visibility.organizationName ? organization.name || "Your organization" : "", address: a.visibility.organizationAddress ? organization.address : "", email: a.visibility.organizationAddress ? organization.email : "", registrationNumber: a.visibility.organizationAddress ? organization.registrationNumber : "", taxNumber: registrationLines.join("\n") } : key === "billing" ? { name: invoice.billToName || "—", address: invoice.billToAddress, email: design.fields.customerEmail ? invoice.billToEmail : "" } : { name: invoice.shipToName, address: invoice.shipToAddress };
     const lines = documentAddressLines(settings, source).split("\n");
     const nameStyle = element(org ? "organizationName" : "customerName"), addressStyle = element(org ? "organizationAddress" : "customerAddress");
     const style: Style = settings.placement === "absolute" ? { position: "absolute", left: settings.x - margin.left, top: settings.y - margin.top, width: Math.min(settings.width, page.width - settings.x) } : { flex: 1, paddingRight: 14 };
@@ -104,7 +109,8 @@ function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }
   return <Document title={`${title} ${invoice.number}`} author={organization.name} creator="Societyer · pdfcn / Forme" lang="en-CA" fonts={fonts} style={body}>
     <Page size={page} margin={margin}>
       {design.sections.map((key) => <Fragment key={key}>{key === "items" && extra("before_items")}{sections[key]}{key === "items" && extra("after_items")}{key === "totals" && extra("after_totals")}</Fragment>)}{extra("end")}
-      {design.fields.taxRegistration && organization.gstNumber && text(`GST/HST registration no. ${organization.gstNumber}`, typeStyle("footer"))}
+      {showRegistrations && registrationLines.map(line => <Fragment key={line}>{text(line, body)}</Fragment>)}
+      {taxDisclosures.length > 0 && paragraphSection("Tax treatment", taxDisclosures.join("\n"), body)}
 
     </Page>
     {a.annexures.enabled && annexures.map((annexure, index) => <Page key={`annex-${index}`} size={page} margin={extraPageMargin}>{text(annexure.title, { ...header, marginBottom: 15 })}<Table columns={annexure.columns.map(() => ({ width: { fixed: contentWidth / annexure.columns.length } }))}><Row header>{annexure.columns.map((label, i) => <Cell key={i} style={{ padding: 5, backgroundColor: a.colors.tableHeaderBackground }}>{text(label, element("columnHeader"))}</Cell>)}</Row>{annexure.rows.map((row, i) => <Row key={i}>{row.map((value, j) => <Cell key={j} style={{ padding: 5, borderBottomWidth: 0.4, borderColor: a.colors.border }}>{text(value, table)}</Cell>)}</Row>)}</Table></Page>)}

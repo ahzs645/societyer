@@ -9,6 +9,7 @@ import { assertRepairApprovalPortable, repairApprovalScope } from "./repairOpera
 import { cleanInvoiceMoney } from "../invoiceMoney";
 import { loadInvoiceLedgerContext } from "./invoiceLedger";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
+import { assertInvoiceTaxAssessments, cleanTaxAssessment, reassessTaxLines, taxTransactionContextChanged } from "../tax";
 
 type Ctx = PortableQueryCtx;
 type Row = { _id: string; societyId: string; [key: string]: any };
@@ -42,6 +43,7 @@ async function technician(ctx: Ctx, societyId: string, userId: string) {
 function rate(value: number) { if (!Number.isSafeInteger(value) || value < 0 || value > 100_000_000) throw new Error("Hourly rates must be non-negative integer cents."); return value; }
 
 async function cleanQuoteFields(ctx: Ctx, societyId: string, input: QuoteFields): Promise<QuoteFields> {
+  input = { ...input, lines: input.lines?.map((line) => ({ ...line, ...(line.taxAssessment ? { taxAssessment: cleanTaxAssessment(line.taxAssessment) } : {}) })) };
   if (!["member", "organization", "custom"].includes(input.partyKind)) throw new Error("Choose a customer type.");
   if (!text(input.billToName, 200)) throw new Error("Choose a quote customer.");
   if (!isCalendarDate(input.issueDate) || !isCalendarDate(input.validUntil) || input.validUntil < input.issueDate) throw new Error("Choose a valid quote issue date and expiry date.");
@@ -120,6 +122,7 @@ export async function upsertQuotePortable(ctx: PortableMutationCtx, args: { soci
   const old = args.id ? await getOwned<Row>(ctx, "billingQuotes", args.id, args.societyId) : null;
   if (old && (old.status !== "draft" || old.convertedInvoiceId)) throw new Error("Published quotes are immutable. Create a new revision before editing.");
   const fields = await cleanQuoteFields(ctx, args.societyId, args.fields);
+  if (old && taxTransactionContextChanged(old.fields, fields)) fields.lines = reassessTaxLines(fields.lines, fields.issueDate);
   const patch = { fields, totalCents: computeInvoiceTotals(fields.lines, fields.discount, fields.money).totalCents, updatedAtISO: now() };
   if (old) { await ctx.db.patch(old._id, patch); return old._id; }
   const id = await ctx.db.insert("billingQuotes", { societyId: args.societyId, number: "", revision: 1, status: "draft", ...patch, createdByUserId: await actor(ctx, args.societyId), createdAtISO: now(), timeline: [{ atISO: now(), actorUserId: await actor(ctx, args.societyId), action: "Quote created" }] });
@@ -130,6 +133,7 @@ export async function setQuoteStatusPortable(ctx: PortableMutationCtx, args: { i
   if (value.convertedInvoiceId) throw new Error("This quote is already converted to an invoice.");
   if (value.status === args.status) return value._id;
   if (!(QUOTE_STATUSES as readonly string[]).includes(args.status)) throw new Error("Choose a quote status.");
+  if (args.status === "sent") assertInvoiceTaxAssessments(value.fields.lines, value.fields.issueDate);
   const transitions: Record<string, string[]> = { draft: ["sent"], sent: ["accepted", "declined", "expired"], accepted: [], declined: [], expired: [] };
   if (!transitions[value.status]?.includes(args.status)) throw new Error("That quote transition is not available; create a new revision to change a published offer.");
   const today = await calendarToday(ctx, value.societyId);
@@ -151,6 +155,7 @@ export async function convertQuotePortable(ctx: PortableMutationCtx, { id, issue
   if (value.convertedInvoiceId) { await getOwned(ctx, "invoices", value.convertedInvoiceId, value.societyId); return value.convertedInvoiceId; }
   if (value.status !== "accepted") throw new Error("Record customer acceptance before converting the quote.");
   const fields = await cleanQuoteFields(ctx, value.societyId, value.fields);
+  fields.lines = reassessTaxLines(fields.lines, issueDate);
   const invoiceId = await upsertPortable(ctx, { societyId: value.societyId, ...fields, issueDate, terms, documentExtras: { termsAndConditions: fields.termsAndConditions }, reference: `${value.number} · revision ${value.revision}` });
   await ctx.db.patch(id, { convertedInvoiceId: invoiceId, updatedAtISO: now(), timeline: [...value.timeline, { atISO: now(), actorUserId: await actor(ctx, value.societyId), action: "Converted to invoice" }] }); return invoiceId;
 }

@@ -64,6 +64,8 @@ export const SERIES_FREQUENCY_LABEL: Record<SeriesFrequency, string> = {
 const FREQUENCY_MONTHS: Record<SeriesFrequency, number> = { monthly: 1, quarterly: 3, annually: 12 };
 
 export type InvoiceLine = {
+  /** Versioned, evidenced guidance; collection and exemption are separate decisions. */
+  taxAssessment?: import("./tax").TaxAssessment;
   key: string;
   catalogItemId?: string;
   item: string;

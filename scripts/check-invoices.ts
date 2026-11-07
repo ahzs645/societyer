@@ -162,7 +162,7 @@ assert.equal(ws.catalog.length, 9);
 assert.equal(ws.settings.nextNumberPreview, "RCS-0026");
 assert.equal(ws.summary.overdueCount, 2);
 assert.equal(ws.duesCandidates.length, 4);
-assert.equal(ws.organization.gstNumber, "81234 5678 RT0001");
+assert.equal(ws.organization.gstNumber, "812345678RT0001");
 
 // partial payment linked to a suggested bank line, then the rest
 const yogaOverdue = ws.invoices.find((row: any) => row._id === "static_invoice_yoga_4");

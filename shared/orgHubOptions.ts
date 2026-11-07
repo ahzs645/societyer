@@ -177,7 +177,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "company_keys",
     "paper_minute_book_archive",
   ],
-  taxNumberTypes: ["corporation_key", "company_key", "ontario_company_key", "business_number", "income_tax", "sales_tax", "import___export", "payroll_tax", "charity_number", "registry_account", "gst", "payroll", "other"],
+  taxNumberTypes: ["corporation_key", "company_key", "ontario_company_key", "business_number", "income_tax", "sales_tax", "import___export", "payroll_tax", "charity_number", "registry_account", "gst", "pst", "payroll", "other"],
   companyKeyTypes: ["company_key", "corporation_key", "ontario_company_key", "password__bc_", "access_code"],
   permissionLevels: ["entity_administrator", "entity_editor", "entity_viewer"],
   signerStatuses: ["unsigned", "opened_package", "all_signed", "signed", "declined", "needs_review"],

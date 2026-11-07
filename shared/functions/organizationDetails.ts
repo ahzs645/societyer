@@ -1,5 +1,7 @@
 import { normalizeAddressText, parseAddressText } from "../structuredAddress";
 import { canonicalizeJurisdictionCode } from "../organizationDomain";
+import { normalizeGstRegistration, normalizeBcPstRegistration } from "../invoiceTaxRegistrations";
+import { isCalendarDate } from "../invoicing";
 /**
  * PORTABLE FUNCTIONS: the organization-details domain
  * (overview / upsertAddress / removeAddress / upsertRegistration /
@@ -195,11 +197,18 @@ export async function upsertIdentifierPortable(
   assertAllowedOption("entityJurisdictions", args.jurisdiction, "Identifier jurisdiction");
   assertAllowedOption("identifierStatuses", args.status, "Identifier status");
   assertAllowedOption("accessLevels", args.accessLevel, "Identifier access level");
+  const registrationNumber = args.kind === "gst" ? normalizeGstRegistration(args.number ?? "")
+    : args.kind === "pst" ? normalizeBcPstRegistration(args.number ?? "") : undefined;
+  if (args.status === "active" && args.kind === "gst" && !registrationNumber) throw new Error("Enter the full GST/HST account number: nine digits, RT, then four digits (for example, 123456789RT0001). Keep uncertain registrations marked Needs review.");
+  if (args.status === "active" && args.kind === "pst" && !registrationNumber) throw new Error("Enter the BC PST registration number in the form PST-1234-5678. Keep uncertain registrations marked Needs review.");
+  if (args.kind === "pst" && args.jurisdiction && !["CA-BC", "british_columbia"].includes(args.jurisdiction)) throw new Error("The BC PST registration kind requires British Columbia. Use a separate identifier for another tax jurisdiction.");
+  if (["gst", "pst"].includes(args.kind) && args.registeredAt && !isCalendarDate(args.registeredAt)) throw new Error("Choose a valid registration effective date.");
   const now = new Date().toISOString();
   const payload = {
     ...cleanObject(args),
     kind: cleanText(args.kind) || "other",
-    number: cleanText(args.number) || "Needs review",
+    number: registrationNumber || cleanText(args.number) || "Needs review",
+    ...(args.kind === "pst" ? { jurisdiction: "CA-BC" } : {}),
     status: cleanText(args.status) || "needs_review",
     accessLevel: cleanText(args.accessLevel) || "restricted",
     updatedAtISO: now,

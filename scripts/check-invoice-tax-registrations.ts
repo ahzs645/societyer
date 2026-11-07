@@ -1,0 +1,110 @@
+import assert from "node:assert/strict";
+import { MemoryDb } from "../shared/portable/memoryDb";
+import { makeCapabilities } from "../shared/portable/capabilities";
+import { tables, society } from "../src/lib/staticConvexFixtures";
+import { normalizeGstRegistration, normalizeBcPstRegistration, selectIssuerTaxRegistrations, captureIssuerTaxRegistrations, invoiceIssuerTaxRegistrations } from "../shared/invoiceTaxRegistrations";
+import { assessTax, defaultTaxAnswers, taxAssessmentRates } from "../shared/tax";
+import * as invoices from "../shared/functions/invoices";
+import * as automation from "../shared/functions/billingAutomation";
+import { upsertIdentifierPortable } from "../shared/functions/organizationDetails";
+
+const date = "2026-11-06", at = `${date}T12:00:00.000Z`;
+const gst = { kind: "gst", number: "123 456 789 rt 0001", status: "active", registeredAt: "2026-01-01" };
+const pst = { kind: "pst", number: "pst12345678", status: "active", jurisdiction: "CA-BC", registeredAt: "2026-01-01" };
+assert.equal(normalizeGstRegistration(gst.number), "123456789RT0001");
+assert.equal(normalizeGstRegistration("123456789"), undefined);
+assert.equal(normalizeBcPstRegistration(pst.number), "PST-1234-5678");
+assert.equal(normalizeBcPstRegistration("12345678"), undefined);
+const selected = selectIssuerTaxRegistrations([gst, pst], date);
+assert.equal(selected.length, 2);
+for (const status of ["needs_review", "inactive", undefined]) assert.deepEqual(selectIssuerTaxRegistrations([{ ...gst, status }], date), []);
+for (const registeredAt of ["2027-01-01", "2026-02-30", "2026-99-01", "unknown"]) assert.deepEqual(selectIssuerTaxRegistrations([{ ...gst, registeredAt }], date), []);
+assert.equal(selectIssuerTaxRegistrations([{ ...gst, kind: "business_number" }], date).length, 1);
+assert.deepEqual(selectIssuerTaxRegistrations([gst, { ...gst, number: "987654321RT0001" }], date), []);
+assert.equal(selectIssuerTaxRegistrations([gst, { ...gst, kind: "business_number" }], date).length, 1, "same number in legacy BN and GST slots is not ambiguous");
+assert.deepEqual(selectIssuerTaxRegistrations([{ ...pst, jurisdiction: "CA-ON" }], date), []);
+const guided = [{ taxAssessment: { components: [{ taxId: "CA-GST", collection: "collect" }, { taxId: "CA-BC-PST", collection: "collect" }] } }];
+assert.throws(() => captureIssuerTaxRegistrations([gst], guided, date, at), /BC PST/);
+const frozen = captureIssuerTaxRegistrations([gst, pst], guided, date, at);
+const currentOrganization = { gstNumber: "999999999RT0001", pstNumber: "PST-9999-9999" };
+assert.deepEqual(invoiceIssuerTaxRegistrations({ status: "sent", issuerTaxRegistrationsSnapshot: frozen }, currentOrganization), selected);
+assert.deepEqual(invoiceIssuerTaxRegistrations({ status: "sent" }, currentOrganization), [], "legacy issued data never borrows today's registrations");
+assert.deepEqual(invoiceIssuerTaxRegistrations({ status: "sent", issuerTaxRegistrationsSnapshot: { ...frozen, registrations: [] } }, currentOrganization), []);
+assert.equal(invoiceIssuerTaxRegistrations({ status: "draft" }, currentOrganization).length, 2);
+for (const taxId of ["CA-GST", "CA-BC-PST"]) {
+  const notCollected = (treatment: string) => [{ taxAssessment: { components: [{ taxId, treatment, collection: "do_not_collect" }] } }];
+  assert.throws(() => captureIssuerTaxRegistrations([gst, pst], notCollected("standard"), date, at), /active .* registration/);
+  for (const treatment of ["exempt", "zero_rated", "not_subject", "relieved", "out_of_scope"]) assert.doesNotThrow(() => captureIssuerTaxRegistrations([gst, pst], notCollected(treatment), date, at));
+  for (const identifiers of [[], [gst, pst].map(identifier => ({ ...identifier, status: "inactive" })), [gst, pst].map(identifier => ({ ...identifier, registeredAt: "2027-01-01" }))]) assert.doesNotThrow(() => captureIssuerTaxRegistrations(identifiers, notCollected("standard"), date, at));
+}
+assert.throws(() => captureIssuerTaxRegistrations([gst, { ...gst, number: "987654321RT0001" }], [{ taxAssessment: { components: [{ taxId: "CA-GST", treatment: "standard", collection: "do_not_collect" }] } }], date, at), /active GST\/HST registration/, "ambiguous branch numbers cannot bypass the non-collection conflict");
+assert.equal(selectIssuerTaxRegistrations([{ ...gst, registeredAt: undefined }], date).length, 1, "optional effective dates retain the user-declaration compatibility path");
+
+const seed: Record<string, any[]> = structuredClone(tables);
+seed.societies = [structuredClone(society)];
+seed.organizationIdentifiers = [];
+const db = new MemoryDb({ seed });
+const societyId = seed.users[0].societyId, ownerId = seed.users[0]._id;
+const ctx: any = { db, principal: { kind: "user", runtime: "test", assurance: "trusted-workspace", subject: `test:${ownerId}`, societyId, userId: ownerId }, capabilities: makeCapabilities({}), runQuery: async () => { throw new Error("Unexpected query"); } };
+await assert.rejects(() => upsertIdentifierPortable(ctx, { societyId, kind: "gst", number: "123456789", status: "active" }), /full GST\/HST/);
+await assert.rejects(() => upsertIdentifierPortable(ctx, { societyId, kind: "pst", number: "PST-1234-5678", jurisdiction: "CA-ON", status: "active" }), /British Columbia/);
+const gstId = await upsertIdentifierPortable(ctx, { societyId, ...gst });
+const pstId = await upsertIdentifierPortable(ctx, { societyId, ...pst, status: "needs_review" });
+const answers = { ...defaultTaxAnswers("transaction", date), jurisdictionCode: "CA-BC", itemCategory: "goods", sellerKind: "business", scopeConfirmed: "yes", federalException: "none", gstRegistration: "registered", provincialException: "category", pstRegistration: "registered", customerRelief: "none" };
+const assessment = assessTax(answers, true);
+assert.equal(assessment.confirmed, true);
+const line = { key: "taxable", item: "Synthetic equipment", quantity: 1, unitPriceCents: 10000, taxAssessment: assessment, ...taxAssessmentRates(assessment) };
+const input = { societyId, partyKind: "custom" as const, billToName: "Synthetic buyer", issueDate: date, terms: "net_30", currency: "CAD", lines: [line] };
+const invoiceId = await invoices.upsertPortable(ctx, input);
+await assert.rejects(() => invoices.markSentPortable(ctx, { societyId, ids: [invoiceId] }), /active BC PST/);
+assert.equal((await db.get(invoiceId))!.status, "draft");
+await assert.rejects(() => invoices.recordPaymentPortable(ctx, { id: invoiceId, date, amountCents: 1000 }), /active BC PST/);
+assert.equal((await db.get(invoiceId))!.payments.length, 0, "first settlement validates before posting");
+await upsertIdentifierPortable(ctx, { societyId, id: pstId, ...pst });
+for (const registration of ["gst", "pst"]) {
+  const conflict = assessTax({ ...answers, [`${registration}Registration`]: "not_required", [`${registration}RegistrationEvidence`]: "Synthetic registration review" }, true);
+  assert.equal(conflict.confirmed, true);
+  const conflictInvoiceId = await invoices.upsertPortable(ctx, { ...input, lines: [{ ...line, taxAssessment: conflict, ...taxAssessmentRates(conflict) }] });
+  await assert.rejects(() => invoices.markSentPortable(ctx, { societyId, ids: [conflictInvoiceId] }), /active .* registration/);
+  assert.equal((await db.get(conflictInvoiceId))!.status, "draft");
+}
+const workspace: any = await invoices.workspacePortable(ctx, { societyId });
+assert.equal(workspace.organization.gstNumber, "123456789RT0001");
+assert.equal(workspace.organization.pstNumber, "PST-1234-5678");
+await invoices.markSentPortable(ctx, { societyId, ids: [invoiceId] });
+const issued = (await db.get(invoiceId))!;
+assert.deepEqual(issued.issuerTaxRegistrationsSnapshot.registrations, selected);
+await upsertIdentifierPortable(ctx, { societyId, id: gstId, ...gst, number: "987654321RT0001" });
+await invoices.markSentPortable(ctx, { societyId, ids: [invoiceId] });
+assert.deepEqual((await db.get(invoiceId))!.issuerTaxRegistrationsSnapshot, issued.issuerTaxRegistrationsSnapshot, "reissuing cannot refresh historical registrations");
+const paidDraftId = await invoices.upsertPortable(ctx, input);
+await invoices.recordPaymentPortable(ctx, { id: paidDraftId, date, amountCents: 1000 });
+assert.equal((await db.get(paidDraftId))!.issuerTaxRegistrationsSnapshot.registrations[0].number, "987654321RT0001");
+const duplicated = await invoices.duplicatePortable(ctx, { id: invoiceId });
+assert.equal((await db.get(duplicated))!.issuerTaxRegistrationsSnapshot, undefined);
+
+// A guided recurring schedule pauses before invoice allocation and does not
+// send an unconfirmed occurrence. Manual recurring PDFs reserve their numbers.
+await automation.saveSettingsPortable(ctx, { societyId, enabled: true, fromEmail: "billing@example.invalid", fromName: "Synthetic billing", senderConfirmed: true });
+const seriesArgs = { societyId, name: "Registration check", frequency: "monthly", startDate: date, endKind: "after_count", endAfterCount: 1, autoSend: false, partyKind: "custom" as const, billToName: "Synthetic buyer", terms: "net_30", currency: "CAD" };
+const scheduleArgs = { societyId, name: "Registration check", kind: "recurring_invoice" as const, recipients: ["buyer@example.invalid"], recipientsConfirmed: true, timezone: "UTC", localTime: "00:00", cadence: "monthly" as const, startDate: date, active: true };
+const guidedSeries = await invoices.upsertSeriesPortable(ctx, { ...seriesArgs, lines: [line] });
+const guidedSchedule = await automation.saveSchedulePortable(ctx, { ...scheduleArgs, sourceId: guidedSeries });
+await automation.prepareDuePortable(ctx, { societyId, atISO: at });
+assert.equal((await db.get(guidedSeries))!.issuedCount ?? 0, 0);
+assert.equal((await db.get(guidedSchedule))!.active, false);
+const reviewRun = await db.query("billingAutomationRuns").withIndex("by_schedule_occurrence", q => q.eq("scheduleId", guidedSchedule).eq("occurrenceKey", `${date}:tax-review`)).unique();
+assert.match(reviewRun!.lastError, /review its tax guidance/);
+assert.deepEqual(reviewRun!.deliveries, []);
+const manualSeries = await invoices.upsertSeriesPortable(ctx, { ...seriesArgs, name: "Manual registration check", lines: [{ key: "manual", item: "Synthetic service", quantity: 1, unitPriceCents: 10000 }] });
+const manualSchedule = await automation.saveSchedulePortable(ctx, { ...scheduleArgs, sourceId: manualSeries });
+await automation.prepareDuePortable(ctx, { societyId, atISO: at });
+const run = await db.query("billingAutomationRuns").withIndex("by_schedule_occurrence", q => q.eq("scheduleId", manualSchedule).eq("occurrenceKey", date)).unique();
+const reserved = (await db.get(run!.invoiceId))!.issuerTaxRegistrationsSnapshot;
+assert.deepEqual(run!.snapshot.invoice.issuerTaxRegistrationsSnapshot, reserved);
+await upsertIdentifierPortable(ctx, { societyId, id: gstId, ...gst, number: "111222333RT0001" });
+// Simulate provider acceptance; this test never invokes a delivery provider.
+await db.patch(run!._id, { status: "accepted" });
+await automation.finalizeRunPortable(ctx, { societyId, id: run!._id });
+assert.deepEqual((await db.get(run!.invoiceId))!.issuerTaxRegistrationsSnapshot, reserved);
+console.log("PASS invoice tax registrations: formats, active/effective selection, ambiguity, issue/payment gates, historical snapshots, and recurring preparation/finalization.");

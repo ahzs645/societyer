@@ -4,6 +4,8 @@ import { transactionLineValidator } from "./financeTags";
 import { transactionRuleApplicationValidator } from "./accounting";
 import { documentDesignValidator } from "./documentDesign";
 import { invoiceMoneyValidator, invoiceDocumentExtrasValidator, invoiceTaxModeValidator } from "./invoiceMoney";
+import { taxAssessmentValidator } from "../validators/taxAssessment";
+import { invoiceIssuerTaxSnapshotValidator } from "../validators/invoiceTaxRegistrations";
 
 /**
  * Receivables: invoices for dues, program fees, space rentals and
@@ -13,6 +15,7 @@ import { invoiceMoneyValidator, invoiceDocumentExtrasValidator, invoiceTaxModeVa
  */
 
 export const invoiceLineValidator = v.object({
+  taxAssessment: v.optional(taxAssessmentValidator),
   key: v.string(),
   catalogItemId: v.optional(v.id("invoiceCatalogItems")),
   item: v.string(),
@@ -119,6 +122,7 @@ export const repairStatusValidator = v.union(v.literal("received"), v.literal("d
 
 export const invoiceTables = {
   invoices: defineTable({
+    issuerTaxRegistrationsSnapshot: v.optional(invoiceIssuerTaxSnapshotValidator),
     societyId: v.id("societies"),
     sequence: v.number(),
     number: v.string(),
@@ -180,6 +184,7 @@ export const invoiceTables = {
     .index("by_member", ["memberId"]),
 
   invoiceCatalogItems: defineTable({
+    taxAssessment: v.optional(taxAssessmentValidator),
     societyId: v.id("societies"),
     name: v.string(),
     description: v.optional(v.string()),

@@ -4,6 +4,7 @@ import { ListChecks } from "lucide-react";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Banner, Skeleton } from "../components/ui";
 import { SetupRing } from "../components/SetupPill";
+import { OrganizationCapabilities } from "../components/OrganizationCapabilities";
 import { useSociety } from "../hooks/useSociety";
 import { useIsMobile } from "../lib/useIsMobile";
 import { usePermissions } from "../hooks/usePermissions";
@@ -119,6 +120,7 @@ export function OrganizationSetupPage() {
               </div>
             )}
             <div className="setup-layout__phases">
+              <OrganizationCapabilities organization={society} />
               {progress.phases.map((phase, index) => (
                 <SetupPhaseSection
                   key={phase.key}
