@@ -1,7 +1,7 @@
 /** Shared scanner for the browser sweep and its non-browser regression gate. */
 export type WorkspaceKey = "bc-corp" | "cbca-corp" | "obca-corp" | "custom" | "bc-society" | "bc-demo" | "cbca-demo" | "obca-demo";
 export type CopyWorkspace = { key: WorkspaceKey; name: string; society: boolean; bc: boolean };
-export type CopyContext = "privacy-summary";
+export type CopyContext = "privacy-summary" | "entity-kind-applicability";
 
 type PatternKey =
   | "societies-act"
@@ -62,7 +62,7 @@ const normalise = (text: string) => text.replace(/[ \t ]+/g, " ").replace(/\n{2
 export function scan(workspace: CopyWorkspace, route: string, channel: Channel, rawText: string, inNav: boolean, context?: CopyContext): Finding[] {
   // A law label and its status badge form one summary even when innerText puts
   // them on separate lines. Other page text keeps its original line boundaries.
-  const source = context === "privacy-summary" ? rawText.replace(/\s+/g, " ").trim() : rawText;
+  const source = context ? rawText.replace(/\s+/g, " ").trim() : rawText;
   const text = normalise(source.split(workspace.name).join("‹workspace›"));
   const findings: Finding[] = [];
   for (const pattern of PATTERNS) {
@@ -143,4 +143,26 @@ export function partitionPrivacySummaryText(main: string, rawSummaries: readonly
     remaining = remaining.slice(0, span.start) + "\n" + remaining.slice(span.end);
   }
   return { main: remaining, privacySummaries: spans.map((span) => span.text) };
+}
+
+/**
+ * The unavailable-page gate names other legal forms to explain its boundary.
+ * Only its captured, exact applicability subtitle gets that context. Bare or
+ * changed labels, duplicate occurrences and adjacent operative text stay in
+ * the ordinary page scan. The browser also verifies the enclosing gate heading.
+ */
+export function partitionEntityGateText(main: string, rawExplanations: readonly string[]) {
+  const unchanged = { main, entityGateExplanations: [] as string[] };
+  if (rawExplanations.length !== 1) return unchanged;
+  const text = rawExplanations[0].trim();
+  const normalized = text.replace(/\s+/g, " ");
+  if (!/^.+: Business corporation\. This page applies to Society \(nonprofit\), Nonprofit corporation, Cooperative, Unincorporated association\.$/.test(normalized)) return unchanged;
+  const start = main.indexOf(text);
+  if (start < 0 || main.indexOf(text, start + text.length) !== -1) return unchanged;
+  const end = start + text.length;
+  const lineStart = main.lastIndexOf("\n", start - 1) + 1;
+  const nextLine = main.indexOf("\n", end);
+  const lineEnd = nextLine === -1 ? main.length : nextLine;
+  if (main.slice(lineStart, start).trim() || main.slice(end, lineEnd).trim()) return unchanged;
+  return { main: main.slice(0, start) + "\n" + main.slice(end), entityGateExplanations: [text] };
 }

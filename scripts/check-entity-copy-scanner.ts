@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   isAllowed,
+  partitionEntityGateText,
   partitionPrivacySummaryText,
   scan,
   type AllowList,
@@ -77,4 +78,46 @@ assert.equal(mixed.leaks.length, 1);
 assert.equal(mixed.leaks[0].pattern, "societies-act");
 assert.deepEqual(scan({ ...workspace("bc-corp"), bc: true }, "/app/privacy", "main", "BC PIPA", true), []);
 
-console.log("Entity copy scanner: conditional summary layouts pass; standalone, sidebar, changed-status, ambiguous and out-of-scope labels remain findings.");
+const gateExplanation = "Example organization: Business corporation. This page applies to Society (nonprofit), Nonprofit corporation, Cooperative, Unincorporated association.";
+function classifyGate(main: string, captured: string[] = [], route = "/app/members", key: WorkspaceKey = "cbca-corp") {
+  const text = partitionEntityGateText(main, captured);
+  const findings = [
+    ...scan(workspace(key), route, "main", text.main, false),
+    ...text.entityGateExplanations.flatMap((explanation) => scan(workspace(key), route, "main", explanation, false, "entity-kind-applicability")),
+  ];
+  return { ...text, findings, leaks: findings.filter((finding) => !isAllowed(finding, allow)) };
+}
+// Replay the exact gate boundary that produced all fourteen CI findings, while
+// preserving detection of genuine society wording around or outside that gate.
+for (const key of ["bc-corp", "cbca-corp", "obca-corp", "custom", "bc-demo", "cbca-demo", "obca-demo"] as const) {
+  for (const route of ["/app/members", "/app/membership"]) {
+    const result = classifyGate(gateExplanation, [gateExplanation], route, key);
+    assert.equal(result.findings.length, 1, "the boundary label is still scanned");
+    assert.equal(result.leaks.length, 0, `${key} ${route}: exact gate explanation is contextual`);
+    assert.equal(classifyGate(gateExplanation, [], route, key).leaks.length, 1, "identical ordinary page text has no gate exemption");
+    const mixed = classifyGate(`${gateExplanation}\nSociety records are required here.`, [gateExplanation], route, key);
+    assert.equal(mixed.leaks.length, 1, "a gate cannot excuse unrelated society copy");
+    assert.equal(mixed.leaks[0].snippet, "Society records are required here.");
+  }
+}
+for (const changed of [
+  gateExplanation.replace("Business corporation", "Society (nonprofit)"),
+  gateExplanation.replace("This page applies to", "This organization is a"),
+  `${gateExplanation} These society requirements apply here.`,
+]) {
+  const result = classifyGate(changed, [changed]);
+  assert.equal(result.entityGateExplanations.length, 0, "changed legal meaning must not receive boundary context");
+  assert.ok(result.leaks.length > 0);
+}
+for (const main of [`Required: ${gateExplanation}`, `${gateExplanation} applies here`, `${gateExplanation}\n${gateExplanation}`]) {
+  const result = classifyGate(main, [gateExplanation]);
+  assert.equal(result.entityGateExplanations.length, 0, "partial and ambiguous positions fail closed");
+  assert.ok(result.leaks.length > 0);
+}
+assert.equal(classifyGate(gateExplanation, [gateExplanation, gateExplanation]).leaks.length, 1, "multiple captured gates fail closed");
+assert.equal(classifyGate("Society records", [gateExplanation]).leaks.length, 1, "a missing captured subtitle cannot hide other wording");
+assert.equal(classifyGate(gateExplanation, [gateExplanation], "/app/society").leaks.length, 1, "boundary exception is limited to member routes");
+const sidebarGate = scan(workspace("cbca-corp"), "/app/members", "sidebar", gateExplanation, true, "entity-kind-applicability");
+assert.ok(sidebarGate.every((finding) => !isAllowed(finding, allow)), "boundary wording cannot excuse sidebar labels");
+
+console.log("Entity copy scanner: conditional summaries and exact unavailable-page explanations pass; ordinary page/sidebar copy, changed meaning, ambiguity and out-of-scope labels remain findings.");

@@ -56,11 +56,16 @@ export function OrganizationRegistrationProfile({ organization }: {
   const documents = useQuery(api.documents.listSummaries, draft && canReadDocuments ? { societyId: organization._id } : "skip");
   const selectedEvidenceIds = draft ? evidenceIdsFor(draft) : [];
   const selectionKey = JSON.stringify(selectedEvidenceIds);
-  const evidence = useQuery(api.receipts.evidenceForReview, selectedEvidenceIds.length && canRead && canReadDocuments
+  const accessibleDocumentIds = new Set((documents ?? []).filter((document: any) => !document.inCameraWithheld).map((document: any) => document._id));
+  const selectedSourcesAccessible = canRead && canReadDocuments && documents !== undefined && selectedEvidenceIds.every((id) => accessibleDocumentIds.has(id));
+  const missingSelectedSource = documents !== undefined && selectedEvidenceIds.some((id) => !accessibleDocumentIds.has(id));
+  // A revision may retain sources the current operator cannot open. Preserve
+  // those links, but do not send them to the access-enforcing review query.
+  const evidence = useQuery(api.receipts.evidenceForReview, selectedEvidenceIds.length && selectedSourcesAccessible
     ? { societyId: organization._id, documentIds: selectedEvidenceIds }
     : "skip") as Array<EvidenceFingerprint & { reviewIssue?: string }> | undefined;
   const reviewedSources = selectedEvidenceIds.map((id) => evidence?.find((source) => source.documentId === id));
-  const evidenceReady = selectedEvidenceIds.length > 0 && reviewedSources.every((source) => source && !source.reviewIssue && /^[a-f0-9]{64}$/i.test(source.fingerprint));
+  const evidenceReady = selectedSourcesAccessible && selectedEvidenceIds.length > 0 && reviewedSources.every((source) => source && !source.reviewIssue && /^[a-f0-9]{64}$/i.test(source.fingerprint));
   const evidenceFingerprints = evidenceReady ? reviewedSources.map((source) => ({ documentId: source!.documentId, fingerprint: source!.fingerprint })) : undefined;
   const evidenceKey = JSON.stringify(evidenceFingerprints ?? null);
 
@@ -100,7 +105,7 @@ export function OrganizationRegistrationProfile({ organization }: {
   };
 
   const save = async () => {
-    if (!draft || !canWrite || saving) return;
+    if (!draft || !canWrite || saving || (selectedEvidenceIds.length > 0 && !selectedSourcesAccessible)) return;
     setSaving(true);
     setError(null);
     try {
@@ -177,7 +182,7 @@ export function OrganizationRegistrationProfile({ organization }: {
     </section>
     <Drawer open={draft !== null} onClose={() => { if (!saving) setDraft(null); }} title="Record charity registration update" footer={<>
       <button type="button" className="btn" onClick={() => setDraft(null)} disabled={saving}>Cancel</button>
-      <button type="button" className="btn btn--accent" onClick={() => void save()} disabled={!canWrite || saving}>{saving ? "Recording…" : "Record update"}</button>
+      <button type="button" className="btn btn--accent" onClick={() => void save()} disabled={!canWrite || saving || (selectedEvidenceIds.length > 0 && !selectedSourcesAccessible)}>{saving ? "Recording…" : "Record update"}</button>
     </>}>
       {draft && <div className="organization-registration-profile__form">
         <p>This records a new revision. Use the dates and name in the authority's documents; previous revisions are retained.</p>
@@ -205,7 +210,9 @@ export function OrganizationRegistrationProfile({ organization }: {
           <Field label="Supporting registration document" hint="Choose evidence already saved in this organization. A reviewed registration needs a supporting document.">
             <Select value={draft.evidenceDocumentId} onChange={(value) => setDraft({ ...draft, evidenceDocumentId: value, additionalEvidenceDocumentIds: draft.additionalEvidenceDocumentIds.filter((id) => id !== value), evidenceReviewed: false })} disabled={!canReadDocuments || documents === undefined} options={[
               { value: "", label: "Select a supporting document" },
-              ...(documents ?? []).map((document: any) => ({ value: document._id, label: document.title || "Untitled document" })),
+              ...(draft.evidenceDocumentId && documents !== undefined && !documents.some((document: any) => document._id === draft.evidenceDocumentId)
+                ? [{ value: draft.evidenceDocumentId, label: "Retained evidence (access required)", disabled: true }] : []),
+              ...(documents ?? []).map((document: any) => ({ value: document._id, label: document.title || "Untitled document", disabled: Boolean(document.inCameraWithheld) })),
             ]} />
           </Field>
           {draft.additionalEvidenceDocumentIds.length > 0 && <div className="organization-registration-profile__retained-evidence">
@@ -217,7 +224,9 @@ export function OrganizationRegistrationProfile({ organization }: {
           </div>}
           <p><Link to="/app/documents" target="_blank" rel="noopener noreferrer">Open Documents to add evidence</Link></p>
           {!canReadDocuments && <p className="muted">Document read permission is required to review registration evidence.</p>}
-          {selectedEvidenceIds.length > 0 && canReadDocuments && evidence === undefined && <p className="muted" role="status">Checking the selected evidence…</p>}
+          {selectedEvidenceIds.length > 0 && canReadDocuments && documents === undefined && <p className="muted" role="status">Checking access to the selected evidence…</p>}
+          {missingSelectedSource && <p className="organization-registration-profile__notice" role="status">One or more retained evidence documents are unavailable with your current access. Their links are preserved. Restore access or review the selected sources before confirming or recording this update.</p>}
+          {selectedEvidenceIds.length > 0 && selectedSourcesAccessible && evidence === undefined && <p className="muted" role="status">Checking the selected evidence…</p>}
           {reviewedSources.filter((source) => source?.reviewIssue).map((source) => <p key={source!.documentId} className="organization-registration-profile__notice" role="status">{source!.reviewIssue}</p>)}
           <label className="organization-registration-profile__review">
             <input type="checkbox" checked={draft.evidenceReviewed} disabled={!canReadDocuments || !evidenceReady} onChange={(event) => {

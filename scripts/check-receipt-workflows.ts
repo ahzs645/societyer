@@ -67,9 +67,9 @@ for (const backend of ["memory", "local"] as const) {
   await assert.rejects(issue({ ...official, charityNumber: "999999999RR9999" }), /registration/i);
   await assert.rejects(saveRegistration({ ...reviewed, charityNumber: "<script>123456789RR0001</script>" }), /full CRA/);
   await assert.rejects(saveRegistration({ ...registration, evidenceDocumentIds: ["foreign-proof"], expectedEvidenceFingerprints: [{ documentId: "foreign-proof", fingerprint: "a".repeat(64) }] }), /not found|belong|workspace/i);
-  const privateProof = await runtime(db, "receipt-director").runQuery<any[]>("receipts:evidenceForReview", { societyId, documentIds: ["private-proof"] });
-  assert.equal(privateProof[0].fingerprint, "");
-  assert.match(privateProof[0].reviewIssue, /not found/);
+  await assert.rejects(proof(["foreign-proof"]), /not found|belong|workspace/i, "foreign evidence rejects the query instead of returning a review issue");
+  await assert.rejects(proof(["authority-proof", "foreign-proof"]), /not found|belong|workspace/i, "one foreign source rejects the entire review request");
+  await assert.rejects(runtime(db, "receipt-director").runQuery("receipts:evidenceForReview", { societyId, documentIds: ["private-proof"] }), /not found/, "private evidence rejects before a review result is constructed");
   assert.match((await proof(["metadata-only"]))[0].reviewIssue, /retained file|source text/);
   assert.match((await proof(["external"], true))[0].reviewIssue, /retained uploaded file/);
 

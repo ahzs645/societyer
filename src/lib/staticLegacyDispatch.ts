@@ -1,6 +1,7 @@
 import { assertValid, validateAccessCustodyInput } from "../../shared/recordValidation";
 import portableManifest from "../../shared/functions/portable-manifest.json";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { mintEntityId } from "../../shared/portable/ids";
 import { validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
 import { validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
@@ -1213,10 +1214,13 @@ function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexie
   }
   if (name === "documentVersions:recordUploadedVersion") {
     const now = new Date().toISOString();
-    const id = `static_documentVersion_${Date.now()}`;
+    // Timestamp-only IDs can overwrite a different document's retained version
+    // when uploads finish in the same millisecond (or a clock is fixed).
+    const id = mintEntityId("static_documentVersion");
     let version = 1;
     store?.transaction(() => {
-      const existing = store.listRows("documentVersions", { documentId: args?.documentId });
+      const existing = store.listRows("documentVersions", { societyId: args?.societyId ?? SOCIETY_ID })
+        .filter((row) => row.documentId === args?.documentId);
       version = Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1;
       for (const row of existing) {
         if (row.isCurrent) store.upsertRow("documentVersions", { ...row, isCurrent: false });

@@ -108,6 +108,13 @@ export async function captureReceiptEvidence(ctx: PortableQueryCtx, societyId: s
 export async function receiptEvidenceForReviewPortable(ctx: PortableQueryCtx, { societyId, documentIds, requireFile = false }: { societyId: string; documentIds: string[]; requireFile?: boolean }): Promise<ReceiptEvidenceReview[]> {
   await requirePermissionPortable(ctx, societyId, "society:read");
   if (documentIds.length > 20 || new Set(documentIds).size !== documentIds.length) throw new Error("Choose no more than 20 distinct evidence documents.");
+  if (documentIds.length) await requirePermissionPortable(ctx, societyId, "documents:read");
+  // Authorization failures reject the request. Per-file review issues apply
+  // only to sources this actor can already access in this workspace.
+  await Promise.all(documentIds.map(async id => {
+    await getOwned(ctx, "documents", id, societyId);
+    await requireDocumentAccess(ctx, id);
+  }));
   return Promise.all(documentIds.map(async id => {
     try { return await captureReceiptEvidence(ctx, societyId, id, requireFile); }
     catch (error) { return { documentId: id, fingerprint: "", reviewIssue: error instanceof Error ? error.message : "Evidence could not be assessed." }; }
