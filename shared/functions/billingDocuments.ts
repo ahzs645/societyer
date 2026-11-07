@@ -10,6 +10,7 @@ import { cleanInvoiceMoney } from "../invoiceMoney";
 import { loadInvoiceLedgerContext } from "./invoiceLedger";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import { assertInvoiceTaxAssessments, cleanTaxAssessment, reassessTaxLines, taxTransactionContextChanged } from "../tax";
+import { assertInvoiceOrganizationFactsCurrent, loadOrganizationTaxContext } from "./organizationTaxFacts";
 
 type Ctx = PortableQueryCtx;
 type Row = { _id: string; societyId: string; [key: string]: any };
@@ -133,7 +134,12 @@ export async function setQuoteStatusPortable(ctx: PortableMutationCtx, args: { i
   if (value.convertedInvoiceId) throw new Error("This quote is already converted to an invoice.");
   if (value.status === args.status) return value._id;
   if (!(QUOTE_STATUSES as readonly string[]).includes(args.status)) throw new Error("Choose a quote status.");
-  if (args.status === "sent") assertInvoiceTaxAssessments(value.fields.lines, value.fields.issueDate);
+  if (args.status === "sent") {
+    assertInvoiceTaxAssessments(value.fields.lines, value.fields.issueDate);
+    if (value.fields.lines.some((line: { taxAssessment?: unknown }) => line.taxAssessment)) {
+      await assertInvoiceOrganizationFactsCurrent(ctx, value.societyId, value.fields.lines, await loadOrganizationTaxContext(ctx, value.societyId));
+    }
+  }
   const transitions: Record<string, string[]> = { draft: ["sent"], sent: ["accepted", "declined", "expired"], accepted: [], declined: [], expired: [] };
   if (!transitions[value.status]?.includes(args.status)) throw new Error("That quote transition is not available; create a new revision to change a published offer.");
   const today = await calendarToday(ctx, value.societyId);

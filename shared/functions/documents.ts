@@ -30,6 +30,7 @@ import { organizationRuleScope } from "../entityRuleScope";
 import { documentPreparationReviewView, isAnnualPacketRecord } from "../preparationDocumentState";
 import { withheldInCameraDocument } from "../minutesPrivacy";
 import { inCameraDocumentTest, publicInCameraDocumentTest } from "./minutesPrivacy";
+import { assertReceiptEvidenceContentUnchanged, assertReceiptEvidenceDocumentMayBeDeleted } from "./receiptRetention";
 
 // Documents are listed whatever their category (finding D-04): categories are
 // an open, normalized model (shared/documentCategories.ts). Only Societyer's
@@ -814,9 +815,11 @@ export async function rebuildPipaPolicyDraftFromSocietyPortable(
   if (!society) throw new Error("Society not found.");
 
   const title = privacyPolicyDraftTitle(society);
+  const content = buildPrivacyPolicyDraft(society);
+  await assertReceiptEvidenceContentUnchanged(ctx, document, { content });
   await ctx.db.patch(id, {
     title,
-    content: buildPrivacyPolicyDraft(society),
+    content,
     tags: withTags(document.tags, [...privacyPolicyDraftTags(society), "society-filled"]),
   });
   await ctx.db.insert("activity", {
@@ -883,6 +886,7 @@ export async function updateDraftContentPortable(
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const document = await getOwned(ctx, "documents", args.id, String(candidate.societyId));
   const tags = args.tags ? Array.from(new Set(args.tags)) : document.tags;
+  await assertReceiptEvidenceContentUnchanged(ctx, document, { content: args.content });
   await ctx.db.patch(args.id, {
     title: args.title.trim() || document.title,
     content: args.content,
@@ -1164,6 +1168,14 @@ export async function mergeConnectorDocumentMetadataPortable(
   );
   const existingTags = document.tags ?? [];
   const existingSourceIds = document.sourceExternalIds ?? [];
+  const versions = await ctx.db
+    .query("documentVersions")
+    .withIndex("by_document", (q) => q.eq("documentId", args.documentId))
+    .collect();
+  const currentVersion = versions.find((version) => version.isCurrent) ?? versions[0];
+  if (currentVersion) await getOwned(ctx, "documentVersions", currentVersion._id, String(document.societyId));
+  // Check the retained version before writing either the parent or its version.
+  await assertReceiptEvidenceContentUnchanged(ctx, document, { ...args, url: args.sourceUrl }, currentVersion);
   await ctx.db.patch(args.documentId, {
     title: args.title ?? document.title,
     category: args.category ?? document.category,
@@ -1178,18 +1190,7 @@ export async function mergeConnectorDocumentMetadataPortable(
     tags: args.tags?.length ? Array.from(new Set([...existingTags, ...args.tags])) : existingTags,
   });
 
-  const versions = await ctx.db
-    .query("documentVersions")
-    .withIndex("by_document", (q) => q.eq("documentId", args.documentId))
-    .collect();
-  const currentVersion = versions.find((version) => version.isCurrent) ?? versions[0];
   if (currentVersion) {
-    await getOwned(
-      ctx,
-      "documentVersions",
-      currentVersion._id,
-      String(document.societyId),
-    );
     await ctx.db.patch(currentVersion._id, {
       fileName: args.fileName ?? currentVersion.fileName,
       mimeType: args.mimeType ?? currentVersion.mimeType,
@@ -1236,7 +1237,8 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   const candidate = await ctx.db.get(id, "documents");
   if (!candidate) return;
   await requireSocietyMembership(ctx, String(candidate.societyId));
-  await getOwned(ctx, "documents", id, String(candidate.societyId));
+  const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
+  await assertReceiptEvidenceDocumentMayBeDeleted(ctx, document);
   await ctx.db.delete(id);
 }
 
@@ -1261,9 +1263,11 @@ async function findExistingPrivacyDraft(ctx: PortableMutationCtx, societyId: str
 async function refreshGenericPipaPolicyDraft(ctx: PortableMutationCtx, document: any, society: any) {
   if (!isGenericPipaPolicyTemplate(document)) return null;
   const title = privacyPolicyDraftTitle(society);
+  const content = buildPrivacyPolicyDraft(society);
+  await assertReceiptEvidenceContentUnchanged(ctx, document, { content });
   await ctx.db.patch(document._id, {
     title,
-    content: buildPrivacyPolicyDraft(society),
+    content,
     tags: withTags(document.tags, [...privacyPolicyDraftTags(society), "society-filled"]),
   });
   await ctx.db.insert("activity", {

@@ -438,18 +438,18 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />
             <Route path="point-in-time-register" element={<PointInTimeRegisterPage />} />
-            <Route path="significant-individuals" element={<SignificantIndividualsPage />} />
+            <Route path="significant-individuals" element={withEntityKind("/app/significant-individuals", <SignificantIndividualsPage />)} />
             <Route path="people-directory" element={<PeopleDirectoryPage />} />
             <Route path="people-history" element={<PersonReviewPage />} />
             <Route path="source-model-coverage" element={<Navigate to="/app/coverage?tab=system" replace />} />
             <Route path="coverage" element={<CoverageGapsPage />} />
             <Route path="people-directory/:id" element={<PersonProfilePage />} />
-            <Route path="dividends" element={<DividendsPage />} />
+            <Route path="dividends" element={withEntityKind("/app/dividends", <DividendsPage />)} />
             <Route path="service-providers" element={<ServiceProvidersPage />} />
             <Route path="compliance-settings" element={<ComplianceSettingsPage />} />
             <Route path="corporate-history" element={<CorporateHistoryPage />} />
             <Route path="annual-filings" element={<AnnualFilingsPage />} />
-            <Route path="certificate-register" element={<CertificateRegisterPage />} />
+            <Route path="certificate-register" element={withEntityKind("/app/certificate-register", <CertificateRegisterPage />)} />
             <Route path="portfolio" element={<PortfolioPage />} />
             <Route path="rights-ledger" element={<RightsLedgerPage />} />
             <Route path="template-engine" element={<TemplateEnginePage />} />
@@ -484,7 +484,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="documents/:id" element={<DocumentWorkbenchPage />} />
             <Route path="document-catalog" element={<DocumentCatalogPage />} />
             <Route path="organization-setup" element={<OrganizationSetupPage />} />
-            <Route path="post-incorporation" element={<PostIncorporationChecklistPage />} />
+            <Route path="post-incorporation" element={withEntityKind("/app/post-incorporation", <PostIncorporationChecklistPage />)} />
             <Route path="library" element={<LibraryPage />} />
             <Route path="minute-book" element={<MinuteBookPage />} />
             <Route path="conflicts" element={<ConflictsPage />} />

@@ -164,7 +164,7 @@ test("malformed backup never reaches destructive confirmation or changes local r
   expect(after.tables).toEqual(before.tables); await fits(page);
 });
 
-test("federal CBCA: jurisdiction first, then the Act, with full guidance shown in review", async ({ page }, info) => {
+test("federal CBCA: jurisdiction first, then the Act, with core governance coverage shown in review", async ({ page }, info) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await start(page);
   await page.getByRole("button", { name: "No, prepare a new incorporation", exact: true }).click();
@@ -181,7 +181,7 @@ test("federal CBCA: jurisdiction first, then the Act, with full guidance shown i
   await expect(page.getByRole("radio")).toHaveCount(4); // CBCA, CNCA, Canada Cooperatives Act, Another Act
   const cbca = page.getByRole("radio", { name: /^Canada Business Corporations Act \(CBCA\)/ });
   const cnca = page.getByRole("radio", { name: /^Canada Not-for-profit Corporations Act/ });
-  await expect(page.locator("label", { has: cbca })).toContainText("Full guidance");
+  await expect(page.locator("label", { has: cbca })).toContainText("Core governance profile");
   await expect(page.locator("label", { has: cnca })).toContainText("Records only");
   // Keyboard: arrow keys move through the Act choices.
   await cbca.focus(); await page.keyboard.press("Space");
@@ -197,7 +197,7 @@ test("federal CBCA: jurisdiction first, then the Act, with full guidance shown i
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const actRow = page.locator(".society-create__summary > div", { hasText: "Governing Act" });
   await expect(actRow).toContainText("Federal · CBCA");
-  await expect(actRow).toContainText("Business corporation · Full guidance");
+  await expect(actRow).toContainText("Business corporation · Core governance profile");
   // Edit goes back to the Act question with the answer kept; Change goes to the jurisdiction.
   await actRow.getByRole("button", { name: "Edit governing Act", exact: true }).click();
   await expect(cbca).toBeChecked();

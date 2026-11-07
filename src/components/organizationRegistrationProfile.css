@@ -1,0 +1,25 @@
+.organization-registration-profile { display: grid; gap: var(--s-4); margin-block: var(--s-4); min-width: 0; }
+.organization-registration-profile__head { align-items: flex-start; flex-wrap: wrap; gap: var(--s-3); }
+.organization-registration-profile__head .card__title { display: flex; align-items: center; gap: var(--s-2); }
+.organization-registration-profile__head > div { flex: 1 1 20rem; min-width: 0; }
+.organization-registration-profile__head .btn { flex-shrink: 0; }
+.organization-registration-profile__status { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
+.organization-registration-profile__status > span:last-child { flex: 1 1 18rem; }
+.organization-registration-profile__reasons { padding-left: 1.25rem; }
+.organization-registration-profile__notice { border-left: 3px solid var(--accent); padding-left: var(--s-3); }
+.organization-registration-profile__history { margin-top: var(--s-4); }
+.organization-registration-profile__history summary { cursor: pointer; font-weight: 600; }
+.organization-registration-profile__history ol { display: grid; gap: var(--s-3); padding-left: 1.25rem; }
+.organization-registration-profile__history li { padding-block: var(--s-2); overflow-wrap: anywhere; }
+.organization-registration-profile__history p { margin: var(--s-1) 0; }
+.organization-registration-profile__form fieldset { padding: 0; margin: 0; min-width: 0; border: 0; }
+.organization-registration-profile__dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+.organization-registration-profile__review { display: flex; align-items: flex-start; gap: var(--s-2); margin-block: var(--s-4); line-height: 1.5; }
+.organization-registration-profile__review input { margin-top: .3rem; flex-shrink: 0; }
+.organization-registration-profile__retained-evidence ul { padding-left: 1.25rem; }
+.organization-registration-profile__retained-evidence li { overflow-wrap: anywhere; }
+.organization-registration-profile__error { color: var(--danger); padding: var(--s-3); border: 1px solid currentColor; border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .organization-registration-profile__dates { grid-template-columns: minmax(0, 1fr); }
+  .organization-registration-profile__head .btn { width: 100%; white-space: normal; min-height: 44px; }
+}

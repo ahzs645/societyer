@@ -84,7 +84,7 @@ export async function createWorkspacePortable(
   if (args.fiscalYearEnd && !/^\d{2}-\d{2}$/.test(args.fiscalYearEnd)) {
     throw new Error("Fiscal year end must use MM-DD format.");
   }
-  validateEntitySetup(args);
+  validateEntitySetup({ ...args, isCharity: args.isCharity ?? false });
   validateFormationEvidence(args);
   validateWorkspaceLegalIdentity({ ...args, jurisdictionCode: args.jurisdictionCode ?? args.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE });
   assertAllowedOption("entityTypes", args.entityType, "Entity type");

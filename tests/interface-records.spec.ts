@@ -9,6 +9,21 @@ async function openNavigation(page: Page) {
   }
 }
 
+type DemoOrganization = "society" | "company";
+const companyOnlyDialogRoutes = new Set(["certificate-register", "significant-individuals"]);
+
+// Exercise the same demo persona switch as the entity-copy sweep. The desktop
+// selector and compact phone menu both change the actual /demo workspace.
+async function selectDemoOrganization(page: Page, organization: DemoOrganization) {
+  await expect(page.locator(".demo-banner")).toBeVisible();
+  const desktopTrigger = page.getByRole("button", { name: /Try another organization type/ });
+  if (await desktopTrigger.isVisible()) await desktopTrigger.click();
+  else await page.getByRole("button", { name: /^Demo controls\. Viewing as/ }).click();
+  await page.getByRole("menuitem", { name: organization === "company" ? /^Federal CBCA corporation/ : /^BC society/ }).click();
+  await expect(page.locator(".demo-banner")).toContainText(organization === "company" ? "Maple Demo Federal Inc." : "Riverside Community Society");
+  await page.waitForURL(/\/demo\/app\/?$/);
+}
+
 // [route, header action, first field, menu item when the action opens the "+" menu]
 const dialogCases: ReadonlyArray<readonly [string, string, string, string?]> = [
   ["certificate-register", "Issue certificate", "Certificate number"],
@@ -49,8 +64,16 @@ for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
+    await page.goto("/demo/app");
     let currentRoute = "";
+    let currentOrganization: DemoOrganization = "society";
     for (const [route, action, field, menuItem] of dialogCases) {
+      const requiredOrganization = companyOnlyDialogRoutes.has(route) ? "company" : "society";
+      if (currentOrganization !== requiredOrganization) {
+        await selectDemoOrganization(page, requiredOrganization);
+        currentOrganization = requiredOrganization;
+        currentRoute = "";
+      }
       if (route !== currentRoute) await page.goto(`/demo/app/${route}`);
       currentRoute = route;
       await page.getByRole("button", { name: action, exact: true }).first().click();
@@ -85,6 +108,8 @@ for (const width of [320, 390, 768, 1440]) {
 test("rejected certificate and formation evidence stays visible without unhandled errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/demo/app");
+  await selectDemoOrganization(page, "company");
   await page.goto("/demo/app/certificate-register");
   await page.getByRole("button", { name: "Issue certificate", exact: true }).click();
   const dialog = page.getByRole("dialog");
@@ -92,6 +117,7 @@ test("rejected certificate and formation evidence stays visible without unhandle
   await expect(page.getByText("Could not record certificate", { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("Certificate number", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await selectDemoOrganization(page, "society");
   await page.goto("/demo/app/society");
   await page.getByText("More organization details", { exact: false }).click();
   await page.getByLabel("Legal formation status", { exact: true }).click();
@@ -99,6 +125,27 @@ test("rejected certificate and formation evidence stays visible without unhandle
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByText("Could not save organization", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Legal formation status", { exact: true })).toContainText("certificate evidence verified");
+  expect(errors).toEqual([]);
+});
+
+test("company certificate writes remain disabled for its Viewer", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto("/demo/app");
+  await selectDemoOrganization(page, "company");
+  await page.goto("/demo/app/certificate-register");
+  await expect(page.getByRole("heading", { name: "Certificate register", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Issue certificate", exact: true })).toBeEnabled();
+  const roleTrigger = page.getByRole("button", { name: "Viewing as Owner. Switch role", exact: true });
+  const compactRoleTrigger = page.getByRole("button", { name: "Demo controls. Viewing as Owner", exact: true });
+  await expect.poll(async () => await roleTrigger.isVisible() || await compactRoleTrigger.isVisible()).toBe(true);
+  if (await roleTrigger.isVisible()) await roleTrigger.click();
+  else await compactRoleTrigger.click();
+  // Arjun Mehta is the populated Federal CBCA demo's existing Viewer.
+  await page.getByRole("menuitem", { name: /^Arjun Mehta/ }).click();
+  await expect(page.locator(".demo-banner")).toContainText("as Viewer");
+  await expect(page.getByRole("button", { name: "Issue certificate", exact: true })).toBeDisabled();
+  for (const remove of await page.getByRole("button", { name: /^Delete certificate / }).all()) await expect(remove).toBeDisabled();
   expect(errors).toEqual([]);
 });
 
@@ -186,15 +233,16 @@ test("document metadata opens its review workbench and validates page comments",
     await annualRow.click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
   }
-  // Corporate-only sidebar entries are hidden for this society fixture. Preview
-  // their public deep links without reloading the demo's in-memory actor.
+  // Keep the society's Viewer and its retained bylaws fixture. Company-only
+  // deep links now show the entity boundary; company Viewer writes are tested
+  // separately with the populated company persona.
   const navigatePreview = async (route: string) => page.evaluate((path) => {
     window.history.pushState({}, "", `/demo/app/${path}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, route);
   await navigatePreview("certificate-register");
-  await expect(page.getByRole("button", { name: "Issue certificate", exact: true })).toBeDisabled();
-  for (const remove of await page.getByRole("button", { name: /^Delete certificate / }).all()) await expect(remove).toBeDisabled();
+  await expect(page.getByTestId("entity-kind-unavailable")).toContainText("Certificate register is not used for this kind of organization");
+  await expect(page.getByRole("button", { name: "Issue certificate", exact: true })).toHaveCount(0);
   await navigatePreview("compliance-settings");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   await page.getByText("Clone this entity", { exact: true }).click();

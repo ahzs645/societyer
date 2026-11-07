@@ -23,6 +23,8 @@ import { certificateAnniversaryDate, validateEntitySetup, validateFormationEvide
 import { validateWorkspaceLegalIdentity } from "../organizationDomain";
 import { onboardingAnswerSentences, readOnboardingAnswersJson, type OrganizationOnboardingAnswers } from "../onboarding";
 import { organizationToday } from "./electionElectorate";
+import { loadOrganizationTaxContext } from "./organizationTaxFacts";
+import { charityRegistrationAtDate } from "../receipting/registration";
 import { isDateOnly, parseDateOnly } from "../dateOnly";
 import {
   decidableSetupSteps,
@@ -101,7 +103,7 @@ export async function progressPortable(ctx: PortableQueryCtx, { societyId }: { s
   const nowISO = now.toISOString();
   const year = now.getFullYear();
 
-  const [roleHolders, rightsClasses, transfers, holdings, nameSearches, formationRecords, precedentRuns, pathwayRuns, users, invitations, registrations, recordsLocations, members, directors, upcomingMeetings, meetingsThisYear, filings, openDeadlines, minuteBook] = await Promise.all([
+  const [roleHolders, rightsClasses, transfers, holdings, nameSearches, formationRecords, precedentRuns, pathwayRuns, users, invitations, registrations, recordsLocations, members, directors, upcomingMeetings, meetingsThisYear, filings, openDeadlines, minuteBook, taxContext] = await Promise.all([
     can("documents:read") ? bySociety("roleHolders").collect() : none,
     can("documents:read") ? bySociety("rightsClasses").collect() : none,
     can("documents:read") ? bySociety("rightsholdingTransfers").collect() : none,
@@ -121,6 +123,7 @@ export async function progressPortable(ctx: PortableQueryCtx, { societyId }: { s
     can("filings:read") ? bySociety("filings").take(1) : none,
     can("deadlines:read") ? ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).take(1) : none,
     can("minutes:read") ? bySociety("minuteBookItems").collect() : none,
+    loadOrganizationTaxContext(ctx, societyId),
   ]);
 
   // Role-holder registers keep their own authority: directors and officers
@@ -156,6 +159,10 @@ export async function progressPortable(ctx: PortableQueryCtx, { societyId }: { s
   const answers = savedAnswers(society);
   const facts: OrganizationSetupFacts = {
     organization: setupOrganization(society),
+    charityRegistration: {
+      status: charityRegistrationAtDate(taxContext.charityRegistrations ?? [], organizationToday(society)).status,
+      hasHistory: Boolean(taxContext.charityRegistrations?.length),
+    },
     answers,
     roles: { director: roleCounts("director"), officer: roleCounts("officer"), shareholder: roleCounts("shareholder"), controller: roleCounts("controller") },
     societyDirectors: directors.length,

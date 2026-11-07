@@ -11,6 +11,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireRolePortable, requireSocietyMembership } from "./access";
+import { recordedDonationGifts } from "../receipting/policy";
 
 function inRange(date: string | undefined, from?: string, to?: string) {
   if (!date) return true;
@@ -237,7 +238,7 @@ export async function fundingSourcesRollup(
     addRestrictedPurpose(row, grant.restrictedPurpose);
   }
 
-  for (const receipt of receipts.filter((receipt: any) => inRange(receipt.receivedOnISO ?? receipt.issuedAtISO, from, to))) {
+  for (const receipt of recordedDonationGifts(receipts).filter((receipt: any) => inRange(receipt.receivedOnISO ?? receipt.issuedAtISO, from, to))) {
     const row = getRollupGroup(groups, receipt.donorName, "Donor");
     row.receivedCents += receipt.amountCents ?? 0;
     addActivity(row, receipt.receivedOnISO ?? receipt.issuedAtISO);

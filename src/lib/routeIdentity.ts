@@ -107,6 +107,8 @@ import type { ComponentType } from "react";
 import type { ModuleKey } from "./modules";
 import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { organizationKind, type LegalEntityLike } from "../../shared/organizationDomain";
+import { normalizeOrganizationIdentity } from "../../shared/organization/normalize";
+import type { LegalForm } from "../../shared/organization/types";
 
 export type RouteGroup =
   | "workspace"
@@ -205,6 +207,8 @@ export type RouteIdentity = {
    * have no society analog). Omit for routes that apply to every entity.
    */
   entityKinds?: RouteEntityKind[];
+  /** Recorded legal forms for shared records such as nonprofit member registers. */
+  legalForms?: LegalForm[];
   /**
    * Optional permission gate for technical/admin-only surfaces (raw integration
    * config, automation internals) that a regular board member never needs to see.
@@ -221,9 +225,21 @@ export function routeAllowedForEntityKind(
 ): boolean {
   if (!identity.entityKinds || identity.entityKinds.length === 0) return true;
   if (kind === "society" || kind === "corporation") return identity.entityKinds.includes(kind);
-  // Unknown/generic kind ("organization", or no society loaded): show everything
-  // so nothing is hidden before the entity type is known.
-  return true;
+  return false;
+}
+
+/** Form-aware navigation only; handlers independently enforce authority and action eligibility. */
+export function routeAllowedForOrganization(
+  route: Pick<RouteIdentity, "entityKinds" | "legalForms">,
+  organization: LegalEntityLike | null | undefined,
+): boolean {
+  if (!route.entityKinds?.length && !route.legalForms?.length) return true;
+  if (!organization) return false;
+  const identity = normalizeOrganizationIdentity(organization);
+  if (identity.status === "conflict" || identity.legalForm === "unknown") return false;
+  if (route.legalForms?.length) return route.legalForms.includes(identity.legalForm);
+  const kind = identity.legalForm === "society" ? "society" : identity.legalForm === "business_corporation" ? "corporation" : "organization";
+  return routeAllowedForEntityKind(route, kind);
 }
 
 /** Label for the given entity kind, falling back to the default label. */
@@ -263,14 +279,14 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   // A top-level section of its own (navConfig.ts), so it takes the workspace tone, like the dashboard.
   "/app/procurement-review": { icon: FileSearch, group: "workspace", label: "Procurement review", module: "procurementReview" },
   // The page itself is the entity-neutral "Organization profile".
-  "/app/society": { icon: Building2, group: "workspace", label: "Society", labelByEntityKind: { corporation: "Corporation" } },
+  "/app/society": { icon: Building2, group: "workspace", label: "Organization", labelByEntityKind: { society: "Society", corporation: "Corporation" } },
   "/app/org-history": { icon: Newspaper, group: "workspace", label: "Org history" },
   "/app/timeline": { icon: Hourglass, group: "workspace", label: "Timeline" },
 
   // ---- People ----
-  // The Societies Act member register. A corporation's shareholders live in
-  // Role holders and the Share register instead, so hide this for corporations.
-  "/app/members": { icon: Users, group: "people", label: "Members", entityKinds: ["society"] },
+  // Legal member records also serve nonprofit corporations. Statutory guidance
+  // remains scoped by its Act; cooperatives retain their own ownership model.
+  "/app/members": { icon: Users, group: "people", label: "Members", legalForms: ["society", "nonprofit_corporation", "cooperative", "unincorporated_association"] },
   "/app/directors": { icon: UserCog, group: "people", label: "Directors" },
   "/app/org-chart": { icon: Network, group: "people", label: "Org chart" },
   "/app/role-holders": { icon: UsersRound, group: "people", label: "Role holders" },
@@ -389,9 +405,9 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/grants": { icon: BadgeDollarSign, group: "finance", label: "Grants", module: "grants" },
   "/app/agreements": { icon: FileSignature, group: "finance", label: "Agreements", module: "agreements" },
   "/app/reconciliation": { icon: Scale, group: "finance", label: "Reconciliation", module: "reconciliation" },
-  // Charitable donation receipts and member-fee billing are society concepts.
-  "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts", entityKinds: ["society"] },
-  "/app/membership": { icon: CreditCard, group: "finance", label: "Membership & billing", module: "membershipBilling", entityKinds: ["society"] },
+  // Contributions and receipt eligibility depend on registrations and each gift.
+  "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts" },
+  "/app/membership": { icon: CreditCard, group: "finance", label: "Membership & billing", module: "membershipBilling", legalForms: ["society", "nonprofit_corporation", "cooperative", "unincorporated_association"] },
 
   // ---- Workflows (kept visible to everyone — plain-language automation a treasurer can use) ----
   "/app/workflows": { icon: Workflow, group: "workflows", label: "Workflows", module: "workflows" },

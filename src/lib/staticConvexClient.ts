@@ -299,7 +299,7 @@ export class StaticConvexClient {
     warnLegacyFallback(name, kind, "mutation");
     const result = this.portable.authorizeFunction(name, "mutation", args ?? {}).then(async () => {
       const { mutationResult } = await import("./staticLegacyDispatch");
-      const value = await mutationResult(name, args, this.store);
+      const value = await mutationResult(name, args, this.store, "mutation");
       // Legacy handlers write through the row API, which persists in the
       // background; resolve only once those writes are durable (a saved
       // view must survive a reload made right after "Save changes").
@@ -318,7 +318,7 @@ export class StaticConvexClient {
     warnLegacyFallback(name, this.portable.kind(name), "action");
     return this.portable.authorizeFunction(name, "action", args ?? {}).then(async () => {
       const { mutationResult } = await import("./staticLegacyDispatch");
-      return mutationResult(name, args, this.store);
+      return mutationResult(name, args, this.store, "action");
     });
   }
 

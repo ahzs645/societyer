@@ -24,6 +24,7 @@ import { filingTables } from "./tables/filings";
 import { inventoryTables } from "./tables/inventory";
 import { governanceTables } from "./tables/governance";
 import { electionsMiscTables } from "./tables/electionsMisc";
+import { organizationTaxRegistrationTables } from "./tables/organizationTaxRegistrations";
 import { meetingWorkflowTables } from "./tables/meetingWorkflow";
 import { recordTableTables } from "./tables/recordTable";
 import { accountingTables } from "./tables/accounting";
@@ -621,6 +622,7 @@ export default defineSchema({
 
   // electionsMisc — extracted to convex/tables/electionsMisc.ts
   ...electionsMiscTables,
+  ...organizationTaxRegistrationTables,
 
   ...meetingWorkflowTables,
 

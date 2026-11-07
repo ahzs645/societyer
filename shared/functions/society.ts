@@ -20,6 +20,7 @@ import { isValidFiscalYearEnd } from "../entitySetup";
 import { requirePermissionPortable } from "./permissions";
 import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
 import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership, WorkspaceMfaRequiredError } from "./access";
+import { storageHasRetainedDocumentReference } from "./receiptRetention";
 
 export type WorkspaceCreationAccess = { allowed: boolean; reason: string };
 
@@ -223,9 +224,14 @@ async function setStorageField(ctx: PortableMutationCtx, societyId: string, fiel
   const previous = society[field];
   if (previous && previous !== storageId) {
     try {
-      await ctx.capabilities.storage.delete({ storageKey: String(previous) });
+      const sharedBranding = ["logoStorageId", "logoDarkStorageId", "letterheadStorageId"]
+        .some(otherField => otherField !== field && society[otherField] === previous);
+      if (!sharedBranding && !await storageHasRetainedDocumentReference(ctx, societyId, String(previous))) {
+        await ctx.capabilities.storage.delete({ storageKey: String(previous) });
+      }
     } catch {
-      // Old blob may have already been removed; not fatal.
+      // Preserve the old blob if its retained references cannot be assessed.
+      // A failed cleanup must not block updating the branding pointer.
     }
   }
   await ctx.db.patch(societyId, { [field]: storageId, updatedAt: Date.now() });

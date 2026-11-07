@@ -40,7 +40,7 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   secretVaultItems: "secrets", retentionRows: "retention",
   reconciliationTransactions: "reconciliation", counterpartyTransactions: "financialHub",
   accountTransactions: "financialHub", profileFacts: "organizationDetails",
-  donationReceipts: "receipts", minuteBookItems: "minuteBook",
+  donationReceipts: "receipts", donationReceiptSequences: "receipts", organizationTaxRegistrations: "organizationDetails", minuteBookItems: "minuteBook",
   insurancePolicies: "insurance", volunteerApplications: "volunteers",
   volunteerScreenings: "volunteers", financialTransactions: "financialHub",
   communicationTemplates: "communications", communicationSegments: "communications",
@@ -135,6 +135,9 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
 
 export function actionPermission(name: string, kind: "query" | "mutation" | "action"): Permission | null {
   if (HANDLER_POLICIES.has(name) || PUBLIC_HANDLERS.has(name)) return null;
+  if (name === "receipts:registrationHistory") return "society:read";
+  if (name === "receipts:evidenceForReview") return "society:read";
+  if (name === "receipts:recordRegistration") return "society:write";
   if (name === "seedRecordTableMetadata:ensureForSociety") return "settings:write";
   const [domain, action] = name.split(":");
   if (domain === "seed" || domain.endsWith("Backfill") || domain === "seedRecordTableMetadata") return null;

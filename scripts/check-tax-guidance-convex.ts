@@ -5,6 +5,8 @@ import { anyApi } from "convex/server";
 import schema from "../convex/schema";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import { assessTax, defaultTaxAnswers, taxAssessmentRates } from "../shared/tax";
+import { assessTaxForOrganization } from "../shared/tax/organizationFacts";
+import { receiptEvidenceFingerprint } from "../shared/receipting/evidence";
 import { DEFAULT_INVOICE_TEMPLATE } from "../shared/invoiceCommerce";
 
 mock.timers.enable({ apis: ["Date"], now: new Date("2026-11-06T20:00:00Z") });
@@ -103,5 +105,40 @@ assert.equal((await t.run((ctx) => ctx.db.get(customerQuote)))?.fields.lines[0].
 assert.equal((await t.run((ctx) => ctx.db.get(customerIssued)))?.billToName, "Saved synthetic buyer", "issued assessed invoices retain their recipient even when master edits opt into legacy renaming");
 await owner.mutation(api.invoices.upsertCustomer, { societyId: ids.societyId, name: "Promoted one-off buyer", oneOffName: "Synthetic buyer", updateSentInvoices: true });
 assert.equal((await t.run((ctx) => ctx.db.get(invoiceId)))?.partyKind, "custom", "promoting one-off customers cannot relink issued tax evidence");
+
+// The hosted publisher must load organization facts itself; client answers and
+// forged success flags do not override dated charity evidence.
+const charityRegistrationId = await t.run(async ctx => {
+  const content = "Synthetic authority source retained for the hosted supplier-facts regression fixture.";
+  const evidence = await ctx.db.insert("documents", { societyId: ids.societyId, title: "Synthetic reviewed registration", category: "Finance", content, createdAtISO: "2026-11-06T00:00:00Z", flaggedForDeletion: false, tags: [] });
+  return ctx.db.insert("organizationTaxRegistrations", {
+    societyId: ids.societyId, registrationType: "CA-CRA-CHARITY", revisionNumber: 1, status: "registered", evidenceReviewed: true,
+    charityNumber: "123456789RR0001", registeredName: "Synthetic tax organization", registeredAddress: "Synthetic registered address", effectiveFrom: "2026-01-01",
+    evidenceDocumentIds: [evidence], recordedByUserId: "synthetic-reviewer", recordedAtISO: "2026-11-06T00:00:00Z", reviewedByUserId: "synthetic-reviewer", reviewedAtISO: "2026-11-06T00:00:00Z",
+    evidenceSnapshots: [{ documentId: evidence, fingerprint: await receiptEvidenceFingerprint({ documentId: evidence, content }) }],
+  });
+});
+const conflictingSupplier = await owner.mutation(api.invoices.upsert, input);
+const ledgerCount = await t.run(async ctx => ({ entries: (await ctx.db.query("journalEntries").collect()).length, lines: (await ctx.db.query("journalLines").collect()).length, accounts: (await ctx.db.query("financialAccounts").collect()).length }));
+await assert.rejects(() => owner.mutation(api.invoices.markSent, { societyId: ids.societyId, ids: [conflictingSupplier] }), /reviewed registration identifies a registered charity/);
+await assert.rejects(() => owner.mutation(api.invoices.recordPayment, { id: conflictingSupplier, date: "2026-11-06", amountCents: 1000, method: "cash" }), /reviewed registration identifies a registered charity/);
+assert.equal((await t.run(ctx => ctx.db.get(conflictingSupplier)))?.status, "draft");
+assert.deepEqual(await t.run(async ctx => ({ entries: (await ctx.db.query("journalEntries").collect()).length, lines: (await ctx.db.query("journalLines").collect()).length, accounts: (await ctx.db.query("financialAccounts").collect()).length })), ledgerCount);
+const projected: any = await owner.query(api.invoices.workspace, { societyId: ids.societyId });
+assert.doesNotMatch(JSON.stringify(projected.organization.charityRegistrations), /charityNumber|registeredAddress|evidenceDocumentIds|reviewedByUserId/);
+const charityAssessment = assessTaxForOrganization({ ...answers, sellerKind: "charity", charityEvidence: "Synthetic review of the charity's ordinary taxable supply" }, projected.organization, true);
+assert.equal(charityAssessment.confirmed, true);
+const charityInvoice = await owner.mutation(api.invoices.upsert, { ...input, lines: [{ ...line, taxAssessment: charityAssessment, ...taxAssessmentRates(charityAssessment) }] });
+await owner.mutation(api.invoices.markSent, { societyId: ids.societyId, ids: [charityInvoice] });
+assert.equal((await t.run(ctx => ctx.db.get(charityInvoice)))?.issuerTaxRegistrationsSnapshot?.supplierFacts?.charityRegistrationRevisionId, charityRegistrationId);
+const changedSourceInvoice = await owner.mutation(api.invoices.upsert, { ...input, lines: [{ ...line, taxAssessment: charityAssessment, ...taxAssessmentRates(charityAssessment) }] });
+await t.run(async ctx => {
+  const reviewed = (await ctx.db.get(charityRegistrationId))!;
+  await ctx.db.patch(reviewed.evidenceDocumentIds[0], { content: "Synthetic changed source after review." });
+});
+const beforeChangedSource = await t.run(async ctx => ({ entries: (await ctx.db.query("journalEntries").collect()).length, lines: (await ctx.db.query("journalLines").collect()).length, accounts: (await ctx.db.query("financialAccounts").collect()).length }));
+await assert.rejects(() => owner.mutation(api.invoices.markSent, { societyId: ids.societyId, ids: [changedSourceInvoice] }), /Registration evidence changed/);
+assert.equal((await t.run(ctx => ctx.db.get(changedSourceInvoice)))?.status, "draft");
+assert.deepEqual(await t.run(async ctx => ({ entries: (await ctx.db.query("journalEntries").collect()).length, lines: (await ctx.db.query("journalLines").collect()).length, accounts: (await ctx.db.query("financialAccounts").collect()).length })), beforeChangedSource);
 console.log("PASS hosted tax schema and handlers: catalog and line persistence, independent zero/exempt treatment, authorization/tenant isolation, server recomputation, issue gates, customer/date changes and immutable issued decisions.");
 mock.timers.reset();

@@ -36,6 +36,8 @@ import { cleanInvoiceTemplate, invoiceCurrency, REPAIR_TRANSITIONS, REPAIR_STATU
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { captureIssuerTaxRegistrations, selectIssuerTaxRegistrations } from "../invoiceTaxRegistrations";
 import { assertInvoiceTaxAssessments, cleanTaxAssessment, taxAssessmentRates, taxAssessmentForTransaction, taxTransactionContextChanged, reassessTaxLines } from "../tax";
+import { snapshotSupplierTaxFacts } from "../tax/organizationFacts";
+import { assertInvoiceOrganizationFactsCurrent, loadOrganizationTaxContext, projectOrganizationTaxContext } from "./organizationTaxFacts";
 import { getOwned, principalUserId, requireOwnedRow, requireRolePortable, requireSocietyMembership } from "./access";
 import { flagChangedPeriods } from "./reconciliation";
 import { assertValid, validateCounterpartyInput } from "../recordValidation";
@@ -418,12 +420,13 @@ export async function loadIssuerTaxIdentifiers(ctx: PortableQueryCtx, societyId:
 /** Branding and reusable designs only: report pages do not need billing/bank records. */
 export async function documentTemplatesPortable(ctx: PortableQueryCtx, { societyId, templateId }: { societyId: string; templateId?: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const [organization, templates, settings, identifiers, accounts] = await Promise.all([
+  const [organization, templates, settings, identifiers, accounts, taxContext] = await Promise.all([
     ctx.db.get(societyId, "societies"),
     ctx.db.query("invoiceTemplates").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(4),
     loadSettings(ctx, societyId),
     loadIssuerTaxIdentifiers(ctx, societyId),
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(2000),
+    loadOrganizationTaxContext(ctx, societyId),
   ]);
   const requestedIds = [...new Set([templateId, settings?.defaultTemplateId].filter((id): id is string => Boolean(id)))];
   const selectedTemplates = await Promise.all(requestedIds.map((id) => getOwned(ctx, "invoiceTemplates", id, societyId)));
@@ -448,8 +451,7 @@ export async function documentTemplatesPortable(ctx: PortableQueryCtx, { society
       gstNumber: taxRegistrations.find(registration => registration.taxId === "CA-GST")?.number,
       pstNumber: taxRegistrations.find(registration => registration.taxId === "CA-BC-PST")?.number,
       taxRegistrations,
-      isCharity: organization?.isCharity,
-      charityStatus: organization?.charityStatus,
+      ...projectOrganizationTaxContext(taxContext),
       gstHstStatus: organization?.gstHstStatus,
       logoUrl,
     },
@@ -465,7 +467,7 @@ export async function documentTemplatesPortable(ctx: PortableQueryCtx, { society
 export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
   const today = await organizationToday(ctx, societyId);
-  const [organization, invoices, settings, catalog, series, members, counterparties, transactions, subscriptions, plans, feePeriods, identifiers, lctx, postedEntries, templates, priceLists, repairJobs] = await Promise.all([
+  const [organization, invoices, settings, catalog, series, members, counterparties, transactions, subscriptions, plans, feePeriods, identifiers, lctx, postedEntries, templates, priceLists, repairJobs, taxContext] = await Promise.all([
     ctx.db.get(societyId, "societies"),
     loadInvoices(ctx, societyId),
     loadSettings(ctx, societyId),
@@ -485,6 +487,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     ctx.db.query("invoiceTemplates").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(4),
     ctx.db.query("invoicePriceLists").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(4),
     ctx.db.query("repairJobs").withIndex("by_society", (q) => q.eq("societyId", societyId)).order("desc").take(4),
+    loadOrganizationTaxContext(ctx, societyId),
   ]);
   const seriesById = new Map((series as Row[]).map((row) => [row._id, row]));
   const txnById = new Map((transactions as Row[]).map((row) => [row._id, row]));
@@ -562,8 +565,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       gstNumber: taxRegistrations.find(registration => registration.taxId === "CA-GST")?.number,
       pstNumber: taxRegistrations.find(registration => registration.taxId === "CA-BC-PST")?.number,
       taxRegistrations,
-      isCharity: organization?.isCharity,
-      charityStatus: organization?.charityStatus,
+      ...projectOrganizationTaxContext(taxContext),
       gstHstStatus: organization?.gstHstStatus,
     },
     templates: defaultTemplate?.societyId === societyId ? [...templates, defaultTemplate] : templates,
@@ -976,10 +978,15 @@ function postedLabel(totalCents: number) {
 export async function markSentPortable(ctx: PortableMutationCtx, { societyId, ids, draftEmail }: { societyId: string; ids: string[]; draftEmail?: boolean }) {
   const rows = await ownedInvoices(ctx, societyId, ids);
   // Validate the whole batch before posting anything, including on the portable runtime.
-  for (const row of rows) if (row.status === "draft") assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
+  const taxContext = rows.some(row => row.status === "draft" && row.lines?.some((line: InvoiceLine) => line.taxAssessment))
+    ? await loadOrganizationTaxContext(ctx, societyId) : undefined;
+  for (const row of rows) if (row.status === "draft") {
+    assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
+  }
+  if (taxContext) await assertInvoiceOrganizationFactsCurrent(ctx, societyId, rows.filter(row => row.status === "draft").flatMap(row => row.lines ?? []), taxContext);
   const identifiers = rows.some(row => row.status === "draft" && !row.issuerTaxRegistrationsSnapshot) ? await loadIssuerTaxIdentifiers(ctx, societyId) : [];
   const issuerSnapshots = new Map(rows.filter(row => row.status === "draft").map(row => [row._id,
-    row.issuerTaxRegistrationsSnapshot ?? captureIssuerTaxRegistrations(identifiers, row.lines ?? [], row.issueDate, nowISO())]));
+    row.issuerTaxRegistrationsSnapshot ?? captureIssuerTaxRegistrations(identifiers, row.lines ?? [], row.issueDate, nowISO(), taxContext ? snapshotSupplierTaxFacts(row.lines ?? [], taxContext, row.issueDate) : undefined)]));
   const actor = await actorName(ctx, societyId);
   const userId = await actingUser(ctx, societyId);
   const lctx = await loadInvoiceLedgerContext(ctx, societyId);
@@ -1249,7 +1256,9 @@ async function recordSettlement(ctx: PortableMutationCtx, args: SettlementArgs, 
   let issuerTaxRegistrationsSnapshot = row.issuerTaxRegistrationsSnapshot;
   if (row.status === "draft") {
     assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
-    issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, row.societyId), row.lines ?? [], row.issueDate, at);
+    const taxContext = row.lines?.some((line: InvoiceLine) => line.taxAssessment) ? await loadOrganizationTaxContext(ctx, row.societyId) : undefined;
+    if (taxContext) await assertInvoiceOrganizationFactsCurrent(ctx, row.societyId, row.lines ?? [], taxContext);
+    issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, row.societyId), row.lines ?? [], row.issueDate, at, taxContext ? snapshotSupplierTaxFacts(row.lines ?? [], taxContext, row.issueDate) : undefined);
   }
   let payment: StoredInvoicePayment = { key: randomKey("settlement"), kind, date: args.date, amountCents, method, recordedAtISO: at, ...(idempotencyKey ? { idempotencyKey } : {}), ...(args.sourcePaymentKey ? { sourcePaymentKey: args.sourcePaymentKey } : {}), ...(fxRateMicros ? { fxRateMicros, fxSource: cleanText(args.fxSource, 200) } : {}), ...(args.reference ? { reference: cleanText(args.reference, 100) } : {}), ...(args.note ? { note: cleanText(args.note, 1000) } : {}), ...(actor ? { recordedByName: actor } : {}), ...(txn ? { financialTransactionId: txn._id } : args.depositAccountId && !noncash ? { depositAccountId: args.depositAccountId } : {}) };
   if(new TextEncoder().encode(JSON.stringify({...row,payments:[...previous,payment]})).byteLength>900000)throw new Error("This invoice is too large for another settlement record. Export the audit history and reduce inline attachments.");

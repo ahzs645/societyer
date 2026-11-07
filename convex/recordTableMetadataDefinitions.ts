@@ -1702,8 +1702,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     labelIdentifierFieldName: "donorName",
     fields: [
       { name: "receiptNumber", label: "#", fieldType: FIELD_TYPES.TEXT, icon: "Hash", isReadOnly: true },
-      { name: "donorName", label: "Donor", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true },
-      { name: "receivedOnISO", label: "Received", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "donorName", label: "Donor", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true, isReadOnly: true },
+      { name: "receivedOnISO", label: "Received", fieldType: FIELD_TYPES.DATE, icon: "Calendar", isReadOnly: true },
       { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
       { name: "eligibleAmountCents", label: "Eligible", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
       { name: "status", label: "Status", fieldType: FIELD_TYPES.TEXT, icon: "Activity", isReadOnly: true },

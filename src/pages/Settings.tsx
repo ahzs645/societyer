@@ -101,7 +101,7 @@ export function SettingsPage() {
     setRetentionDays(String(society.notificationRetentionDays ?? 30));
   }, [society]);
 
-  // Donation receipts and membership billing only apply to societies.
+  // Contributions are cross-form; membership billing keeps its own module scope.
   const entityKind = society ? organizationKind(society as any) : null;
   const modulesByCategory = useMemo(
     () =>

@@ -39,6 +39,7 @@ import {
 // ledger's own as-of helper lands (same name and signature).
 import { holdingsAsOf, toDividendHoldingRows, undatedPostedTransfers } from "../dividendHoldingsAsOf";
 import { legalGovernanceProfile } from "../legalGovernanceProfiles";
+import { assertBusinessCorporationAction } from "../organization/resolveContext";
 
 function centsToAmount(cents: number): string {
   return (cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -98,6 +99,7 @@ export interface DividendPreview {
  */
 async function computeDraft(ctx: PortableQueryCtx, args: DividendDraftArgs): Promise<DividendPreview> {
   const society = await ctx.db.get(args.societyId, "societies");
+  assertBusinessCorporationAction(society);
   const scope = dividendRuleScope(society as any);
   const warnings: string[] = [];
 
@@ -309,6 +311,8 @@ export async function setStatusPortable(
   const row = await requireOwnedRow<Record<string, any> & { _id: string; societyId: string }>(ctx, "dividends", args.id);
   if (args.declaredByResolutionId) await getOwned(ctx, "writtenResolutions", args.declaredByResolutionId, row.societyId);
   const society = await ctx.db.get(row.societyId, "societies");
+  // A wrongly classified historical declaration can still be cancelled.
+  if (args.status !== "cancelled") assertBusinessCorporationAction(society);
   const scope = dividendRuleScope(society as any);
   const next = {
     status: args.status,

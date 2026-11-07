@@ -5,8 +5,7 @@ import { useTranslation } from "react-i18next";
 import { translateNavLabel } from "../i18n/navLabels";
 import { breadcrumbTrailForPath } from "../lib/navTree";
 import { isModuleEnabled } from "../lib/modules";
-import { ROUTE_IDENTITY, routeAllowedForEntityKind, routeLabelForOrganization } from "../lib/routeIdentity";
-import { organizationKind } from "../../shared/organizationDomain";
+import { ROUTE_IDENTITY, routeAllowedForOrganization, routeLabelForOrganization } from "../lib/routeIdentity";
 
 export type Crumb = {
   label: ReactNode;
@@ -68,7 +67,6 @@ export function useRouteBreadcrumbs(
   const { t } = useTranslation();
   const trail = breadcrumbTrailForPath(pathname);
   if (!trail) return null;
-  const kind = organization ? organizationKind(organization) : null;
   const crumbs: Crumb[] = trail.map((entry) => {
     if (entry.parent) {
       // Link the section to its first page this organization can open.
@@ -76,7 +74,7 @@ export function useRouteBreadcrumbs(
         const identity = ROUTE_IDENTITY[child.to];
         return (
           identity &&
-          routeAllowedForEntityKind(identity, kind) &&
+          routeAllowedForOrganization(identity, organization) &&
           (!identity.module || isModuleEnabled(organization, identity.module))
         );
       });

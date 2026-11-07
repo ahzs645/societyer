@@ -22,6 +22,7 @@ import {
 import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+import { assertBusinessCorporationAction } from "../organization/resolveContext";
 
 export interface UpsertRightsClassArgs {
   id?: string;
@@ -90,7 +91,10 @@ export async function upsertRightsClassPortable(
   { id, ...args }: UpsertRightsClassArgs,
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
-  if (id) await getOwned(ctx, "rightsClasses", id, args.societyId);
+  const existing = id ? await getOwned(ctx, "rightsClasses", id, args.societyId) : undefined;
+  if (args.classType === "share" || existing?.classType === "share") {
+    assertBusinessCorporationAction(await ctx.db.get(args.societyId, "societies"));
+  }
   for (const documentId of args.sourceDocumentIds ?? []) {
     await getOwned(ctx, "documents", documentId, args.societyId);
   }

@@ -147,6 +147,22 @@
       "reason": "Direct-URL guard for society-only pages (Members, Member proposals, Membership): names the page to say it does not apply to this entity."
     },
     {
+      "pattern": "society",
+      "route": "/app/members",
+      "channel": "main",
+      "context": "entity-kind-applicability",
+      "snippet": "^‹workspace›: Business corporation\\. This page applies to Society \\(nonprofit\\), Nonprofit corporation, Cooperative, Unincorporated assoc…$",
+      "reason": "The entity-kind-unavailable gate explicitly denies the current business corporation this legal-member page and lists the forms it supports. Only the exact applicability subtitle captured inside that gate receives this context; unrelated page text remains scanned normally."
+    },
+    {
+      "pattern": "society",
+      "route": "/app/membership",
+      "channel": "main",
+      "context": "entity-kind-applicability",
+      "snippet": "^‹workspace›: Business corporation\\. This page applies to Society \\(nonprofit\\), Nonprofit corporation, Cooperative, Unincorporated assoc…$",
+      "reason": "The entity-kind-unavailable gate explicitly denies the current business corporation this membership page and lists the forms it supports. Only the exact applicability subtitle captured inside that gate receives this context; unrelated page text remains scanned normally."
+    },
+    {
       "pattern": "agm",
       "route": "/app/research-library",
       "reason": "BC company research records: the BC Business Corporations Act uses 'annual general meeting' (s.182), so AGM is the correct term for this entity.",

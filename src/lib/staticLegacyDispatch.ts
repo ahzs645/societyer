@@ -1,5 +1,7 @@
 import { assertValid, validateAccessCustodyInput } from "../../shared/recordValidation";
+import portableManifest from "../../shared/functions/portable-manifest.json";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { mintEntityId } from "../../shared/portable/ids";
 import { validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
 import { validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
@@ -273,6 +275,8 @@ const STATIC_EXPORT_TABLES = [
   "organizationAddresses",
   "organizationRegistrations",
   "organizationIdentifiers",
+  "organizationTaxRegistrations",
+  "donationReceiptSequences",
   "users",
   "apiClients",
   "apiTokens",
@@ -1210,10 +1214,13 @@ function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexie
   }
   if (name === "documentVersions:recordUploadedVersion") {
     const now = new Date().toISOString();
-    const id = `static_documentVersion_${Date.now()}`;
+    // Timestamp-only IDs can overwrite a different document's retained version
+    // when uploads finish in the same millisecond (or a clock is fixed).
+    const id = mintEntityId("static_documentVersion");
     let version = 1;
     store?.transaction(() => {
-      const existing = store.listRows("documentVersions", { documentId: args?.documentId });
+      const existing = store.listRows("documentVersions", { societyId: args?.societyId ?? SOCIETY_ID })
+        .filter((row) => row.documentId === args?.documentId);
       version = Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1;
       for (const row of existing) {
         if (row.isCurrent) store.upsertRow("documentVersions", { ...row, isCurrent: false });
@@ -1324,7 +1331,17 @@ const MUT_DISPATCHERS = [
   mutCasesAssets9,
 ];
 
-export function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+// Permission checks classify application domains. They do not make an invented
+// method (documents:update, for example) a supported write API. The legacy
+// dispatcher loads lazily, so its exact declaration inventory does too.
+const DECLARED_LEGACY_WRITES = new Map(portableManifest.functions
+  .filter(entry => entry.kind === "mutation" || entry.kind === "action")
+  .map(entry => [entry.name, entry.kind] as const));
+
+export function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null, invokedKind?: "mutation" | "action"): any {
+  const declaredKind = DECLARED_LEGACY_WRITES.get(name);
+  if (!declaredKind) throw new Error(`Unknown local write function: ${name}. Use a declared mutation or action.`);
+  if (invokedKind && declaredKind !== invokedKind) throw new Error(`Function ${name} requires ${declaredKind}(); received ${invokedKind}().`);
   assertLocalWriteCapability(name);
   const localResult = store?.mutationResult(name, args);
   if (localResult !== undefined) return localResult;

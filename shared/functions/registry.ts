@@ -483,7 +483,11 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // receipts
   definePortableQuery({ name: "receipts:list", handler: receiptsFns.receiptsListPortable }),
+  definePortableQuery({ name: "receipts:registrationHistory", handler: receiptsFns.receiptRegistrationHistoryPortable }),
+  definePortableQuery({ name: "receipts:evidenceForReview", handler: receiptsFns.receiptEvidenceForReviewPortable }),
+  definePortableMutation({ name: "receipts:recordRegistration", handler: receiptsFns.receiptRecordRegistrationPortable }),
   definePortableMutation({ name: "receipts:issue", handler: receiptsFns.receiptIssuePortable }),
+  definePortableMutation({ name: "receipts:finalizeOfficial", handler: receiptsFns.receiptFinalizeOfficialPortable }),
   definePortableMutation({ name: "receipts:voidReceipt", handler: receiptsFns.receiptVoidPortable }),
   definePortableMutation({ name: "receipts:remove", handler: receiptsFns.receiptRemovePortable }),
 

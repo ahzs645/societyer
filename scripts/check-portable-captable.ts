@@ -50,7 +50,7 @@ const quantities = (rows: Holding[]) => rows.map((h) => h.quantity).sort((a, b) 
 // The scenario every engine runs: issue 100 to alice, move 25 to bob, then try an
 // invalid cancellation of 200 (must throw and roll back).
 async function capTableScenario(ids: Ids, exec: Exec) {
-  await exec.transfer({ transferType: "issuance", status: "posted", rightsClassId: ids.classId, destinationRoleHolderId: ids.alice, quantity: 100, transferDate: "2026-01-02" });
+  await exec.transfer({ transferType: "issuance", status: "posted", rightsClassId: ids.classId, destinationRoleHolderId: ids.alice, quantity: 100, transferDate: "2026-01-02", considerationType: "cash", fullyPaidConfirmedAt: "2026-01-02" });
   const afterIssue = await exec.holdings();
 
   await exec.transfer({ transferType: "transfer", status: "posted", rightsClassId: ids.classId, sourceRoleHolderId: ids.alice, destinationRoleHolderId: ids.bob, quantity: 25, transferDate: "2026-01-03" });
@@ -86,9 +86,11 @@ function localExec(db: TransactionalDb, ids: Ids): Exec {
 }
 
 const localIds: Ids = { societyId: "soc_cap", classId: "classA", alice: "alice", bob: "bob" };
+const companyIdentity = { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" };
 const localSeed = {
   ...portableTestSeed(localIds.societyId),
-  rightsClasses: [{ _id: localIds.classId, societyId: localIds.societyId, className: "Class A" }],
+  societies: [{ ...portableTestSeed(localIds.societyId).societies[0], ...companyIdentity }],
+  rightsClasses: [{ _id: localIds.classId, societyId: localIds.societyId, className: "Class A", classType: "share" }],
   roleHolders: [
     { _id: localIds.alice, societyId: localIds.societyId, fullName: "Alice", status: "current" },
     { _id: localIds.bob, societyId: localIds.societyId, fullName: "Bob", status: "current" },
@@ -119,7 +121,7 @@ process.env.BETTER_AUTH_BASE_URL = PORTABLE_TEST_IDENTITY.issuer;
 const t = convexTest(schema, modules as any);
 const cids: Ids = await t.run(async (ctx: any) => {
   const iso = "2026-01-01T00:00:00.000Z";
-  const societyId = await ctx.db.insert("societies", { name: "Cap", isCharity: false, isMemberFunded: false, updatedAt: 0 });
+  const societyId = await ctx.db.insert("societies", { name: "Cap", ...companyIdentity, isCharity: false, isMemberFunded: false, updatedAt: 0 });
   await ctx.db.insert("users", {
     societyId,
     email: "owner@portable-fixture.test",
@@ -136,7 +138,7 @@ const cids: Ids = await t.run(async (ctx: any) => {
     sourceDocumentIds: [], sourceExternalIds: [], createdAtISO: iso, updatedAtISO: iso,
   });
   const role = (fullName: string) => ctx.db.insert("roleHolders", {
-    societyId, roleType: "member", status: "current", fullName,
+    societyId, roleType: "shareholder", status: "current", fullName,
     citizenshipCountries: [], taxResidenceCountries: [], relatedShareholderIds: [], controllingIndividualIds: [],
     sourceDocumentIds: [], sourceExternalIds: [], createdAtISO: iso, updatedAtISO: iso,
   });

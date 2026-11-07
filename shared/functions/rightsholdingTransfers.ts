@@ -24,6 +24,7 @@ import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertRegisterRowMayBeDeleted } from "../registerRetention";
+import { assertBusinessCorporationAction } from "../organization/resolveContext";
 
 /** Ledger order: date, then the optional same-day sequence, then creation time. */
 export function transferChronologicalSort(left: any, right: any): number {
@@ -117,11 +118,16 @@ export async function upsertRightsholdingTransferPortable(
   { id, ...args }: UpsertRightsholdingTransferArgs,
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
-  if (id) await requireOwnedRow(ctx, "rightsholdingTransfers", id);
+  const existingTransfer = id ? await getOwned(ctx, "rightsholdingTransfers", id, args.societyId) : null;
   if (args.precedentRunId) {
     await getOwned(ctx, "legalPrecedentRuns", args.precedentRunId, args.societyId);
   }
-  if (args.rightsClassId) await getOwned(ctx, "rightsClasses", args.rightsClassId, args.societyId);
+  const rightsClass = args.rightsClassId ? await getOwned(ctx, "rightsClasses", args.rightsClassId, args.societyId) : null;
+  const previousClass = existingTransfer?.rightsClassId && existingTransfer.rightsClassId !== args.rightsClassId
+    ? await getOwned(ctx, "rightsClasses", String(existingTransfer.rightsClassId), args.societyId) : null;
+  if ((rightsClass?.classType === "share" || previousClass?.classType === "share") && !(existingTransfer && args.status === "void")) {
+    assertBusinessCorporationAction(await ctx.db.get(args.societyId, "societies"));
+  }
   if (args.sourceRoleHolderId) {
     await getOwned(ctx, "roleHolders", args.sourceRoleHolderId, args.societyId);
   }
@@ -173,7 +179,6 @@ export async function upsertRightsholdingTransferPortable(
     notes: cleanText(args.notes),
     updatedAtISO: now,
   };
-  const existingTransfer = id ? await ctx.db.get(id) : null;
   const [existingTransfers, classes, organization] = await Promise.all([
     ctx.db
       .query("rightsholdingTransfers")

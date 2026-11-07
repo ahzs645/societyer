@@ -103,8 +103,7 @@ import { RouteAccessGate } from "./RouteAccessGate";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
-import { getRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type IconTone, type LucideIcon } from "../lib/routeIdentity";
-import { organizationKind } from "../../shared/organizationDomain";
+import { getRouteIdentity, routeAllowedForOrganization, routeLabelForOrganization, type IconTone, type LucideIcon } from "../lib/routeIdentity";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
@@ -683,7 +682,6 @@ export function Layout() {
   const counts = localWorkspaceReady ? rawCounts : undefined;
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
-  const entityKind = useMemo(() => (society ? organizationKind(society as any) : null), [society]);
   const { can } = usePermissions();
   // The firm-wide Portfolio rolls up multiple entities; with a single entity it
   // has nothing to aggregate, so hide its sidebar nav item (the switcher's
@@ -696,11 +694,11 @@ export function Layout() {
       pinnedNav.filter(
         (item) =>
           (!item.module || isModuleEnabled(society, item.module)) &&
-          routeAllowedForEntityKind(item, entityKind) &&
+          routeAllowedForOrganization(item, society) &&
           navAllowedForEntityCount(item) &&
           (!item.permission || can(item.permission)),
       ),
-    [pinnedNav, society, entityKind, isMultiEntity, can],
+    [pinnedNav, society, isMultiEntity, can],
   );
 
   const orderedPinnedNav = useMemo(() => orderedFavoriteRoutes(favoritesOrder, visiblePinnedNav), [favoritesOrder, visiblePinnedNav]);
@@ -724,11 +722,11 @@ export function Layout() {
       filterNavTree(
         (item) =>
           (!item.module || isModuleEnabled(society, item.module)) &&
-          routeAllowedForEntityKind(item, entityKind) &&
+          routeAllowedForOrganization(item, society) &&
           navAllowedForEntityCount(item) &&
           (!item.permission || can(item.permission)),
       ).filter((entry) => entry.kind !== "item" || !pinnedRouteSet.has(entry.item.to)),
-    [society, entityKind, isMultiEntity, can, pinnedRouteSet],
+    [society, isMultiEntity, can, pinnedRouteSet],
   );
   const getNavItemLabel = (item: NavItem) => {
     const label = routeLabelForOrganization(item, society as any);

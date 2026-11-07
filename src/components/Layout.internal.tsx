@@ -231,6 +231,7 @@ type NavItem = {
   end?: boolean;
   module?: ModuleKey;
   entityKinds?: ("society" | "corporation")[];
+  legalForms?: import("../../shared/organization/types").LegalForm[];
   permission?: string;
   /** Label inside the tree only (e.g. "Overview" for Financials under Finance). */
   treeLabel?: string;
@@ -274,6 +275,7 @@ function navItem(to: string, end?: boolean): NavItem {
     ...(end ? { end } : {}),
     ...(id.module ? { module: id.module } : {}),
     ...(id.entityKinds ? { entityKinds: id.entityKinds } : {}),
+    ...(id.legalForms ? { legalForms: id.legalForms } : {}),
     ...(id.permission ? { permission: id.permission } : {}),
   };
 }

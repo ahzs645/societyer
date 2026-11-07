@@ -41,6 +41,7 @@ export default defineConfig({
     "live-interface-*.spec.ts",
     "offline-rollout-*.spec.ts",
     "guided-setup.spec.ts",
+    "organization-workflows.spec.ts",
     "governance-retest.spec.ts",
     "meeting-history.spec.ts",
     "meetings-editing.spec.ts",
