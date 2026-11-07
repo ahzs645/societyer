@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import {
   activateRemittance,
   inspectRemittance,
-  swipeRemittanceTable,
+  expectRemittanceCards,
 } from "./payroll-remittance-responsive";
 const browserErrors = new WeakMap<Page, string[]>();
 test.beforeEach(async ({ page }) => {
@@ -240,7 +240,7 @@ test("CRA plans require review, export no payment, and actual partial bank settl
   page.on("pageerror", (error) => errors.push(error.message));
   const { panel, societyId, bankAccountId } = await seed(page);
   await inspectRemittance(page, testInfo, "initial-obligations");
-  await swipeRemittanceTable(page, testInfo);
+  await expectRemittanceCards(page, testInfo);
   await activateRemittance(
     panel.getByRole("button", { name: "Prepare payment plan", exact: true }),
   );
@@ -287,6 +287,8 @@ test("CRA plans require review, export no payment, and actual partial bank settl
       exact: true,
     }),
   );
+  // The save writes asynchronously; reloading before it lands discards it.
+  await expect(planForm).toBeHidden();
   await reopenRemittance(page);
   const review = panel.getByRole("region", {
     name: "Remittance plan review",

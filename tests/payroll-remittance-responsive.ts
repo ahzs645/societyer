@@ -56,14 +56,17 @@ export async function inspectRemittance(
               "button,input:not([type=checkbox]),select,textarea,summary",
             ),
           ]
+            // Layout height: the button just tapped can still be in its
+            // pressed state (scale 0.96), which shrinks its rect but not
+            // its touch target.
             .filter((el) => {
               const rect = el.getBoundingClientRect();
-              return rect.width > 0 && rect.height > 0 && rect.height < 44;
+              return rect.width > 0 && rect.height > 0 && el.offsetHeight < 44;
             })
             .map((el) => ({
               tag: el.tagName,
               text: el.textContent?.slice(0, 100),
-              height: el.getBoundingClientRect().height,
+              height: el.offsetHeight,
             }))
         : [];
       return {
@@ -116,39 +119,22 @@ export async function inspectRemittance(
     `${stage}: controls provide 44px touch targets`,
   ).toEqual([]);
 }
-export async function swipeRemittanceTable(page: Page, testInfo: TestInfo) {
+/**
+ * Phones show each CRA obligation as a card: nothing in the obligations list
+ * may need a sideways swipe, and each card names its facts.
+ */
+export async function expectRemittanceCards(page: Page, testInfo: TestInfo) {
   if (!testInfo.project.use.hasTouch) return;
   const wrapper = page
     .getByRole("region", { name: "CRA obligations", exact: true })
     .locator(".payroll-calculator__table-wrap");
   await wrapper.scrollIntoViewIfNeeded();
-  const rect = await wrapper.boundingBox();
-  if (!rect)
-    throw new Error("Remittance obligation table is not available to touch.");
-  await wrapper.evaluate((el) => {
-    el.scrollLeft = 0;
-  });
-  const session = await page.context().newCDPSession(page);
-  const point = (x: number) => [
-    { x, y: rect.y + Math.min(rect.height / 2, 100) },
-  ];
-  await session.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: point(rect.x + rect.width - 20),
-  });
-  for (let step = 1; step <= 6; step++)
-    await session.send("Input.dispatchTouchEvent", {
-      type: "touchMove",
-      touchPoints: point(
-        rect.x + rect.width - 20 - ((rect.width - 50) * step) / 6,
-      ),
-    });
-  await session.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-  await session.detach();
-  await expect
-    .poll(() => wrapper.evaluate((el) => el.scrollLeft))
-    .toBeGreaterThan(20);
+  const fit = await wrapper.evaluate((el) => ({
+    scroll: el.scrollWidth,
+    client: el.clientWidth,
+  }));
+  expect(fit.scroll, "obligations fit without a sideways swipe").toBeLessThanOrEqual(fit.client + 1);
+  const firstCard = wrapper.locator("tbody tr").first();
+  await expect(firstCard.locator('td[data-label="Due"]')).toBeVisible();
+  await expect(firstCard.locator('td[data-label="Amount"]')).toBeVisible();
 }
