@@ -14,6 +14,18 @@ async function date(page: Page, scope: Locator, label: string, value: string) {
   await expect(input).not.toBeVisible();
 }
 
+/** RecordTable pins actions in a row menu when the available width needs it. */
+async function receiptAction(page: Page, receiptNumber: string, name: string) {
+  const row = page.getByRole("row").filter({ has: page.getByRole("gridcell", { name: receiptNumber, exact: true }) });
+  await expect(row).toBeVisible();
+  const trigger = row.getByRole("button", { name: /^Row actions for / });
+  if (await trigger.isVisible()) {
+    await trigger.click();
+    return page.getByRole("menuitem", { name, exact: true });
+  }
+  return row.getByRole("button", { name, exact: true });
+}
+
 async function createSociety(page: Page, name: string) {
   await page.goto("/app/society");
   await expect(page.getByRole("heading", { name: "Organization profile", exact: true })).toBeVisible();
@@ -141,7 +153,6 @@ test("acknowledgement becomes a separately signed official receipt without chang
   await drawer.getByLabel("Place of issue", { exact: true }).fill("Prince George, BC");
   await drawer.getByRole("button", { name: "Record acknowledgement", exact: true }).click();
   await expect(drawer).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "Prepare official receipt", exact: true })).toBeDisabled();
   const original = await page.evaluate(async (societyId) => {
     const { localDataClient: client } = await import("/src/lib/localDataClient.ts" as string);
     const rows = await client.query("receipts:list", { societyId });
@@ -149,6 +160,8 @@ test("acknowledgement becomes a separately signed official receipt without chang
   }, societyId);
   expect(original.documentKind).toBe("acknowledgement");
   expect(original.eligibleAmountCents).toBe(0);
+  await expect(await receiptAction(page, original.receiptNumber, "Prepare official receipt")).toBeDisabled();
+  await page.keyboard.press("Escape");
 
   await page.goto("/app/society");
   const evidenceTitle = "Synthetic decision for gift workflow";
@@ -166,29 +179,37 @@ test("acknowledgement becomes a separately signed official receipt without chang
   await expect(profile).toContainText("Evidence reviewed; each gift and signing action still needs its own checks.");
 
   await page.goto("/app/receipts");
-  await page.getByRole("button", { name: "Prepare official receipt", exact: true }).click();
+  await (await receiptAction(page, original.receiptNumber, "Prepare official receipt")).click();
   drawer = page.getByRole("dialog", { name: "Prepare official receipt", exact: true });
   await expect(drawer.getByLabel("Donor full name", { exact: true })).toHaveValue("Synthetic Donor");
   await drawer.getByLabel(/I reviewed the donor identity/).check();
   await drawer.getByRole("button", { name: "Prepare for signature", exact: true }).click();
   await expect(drawer).not.toBeVisible();
+  const preparation = await page.evaluate(async (societyId) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts" as string);
+    const rows = await client.query("receipts:list", { societyId });
+    return rows.find((row: any) => row.documentKind === "official_tax_receipt");
+  }, societyId);
+  expect(preparation.issueStatus).toBe("prepared");
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "PDF for signature", exact: true }).click();
+  await (await receiptAction(page, preparation.receiptNumber, "PDF for signature")).click();
   const download = await downloadPromise;
   await download.saveAs(testInfo.outputPath("synthetic-receipt-preparation.pdf"));
   expect(download.suggestedFilename()).toMatch(/\.pdf$/);
 
   const signedTitle = "Synthetic signed copy — test evidence only";
   await evidencePdf(page, societyId, signedTitle);
-  await page.getByRole("button", { name: "Record signed issue", exact: true }).click();
+  await (await receiptAction(page, preparation.receiptNumber, "Record signed issue")).click();
   drawer = page.getByRole("dialog", { name: "Record signed issue", exact: true });
   await drawer.getByLabel("Signed copy document", { exact: true }).selectOption({ label: signedTitle });
   await drawer.getByLabel("Authorized signatory name", { exact: true }).fill("Synthetic Authorized Signer");
   await drawer.getByLabel(/I checked that the signed copy matches/).check();
   await drawer.getByRole("button", { name: "Record signed issue", exact: true }).click();
   await expect(drawer).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "Signed copy", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Prepare official receipt", exact: true })).toHaveCount(0);
+  await expect(await receiptAction(page, preparation.receiptNumber, "Signed copy")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(await receiptAction(page, original.receiptNumber, "Prepare official receipt")).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await page.reload();
   const rows = await page.evaluate(async (societyId) => {
     const { localDataClient: client } = await import("/src/lib/localDataClient.ts" as string);

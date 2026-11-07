@@ -92,7 +92,7 @@ export function ReceiptsPage() {
     setBusy(true);
     try {
       const amountCents = dollarInputToCents(form.amountDollars);
-      if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new Error("Enter a positive gift amount in Canadian dollars.");
+      if (typeof amountCents !== "number" || !Number.isSafeInteger(amountCents) || amountCents <= 0) throw new Error("Enter a positive gift amount in Canadian dollars.");
       const official = form.documentKind === "official_tax_receipt";
       const { amountDollars: _amount, ...input } = form;
       await issue({

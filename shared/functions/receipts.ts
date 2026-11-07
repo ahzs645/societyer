@@ -110,7 +110,24 @@ export async function receiptFinalizeOfficialPortable(
     return receipt._id;
   }
   if (receipt.issueStatus !== "prepared") throw new Error("Only a numbered preparation can be finalized.");
-  validateReceiptInput({ ...receipt, societyId, documentKind: "official_tax_receipt", intendedIssueDate: args.signedOn } as ReceiptIssueInput, args.signedOn);
+  validateReceiptInput({
+    societyId,
+    documentKind: "official_tax_receipt",
+    idempotencyKey: receipt.idempotencyKey,
+    donorName: receipt.donorName,
+    donorAddress: receipt.donorAddress,
+    donorEmail: receipt.donorEmail,
+    amountCents: receipt.amountCents,
+    eligibleAmountCents: receipt.eligibleAmountCents,
+    receivedOnISO: receipt.receivedOnISO,
+    intendedIssueDate: args.signedOn,
+    location: receipt.location,
+    description: receipt.description,
+    isNonCash: receipt.isNonCash,
+    appraiserName: receipt.appraiserName,
+    advantageAmountCents: receipt.advantageAmountCents,
+    giftEligibilityConfirmed: receipt.giftEligibilityConfirmed,
+  }, args.signedOn);
   if (receipt.giftAssessmentSnapshot.ruleVersion !== RECEIPT_RULE_VERSION || receipt.giftAssessmentSnapshot.giftType !== "cash" || receipt.giftAssessmentSnapshot.advantageAmountCents !== 0 || receipt.giftAssessmentSnapshot.eligibleAmountCents !== receipt.amountCents) throw new Error("The gift assessment no longer matches this preparation. Review and reprepare it.");
   if (receipt.giftRecordId) {
     const related = await ctx.db.query("donationReceipts").withIndex("by_gift_record", q => q.eq("giftRecordId", receipt.giftRecordId)).take(201);

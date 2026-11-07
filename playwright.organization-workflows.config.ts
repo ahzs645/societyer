@@ -12,6 +12,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:4199",
     headless: true,
+    actionTimeout: 30_000,
     launchOptions: chromiumLaunchOptions(),
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
