@@ -55,12 +55,16 @@ jobs:
       - name: Existing invoice behavior
         run: npm run test:invoices && npm run test:invoice-money && npm run test:billing-documents && npm run test:billing-operations && npm run test:billing-automation
       - name: App and hosted schema typechecks
+        if: ${{ !cancelled() }}
         run: npx tsc --noEmit && npm run convex:typecheck
       - name: Install browser
+        if: ${{ !cancelled() }}
         run: npx playwright install --with-deps chromium
       - name: Desktop and phone tax decisions
+        if: ${{ !cancelled() }}
         run: npm run test:tax-guidance-ui
       - name: Existing catalog and customer flows
+        if: ${{ !cancelled() }}
         run: npm run test:invoice-catalog-customers-ui
       - name: Browser evidence
         if: ${{ !cancelled() }}

@@ -100,6 +100,7 @@ export function isStaticGenericCrud(name: string): boolean {
 
 /** These hosted capabilities fail explicitly; they must never report a local save. */
 export const STATIC_UNSUPPORTED_WRITES: ReadonlyMap<string, string> = new Map([
+  ["workspaceMfa:setPolicy", "Workspace two-factor authentication policy requires a connected workspace and a verified Owner session. It cannot be changed in local or demo mode."],
   ["meetingTranscription:editSegment", "Paged transcription edits require the connected workspace. Export a timed transcript there and import a local copy to edit on this device."],
 ]);
 export function assertLocalWriteCapability(name: string): void {

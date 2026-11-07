@@ -35,5 +35,6 @@ switch(name) { case 'real:four': return save(); }
 ` }]);
 assert.deepEqual([...dispatch].sort(), ['real:four', 'real:one', 'real:three', 'real:two']);
 assert.throws(() => assertLocalWriteCapability('meetingTranscription:editSegment'), /hosted|connected/i);
+assert.throws(() => assertLocalWriteCapability('workspaceMfa:setPolicy'), /connected workspace.*verified Owner session/i);
 assert.doesNotThrow(() => assertLocalWriteCapability('tasks:update'));
 console.log('Interaction write inventory checks passed: aliases, namespaces, wrappers, destructuring, computed names, shadowing, partial dynamics, explicit dispatch and local capability rejection.');

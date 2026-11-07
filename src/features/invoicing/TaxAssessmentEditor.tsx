@@ -34,7 +34,7 @@ export function TaxAssessmentEditor({ value, scope, date, contextKey, organizati
     setOpen(false);
   }, [value, scope, date, contextKey]);
   const patch = (key: string, next: string) => { setError(""); setAnswers((current) => updateTaxAnswer(current, key, next)); };
-  const effective = { ...answers, scope, supplyDate: date, ...(scope === "catalog" ? { customerRelief: "none", customerEvidence: "", purchaserPstNumber: "", pstReliefDocumentation: "unknown", pstReliefConditions: "unknown", pstCertificateType: "" } : {}) };
+  const effective: TaxAnswers = { ...answers, scope, supplyDate: date, ...(scope === "catalog" ? { customerRelief: "none", customerEvidence: "", purchaserPstNumber: "", pstReliefDocumentation: "unknown", pstReliefConditions: "unknown", pstCertificateType: "" } : {}) };
   let result: TaxAssessment | undefined;
   try { result = assessTax(effective); } catch { /* A partial date is shown as a validation message on save. */ }
   const pack = resolveTaxPack(effective.jurisdictionCode, date);
