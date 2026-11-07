@@ -9,7 +9,8 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get("origin");
     const headers = new Headers({ "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Vary": "Origin" });
-    if (origin && origin !== env.SITE_ORIGIN) return new Response("Origin denied.", { status: 403 });
+    const allowedOrigins = env.SITE_ORIGIN.split(",").map(value => value.trim()).filter(Boolean);
+    if (origin && !allowedOrigins.includes(origin)) return new Response("Origin denied.", { status: 403 });
     if (origin) headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Methods", "POST, PUT, OPTIONS");
     headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");

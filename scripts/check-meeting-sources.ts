@@ -130,6 +130,22 @@ try {
   for (const subject of ["member", "foreign"]) assert.equal((await call("start", { meetingId, fileName: "fixture.mp4", size: 3, fingerprint: "b".repeat(64) }, subject)).status, 400);
   assert.equal(graphCalls, 0, "Reject unauthorized users before contacting Microsoft");
   assert.equal((await call("list", { meetingId }, "owner", "https://evil.test")).status, 403);
+  const portalOrigin = "https://portal.ddcnorth.com";
+  const portalEnv = { ...env, SITE_ORIGIN: ` ${portalOrigin}, ${env.SITE_ORIGIN} ` };
+  for (const origin of [portalOrigin, env.SITE_ORIGIN]) {
+    const response = await worker.fetch(new Request("https://broker.example.test/meeting-sources/list", {
+      method: "OPTIONS", headers: { Origin: origin },
+    }), portalEnv);
+    assert.equal(response.status, 204, "Both the portal and existing frontend can use uploads");
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), origin);
+  }
+  for (const origin of ["https://portal.ddcnorth.com.evil.test", "https://evil.test"]) {
+    const response = await worker.fetch(new Request("https://broker.example.test/meeting-sources/list", {
+      method: "OPTIONS", headers: { Origin: origin },
+    }), portalEnv);
+    assert.equal(response.status, 403, "Origin matching must remain exact");
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
+  }
   assert.equal((await test.fetch("/meeting-sources/control", { method: "POST", body: "{}" })).status, 403, "Worker-only control plane");
   const unverified = actor("owner", { emailVerified: false });
   assert.equal((await unverified.fetch("/meeting-sources/control", { method: "POST", headers: { "x-societyer-broker": env.MEETING_SOURCE_BROKER_KEY }, body: JSON.stringify({ operation: "list", meetingId }) })).status, 401);

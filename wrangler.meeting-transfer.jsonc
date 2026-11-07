@@ -7,7 +7,7 @@
   "preview_urls": false,
   "vars": {
     "CONVEX_SITE_URL": "https://industrious-cricket-610.convex.site",
-    "SITE_ORIGIN": "https://societyer-ddcnorth.pages.dev",
+    "SITE_ORIGIN": "https://portal.ddcnorth.com,https://societyer-ddcnorth.pages.dev",
     "SHAREPOINT_TRANSFER_HOSTS": "1stform.sharepoint.com"
   },
   "observability": { "enabled": false }
