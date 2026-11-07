@@ -4,6 +4,8 @@ import { requirePermissionPortable } from "./permissions";
 import { issueFromSeriesPortable, markSentPortable, loadIssuerTaxIdentifiers } from "./invoices";
 import { captureIssuerTaxRegistrations } from "../invoiceTaxRegistrations";
 import { assertInvoiceTaxAssessments } from "../tax";
+import { snapshotSupplierTaxFacts } from "../tax/organizationFacts";
+import { assertInvoiceOrganizationFactsCurrent, loadOrganizationTaxContext } from "./organizationTaxFacts";
 import { cleanInvoiceTemplate } from "../invoiceCommerce";
 import { billingRetryAt, billingWallTime, cleanBillingEmail, cleanBillingRecipients, nextBillingDate, validateBillingTimezone, automationError, type BillingAutomationKind, type BillingCadence } from "../billingAutomation";
 
@@ -83,7 +85,9 @@ async function invoiceSnapshot(ctx: PortableQueryCtx, invoice: any, templateId?:
   const { _id, _creationTime, societyId, ...document } = invoice;
   if (document.status === "draft") {
     assertInvoiceTaxAssessments(document.lines ?? [], document.issueDate);
-    document.issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, invoice.societyId), document.lines ?? [], document.issueDate, now());
+    const taxContext = document.lines?.some((line: { taxAssessment?: unknown }) => line.taxAssessment) ? await loadOrganizationTaxContext(ctx, invoice.societyId) : undefined;
+    if (taxContext) await assertInvoiceOrganizationFactsCurrent(ctx, invoice.societyId, document.lines ?? [], taxContext);
+    document.issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, invoice.societyId), document.lines ?? [], document.issueDate, now(), taxContext ? snapshotSupplierTaxFacts(document.lines ?? [], taxContext, document.issueDate) : undefined);
   }
   return { kind: "invoice", invoice: { ...document, status: document.status === "draft" ? "sent" : document.status, documentTemplate: cleanInvoiceTemplate(template?.config ?? invoice.documentTemplate) }, organization: { name: society?.name ?? "Organization", address: society?.mailingAddress ?? society?.registeredOfficeAddress, email: society?.publicContactEmail ?? society?.officialEmail, registrationNumber: society?.incorporationNumber, logoStorageId: society?.logoStorageId }, paymentInstructions: settings?.paymentInstructions };
 }

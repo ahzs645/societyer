@@ -49,12 +49,13 @@ const modules = {
 };
 
 const t = convexTest(schema, modules as any);
+const companyIdentity = { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" };
 
 // --- seed the real schema (validated inserts), capturing generated ids --------
 const seeded = await t.run(async (ctx: any) => {
   const iso = "2026-01-01T00:00:00.000Z";
   const societyId = await ctx.db.insert("societies", {
-    name: "Riverside", isCharity: false, isMemberFunded: false, updatedAt: 0,
+    name: "Riverside Holdings Inc.", isCharity: false, isMemberFunded: false, updatedAt: 0, ...companyIdentity,
   });
   await ctx.db.insert("users", {
     societyId,
@@ -117,6 +118,7 @@ const convexResult: any = await authedT.query(api.legalOperations.votingPower, {
 const societyId = "soc_local";
 const localFixture: Record<string, PortableDoc[]> = {
   ...portableTestSeed(societyId),
+  societies: [{ _id: societyId, name: "Riverside Holdings Inc.", ...companyIdentity }],
   rightsClasses: [
     { _id: "classA", societyId, className: "Class A", votesPerShare: 10 },
     { _id: "classB", societyId, className: "Class B", votingRights: "Non-Voting" },
@@ -177,6 +179,7 @@ assert.equal(convexUpdated._id, convexCreatedId, "update patches in place (same 
 const upsertDef = definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable });
 async function localCreate(db: TransactionalDb, classType = "share") {
   const localSocietyId = await createPortableTestWorkspace(db);
+  await db.transaction(() => db.patch(localSocietyId, companyIdentity));
   const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal }).register(upsertDef);
   const id = await rt.runMutation<string>("legalOperations:upsertRightsClass", {
     societyId: localSocietyId, className: "Class C", classType, status: "active", votesPerShare: 5,

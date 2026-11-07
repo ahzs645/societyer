@@ -182,9 +182,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "donationReceipts",
     label: "Donation receipts",
     category: "Finance",
-    description: "Receipt issuance, voiding, and receipt history.",
+    description: "Contribution acknowledgements, reviewed official receipt preparation, and receipt history.",
     includes: ["Donation receipts"],
-    entityKinds: ["society"],
   },
   {
     key: "membershipBilling",
@@ -261,8 +260,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
 
 /**
  * Whether a module applies to an organisation of this kind. Unknown kinds
- * ("organization", or before the workspace loads) keep every module, like
- * routeAllowedForEntityKind.
+ * ("organization", or before the workspace loads) keep the configuration
+ * controls available. Route and action eligibility are assessed separately.
  */
 export function moduleAppliesToEntityKind(
   module: { entityKinds?: readonly ModuleEntityKind[] },

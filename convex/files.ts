@@ -4,6 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { assertNativeFileStorageEnabled } from "./providers/env";
 import { requireDocumentAccess } from "../shared/functions/documents";
+import { assertReceiptEvidenceContentUnchanged } from "../shared/functions/receiptRetention";
 import { getUrlPortable, generateUploadUrlPortable, generateLogoUploadUrlPortable } from "../shared/functions/files";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
@@ -55,6 +56,7 @@ export const attachUploadedFileToDocument = authorizedMutation("files:attachUplo
     if (!metadata) throw new Error("Uploaded file not found.");
     fileSizeBytes = metadata.size;
     mimeType = metadata.contentType;
+    await assertReceiptEvidenceContentUnchanged(portableCtx, document, { storageId, fileName, mimeType, fileSizeBytes });
     await claimStorageId(portableCtx, storageId, String(document.societyId));
     await ctx.db.patch(documentId, { storageId, fileName, mimeType, fileSizeBytes });
   },

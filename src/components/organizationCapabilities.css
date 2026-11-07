@@ -33,6 +33,18 @@
 .organization-capabilities__records ul, .organization-capabilities__steps { padding-left: 22px; }
 .organization-capabilities__records li, .organization-capabilities__steps li { margin: 10px 0; }
 .organization-capabilities__note { margin: 16px 0 0; color: var(--text-secondary); font-size: var(--fs-xs, 12px); }
+.organization-capabilities__identity-review { border-left: 3px solid var(--border-focus); padding: 4px 12px; margin-bottom: 16px; }
+.organization-capabilities__identity-review p { margin: 6px 0; }
+.organization-capabilities__explanation { color: var(--text-secondary); }
+.organization-capabilities__workflows { list-style: none; display: grid; gap: 12px; margin: 0; padding: 0; }
+.organization-capabilities__workflows > li { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.organization-capabilities__workflow-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.organization-capabilities__workflow-heading h4 { margin: 0; font-size: inherit; }
+.organization-capabilities__workflow-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.organization-capabilities__workflow-facts dt { color: var(--text-secondary); font-size: var(--fs-xs, 12px); }
+.organization-capabilities__workflow-facts dd { margin: 3px 0 0; }
+.organization-capabilities__workflows p { margin: 8px 0; color: var(--text-secondary); }
 @media (max-width: 640px) {
   .organization-capabilities__features { grid-template-columns: minmax(0, 1fr); }
+  .organization-capabilities__workflow-facts { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }

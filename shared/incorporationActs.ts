@@ -88,7 +88,7 @@ export const ENTITY_KIND_LABELS: Record<IncorporationEntityKind, { label: string
 };
 
 export const SUPPORT_LABELS: Record<IncorporationSupport, { badge: string; description: string }> = {
-  full: { badge: "Full guidance", description: "Reviewed rules, deadlines and document guidance for this Act." },
+  full: { badge: "Core governance profile", description: "Reviewed core governance rules for this Act. Formation preparation and individual actions have separate coverage and evidence requirements." },
   records_only: { badge: "Records only", description: "No reviewed guidance yet. Keep records, documents and tasks; check rules and deadlines with the registry or an adviser." },
 };
 

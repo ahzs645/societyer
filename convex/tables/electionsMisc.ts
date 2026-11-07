@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { corporateElectionReviewValidator } from "../lib/electionValidators";
+import { receiptDocumentKindValidator, receiptIssuerSnapshotValidator, receiptGiftAssessmentValidator, receiptSignedCopyValidator } from "../validators/receipts";
 
 /**
  * Insurance, training, proxies, auditors, proposals, elections, donations, employees, court orders, bylaw amendments.
@@ -367,6 +368,31 @@ export const electionsMiscTables = {
 
   donationReceipts: defineTable({
     societyId: v.id("societies"),
+    documentKind: v.optional(receiptDocumentKindValidator),
+    issueStatus: v.optional(v.union(v.literal("prepared"), v.literal("issued"))),
+    idempotencyKey: v.optional(v.string()),
+    requestFingerprint: v.optional(v.string()),
+    serialAssessed: v.optional(v.boolean()),
+    currency: v.optional(v.literal("CAD")),
+    intendedIssueDate: v.optional(v.string()),
+    preparedAtISO: v.optional(v.string()),
+    preparedByUserId: v.optional(v.string()),
+    issuedByUserId: v.optional(v.string()),
+    issuedOn: v.optional(v.string()),
+    advantageAmountCents: v.optional(v.number()),
+    giftEligibilityConfirmed: v.optional(v.boolean()),
+    giftRecordId: v.optional(v.id("donationReceipts")),
+    sourceAcknowledgementId: v.optional(v.id("donationReceipts")),
+    replacesReceiptId: v.optional(v.id("donationReceipts")),
+    replacementReceiptId: v.optional(v.id("donationReceipts")),
+    issuerSnapshot: v.optional(receiptIssuerSnapshotValidator),
+    giftAssessmentSnapshot: v.optional(receiptGiftAssessmentValidator),
+    signedCopyDocumentId: v.optional(v.id("documents")),
+    signedCopySnapshot: v.optional(receiptSignedCopyValidator),
+    signatureMethod: v.optional(v.literal("wet_ink")),
+    signatoryName: v.optional(v.string()),
+    signatureAuthorityConfirmedAtISO: v.optional(v.string()),
+    voidedByUserId: v.optional(v.string()),
     charityNumber: v.string(),
     receiptNumber: v.string(),
     donorName: v.string(),
@@ -375,7 +401,7 @@ export const electionsMiscTables = {
     amountCents: v.number(),
     eligibleAmountCents: v.number(),
     receivedOnISO: v.string(),
-    issuedAtISO: v.string(),
+    issuedAtISO: v.optional(v.string()),
     location: v.string(),
     description: v.optional(v.string()), // non-cash gifts
     isNonCash: v.boolean(),
@@ -384,7 +410,13 @@ export const electionsMiscTables = {
     voidReason: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
-    .index("by_receipt_number", ["societyId", "receiptNumber"]),
+    .index("by_receipt_number", ["societyId", "receiptNumber"])
+    .index("by_society_request", ["societyId", "idempotencyKey"])
+    .index("by_society_serial_assessed", ["societyId", "serialAssessed"])
+    .index("by_source_acknowledgement", ["sourceAcknowledgementId"])
+    .index("by_gift_record", ["giftRecordId"])
+    .index("by_signed_copy_document", ["signedCopyDocumentId"])
+    .index("by_signed_copy_storage", ["signedCopySnapshot.storageId"]),
 
   employees: defineTable({
     societyId: v.id("societies"),

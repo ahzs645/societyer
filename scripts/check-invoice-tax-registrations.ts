@@ -41,7 +41,7 @@ assert.throws(() => captureIssuerTaxRegistrations([gst, { ...gst, number: "98765
 assert.equal(selectIssuerTaxRegistrations([{ ...gst, registeredAt: undefined }], date).length, 1, "optional effective dates retain the user-declaration compatibility path");
 
 const seed: Record<string, any[]> = structuredClone(tables);
-seed.societies = [structuredClone(society)];
+seed.societies = [{ ...structuredClone(society), isCharity: false, charityStatus: "not_applied" }];
 seed.organizationIdentifiers = [];
 const db = new MemoryDb({ seed });
 const societyId = seed.users[0].societyId, ownerId = seed.users[0]._id;

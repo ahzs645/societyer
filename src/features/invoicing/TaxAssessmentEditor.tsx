@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Field } from "../../components/ui";
 import { Select } from "../../components/Select";
-import { assessTax, defaultTaxAnswers, resolveTaxPack, TAX_RULE_PACKS, taxAssessmentRates, taxAssessmentSummary, taxQuestionVisible, updateTaxAnswer, type TaxAnswers, type TaxAssessment } from "../../../shared/tax";
+import { defaultTaxAnswers, resolveTaxPack, TAX_RULE_PACKS, taxAssessmentRates, taxAssessmentSummary, taxQuestionVisible, updateTaxAnswer, type TaxAnswers, type TaxAssessment } from "../../../shared/tax";
+import { assessTaxForOrganization, organizationTaxFacts, organizationTaxProblems, prefillOrganizationTaxAnswers } from "../../../shared/tax/organizationFacts";
 import type { InvoiceLineTaxes } from "../../../shared/invoiceMoney";
 import type { InvoiceOrganization } from "./types";
 import "./taxAssessment.css";
@@ -23,26 +24,29 @@ export function TaxAssessmentEditor({ value, scope, date, contextKey, organizati
   const [error, setError] = useState("");
   const guideId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const supplierFacts = organizationTaxFacts(organization, date);
+  const supplierContextKey = supplierFacts.factsKey;
+  const savedProblems = value ? organizationTaxProblems(value.answers, organization) : [];
   function initialAnswers(): TaxAnswers {
-    return defaultTaxAnswers(scope, date);
+    return prefillOrganizationTaxAnswers(defaultTaxAnswers(scope, date), organization);
   }
   // A customer or item can change while this guide is open, even before the
   // first assessment has been saved. Never reapply answers from that old sale.
   useEffect(() => {
-    setAnswers(value ? { ...value.answers, scope, supplyDate: date } : defaultTaxAnswers(scope, date));
+    setAnswers(value ? { ...value.answers, scope, supplyDate: date } : initialAnswers());
     setError("");
     setOpen(false);
-  }, [value, scope, date, contextKey]);
+  }, [value, scope, date, contextKey, supplierContextKey]);
   const patch = (key: string, next: string) => { setError(""); setAnswers((current) => updateTaxAnswer(current, key, next)); };
   const effective: TaxAnswers = { ...answers, scope, supplyDate: date, ...(scope === "catalog" ? { customerRelief: "none", customerEvidence: "", purchaserPstNumber: "", pstReliefDocumentation: "unknown", pstReliefConditions: "unknown", pstCertificateType: "" } : {}) };
   let result: TaxAssessment | undefined;
-  try { result = assessTax(effective); } catch { /* A partial date is shown as a validation message on save. */ }
+  try { result = assessTaxForOrganization(effective, organization); } catch { /* A partial date is shown as a validation message on save. */ }
   const pack = resolveTaxPack(effective.jurisdictionCode, date);
   const displayPack = pack ?? TAX_RULE_PACKS.find((candidate) => candidate.jurisdictionCode === effective.jurisdictionCode);
   const knownPlace = TAX_RULE_PACKS.some((candidate) => candidate.jurisdictionCode === effective.jurisdictionCode);
   const save = (confirm: boolean) => {
     try {
-      const assessment = assessTax(effective, confirm);
+      const assessment = assessTaxForOrganization(effective, organization, confirm);
       if (confirm && !assessment.confirmed) throw new Error("Resolve the review questions before applying tax treatment.");
       onApply(assessment, confirm ? taxAssessmentRates(assessment) : undefined);
       setOpen(false);
@@ -57,13 +61,14 @@ export function TaxAssessmentEditor({ value, scope, date, contextKey, organizati
 
   return <div className="tax-assessment">
     <div className="tax-assessment__summary">
-      <span>{taxAssessmentSummary(value)}</span>
+      <span>{savedProblems.length ? "Tax assessment needs review — organization facts changed or unresolved" : taxAssessmentSummary(value)}</span>
       {!disabled && <button ref={toggleRef} type="button" className="btn btn--ghost btn--sm" onClick={open ? () => setOpen(false) : openGuide} aria-controls={guideId} aria-expanded={open}>{open ? "Close tax guide" : value ? "Review tax assessment" : "Guide me through tax"}</button>}
     </div>
     {open && <section id={guideId} className="tax-assessment__guide" aria-label="Tax decision guide">
       <h3>Work out this item's taxes</h3>
       <p className="muted">Answer for the actual supply. Legal structure, charity status, supplier registration and item treatment are separate. Review both taxes before applying the result.</p>
       <p className="muted">Assessment date: {date}. {scope === "catalog" ? "Catalog guidance is checked again for each invoice and customer." : "Review delivery, use and any transitional rules if the supply date differs from the invoice date."}</p>
+      <p className={supplierFacts.needsReview ? "field__error" : "muted"} data-testid="tax-supplier-facts">{supplierFacts.message}</p>
       {(organization?.gstNumber || organization?.pstNumber) && <p className="muted">Numbers on file: {[organization.gstNumber && `GST/HST ${organization.gstNumber}`, organization.pstNumber && `PST ${organization.pstNumber}`].filter(Boolean).join(" · ")}. Confirm registration and collection status below.</p>}
       <Field label="Place of supply" hint="Use the tax place-of-supply rules, including delivery/use. Do not select the incorporation address automatically.">
         <Select aria-label="Place of supply" value={knownPlace ? effective.jurisdictionCode : effective.jurisdictionCode === "unknown" ? "unknown" : "other"} onChange={(value) => patch("jurisdictionCode", value)} options={[

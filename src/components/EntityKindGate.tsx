@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
-import { organizationKind } from "../../shared/organizationDomain";
-import { ROUTE_IDENTITY, routeAllowedForEntityKind } from "../lib/routeIdentity";
+import { normalizeOrganizationIdentity, LEGAL_FORM_LABELS } from "../../shared/organization/normalize";
+import { ROUTE_IDENTITY, routeAllowedForOrganization } from "../lib/routeIdentity";
 
 /**
  * Where a corporation keeps the records a society-only page would hold. Only
@@ -22,15 +22,19 @@ const KIND_PLURAL: Record<string, string> = {
  * Direct-URL guard for routes that apply to one entity kind only. The sidebar
  * and command palette already hide these (ROUTE_IDENTITY.entityKinds); this
  * keeps a bookmarked or typed URL from opening, for example, the Societies Act
- * member register in a corporation workspace. Workspaces whose kind is not yet
- * known (loading, or a generic organization) see the page as before.
+ * member register in a business-company workspace. Loading and unresolved
+ * identities do not grant access to a form-specific route.
  */
 export function EntityKindGate({ routeKey, children }: { routeKey: string; children: React.ReactNode }) {
   const society = useSociety();
   const identity = ROUTE_IDENTITY[routeKey];
-  if (!identity || !society) return <>{children}</>;
-  const kind = organizationKind(society as any);
-  if (routeAllowedForEntityKind(identity, kind)) return <>{children}</>;
+  if (!identity || (!identity.entityKinds?.length && !identity.legalForms?.length)) return <>{children}</>;
+  if (society === undefined) return <div className="page" role="status">Loading organization…</div>;
+  if (routeAllowedForOrganization(identity, society)) return <>{children}</>;
+  const normalized = normalizeOrganizationIdentity(society);
+  const kind = normalized.legalForm === "business_corporation" ? "corporation" : normalized.legalForm;
+  const applicableTo = identity.legalForms?.map(form => LEGAL_FORM_LABELS[form]).join(", ")
+    ?? (identity.entityKinds ?? []).map(value => KIND_PLURAL[value] ?? value).join(" and ");
 
   const alternative = ALTERNATIVES[routeKey];
   return (
@@ -39,12 +43,13 @@ export function EntityKindGate({ routeKey, children }: { routeKey: string; child
         <div className="card__head">
           <h2 className="card__title">{identity.label} is not used for this kind of organization</h2>
           <span className="card__subtitle">
-            {society.name} is set up as a {kind}. This page applies to {(identity.entityKinds ?? []).map((value) => KIND_PLURAL[value] ?? value).join(" and ")} only.
+            {society?.name ?? "This workspace"}: {normalized.legalFormLabel}. This page applies to {applicableTo}.
           </span>
         </div>
         <div className="card__body col">
           <div className="muted">
             Existing records are preserved. If the entity type is wrong, correct it on the organization profile.
+            {normalized.issues.map(issue => <p key={issue.code}>{issue.message}</p>)}
           </div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             {alternative && kind === "corporation" && (

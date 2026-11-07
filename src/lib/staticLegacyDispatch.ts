@@ -1,4 +1,5 @@
 import { assertValid, validateAccessCustodyInput } from "../../shared/recordValidation";
+import portableManifest from "../../shared/functions/portable-manifest.json";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
 import { validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
@@ -273,6 +274,8 @@ const STATIC_EXPORT_TABLES = [
   "organizationAddresses",
   "organizationRegistrations",
   "organizationIdentifiers",
+  "organizationTaxRegistrations",
+  "donationReceiptSequences",
   "users",
   "apiClients",
   "apiTokens",
@@ -1324,7 +1327,17 @@ const MUT_DISPATCHERS = [
   mutCasesAssets9,
 ];
 
-export function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+// Permission checks classify application domains. They do not make an invented
+// method (documents:update, for example) a supported write API. The legacy
+// dispatcher loads lazily, so its exact declaration inventory does too.
+const DECLARED_LEGACY_WRITES = new Map(portableManifest.functions
+  .filter(entry => entry.kind === "mutation" || entry.kind === "action")
+  .map(entry => [entry.name, entry.kind] as const));
+
+export function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null, invokedKind?: "mutation" | "action"): any {
+  const declaredKind = DECLARED_LEGACY_WRITES.get(name);
+  if (!declaredKind) throw new Error(`Unknown local write function: ${name}. Use a declared mutation or action.`);
+  if (invokedKind && declaredKind !== invokedKind) throw new Error(`Function ${name} requires ${declaredKind}(); received ${invokedKind}().`);
   assertLocalWriteCapability(name);
   const localResult = store?.mutationResult(name, args);
   if (localResult !== undefined) return localResult;

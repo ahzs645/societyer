@@ -23,6 +23,7 @@
  */
 
 import { formatLongDate } from "../locale";
+import { charityStatusConflict } from "../entitySetup";
 import type { OrganizationOnboardingAnswers } from "../onboarding";
 import {
   SETUP_PHASE_ORDER,
@@ -58,6 +59,11 @@ export type SetupEvidenceStage = "preparing" | "executed" | "filed" | "certified
  */
 export type OrganizationSetupFacts = {
   organization: SetupOrganization;
+  /** Dated registration assessment only; no tax account or evidence details. */
+  charityRegistration?: {
+    status: "registered" | "not_registered" | "unknown" | "conflict";
+    hasHistory: boolean;
+  };
   answers?: OrganizationOnboardingAnswers | null;
   /** Structured role holders (corporations and other non-society organizations). */
   roles: { director: SetupRoleCounts; officer: SetupRoleCounts; shareholder: SetupRoleCounts; controller: SetupRoleCounts };
@@ -248,8 +254,27 @@ function stepStatus(definition: SetupStepDefinition, variant: SetupVariant, fact
       if (evidenceAtLeast(facts, ["society-records"], "executed")) return done();
       return evidenceAtLeast(facts, ["society-records"], "preparing") || packetGenerated(facts, ["society-directors-resolution"]) ? progress("Resolution started") : todo();
     case "tax": {
-      const known = (value?: string | null) => Boolean(value) && value !== "unknown";
-      return either(known(org.craBnStatus) && known(org.charityStatus), known(org.craBnStatus) || known(org.charityStatus));
+      const businessNumberResolved = ["confirmed", "not_required"].includes(String(org.craBnStatus));
+      const registration = facts.charityRegistration;
+      const conflict = charityStatusConflict(org);
+      if (registration?.status === "conflict" || conflict) {
+        return progress("Resolve the conflicting charity information before completing this step.");
+      }
+      const charityResolved = registration?.hasHistory
+        ? ["registered", "not_registered"].includes(registration.status)
+        : ["not_applied", "revoked"].includes(String(org.charityStatus));
+      if (businessNumberResolved && charityResolved) {
+        return done(registration?.status === "registered"
+          ? "Registration evidence reviewed; each gift and supply still needs its own assessment"
+          : "Tax status recorded; charity receipting eligibility is not established by this step");
+      }
+      if (org.craBnStatus === "pending" || org.charityStatus === "application_pending") {
+        return progress("Application pending — record the authority's decision when it arrives");
+      }
+      if (registration?.hasHistory || org.isCharity === true || org.charityStatus === "registered") {
+        return progress("Review the registration evidence and complete the business-number assessment");
+      }
+      return either(false, businessNumberResolved || charityResolved);
     }
     case "number":
       return org.incorporationNumber?.trim() ? done(org.incorporationNumber.trim()) : todo();

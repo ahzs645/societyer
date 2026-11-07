@@ -52,7 +52,7 @@ import {
 } from "lucide-react";
 import { api } from "../lib/convexApi";
 import { useSociety, useSocieties, setStoredSocietyId } from "../hooks/useSociety";
-import { organizationKind, organizationLabel } from "../../shared/organizationDomain";
+import { organizationLabel } from "../../shared/organizationDomain";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
@@ -62,7 +62,7 @@ import { CREATE_COMMAND_IDS, useCreateCommands } from "../lib/createCommands";
 import { formatDueDate } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
-import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
+import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForOrganization, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 import { navParentForRoute, NAV_TREE_ROUTES } from "../lib/navTree";
 import { canPinFavorite } from "../lib/favoriteProjection";
@@ -647,11 +647,10 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
     const enabledActions = actions.filter((item) => !item.module || isModuleEnabled(society, item.module));
     // Match the sidebar: hide routes gated to another entity kind (e.g. the
     // society member register for a corporation) and use the per-kind label.
-    const entityKind = society ? organizationKind(society as any) : null;
     const navItems = NAV_ITEMS.flatMap((item) => {
       const identity = item.to ? ROUTE_IDENTITY[item.to] : undefined;
       if (!identity) return [item];
-      if (!routeAllowedForEntityKind(identity, entityKind)) return [];
+      if (!routeAllowedForOrganization(identity, society)) return [];
       const label = routeLabelForOrganization(identity, society as any);
       return [label === item.label ? item : { ...item, label, keywords: [...(item.keywords ?? []), item.label] }];
     });

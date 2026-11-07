@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { organizationVocabulary } from "../src/lib/organizationVocabulary";
 import { governanceVocabulary as legacyGovernanceVocabulary, capitalize } from "../src/lib/governanceVocabulary";
 import { organizationCopy as legacyOrganizationCopy } from "../src/lib/organizationCopy";
-import { ROUTE_IDENTITY, routeLabelForOrganization } from "../src/lib/routeIdentity";
+import { ROUTE_IDENTITY, routeLabelForOrganization, routeAllowedForOrganization } from "../src/lib/routeIdentity";
 import { catalogForOrganization, presentRecipe, recipeAppliesToOrganization } from "../src/lib/workflowRecipePresentation";
 import { researchAreaApplies, researchAreasForOrganization } from "../src/lib/researchApplicability";
 import { applyEntityObjectLabels, applyEntityViewLabels } from "../src/lib/entityRecordLabels";
@@ -81,9 +81,13 @@ for (const key of KEYS) {
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], ENTITIES.federalCbca), "Privacy training");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], ENTITIES.bcCompany), "PIPA training");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/society"], ENTITIES.federalCbca), "Corporation");
-for (const path of ["/app/members", "/app/proposals", "/app/receipts", "/app/membership"]) {
-  assert.deepEqual(ROUTE_IDENTITY[path].entityKinds, ["society"], `${path} stays society-only (EntityKindGate reads this)`);
+assert.deepEqual(ROUTE_IDENTITY["/app/proposals"].entityKinds, ["society"], "member proposal guidance stays within its existing supported scope");
+for (const path of ["/app/members", "/app/membership"]) {
+  assert.equal(routeAllowedForOrganization(ROUTE_IDENTITY[path], ENTITIES.bcSociety), true);
+  assert.equal(routeAllowedForOrganization(ROUTE_IDENTITY[path], ENTITIES.bcCompany), false);
+  assert.equal(routeAllowedForOrganization(ROUTE_IDENTITY[path], { entityType: "corporation__nfp_", jurisdictionCode: "CA-FED", actFormedUnder: "canada_not_for_profit_corporations_act" }), true);
 }
+assert.equal(routeAllowedForOrganization(ROUTE_IDENTITY["/app/receipts"], ENTITIES.bcCompany), true, "acknowledgements are independent of the registered-charity issuance gate");
 
 /* --------------------------- workflow recipes -------------------------- */
 

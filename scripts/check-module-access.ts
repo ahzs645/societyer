@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { PERMISSIONS } from "../shared/functions/permissions";
 import { ROLES } from "../shared/functions/access";
-import { MODULE_KEYS } from "../src/lib/modules";
+import { MODULE_KEYS, MODULES_BY_KEY, moduleAppliesToEntityKind } from "../src/lib/modules";
 import { ACCESS_ACTIONS, getModuleAccess, MODULE_ACCESS_DEFINITIONS } from "../src/lib/moduleAccess";
 
 const find = (role: string, key: string, source?: Parameters<typeof getModuleAccess>[1]) => {
@@ -74,5 +74,10 @@ for (const status of ["Invited", "Disabled"]) {
 assert.ok(getModuleAccess("unknown").every((row) => ACCESS_ACTIONS.every((action) => row.actions[action] !== true)));
 assert.ok(find("Director", "grants").notes.some((note) => note.includes("grants:write")));
 assert.ok(find("Viewer", "financials").notes.some((note) => note.includes("corresponding role permission")));
+
+for (const kind of ["society", "corporation", "organization"]) {
+  assert.equal(moduleAppliesToEntityKind(MODULES_BY_KEY.donationReceipts, kind), true, "contribution acknowledgements remain configurable for every organization form");
+}
+assert.equal(moduleAppliesToEntityKind(MODULES_BY_KEY.membershipBilling, "corporation"), false, "acknowledgements do not widen the membership billing module scope");
 
 console.log("Module access projection checks passed: all role grants, optional modules, partial access, disabled features, inactive memberships, and enforcement caveats.");
