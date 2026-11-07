@@ -1,0 +1,38 @@
+.organization-capabilities {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card, 8px);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+.organization-capabilities > summary {
+  padding: 14px 16px;
+  min-height: 44px;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.organization-capabilities > summary .badge { margin-left: 8px; }
+.organization-capabilities__heading { font-weight: 600; }
+.organization-capabilities summary:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.organization-capabilities__body { padding: 0 16px 16px; font-size: var(--fs-sm, 14px); line-height: 1.5; overflow-wrap: anywhere; }
+.organization-capabilities__body h3 { font-size: inherit; font-weight: 600; margin: 20px 0 10px; }
+.organization-capabilities__identity { margin: 0 0 16px; }
+.organization-capabilities__coverage { margin: 0; display: grid; gap: 16px; }
+.organization-capabilities__coverage dt { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 600; }
+.organization-capabilities__coverage dd { margin: 6px 0 0; color: var(--text-secondary); }
+.organization-capabilities__meta { font-size: var(--fs-xs, 12px); }
+.organization-capabilities__features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; padding: 0; margin: 0; list-style: none; }
+.organization-capabilities__features p, .organization-capabilities__steps p, .organization-capabilities__records li p { margin: 4px 0 0; color: var(--text-secondary); }
+.organization-capabilities__records { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.organization-capabilities__records summary { cursor: pointer; min-height: 32px; }
+.organization-capabilities__records > p { color: var(--text-secondary); }
+.organization-capabilities__records ul, .organization-capabilities__steps { padding-left: 22px; }
+.organization-capabilities__records li, .organization-capabilities__steps li { margin: 10px 0; }
+.organization-capabilities__note { margin: 16px 0 0; color: var(--text-secondary); font-size: var(--fs-xs, 12px); }
+@media (max-width: 640px) {
+  .organization-capabilities__features { grid-template-columns: minmax(0, 1fr); }
+}

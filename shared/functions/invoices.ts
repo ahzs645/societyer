@@ -34,6 +34,8 @@ import { cleanInvoiceTemplate, invoiceCurrency, REPAIR_TRANSITIONS, REPAIR_STATU
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { captureIssuerTaxRegistrations, selectIssuerTaxRegistrations } from "../invoiceTaxRegistrations";
+import { assertInvoiceTaxAssessments, cleanTaxAssessment, taxAssessmentRates, taxAssessmentForTransaction, taxTransactionContextChanged, reassessTaxLines } from "../tax";
 import { getOwned, principalUserId, requireOwnedRow, requireRolePortable, requireSocietyMembership } from "./access";
 import { flagChangedPeriods } from "./reconciliation";
 import { assertValid, validateCounterpartyInput } from "../recordValidation";
@@ -181,6 +183,7 @@ function cleanText(value: unknown, max = 2000): string | undefined {
 function cleanLines(lines: any[]): InvoiceLine[] {
   return (lines ?? []).slice(0, 100).map((raw, index) => {
     const line: InvoiceLine = {
+      ...(raw?.taxAssessment ? { taxAssessment: cleanTaxAssessment(raw.taxAssessment) } : {}),
       ...cleanInvoiceLineDetails(raw ?? {}),
       key: cleanText(raw?.key, 60) ?? `line_${index + 1}`,
       item: String(raw?.item ?? "").trim().slice(0, 200),
@@ -404,6 +407,14 @@ function ledgerView(lctx: InvoiceLedgerContext, catalog: Row[]) {
   };
 }
 
+/** Bounded tax-only identifier reads; a truncated list must never select a number. */
+export async function loadIssuerTaxIdentifiers(ctx: PortableQueryCtx, societyId: string) {
+  const groups = await Promise.all(["gst", "business_number", "pst"].map(kind => ctx.db.query("organizationIdentifiers")
+    .withIndex("by_society_kind", q => q.eq("societyId", societyId).eq("kind", kind)).take(101)));
+  if (groups.some(group => group.length > 100)) throw new Error("There are too many tax registrations to select safely. Review duplicate organization identifiers before invoicing.");
+  return groups.flat().map(({ kind, number, status, jurisdiction, registeredAt }) => ({ kind, number, status, jurisdiction, registeredAt }));
+}
+
 /** Branding and reusable designs only: report pages do not need billing/bank records. */
 export async function documentTemplatesPortable(ctx: PortableQueryCtx, { societyId, templateId }: { societyId: string; templateId?: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -411,14 +422,14 @@ export async function documentTemplatesPortable(ctx: PortableQueryCtx, { society
     ctx.db.get(societyId, "societies"),
     ctx.db.query("invoiceTemplates").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(4),
     loadSettings(ctx, societyId),
-    ctx.db.query("organizationIdentifiers").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(100),
+    loadIssuerTaxIdentifiers(ctx, societyId),
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(2000),
   ]);
   const requestedIds = [...new Set([templateId, settings?.defaultTemplateId].filter((id): id is string => Boolean(id)))];
   const selectedTemplates = await Promise.all(requestedIds.map((id) => getOwned(ctx, "invoiceTemplates", id, societyId)));
   const availableTemplates = [...new Map([...templates, ...selectedTemplates].filter((template) => template?.active).map((template) => [String(template!._id), template!])).values()];
   const selectedTemplate = selectedTemplates.find((template) => String(template?._id) === (templateId ?? settings?.defaultTemplateId)) ?? null;
-  const gst = identifiers.find((row) => row.kind === "gst" && row.status !== "inactive");
+  const taxRegistrations = selectIssuerTaxRegistrations(identifiers, await organizationToday(ctx, societyId));
   const logoUrl = organization?.logoStorageId
     ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(organization.logoStorageId) })).url ?? undefined
     : undefined;
@@ -434,7 +445,12 @@ export async function documentTemplatesPortable(ctx: PortableQueryCtx, { society
       address: organization?.mailingAddress ?? organization?.registeredOfficeAddress,
       registrationNumber: organization?.incorporationNumber,
       email: organization?.publicContactEmail ?? organization?.officialEmail ?? organization?.primaryContactEmail,
-      gstNumber: gst?.number,
+      gstNumber: taxRegistrations.find(registration => registration.taxId === "CA-GST")?.number,
+      pstNumber: taxRegistrations.find(registration => registration.taxId === "CA-BC-PST")?.number,
+      taxRegistrations,
+      isCharity: organization?.isCharity,
+      charityStatus: organization?.charityStatus,
+      gstHstStatus: organization?.gstHstStatus,
       logoUrl,
     },
     templates: availableTemplates,
@@ -461,7 +477,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     ctx.db.query("memberSubscriptions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("subscriptionPlans").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("membershipFeePeriods").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("organizationIdentifiers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    loadIssuerTaxIdentifiers(ctx, societyId),
     loadInvoiceLedgerContext(ctx, societyId),
     postedInvoiceEntries(ctx, societyId),
     // The invoice page subscribes to every collectionPage before opening a builder.
@@ -528,8 +544,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
   }
   const activePlans = (plans as Row[]).filter((plan) => plan.active !== false);
   const duesCandidates = buildDuesCandidates(today, subscriptions as Row[], activePlans, feePeriods as Row[], members as Row[], decorated);
-  const gst = (identifiers as Row[]).find((row) => row.kind === "gst" && row.status !== "inactive")
-    ?? (identifiers as Row[]).find((row) => row.kind === "business_number" && row.status !== "inactive" && /RT\d{4}/i.test(String(row.number)));
+  const taxRegistrations = selectIssuerTaxRegistrations(identifiers, today);
   const defaultId = settings?.defaultTemplateId;
   const defaultTemplate = defaultId && !templates.some(template => template._id === defaultId)
     ? await ctx.db.get(defaultId, "invoiceTemplates")
@@ -544,7 +559,12 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       address: (organization as any)?.mailingAddress ?? (organization as any)?.registeredOfficeAddress,
       registrationNumber: (organization as any)?.incorporationNumber,
       email: (organization as any)?.publicContactEmail ?? (organization as any)?.officialEmail ?? (organization as any)?.primaryContactEmail,
-      gstNumber: gst?.number,
+      gstNumber: taxRegistrations.find(registration => registration.taxId === "CA-GST")?.number,
+      pstNumber: taxRegistrations.find(registration => registration.taxId === "CA-BC-PST")?.number,
+      taxRegistrations,
+      isCharity: organization?.isCharity,
+      charityStatus: organization?.charityStatus,
+      gstHstStatus: organization?.gstHstStatus,
     },
     templates: defaultTemplate?.societyId === societyId ? [...templates, defaultTemplate] : templates,
     priceLists,
@@ -679,6 +699,9 @@ async function invoiceFields(ctx: PortableQueryCtx, args: InvoiceArgs, original:
   if (JSON.stringify({ lines, documentExtras: args.documentExtras }).length > 850000) throw new Error("This invoice contains too much inline artwork or attachments. Keep it below 850 KB.");
   if (totals.totalCents < 0) throw new Error("The discount is larger than the invoice.");
   const party = await cleanParty(ctx, args.societyId, args);
+  if (original && original.status === "draft" && taxTransactionContextChanged(original, { ...args, ...party, currency: args.currency ?? original.currency })) {
+    for (const line of lines) if (line.taxAssessment) line.taxAssessment = taxAssessmentForTransaction(line.taxAssessment, args.issueDate);
+  }
   const organization: any = await ctx.db.get(args.societyId, "societies");
   const currency = invoiceCurrency(args.currency, organization?.currency ?? "CAD");
   if (args.priceListId) {
@@ -740,6 +763,12 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: InvoiceArgs
   }
   if (original && original.currency !== fields.currency && ((original.payments ?? []).length || original.journalEntryId)) throw new Error("Currency cannot change after payments or ledger posting.");
   if (original && (original.journalEntryId || original.status !== "draft") && JSON.stringify(original.money?.fx) !== JSON.stringify(fields.money?.fx)) throw new Error("The invoice FX quote is immutable after issue. Void and replace the invoice to change it.");
+  if (original && (original.status !== "draft" || original.issuerTaxRegistrationsSnapshot)) {
+    const guidedOrPrepared = (original.status === "draft" && original.issuerTaxRegistrationsSnapshot) || [...(original.lines ?? []), ...fields.lines].some((line: InvoiceLine) => line.taxAssessment);
+    if (guidedOrPrepared && taxTransactionContextChanged(original, fields)) throw new Error("Issued tax decisions are fixed to their recipient, delivery details and date. Void and replace the invoice to change them.");
+    const taxState = (lines: InvoiceLine[]) => lines.map((line) => ({ key: line.key, item: line.item, description: line.description, catalogItemId: line.catalogItemId, taxRatePercent: line.taxRatePercent ?? 0, taxLabel: line.taxLabel ?? "", additionalTaxes: line.additionalTaxes ?? [], taxAssessment: line.taxAssessment })).sort((a, b) => a.key.localeCompare(b.key));
+    if (guidedOrPrepared && JSON.stringify(taxState(original.lines ?? [])) !== JSON.stringify(taxState(fields.lines))) throw new Error("Issued tax decisions are fixed. Void and replace the invoice to change its supply or tax treatment.");
+  }
   if(new TextEncoder().encode(JSON.stringify({...original,...fields})).byteLength>900000)throw new Error("This invoice exceeds 900 KB. Reduce artwork or attachments before saving.");
   const actor = await actorName(ctx, args.societyId);
   const at = nowISO();
@@ -946,6 +975,11 @@ function postedLabel(totalCents: number) {
 /** Mark drafts as sent (optionally drafting an Outbox email for each); each posts its accrual when the books can take it. */
 export async function markSentPortable(ctx: PortableMutationCtx, { societyId, ids, draftEmail }: { societyId: string; ids: string[]; draftEmail?: boolean }) {
   const rows = await ownedInvoices(ctx, societyId, ids);
+  // Validate the whole batch before posting anything, including on the portable runtime.
+  for (const row of rows) if (row.status === "draft") assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
+  const identifiers = rows.some(row => row.status === "draft" && !row.issuerTaxRegistrationsSnapshot) ? await loadIssuerTaxIdentifiers(ctx, societyId) : [];
+  const issuerSnapshots = new Map(rows.filter(row => row.status === "draft").map(row => [row._id,
+    row.issuerTaxRegistrationsSnapshot ?? captureIssuerTaxRegistrations(identifiers, row.lines ?? [], row.issueDate, nowISO())]));
   const actor = await actorName(ctx, societyId);
   const userId = await actingUser(ctx, societyId);
   const lctx = await loadInvoiceLedgerContext(ctx, societyId);
@@ -960,7 +994,7 @@ export async function markSentPortable(ctx: PortableMutationCtx, { societyId, id
     const at = nowISO();
     const events = [event("sent", draftEmail && row.billToEmail ? "Marked as sent · email drafted in Outbox" : "Marked as sent", actor)];
     if (outcome.entryId) events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents), actor));
-    await ctx.db.patch(row._id, { status: "sent", sentAtISO: at, updatedAtISO: at, ...(outcome.entryId ? { journalEntryId: outcome.entryId } : {}), timeline: [...(row.timeline ?? []), ...events] });
+    await ctx.db.patch(row._id, { status: "sent", sentAtISO: at, issuerTaxRegistrationsSnapshot: issuerSnapshots.get(row._id), updatedAtISO: at, ...(outcome.entryId ? { journalEntryId: outcome.entryId } : {}), timeline: [...(row.timeline ?? []), ...events] });
     sent += 1;
     if (outcome.entryId) posted += 1;
     if (draftEmail && row.billToEmail) {
@@ -1068,7 +1102,7 @@ export async function duplicatePortable(ctx: PortableMutationCtx, { id }: { id: 
     paymentInstructions: row.paymentInstructions ?? defaults.paymentInstructions,
     money: row.money, documentExtras: row.documentExtras,
     priceListId: row.priceListId,
-    lines: (row.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line") })),
+    lines: (row.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line"), ...(line.taxAssessment ? { taxAssessment: taxAssessmentForTransaction(line.taxAssessment, today) } : {}) })),
     discount: row.discount,
     memo: row.memo,
     totalCents: computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents,
@@ -1212,6 +1246,11 @@ async function recordSettlement(ctx: PortableMutationCtx, args: SettlementArgs, 
     if (depositAccountId) await assertDepositAccount(ctx, row.societyId, depositAccountId, lctx.workspaceCurrency);
   }
   const actor = await actorName(ctx, row.societyId), userId = await actingUser(ctx, row.societyId), at = nowISO();
+  let issuerTaxRegistrationsSnapshot = row.issuerTaxRegistrationsSnapshot;
+  if (row.status === "draft") {
+    assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
+    issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, row.societyId), row.lines ?? [], row.issueDate, at);
+  }
   let payment: StoredInvoicePayment = { key: randomKey("settlement"), kind, date: args.date, amountCents, method, recordedAtISO: at, ...(idempotencyKey ? { idempotencyKey } : {}), ...(args.sourcePaymentKey ? { sourcePaymentKey: args.sourcePaymentKey } : {}), ...(fxRateMicros ? { fxRateMicros, fxSource: cleanText(args.fxSource, 200) } : {}), ...(args.reference ? { reference: cleanText(args.reference, 100) } : {}), ...(args.note ? { note: cleanText(args.note, 1000) } : {}), ...(actor ? { recordedByName: actor } : {}), ...(txn ? { financialTransactionId: txn._id } : args.depositAccountId && !noncash ? { depositAccountId: args.depositAccountId } : {}) };
   if(new TextEncoder().encode(JSON.stringify({...row,payments:[...previous,payment]})).byteLength>900000)throw new Error("This invoice is too large for another settlement record. Export the audit history and reduce inline attachments.");
   let next = { ...row, status: "sent", payments: [...previous, payment] } as Row;
@@ -1223,7 +1262,7 @@ async function recordSettlement(ctx: PortableMutationCtx, args: SettlementArgs, 
   next.fxRevaluations = fxRevaluations;
   if (txn) payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
   payment = withPosting(payment, await postPayment(ctx, asStored(next), payment, lctx, userId));
-  await ctx.db.patch(row._id, { status: "sent", sentAtISO: row.sentAtISO ?? at, ...(next.journalEntryId ? { journalEntryId: next.journalEntryId } : {}), fxRevaluations, payments: [...previous, payment], paidCents: sumPaid([...previous, payment]), totalCents: total, updatedAtISO: at, timeline: [...(row.timeline ?? []), event(kind, `${kind === "payment" ? "Payment" : kind === "write_off" ? "Write-off" : kind === "credit" ? "Credit" : "Refund"} recorded`, actor, amountCents)] });
+  await ctx.db.patch(row._id, { status: "sent", sentAtISO: row.sentAtISO ?? at, ...(issuerTaxRegistrationsSnapshot ? { issuerTaxRegistrationsSnapshot } : {}), ...(next.journalEntryId ? { journalEntryId: next.journalEntryId } : {}), fxRevaluations, payments: [...previous, payment], paidCents: sumPaid([...previous, payment]), totalCents: total, updatedAtISO: at, timeline: [...(row.timeline ?? []), event(kind, `${kind === "payment" ? "Payment" : kind === "write_off" ? "Write-off" : kind === "credit" ? "Credit" : "Refund"} recorded`, actor, amountCents)] });
   return payment.key;
 }
 export async function recordPaymentPortable(ctx: PortableMutationCtx, args: SettlementArgs) { return recordSettlement(ctx, args, "payment"); }
@@ -1497,8 +1536,15 @@ export async function upsertCatalogItemPortable(
   if (!Number.isFinite(rate) || rate < 0 || rate > 30) throw new Error("Tax rate must be between 0 and 30%.");
   if (args.accountingAccountId) await requireAccountOfKind(ctx, args.societyId, args.accountingAccountId, "revenue");
   const {rateOverridden:_override,...details}=cleanInvoiceLineDetails(args);
+  const taxAssessment = cleanTaxAssessment(args.taxAssessment);
+  if (taxAssessment && taxAssessment.answers.scope !== "catalog") throw new Error("Save a catalog assessment without customer-specific relief.");
+  if (taxAssessment?.confirmed) {
+    const expected = taxAssessmentRates(taxAssessment);
+    if (JSON.stringify([expected.taxRatePercent ?? 0, expected.taxLabel ?? "", expected.additionalTaxes ?? []]) !== JSON.stringify([rate, rate > 0 ? cleanText(args.taxLabel, 20) ?? "Tax" : "", rate > 0 ? cleanAdditionalTaxes(args.additionalTaxes) ?? [] : []])) throw new Error("Catalog rates must match the confirmed tax assessment.");
+  }
   const fields = {
     ...details,
+    taxAssessment,
     imageUrl:details.imageUrl,manufacturer:details.manufacturer,partNumber:details.partNumber,upc:details.upc,ean:details.ean,isbn:details.isbn,customField:details.customField,batchNumber:details.batchNumber,serialNumbers:details.serialNumbers,taxMode:details.taxMode,
     name,
     description: cleanText(args.description, 1000),
@@ -1515,7 +1561,8 @@ export async function upsertCatalogItemPortable(
     updatedAtISO: nowISO(),
   };
   if (args.id) {
-    await getOwned(ctx, "invoiceCatalogItems", args.id, args.societyId);
+    const old = await getOwned<Row>(ctx, "invoiceCatalogItems", args.id, args.societyId);
+    if (fields.taxAssessment && (old.name !== fields.name || (old.kind ?? "item") !== fields.kind || (old.currency ?? "CAD") !== fields.currency)) fields.taxAssessment = { ...fields.taxAssessment, confirmed: false };
     await ctx.db.patch(args.id, fields);
     return args.id;
   }
@@ -1595,8 +1642,12 @@ export async function upsertCustomerPortable(ctx: PortableMutationCtx, args: Cus
   for (const row of await loadInvoices(ctx, societyId)) {
     // A repair invoice must stay on the repair's party, so a one-off's stays one-off.
     if (!isTheirs(row) || (oneOffKey && row.repairJobId)) continue;
+    // Delivery preparation can freeze a draft's public invoice. Preserve its
+    // recipient just as we preserve an issued assessment's transaction facts.
+    if ((row.status === "draft" && row.issuerTaxRegistrationsSnapshot) || (row.status !== "draft" && row.lines?.some((line: InvoiceLine) => line.taxAssessment))) continue;
     if (row.status === "draft") {
-      await ctx.db.patch(row._id, { ...link, ...details(row), updatedAtISO: nowISO() });
+      const next = { ...row, ...link, ...details(row) };
+      await ctx.db.patch(row._id, { ...link, ...details(row), ...(taxTransactionContextChanged(row, next) ? { lines: reassessTaxLines(row.lines, row.issueDate) } : {}), updatedAtISO: nowISO() });
       continue;
     }
     const rename = args.updateSentInvoices && row.status !== "void" && row.billToName !== name;
@@ -1607,7 +1658,11 @@ export async function upsertCustomerPortable(ctx: PortableMutationCtx, args: Cus
     if (isTheirs(row)) await ctx.db.patch(row._id, { ...link, ...details(row), updatedAtISO: nowISO() });
   }
   for (const quote of await ctx.db.query("billingQuotes").withIndex("by_society", (q) => q.eq("societyId", societyId)).take(1000)) {
-    if (quote.status === "draft" && isTheirs(quote.fields)) await ctx.db.patch(quote._id, { fields: { ...quote.fields, ...link, ...details(quote.fields) } });
+    if (quote.status === "draft" && isTheirs(quote.fields)) {
+      const fields = { ...quote.fields, ...link, ...details(quote.fields) };
+      if (taxTransactionContextChanged(quote.fields, fields)) fields.lines = reassessTaxLines(fields.lines, fields.issueDate);
+      await ctx.db.patch(quote._id, { fields });
+    }
   }
   if (oneOffKey) {
     const pricing = await ctx.db.query("billingCustomerPricing").withIndex("by_society_partyKey", (q) => q.eq("societyId", societyId).eq("partyKey", `name:${oneOffKey}`)).first();
@@ -1735,7 +1790,7 @@ export async function issueFromSeriesPortable(ctx: PortableMutationCtx, { id }: 
     paymentMethods: series.paymentMethods ?? defaults.paymentMethods,
     paymentInstructions: series.paymentInstructions ?? defaults.paymentInstructions,
     money: series.money, documentExtras: series.documentExtras,
-    lines: (series.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line") })),
+    lines: (series.lines ?? []).map((line: any) => ({ ...line, key: randomKey("line"), ...(line.taxAssessment ? { taxAssessment: taxAssessmentForTransaction(line.taxAssessment, issueDate) } : {}) })),
     discount: series.discount,
     memo: series.memo,
     totalCents: computeInvoiceTotals(series.lines ?? [], series.discount, series.money).totalCents,
@@ -2029,7 +2084,8 @@ export async function invoiceRepairJobPortable(ctx: PortableMutationCtx, { id }:
   if (active) return active._id;
   const settings = await loadSettings(ctx, job.societyId);
   const customer: Row | null = job.counterpartyId ? await ctx.db.get(job.counterpartyId, "accountingCounterparties") : null;
-  const invoiceId = await upsertPortable(ctx, { societyId: job.societyId, partyKind: job.partyKind, memberId: job.memberId, counterpartyId: job.counterpartyId, billToName: customer?.name ?? job.billToName, billToEmail: job.billToEmail, billToAddress: job.billToAddress, issueDate: await organizationToday(ctx, job.societyId), terms: settings?.defaultTerms ?? DEFAULT_TERMS, reference: job.number, currency: job.currency, repairJobId: id, lines: job.lines, memo: `${job.asset}${job.serialNumber ? ` (${job.serialNumber})` : ""}\n${job.problem}` });
+  const issueDate = await organizationToday(ctx, job.societyId);
+  const invoiceId = await upsertPortable(ctx, { societyId: job.societyId, partyKind: job.partyKind, memberId: job.memberId, counterpartyId: job.counterpartyId, billToName: customer?.name ?? job.billToName, billToEmail: job.billToEmail, billToAddress: job.billToAddress, issueDate, terms: settings?.defaultTerms ?? DEFAULT_TERMS, reference: job.number, currency: job.currency, repairJobId: id, lines: reassessTaxLines(job.lines, issueDate), memo: `${job.asset}${job.serialNumber ? ` (${job.serialNumber})` : ""}\n${job.problem}` });
   await ctx.db.patch(id, { updatedAtISO: nowISO(), timeline: [...job.timeline, event("invoiced", "Invoice created", await actorName(ctx, job.societyId))] });
   return invoiceId;
 }

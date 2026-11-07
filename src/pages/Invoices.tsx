@@ -541,7 +541,7 @@ export function InvoicesPage() {
       ) : tab === "repairs" ? (
         <RepairJobsPanel key={params.get("repair")} workspace={workspace} societyId={society._id} canWrite={canWrite} canExport={canExport} logoUrl={(society as any).logoUrl ?? null} focusId={params.get("repair")} onOpenInvoice={(id) => setParam({ invoice: id, builder: null })} />
       ) : tab === "catalog" ? (
-        <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} defaultCurrency={workspace.ledger.workspaceCurrency} />
+        <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} defaultCurrency={workspace.ledger.workspaceCurrency} assessmentDate={workspace.today} organization={workspace.organization} />
       ) : LIST_TABS.has(tab) ? (
         <div className="card invoice-card">
           <InvoiceViewControls societyId={society._id} value={listView} onChange={applyView} />

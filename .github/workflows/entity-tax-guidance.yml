@@ -1,0 +1,76 @@
+name: Organization and tax guidance
+
+on:
+  pull_request:
+    paths:
+      - "shared/tax/**"
+      - "shared/*Tax*"
+      - "shared/*tax*"
+      - "shared/*entity*"
+      - "shared/*Entity*"
+      - "shared/functions/invoices.ts"
+      - "shared/functions/organizationDetails.ts"
+      - "shared/functions/billingDocuments.ts"
+      - "shared/orgHubOptions.ts"
+      - "shared/organizationCapabilities.ts"
+      - "shared/functions/billingAutomation.ts"
+      - "convex/invoices.ts"
+      - "convex/organizationDetails.ts"
+      - "convex/tables/invoices.ts"
+      - "convex/validators/*Tax*.ts"
+      - "convex/validators/taxAssessment.ts"
+      - "src/features/invoicing/**"
+      - "src/pages/Society.tsx"
+      - "src/pages/Invoices.tsx"
+      - "src/pages/OrganizationSetup.tsx"
+      - "src/components/OrganizationCapabilities.tsx"
+      - "src/components/organizationCapabilities.css"
+      - "scripts/check-tax-*"
+      - "scripts/check-invoice-tax-*"
+      - "scripts/check-organization-capabilities.ts"
+      - "scripts/check-entity-*"
+      - "tests/tax-guidance.spec.ts"
+      - "playwright.tax-guidance.config.ts"
+      - ".github/workflows/entity-tax-guidance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tax-guidance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Entity coverage, tax rules, persistence and document rendering
+        run: npm run test:organization-capabilities && npm run test:tax-guidance
+      - name: Existing invoice behavior
+        run: npm run test:invoices && npm run test:invoice-money && npm run test:billing-documents && npm run test:billing-operations && npm run test:billing-automation
+      - name: App and hosted schema typechecks
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit && npm run convex:typecheck
+      - name: Install browser
+        if: ${{ !cancelled() }}
+        run: npx playwright install --with-deps chromium
+      - name: Desktop and phone tax decisions
+        if: ${{ !cancelled() }}
+        run: npm run test:tax-guidance-ui
+      - name: Existing catalog and customer flows
+        if: ${{ !cancelled() }}
+        run: npm run test:invoice-catalog-customers-ui
+      - name: Browser evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tax-guidance-browser-results
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7

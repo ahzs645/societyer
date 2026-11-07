@@ -32,11 +32,13 @@ import {
   postExistingPortable,
 } from "../shared/functions/invoices";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { taxAssessmentValidator } from "./validators/taxAssessment";
 import { invoiceMoneyValidator, invoiceDocumentExtrasValidator, invoiceTaxModeValidator } from "./tables/invoiceMoney";
 import { invoiceReceivingMethodValidator, invoiceTemplateValidator, invoicePriceEntryValidator, repairStatusValidator, invoiceDiscountValidator } from "./tables/invoices";
 
 // Lines arrive from the builder; the handler normalises and validates them.
 const clientLineValidator = v.object({
+  taxAssessment: v.optional(taxAssessmentValidator),
   key: v.optional(v.string()),
   catalogItemId: v.optional(v.id("invoiceCatalogItems")),
   item: v.string(),
@@ -196,6 +198,7 @@ export const undoDuesBatch = authorizedMutation("invoices:undoDuesBatch", mutati
 
 export const upsertCatalogItem = authorizedMutation("invoices:upsertCatalogItem", mutation)({
   args: {
+    taxAssessment: v.optional(taxAssessmentValidator),
     id: v.optional(v.id("invoiceCatalogItems")),
     societyId: v.id("societies"),
     name: v.string(),

@@ -245,6 +245,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
         </section>
       )}
 
+      {(invoice.lifecycle === "sent" || invoice.sentAtISO) && !invoice.issuerTaxRegistrationsSnapshot && <p className="muted" style={{ fontSize: 13 }}>Tax registration numbers were not saved when this invoice was issued. Its preview does not substitute today's organization numbers; consult the original issued document for those details.</p>}
       {ledgerNote && (
         <p className="muted invoice-drawer__note invoice-drawer__ledger">
           <BookCheck size={14} aria-hidden="true" /> {ledgerNote}

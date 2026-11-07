@@ -6,6 +6,8 @@ import type { InvoiceTemplate, DocumentSectionKey } from "../../../shared/invoic
 import type { DocumentExtras, DocumentCustomTable, DocumentSummaryRow } from "../../../shared/documentExtras";
 import type { InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
 import type { InvoiceLine } from "../../../shared/invoicing";
+import { invoiceIssuerTaxRegistrations, registrationDisplayLines, guidedTaxIdsToCollect, type InvoiceIssuerTaxSnapshot } from "../../../shared/invoiceTaxRegistrations";
+import { invoiceTaxDisclosureLines } from "../../../shared/tax";
 import type { InvoiceOrganization, InvoicePaymentView } from "./types";
 import { documentCssFont, documentPresentation, numericDocumentColumn, documentAddressLines, documentBackgroundCss } from "./documentPresentation";
 import { cleanDocumentImage } from "../../../shared/documentRichContent";
@@ -14,6 +16,9 @@ import { DocumentAdvancedBlocks } from "./DocumentAdvancedBlocks";
 import "./documentPreview.css";
 
 export type InvoiceDocumentData = {
+  issuerTaxRegistrationsSnapshot?: InvoiceIssuerTaxSnapshot;
+  lifecycle?: "draft" | "sent" | "void";
+  sentAtISO?: string;
   documentTemplate?: InvoiceTemplate;
   paymentMethods?: InvoiceReceivingMethod[];
   paymentInstructions?: string;
@@ -51,6 +56,9 @@ export type InvoiceDocumentProps = {
 /** The flowing HTML preview shares its normalized data, settings and blocks with the PDF. */
 export function InvoiceDocument({ invoice, organization, paymentInstructions }: InvoiceDocumentProps) {
   const data = documentPresentation(invoice), { config, design, advanced: a, extras, kind, title, columns, cellValue, summary, metadata, page } = data;
+  const registrationLines = registrationDisplayLines(invoiceIssuerTaxRegistrations(invoice, organization));
+  const showRegistrations = design.fields.taxRegistration || guidedTaxIdsToCollect(invoice.lines).length > 0;
+  const taxDisclosures = invoiceTaxDisclosureLines(invoice.lines);
   paymentInstructions = invoicePaymentText(invoice, paymentInstructions);
   const brand = config.brand;
   const logoBrand = config.customLogo ? undefined : brand;
@@ -59,7 +67,7 @@ export function InvoiceDocument({ invoice, organization, paymentInstructions }: 
   const element = (key: keyof typeof a.typography): CSSProperties => { const type = a.typography[key]; return { fontFamily: documentCssFont(type.fontFamily, brand?.font), fontSize: `${type.fontSize}pt`, color: type.color }; };
   const address = (key: "organization" | "billing" | "shipping") => {
     const settings = a.addresses[key], org = key === "organization";
-    const source = org ? { name: a.visibility.organizationName ? organization.name || "Your organization" : "", address: a.visibility.organizationAddress ? organization.address : "", email: a.visibility.organizationAddress ? organization.email : "", registrationNumber: a.visibility.organizationAddress ? organization.registrationNumber : "", taxNumber: organization.gstNumber } : key === "billing" ? { name: invoice.billToName || "—", address: invoice.billToAddress, email: design.fields.customerEmail ? invoice.billToEmail : "" } : { name: invoice.shipToName, address: invoice.shipToAddress };
+    const source = org ? { name: a.visibility.organizationName ? organization.name || "Your organization" : "", address: a.visibility.organizationAddress ? organization.address : "", email: a.visibility.organizationAddress ? organization.email : "", registrationNumber: a.visibility.organizationAddress ? organization.registrationNumber : "", taxNumber: registrationLines.join("\n") } : key === "billing" ? { name: invoice.billToName || "—", address: invoice.billToAddress, email: design.fields.customerEmail ? invoice.billToEmail : "" } : { name: invoice.shipToName, address: invoice.shipToAddress };
     return <div key={key} className="document-preview__address" style={settings.placement === "absolute" ? { position: "absolute", left: `${settings.x}pt`, top: `${settings.y}pt`, width: `${Math.min(settings.width, page.width - settings.x)}pt`, zIndex: 2 } : undefined}>
       {!org && (key !== "billing" || a.visibility.billTo) && <strong style={element("labels")}>{key === "billing" ? design.labels.billTo : design.labels.shipTo}</strong>}
       {documentAddressLines(settings, source).split("\n").map((line, index) => <p key={index} style={element(line.includes(source.name || "\u0000") ? org ? "organizationName" : "customerName" : org ? "organizationAddress" : "customerAddress")}>{line}</p>)}
@@ -105,7 +113,8 @@ export function InvoiceDocument({ invoice, organization, paymentInstructions }: 
     {draftWatermark && <div aria-hidden="true" className="document-preview__watermark" style={{ color: a.stamp.color }}><span>{a.stamp.text || "DRAFT"}</span></div>}
     {design.header.text && <div className="document-preview__band" style={typography("header")}>{design.header.text}</div>}{a.rich.headerHtml && <DocumentRichContent html={a.rich.headerHtml} />}
     {design.sections.map((key) => <div key={key} data-document-section={key}>{key === "items" && advancedBlock("before_items")}{key === "items" && data.taxModeLabel && <p style={element("labels")}>{data.taxModeLabel}</p>}{sections[key]}{key === "items" && advancedBlock("after_items")}{key === "totals" && advancedBlock("after_totals")}</div>)}{advancedBlock("end")}
-    {design.fields.taxRegistration && organization.gstNumber && <div className="document-preview__tax" style={typography("footer")}>GST/HST registration no. {organization.gstNumber}</div>}
+    {showRegistrations && registrationLines.map(line => <div key={line} className="document-preview__tax" style={typography("body")}>{line}</div>)}
+    {taxDisclosures.length > 0 && <section aria-label="Tax treatment" className="document-preview__tax" style={typography("body")}><strong>Tax treatment</strong>{taxDisclosures.map((line, index) => <p key={index}>{line}</p>)}</section>}
     {data.paymentStubDetails && <section className="document-preview__stub" style={element("payment")}><strong>{a.labels.paymentStub}</strong><p>{invoice.number} · {invoice.billToName}</p><p>{data.paymentStubDetails.totalLabel}: {data.paymentStubDetails.total}{data.paymentStubDetails.showBalance && <> · {data.paymentStubDetails.balanceLabel}: {data.paymentStubDetails.balance}</>}</p><p>{a.paymentStub.instructions}</p></section>}
     <footer className="document-preview__footer" style={{ ...typography("footer"), backgroundColor: a.backgrounds.footer.color }}><div aria-hidden="true" className="document-preview__artwork" style={{ ...documentBackgroundCss(a.backgrounds.footer), opacity: a.backgrounds.footer.opacity }} />{design.footer.text && <p>{design.footer.text}</p>}{a.rich.footerHtml && <DocumentRichContent html={a.rich.footerHtml} />}{design.footer.pageNumbers && <span style={{ textAlign: a.page.pageNumber.alignment }}>{design.footer.pageNumberFormat === "page_of_total" ? "Page 1" : "1"}</span>}</footer>
     {design.fields.organization && a.addresses.organization.placement === "absolute" && address("organization")}{a.addresses.billing.placement === "absolute" && address("billing")}{design.fields.shipTo && a.addresses.shipping.placement === "absolute" && address("shipping")}{a.signature.placement === "absolute" && signature()}{a.receiverSignature.placement === "absolute" && signature(true)}

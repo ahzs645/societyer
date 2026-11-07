@@ -6,6 +6,7 @@ import { DocumentExtrasFields } from "./DocumentExtrasFields";
 import { FinalTotalPanel } from "./FinalPricePanel";
 import { InvoiceMoneyFields } from "./InvoiceMoneyFields";
 import { cleanInvoiceMoney, type InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
+import { taxTransactionContextChanged, taxTransactionContextKey, reassessTaxLines } from "../../../shared/tax";
 import { assignedPriceList, quantityCatalogRate, type BillingPricingWorkspace } from "../../../shared/billingPricing";
 import { partyKey as billingPartyKey } from "../../../shared/invoicing";
 import type { DocumentExtras } from "../../../shared/documentExtras";
@@ -184,6 +185,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     if(repricing)setPricingChanged(true);
     setDraft((current) => {
       const next = {...current,...patch};
+      if (taxTransactionContextChanged(current, next)) next.lines = reassessTaxLines(next.lines, next.issueDate);
       if(repricing&&pricing){
         if(!priceListManual&&!Object.prototype.hasOwnProperty.call(patch,"priceListId"))next.priceListId=assignedPriceList(workspace.priceLists??[],pricing,billingPartyKey(next),next.currency,next.issueDate)?._id??"";
         const list=workspace.priceLists?.find(value=>value._id===next.priceListId);
@@ -232,6 +234,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     memo: draft.memo || undefined,
     payments: invoice?.payments,
     status: invoice?.status ?? "draft",
+    issuerTaxRegistrationsSnapshot: invoice?.issuerTaxRegistrationsSnapshot,
   };
   const organization = { ...workspace.organization, logoUrl };
   const partyKey = (party: { partyKind: string; memberId?: string; counterpartyId?: string; billToName: string }) =>
@@ -469,6 +472,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
           {invoice && invoice.payments.length > 0 && invoice.lifecycle !== "void" && (
             <Banner tone="info" title="Payments recorded">The total can't drop below the <Money cents={invoice.paidCents} currency={draft.currency} /> already paid.</Banner>
           )}
+          {invoice && invoice.lifecycle !== "draft" && invoice.lines.some((line) => line.taxAssessment) && <Banner tone="info" title="Issued tax assessment">The supply, tax decisions, recipient, delivery details and date are fixed to this invoice. Void and replace it if those facts need to change.</Banner>}
           {error && <Banner tone="danger" title="Check the invoice">{error}</Banner>}
           {duplicateRetry && likelyDuplicate && (
             <Banner tone="warn" title={`Looks like a duplicate of ${likelyDuplicate.title} (${formatDate(likelyDuplicate.date)})`}>
@@ -502,6 +506,8 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
           </section>
 
           <LineItemsEditor
+            assessmentDate={draft.issueDate} assessmentContext={taxTransactionContextKey(draft)}
+            organization={workspace.organization}
             lines={draft.lines}
             onChange={(next) => update({ lines: next })}
             catalog={activeCatalog}

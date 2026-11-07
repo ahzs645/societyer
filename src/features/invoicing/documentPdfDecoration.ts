@@ -9,6 +9,7 @@ import type { InvoiceOrganization } from "./types";
 import { documentAddressLines } from "./documentPresentation";
 import { documentPdfFontFamily } from "./documentPresentation";
 import { cleanDocumentLink } from "../../../shared/documentRichContent";
+import { invoiceIssuerTaxRegistrations, registrationDisplayLines } from "../../../shared/invoiceTaxRegistrations";
 import { DocumentRichPdf } from "./DocumentRichContent";
 export type DocumentPdfEngine = Pick<typeof import("@formepdf/core"), "renderDocument" | "renderDocumentWithLayout">;
 export type DocumentPdfDecoration = { config: InvoiceTemplate; organizationName?: string; number?: string; fonts?: FontRegistration[]; engine?: DocumentPdfEngine; layout?: LayoutInfo; content?: { invoice: InvoiceDocumentData; organization: InvoiceOrganization & { logoUrl?: string | null }; suppressCustomerBlocks?: boolean }; paymentStub?: { number: string; customer: string; total: string; balance: string; height: number; totalLabel?: string; balanceLabel?: string; showBalance?: boolean } };
@@ -149,7 +150,7 @@ export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, pa
     for (const key of ["organization", "billing", "shipping"] as const) {
       const setting = advanced.addresses[key]; if (content.suppressCustomerBlocks && key !== "organization") continue; if (setting.placement !== "absolute" || key === "organization" && !design.fields.organization || key === "shipping" && !design.fields.shipTo) continue;
       const org = key === "organization";
-      const source = org ? { name: advanced.visibility.organizationName ? organization.name || "Your organization" : "", address: advanced.visibility.organizationAddress ? organization.address : "", email: advanced.visibility.organizationAddress ? organization.email : "", registrationNumber: advanced.visibility.organizationAddress ? organization.registrationNumber : "", taxNumber: organization.gstNumber } : key === "billing" ? { name: invoice.billToName, address: invoice.billToAddress, email: design.fields.customerEmail ? invoice.billToEmail : "" } : { name: invoice.shipToName, address: invoice.shipToAddress };
+      const source = org ? { name: advanced.visibility.organizationName ? organization.name || "Your organization" : "", address: advanced.visibility.organizationAddress ? organization.address : "", email: advanced.visibility.organizationAddress ? organization.email : "", registrationNumber: advanced.visibility.organizationAddress ? organization.registrationNumber : "", taxNumber: registrationDisplayLines(invoiceIssuerTaxRegistrations(invoice, organization)).join("\n") } : key === "billing" ? { name: invoice.billToName, address: invoice.billToAddress, email: design.fields.customerEmail ? invoice.billToEmail : "" } : { name: invoice.shipToName, address: invoice.shipToAddress };
       const lines = documentAddressLines(setting, source).split("\n").map((value) => ({ value, type: advanced.typography[value.includes(source.name || "\u0000") ? org ? "organizationName" : "customerName" : org ? "organizationAddress" : "customerAddress"] }));
       if (!org && (key !== "billing" || advanced.visibility.billTo)) lines.unshift({ value: key === "billing" ? design.labels.billTo : design.labels.shipTo, type: advanced.typography.labels });
       await drawLines(lines, setting.x, setting.y, setting.width);

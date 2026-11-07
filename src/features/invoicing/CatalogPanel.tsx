@@ -10,9 +10,11 @@ import { useConfirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { CatalogItemEditor, type CatalogItemSeed } from "./CatalogItemEditor";
 import type { CatalogItem } from "./types";
+import type { InvoiceOrganization } from "./types";
+import { taxAssessmentSummary } from "../../../shared/tax";
 
 /** Reusable items (dues, rentals, fees, sponsorship levels) for the builder. */
-export function CatalogPanel({ items, societyId, canWrite, defaultCurrency }: { items: CatalogItem[]; societyId: string; canWrite: boolean; defaultCurrency: string }) {
+export function CatalogPanel({ items, societyId, canWrite, defaultCurrency, assessmentDate, organization }: { items: CatalogItem[]; societyId: string; canWrite: boolean; defaultCurrency: string; assessmentDate?: string; organization?: InvoiceOrganization }) {
   const setActive = useMutation(api.invoices.setCatalogItemActive);
   const remove = useMutation(api.invoices.removeCatalogItem);
   const toast = useToast();
@@ -55,7 +57,7 @@ export function CatalogPanel({ items, societyId, canWrite, defaultCurrency }: { 
                 <td data-label="Type / SKU">{item.kind === "service" ? "Service" : "Item"}{item.sku ? ` · ${item.sku}` : ""}</td>
                 <td data-label="Category">{item.category ?? <span className="muted">—</span>}</td>
                 <td data-label="Price" className="num">{item.openPrice ? <span className="muted">Set on each invoice</span> : <><Money cents={item.unitPriceCents} currency={item.currency ?? defaultCurrency} /> {item.currency ?? defaultCurrency} / {item.unit ?? "each"}</>}</td>
-                <td data-label="Tax">{item.taxRatePercent ? taxChoiceLabel(item) : <span className="muted">None</span>}</td>
+                <td data-label="Tax">{item.taxRatePercent ? taxChoiceLabel(item) : <span className="muted">None</span>}{item.taxAssessment && <span className="muted invoice-table__sub">{taxAssessmentSummary(item.taxAssessment)}</span>}</td>
                 <td className="invoice-table__actions">
                   <Menu
                     align="right"
@@ -86,7 +88,7 @@ export function CatalogPanel({ items, societyId, canWrite, defaultCurrency }: { 
         </table>
       )}
 
-      <CatalogItemEditor item={editing} societyId={societyId} canWrite={canWrite} defaultCurrency={defaultCurrency} onClose={() => setEditing(null)} />
+      <CatalogItemEditor item={editing} societyId={societyId} canWrite={canWrite} defaultCurrency={defaultCurrency} assessmentDate={assessmentDate} organization={organization} onClose={() => setEditing(null)} />
     </div>
   );
 }

@@ -456,7 +456,10 @@
     "test:invoice-preview-controls-ui": "playwright test --config playwright.invoice-preview-controls.config.ts",
     "test:invoice-payment-methods": "tsx scripts/check-invoice-payment-methods.ts",
     "test:invoice-branding-setup": "tsx scripts/check-invoice-branding-setup.tsx",
-    "test:invoice-payment-branding-ui": "playwright test --config playwright.invoice-payment-branding.config.ts"
+    "test:invoice-payment-branding-ui": "playwright test --config playwright.invoice-payment-branding.config.ts",
+    "test:tax-guidance": "node --import tsx scripts/check-tax-guidance.ts && node --import tsx scripts/check-tax-answer-updates.ts && node --import tsx scripts/check-tax-guidance-convex.ts && node --import tsx scripts/check-invoice-tax-registrations.ts && node --import tsx scripts/check-invoice-tax-rendering.ts",
+    "test:tax-guidance-ui": "playwright test --config playwright.tax-guidance.config.ts",
+    "test:organization-capabilities": "node --import tsx scripts/check-organization-capabilities.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

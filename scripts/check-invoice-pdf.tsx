@@ -21,8 +21,8 @@ for (const layout of ["classic", "modern", "compact"] as const) {
   const pdf = await PDFDocument.load(bytes);
   assert.ok(Math.abs(pdf.getPage(0).getWidth() - (long ? 595.276 : 612)) < 0.1);
   assert.ok(long ? pdf.getPageCount() > 1 : pdf.getPageCount() === 1);
-  await mkdir("/workspace/scratch/invoice-pdf", { recursive: true });
-  await writeFile(`/workspace/scratch/invoice-pdf/${layout}.pdf`, bytes);
+  await mkdir("test-results/invoice-pdf", { recursive: true });
+  await writeFile(`test-results/invoice-pdf/${layout}.pdf`, bytes);
   const extracted = await getDocument({ data: bytes.slice(), useSystemFonts: true, disableFontFace: true }).promise;
   const pages: string[] = [];
   for (let i = 1; i <= extracted.numPages; i++) pages.push((await (await extracted.getPage(i)).getTextContent()).items.map((item: any) => item.str ?? "").join(" "));
@@ -30,8 +30,8 @@ for (const layout of ["classic", "modern", "compact"] as const) {
   for (const expected of [invoice.number, "Renée", "Rate (USD)", "1.5 hour", "GST", "Total USD", "Balance due", "Thank you", "Pay by e-transfer", "Warranty work checked"]) assert.ok(text.includes(expected), `${layout}: PDF contains ${expected}`);
   assert.ok(text.includes(`Repair service ${long ? 100 : 2}`));
   if (long) assert.ok(pages.slice(1).some((page) => page.includes("Rate (USD)")), "table header repeats across pages");
-  await mkdir("/workspace/scratch/invoice-pdf", { recursive: true });
-  await writeFile(`/workspace/scratch/invoice-pdf/${layout}.pdf`, bytes);
+  await mkdir("test-results/invoice-pdf", { recursive: true });
+  await writeFile(`test-results/invoice-pdf/${layout}.pdf`, bytes);
   await extracted.destroy();
 }
 const brand = importInvoiceBrand(ddcnorth);
@@ -42,7 +42,7 @@ const brandFonts = await Promise.all([
 const branded = await renderDocument(<InvoicePdfDocument invoice={{ number: "DDC-0001", issueDate: "2026-10-22", dueDate: "2026-11-21", terms: "net_30", currency: "CAD", billToName: "Sample customer", lines: [{ key: "service", item: "Repair labour", quantity: 2, unit: "hour", unitPriceCents: 8500 }], documentTemplate: { ...DEFAULT_INVOICE_TEMPLATE, brand, accentColor: brand.primary } }} organization={{ name: "ddcnorth", email: "billing@example.test" }} fonts={brandFonts} />);
 const brandedDoc = await PDFDocument.load(branded);
 assert.equal(brandedDoc.getPageCount(), 1);
-await writeFile("/workspace/scratch/invoice-pdf/ddcnorth.pdf", branded);
+await writeFile("test-results/invoice-pdf/ddcnorth.pdf", branded);
 console.log("pdfcn / Forme PDF checks passed: all layouts, Unicode, currency, tax, payments, notes, paper sizes and multipage tables.");
 
 // A saved versioned design must change the downloaded PDF, not just its editor preview.
@@ -74,7 +74,7 @@ const customTemplate = cleanInvoiceTemplate({ ...DEFAULT_INVOICE_TEMPLATE, brand
 const customInvoice = { number: "DESIGN-TEST", issueDate: "2026-10-22", dueDate: "2030-12-31", terms: "net_90", currency: "CAD", billToName: "Designer customer", billToEmail: "hidden@example.test", shipToName: "Delivery contact", shipToAddress: "42 Workshop Road", lines: Array.from({ length: 95 }, (_, index) => ({ key: String(index), item: `Inspection ${index + 1}`, sku: `PART-${index + 1}`, quantity: 2, unit: "hour", unitPriceCents: 1000, description: "HIDDEN DESCRIPTION" })), memo: "HIDDEN MEMO", documentTemplate: customTemplate };
 const customRaw = await renderDocument(<InvoicePdfDocument invoice={customInvoice} organization={{ name: "Workshop" }} fonts={allFonts} />);
 const customBytes = await decorateDocumentPdf(customRaw, { config: customTemplate, fonts: allFonts });
-await writeFile("/workspace/scratch/invoice-pdf/designer-multipage.pdf", customBytes);
+await writeFile("test-results/invoice-pdf/designer-multipage.pdf", customBytes);
 const customDoc = await PDFDocument.load(customBytes);
 assert.ok(customDoc.getPageCount() > 1);
 assert.equal(customDoc.getPage(0).getWidth(), 792);
@@ -109,7 +109,7 @@ for (let index = 0; index < referencePixels.length; index += 4) {
 // allowing their small spacing differences, instead of requiring identical edge pixels.
 assert.ok(actualInk / referenceInk > 0.9 && actualInk / referenceInk < 1.1, "Custom-font header must retain every visible glyph outline.");
 for (let index = 0; index < referenceRegions.length; index++) if (referenceRegions[index] > 100) assert.ok(actualRegions[index] / referenceRegions[index] > 0.6 && actualRegions[index] / referenceRegions[index] < 1.5, "Custom-font header glyph coverage matches the source font throughout the line.");
-await writeFile("/workspace/scratch/invoice-pdf/header-visual.png", visualCanvas.toBuffer("image/png"));
+await writeFile("test-results/invoice-pdf/header-visual.png", visualCanvas.toBuffer("image/png"));
 assert.ok(customPages[0].includes("FIRST PAGE HEADER"));
 assert.ok(customPages[0].includes("FIRST PAGE FOOTER"));
 for (let index = 1; index < customPages.length; index++) {
@@ -127,7 +127,7 @@ await customPdf.destroy();
 for (const documentKind of ["receipt", "work_order"] as const) {
   const invoice = { ...customInvoice, documentKind, lines: customInvoice.lines.slice(0, 1), documentDetails: [{ label: "Payment reference", value: "BANK-123" }, { label: "Reported problem", value: "Equipment will not start.\nInspect the power supply and replace the damaged connector." }], status: "draft" };
   const bytes = await decorateDocumentPdf(await renderDocument(<InvoicePdfDocument invoice={invoice} organization={{ name: "Workshop" }} fonts={allFonts} paymentInstructions="HIDDEN PAYMENT INSTRUCTIONS" />), { config: customTemplate, fonts: allFonts });
-  await writeFile(`/workspace/scratch/invoice-pdf/${documentKind}.pdf`, bytes);
+  await writeFile(`test-results/invoice-pdf/${documentKind}.pdf`, bytes);
   const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true, disableFontFace: true }).promise;
   const text = (await (await pdf.getPage(1)).getTextContent()).items.map((item: any) => item.str ?? "").join(" ").replace(/\s+/g, " ");
   assert.ok(text.includes(custom.titles[documentKind]));

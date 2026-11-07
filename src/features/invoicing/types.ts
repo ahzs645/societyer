@@ -4,6 +4,7 @@ import type { DocumentExtras } from "../../../shared/documentExtras";
 import type { InvoiceTemplate, InvoicePriceList, RepairStatus } from "../../../shared/invoiceCommerce";
 import type { CustomerSummary, InvoiceLine, InvoicePayment, InvoiceStatus, InvoiceTotals } from "../../../shared/invoicing";
 import type { BooksStart, CategoryAccount, NeedsActionFlag } from "../../../shared/invoiceLedger";
+import type { InvoiceIssuerTaxSnapshot, IssuerTaxRegistration } from "../../../shared/invoiceTaxRegistrations";
 
 export type InvoicePaymentView = InvoicePayment & {
   recordedByName?: string;
@@ -19,6 +20,7 @@ export type InvoiceRow = {
   number: string;
   status: InvoiceStatus;
   lifecycle: "draft" | "sent" | "void";
+  issuerTaxRegistrationsSnapshot?: InvoiceIssuerTaxSnapshot;
   partyKind: "member" | "organization" | "custom";
   memberId?: string;
   counterpartyId?: string;
@@ -74,6 +76,7 @@ export type InvoiceLedgerState = {
 };
 
 export type CatalogItem = Partial<Pick<InvoiceLine, "taxMode" | "imageUrl" | "manufacturer" | "partNumber" | "upc" | "ean" | "isbn" | "customField" | "batchNumber" | "serialNumbers">> & {
+  taxAssessment?: import("../../../shared/tax").TaxAssessment;
   _id: string;
   name: string;
   description?: string;
@@ -208,6 +211,11 @@ export type InvoiceOrganization = {
   registrationNumber?: string;
   email?: string;
   gstNumber?: string;
+  pstNumber?: string;
+  taxRegistrations?: IssuerTaxRegistration[];
+  isCharity?: boolean;
+  charityStatus?: string;
+  gstHstStatus?: string;
 };
 
 export type PartyOption = { _id: string; name: string; email?: string; address?: string; phone?: string; contactName?: string; notes?: string; membershipClass?: string; status?: string; kind?: string };

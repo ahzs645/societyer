@@ -33,6 +33,13 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/account/security",
+    "path": "/demo/account/security",
+    "kind": "public",
+    "fixture": "route",
+    "redirectTo": "/demo/app"
+  },
+  {
     "pattern": "/invite/:token",
     "path": "/demo/invite/interface-audit-missing",
     "kind": "public",

@@ -15,6 +15,7 @@ import { BillingDocumentPreview } from "./BillingDocumentPreview";
 import { defaultDocumentTemplate, repairWorkOrderDocument } from "./billingDocuments";
 import { RepairOperationsPanel, RepairWorkloadBoard } from "./RepairOperationsPanel";
 import type { InvoiceWorkspace, RepairJob } from "./types";
+import { taxTransactionContextKey, taxTransactionContextChanged, reassessTaxLines } from "../../../shared/tax";
 
 type Draft = BillToValue & { id?: string; asset: string; serialNumber: string; problem: string; notes: string; receivedDate: string; targetDate: string; currency: string; lines: LineDraft[] };
 export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, logoUrl, onOpenInvoice, focusId }: { workspace: InvoiceWorkspace; societyId: string; canWrite: boolean; canExport: boolean; logoUrl?: string | null; onOpenInvoice: (id: string) => void; focusId?: string | null }) {
@@ -30,7 +31,7 @@ export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, log
   const [filter, setFilter] = useState("open");
   const [workOrderId, setWorkOrderId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState("");
-  const update = (patch: Partial<Draft>) => setDraft((current) => current && ({ ...current, ...patch }));
+  const update = (patch: Partial<Draft>) => setDraft((current) => { if (!current) return current; const next = { ...current, ...patch }; if (taxTransactionContextChanged(current, next) || current.receivedDate !== next.receivedDate) next.lines = reassessTaxLines(next.lines, next.receivedDate); return next; });
   const jobs = workspace.repairJobs ?? [];
   const detail = jobs.find((job) => job._id === detailId);
   const workOrder = jobs.find((job) => job._id === workOrderId);
@@ -88,7 +89,7 @@ export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, log
         <Field label="Target date"><DatePicker value={draft.targetDate} min={draft.receivedDate} onChange={(targetDate) => update({ targetDate })} /></Field>
         <Field label="Currency"><Select value={draft.currency} disabled={billed || draft.lines.length > 0} onChange={(currency) => update({ currency })} options={INVOICE_CURRENCIES.map((value) => ({ value, label: value }))} /></Field>
         {billed && <p className="muted">Billing is on the linked invoice. You can continue updating repair notes and status here.</p>}
-        <LineItemsEditor lines={draft.lines} onChange={(lines) => update({ lines })} catalog={workspace.catalog.filter((item) => item.active && (item.currency ?? workspace.ledger.workspaceCurrency) === draft.currency)} catalogEditing={{ societyId, canWrite, asModal: true }} currency={draft.currency} readOnly={billed} gstHint={false} />
+        <LineItemsEditor assessmentDate={draft.receivedDate} assessmentContext={taxTransactionContextKey(draft)} organization={workspace.organization} lines={draft.lines} onChange={(lines) => update({ lines })} catalog={workspace.catalog.filter((item) => item.active && (item.currency ?? workspace.ledger.workspaceCurrency) === draft.currency)} catalogEditing={{ societyId, canWrite, asModal: true }} currency={draft.currency} readOnly={billed} gstHint={false} />
         <Field label="Work notes"><textarea className="input textarea" rows={4} value={draft.notes} onChange={(e) => update({ notes: e.target.value })} /></Field>
       </div>}
     </Drawer>

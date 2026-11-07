@@ -13,12 +13,15 @@ import { parseMoneyInput } from "../../lib/money";
 import { INVOICE_CURRENCIES } from "../../../shared/invoiceCommerce";
 import { INVOICE_LINE_DETAIL_KEYS, INVOICE_LINE_DETAIL_LABELS, cleanInvoiceLineDetails } from "../../../shared/invoiceLineDetails";
 import type { CatalogItem } from "./types";
+import type { InvoiceOrganization } from "./types";
+import type { TaxAssessment } from "../../../shared/tax";
+import { TaxAssessmentEditor } from "./TaxAssessmentEditor";
 
 /** A saved item to edit, or the starting values of a new one. */
 export type CatalogItemSeed = Partial<Omit<CatalogItem, "unitPriceCents">> & { unitPriceCents?: number };
 
 type Details = ReturnType<typeof cleanInvoiceLineDetails>;
-type Draft = Details & { name: string; description: string; priceInput: string; openPrice: boolean; tax: string; category: string; active: boolean; kind: "item" | "service"; sku: string; unit: string; currency: string };
+type Draft = Details & { taxAssessment?: TaxAssessment; name: string; description: string; priceInput: string; openPrice: boolean; tax: string; category: string; active: boolean; kind: "item" | "service"; sku: string; unit: string; currency: string };
 
 function toDraft(item: CatalogItemSeed, defaultCurrency: string): Draft {
   return {
@@ -32,12 +35,15 @@ function toDraft(item: CatalogItemSeed, defaultCurrency: string): Draft {
     openPrice: item.openPrice ?? false,
     priceInput: item.openPrice || item.unitPriceCents == null ? "" : (item.unitPriceCents / 100).toFixed(2),
     tax: encodeTaxChoice(item),
+    taxAssessment: item.taxAssessment,
     category: item.category ?? "",
     active: item.active ?? true,
   };
 }
 
 type Props = {
+  assessmentDate?: string;
+  organization?: InvoiceOrganization;
   /** The item to edit or start from; null keeps the editor closed. */
   item: CatalogItemSeed | null;
   societyId: string;
@@ -56,13 +62,13 @@ export function CatalogItemEditor({ item, ...props }: Props) {
   return item ? <CatalogItemForm key={item._id ?? "new"} item={item} {...props} /> : null;
 }
 
-function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurrency, asModal, onClose, onSaved }: Props & { item: CatalogItemSeed }) {
+function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurrency, asModal, onClose, onSaved, assessmentDate = new Date().toISOString().slice(0, 10), organization }: Props & { item: CatalogItemSeed }) {
   const upsert = useMutation(api.invoices.upsertCatalogItem);
   const toast = useToast();
   const [draft, setDraft] = useState(() => toDraft(item, defaultCurrency));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const update = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
+  const update = (patch: Partial<Draft>) => setDraft((current) => { const next = { ...current, ...patch }; if (next.taxAssessment && ["name", "kind", "currency"].some((key) => current[key as "name" | "kind" | "currency"] !== next[key as "name" | "kind" | "currency"])) next.taxAssessment = { ...next.taxAssessment, confirmed: false }; return next; });
 
   const save = async () => {
     const cents = draft.openPrice ? 0 : parseMoneyInput(draft.priceInput);
@@ -80,6 +86,7 @@ function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurre
       unitPriceCents: cents,
       openPrice: draft.openPrice || undefined,
       ...decodeTaxChoice(draft.tax),
+      taxAssessment: draft.taxAssessment,
       category: draft.category || undefined,
       active: draft.active,
     };
@@ -139,7 +146,8 @@ function CatalogItemForm({ item, societyId, canWrite, defaultCurrency, lockCurre
       <Field label="SKU / code"><input className="input" value={draft.sku} onChange={(e) => update({ sku: e.target.value })} /></Field>
       <Field label="Unit"><input className="input" value={draft.unit} onChange={(e) => update({ unit: e.target.value })} placeholder="each / hour / day" /></Field>
       <Field label="Currency"><Select value={draft.currency} disabled={lockCurrency} onChange={(currency) => update({ currency })} options={INVOICE_CURRENCIES.map((value) => ({ value, label: value }))} /></Field>
-      <Field label="Sales tax"><Select value={draft.tax} onChange={(tax) => update({ tax })} options={taxChoices} /></Field>
+      <Field label="Sales tax" hint="Changing rates manually clears the guided assessment."><Select value={draft.tax} onChange={(tax) => update({ tax, taxAssessment: undefined })} options={taxChoices} /></Field>
+      <TaxAssessmentEditor value={draft.taxAssessment} scope="catalog" date={assessmentDate} contextKey={JSON.stringify([draft.name, draft.kind, draft.currency])} organization={organization} disabled={!canWrite} onApply={(taxAssessment, rates) => update({ taxAssessment, ...(rates ? { tax: encodeTaxChoice(rates) } : {}) })} />
       <Field label="Price entered" hint="Tax-included prices stay exact at any quantity."><Select value={draft.taxMode ?? "exclusive"} onChange={(value) => update({ taxMode: value as "exclusive" | "inclusive" })} options={[{ value: "exclusive", label: "Before tax" }, { value: "inclusive", label: "Tax included" }]} /></Field>
       {!draft.openPrice && <FinalPriceButton line={{ quantity: 1, unitPriceCents: parseMoneyInput(draft.priceInput) ?? 0, taxMode: draft.taxMode, ...decodeTaxChoice(draft.tax) }} currency={draft.currency} onApply={(cents) => update({ priceInput: (cents / 100).toFixed(2) })} />}
       <details>

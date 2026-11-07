@@ -14,6 +14,19 @@ async function inspect(page: Page, societyId: string) {
   return page.evaluate(id => (window as any).__societyerE2E.inspectInteractionAudit(id), societyId);
 }
 const taskRow = (page: Page, title = 'Interaction task A') => page.locator('.task-row', { hasText: title });
+// The local owner fixture must exercise the implemented route's unavailable
+// behavior. Hosted enrollment/session assurance has its own authenticator suite.
+test('account security redirects a local owner and exposes no hosted MFA controls', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/account/security');
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.locator('.app-shell')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Account security', exact: true })).toHaveCount(0);
+  await page.goto('/app/users');
+  await expect(page.getByRole('heading', { name: 'Users & access', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Require 2FA', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save 2FA policy', exact: true })).toHaveCount(0);
+});
 async function edit(page: Page, title = 'Interaction task A') {
   await taskRow(page, title).locator('.task-row__title-text').click();
   const drawer = page.getByRole('dialog', { name: 'Edit task', exact: true });

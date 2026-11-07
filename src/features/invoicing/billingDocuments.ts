@@ -5,7 +5,7 @@ import type { InvoiceRow, InvoiceWorkspace, RepairJob } from "./types";
 import { settlementTotals, type InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
 import type { BillingQuote, CustomerStatement } from "../../../shared/billingDocuments";
 
-type ReceiptSource = Pick<InvoiceRow, "number" | "lifecycle" | "status" | "currency" | "billToName" | "billToEmail" | "billToAddress" | "documentTemplate" | "lines" | "discount" | "payments"> & { money?: InvoiceMoneyOptions };
+type ReceiptSource = Pick<InvoiceRow, "number" | "lifecycle" | "status" | "currency" | "billToName" | "billToEmail" | "billToAddress" | "documentTemplate" | "lines" | "discount" | "payments" | "issuerTaxRegistrationsSnapshot"> & { money?: InvoiceMoneyOptions };
 type PaymentContext = Pick<InvoiceWorkspace, "transactions" | "ledger">;
 
 const money = (cents: number, currency: string) => new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(cents / 100);
@@ -42,6 +42,7 @@ export function paymentReceiptDocument(invoice: ReceiptSource, paymentKey: strin
   ];
   return {
     documentKind: "receipt",
+    issuerTaxRegistrationsSnapshot: invoice.issuerTaxRegistrationsSnapshot,
     documentTemplate: cleanInvoiceTemplate(invoice.documentTemplate),
     // Payment keys are stable and retained in the document even when dates/amounts coincide.
     number: `RCPT-${invoice.number}-${payment.key}`,

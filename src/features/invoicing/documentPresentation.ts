@@ -1,4 +1,5 @@
 import { lineTaxes } from "../../../shared/invoiceMoney";
+import { taxAssessmentPrintSummary } from "../../../shared/tax";
 import type { FontRegistration } from "@formepdf/react";
 import { cleanInvoiceTemplate, DEFAULT_DOCUMENT_DESIGN, resolveDocumentAdvanced, resolveDocumentDesign, type DocumentColumnKey, type DocumentDesign, type DocumentBackground, type DocumentAddressBlock } from "../../../shared/invoiceCommerce";
 import { computeInvoiceTotals, lineAmountCents, INVOICE_TERMS_LABEL, settlementTotals, convertInvoiceCents, type InvoiceTerms } from "../../../shared/invoicing";
@@ -45,7 +46,7 @@ export function documentPresentation(invoice: InvoiceDocumentData) {
       case "quantity": return `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 3 }).format(line.quantity)}${line.unit && !columns.some((c) => c.key === "unit") ? ` ${line.unit}` : ""}`;
       case "unit": return line.unit || "—";
       case "rate": return money(line.unitPriceCents);
-      case "tax": return line.taxRatePercent ? `${line.additionalTaxes?.length ? lineTaxes(line).map((tax) => tax.label).join(" + ") : `${line.taxLabel || design.labels.tax} ${line.taxRatePercent}%`}${taxModes.size > 1 && (line.taxMode || invoice.money?.taxMode) === "inclusive" ? " incl." : ""}` : "—";
+      case "tax": return line.taxAssessment ? taxAssessmentPrintSummary(line.taxAssessment) : line.taxRatePercent ? `${line.additionalTaxes?.length ? lineTaxes(line).map((tax) => tax.label).join(" + ") : `${line.taxLabel || design.labels.tax} ${line.taxRatePercent}%`}${taxModes.size > 1 && (line.taxMode || invoice.money?.taxMode) === "inclusive" ? " incl." : ""}` : "—";
       case "amount": return money(lineAmountCents(line));
       case "image": return line.imageUrl || "";
       case "manufacturer": case "partNumber": case "upc": case "ean": case "isbn": case "customField": return line[key] || "—";
@@ -56,7 +57,7 @@ export function documentPresentation(invoice: InvoiceDocumentData) {
     ...(design.totals.showSubtotal ? [{ label: design.labels.subtotal, value: money(totals.subtotalCents), cents: totals.subtotalCents }] : []),
     ...(design.totals.showDiscount && totals.discountCents ? [{ label: design.labels.discount, value: money(-totals.discountCents), cents: -totals.discountCents }] : []),
     ...(advanced.adjustments.showShipping && totals.shippingCents ? [{ label: advanced.labels.shipping, value: money(totals.shippingCents), cents: totals.shippingCents }] : []),
-    ...(design.totals.showTax ? totals.taxes.map((tax) => ({ label: `${design.labels.tax}: ${tax.label} ${tax.ratePercent}%`, value: money(tax.cents), cents: tax.cents })) : []),
+    ...(design.totals.showTax || invoice.lines.some((line) => line.taxAssessment?.components.some((component) => component.collection === "collect")) ? totals.taxes.map((tax) => ({ label: `${design.labels.tax}: ${tax.label} ${tax.ratePercent}%`, value: money(tax.cents), cents: tax.cents })) : []),
     ...(advanced.adjustments.showWithholding && totals.withholdingCents ? [{ label: advanced.labels.withholding, value: money(-totals.withholdingCents), cents: -totals.withholdingCents }] : []),
     ...(advanced.visibility.finalTotal && documentTotalCents !== undefined ? [{ label: `${totalLabel} ${invoice.currency}`, value: money(documentTotalCents), cents: documentTotalCents, strong: true }] : []),
     ...(kind === "invoice" && design.totals.showPaid && settlements.cashPaidCents > 0 ? [{ label: design.labels.paid, value: money(-settlements.cashPaidCents), cents: -settlements.cashPaidCents }] : []),

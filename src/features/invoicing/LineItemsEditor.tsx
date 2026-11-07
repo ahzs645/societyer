@@ -13,6 +13,9 @@ import { TagPicker } from "../financials/transactions/TagPicker";
 import type { FinanceTagsApi } from "../financials/transactions/useFinanceTags";
 import { CatalogItemEditor, type CatalogItemSeed } from "./CatalogItemEditor";
 import type { CatalogItem } from "./types";
+import type { InvoiceOrganization } from "./types";
+import { assessTax, taxAssessmentForTransaction, taxAssessmentProblem } from "../../../shared/tax";
+import { TaxAssessmentEditor } from "./TaxAssessmentEditor";
 
 export type LineDraft = InvoiceLine & { qtyInput: string; priceInput: string };
 
@@ -25,6 +28,7 @@ export function toLineDraft(line: InvoiceLine): LineDraft {
 
 export function lineFromCatalog(item: CatalogItem): LineDraft {
   return toLineDraft({
+    taxAssessment: taxAssessmentForTransaction(item.taxAssessment),
     ...cleanInvoiceLineDetails(item),
     // An open price is the user's to enter, so re-pricing must leave it alone.
     rateOverridden: Boolean(item.openPrice),
@@ -47,6 +51,9 @@ export function blankLine(): LineDraft {
 }
 
 type Props = {
+  assessmentDate?: string;
+  assessmentContext?: string;
+  organization?: InvoiceOrganization;
   lines: LineDraft[];
   onChange: (lines: LineDraft[]) => void;
   catalog: CatalogItem[];
@@ -65,7 +72,7 @@ type Props = {
 const hasLineDetails = (line: LineDraft) => Boolean(line.sku || (line.unit && line.unit !== "each") || line.taxMode || line.serialNumbers?.length || line.imageUrl || line.tagIds?.length || INVOICE_LINE_DETAIL_KEYS.some((key) => line[key]));
 
 /** Line items: add from the catalog, quantity × price, per-line tax and tags, reorder and remove. */
-export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, tags, currency = "CAD", catalogEditing, getCatalogRate }: Props) {
+export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, tags, currency = "CAD", catalogEditing, getCatalogRate, assessmentDate = new Date().toISOString().slice(0, 10), assessmentContext, organization }: Props) {
   const toast = useToast();
   const [detailKeys, setDetailKeys] = useState<{ openKeys: Set<string>; closedKeys: Set<string> }>({ openKeys: new Set(), closedKeys: new Set() });
   const showTags = Boolean(tags?.loaded && (tags.activeGroups.some((group) => group.tags.length > 0) || lines.some((line) => line.tagIds?.length)));
@@ -75,13 +82,13 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
   const addFromCatalog = (item: CatalogItem) => onChange([...lines.filter(hasContent), lineFromCatalog(item)]);
   const saveLineToCatalog = (line: LineDraft) => setNewItem({
     lineKey: line.key,
-    seed: { ...cleanInvoiceLineDetails(line), name: line.item, description: line.description, sku: line.sku, unit: line.unit, unitPriceCents: line.unitPriceCents || undefined, taxRatePercent: line.taxRatePercent, taxLabel: line.taxLabel, currency },
+    seed: { ...cleanInvoiceLineDetails(line), name: line.item, description: line.description, sku: line.sku, unit: line.unit, unitPriceCents: line.unitPriceCents || undefined, taxRatePercent: line.taxRatePercent, taxLabel: line.taxLabel, additionalTaxes: line.additionalTaxes, currency, taxAssessment: line.taxAssessment ? assessTax({ ...line.taxAssessment.answers, scope: "catalog", customerRelief: "none", customerEvidence: "", purchaserPstNumber: "", pstReliefDocumentation: "unknown", pstReliefConditions: "unknown", pstCertificateType: "" }, false) : undefined },
   });
   const onItemSaved = (item: CatalogItem) => {
     if (!newItem?.lineKey) return addFromCatalog(item);
     onChange(lines.map((line) => {
       if (line.key !== newItem.lineKey) return line;
-      if (item.openPrice) return { ...line, catalogItemId: item._id, item: item.name, rateOverridden: true };
+      if (item.openPrice) return { ...lineFromCatalog(item), key: line.key, quantity: line.quantity, qtyInput: line.qtyInput, priceInput: line.priceInput, unitPriceCents: line.unitPriceCents, tagIds: line.tagIds, rateOverridden: true };
       return { ...lineFromCatalog(item), key: line.key, quantity: line.quantity, qtyInput: line.qtyInput, tagIds: line.tagIds };
     }));
   };
@@ -132,7 +139,7 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
               <div className="line-editor__main">
                 <label className="line-editor__field line-editor__field--item">
                   <span className="field__label">Item</span>
-                  <input className="input" value={line.item} disabled={readOnly} placeholder="What you're billing for" onChange={(e) => updateLine(line.key, { item: e.target.value, catalogItemId: undefined })} />
+                  <input className="input" value={line.item} disabled={readOnly} placeholder="What you're billing for" onChange={(e) => updateLine(line.key, { item: e.target.value, catalogItemId: undefined, ...(line.taxAssessment ? { taxAssessment: { ...line.taxAssessment, confirmed: false } } : {}) })} />
                 </label>
                 <label className="line-editor__field line-editor__field--desc">
                   <span className="field__label">Description</span>
@@ -174,7 +181,7 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                     disabled={readOnly}
                     aria-label={`Tax for line ${index + 1}`}
                     onChange={(value) => {
-                      updateLine(line.key, decodeTaxChoice(value));
+                      updateLine(line.key, { ...decodeTaxChoice(value), taxAssessment: undefined });
                     }}
                     options={tax.options}
                   />
@@ -184,6 +191,8 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
                   <Money cents={lineAmountCents(line)} currency={currency} />
                 </div>
               </div>
+              <TaxAssessmentEditor value={line.taxAssessment} scope="transaction" date={assessmentDate} contextKey={JSON.stringify([assessmentContext, line.item, line.catalogItemId, currency])} organization={organization} disabled={readOnly} onApply={(taxAssessment, rates) => updateLine(line.key, { taxAssessment, ...rates })} />
+              {line.taxAssessment && taxAssessmentProblem(line, assessmentDate) && <p className="line-editor__price-note">{taxAssessmentProblem(line, assessmentDate)}</p>}
               <div className="line-editor__actions">
                 <FinalPriceButton line={line} currency={currency} disabled={readOnly} onApply={(unitPriceCents) => updateLine(line.key, { unitPriceCents, priceInput: (unitPriceCents / 100).toFixed(2), rateOverridden: true })} />
                 {catalogEditing && !line.catalogItemId && line.item.trim() && !readOnly && <button type="button" className="btn btn--ghost btn--sm" disabled={!catalogEditing.canWrite} onClick={() => saveLineToCatalog(line)}><BookOpen size={14} aria-hidden="true" /> Save to catalog</button>}
@@ -268,6 +277,8 @@ export function LineItemsEditor({ lines, onChange, catalog, readOnly, gstHint, t
           societyId={catalogEditing.societyId}
           canWrite={catalogEditing.canWrite}
           defaultCurrency={currency}
+          assessmentDate={assessmentDate}
+          organization={organization}
           lockCurrency
           asModal={catalogEditing.asModal}
           onClose={() => setNewItem(null)}
