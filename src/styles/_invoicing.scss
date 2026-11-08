@@ -1157,6 +1157,12 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 }
 .invoice-pdf-preview__state { margin: 0; padding: token(s-3); color: token(text-secondary); font-size: token(fs-sm); }
 
+.invoice-paper--pdf .invoice-pdf-preview {
+  height: auto;
+  min-height: 0;
+  max-height: var(--invoice-preview-max-height, 100dvh);
+}
+
 /* Items and customers beside an open invoice panel. */
 .invoice-table--catalog td { overflow-wrap: break-word; }
 @media (min-width: 761px) {

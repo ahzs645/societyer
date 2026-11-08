@@ -4,14 +4,13 @@ import { clampZoom, MAX_PREVIEW_ZOOM, MIN_PREVIEW_ZOOM, stepZoom, zoomLabel } fr
 
 /**
  * Zoom controls, pinch-to-zoom and scroll anchoring shared by the PDF and Word
- * previews. Zoom is relative to fit-width (see previewViewport.ts); the middle
- * button shows the level and resets to fit.
+ * previews. The middle button shows the zoom level and restores the fitted view.
  */
-export function PreviewZoomControls({ zoom, onZoom }: { zoom: number; onZoom: (zoom: number) => void }) {
+export function PreviewZoomControls({ zoom, onZoom, fitLabel = "Fit to width" }: { zoom: number; onZoom: (zoom: number) => void; fitLabel?: string }) {
   const label = zoomLabel(zoom);
   return <>
     <button type="button" className="btn btn--sm btn--icon" disabled={zoom <= MIN_PREVIEW_ZOOM + 0.005} onClick={() => onZoom(stepZoom(zoom, -1))} aria-label="Zoom out" title="Zoom out"><ZoomOut size={14} /></button>
-    <button type="button" className="btn btn--sm preview-zoom__level" onClick={() => onZoom(1)} aria-label={label === "Fit" ? "Fit to width" : `${label}, fit to width`} title="Fit to width">{label}</button>
+    <button type="button" className="btn btn--sm preview-zoom__level" onClick={() => onZoom(1)} aria-label={label === "Fit" ? fitLabel : `${label}, ${fitLabel.toLowerCase()}`} title={fitLabel}>{label}</button>
     <button type="button" className="btn btn--sm btn--icon" disabled={zoom >= MAX_PREVIEW_ZOOM - 0.005} onClick={() => onZoom(stepZoom(zoom, 1))} aria-label="Zoom in" title="Zoom in"><ZoomIn size={14} /></button>
   </>;
 }

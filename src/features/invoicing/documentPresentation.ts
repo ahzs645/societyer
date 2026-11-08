@@ -19,6 +19,24 @@ export function documentAddressLines(block: DocumentAddressBlock, data: { name?:
   const format = block.format || "{{name}}\n{{address}}\n{{email}}\n{{registrationNumber}}";
   return format.replace(/\{\{(name|address|email|registrationNumber|taxNumber)\}\}/g, (_match, token: keyof typeof data) => data[token] || "").split("\n").filter((line) => line.trim()).join("\n");
 }
+
+const stockColumnWidths = new Map(DEFAULT_DOCUMENT_DESIGN.table.columns.map(column => [column.key, column.width]));
+
+function lineItemColumns(design: DocumentDesign, lines: InvoiceDocumentData["lines"]) {
+  const visible = design.table.columns.filter(column => column.visible);
+  const hasMultipleTaxes = lines.some(line =>
+    line.taxAssessment ? line.taxAssessment.components.length > 1 : lineTaxes(line).length > 1);
+  if (!hasMultipleTaxes || !visible.some(column => column.key === "tax")) return visible;
+  if (visible.some(column => column.width !== stockColumnWidths.get(column.key))) return visible;
+
+  // On stock tables, give combined rates space only on invoices that use them.
+  const hasDescriptions = visible.some(column => column.key === "description") && lines.some(line => line.description?.trim());
+  const widths: Partial<Record<DocumentColumnKey, number>> = { item: hasDescriptions ? 23 : 39, description: 16, quantity: 11, tax: 23 };
+  return visible
+    .filter(column => column.key !== "description" || hasDescriptions)
+    .map(column => ({ ...column, width: widths[column.key] ?? column.width }));
+}
+
 export function documentPresentation(invoice: InvoiceDocumentData) {
   const config = cleanInvoiceTemplate(invoice.documentTemplate), design = resolveDocumentDesign(config), advanced = resolveDocumentAdvanced(design);
   const extras = cleanDocumentExtras(invoice.documentExtras);
@@ -36,7 +54,7 @@ export function documentPresentation(invoice: InvoiceDocumentData) {
   const baseMoney = invoice.money?.fx ? (cents: number) => money(convertInvoiceCents(cents, invoice.money!.fx!.rateMicros), invoice.money!.fx!.baseCurrency) : undefined;
   const taxModes = new Set(invoice.lines.map((line) => line.taxMode || invoice.money?.taxMode || "exclusive"));
   const taxModeLabel = taxModes.has("inclusive") ? taxModes.size === 1 ? "Rates include tax" : "Tax treatment varies by line" : "";
-  const columns = design.table.columns.filter((column) => column.visible);
+  const columns = lineItemColumns(design, invoice.lines);
   const cellValue = (key: DocumentColumnKey, line: InvoiceDocumentData["lines"][number], index: number): string => {
     switch (key) {
       case "number": return String(index + 1);
@@ -46,7 +64,13 @@ export function documentPresentation(invoice: InvoiceDocumentData) {
       case "quantity": return `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 3 }).format(line.quantity)}${line.unit && !columns.some((c) => c.key === "unit") ? ` ${line.unit}` : ""}`;
       case "unit": return line.unit || "—";
       case "rate": return money(line.unitPriceCents);
-      case "tax": return line.taxAssessment ? taxAssessmentPrintSummary(line.taxAssessment) : line.taxRatePercent ? `${line.additionalTaxes?.length ? lineTaxes(line).map((tax) => tax.label).join(" + ") : `${line.taxLabel || design.labels.tax} ${line.taxRatePercent}%`}${taxModes.size > 1 && (line.taxMode || invoice.money?.taxMode) === "inclusive" ? " incl." : ""}` : "—";
+      case "tax": {
+        if (line.taxAssessment) return taxAssessmentPrintSummary(line.taxAssessment);
+        const taxes = lineTaxes({ ...line, taxLabel: line.taxLabel || design.labels.tax });
+        if (!taxes.length) return "—";
+        const rates = taxes.map(tax => `${tax.label} ${tax.ratePercent}%`).join(" + ");
+        return taxModes.size > 1 && (line.taxMode || invoice.money?.taxMode) === "inclusive" ? `${rates} incl.` : rates;
+      }
       case "amount": return money(lineAmountCents(line));
       case "image": return line.imageUrl || "";
       case "manufacturer": case "partNumber": case "upc": case "ean": case "isbn": case "customField": return line[key] || "—";
@@ -84,4 +108,4 @@ export function documentPresentation(invoice: InvoiceDocumentData) {
   const inventoryRows = invoice.lines.flatMap((line) => (advanced.annexures.showBatches && line.batchNumber || advanced.annexures.showSerials && line.serialNumbers?.length) ? [{ item: line.item, sku: line.sku || "", batch: advanced.annexures.showBatches ? line.batchNumber || "" : "", serials: advanced.annexures.showSerials ? (line.serialNumbers || []).join(", ") : "" }] : []);
   return { config, design, advanced, extras, kind, title, totals, settlements, paid, balance, documentTotalCents, totalLabel, balanceLabel, paymentStubDetails, money, baseMoney, columns, cellValue, summary, metadata, page, paymentUrl, amountWords, inventoryRows, taxModeLabel };
 }
-export const numericDocumentColumn = (key: DocumentColumnKey) => ["number", "quantity", "rate", "tax", "amount"].includes(key);
+export const numericDocumentColumn = (key: DocumentColumnKey) => ["number", "quantity", "rate", "amount"].includes(key);

@@ -2,8 +2,8 @@
  * Pure zoom, page-window and title rules shared by the PDF and Word previews.
  * DOM-free so `scripts/check-file-preview.ts` can check them directly.
  *
- * Zoom is relative to fit-width: 1 is "Fit", 0.5 shows the page at half the
- * available width, 2 at twice it.
+ * Zoom is relative to the fitted size. At 1 the page fits the width or,
+ * in whole-page mode, both dimensions of the viewport.
  */
 export const PREVIEW_ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3, 4] as const;
 export const MIN_PREVIEW_ZOOM = PREVIEW_ZOOM_STEPS[0];
