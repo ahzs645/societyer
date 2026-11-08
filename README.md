@@ -61,6 +61,8 @@ The optional private test-site entrypoint, `src/sitesPreview.ts`, initializes a 
 
 The repo ships a `docker-compose.yml` that runs the official Convex backend/dashboard plus local support services. No need to clone anything else.
 
+[Tourkit](https://github.com/ahzs645/tourkit) is a git submodule in `modules/tourkit`, imported from source as `tourkit/...` (it draws the one-time tips). Clone with `git clone --recurse-submodules`, or run `git submodule update --init` in an existing checkout. Don't install packages inside `modules/tourkit`: a second copy of React there breaks hooks.
+
 ### 1. Bring up the Convex backend
 
 ```bash

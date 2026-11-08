@@ -130,6 +130,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Tourkit is a git submodule compiled from source (`tourkit/tips`, ...).
+      // Never install packages inside it: a second React breaks hooks.
+      tourkit: path.resolve(__dirname, "./modules/tourkit"),
       // AI intake reads Outlook .msg files in the browser; iconv-lite needs Node's Buffer.
       "iconv-lite": path.resolve(__dirname, "./src/lib/iconvLiteBrowser.ts"),
     },

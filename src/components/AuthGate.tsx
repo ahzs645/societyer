@@ -57,6 +57,13 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
   }
 
   if (auth.membershipState !== "ready" || auth.membershipStatus !== "bound") {
+    if (auth.membershipStatus === "unauthenticated") {
+      return (
+        <AuthMessage title="Sign in again" message="Your sign-in must be refreshed to continue.">
+          <button className="btn btn--primary" type="button" onClick={() => void auth.signOut()}>Sign in again</button>
+        </AuthMessage>
+      );
+    }
     if (auth.membershipStatus === "mfa-required") {
       return (
         <AuthMessage title="Two-factor authentication required"

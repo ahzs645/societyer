@@ -11,6 +11,8 @@ export default [
       ".claude/**",
       "node_modules/**",
       "convex/_generated/**",
+      // Git submodules (Tourkit) are linted in their own repositories.
+      "modules/**",
     ],
   },
   {

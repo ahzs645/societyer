@@ -29,12 +29,13 @@ component. Add Microsoft OAuth/OIDC sign-in to that component. The browser
 returns to the portal after authenticating with the company's Entra directory;
 Convex continues checking Societyer workspace memberships and roles.
 
-The current Convex broker does **not** configure a Microsoft provider. The
-existing tenant-restricted implementation in `server/microsoft-sso.ts` belongs
-to the separate Node broker. Setting its environment variables alone will not
-enable Microsoft login in the deployed application.
+The Convex broker now has the dedicated certificate-based Microsoft provider,
+registered in Entra and verified live with required-SSO enforcement on November 8, 2026.
+See [the DDC North rollout](ddcnorth-entra-rollout.md) for the reviewed group,
+exact settings, provisioning and session policy. The older Node broker retains
+its separate settings and existing Microsoft account identifiers.
 
-Implementation sequence:
+Original implementation outline (the rollout document records current progress):
 
 1. An Entra administrator registers a dedicated, single-tenant Web application
    for Societyer sign-in. With the current auth host, register this exact redirect:
@@ -45,8 +46,8 @@ Implementation sequence:
    `convex/hostedAuth.ts`, using the Convex auth base URL. Add safe provider
    discovery and **Continue with Microsoft** to the Convex login flow. Preserve
    fixed-tenant validation, identity-only scopes and explicit account linking.
-4. Require assignment to the Entra enterprise application; assign approved staff
-   or a staff group. Apply the organization's MFA/Conditional Access policies
+4. Require the exact signed DDC North group claim and explicitly provision
+   approved directory Object IDs. Apply the organization's MFA/Conditional Access policies
    where licensed. Keep storage and mail service principals separate.
 5. Deliberately link or migrate existing login identities and workspace memberships.
    Do not silently merge accounts by matching email. A successful Microsoft login

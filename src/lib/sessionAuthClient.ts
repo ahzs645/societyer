@@ -7,6 +7,7 @@ import { getAuthMode } from "./authMode";
 export type SessionAuthModule = {
   authClient: Pick<typeof import("./authClient").authClient, "$fetch" | "useSession" | "signIn" | "signUp" | "signOut" | "requestPasswordReset" | "resetPassword" | "sendVerificationEmail" | "twoFactor" | "listAccounts">;
   fetchConvexToken: (forceRefresh?: boolean) => Promise<string | null>;
+  completeOAuthCallback?: () => Promise<void>;
 };
 
 /**
@@ -14,8 +15,9 @@ export type SessionAuthModule = {
  * (`better-auth`) or the Convex deployment's own (`convex`). Loaded lazily so
  * other modes never bundle it into the first page load.
  */
-export function loadSessionAuthClient(): Promise<SessionAuthModule> {
-  return getAuthMode() === "convex"
-    ? import("./convexAuthClient")
-    : import("./authClient");
+export async function loadSessionAuthClient(): Promise<SessionAuthModule> {
+  if (getAuthMode() !== "convex") return import("./authClient");
+  const module = await import("./convexAuthClient");
+  await module.completeOAuthCallback();
+  return module;
 }
