@@ -51,6 +51,11 @@ export function LoginPage() {
             Try again
           </button>
         )}
+        {auth.fatalError.kind === "expired-session" && (
+          <button className="btn btn--primary auth__submit" type="button" onClick={() => void auth.signOut()}>
+            Sign in again
+          </button>
+        )}
       </AuthShell>
     );
   }
@@ -133,16 +138,18 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
   const [sent, setSent] = useState<SentState | null>(null);
   const [resent, setResent] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const microsoftEnabled = useGatewayAuthProviders()?.microsoft?.enabled === true;
+  const gatewayMicrosoftEnabled = useGatewayAuthProviders()?.microsoft?.enabled === true;
   // Convex-hosted sign-in can only verify emails and reset passwords when the
   // deployment has a mail sender configured.
   const capabilities = useAuthCapabilities();
+  const microsoftEnabled = gatewayMicrosoftEnabled || capabilities?.microsoft?.enabled === true;
+  const microsoftRequired = capabilities?.microsoft?.required === true;
   const emailDelivery = capabilities?.emailDelivery === true;
   const allowedEmailDomains = useMemo(() => capabilities?.allowedEmailDomains ?? [], [capabilities]);
   const signUpUnavailable = auth.mode === "convex" && (!capabilities || !capabilities.signUpEnabled);
   const canResetByEmail = auth.mode === "convex" && emailDelivery;
   // Hold `?mode=forgot` until capabilities load, then fall back if there is no mail.
-  const mode: Mode = requestedMode === "forgot" && (auth.mode !== "convex" || capabilities?.emailDelivery === false)
+  const mode: Mode = microsoftRequired ? "sign-in" : requestedMode === "forgot" && (auth.mode !== "convex" || capabilities?.emailDelivery === false)
     ? "sign-in"
     : requestedMode;
   const passwordMinLength = auth.mode === "convex" && mode === "sign-up" ? 10 : 8;
@@ -289,7 +296,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
     setBusy("microsoft");
     setError(null);
     try {
-      const { authClient } = await import("../lib/authClient");
+      const { authClient } = await loadSessionAuthClient();
       const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
       const callbackURL = new URL(`${basePath}${safeRedirect}`, window.location.origin).href;
       const errorCallbackURL = new URL(`${basePath}/login`, window.location.origin);
@@ -349,7 +356,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
   }
 
   const copy = MODE_COPY[mode];
-  const lede = mode === "sign-up" && canResetByEmail
+  const lede = microsoftRequired ? "Use your work Microsoft account to continue." : mode === "sign-up" && canResetByEmail
     ? "Use your work email. We'll send you a link to confirm it."
     : copy.lede;
   const domainHint = authEmailDomainHint(allowedEmailDomains);
@@ -359,7 +366,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
       title={copy.title}
       lede={lede}
       stateKey={mode}
-      after={
+      after={!microsoftRequired && (
         <ModeSwitch
           mode={mode}
           busy={busy !== null}
@@ -367,7 +374,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
           signUpUnavailable={signUpUnavailable}
           onSwitch={switchMode}
         />
-      }
+      )}
       help={mode === "sign-in" && !canResetByEmail ? "Trouble signing in?" : undefined}
     >
       {invitation && <p className="notice auth__notice">You’re invited to <strong>{invitation.workspaceName}</strong>. {invitation.email ? `Use ${invitation.email}. ` : ""}Sign in or verify a new account to join directly. You don’t need to create an organization.</p>}
@@ -389,10 +396,11 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
                   <MicrosoftLogo /> Continue with Microsoft
                 </BusyLabel>
               </button>
-              <div className="auth__divider" role="separator"><span>or</span></div>
+              {!microsoftRequired && <div className="auth__divider" role="separator"><span>or</span></div>}
             </>
           )}
 
+          {!microsoftRequired && <>
           {mode === "sign-up" && (
             <label className="field auth-field">
               <span className="field__label">Full name</span>
@@ -445,8 +453,6 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
             />
           )}
 
-          {errorNotice}
-
           <button
             type="submit"
             className={`btn btn--primary auth__submit${busy === "email" ? " is-busy" : ""}`}
@@ -454,6 +460,8 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
           >
             <BusyLabel busy={busy === "email"} busyText="Please wait…">{copy.submit}</BusyLabel>
           </button>
+          </>}
+          {errorNotice}
         </fieldset>
       </form>
 

@@ -29,12 +29,13 @@ component. Add Microsoft OAuth/OIDC sign-in to that component. The browser
 returns to the portal after authenticating with the company's Entra directory;
 Convex continues checking Societyer workspace memberships and roles.
 
-The current Convex broker does **not** configure a Microsoft provider. The
-existing tenant-restricted implementation in `server/microsoft-sso.ts` belongs
-to the separate Node broker. Setting its environment variables alone will not
-enable Microsoft login in the deployed application.
+The Convex broker now has an opt-in, certificate-based Microsoft provider,
+prepared and tested locally but awaiting Entra registration and live activation.
+See [the DDC North rollout](ddcnorth-entra-rollout.md) for the reviewed group,
+exact settings, provisioning and session policy. The older Node broker retains
+its separate settings and existing Microsoft account identifiers.
 
-Implementation sequence:
+Original implementation outline (the rollout document records current progress):
 
 1. An Entra administrator registers a dedicated, single-tenant Web application
    for Societyer sign-in. With the current auth host, register this exact redirect:

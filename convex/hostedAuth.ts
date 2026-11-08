@@ -27,6 +27,7 @@ import { PASSWORD_RESET_LINK_CHECK, passwordResetLink } from "../shared/password
 import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage, manualAuthProvisioningEnabled } from "../shared/authEmailPolicy";
 import { emailProviderConfiguration } from "../shared/emailConfiguration";
 import { developmentMailConfigured, assertDevelopmentMail } from "../shared/developmentMailConfiguration";
+import { hostedEntraConfig, createHostedEntraProvider, hostedEntraPlugin, hostedEntraClaims, entraSsoRequired } from "../shared/hostedMicrosoftSso";
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
@@ -92,6 +93,9 @@ function throttleHooks(ctx: GenericCtx<DataModel>, domains: readonly string[], s
   if (!("runMutation" in ctx)) return {};
   return {
     before: createAuthMiddleware(async (hook) => {
+      if (entraSsoRequired() && ["/sign-in/email", "/sign-up/email"].includes(hook.path)) {
+        throw new APIError("FORBIDDEN", { message: "Use Continue with Microsoft to sign in to this instance." });
+      }
       if (hook.path === "/two-factor/enable" && !authenticatorEnrollmentEnabled(process.env)) {
         throw new APIError("FORBIDDEN", { message: "Authenticator enrollment is closed for this instance." });
       }
@@ -139,6 +143,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
   const emailConfigured = hostedAuthEmailConfigured();
   const domains = allowedAuthEmailDomains(process.env);
   const signUpEnabled = hostedAuthSignUpEnabled();
+  const entra = active ? hostedEntraConfig() : undefined;
   const checkEmail = (email: unknown) => {
     if (!authEmailAllowed(email, domains)) throw new APIError("FORBIDDEN", { message: authEmailPolicyMessage(domains) });
   };
@@ -147,6 +152,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     secret: secret || "inactive-convex-broker-placeholder-secret-0000",
     trustedOrigins: siteUrls,
     database: authComponent.adapter(ctx),
+    ...(entra ? { socialProviders: { microsoft: createHostedEntraProvider(entra) } } : {}),
     databaseHooks: {
       user: {
         create: { before: async (user) => { checkEmail(user.email); } },
@@ -194,7 +200,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       // Same policy as the gateway broker: a matching email never links accounts.
       accountLinking: { enabled: false, disableImplicitLinking: true, trustedProviders: [] },
     },
-    session: hostedSessionConfiguration(process.env),
+    session: entra ? { expiresIn: 8 * 3600, disableSessionRefresh: true } : hostedSessionConfiguration(process.env),
     // Better Auth's limiter reads the client IP from request headers, which
     // Convex doesn't forward, and would put every visitor in one shared bucket.
     // `throttleHooks` limits by account and by Convex's own client IP instead.
@@ -202,6 +208,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     advanced: { ipAddress: { disableIpTracking: true } },
     hooks: throttleHooks(ctx, domains, signUpEnabled),
     plugins: [
+      ...(entra ? [hostedEntraPlugin(entra)] : []),
       twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" }),
       workspaceMfaProof,
       passwordResetLink,
@@ -215,6 +222,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
           definePayload: async ({ user, session }): Promise<Record<string, unknown>> => ({
             email: user.email, emailVerified: user.emailVerified === true, name: user.name,
             ...await betterAuthMfaClaims((await auth.$context).adapter, user, session),
+            ...await hostedEntraClaims((await auth.$context).adapter, user.id, session.id, entra),
           }),
         },
       }),

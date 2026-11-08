@@ -76,6 +76,7 @@
     "test:auth-token": "tsx scripts/check-auth-token.ts",
     "test:auth-email-policy": "tsx scripts/check-auth-email-policy.ts",
     "test:microsoft-sso": "tsx scripts/check-microsoft-sso.ts",
+    "test:hosted-entra": "tsx scripts/check-hosted-entra.ts",
     "test:outbound-url-policy": "tsx scripts/check-outbound-url-policy.ts",
     "test:local-ai-client": "tsx scripts/check-local-ai-client.ts",
     "test:device-assistant-tools": "tsx scripts/check-device-assistant-tools.ts",

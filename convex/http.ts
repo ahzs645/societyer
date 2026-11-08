@@ -68,6 +68,7 @@ export const authCapabilities = authorizedQuery("http:authCapabilities", query)(
     // SOCIETYER_AUTH_INSTANCE_NAME / SOCIETYER_AUTH_SUPPORT_EMAIL; omitted when unset.
     instanceName: v.optional(v.string()),
     supportEmail: v.optional(v.string()),
+    microsoft: v.optional(v.object({ enabled: v.boolean(), required: v.boolean() })),
   }),
   handler: async () => ({
     mode: resolveSessionBroker(process.env),
@@ -77,6 +78,7 @@ export const authCapabilities = authorizedQuery("http:authCapabilities", query)(
     ...(resolveSessionBroker(process.env) === "convex" && authenticatorEnrollmentEnabled(process.env) ? { authenticatorEnrollment: true } : {}),
     ...(developmentMailConfigured(process.env) ? { developmentMail: true } : {}),
     ...authInstanceDetails(process.env),
+    ...(process.env.SOCIETYER_ENTRA_LOGIN === "1" ? { microsoft: { enabled: true, required: process.env.SOCIETYER_ENTRA_SSO_REQUIRED === "1" } } : {}),
   }),
 });
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;

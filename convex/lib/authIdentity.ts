@@ -2,6 +2,7 @@ import type { UserIdentity } from "convex/server";
 import type { PortablePrincipal } from "../../shared/portable/ctx";
 import { resolveAuthIssuer, resolveClerkIssuer, resolveSessionBroker } from "../../shared/authConfiguration";
 import { allowedAuthEmailDomains, authEmailAllowed, manualAuthProvisioningEnabled } from "../../shared/authEmailPolicy";
+import { entraSsoRequired, validEntraProof } from "../../shared/hostedMicrosoftSso";
 
 export function betterAuthIssuer(): string {
   return resolveAuthIssuer(process.env);
@@ -19,7 +20,12 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
   if (mode === "convex") {
     const domains = allowedAuthEmailDomains(process.env);
     const requiresVerifiedEmail = domains.length > 0 || manualAuthProvisioningEnabled(process.env);
-    if (!authEmailAllowed(identity.email, domains) || (requiresVerifiedEmail && identity.emailVerified !== true)) {
+    const entraVerified = process.env.SOCIETYER_ENTRA_LOGIN === "1" && validEntraProof(identity.societyer_entra, {
+      tenantId: process.env.MICROSOFT_LOGIN_TENANT_ID ?? "",
+      groupIds: (process.env.MICROSOFT_LOGIN_GROUP_IDS ?? "").split(",").map(value => value.trim()),
+    }) && identity.societyer_entra.userId === identity.subject;
+    if (!authEmailAllowed(identity.email, domains) || (entraSsoRequired() && !entraVerified)
+      || (requiresVerifiedEmail && identity.emailVerified !== true && !entraVerified)) {
       return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
     }
     // Only this deployment's own signer is trusted; there is no machine bridge.
