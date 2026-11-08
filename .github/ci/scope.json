@@ -1,0 +1,71 @@
+{
+  "flags": [
+    "full"
+  ],
+  "rules": [
+    {
+      "pattern": "^\\.github/|^(shared|convex|tests|scripts)/|^playwright\\.|(^|/)(package(-lock)?\\.json|tsconfig[^/]*\\.json)$",
+      "select": [
+        "full"
+      ]
+    },
+    {
+      "pattern": "^src/(main\\.tsx|components/|contexts/|hooks/|lib/|features/)",
+      "select": [
+        "full"
+      ]
+    },
+    {
+      "pattern": "^src/pages/(OrganizationSetup|Society|Invoices|Companies|Entity)[^/]*",
+      "select": [
+        "full"
+      ]
+    },
+    {
+      "pattern": "^src/pages/Calendar\\.tsx$|^src/[^/]+\\.css$|^docs/|^[^/]+\\.md$",
+      "select": []
+    }
+  ],
+  "cases": [
+    {
+      "paths": [
+        "src/pages/Calendar.tsx"
+      ],
+      "expected": {
+        "full": false
+      }
+    },
+    {
+      "paths": [
+        "shared/entityProfile.ts"
+      ],
+      "expected": {
+        "full": true
+      }
+    },
+    {
+      "paths": [
+        "src/main.tsx"
+      ],
+      "expected": {
+        "full": true
+      }
+    },
+    {
+      "paths": [
+        "tests/entity-copy-sweep.spec.ts"
+      ],
+      "expected": {
+        "full": true
+      }
+    },
+    {
+      "paths": [
+        "src/pages/UnmappedNewPage.tsx"
+      ],
+      "expected": {
+        "full": true
+      }
+    }
+  ]
+}

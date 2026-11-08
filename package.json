@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Local-first desktop and web tools for society records, documents, and operations.",
   "author": "Societyer",
-  "copyright": "Copyright © Societyer",
+  "copyright": "Copyright \u00a9 Societyer",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
@@ -463,7 +463,8 @@
     "test:invoice-payment-branding-ui": "playwright test --config playwright.invoice-payment-branding.config.ts",
     "test:tax-guidance": "node --import tsx scripts/check-tax-guidance.ts && node --import tsx scripts/check-tax-answer-updates.ts && node --import tsx scripts/check-tax-guidance-convex.ts && node --import tsx scripts/check-invoice-tax-registrations.ts && node --import tsx scripts/check-invoice-tax-rendering.ts",
     "test:tax-guidance-ui": "playwright test --config playwright.tax-guidance.config.ts",
-    "test:organization-capabilities": "node --import tsx scripts/check-organization-capabilities.ts"
+    "test:organization-capabilities": "node --import tsx scripts/check-organization-capabilities.ts",
+    "test:interaction-audit:focused": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",
