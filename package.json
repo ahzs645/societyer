@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Local-first desktop and web tools for society records, documents, and operations.",
   "author": "Societyer",
-  "copyright": "Copyright © Societyer",
+  "copyright": "Copyright \u00a9 Societyer",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
@@ -465,7 +465,8 @@
     "test:tax-guidance-ui": "playwright test --config playwright.tax-guidance.config.ts",
     "test:organization-capabilities": "node --import tsx scripts/check-organization-capabilities.ts",
     "test:document-sources": "node --import tsx scripts/check-document-sources.ts && node --import tsx scripts/check-document-sources-backend.ts && node --import tsx scripts/check-document-sources-local.ts",
-    "test:interface-external-documents": "playwright test -c playwright.external-documents.config.ts"
+    "test:interface-external-documents": "playwright test -c playwright.external-documents.config.ts",
+    "test:interaction-audit:focused": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

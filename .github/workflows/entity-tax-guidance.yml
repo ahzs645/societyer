@@ -3,6 +3,8 @@ name: Organization and tax guidance
 on:
   pull_request:
     paths:
+      - "package*.json"
+      - "tsconfig*.json"
       - "shared/tax/**"
       - "shared/*Tax*"
       - "shared/*tax*"
@@ -36,6 +38,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   tax-guidance:
