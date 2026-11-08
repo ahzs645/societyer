@@ -28,7 +28,8 @@ concurrency:
 
 jobs:
   interface:
-    runs-on: ubuntu-latest
+    # Playwright 1.59 does not support the Ubuntu 26.04 image behind ubuntu-latest.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NODE_OPTIONS: --max-old-space-size=6144
@@ -41,16 +42,19 @@ jobs:
           node-version: 24
           cache: npm
       - name: Install dependencies
+        id: dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install Chromium
+        id: chromium
         run: npx playwright install --with-deps chromium
       - name: Application typecheck
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npx tsc -b --pretty false
       - name: Workspace brand browser journeys
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.chromium.outcome == 'success' }}
         run: npm run test:workspace-branding-ui
       - name: Production bundle
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npx vite build
       - name: Browser evidence
         if: ${{ !cancelled() }}
