@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import type { SetupStepView } from "../../../shared/organizationSetup/types";
 import { incorporationPreparationForOrganization } from "../../../shared/incorporationPreparation";
 import { useSetupView } from "./SetupViewContext";
+import { FederalBcIncorporationGuide } from "../../components/FederalBcIncorporationGuide";
 
 /**
  * The filing step: open the registry's own service, then say "I've filed it".
@@ -70,6 +71,7 @@ export function FilingStepPanel({ step, context }: { step: SetupStepView; contex
           ) : null}
         </details>
       )}
+      {context === "row" && <FederalBcIncorporationGuide organization={view.society} />}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
 } from "../../shared/incorporationPreparation";
 import type { LegalEntityLike } from "../../shared/organizationDomain";
 import { PATHWAY_REGISTRY } from "../../shared/pathways/registry";
+import { FederalBcIncorporationGuide } from "./FederalBcIncorporationGuide";
 
 export function IncorporationPreparation({ organization }: { organization?: LegalEntityLike | null }) {
   const guide = incorporationPreparationForOrganization(organization);
@@ -48,8 +49,9 @@ export function IncorporationPreparation({ organization }: { organization?: Lega
         <h3 style={{ fontSize: 14 }}>Keep after incorporation</h3>
         <ul>{guide.retainedDocuments.map((document) => <li key={document}>{document}</li>)}</ul>
       </details>
+      <FederalBcIncorporationGuide organization={organization} />
       <details style={{ marginTop: 12 }}>
-        <summary style={{ cursor: "pointer" }}>Sources and verification</summary>
+        <summary style={{ cursor: "pointer" }}>Sources for the overview</summary>
         <p className="muted">Draft preparation guidance uses existing repository sources. Filing channels, fees, forms, and mail availability need a current registry check; these links were not reverified for this checklist.</p>
         <ul>
           {guide.sources.map((source) => (

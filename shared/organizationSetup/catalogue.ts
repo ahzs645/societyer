@@ -316,7 +316,7 @@ function nameStep(ctx: SetupCopyContext): SetupStepDefinition {
     });
   }
   const description = ctx.federal && ctx.shareBased
-    ? "Use a numbered name, or pick a word name and get a NUANS name search report."
+    ? "Use a numbered name, or submit a word name for approval through Corporations Canada's online incorporation service. Its integrated name search means you do not normally need to buy a separate NUANS report for that online route."
     : ctx.bcCompany
       ? "Use a numbered company, or pick a name and get it approved by BC Registries."
       : `Use a numbered name if ${ctx.registry} allows it, or pick a name and check that it's available.`;
@@ -572,7 +572,9 @@ function corporationPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[]
     ...(ctx.controlRegister === "isc" ? [step({
       key: "isc-register", phase: "organize", allowNotApplicable: true,
       title: "Keep the significant-control register",
-      description: "Record each person with significant control, and update the register within 15 days of a change.",
+      description: ctx.federal && ctx.shareBased
+        ? "Record each person with significant control. Enter new information within 15 days after becoming aware of it, and file the change with Corporations Canada within 15 days after the register entry."
+        : "Record each person with significant control. Enter new information within 15 days after becoming aware of it.",
       to: "/app/significant-individuals", actionLabel: "Open the register",
       reads: ["documents:read"],
     })] : ctx.controlRegister === "transparency" ? [step({
