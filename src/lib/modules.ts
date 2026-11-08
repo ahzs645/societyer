@@ -27,6 +27,8 @@ export const MODULE_DEFAULTS = {
   workflows: true,
   // Off until a workspace turns it on: it shows data published from outside Societyer.
   procurementReview: false,
+  // Linked files remain in their source service until a workspace opts in.
+  externalDocuments: false,
 } as const;
 
 export type ModuleKey = keyof typeof MODULE_DEFAULTS;
@@ -255,6 +257,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Integrations",
     description: "A read-only copy of the bid opportunities a Zoer instance publishes to this workspace's SharePoint folder.",
     includes: ["Procurement review", "Published snapshot viewer", "Bid document previews"],
+  },
+  {
+    key: "externalDocuments",
+    label: "External documents",
+    category: "Integrations",
+    description: "Link documents in approved external libraries and open them with each reader's source permissions.",
+    includes: ["Document source settings", "Link existing document", "Open at source"],
   },
 ];
 

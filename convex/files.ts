@@ -3,7 +3,7 @@ import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { assertNativeFileStorageEnabled } from "./providers/env";
-import { requireDocumentAccess } from "../shared/functions/documents";
+import { assertDocumentSupportsStoredContent, requireDocumentAccess } from "../shared/functions/documents";
 import { assertReceiptEvidenceContentUnchanged } from "../shared/functions/receiptRetention";
 import { getUrlPortable, generateUploadUrlPortable, generateLogoUploadUrlPortable } from "../shared/functions/files";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
@@ -52,6 +52,7 @@ export const attachUploadedFileToDocument = authorizedMutation("files:attachUplo
     const document = await requireOwnedRow(portableCtx, "documents", documentId);
     await requireRolePortable(portableCtx, { societyId: String(document.societyId), required: "Director" });
     await requireDocumentAccess(portableCtx, documentId, "manage");
+    assertDocumentSupportsStoredContent(document);
     const metadata = await ctx.db.system.get(storageId);
     if (!metadata) throw new Error("Uploaded file not found.");
     fileSizeBytes = metadata.size;

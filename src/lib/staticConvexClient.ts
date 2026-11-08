@@ -6,6 +6,7 @@ import type { PortableDoc, PortablePrincipal, RuntimeKind } from "../../shared/p
 import { LocalStoreDb, type RowStoreOp } from "../../shared/portable/localRowStore";
 import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
 import { buildLocalCapabilities } from "./localCapabilities";
+import { CapabilityUnavailableError } from "../../shared/portable/capabilities";
 import type { LocalWorkspaceSnapshot, LocalWorkspaceBinaryFile } from "./localDexieRowStore";
 import { PortableQueryCache } from "./portableQueryCache";
 import {
@@ -311,6 +312,11 @@ export class StaticConvexClient {
 
   action(action: any, args?: StaticArgs) {
     const name = functionName(action);
+    if (["documentSources:browse", "documentSources:link", "documentSources:resolve"].includes(name)) {
+      // Reject before dispatch or persistence: a delegated credential must
+      // never enter the local mutation/legacy-action queue.
+      return Promise.reject(new CapabilityUnavailableError("http", "External document access requires a hosted workspace. Source settings and existing record labels remain available locally."));
+    }
     if (name === "aiChatActions:sendChatMessage") {
       if (this.clientUrl !== "static://societyer-demo") return Promise.reject(new Error("Live AI requires a connected workspace. No local inference engine is configured."));
       return this.portable.runMutation(name, args ?? {});

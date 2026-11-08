@@ -25,7 +25,7 @@ import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import type { MenuSection } from "../components/Menu";
-import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, BookOpen, ClipboardCheck, MessageSquare, Copy, Layers, FileSearch, Lock } from "lucide-react";
+import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, BookOpen, ClipboardCheck, MessageSquare, Copy, Layers, FileSearch, Lock, Link2, ExternalLink, Unlink, RefreshCw } from "lucide-react";
 import { formatDate, formatDateTime, pluralize } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { isDocumentVersionStorageEnabled } from "../lib/runtimeMode";
@@ -46,6 +46,8 @@ import {
   documentReviewStatusTone,
 } from "../../shared/documentReviewStatus";
 import { SOURCE_VERSION_STATUS_LABELS, type SourceVersionStatus } from "../../shared/documentVersioning";
+import { LinkExternalDocumentDialog } from "../features/externalDocuments/LinkExternalDocumentDialog";
+import { useExternalDocumentActions } from "../features/externalDocuments/useExternalDocumentActions";
 
 type ShowFilter = "all" | "needs_review" | "duplicates" | "versions";
 
@@ -61,6 +63,8 @@ export function DocumentsPage() {
   const society = useSociety();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
+  const externalActions = useExternalDocumentActions(society?._id);
+  const [externalLinkOpen, setExternalLinkOpen] = useState(false);
   const canReviewImports = permissions.loaded && permissions.can("settings:read");
   // Light projection: no content blobs, no per-row queries (findings D-16, D-21).
   const browse = useQuery(api.documents.browse, society ? { societyId: society._id } : "skip");
@@ -84,6 +88,7 @@ export function DocumentsPage() {
   const [form, setForm] = useState<any>(null);
   const [versionsFor, setVersionsFor] = useState<{ id: any; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const sourceOpenGuidanceShown = useRef(false);
   const [formErrors, setFormErrors] = useState<FieldErrors>({});
   const nativeStorage = isDocumentVersionStorageEnabled();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -257,9 +262,14 @@ export function DocumentsPage() {
       const result = await openDocumentFile(row, {
         getDownloadTarget: (args) => getDownloadTarget(args as any),
         getLegacyUrl: (storageId) => convex.query(api.files.getUrl, { storageId }),
+        getExternalTarget: externalActions.getExternalTarget,
       });
       if (result === "simulated") toast.info("Demo mode — no real file is stored, so the download is simulated.");
       else if (result === "none") toast.info("No file or link is attached to this document.");
+      else if (result === "external" && row.externalReference && !sourceOpenGuidanceShown.current) {
+        sourceOpenGuidanceShown.current = true;
+        toast.info("Source access checked", "If the source tab did not open, allow pop-ups for Societyer and choose Open at source again.");
+      }
     } catch (error: any) {
       toast.error("Could not open the file", error?.message ?? String(error));
     }
@@ -268,8 +278,10 @@ export function DocumentsPage() {
   const deleteDocument = async (row: any) => {
     const ok = await confirm({
       title: "Delete document?",
-      message: `"${row.title}" will be permanently removed${row.linkedRecordCount ? `, and ${row.linkedRecordCount} linked record${row.linkedRecordCount === 1 ? "" : "s"} will lose this source` : ""}${documentHasFile(row) ? ". Its attached file metadata goes with it" : ""}.`,
-      confirmLabel: "Delete",
+      message: row.externalReference
+        ? `The Societyer record "${row.title}" will be permanently removed${row.linkedRecordCount ? `, and ${row.linkedRecordCount} linked record${row.linkedRecordCount === 1 ? "" : "s"} will lose this reference` : ""}. The file in its source service will remain.`
+        : `"${row.title}" will be permanently removed${row.linkedRecordCount ? `, and ${row.linkedRecordCount} linked record${row.linkedRecordCount === 1 ? "" : "s"} will lose this source` : ""}${documentHasFile(row) ? ". Its attached file metadata goes with it" : ""}.`,
+      confirmLabel: row.externalReference ? "Delete record" : "Delete",
       tone: "danger",
     });
     if (!ok) return;
@@ -281,7 +293,23 @@ export function DocumentsPage() {
     }
   };
 
-  const menuSections = (row: any): MenuSection[] => [
+  const menuSections = (row: any): MenuSection[] => row.externalReference ? [
+    {
+      id: "open",
+      items: [
+        { id: "review", label: "Open review page", icon: <ClipboardCheck size={14} />, onSelect: () => navigate(`/app/documents/${row._id}`) },
+        { id: "source", label: "Open at source", icon: <ExternalLink size={14} />, disabled: !externalActions.moduleEnabled || Boolean(externalActions.unavailableReason) || !externalActions.sourceFor(row)?.enabled || Boolean(externalActions.busyDocumentId), onSelect: () => { void openFile(row); } },
+        { id: "check", label: "Check link", icon: <RefreshCw size={14} />, disabled: !externalActions.moduleEnabled || Boolean(externalActions.unavailableReason) || !externalActions.sourceFor(row)?.enabled || Boolean(externalActions.busyDocumentId), onSelect: () => { void externalActions.resolve(row).then(() => toast.success("Source access checked", "This document is available to the signed-in Microsoft reader.")).catch(error => toast.error("Could not check link", error instanceof Error ? error.message : String(error))); } },
+      ],
+    },
+    {
+      id: "manage",
+      items: [
+        { id: "unlink", label: "Unlink…", icon: <Unlink size={14} />, disabled: !canEdit || Boolean(externalActions.busyDocumentId), onSelect: () => { void externalActions.unlink(row); } },
+        { id: "delete", label: "Delete record…", icon: <Trash2 size={14} />, disabled: !canEdit || Boolean(externalActions.busyDocumentId), destructive: true, onSelect: () => { void deleteDocument(row); } },
+      ],
+    },
+  ] : [
     {
       id: "open",
       items: [
@@ -348,6 +376,7 @@ export function DocumentsPage() {
                   : []),
               ]}
             />
+            {externalActions.moduleEnabled && <button className="btn-action" disabled={busy || !canEdit} onClick={() => setExternalLinkOpen(true)}><Link2 size={12} /> Link existing document</button>}
             <button className="btn-action btn-action--primary" disabled={busy || !canEdit} onClick={openNew}>
               <Plus size={12} /> New document
             </button>
@@ -462,7 +491,7 @@ export function DocumentsPage() {
               if (field.name === "category") return <Badge tone={documentCategoryTone(r.category)}>{documentCategoryLabel(r.category, categoryAudience)}</Badge>;
               if (field.name === "reviewStatus") return <Badge tone={documentReviewStatusTone(r.reviewStatus)}>{documentReviewStatusLabel(r.reviewStatus)}</Badge>;
               if (field.name === "sourceDate") return r.sourceDate ? <span>{r.sourceDate}</span> : <span className="muted">—</span>;
-              if (field.name === "sourceSystemLabel") return r.sourceSystemLabel ? <span>{r.sourceSystemLabel}</span> : <span className="muted">Added here</span>;
+              if (field.name === "sourceSystemLabel") return r.externalReference ? <span>External document</span> : r.sourceSystemLabel ? <span>{r.sourceSystemLabel}</span> : <span className="muted">Added here</span>;
               if (field.name === "sourceVersionStatus") return r.sourceVersionStatus
                 ? <Badge tone={r.sourceVersionStatus === "approved" || r.sourceVersionStatus === "signed" ? "success" : r.sourceVersionStatus === "draft" ? "neutral" : "info"}>{SOURCE_VERSION_STATUS_LABELS[r.sourceVersionStatus as SourceVersionStatus] ?? r.sourceVersionStatus}{r.sourceVersionStatusDetected ? "*" : ""}</Badge>
                 : <span className="muted">—</span>;
@@ -531,6 +560,8 @@ export function DocumentsPage() {
         )}
       </Drawer>
 
+      {externalLinkOpen && <LinkExternalDocumentDialog societyId={society._id} open onClose={() => setExternalLinkOpen(false)} onLinked={(documentId) => { setExternalLinkOpen(false); navigate(`/app/documents/${documentId}`); }} />}
+
       <DocumentVersionsDrawer
         open={!!versionsFor}
         onClose={() => setVersionsFor(null)}
@@ -545,11 +576,12 @@ export function DocumentsPage() {
 /** Title, the file name only when it adds something, and duplicate/version markers. */
 function DocumentTitleCell({ row }: { row: any }) {
   const showFileName = row.fileName && row.fileName.trim().toLowerCase() !== String(row.title ?? "").trim().toLowerCase();
-  const secondary = showFileName ? row.fileName : row.sourcePath;
+  const secondary = row.externalReference ? undefined : showFileName ? row.fileName : row.sourcePath;
   return (
     <div className="record-table__identifier-lines document-title-cell">
       <strong className="record-table__identifier-primary" title={row.title}>{row.title}</strong>
       <div className="record-table__identifier-secondary document-title-markers">
+        {row.externalReference && <Badge tone="info"><Link2 size={10} /> Linked · latest</Badge>}
         {row.duplicateCount > 1 && (
           <span title={row.isDuplicate ? "Another copy of this file is the canonical record" : "Other copies of this file exist"}>
             <Badge tone={row.isDuplicate ? "warn" : "info"}>

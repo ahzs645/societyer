@@ -13,7 +13,7 @@ import {
 } from "./providers/storage";
 import { providers } from "./providers/env";
 import { DOCUMENT_STORAGE_CAPABILITIES } from "../shared/storage/providerCapabilities";
-import { requireDocumentAccess } from "../shared/functions/documents";
+import { assertDocumentSupportsStoredContent, requireDocumentAccess } from "../shared/functions/documents";
 import { validateUploadMetadata, validateUploadHandle } from "../shared/storage/uploadVerification";
 import { assertNativeFileStorageEnabled, assertDocumentVersionStorageEnabled } from "./providers/env";
 import { decodeSharePointLocator, sharePointDeployment } from "../shared/storage/sharePointDeployment";
@@ -92,6 +92,7 @@ export const allocateUploadHandle = internalMutation({
     if (args.actingUserId && String(args.actingUserId) !== actor._id) throw new Error("Authenticated actor does not match the current principal.");
     if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
     const document = await requireDocumentAccess(portable, args.documentId, "manage");
+    assertDocumentSupportsStoredContent(document);
     if (String(document.societyId) !== String(args.societyId)) throw new Error("documents not found.");
     const storage = providers.storage();
     const provider = storage.id;
@@ -119,7 +120,7 @@ export const claimUploadHandle = internalMutation({
     const portable = await toPortableMutationCtx(ctx);
     const actor = await requireSocietyMembership(portable, handle.societyId);
     if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
-    await requireDocumentAccess(portable, handle.documentId, "manage");
+    assertDocumentSupportsStoredContent(await requireDocumentAccess(portable, handle.documentId, "manage"));
     validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, "pending");
     const storageKey = buildUploadStorageKey(handle.societyId, handle.documentId, `sealed-${crypto.randomUUID()}`, handle.fileName);
     await ctx.db.patch(uploadHandleId, { status: "verifying", storageKey });
@@ -135,7 +136,7 @@ export const markUploadVerified = internalMutation({
     const portable = await toPortableMutationCtx(ctx);
     const actor = await requireSocietyMembership(portable, handle.societyId);
     if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
-    await requireDocumentAccess(portable, handle.documentId, "manage");
+    assertDocumentSupportsStoredContent(await requireDocumentAccess(portable, handle.documentId, "manage"));
     validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, "verifying");
     if (handle.provider === "sharepoint") {
       if (!storageKey) throw new Error("Verified SharePoint metadata is required.");
@@ -155,7 +156,7 @@ export const uploadStatus = internalQuery({
     const portable = await toPortableQueryCtx(ctx);
     const actor = await requireSocietyMembership(portable, handle.societyId);
     if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
-    await requireDocumentAccess(portable, handle.documentId, "manage");
+    assertDocumentSupportsStoredContent(await requireDocumentAccess(portable, handle.documentId, "manage"));
     validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, handle.status);
     return handle;
   },
@@ -207,7 +208,7 @@ export const recordUploadedVersion = authorizedMutation("documentVersions:record
       required: "Director",
     });
     await getOwned(portableCtx, "documents", args.documentId, args.societyId);
-    await requireDocumentAccess(portableCtx, args.documentId, "manage");
+    assertDocumentSupportsStoredContent(await requireDocumentAccess(portableCtx, args.documentId, "manage"));
     if (!args.uploadHandleId) throw new Error("A server-verified upload handle is required.");
     const handle = await ctx.db.get(args.uploadHandleId);
     validateUploadHandle(handle, { societyId: args.societyId, documentId: args.documentId, actorUserId: uploader._id }, "verified");
@@ -394,7 +395,7 @@ export const createDemoVersion = authorizedMutation("documentVersions:createDemo
       throw new Error(`Role Director required — you have ${uploader.role}.`);
     }
     await getOwned(portableCtx, "documents", args.documentId, args.societyId);
-    await requireDocumentAccess(portableCtx, args.documentId, "manage");
+    assertDocumentSupportsStoredContent(await requireDocumentAccess(portableCtx, args.documentId, "manage"));
     if (providers.storage().live) throw new Error("Demo versions are unavailable on a live storage deployment.");
     const uploaderId = uploader._id;
     const existing = await ctx.db

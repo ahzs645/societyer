@@ -57,6 +57,8 @@ export const EXPORTABLE_TABLES = [
   "webhookDeliveries",
   "integrationSyncStates",
   "documentVersions",
+  "documentSources",
+  "externalDocumentReferences",
   "paperlessConnections",
   "paperlessDocumentSyncs",
   "notifications",
@@ -596,7 +598,7 @@ async function paginateForSociety(
   const query = ctx.db.query(table).withIndex(indexName, (q) => q.eq("societyId", societyId));
   const page = await query.paginate(paginationOpts);
   let visibleRows = page.page;
-  if (["documents", "documentVersions", "documentComments", "meetingMaterials", "paperlessDocumentSyncs"].includes(table)) {
+  if (["documents", "documentVersions", "documentComments", "meetingMaterials", "paperlessDocumentSyncs", "externalDocumentReferences"].includes(table)) {
     const allows = await documentAccessPredicate(ctx, societyId);
     const parents = table === "documents" ? visibleRows : await Promise.all(visibleRows.map((row) => row.documentId ? ctx.db.get(String(row.documentId), "documents") : null));
     visibleRows = visibleRows.filter((_, index) => allows(parents[index]));

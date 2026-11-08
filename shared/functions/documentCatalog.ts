@@ -123,6 +123,7 @@ function projectRow(doc: Row, extras: {
     fileName: doc.fileName,
     mimeType: doc.mimeType,
     url: doc.url,
+    externalReference: doc.externalReference,
     storageId: doc.storageId,
     fileSizeBytes: doc.fileSizeBytes ?? extras.latestVersion?.fileSizeBytes,
     retentionYears: doc.retentionYears,
@@ -441,6 +442,9 @@ export async function mergeDuplicatesPortable(
   const pairs: Array<{ document: Row; other: Row; societyId: string }> = [];
   for (const id of ids) pairs.push(await ownedDocumentPair(ctx, keepId, id));
   const keep = pairs[0].document;
+  if (keep.externalReference || pairs.some(({ other }) => other.externalReference)) {
+    throw new Error("Unlink external originals before merging document records.");
+  }
   const societyId = pairs[0].societyId;
   const tags = new Set<string>((keep.tags ?? []).map(String));
   const tagKeys = new Set([...tags].map((tag) => tag.toLowerCase()));

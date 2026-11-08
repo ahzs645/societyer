@@ -17,6 +17,7 @@ import { getAuthMode, type AuthMode } from "../lib/authMode";
 import { loadSessionAuthClient, type SessionAuthModule } from "../lib/sessionAuthClient";
 import { registerAuthTokenGetter, type AuthTokenGetter } from "../lib/authToken";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { setDocumentSourceSessionKey } from "../features/externalDocuments/microsoftAccess";
 import { setPrincipalUsers, setStoredUserId } from "../hooks/useCurrentUser";
 import {
   getStoredSocietyId,
@@ -231,8 +232,14 @@ type AuthenticatedProviderProps = {
 export function AuthenticatedProviderReady(props: AuthenticatedProviderProps) {
   const convex = useConvex();
   const { session, sessionPending, getToken } = props;
+  const documentSourceSessionKey = session ? `${session.user.id}:${session.session?.id ?? ""}` : null;
   const [providerTokenFailure, setProviderTokenFailure] = useState<AuthFailure | null>(null);
   const [tokenRetry, setTokenRetry] = useState(0);
+
+  useEffect(() => {
+    setDocumentSourceSessionKey(documentSourceSessionKey);
+    return () => setDocumentSourceSessionKey(null);
+  }, [documentSourceSessionKey]);
 
   useEffect(() => {
     if (!session) return;
@@ -482,6 +489,7 @@ function MembershipProviderReady({
       },
       signOut: async () => {
         signingOutRef.current = true;
+        setDocumentSourceSessionKey(null);
         hadSessionRef.current = false;
         hadMembershipRef.current = false;
         setMembershipSocietyIds(null);

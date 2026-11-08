@@ -9,10 +9,11 @@ import { restoredDocumentFile } from "../lib/documentOpen";
 import { fetchDocumentDownload } from "../lib/documentDownload";
 import { xlsxToSheets, type SheetPreview } from "../lib/xlsxPreview";
 import { hasPdfSignature, hasZipSignature, hasOleSignature, imageMimeType, mediaMimeType, extensionOf, LEGACY_LABELS } from "../lib/filePreviewSignatures";
+import type { ExternalDocumentReference } from "../features/externalDocuments/types";
 
 /* ------------------------------- preview pane -------------------------------- */
 
-type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "audio" | "video" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "error";
+type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "audio" | "video" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "external" | "error";
 
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -34,7 +35,7 @@ export function DocumentPreviewPane({
   onOpenFile,
   loadBytes,
 }: {
-  document: { _id: string; fileName?: string; mimeType?: string; sha256?: string; latestVersionId?: string } | null;
+  document: { _id: string; fileName?: string; mimeType?: string; sha256?: string; latestVersionId?: string; externalReference?: ExternalDocumentReference } | null;
   getDownloadTarget?: (args: { versionId: Id<"documentVersions"> }) => Promise<any>;
   fallbackUrl: string | null;
   hasAnyFile: boolean;
@@ -64,6 +65,10 @@ export function DocumentPreviewPane({
     setSheets([]);
     setText("");
     setOrigin(null);
+    if (document?.externalReference) {
+      setStatus("external");
+      return;
+    }
     if (!document || !hasAnyFile) {
       setStatus(LEGACY_LABELS[ext] ? "legacy" : "unavailable");
       return;
@@ -187,7 +192,7 @@ export function DocumentPreviewPane({
       controller.abort();
       if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
     };
-  }, [loadBytes, getDownloadTarget, document?._id, document?.latestVersionId, document?.sha256, document?.mimeType, fallbackUrl, fileName, hasAnyFile]);
+  }, [loadBytes, getDownloadTarget, document?._id, document?.latestVersionId, document?.sha256, document?.mimeType, document?.externalReference, fallbackUrl, fileName, hasAnyFile]);
 
   const docxFailed = useCallback((error: unknown) => {
     console.error("Failed to render document preview", error);
@@ -196,6 +201,7 @@ export function DocumentPreviewPane({
   const extracted = extractedText?.trim();
   return (
     <ScrollArea className="document-preview-pane" viewportClassName="document-preview-pane__viewport" tabIndex={0} role="region" aria-label="Document preview">
+      {status === "external" && <div className="minutes-docx-preview__status"><p>This linked document opens at its source. No file preview is stored in Societyer.</p>{onOpenFile && <button type="button" className="btn" onClick={onOpenFile}>Open at source</button>}</div>}
       {origin === "saved" && status !== "loading" && (
         <div className="document-preview-pane__origin"><ShieldCheck size={12} /> Showing the saved original</div>
       )}

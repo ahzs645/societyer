@@ -1,6 +1,7 @@
 import { getRestoredFile } from "./workspaceArchiveFiles";
 import { openDocumentDownloadTarget, type DocumentDownloadTarget } from "./documentStorage";
 import { triggerBlobDownload } from "./zip";
+import type { ExternalDocumentReference } from "../features/externalDocuments/types";
 
 /**
  * Opening a document's file, in order of trust (finding D-02):
@@ -20,11 +21,15 @@ export type OpenableDocument = {
   storageId?: string;
   sha256?: string;
   latestVersionId?: string;
+  /** An external reference is resolved with the current reader's source permissions. */
+  externalReference?: ExternalDocumentReference;
   /** File-history actions must never substitute the parent document's original. */
   versionOnly?: boolean;
 };
 
-export async function restoredDocumentFile(doc: Pick<OpenableDocument, "_id" | "latestVersionId" | "sha256">): Promise<Blob | undefined> {
+export async function restoredDocumentFile(doc: Pick<OpenableDocument, "_id" | "latestVersionId" | "sha256" | "externalReference">): Promise<Blob | undefined> {
+  // Linked documents never substitute cached bytes for their current source.
+  if (doc.externalReference) return undefined;
   try {
     if (doc.latestVersionId) {
       const byVersion = await getRestoredFile({ versionId: doc.latestVersionId }).catch(() => undefined);
@@ -60,8 +65,18 @@ export async function openDocumentFile(
   deps: {
     getDownloadTarget: (args: { versionId: string }) => Promise<DocumentDownloadTarget | null>;
     getLegacyUrl?: (storageId: string) => Promise<string | null | undefined>;
+    getExternalTarget?: (document: OpenableDocument) => Promise<{ url: string }>;
   },
 ): Promise<OpenDocumentResult> {
+  if (doc.externalReference) {
+    if (doc.versionOnly) throw new Error("Linked documents do not have stored file versions. Open the document's review page to access its source.");
+    if (!deps.getExternalTarget) throw new Error("Open this document's review page to sign in and open its external source.");
+    const target = await deps.getExternalTarget(doc);
+    const url = new URL(target.url);
+    if (url.protocol !== "https:" || url.username || url.password) throw new Error("The source returned an unsupported document link.");
+    window.open(url.href, "_blank", "noopener,noreferrer");
+    return "external";
+  }
   const restored = doc.versionOnly && doc.latestVersionId
     ? await getRestoredFile({ versionId: doc.latestVersionId }).catch(() => undefined)
     : await restoredDocumentFile(doc);
@@ -90,7 +105,7 @@ export async function openDocumentFile(
 }
 
 export function documentHasFile(doc: OpenableDocument) {
-  return Boolean(doc.latestVersionId || doc.storageId || doc.url || doc.sha256 || doc.fileName);
+  return Boolean(doc.externalReference || doc.latestVersionId || doc.storageId || doc.url || doc.sha256 || doc.fileName);
 }
 
 export function formatBytes(bytes: number | undefined) {

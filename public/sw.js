@@ -1,6 +1,6 @@
 // Bump this whenever the caching strategy changes so older caches (which may
 // hold stale build chunks under stable asset filenames) are purged on activate.
-const CACHE_VERSION = "societyer-pwa-v3";
+const CACHE_VERSION = "societyer-pwa-v4";
 
 // Everything is resolved against the worker's own scope rather than "/", so a
 // build served from a subdirectory caches its own shell instead of the host's
@@ -43,6 +43,8 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (!url.pathname.startsWith(SCOPE.pathname)) return;
   if (url.pathname.startsWith(scoped("api/"))) return;
+  // An OAuth callback must not replace the cached app shell or load that shell offline.
+  if (url.pathname === scoped("document-source-auth.html")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(

@@ -14,6 +14,7 @@ export type DocumentPreviewAccess = {
 /** Resolve on demand through the same access-checked adapters as downloads. */
 export async function readDocumentPreview(doc: PreviewDocument, access: DocumentPreviewAccess, signal: AbortSignal) {
   signal.throwIfAborted();
+  if (doc.externalReference) throw new Error("Open this linked document at its source. Societyer does not store a preview of external files.");
   if (doc.fileSizeBytes !== undefined) assertPreviewSize(doc.fileSizeBytes);
   const restored = doc.versionOnly ? await getRestoredFile({ versionId: doc.latestVersionId }).catch(() => undefined) : await restoredDocumentFile(doc);
   signal.throwIfAborted();

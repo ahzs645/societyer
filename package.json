@@ -463,11 +463,14 @@
     "test:invoice-payment-branding-ui": "playwright test --config playwright.invoice-payment-branding.config.ts",
     "test:tax-guidance": "node --import tsx scripts/check-tax-guidance.ts && node --import tsx scripts/check-tax-answer-updates.ts && node --import tsx scripts/check-tax-guidance-convex.ts && node --import tsx scripts/check-invoice-tax-registrations.ts && node --import tsx scripts/check-invoice-tax-rendering.ts",
     "test:tax-guidance-ui": "playwright test --config playwright.tax-guidance.config.ts",
-    "test:organization-capabilities": "node --import tsx scripts/check-organization-capabilities.ts"
+    "test:organization-capabilities": "node --import tsx scripts/check-organization-capabilities.ts",
+    "test:document-sources": "node --import tsx scripts/check-document-sources.ts && node --import tsx scripts/check-document-sources-backend.ts && node --import tsx scripts/check-document-sources-local.ts",
+    "test:interface-external-documents": "playwright test -c playwright.external-documents.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",
     "@asteasolutions/zod-to-openapi": "^8.5.0",
+    "@azure/msal-browser": "5.29.0",
     "@clerk/backend": "^3.22.0",
     "@clerk/react": "^6.17.5",
     "@convex-dev/better-auth": "~0.13.0",
