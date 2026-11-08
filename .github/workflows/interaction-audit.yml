@@ -17,12 +17,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run test:interaction-audit
-      - run: npm run test:meeting-collaboration && npm run test:motions-carryforward && npm run test:task-source-links
-      - run: npm run test:portable-manifest
+      - name: Interaction contracts (shared contracts are owned by portable conformance)
+        run: npm run test:interaction-audit:focused
+      - name: Shared contracts for a standalone manual run
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run test:static-parity && npm run test:meeting-draft-recovery
+      - run: npm run test:motions-carryforward && npm run test:task-source-links
+      - name: Meeting collaboration for a standalone manual run
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run test:meeting-collaboration
+      - name: Portable manifest for a standalone manual run
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run test:portable-manifest
       - run: npm run build
   browser:
     runs-on: ubuntu-24.04
@@ -31,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
@@ -53,7 +62,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium

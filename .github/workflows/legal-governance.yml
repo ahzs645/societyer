@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   legal-governance:
     runs-on: ubuntu-latest
@@ -34,6 +38,7 @@ jobs:
       - name: Entity-copy scanner context regression
         run: npm run test:entity-copy-scanner
       - name: Portable manifest drift
+        if: github.event_name == 'workflow_dispatch'
         run: npm run test:portable-manifest
       - name: Convex, TypeScript and production build
         run: npm run build
@@ -48,6 +53,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select browser scope
+        id: scope
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python3 -m unittest discover -s .github/ci -p 'test_*.py'
+          python3 .github/ci/select-checks.py
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -55,11 +69,12 @@ jobs:
       - run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Strict entity copy sweep (five guided workspaces and three demo companies, every route)
-        run: npm run test:entity-sweep
+      - name: Strict entity copy sweep (all workspaces; selected routes or full sweep)
+        run: bash .github/ci/run-entity-sweep.sh
         timeout-minutes: 30
         env:
           ENTITY_SWEEP_STRICT: "1"
+          PR_CRITICAL_ROUTES: ${{ github.event_name == 'pull_request' && steps.scope.outputs.full != 'true' }}
       - name: Corporation flow and governance copy
         if: ${{ !cancelled() }}
         run: npx playwright test -c playwright.corporation.config.ts
