@@ -42,9 +42,8 @@
 }
 .workspace-logo.sidebar__brand-logo { background: transparent; overflow: visible; border-radius: 0; }
 .sidebar__brand--branded {
-  height: auto;
-  min-height: token('topbar-h');
-  align-items: flex-start;
+  height: token('topbar-h');
+  align-items: center;
 }
 .sidebar__brand--branded .sidebar__workspace {
   display: grid;
@@ -53,9 +52,8 @@
   text-align: left;
 }
 .sidebar__brand--branded .workspace-logo--full { width: 100%; height: 28px; grid-column: 1; }
-.sidebar__brand--branded .sidebar__brand-name { grid-row: 2; grid-column: 1 / -1; }
 .sidebar__brand--branded .sidebar__brand-workspace { grid-row: 1; grid-column: 2; }
-.sidebar__brand--branded .sidebar__brand-actions { padding-top: token('s-1'); }
+.sidebar__brand--branded .sidebar__brand-actions { padding-top: 0; }
 .app-shell.is-rail .sidebar__brand--branded .sidebar__workspace { display: flex; }
 .workspace-menu__option { overflow-wrap: anywhere; }
 .workspace-menu__option .workspace-logo { width: 54px; }
@@ -130,6 +128,7 @@
   }
   .mobile-topbar__workspace:hover { background: token('bg-hover'); }
   .mobile-topbar__workspace .workspace-logo { width: 38px; height: 28px; }
+  .mobile-topbar__workspace .workspace-logo--full { width: min(172px, calc(100% - 24px)); }
   .mobile-topbar__workspace > svg { flex: none; }
   .mobile-topbar__workspace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: token('fs-sm'); }
   .mobile-topbar .mobile-topbar__search { flex: 0 0 40px; width: 40px; padding: 0; justify-content: center; }

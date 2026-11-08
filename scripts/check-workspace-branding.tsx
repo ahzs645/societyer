@@ -7,6 +7,14 @@ import { workspaceAccentPalette, workspaceColorContrast, workspaceInitial, works
 import { cleanWorkspaceBrand } from "../shared/workspaceBrandValidation";
 import { WorkspaceLogo } from "../src/components/WorkspaceLogo";
 import { formatDocumentTitle } from "../src/lib/documentTitle";
+import { instanceWorkspaceSymbol } from "../shared/instanceBranding";
+
+const symbolConfig = { VITE_WORKSPACE_SYMBOL_BRAND_ID: "ddcnorth", VITE_WORKSPACE_SYMBOL_LIGHT: "/ddcnorth/symbol-midnight.svg", VITE_WORKSPACE_SYMBOL_DARK: "/ddcnorth/symbol-white.svg" };
+assert.deepEqual(instanceWorkspaceSymbol("ddcnorth", symbolConfig), { light: symbolConfig.VITE_WORKSPACE_SYMBOL_LIGHT, dark: symbolConfig.VITE_WORKSPACE_SYMBOL_DARK });
+assert.equal(instanceWorkspaceSymbol("firstform", symbolConfig), null, "Another workspace must keep its own supplied artwork");
+assert.equal(instanceWorkspaceSymbol("ddcnorth", {}), null, "Other deployments retain their existing identity treatment");
+assert.equal(instanceWorkspaceSymbol("ddcnorth", { ...symbolConfig, VITE_WORKSPACE_SYMBOL_LIGHT: "https://example.test/icon.svg" }), null);
+assert.deepEqual(instanceWorkspaceSymbol("ddcnorth", { ...symbolConfig, VITE_WORKSPACE_SYMBOL_DARK: undefined }), { light: symbolConfig.VITE_WORKSPACE_SYMBOL_LIGHT, dark: symbolConfig.VITE_WORKSPACE_SYMBOL_LIGHT });
 
 const ids = ["ddcnorth", "firstform", "overtheedge", "sparklab", "northwind", "bc-province-1977", "bc-hydro-1983"];
 const brands = await Promise.all(ids.map(async id => importInvoiceBrand(JSON.parse(await readFile(new URL(`fixtures/brandkit/${id}.json`, import.meta.url), "utf8")))));

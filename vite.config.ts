@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "fs";
 import path from "path";
+import { instanceWorkspaceSymbol } from "./shared/instanceBranding";
 
 const base = process.env.VITE_BASE_PATH ?? "/";
 const stableAssetNames = process.env.VITE_STABLE_ASSET_NAMES === "1";
@@ -90,9 +91,24 @@ function pluginBundles(): Plugin {
   };
 }
 
+function instanceBrandIcons(): Plugin {
+  let symbols: ReturnType<typeof instanceWorkspaceSymbol> = null;
+  return {
+    name: "societyer-instance-brand-icons",
+    configResolved(config) {
+      symbols = instanceWorkspaceSymbol(config.env.VITE_WORKSPACE_SYMBOL_BRAND_ID, config.env);
+    },
+    transformIndexHtml(html) {
+      if (!symbols) return html;
+      return html.replace('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
+        `<link rel="icon" type="image/svg+xml" href="${symbols.light}" />\n    <link rel="icon" type="image/svg+xml" href="${symbols.dark}" media="(prefers-color-scheme: dark)" />`);
+    },
+  };
+}
+
 export default defineConfig({
   base,
-  plugins: [react(), intakeOcrAssets(), pluginBundles()],
+  plugins: [react(), intakeOcrAssets(), pluginBundles(), instanceBrandIcons()],
   // Milkdown's Crepe toolbar ships Vue components. Without these compile-time
   // flags Vue's esm-bundler build warns on every editor mount. Options API stays
   // on (Vue's default, in case a toolbar component uses it); devtools are off.

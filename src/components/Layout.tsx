@@ -1342,7 +1342,7 @@ export function Layout() {
               onClick={event => { workspaceTriggerRef.current = event.currentTarget; setWorkspaceOpen((v) => !v); }}
             >
               <WorkspaceLogo organization={society} presentation={society?.workspaceBrand && !isRail ? "full" : "compact"} className="sidebar__brand-logo" />
-              <span className="sidebar__brand-name" id={brandNameId}>{society?.name ?? t("sidebar.selectWorkspace")}</span>
+              <span className={`sidebar__brand-name${society?.workspaceBrand ? " sr-only" : ""}`} id={brandNameId}>{society?.name ?? t("sidebar.selectWorkspace")}</span>
               <span className="sidebar__brand-workspace">
                 <ChevronDown size={12} />
               </span>
@@ -2026,8 +2026,8 @@ export function Layout() {
               aria-label={society?.name ? `${t("sidebar.selectWorkspace")} — ${society.name}` : t("sidebar.selectWorkspace")}
               aria-haspopup="menu" aria-expanded={workspaceOpen}
               onClick={event => { workspaceTriggerRef.current = event.currentTarget; setWorkspaceOpen(value => !value); }}>
-              <WorkspaceLogo organization={society} />
-              <span className="mobile-topbar__workspace-name">{society?.name ?? t("sidebar.selectWorkspace")}</span>
+              <WorkspaceLogo organization={society} presentation={society?.workspaceBrand ? "full" : "compact"} />
+              <span className={`mobile-topbar__workspace-name${society?.workspaceBrand ? " sr-only" : ""}`}>{society?.name ?? t("sidebar.selectWorkspace")}</span>
               <ChevronDown size={12} aria-hidden="true" />
             </button>
             <button
