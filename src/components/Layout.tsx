@@ -1711,7 +1711,7 @@ export function Layout() {
             )}
           </nav>
           <div className="sidebar__identity">
-            <UserPickerSafe />
+            <UserPickerSafe compact={isRail} />
             {isRail ? <SidebarThemeCycleButton /> : <SidebarThemeToggle />}
             {isRail && (
               <Tooltip content={<>Expand sidebar <ShortcutHint id="toggleSidebar" tone="inverse" /></>} placement="right" delay={250}>

@@ -48,7 +48,7 @@ export function actAsLocalUser(id: string) {
   setStoredUserId(id as Id<"users">);
 }
 
-export function UserPicker() {
+export function UserPicker({ compact = false }: { compact?: boolean } = {}) {
   const auth = useAuth();
   const authenticatorEnrollment = useAuthenticatorEnrollment();
   const society = useSociety();
@@ -67,6 +67,11 @@ export function UserPicker() {
       if (!rect) return;
       const margin = 8;
       const gap = 4;
+      if (compact) {
+        const width = Math.min(260, window.innerWidth - rect.right - gap * 2 - margin);
+        setAnchor({ bottom: Math.max(margin, window.innerHeight - rect.bottom), left: rect.right + gap * 2, width, maxHeight: window.innerHeight - margin * 2 });
+        return;
+      }
       const width = Math.max(220, rect.width);
       let left = rect.left;
       if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
@@ -96,7 +101,7 @@ export function UserPicker() {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open]);
+  }, [open, compact]);
 
   useEffect(() => {
     if (!users || users.length === 0) return;
@@ -108,39 +113,17 @@ export function UserPicker() {
   if (!society) return null;
 
   if (auth.mode !== "none") {
-    return (
-      <div
-        style={{
-          border: "1px solid var(--border)",
-          borderRadius: "var(--r-md)",
-          padding: "10px 12px",
-          background: "var(--bg-panel)",
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        <div className="row" style={{ gap: 8, alignItems: "center" }}>
-          <span style={{ fontWeight: 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {current?.displayName ?? auth.session?.user.name ?? auth.session?.user.email}
-          </span>
-          {current?.role && (
-            <span
-              style={{
-                fontSize: "var(--fs-xs)",
-                padding: "1px 5px",
-                borderRadius: "var(--r-pill)",
-                background: "var(--accent-soft)",
-                color: "var(--accent)",
-              }}
-            >
-              {current.role}
-            </span>
-          )}
+    const name = current?.displayName ?? auth.session?.user.name ?? auth.session?.user.email ?? "";
+    const card = (
+      <>
+        <div className="row sidebar-account__head">
+          <span className="sidebar-account__name">{name}</span>
+          {current?.role && <span className="sidebar-account__role">{current.role}</span>}
         </div>
-        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+        <div className="muted sidebar-account__note">
           Signed in to your account. Your workspace membership determines access.
         </div>
-        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+        <div className="row sidebar-account__actions">
           {auth.mode === "clerk" && (
             <Suspense fallback={null}><ClerkAccountButton /></Suspense>
           )}
@@ -159,7 +142,42 @@ export function UserPicker() {
             <LogOut size={12} /> Sign out
           </button>
         </div>
-      </div>
+      </>
+    );
+
+    if (!compact) return <div className="sidebar-account">{card}</div>;
+
+    // Rail: an avatar-sized button that opens the same card beside the rail.
+    return (
+      <>
+        <button
+          ref={btnRef}
+          type="button"
+          className="user-picker"
+          onClick={() => setOpen((v) => !v)}
+          title={current?.role ? `${name} (${current.role})` : name}
+          aria-label={`Account: ${name}`}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          <span aria-hidden="true">{name.trim().charAt(0).toUpperCase() || "?"}</span>
+        </button>
+        {open && anchor &&
+          createPortal(
+            <div
+              ref={menuRef}
+              data-floating-layer=""
+              role="dialog"
+              aria-label="Account"
+              tabIndex={-1}
+              className="sidebar-account sidebar-account--popover"
+              style={{ bottom: anchor.bottom, left: anchor.left, width: anchor.width }}
+            >
+              {card}
+            </div>,
+            document.body,
+          )}
+      </>
     );
   }
 

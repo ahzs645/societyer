@@ -123,10 +123,10 @@ function NotificationBellSafe() {
 }
 
 
-function UserPickerSafe() {
+function UserPickerSafe({ compact = false }: { compact?: boolean }) {
   return (
     <ErrorBoundary label="UserPicker" fallback={null}>
-      <UserPicker />
+      <UserPicker compact={compact} />
     </ErrorBoundary>
   );
 }
