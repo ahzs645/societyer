@@ -530,7 +530,10 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
                   value={draft.terms}
                   disabled={readOnly}
                   onChange={(value) => update({ terms: value, dueDate: value === "custom" ? dueDate : draft.dueDate })}
-                  options={INVOICE_TERMS.map((terms) => ({ value: terms, label: INVOICE_TERMS_LABEL[terms] }))}
+                  options={[
+                    ...INVOICE_TERMS.map(terms => ({ value: terms, label: INVOICE_TERMS_LABEL[terms] })),
+                    ...(draft.terms === "net_15" ? [{ value: "net_15", label: INVOICE_TERMS_LABEL.net_15 }] : []),
+                  ]}
                 />
               </Field>
               {draft.terms === "custom" ? (

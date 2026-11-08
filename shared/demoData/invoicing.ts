@@ -18,7 +18,7 @@
  *
  * Pure TypeScript: no Convex, DOM or Node imports.
  */
-import { addDays, addMonthsClamped, computeInvoiceTotals, formatInvoiceNumber, monthBounds, type InvoiceLine } from "../invoicing";
+import { addDays, addMonthsClamped, computeInvoiceTotals, dueDateForTerms, formatInvoiceNumber, monthBounds, type InvoiceLine } from "../invoicing";
 
 export type DemoInvoiceIdKind =
   | "catalogItem"
@@ -163,7 +163,7 @@ export function invoiceDemoRows(refs: DemoInvoiceRefs, nowMs = Date.now()) {
     key: string;
     party: Record<string, any>;
     issue: string;
-    terms: "due_on_receipt" | "net_15" | "net_30" | "net_60";
+    terms: "due_on_receipt" | "net_14" | "net_30" | "net_60";
     lines: InvoiceLine[];
     discount?: { kind: "percent" | "amount"; value: number };
     reference?: string;
@@ -175,13 +175,12 @@ export function invoiceDemoRows(refs: DemoInvoiceRefs, nowMs = Date.now()) {
     source?: string;
     reminder?: string;
   };
-  const termDays = { due_on_receipt: 0, net_15: 15, net_30: 30, net_60: 60 } as const;
 
   const yogaStart = addMonthsClamped(A, -5);
   const yogaLines = lines([{ item: "room", quantity: 4, description: "Tuesday and Thursday evening classes, four sessions" }]);
   const yoga: Spec[] = [0, 1, 2, 3, 4, 5].map((index) => {
     const issue = addMonthsClamped(yogaStart, index);
-    const base: Spec = { key: `yoga_${index}`, party: parties.yoga, issue, terms: "net_15", lines: yogaLines, state: "sent", seriesIndex: index, source: "series", reference: "Room booking WY-2026" };
+    const base: Spec = { key: `yoga_${index}`, party: parties.yoga, issue, terms: "net_14", lines: yogaLines, state: "sent", seriesIndex: index, source: "series", reference: "Room booking WY-2026" };
     if (index <= 3) return { ...base, payments: [{ date: addDays(issue, 9), method: "e_transfer", reference: `WY-${index + 1}` }] };
     if (index === 4) return { ...base, reminder: d(-6) };
     return { ...base, state: "draft" };
@@ -203,15 +202,15 @@ export function invoiceDemoRows(refs: DemoInvoiceRefs, nowMs = Date.now()) {
     { key: "sponsor_cu_gold", party: parties.creditUnion, issue: d(-45), terms: "net_60", lines: lines([{ item: "gold", description: "Youth resilience program, presenting sponsor" }]), state: "sent", reference: "PO 55-1180", memo: "Payable in two instalments of $1,250; the second is due by the invoice due date.", payments: [{ date: d(-20), amountCents: 125000, method: "direct_deposit", txnKey: "cu", reference: "First instalment" }] },
     { key: "sponsor_cu_gala", party: parties.creditUnion, issue: d(-1), terms: "net_30", lines: lines([{ item: "bronze", description: "Fall gala table sponsor" }, { item: "bronze", description: "Fall gala program advertisement", unitPriceCents: 25000 }]), state: "draft", reference: "Fall gala" },
     // Space rentals
-    { key: "hall_seniors", party: { partyKind: "custom", billToName: "Riverside Seniors Club", billToEmail: "seniors.club@example.org", billToAddress: "c/o Margaret Lin\n12 Elm Court\nVancouver, BC V5L 1A2" }, issue: d(-130), terms: "net_15", lines: lines([{ item: "hall", description: "Winter social" }, { item: "kitchen" }]), state: "sent", payments: [{ date: d(-122), method: "cheque", reference: "Cheque 902" }] },
+    { key: "hall_seniors", party: { partyKind: "custom", billToName: "Riverside Seniors Club", billToEmail: "seniors.club@example.org", billToAddress: "c/o Margaret Lin\n12 Elm Court\nVancouver, BC V5L 1A2" }, issue: d(-130), terms: "net_14", lines: lines([{ item: "hall", description: "Winter social" }, { item: "kitchen" }]), state: "sent", payments: [{ date: d(-122), method: "cheque", reference: "Cheque 902" }] },
     { key: "hall_market_spring", party: parties.market, issue: d(-75), terms: "net_30", lines: lines([{ item: "hall", quantity: 2, description: "Indoor market days" }, { item: "kitchen" }]), state: "sent", payments: [{ date: d(-52), method: "e_transfer" }] },
-    { key: "hall_market_now", party: parties.market, issue: d(-8), terms: "net_15", lines: lines([{ item: "hall", description: "Seedling swap" }, { item: "projector", description: "Projector for the growers' talk" }]), state: "sent" },
-    { key: "hall_cancelled", party: { partyKind: "custom", billToName: "Northside Choir", billToEmail: "northside.choir@example.org" }, issue: d(-60), terms: "net_15", lines: lines([{ item: "hall", description: "Spring concert" }]), state: "void", voidReason: "Booking cancelled by the choir" },
+    { key: "hall_market_now", party: parties.market, issue: d(-8), terms: "net_14", lines: lines([{ item: "hall", description: "Seedling swap" }, { item: "projector", description: "Projector for the growers' talk" }]), state: "sent" },
+    { key: "hall_cancelled", party: { partyKind: "custom", billToName: "Northside Choir", billToEmail: "northside.choir@example.org" }, issue: d(-60), terms: "net_14", lines: lines([{ item: "hall", description: "Spring concert" }]), state: "void", voidReason: "Booking cancelled by the choir" },
     // Program fees
     { key: "program_pac", party: parties.pac, issue: d(-20), terms: "net_30", lines: lines([{ item: "workshop", quantity: 18, description: "Grade 6 resilience workshop series" }]), discount: { kind: "percent", value: 10 }, state: "sent", reference: "PAC request 2026-03", payments: [{ date: d(-6), amountCents: 40000, method: "e_transfer", txnKey: "pac", reference: "Deposit" }] },
-    { key: "program_devon", party: member("devon"), issue: d(-58), terms: "net_15", lines: lines([{ item: "workshop", unitPriceCents: 9500, description: "First aid certification course" }]), state: "sent", payments: [{ date: d(-55), method: "card" }] },
-    { key: "program_avery", party: member("avery"), issue: d(-33), terms: "net_15", lines: lines([{ item: "workshop", description: "Emergency preparedness evening" }]), state: "sent", payments: [{ date: d(-29), method: "e_transfer" }] },
-    { key: "program_sam", party: member("sam"), issue: d(-3), terms: "net_15", lines: lines([{ item: "workshop", quantity: 2, description: "Two sessions of the neighbourhood mapping workshop" }]), state: "sent" },
+    { key: "program_devon", party: member("devon"), issue: d(-58), terms: "net_14", lines: lines([{ item: "workshop", unitPriceCents: 9500, description: "First aid certification course" }]), state: "sent", payments: [{ date: d(-55), method: "card" }] },
+    { key: "program_avery", party: member("avery"), issue: d(-33), terms: "net_14", lines: lines([{ item: "workshop", description: "Emergency preparedness evening" }]), state: "sent", payments: [{ date: d(-29), method: "e_transfer" }] },
+    { key: "program_sam", party: member("sam"), issue: d(-3), terms: "net_14", lines: lines([{ item: "workshop", quantity: 2, description: "Two sessions of the neighbourhood mapping workshop" }]), state: "sent" },
   ];
 
   specs.sort((a, b) => a.issue.localeCompare(b.issue) || a.key.localeCompare(b.key));
@@ -227,7 +226,7 @@ export function invoiceDemoRows(refs: DemoInvoiceRefs, nowMs = Date.now()) {
   const invoices: Array<Record<string, any>> = specs.map((spec, index) => {
     const sequence = index + 1;
     const totals = computeInvoiceTotals(spec.lines, spec.discount);
-    const dueDate = addDays(spec.issue, termDays[spec.terms]);
+    const dueDate = dueDateForTerms(spec.issue, spec.terms);
     const payments = (spec.payments ?? []).map((payment, n) => ({
       key: `pay_${spec.key}_${n + 1}`,
       date: payment.date,
@@ -317,7 +316,7 @@ export function invoiceDemoRows(refs: DemoInvoiceRefs, nowMs = Date.now()) {
       autoSend: false,
       status: "active",
       ...parties.yoga,
-      terms: "net_15",
+      terms: "net_14",
       reference: "Room booking WY-2026",
       currency: "CAD",
       lines: yogaLines,

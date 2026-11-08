@@ -11,11 +11,13 @@
 import { computeInvoiceMoneyTotals, settlementTotals, type InvoiceMoneyOptions } from "./invoiceMoney";
 export * from "./invoiceMoney";
 
-export const INVOICE_TERMS = ["due_on_receipt", "net_15", "net_30", "net_60", "custom"] as const;
-export type InvoiceTerms = (typeof INVOICE_TERMS)[number];
+export const INVOICE_TERMS = ["due_on_receipt", "net_14", "net_30", "net_60", "custom"] as const;
+// Saved invoices can still carry their original 15-day agreement.
+export type InvoiceTerms = (typeof INVOICE_TERMS)[number] | "net_15";
 
 export const INVOICE_TERMS_LABEL: Record<InvoiceTerms, string> = {
   due_on_receipt: "Due on receipt",
+  net_14: "Net 14",
   net_15: "Net 15",
   net_30: "Net 30",
   net_60: "Net 60",
@@ -24,6 +26,7 @@ export const INVOICE_TERMS_LABEL: Record<InvoiceTerms, string> = {
 
 const TERMS_DAYS: Record<Exclude<InvoiceTerms, "custom">, number> = {
   due_on_receipt: 0,
+  net_14: 14,
   net_15: 15,
   net_30: 30,
   net_60: 60,

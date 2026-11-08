@@ -112,6 +112,11 @@ type Row = { paymentMethods?: InvoiceReceivingMethod[]; paymentInstructions?: st
 
 const DEFAULT_TERMS = "net_30";
 
+function newInvoiceTerms(value: string | undefined) {
+  if (value === "net_15") return "net_14";
+  return INVOICE_TERMS.find(term => term === value) ?? DEFAULT_TERMS;
+}
+
 function nowISO() {
   return new Date().toISOString();
 }
@@ -156,7 +161,7 @@ function settingsView(row: Row | null, invoices: Row[]) {
     prefix,
     nextNumber,
     nextNumberPreview: formatInvoiceNumber(prefix, nextNumber),
-    defaultTerms: row?.defaultTerms ?? DEFAULT_TERMS,
+    defaultTerms: newInvoiceTerms(row?.defaultTerms),
     paymentInstructions: row?.paymentInstructions,
     paymentMethods: row?.paymentMethods ?? [],
     defaultPaymentMethodIds: row?.defaultPaymentMethodIds ?? [],
@@ -688,7 +693,7 @@ type InvoiceArgs = PartyArgs & {
 
 async function invoiceFields(ctx: PortableQueryCtx, args: InvoiceArgs, original: Row | null) {
   if (!isCalendarDate(args.issueDate)) throw new Error("Choose an issue date.");
-  const terms = (INVOICE_TERMS as readonly string[]).includes(args.terms) ? args.terms : DEFAULT_TERMS;
+  const terms = original?.terms === "net_15" && args.terms === "net_15" ? "net_15" : newInvoiceTerms(args.terms);
   if (terms === "custom" && !isCalendarDate(args.dueDate)) throw new Error("Choose a due date.");
   const dueDate = dueDateForTerms(args.issueDate, terms, args.dueDate);
   if (dueDate < args.issueDate) throw new Error("The due date can't be before the issue date.");
@@ -1084,7 +1089,7 @@ export async function duplicatePortable(ctx: PortableMutationCtx, { id }: { id: 
   const actor = await actorName(ctx, row.societyId);
   const { sequence, number } = await allocateNumber(ctx, row.societyId);
   const at = nowISO();
-  const terms = row.terms === "custom" ? DEFAULT_TERMS : row.terms;
+  const terms = row.terms === "custom" ? DEFAULT_TERMS : newInvoiceTerms(row.terms);
   const defaults = defaultInvoicePayments(await loadSettings(ctx, row.societyId));
   return ctx.db.insert("invoices", {
     societyId: row.societyId,
@@ -1419,7 +1424,7 @@ async function insertDuesDraft(
   input: { member?: Row; subscription?: Row; plan: Row; priceCents: number; issueDate: string; renewalDate?: string; batch?: string; actor?: string },
 ) {
   const settings = await loadSettings(ctx, societyId);
-  const terms = settings?.defaultTerms ?? DEFAULT_TERMS;
+  const terms = newInvoiceTerms(settings?.defaultTerms);
   const lines = [planLineItem(input.plan, input.priceCents, input.renewalDate)];
   const { sequence, number } = await allocateNumber(ctx, societyId);
   const at = nowISO();
@@ -1714,7 +1719,7 @@ export async function upsertSeriesPortable(ctx: PortableMutationCtx, args: Serie
   if (problem) throw new Error(problem);
   await assertCatalogRefs(ctx, args.societyId, lines);
   const party = await cleanParty(ctx, args.societyId, args);
-  const terms = (INVOICE_TERMS as readonly string[]).includes(args.terms) && args.terms !== "custom" ? args.terms : DEFAULT_TERMS;
+  const terms = args.terms === "custom" ? DEFAULT_TERMS : newInvoiceTerms(args.terms);
   const schedule = { frequency: args.frequency, startDate: args.startDate, endKind, endAfterCount, endDate: endKind === "on_date" ? args.endDate : undefined };
   let issuedCount = 0;
   let existing: Row | null = null;
@@ -1774,6 +1779,7 @@ export async function issueFromSeriesPortable(ctx: PortableMutationCtx, { id }: 
   if (!series.nextIssueDate || series.status === "ended") throw new Error("This series has no more invoices to issue.");
   const actor = await actorName(ctx, series.societyId);
   const issueDate = series.nextIssueDate;
+  const terms = newInvoiceTerms(series.terms);
   const defaults = defaultInvoicePayments(await loadSettings(ctx, series.societyId));
   const { sequence, number } = await allocateNumber(ctx, series.societyId);
   const at = nowISO();
@@ -1791,8 +1797,8 @@ export async function issueFromSeriesPortable(ctx: PortableMutationCtx, { id }: 
     shipToName: series.shipToName,
     shipToAddress: series.shipToAddress,
     issueDate,
-    terms: series.terms,
-    dueDate: dueDateForTerms(issueDate, series.terms),
+    terms,
+    dueDate: dueDateForTerms(issueDate, terms),
     reference: series.reference,
     currency: series.currency,
     documentTemplate: series.documentTemplate,
@@ -1837,7 +1843,7 @@ export async function saveSettingsPortable(
     paymentMethods, defaultPaymentMethodIds,
     prefix: normalizeInvoicePrefix(args.prefix),
     nextNumber,
-    defaultTerms: (INVOICE_TERMS as readonly string[]).includes(args.defaultTerms) && args.defaultTerms !== "custom" ? args.defaultTerms : DEFAULT_TERMS,
+    defaultTerms: args.defaultTerms === "custom" ? DEFAULT_TERMS : newInvoiceTerms(args.defaultTerms),
     paymentInstructions: cleanText(args.paymentInstructions, 2000),
     defaultMemo: cleanText(args.defaultMemo, 2000),
     replyToEmail,
