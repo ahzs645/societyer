@@ -34,6 +34,7 @@ import { peopleTables } from "./tables/people";
 import { grantTables } from "./tables/grants";
 import { yearEndTables } from "./tables/yearEnd";
 import { documentTables } from "./tables/documents";
+import { documentSourceTables } from "./tables/documentSources";
 import { assetTables } from "./tables/assets";
 import { treasuryTables } from "./tables/treasury";
 import { workflowTables } from "./tables/workflows";
@@ -607,6 +608,7 @@ export default defineSchema({
 
   // Document tables (documents, meeting materials, document comments, publications), extracted from convex/schema — extracted to convex/tables/documents.ts
   ...documentTables,
+  ...documentSourceTables,
 
   // policies / bylaws — extracted to convex/tables/policies.ts
   ...policyTables,

@@ -473,6 +473,10 @@
     "procurementReview": {
       "label": "Revue des appels d'offres",
       "description": "Une copie en lecture seule des occasions d'appels d'offres qu'une instance Zoer publie dans le dossier SharePoint de cet espace de travail."
+    },
+    "externalDocuments": {
+      "label": "Documents externes",
+      "description": "Lier des documents dans des bibliothèques externes approuvées et les ouvrir selon les autorisations de chaque lecteur à la source."
     }
   },
   "moduleCategories": {

@@ -32,8 +32,15 @@ console.log('fake:log'); const fixture = 'fake:fixture';
 if (name === 'real:one') return doWrite();
 if (['real:two', 'real:three'].includes(name)) throw new Error('Unsupported');
 switch(name) { case 'real:four': return save(); }
+class LocalClient {
+  action(name: string) {
+    if (['live:browse', 'live:link', 'live:resolve'].includes(name)) {
+      return Promise.reject(new Error('Capability unavailable'));
+    }
+  }
+}
 ` }]);
-assert.deepEqual([...dispatch].sort(), ['real:four', 'real:one', 'real:three', 'real:two']);
+assert.deepEqual([...dispatch].sort(), ['live:browse', 'live:link', 'live:resolve', 'real:four', 'real:one', 'real:three', 'real:two']);
 assert.throws(() => assertLocalWriteCapability('meetingTranscription:editSegment'), /hosted|connected/i);
 assert.throws(() => assertLocalWriteCapability('workspaceMfa:setPolicy'), /connected workspace.*verified Owner session/i);
 assert.doesNotThrow(() => assertLocalWriteCapability('tasks:update'));

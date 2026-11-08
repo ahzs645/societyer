@@ -42,6 +42,8 @@ import {
 import { documentCategoryLabel, documentCategoryOptions, normalizeDocumentCategory } from "../../shared/documentCategories";
 import { governingDocumentAudience } from "../../shared/governingDocuments";
 import { SOURCE_VERSION_STATUSES, SOURCE_VERSION_STATUS_LABELS, type SourceVersionStatus } from "../../shared/documentVersioning";
+import { ExternalDocumentDetails } from "../features/externalDocuments/ExternalDocumentDetails";
+import { useExternalDocumentActions } from "../features/externalDocuments/useExternalDocumentActions";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -65,13 +67,14 @@ export function DocumentWorkbenchPage() {
   const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
   const document = useRecordQuery<any>(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
+  const externalActions = useExternalDocumentActions(society?._id, Boolean(document?.externalReference));
   // In-camera material this reader may not see comes back as a placeholder; nothing else about it is read.
   const withheld = document?.inCameraWithheld === "in_camera";
   // Panels read the document's versions, comments and signatures once it exists
   // (a missing or foreign id shows the not-found state, not a failed panel).
   const documentId = withheld ? undefined : document?._id as Id<"documents"> | undefined;
-  const latest = useQuery(api.documentVersions.latest, documentId ? { documentId } : "skip");
-  const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
+  const latest = useQuery(api.documentVersions.latest, documentId && !document?.externalReference ? { documentId } : "skip");
+  const legacyUrl = useQuery(api.files.getUrl, document?.storageId && !document?.externalReference ? { storageId: document.storageId } : "skip");
   const comments = useQuery(api.documentComments.listForDocument, documentId ? { documentId } : "skip");
   const signatures = useQuery(api.signatures.listForEntity, documentId ? { entityType: "document", subjectId: String(documentId) } : "skip");
   const markOpened = useMutation(api.documents.markOpened);
@@ -105,6 +108,7 @@ export function DocumentWorkbenchPage() {
     storageId: document.storageId,
     sha256: provenance?.sha256 ?? latest?.sha256,
     latestVersionId: latest?._id,
+    externalReference: document.externalReference,
   } : null, [document, latest, provenance]);
 
   const societies = useSocieties();
@@ -130,7 +134,7 @@ export function DocumentWorkbenchPage() {
   useEffect(() => {
     let active = true;
     setSavedOriginal(null);
-    if (!openable || latest === undefined) return;
+    if (!openable || openable.externalReference || latest === undefined) return;
     void restoredDocumentFile(openable).then(async (blob) => {
       if (!active || !blob) return;
       const expected = openable.sha256;
@@ -156,6 +160,7 @@ export function DocumentWorkbenchPage() {
     const result = await openDocumentFile(openable, {
       getDownloadTarget: (args) => getDownloadTarget(args as any),
       getLegacyUrl: (storageId) => convex.query(api.files.getUrl, { storageId }),
+      getExternalTarget: externalActions.getExternalTarget,
     });
     if (result === "simulated") toast.info("Demo mode — no stored file is available.");
     else if (result === "none") toast.info("No file or link is attached to this document.", "Upload the file from File history to keep a copy here.");
@@ -220,15 +225,15 @@ export function DocumentWorkbenchPage() {
         title={document.title}
         icon={<FileText size={16} />}
         iconColor="gray"
-        subtitle={`${documentCategoryLabel(document.category)} · ${fileName ?? "metadata record"}${provenance?.sourceSystem ? ` · from ${sourceSystemLabel(provenance.sourceSystem)}` : ""}`}
+        subtitle={`${documentCategoryLabel(document.category)} · ${document.externalReference ? "linked source document" : fileName ?? "metadata record"}${provenance?.sourceSystem ? ` · from ${sourceSystemLabel(provenance.sourceSystem)}` : ""}`}
         actions={
           <>
             <UnsupportedDetailsBadge table="documents" id={document._id} />
-            <PaperlessDocumentAction societyId={society._id} documentId={document._id} disabled={!canEdit || !downloadAvailable} />
-            <button className="btn-action" disabled={!downloadAvailable} onClick={() => { void openFile().catch((error: any) => toast.error("Could not open document", error?.message ?? String(error))); }}>
+            {!document.externalReference && <PaperlessDocumentAction societyId={society._id} documentId={document._id} disabled={!canEdit || !downloadAvailable} />}
+            {!document.externalReference && <button className="btn-action" disabled={!downloadAvailable} onClick={() => { void openFile().catch((error: any) => toast.error("Could not open document", error?.message ?? String(error))); }}>
               {savedOriginal || latest ? <Download size={12} /> : <ExternalLink size={12} />}
               {savedOriginal ? "Open saved original" : latest ? "Open file" : document.url ? "Open source link" : "Open file"}
-            </button>
+            </button>}
           </>
         }
       />
@@ -238,7 +243,9 @@ export function DocumentWorkbenchPage() {
 
       <div className="document-workbench-layout">
         <div className="col" style={{ gap: 16, minWidth: 0 }}>
-          {!downloadAvailable && !extractedTextOf(document.content) ? (
+          {document.externalReference ? (
+            <ExternalDocumentDetails document={document} canEdit={canEdit} />
+          ) : !downloadAvailable && !extractedTextOf(document.content) ? (
             <p className="muted document-metadata-note" role="note">No file is attached to this document — it is a metadata record. Its source and content are shown below.</p>
           ) : (
           <div className="card">
@@ -262,8 +269,8 @@ export function DocumentWorkbenchPage() {
           </div>
           )}
 
-          <SourceDetailsCard document={document} provenance={provenance} savedOriginal={savedOriginal} latest={latest} />
-          <DocumentVersionsPanel documentId={document._id} canEdit={canEdit} />
+          {!document.externalReference && <SourceDetailsCard document={document} provenance={provenance} savedOriginal={savedOriginal} latest={latest} />}
+          {!document.externalReference && <DocumentVersionsPanel documentId={document._id} canEdit={canEdit} />}
           <DocumentEvidencePanel documentId={document._id} />
 
           <div className="card">
@@ -411,7 +418,7 @@ export function DocumentWorkbenchPage() {
               <Detail label="Added">{formatDateTime(document.createdAtISO)}</Detail>
               {provenance?.sourceDate && <Detail label="Source date">{provenance.sourceDate}</Detail>}
               <Detail label="Last opened">{document.lastOpenedAtISO ? formatDateTime(document.lastOpenedAtISO) : "Not opened"}</Detail>
-              <Detail label="File">{latest ? `v${latest.version}` : savedOriginal ? "saved original" : document.url ? "external link" : fileName ? "legacy file" : "metadata only"}</Detail>
+              <Detail label="File">{document.externalReference ? "linked · latest source file" : latest ? `v${latest.version}` : savedOriginal ? "saved original" : document.url ? "external link" : fileName ? "legacy file" : "metadata only"}</Detail>
             </div>
           </div>
           <div className="card">

@@ -117,6 +117,7 @@ const bylawAmendmentsFns = lazyHandlers(() => import("./bylawAmendments"), "byla
 import * as filingsFns from "./filings";
 import * as organizationDetailsFns from "./organizationDetails";
 import * as documentsFns from "./documents";
+import * as documentSourcesFns from "./documentSources";
 const documentCatalogFns = lazyHandlers(() => import("./documentCatalog"), "documentCatalog");
 const organizationHistoryFns = lazyHandlers(() => import("./organizationHistory"), "organizationHistory");
 import * as meetingsFns from "./meetings";
@@ -969,6 +970,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "organizationDetails:removeIdentifier", handler: organizationDetailsFns.removeIdentifierPortable }),
 
   // documents
+  definePortableQuery({ name: "documentSources:list", handler: documentSourcesFns.listPortable }),
+  definePortableMutation({ name: "documentSources:save", handler: documentSourcesFns.savePortable }),
+  definePortableMutation({ name: "documentSources:setEnabled", handler: documentSourcesFns.setEnabledPortable }),
+  definePortableMutation({ name: "documentSources:unlink", handler: documentSourcesFns.unlinkPortable }),
   definePortableQuery({ name: "documents:list", handler: documentsFns.listPortable }),
   definePortableQuery({ name: "documents:listSummaries", handler: documentsFns.listSummariesPortable }),
   definePortableQuery({ name: "documents:get", handler: documentsFns.getPortable }),

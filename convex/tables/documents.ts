@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { externalDocumentMarkerValidator } from "./documentSources";
 
 /**
  * Document tables (documents, meeting materials, document comments, publications), extracted from convex/schema.ts. Spread back into defineSchema; byte-identical.
@@ -16,6 +17,7 @@ export const documentTables = {
     mimeType: v.optional(v.string()),
     content: v.optional(v.string()),
     url: v.optional(v.string()),
+    externalReference: v.optional(externalDocumentMarkerValidator),
     storageId: v.optional(v.id("_storage")),
     fileSizeBytes: v.optional(v.number()),
     retentionYears: v.optional(v.number()),

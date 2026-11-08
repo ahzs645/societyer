@@ -29,7 +29,13 @@ const build = {
   target: "esnext" as const,
   manifest: true,
   chunkSizeWarningLimit: 1000,
-  rollupOptions: { output },
+  rollupOptions: {
+    input: {
+      index: path.resolve(__dirname, "index.html"),
+      documentSourceAuth: path.resolve(__dirname, "document-source-auth.html"),
+    },
+    output,
+  },
 };
 
 /** AI intake OCR runs offline: the tesseract.js worker, its WebAssembly cores, the English model

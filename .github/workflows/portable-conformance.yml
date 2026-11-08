@@ -54,6 +54,9 @@ jobs:
           npm run test:authorization-policy
           npm run test:permissioned-mutation
 
+      - name: Optional document sources and local credential boundary
+        run: npm run test:document-sources
+
       - name: Meeting collaboration and per-user notification regressions
         run: |
           npm run test:meeting-collaboration

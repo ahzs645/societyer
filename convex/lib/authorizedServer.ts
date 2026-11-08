@@ -4,12 +4,16 @@ import { requireFunctionAction } from "../../shared/functions/actionPolicy";
 import { toPortableQueryCtx } from "./portable";
 import { withMeetingDownloadInvalidation } from "./offlineMeetingInvalidation";
 
-function wrap(builder: any, name: string, kind: "query" | "mutation" | "action") {
+function wrap(builder: any, name: string, kind: "query" | "mutation" | "action", authorizationArgs?: (args: any) => Record<string, unknown>) {
   return (definition: any) => {
     const handler = definition.handler;
     return builder({ ...definition, handler: async (ctx: any, args: any) => {
       if (kind === "action") {
-        await ctx.runQuery(makeFunctionReference<"query">("authorization:checkAction"), { name, kind, args });
+        // Credential-bearing actions authorize only their resource identifiers.
+        // Their short-lived credentials never enter the authorization query.
+        await ctx.runQuery(makeFunctionReference<"query">("authorization:checkAction"), {
+          name, kind, args: authorizationArgs ? authorizationArgs(args) : args,
+        });
       } else {
         await requireFunctionAction(await toPortableQueryCtx(ctx), name, kind, args);
       }
@@ -22,4 +26,4 @@ function wrap(builder: any, name: string, kind: "query" | "mutation" | "action")
 
 export const authorizedQuery = <T>(name: string, builder: T): T => wrap(builder, name, "query") as T;
 export const authorizedMutation = <T>(name: string, builder: T): T => wrap(builder, name, "mutation") as T;
-export const authorizedAction = <T>(name: string, builder: T): T => wrap(builder, name, "action") as T;
+export const authorizedAction = <T>(name: string, builder: T, authorizationArgs?: (args: any) => Record<string, unknown>): T => wrap(builder, name, "action", authorizationArgs) as T;

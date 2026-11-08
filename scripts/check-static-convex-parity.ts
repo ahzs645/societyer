@@ -39,7 +39,8 @@ const { refs: frontendWrites, unresolved } = inventoryFrontendWrites(walk(srcDir
   fileName: path.relative(repoRoot, file), text: readFileSync(file, "utf8"),
 })));
 const explicitlyHandled = inventoryExplicitDispatch([
-  staticConvexPath, path.join(srcDir, "lib", "staticLegacyDispatch.ts"), path.join(srcDir, "lib", "staticConvexYcn.ts"),
+  staticConvexPath, path.join(srcDir, "lib", "staticConvexClient.ts"),
+  path.join(srcDir, "lib", "staticLegacyDispatch.ts"), path.join(srcDir, "lib", "staticConvexYcn.ts"),
 ].map((file) => ({ fileName: file, text: readFileSync(file, "utf8") })));
 
 // Functions ported to the portable ctx.db contract are handled by the live local

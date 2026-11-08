@@ -275,6 +275,13 @@ export async function requireDocumentAccess(ctx: PortableQueryCtx, documentId: s
   return document;
 }
 
+/** Linked originals keep their bytes at the source; uploads use a separate document. */
+export function assertDocumentSupportsStoredContent(document: Record<string, unknown>) {
+  if (document.externalReference) {
+    throw new Error("This document links to an external original. Create a separate document to upload or store file contents.");
+  }
+}
+
 /** Apply document policy to rows that embed document previews, content or evidence. */
 export async function filterDocumentLinkedRows(ctx: PortableQueryCtx, societyId: string, rows: any[], table = "") {
   const actor = await requireSocietyMembership(ctx, societyId);
@@ -811,6 +818,7 @@ export async function rebuildPipaPolicyDraftFromSocietyPortable(
   if (!candidate) throw new Error("documents not found.");
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
+  assertDocumentSupportsStoredContent(document);
   const society = await ctx.db.get(String(document.societyId), "societies");
   if (!society) throw new Error("Society not found.");
 
@@ -885,6 +893,7 @@ export async function updateDraftContentPortable(
   if (!candidate) throw new Error("documents not found.");
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const document = await getOwned(ctx, "documents", args.id, String(candidate.societyId));
+  assertDocumentSupportsStoredContent(document);
   const tags = args.tags ? Array.from(new Set(args.tags)) : document.tags;
   await assertReceiptEvidenceContentUnchanged(ctx, document, { content: args.content });
   await ctx.db.patch(args.id, {
@@ -1167,6 +1176,7 @@ export async function mergeConnectorDocumentMetadataPortable(
     String(candidate.societyId),
   );
   const existingTags = document.tags ?? [];
+  assertDocumentSupportsStoredContent(document);
   const existingSourceIds = document.sourceExternalIds ?? [];
   const versions = await ctx.db
     .query("documentVersions")
@@ -1239,6 +1249,15 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
   await assertReceiptEvidenceDocumentMayBeDeleted(ctx, document);
+  if (document.externalReference) {
+    await requireDocumentAccess(ctx, id, "manage");
+    const reference = await ctx.db.get(document.externalReference.referenceId, "externalDocumentReferences");
+    if (reference && (reference.societyId !== document.societyId || reference.documentId !== id
+        || reference.sourceId !== document.externalReference.sourceId)) {
+      throw new Error("External document reference not found.");
+    }
+    if (reference) await ctx.db.delete(reference._id);
+  }
   await ctx.db.delete(id);
 }
 

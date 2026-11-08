@@ -15,6 +15,7 @@ import { ResetTipsButton } from "../components/Spotlight";
 import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
 import { WorkspaceStorageCard } from "../components/WorkspaceStorageCard";
 import { DocumentStorageSettingsCard } from "../components/DocumentStorageSettingsCard";
+import { ExternalDocumentSourcesSettingsCard } from "../components/ExternalDocumentSourcesSettingsCard";
 import { OnDeviceAiSettingsCard } from "../components/OnDeviceAiSettingsCard";
 import { IdentitySessionSettingsCard } from "../components/IdentitySessionSettingsCard";
 import { AiConnectorsCard } from "../features/aiConnectors/AiConnectorsCard";
@@ -709,6 +710,7 @@ export function SettingsPage() {
       <>
       <WorkspaceStorageCard />
       <DocumentStorageSettingsCard />
+      <ExternalDocumentSourcesSettingsCard />
 
       <div className="settings-pair" style={{ marginBottom: 16 }}>
         <IdentitySessionSettingsCard />

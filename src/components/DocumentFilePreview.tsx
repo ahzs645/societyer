@@ -8,9 +8,15 @@ import { openDocumentFile, documentHasFile } from "../lib/documentOpen";
 import { Modal } from "./Modal";
 import { FilePreviewDialog } from "./FilePreviewDialog";
 import { useToast } from "./Toast";
+import { ExternalDocumentDetails } from "../features/externalDocuments/ExternalDocumentDetails";
 
 /** Mount only for the selected file: no storage requests per row. */
 export function DocumentFilePreview({ document, onClose }: { document: PreviewDocument; onClose: () => void }) {
+  if (document.externalReference) return <Modal open title={document.title ?? "Linked document"} onClose={onClose}><ExternalDocumentDetails document={document} /></Modal>;
+  return <StoredDocumentFilePreview document={document} onClose={onClose} />;
+}
+
+function StoredDocumentFilePreview({ document, onClose }: { document: PreviewDocument; onClose: () => void }) {
   const latest = useQuery(api.documentVersions.latest, document.latestVersionId ? "skip" : { documentId: document._id });
   const resolved = useMemo(() => latest ? { ...document, latestVersionId: latest._id, fileName: latest.fileName, mimeType: latest.mimeType, sha256: latest.sha256, fileSizeBytes: latest.fileSizeBytes } : document, [document, latest]);
   if (!document.latestVersionId && latest === undefined) return <Modal open title={document.fileName ?? document.title ?? "Document"} className="modal--one-line-title" onClose={onClose}><p role="status">Loading file information…</p></Modal>;

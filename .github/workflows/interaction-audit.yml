@@ -72,6 +72,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      - name: Optional external documents on desktop and phone
+        run: npm run test:interface-external-documents
       - name: Existing task and record flows
         run: npx playwright test -c playwright.interface.config.ts tests/interface-tasks.spec.ts tests/interface-records.spec.ts --project=desktop
       - uses: actions/upload-artifact@v4
@@ -81,4 +83,5 @@ jobs:
           path: |
             tmp/interface-suite-results
             tmp/interface-results.json
+            tmp/external-document-sources-results
           retention-days: 7

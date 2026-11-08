@@ -11,7 +11,7 @@
  * convex-test oracle.
  */
 
-import { requireDocumentAccess } from "./documents";
+import { assertDocumentSupportsStoredContent, requireDocumentAccess } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwnedChild, requireRolePortable, requireSocietyMembership } from "./access";
 
@@ -20,6 +20,7 @@ export async function listForDocumentPortable(ctx: PortableQueryCtx, { documentI
   if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
   await requireSocietyMembership(ctx, document.societyId);
   await requireDocumentAccess(ctx, documentId);
+  if (document.externalReference) return [];
   const rows = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -32,6 +33,7 @@ export async function latestPortable(ctx: PortableQueryCtx, { documentId }: { do
   if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
   await requireSocietyMembership(ctx, document.societyId);
   await requireDocumentAccess(ctx, documentId);
+  if (document.externalReference) return null;
   const rows = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -46,6 +48,7 @@ export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string })
   if (!document || typeof document.societyId !== "string") throw new Error("documentVersions not found.");
   await requireSocietyMembership(ctx, document.societyId);
   await requireDocumentAccess(ctx, version.documentId);
+  assertDocumentSupportsStoredContent(document);
   return getOwnedChild(ctx, "documentVersions", id, "documents", "documentId", document.societyId);
 }
 
@@ -65,6 +68,7 @@ export async function rollbackPortable(
     required: "Admin",
   });
   await requireDocumentAccess(ctx, String(v.documentId), "manage");
+  assertDocumentSupportsStoredContent(document);
   const siblings = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", v.documentId))
