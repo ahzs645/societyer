@@ -1,8 +1,9 @@
 # DDC North Entra sign-in rollout
 
-Registered and deployed on November 7, 2026 after operator approval. Microsoft
-login is enabled for the live pilot; required-SSO enforcement awaits the real
-passkey/Touch ID login test. Password access remains available during that pilot.
+Registered on November 7 and verified live on November 8, 2026 after operator
+approval. Ahmad signed into the DDC North workspace and the separate staff admin
+portal through Microsoft. Required-SSO enforcement is active; password sign-in
+returns HTTP 403. Existing password sessions cannot authorize workspace access.
 
 ## Directory and access boundary
 
@@ -17,7 +18,7 @@ passkey/Touch ID login test. Password access remains available during that pilot
 - Web redirect:
   `https://industrious-cricket-610.convex.site/api/auth/callback/microsoft`.
 - Frontend remains `https://portal.ddcnorth.com`; broker remains `AUTH_MODE=convex`.
-- Pilot frontend deployment: `https://1c62c3b3.societyer-ddcnorth.pages.dev`.
+- Verified frontend deployment: `https://f436db79.societyer-ddcnorth.pages.dev`.
 
 Configure the registration to include the `email`, `acct` and `auth_time` ID-token optional
 claims and group object IDs (`groupMembershipClaims: All`). The application asks
@@ -38,10 +39,10 @@ by a deployment operator before they can sign in.
 
 Use a dedicated certificate, not the storage or email app's credential. The
 prepared certificate expires **May 6, 2027 at 5:07 PM America/Vancouver**. Arrange
-overlapping rotation before expiry. Its private key is outside the repository
-in a mode-700 temporary directory, with mode 600 on the key file; transfer it
-directly into the Convex environment and remove that local private copy once
-the production setup is confirmed. Entra receives only the public certificate.
+overlapping rotation before expiry. Its private key is stored only in the encrypted
+Convex deployment environment; temporary local key and environment-file copies
+were removed after live token exchange succeeded. Entra received only the public
+certificate. Mail credentials remain separate encrypted runtime secrets.
 
 Server-only variables:
 
@@ -52,7 +53,7 @@ MICROSOFT_LOGIN_CLIENT_ID=bfced040-9730-45b5-b943-345a06bb8b60
 MICROSOFT_LOGIN_GROUP_IDS=815b3b71-596d-48fe-aafd-f5bf34aafa5c
 MICROSOFT_LOGIN_PRIVATE_KEY=<PKCS8-private-key>
 MICROSOFT_LOGIN_CERT_SHA256=<base64url-SHA256-certificate-thumbprint>
-SOCIETYER_ENTRA_SSO_REQUIRED=0
+SOCIETYER_ENTRA_SSO_REQUIRED=1
 ```
 
 The private key never belongs in `VITE_*`, Pages configuration, screenshots or
@@ -71,8 +72,7 @@ server-owned capability; hiding the password form is not the enforcement.
 The operator tool `entraProvisioning:registerDirectoryMember` accepts the
 directory Object ID and an explicitly selected existing auth-user ID. The
 reviewed mapping preserves Ahmad's Owner and Amir's Admin membership in the
-DDC North workspace, including Amir's separate workspace membership. Provision
-the remaining member as Viewer. Provisioning is internal-only, audited and
+DDC North workspace, including Amir's separate workspace membership. The remaining member, Fryderyk, was provisioned as Viewer. Provisioning is internal-only, audited and
 idempotent. It refuses to merge accounts merely by email or reactivate disabled
 identities/memberships. It sends no invitations or notification messages.
 
@@ -122,10 +122,13 @@ authority, disabled-account rejection and audit records. The existing Microsoft,
 persistent-session and identity-binding checks also pass, as does the DDC North
 production build. Fixtures do not prove a live Entra registration or consent.
 
-Live acceptance requires a real Microsoft login to the portal, the correct
-workspace and unchanged roles, token refresh, logout/re-login, and denial from
-an unapproved identity where such a test account is available. Do not claim
-other staff accounts were interactively tested without their participation.
+Live verification confirmed Ahmad’s Microsoft login to the existing DDC North
+workspace and staff administration at `https://ddcnorth.com/admin`. The admin
+portal rejects an existing session without Entra evidence. Both frontends now
+redeem the cross-domain one-time callback token before mounting session guards;
+regression checks cover concurrent mounts and invalid tokens. Staff API calls
+continue across short-token renewal. Other staff were provisioned and their
+roles preserved, but were not interactively tested without their participation.
 
 ## Rollback
 

@@ -29,8 +29,8 @@ component. Add Microsoft OAuth/OIDC sign-in to that component. The browser
 returns to the portal after authenticating with the company's Entra directory;
 Convex continues checking Societyer workspace memberships and roles.
 
-The Convex broker now has an opt-in, certificate-based Microsoft provider,
-prepared and tested locally but awaiting Entra registration and live activation.
+The Convex broker now has the dedicated certificate-based Microsoft provider,
+registered in Entra and verified live with required-SSO enforcement on November 8, 2026.
 See [the DDC North rollout](ddcnorth-entra-rollout.md) for the reviewed group,
 exact settings, provisioning and session policy. The older Node broker retains
 its separate settings and existing Microsoft account identifiers.
@@ -46,8 +46,8 @@ Original implementation outline (the rollout document records current progress):
    `convex/hostedAuth.ts`, using the Convex auth base URL. Add safe provider
    discovery and **Continue with Microsoft** to the Convex login flow. Preserve
    fixed-tenant validation, identity-only scopes and explicit account linking.
-4. Require assignment to the Entra enterprise application; assign approved staff
-   or a staff group. Apply the organization's MFA/Conditional Access policies
+4. Require the exact signed DDC North group claim and explicitly provision
+   approved directory Object IDs. Apply the organization's MFA/Conditional Access policies
    where licensed. Keep storage and mail service principals separate.
 5. Deliberately link or migrate existing login identities and workspace memberships.
    Do not silently merge accounts by matching email. A successful Microsoft login
