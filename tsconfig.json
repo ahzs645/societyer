@@ -20,7 +20,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["src/*"], "tourkit/*": ["modules/tourkit/*"] }
   },
   "include": ["src", "shared"],
   "exclude": ["node_modules", "convex/_generated"]

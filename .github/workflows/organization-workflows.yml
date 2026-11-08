@@ -41,6 +41,8 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: 24
