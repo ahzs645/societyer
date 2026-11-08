@@ -22,6 +22,7 @@ import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternal
 import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership, WorkspaceMfaRequiredError } from "./access";
 import { storageHasRetainedDocumentReference } from "./receiptRetention";
 import type { InvoiceBrand } from "../invoiceBranding";
+import { cleanWorkspaceBrand } from "../workspaceBrandValidation";
 
 export type WorkspaceCreationAccess = { allowed: boolean; reason: string };
 
@@ -275,9 +276,8 @@ export async function setWorkspaceBrandPortable(
   const society = await ctx.db.get(societyId, "societies");
   if (!society) throw new Error("Workspace not found.");
   if (typeof useAccent !== "boolean") throw new Error("Choose whether to use the workspace brand accent.");
-  // Logo parsing is only needed when saving a brand, never during workspace
-  // selection or the local runtime's initial boot.
-  const { cleanWorkspaceBrand } = await import("../workspaceBrandValidation");
+  // Keep this dependency static: the hosted Convex mutation runtime cannot
+  // resolve a dynamic module import when saving the workspace brand.
   const cleaned = brand === null ? undefined : cleanWorkspaceBrand(brand);
   await ctx.db.patch(societyId, {
     workspaceBrand: cleaned,
