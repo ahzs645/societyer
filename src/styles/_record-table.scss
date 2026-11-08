@@ -699,7 +699,7 @@ select.record-table__menu-select,
   font-size: 12px;
   font-weight: 600;
   background: token('accent');
-  color: #fff;
+  color: token('accent-on');
   border: none;
   border-radius: 5px;
   cursor: pointer;

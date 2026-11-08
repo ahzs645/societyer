@@ -191,10 +191,13 @@ import { BottomNavIndicator } from "./BottomNavIndicator";
 import { PendingInvitations } from "./PendingInvitations";
 import { useAuth } from "../auth/AuthProvider";
 import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
+import { WorkspaceLogo } from "./WorkspaceLogo";
+import { useWorkspaceBrandTheme } from "../hooks/useWorkspaceBrandTheme";
 
 export function Layout() {
   const auth = useAuth();
   const { society, societies } = useSocietySelection();
+  useWorkspaceBrandTheme(society);
   const { t } = useTranslation();
   const loc = useLocation();
   const navigate = useNavigate();
@@ -277,6 +280,7 @@ export function Layout() {
   const topbarRef = useRef<HTMLElement | null>(null);
   const workbenchContentRef = useRef<HTMLDivElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
+  const workspaceTriggerRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const navContextMenuRef = useRef<HTMLDivElement | null>(null);
   const operationsDeskMenuRef = useRef<HTMLDivElement | null>(null);
@@ -595,7 +599,7 @@ export function Layout() {
     if (!workspaceOpen) return;
     setWorkspaceFilter("");
     const place = () => {
-      const rect = workspaceButtonRef.current?.getBoundingClientRect();
+      const rect = (workspaceTriggerRef.current ?? workspaceButtonRef.current)?.getBoundingClientRect();
       if (!rect) return;
       const margin = 8;
       const gap = 6;
@@ -618,17 +622,34 @@ export function Layout() {
     const onDown = (e: MouseEvent) => {
       if (workspaceMenuRef.current?.contains(e.target as Node)) return;
       if (workspaceButtonRef.current?.contains(e.target as Node)) return;
+      if (workspaceTriggerRef.current?.contains(e.target as Node)) return;
       setWorkspaceOpen(false);
     };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setWorkspaceOpen(false);
+      (workspaceTriggerRef.current ?? workspaceButtonRef.current)?.focus();
+    };
     window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
       window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
   }, [workspaceOpen]);
+
+  useEffect(() => {
+    if (!workspaceOpen || !workspaceAnchor) return;
+    const frame = window.requestAnimationFrame(() => {
+      workspaceMenuRef.current?.querySelector<HTMLElement>("input, [role='menuitemradio'][aria-checked='true'], [role='menuitemradio']")?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [workspaceOpen, workspaceAnchor !== null]);
 
   useEffect(() => {
     if (!navContextMenu) return;
@@ -1309,7 +1330,7 @@ export function Layout() {
           } : undefined}
         >
           {isNavSheet && <div className="sheet-grabber" aria-hidden="true" />}
-          <div className="sidebar__brand">
+          <div className={`sidebar__brand${society?.workspaceBrand ? " sidebar__brand--branded" : ""}`}>
             <button
               ref={workspaceButtonRef}
               className="sidebar__workspace"
@@ -1318,34 +1339,9 @@ export function Layout() {
               aria-label={society?.name ? `${t("sidebar.selectWorkspace")} — ${society.name}` : t("sidebar.selectWorkspace")}
               aria-haspopup="menu"
               aria-expanded={workspaceOpen}
-              onClick={() => setWorkspaceOpen((v) => !v)}
+              onClick={event => { workspaceTriggerRef.current = event.currentTarget; setWorkspaceOpen((v) => !v); }}
             >
-              {(() => {
-                const lightSrc = society?.logoUrl;
-                const darkSrc = society?.logoDarkUrl ?? society?.logoUrl;
-                const darkNeedsInvert = !society?.logoDarkUrl && !!society?.logoInvertInDarkMode;
-                const hasLogo = !!lightSrc;
-                return (
-                  <div className={`sidebar__brand-logo${hasLogo ? " sidebar__brand-logo--image" : ""}`}>
-                    {hasLogo ? (
-                      <>
-                        <img
-                          src={lightSrc}
-                          alt=""
-                          className="sidebar__brand-logo-img sidebar__brand-logo-img--light"
-                        />
-                        <img
-                          src={darkSrc}
-                          alt=""
-                          className={`sidebar__brand-logo-img sidebar__brand-logo-img--dark${darkNeedsInvert ? " sidebar__brand-logo-img--invert" : ""}`}
-                        />
-                      </>
-                    ) : (
-                      (society?.name ?? "S")[0].toUpperCase()
-                    )}
-                  </div>
-                );
-              })()}
+              <WorkspaceLogo organization={society} presentation={society?.workspaceBrand && !isRail ? "full" : "compact"} className="sidebar__brand-logo" />
               <span className="sidebar__brand-name" id={brandNameId}>{society?.name ?? t("sidebar.selectWorkspace")}</span>
               <span className="sidebar__brand-workspace">
                 <ChevronDown size={12} />
@@ -1731,6 +1727,17 @@ export function Layout() {
         {workspaceOpen && workspaceAnchor && societies && createPortal(
           <div
             ref={workspaceMenuRef}
+            className="workspace-menu"
+            role="menu"
+            aria-label={t("sidebar.workspaces")}
+            onKeyDown={event => {
+              if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || event.target instanceof HTMLInputElement) return;
+              const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button[role^='menuitem']"));
+              if (!options.length) return;
+              const current = options.indexOf(document.activeElement as HTMLButtonElement);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (current + (event.key === "ArrowUp" ? -1 : 1) + options.length) % options.length;
+              event.preventDefault(); options[next].focus();
+            }}
             style={{
               position: "fixed",
               top: workspaceAnchor.top,
@@ -1776,6 +1783,7 @@ export function Layout() {
             {societies.length > 1 && (
               <button
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   setWorkspaceOpen(false);
                   navigate("/app/portfolio");
@@ -1827,9 +1835,13 @@ export function Layout() {
                   <button
                     key={s._id}
                     type="button"
+                    className="workspace-menu__option"
+                    role="menuitemradio"
+                    aria-checked={active}
                     onClick={() => {
                       if (!setStoredSocietyId(s._id)) auth.refreshMembership(s._id);
                       setWorkspaceOpen(false);
+                      setMobileSidebarOpen(false);
                       // The record URL belongs to the workspace being left.
                       navigate("/app");
                     }}
@@ -1850,6 +1862,7 @@ export function Layout() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <WorkspaceLogo organization={s} />
                       <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{s.name}</strong>
                       {active && <Pill size="sm">{t("sidebar.activeWorkspace")}</Pill>}
                     </div>
@@ -1875,9 +1888,12 @@ export function Layout() {
               )}
             </div>
             <div style={{ padding: 8, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              {can("society:write") && <button type="button" className="btn btn--ghost workspace-menu__brand-settings" role="menuitem"
+                onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/app/settings#workspace-brandkit"); }}>Workspace branding</button>}
               <button
                 type="button"
                 className="btn btn--accent"
+                role="menuitem"
                 style={{ width: "100%", justifyContent: "center" }}
                 onClick={() => {
                   setWorkspaceOpen(false);
@@ -2005,6 +2021,15 @@ export function Layout() {
 
         {isMobileNav && (
           <header ref={topbarRef} className="mobile-topbar">
+            <button type="button" className="mobile-topbar__workspace"
+              title={society?.name ?? t("sidebar.selectWorkspace")}
+              aria-label={society?.name ? `${t("sidebar.selectWorkspace")} — ${society.name}` : t("sidebar.selectWorkspace")}
+              aria-haspopup="menu" aria-expanded={workspaceOpen}
+              onClick={event => { workspaceTriggerRef.current = event.currentTarget; setWorkspaceOpen(value => !value); }}>
+              <WorkspaceLogo organization={society} />
+              <span className="mobile-topbar__workspace-name">{society?.name ?? t("sidebar.selectWorkspace")}</span>
+              <ChevronDown size={12} aria-hidden="true" />
+            </button>
             <button
               type="button"
               className="mobile-topbar__search"

@@ -173,12 +173,14 @@ export function PageHeader({
   // A page titled with its sidebar label shows the same translated words as
   // the sidebar; record names and other free text are left as written.
   const displayTitle = typeof title === "string" ? translateNavLabel(t, title) : title;
+  const organization = useSociety();
   useDocumentTitle(
     typeof displayTitle === "string"
       ? displayTitle
       : identity
         ? translateNavLabel(t, identity.label)
         : null,
+    organization?.name,
   );
 
   const resolvedIcon = identity
@@ -188,7 +190,6 @@ export function PageHeader({
   const actionsRef = useRef<HTMLDivElement>(null);
   usePhoneHeaderActionsFit(headerRef, actionsRef, Boolean(actions));
   const resolvedTone: IconTone = identity?.color ?? iconColor ?? "blue";
-  const organization = useSociety();
   // Detail pages (a path below a registered list route) get a derived trail;
   // an explicit routeKey marks a page as its own destination.
   const derivedCrumbs = useRouteBreadcrumbs(location.pathname, displayTitle, organization);

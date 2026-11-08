@@ -1,0 +1,146 @@
+@use "tokens" as *;
+
+/* One contained logo treatment for every workspace identity surface. */
+.workspace-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  vertical-align: middle;
+  min-width: 0;
+  background: transparent;
+}
+.workspace-logo--compact { width: 32px; height: 32px; }
+.workspace-logo--full { width: 172px; height: 44px; max-width: 100%; }
+.workspace-logo__light,
+.workspace-logo__dark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.workspace-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.workspace-logo__dark { display: none; }
+.dark .workspace-logo--auto > .workspace-logo__light,
+.workspace-logo--dark > .workspace-logo__light { display: none; }
+.dark .workspace-logo--auto > .workspace-logo__dark,
+.workspace-logo--dark > .workspace-logo__dark { display: flex; }
+.workspace-logo__dark--invert img { filter: invert(1) hue-rotate(180deg); }
+.workspace-logo__initial {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  font-weight: 600;
+}
+.workspace-logo.sidebar__brand-logo { background: transparent; overflow: visible; border-radius: 0; }
+.sidebar__brand--branded {
+  height: auto;
+  min-height: token('topbar-h');
+  align-items: flex-start;
+}
+.sidebar__brand--branded .sidebar__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: token('s-1') token('s-2');
+  text-align: left;
+}
+.sidebar__brand--branded .workspace-logo--full { width: 100%; height: 28px; grid-column: 1; }
+.sidebar__brand--branded .sidebar__brand-name { grid-row: 2; grid-column: 1 / -1; }
+.sidebar__brand--branded .sidebar__brand-workspace { grid-row: 1; grid-column: 2; }
+.sidebar__brand--branded .sidebar__brand-actions { padding-top: token('s-1'); }
+.app-shell.is-rail .sidebar__brand--branded .sidebar__workspace { display: flex; }
+.workspace-menu__option { overflow-wrap: anywhere; }
+.workspace-menu__option .workspace-logo { width: 54px; }
+.workspace-menu__option:focus-visible { outline-offset: -3px; }
+.workspace-menu__brand-settings { width: 100%; justify-content: flex-start; margin-bottom: token('s-1'); }
+
+.workspace-brand-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-4');
+  padding: token('s-3') token('s-4');
+  margin-bottom: token('s-4');
+  border: 1px solid token('border');
+  border-radius: token('r-card');
+  background: token('bg-panel');
+}
+.workspace-brand-banner__identity { display: flex; flex-direction: column; min-width: 0; flex: 1 1 160px; overflow-wrap: anywhere; }
+.workspace-brand-banner__identity .muted { font-size: token('fs-xs'); }
+.workspace-portfolio-identity { display: inline-flex; align-items: center; gap: token('s-2'); max-width: 100%; text-align: left; }
+.workspace-portfolio-identity .workspace-logo { width: 52px; }
+
+.workspace-brand-settings { margin-bottom: token('s-4'); scroll-margin-top: token('s-4'); }
+.workspace-brand-settings .card__title { display: flex; align-items: center; gap: token('s-2'); }
+.workspace-brand-settings .card__body { gap: token('s-3'); }
+.workspace-brand-settings__tools,
+.workspace-brand-settings__footer,
+.workspace-brand-settings__details { display: flex; align-items: center; flex-wrap: wrap; gap: token('s-2'); }
+.workspace-brand-settings__details { overflow-wrap: anywhere; }
+.workspace-brand-settings__details a { display: inline-flex; align-items: center; gap: token('s-1'); }
+.workspace-brand-settings__upload { position: relative; overflow: hidden; }
+.workspace-brand-settings__upload input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.workspace-brand-settings__upload:focus-within { outline: token('focus-ring-width') solid token('focus-ring-color'); outline-offset: token('focus-ring-offset'); }
+.workspace-brand-settings__upload.is-disabled { opacity: token('opacity-disabled'); cursor: default; }
+.workspace-brand-settings__notice { padding: token('s-2') token('s-3'); border-radius: token('r-sm'); background: token('accent-soft'); color: token('accent-text'); }
+.workspace-brand-settings__error { color: token('danger-text'); }
+.workspace-brand-settings__previews { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: token('s-3'); }
+.workspace-brand-preview {
+  --brand-preview-accent: var(--accent);
+  --brand-preview-on: var(--accent-on);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: token('s-3');
+  padding: token('s-4');
+  min-width: 0;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  overflow-wrap: anywhere;
+}
+.workspace-brand-preview--light { background: token('brand-preview-light-bg'); color: token('brand-preview-light-text'); color-scheme: light; }
+.workspace-brand-preview--dark { background: token('brand-preview-dark-bg'); color: token('brand-preview-dark-text'); color-scheme: dark; }
+.workspace-brand-preview__caption { font-size: token('fs-xs'); }
+.workspace-brand-preview__action { display: inline-block; padding: token('s-2') token('s-3'); border-radius: token('r-sm'); background: token('brand-preview-accent'); color: token('brand-preview-on'); font-size: token('fs-sm'); }
+.workspace-brand-preview .workspace-logo__initial { background: transparent; color: inherit; border: 1px solid currentColor; }
+
+@media (max-width: 980px) {
+  .mobile-topbar__workspace {
+    display: flex;
+    align-items: center;
+    gap: token('s-2');
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 40px;
+    padding: token('s-1');
+    border: 1px solid transparent;
+    border-radius: token('r-sm');
+    color: token('text-primary');
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mobile-topbar__workspace:hover { background: token('bg-hover'); }
+  .mobile-topbar__workspace .workspace-logo { width: 38px; height: 28px; }
+  .mobile-topbar__workspace > svg { flex: none; }
+  .mobile-topbar__workspace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: token('fs-sm'); }
+  .mobile-topbar .mobile-topbar__search { flex: 0 0 40px; width: 40px; padding: 0; justify-content: center; }
+  .mobile-topbar__search span { display: none; }
+}
+@media (max-width: 540px) {
+  .workspace-brand-settings__previews { grid-template-columns: minmax(0, 1fr); }
+  .workspace-brand-settings__tools .btn,
+  .workspace-brand-settings__footer .btn { min-height: 40px; white-space: normal; }
+  .workspace-brand-settings__tools > *,
+  .workspace-brand-settings__footer > * { max-width: 100%; }
+  .workspace-brand-banner { gap: token('s-3'); }
+  .workspace-brand-banner > .workspace-logo--full { width: 136px; height: 36px; }
+}

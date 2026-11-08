@@ -21,6 +21,7 @@ import { requirePermissionPortable } from "./permissions";
 import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
 import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership, WorkspaceMfaRequiredError } from "./access";
 import { storageHasRetainedDocumentReference } from "./receiptRetention";
+import type { InvoiceBrand } from "../invoiceBranding";
 
 export type WorkspaceCreationAccess = { allowed: boolean; reason: string };
 
@@ -260,6 +261,27 @@ export async function setLogoInvertInDarkModePortable(
   if (!society) throw new Error("Society not found.");
   await ctx.db.patch(societyId, {
     logoInvertInDarkMode: invert,
+    updatedAt: Date.now(),
+  });
+  return societyId;
+}
+
+/** Workspace presentation is a separate snapshot from saved document designs. */
+export async function setWorkspaceBrandPortable(
+  ctx: PortableMutationCtx,
+  { societyId, brand, useAccent }: { societyId: string; brand: InvoiceBrand | null; useAccent: boolean },
+) {
+  await requirePermissionPortable(ctx, societyId, "society:write");
+  const society = await ctx.db.get(societyId, "societies");
+  if (!society) throw new Error("Workspace not found.");
+  if (typeof useAccent !== "boolean") throw new Error("Choose whether to use the workspace brand accent.");
+  // Logo parsing is only needed when saving a brand, never during workspace
+  // selection or the local runtime's initial boot.
+  const { cleanWorkspaceBrand } = await import("../workspaceBrandValidation");
+  const cleaned = brand === null ? undefined : cleanWorkspaceBrand(brand);
+  await ctx.db.patch(societyId, {
+    workspaceBrand: cleaned,
+    workspaceBrandUseAccent: cleaned ? useAccent : undefined,
     updatedAt: Date.now(),
   });
   return societyId;

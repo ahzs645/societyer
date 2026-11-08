@@ -52,6 +52,7 @@ import { ATTENTION_MODULES, DashboardPhoneLayout, type DashboardDisclosure } fro
 import { isModuleEnabled } from "../lib/modules";
 import type { DashboardComplianceFlag, DashboardRemediationAction } from "../../shared/dashboardComplianceRules";
 import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
+import { WorkspaceBrandBanner } from "../components/WorkspaceBrandBanner";
 
 export function Dashboard() {
   const society = useSociety();
@@ -653,6 +654,7 @@ export function Dashboard() {
         }
       />
 
+      <WorkspaceBrandBanner organization={society} canEdit={can("society:write")} />
       {isMobile ? (
         <DashboardPhoneLayout
           modules={visibleModules}

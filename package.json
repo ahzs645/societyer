@@ -205,6 +205,8 @@
     "test:transaction-rules": "tsx scripts/check-transaction-rules.ts && tsx scripts/check-finance-workflows.ts && tsx scripts/check-banking-workflows.ts",
     "test:notification-settings": "tsx scripts/check-notification-settings.ts",
     "test:brandkit": "tsx scripts/check-brandkit-profiles.tsx",
+    "test:workspace-branding": "node --import tsx scripts/check-workspace-branding-backend.ts && node --import tsx scripts/check-workspace-branding.tsx",
+    "test:workspace-branding-ui": "playwright test --config playwright.workspace-branding.config.ts",
     "test:invoices": "tsx scripts/check-invoices.ts && tsx scripts/check-invoice-ledger.ts && tsx scripts/check-invoice-commerce.ts && tsx scripts/check-invoice-pdf.tsx && tsx scripts/check-invoice-logo-fidelity.tsx",
     "test:invoice-commerce-ui": "playwright test --config playwright.invoice-commerce.config.ts",
     "test:invoice-catalog-customers-ui": "playwright test --config playwright.invoice-catalog-customers.config.ts",

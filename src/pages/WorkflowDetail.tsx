@@ -168,7 +168,7 @@ function WorkflowDetailWorkspace() {
   const latestRun = runs?.[0];
 
   const graph = useMemo(() => buildGraph(preview), [preview]);
-  useDocumentTitle(workflow?.name ? `${workflow.name} · Workflows` : null);
+  useDocumentTitle(workflow?.name ? `${workflow.name} · Workflows` : null, society?.name);
 
   if (society === undefined || workflow === undefined) return <PageLoading variant="detail" />;
   if (society === null) return <SeedPrompt />;

@@ -1235,6 +1235,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "society:setLetterhead", handler: societyFns.setLetterheadPortable }),
   definePortableMutation({ name: "society:clearLetterhead", handler: societyFns.clearLetterheadPortable }),
   definePortableMutation({ name: "society:setLogoInvertInDarkMode", handler: societyFns.setLogoInvertInDarkModePortable }),
+  definePortableMutation({ name: "society:setWorkspaceBrand", handler: societyFns.setWorkspaceBrandPortable }),
   definePortableMutation({ name: "society:updateModules", handler: societyFns.updateModulesPortable }),
   definePortableMutation({ name: "society:cloneSociety", handler: societyFns.cloneSocietyPortable }),
   definePortableMutation({ name: "society:createWorkspace", handler: (ctx, args: any) => societyCreateFns.createWorkspacePortable(ctx, args) }),

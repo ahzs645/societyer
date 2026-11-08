@@ -6,7 +6,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Layers, AlertTriangle, ListChecks } from "lucide-react";
 import { PageHeader, PageLoading } from "./_helpers";
-import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
+import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
+import { WorkspaceLogo } from "../components/WorkspaceLogo";
 import { Badge, EmptyState } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPackets";
@@ -49,7 +50,8 @@ export function PortfolioPage() {
   const data = useQuery(api.firm.overview, {}) as
     | { today: string; entities: FirmEntity[]; totals: any }
     | undefined;
-  const current = useSociety();
+  const { society: current, societies } = useSocietySelection();
+  const identities = useMemo(() => new Map(societies?.map(organization => [String(organization._id), organization]) ?? []), [societies]);
   const batchGenerate = useMutation(api.firm.batchGeneratePacket);
   const toast = useToast();
   const navigate = useNavigate();
@@ -191,7 +193,7 @@ export function PortfolioPage() {
                   <tr key={e._id}>
                     <td><input type="checkbox" aria-label={`Select ${e.name}`} checked={!!selected[e._id]} onChange={() => toggle(e._id)} /></td>
                     <td>
-                      <button type="button" className="portfolio-table__name" onClick={() => open(e._id)}>{e.name}</button>
+                      <button type="button" className="portfolio-table__name workspace-portfolio-identity" onClick={() => open(e._id)}><WorkspaceLogo organization={identities.get(e._id) ?? e} /><span>{e.name}</span></button>
                       {current && current._id === e._id && <span className="portfolio-current-tag"> · current</span>}
                       <div className="muted">
                         <span className="portfolio-table__narrow">{KIND_LABEL[e.kind] ?? e.kind} · </span>

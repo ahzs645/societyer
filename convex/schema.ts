@@ -50,7 +50,7 @@ import { intakeTables } from "./tables/intake";
 import { agreementTables } from "./tables/agreements";
 import { financeWorkflowTables } from "./tables/financeWorkflows";
 import { financeTagTables } from "./tables/financeTags";
-import { invoiceTables } from "./tables/invoices";
+import { invoiceBrandValidator, invoiceTables } from "./tables/invoices";
 import { commerceReportTables } from "./tables/commerceReports";
 import { invoicePreferenceTables } from "./tables/invoicePreferences";
 import { billingDocumentTables } from "./tables/billingDocuments";
@@ -205,6 +205,8 @@ export default defineSchema({
     logoStorageId: v.optional(v.id("_storage")),
     logoDarkStorageId: v.optional(v.id("_storage")),
     logoInvertInDarkMode: v.optional(v.boolean()),
+    workspaceBrand: v.optional(invoiceBrandValidator),
+    workspaceBrandUseAccent: v.optional(v.boolean()),
     letterheadStorageId: v.optional(v.id("_storage")),
     publicSlug: v.optional(v.string()),
     // Opaque token for the read-only outbound iCalendar feed (export_ics).

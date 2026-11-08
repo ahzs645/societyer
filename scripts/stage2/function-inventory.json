@@ -9118,6 +9118,56 @@
     ]
   },
   {
+    "key": "convex:entraProvisioning:checkSigningKeys",
+    "surface": "convex",
+    "name": "entraProvisioning:checkSigningKeys",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:entraProvisioning:ensureDirectoryMembership",
+    "surface": "convex",
+    "name": "entraProvisioning:ensureDirectoryMembership",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:entraProvisioning:registerDirectoryMember",
+    "surface": "convex",
+    "name": "entraProvisioning:registerDirectoryMember",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:entraProvisioning:revokeMemberSessions",
+    "surface": "convex",
+    "name": "entraProvisioning:revokeMemberSessions",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:evidenceRegisters:createManual",
     "surface": "convex",
     "name": "evidenceRegisters:createManual",
@@ -9473,6 +9523,12 @@
       {
         "path": "receiptDocumentId",
         "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
         "array": false,
         "optional": true
       },
@@ -23717,6 +23773,18 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "corporateCardId",
+        "table": "corporateCards",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -25320,6 +25388,22 @@
     "key": "convex:society:setLogoInvertInDarkMode",
     "surface": "convex",
     "name": "society:setLogoInvertInDarkMode",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:society:setWorkspaceBrand",
+    "surface": "convex",
+    "name": "society:setWorkspaceBrand",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/society.ts",
@@ -36981,6 +37065,12 @@
       {
         "path": "receiptDocumentId",
         "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
         "array": false,
         "optional": true
       },
@@ -48751,6 +48841,18 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "corporateCardId",
+        "table": "corporateCards",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -50160,6 +50262,22 @@
     "key": "portable:society:setLogoInvertInDarkMode",
     "surface": "portable",
     "name": "society:setLogoInvertInDarkMode",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:society:setWorkspaceBrand",
+    "surface": "portable",
+    "name": "society:setWorkspaceBrand",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
