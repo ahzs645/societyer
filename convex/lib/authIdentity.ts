@@ -20,10 +20,21 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
   if (mode === "convex") {
     const domains = allowedAuthEmailDomains(process.env);
     const requiresVerifiedEmail = domains.length > 0 || manualAuthProvisioningEnabled(process.env);
-    const entraVerified = process.env.SOCIETYER_ENTRA_LOGIN === "1" && validEntraProof(identity.societyer_entra, {
+    // Custom JWT auth flattens nested object claims into dotted keys. Arrays
+    // and scalar values keep their JSON types; this is not the raw JWT shape.
+    // https://docs.convex.dev/auth/advanced/custom-jwt#custom-claims
+    const entraProof = {
+      userId: identity["societyer_entra.userId"],
+      tenantId: identity["societyer_entra.tenantId"],
+      objectId: identity["societyer_entra.objectId"],
+      groupIds: identity["societyer_entra.groupIds"],
+      authenticatedAt: identity["societyer_entra.authenticatedAt"],
+      expiresAt: identity["societyer_entra.expiresAt"],
+    };
+    const entraVerified = process.env.SOCIETYER_ENTRA_LOGIN === "1" && validEntraProof(entraProof, {
       tenantId: process.env.MICROSOFT_LOGIN_TENANT_ID ?? "",
       groupIds: (process.env.MICROSOFT_LOGIN_GROUP_IDS ?? "").split(",").map(value => value.trim()),
-    }) && identity.societyer_entra.userId === identity.subject;
+    }) && entraProof.userId === identity.subject;
     if (!authEmailAllowed(identity.email, domains) || (entraSsoRequired() && !entraVerified)
       || (requiresVerifiedEmail && identity.emailVerified !== true && !entraVerified)) {
       return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };

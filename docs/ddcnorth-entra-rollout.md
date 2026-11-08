@@ -1,9 +1,9 @@
 # DDC North Entra sign-in rollout
 
-Registered on November 7 and verified live on November 8, 2026 after operator
-approval. Ahmad signed into the DDC North workspace and the separate staff admin
-portal through Microsoft. Required-SSO enforcement is active; password sign-in
-returns HTTP 403. Existing password sessions cannot authorize workspace access.
+Registered on November 7 and deployed on November 8, 2026 after operator
+approval. Required-SSO enforcement is active; password sign-in returns HTTP 403.
+Existing password sessions cannot authorize workspace access. Qualify the native
+workspace after enabling enforcement as well as the separate staff admin portal.
 
 ## Directory and access boundary
 
@@ -67,6 +67,16 @@ and rejects existing sessions without a server-recorded Entra proof at the
 backend, including direct Convex access. The login screen follows the same
 server-owned capability; hiding the password form is not the enforcement.
 
+Convex custom-JWT authentication exposes nested claims through dotted keys such
+as `identity["societyer_entra.userId"]`; arrays and scalar values retain their JSON
+types. The native backend reconstructs the proof from those verified fields
+before checking the issuer, subject, tenant, group and expiry. The separate
+Worker receives the raw JWT and validates its original nested proof. On November
+8, a native sign-in loop was caused by reading the raw nested shape from the
+Convex identity after required-SSO enforcement was enabled. The regression test
+now uses the actual dotted claim format and rejects expired, malformed,
+wrong-user, wrong-issuer and wrong-group proof.
+
 ## Users and existing roles
 
 The operator tool `entraProvisioning:registerDirectoryMember` accepts the
@@ -122,9 +132,13 @@ authority, disabled-account rejection and audit records. The existing Microsoft,
 persistent-session and identity-binding checks also pass, as does the DDC North
 production build. Fixtures do not prove a live Entra registration or consent.
 
-Live verification confirmed Ahmad’s Microsoft login to the existing DDC North
-workspace and staff administration at `https://ddcnorth.com/admin`. The admin
-portal rejects an existing session without Entra evidence. Both frontends now
+The original workspace pilot preceded required-SSO enforcement and missed the
+Convex claim-format mismatch described above. After correcting that mismatch,
+live verification with enforcement enabled confirmed Ahmad's Owner membership
+through an authenticated production Convex query, a fresh Microsoft browser
+login, protected Tasks navigation and a full reload. Password sign-in still
+returns HTTP 403. Staff administration at `https://ddcnorth.com/admin` was also
+verified; it rejects an existing session without Entra evidence. Both frontends now
 redeem the cross-domain one-time callback token before mounting session guards;
 regression checks cover concurrent mounts and invalid tokens. Staff API calls
 continue across short-token renewal. Other staff were provisioned and their
@@ -145,3 +159,4 @@ credentials alone does not invalidate already-issued app sessions.
 - [Group-based application assignment](https://learn.microsoft.com/en-us/entra/identity/users/groups-saasapps)
 - [Microsoft reauthentication guidance](https://learn.microsoft.com/en-us/entra/identity/conditional-access/howto-policy-persistent-browser-session)
 - [Better Auth Microsoft provider](https://better-auth.com/docs/authentication/microsoft)
+- [Convex custom JWT claims](https://docs.convex.dev/auth/advanced/custom-jwt#custom-claims)

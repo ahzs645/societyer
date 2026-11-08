@@ -140,10 +140,22 @@ try {
   try {
     Object.assign(process.env, { ...environment, AUTH_MODE: "convex", VITE_AUTH_MODE: "convex", SOCIETYER_ENTRA_SSO_REQUIRED: "1", SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS: "example.test" });
     const identity = { issuer: baseURL, subject: user.id, tokenIdentifier: `${baseURL}|${user.id}`, email: claims.email, emailVerified: false };
+    // Match Convex's verified custom-JWT identity boundary, not the raw JWT.
+    // Nested object fields become dotted keys; arrays/scalars retain JSON types.
+    const entraIdentity = Object.fromEntries(Object.entries(proof.societyer_entra!).map(([key, value]) => [`societyer_entra.${key}`, value]));
     assert.equal(hostedPrincipal(identity).kind, "anonymous", "Password/legacy sessions cannot bypass required SSO");
-    assert.equal(hostedPrincipal({ ...identity, ...proof }).kind, "user", "A bound directory identity need not claim mailbox verification");
-    assert.equal(hostedPrincipal({ ...identity, subject: "other-account", ...proof }).kind, "anonymous");
-    assert.equal(hostedPrincipal({ ...identity, societyer_entra: { ...proof.societyer_entra, expiresAt: Date.now() - 1 } }).kind, "anonymous");
+    assert.equal(hostedPrincipal({ ...identity, ...entraIdentity }).kind, "user", "A bound directory identity need not claim mailbox verification");
+    assert.equal(hostedPrincipal({ ...identity, ...proof }).kind, "anonymous", "Raw nested claims must not stand in for Convex's verified identity format");
+    assert.equal(hostedPrincipal({ ...identity, ...entraIdentity, subject: "other-account" }).kind, "anonymous");
+    assert.equal(hostedPrincipal({ ...identity, ...entraIdentity, issuer: "https://other.example.test" }).kind, "anonymous");
+    for (const invalid of [
+      { "societyer_entra.expiresAt": Date.now() - 1 },
+      { "societyer_entra.authenticatedAt": String(Date.now()) },
+      { "societyer_entra.tenantId": "other-tenant" },
+      { "societyer_entra.objectId": "not-an-object-id" },
+      { "societyer_entra.groupIds": [] },
+      { "societyer_entra.groupIds": JSON.stringify([group]) },
+    ]) assert.equal(hostedPrincipal({ ...identity, ...entraIdentity, ...invalid }).kind, "anonymous");
   } finally { for (const key of Object.keys(process.env)) if (!(key in previousEnvironment)) delete process.env[key]; Object.assign(process.env, previousEnvironment); }
   callbackToken = await token({ groups: [] });
   const rejected = await login();
