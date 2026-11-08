@@ -39,16 +39,30 @@ async function assertContained(page: Page, location: string) {
     body: document.body.scrollWidth,
     containers: [...document.querySelectorAll<HTMLElement>(
       "[role=main] .page, .settings-shell, .settings-shell__content, .workspace-brand-settings, .workspace-brand-settings .card__body, .workspace-brand-settings__previews, .workspace-brand-settings__tools, .workspace-brand-settings__footer, .workspace-brand-banner, .workspace-menu",
-    )].filter(element => element.getClientRects().length).map(element => ({
-      className: element.className, width: element.clientWidth, scroll: element.scrollWidth,
-      left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right,
-    })),
+    )].filter(element => element.getClientRects().length).map(element => {
+      // Phone settings cards deliberately bleed through the page gutter.
+      // Their shell may include that scroll area, while the card and every
+      // brand control must still fit their own box and the viewport.
+      const containsFullBleedCard = element.matches(".settings-shell, .settings-shell__content")
+        && [...element.querySelectorAll(".card")].some(card => {
+          const style = getComputedStyle(card);
+          return parseFloat(style.marginInlineStart) < 0 && parseFloat(style.marginInlineEnd) < 0;
+        });
+      return {
+        className: element.className, width: element.clientWidth, scroll: element.scrollWidth,
+        left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right,
+        containsFullBleedCard,
+      };
+    }),
   }));
   expect(dimensions.document, `${location}: document ${JSON.stringify(dimensions)}`).toBeLessThanOrEqual(dimensions.viewport + 1);
   expect(dimensions.body, `${location}: body ${JSON.stringify(dimensions)}`).toBeLessThanOrEqual(dimensions.viewport + 1);
   for (const size of dimensions.containers) {
     const message = `${location}: ${size.className} ${JSON.stringify(size)}`;
-    expect(size.scroll, message).toBeLessThanOrEqual(size.width + 1);
+    const availableWidth = size.containsFullBleedCard
+      ? Math.max(size.width, dimensions.viewport - size.left)
+      : size.width;
+    expect(size.scroll, message).toBeLessThanOrEqual(availableWidth + 1);
     expect(size.left, message).toBeGreaterThanOrEqual(-1);
     expect(size.right, message).toBeLessThanOrEqual(dimensions.viewport + 1);
   }
@@ -178,12 +192,16 @@ test("workspace brands stay isolated; template adoption, unsafe import and remov
   expect(await accent()).toBe(appliedAccent);
 
   const useAccent = settings.getByRole("switch", { name: /Use brand accent in the interface/ });
-  await useAccent.uncheck();
+  const useAccentLabel = settings.getByText("Use brand accent in the interface", { exact: true });
+  await expect(useAccent).toBeChecked();
+  await useAccentLabel.click();
+  await expect(useAccent).not.toBeChecked();
   expect(await accent()).toBe(appliedAccent);
   await settings.getByRole("button", { name: "Apply workspace brand", exact: true }).click();
   await expect.poll(accent).toBe("");
   await expect(sidebar.locator('[data-brand-id="ddcnorth"]')).toBeVisible();
-  await useAccent.check();
+  await useAccentLabel.click();
+  await expect(useAccent).toBeChecked();
   await settings.getByRole("button", { name: "Apply workspace brand", exact: true }).click();
   await expect.poll(accent).not.toBe("");
 
