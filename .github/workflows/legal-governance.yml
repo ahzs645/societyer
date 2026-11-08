@@ -70,11 +70,11 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Strict entity copy sweep (all workspaces; selected routes or full sweep)
-        run: npm run test:entity-sweep
+        run: bash .github/ci/run-entity-sweep.sh
         timeout-minutes: 30
         env:
           ENTITY_SWEEP_STRICT: "1"
-          ENTITY_SWEEP_ROUTES: ${{ github.event_name == 'pull_request' && steps.scope.outputs.full != 'true' && '/app,/app/documents,/app/tasks,/app/meetings,/app/calendar' || '' }}
+          PR_CRITICAL_ROUTES: ${{ github.event_name == 'pull_request' && steps.scope.outputs.full != 'true' }}
       - name: Corporation flow and governance copy
         if: ${{ !cancelled() }}
         run: npx playwright test -c playwright.corporation.config.ts
