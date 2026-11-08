@@ -21,7 +21,7 @@
 .external-documents__entry-info strong { display: block; }
 .external-documents__entry-info small { display: block; margin-top: 3px; }
 .external-documents__facts { display: grid; grid-template-columns: minmax(80px, auto) minmax(0, 1fr); gap: 7px 14px; margin: 0; }
-.external-documents__facts dt { color: var(--text-muted); }
+.external-documents__facts dt { color: var(--text-tertiary); }
 .external-documents__facts dd { margin: 0; overflow-wrap: anywhere; }
 .external-documents__selected { padding: 12px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
 @media (max-width: 480px) {

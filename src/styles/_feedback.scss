@@ -142,6 +142,8 @@
 
 // ---------- Spotlight ----------
 .spotlight {
+  // Tourkit overrides this default inline when positioning an anchored tip.
+  --spotlight-tail: 24px;
   position: fixed;
   // Anchored to page content, so it sits under drawers, dialogs and the
   // shortcut help instead of floating over them.
