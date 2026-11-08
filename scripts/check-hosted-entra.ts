@@ -10,6 +10,7 @@ import schema from "../convex/schema";
 import { internal } from "../convex/_generated/api";
 import { crossDomain } from "@convex-dev/better-auth/plugins";
 import { makeSignature } from "better-auth/crypto";
+import { createOAuthHandoff } from "../shared/completeHostedOAuth";
 
 const tenant = "220c85f6-1cb1-4bb2-a63b-55d9fd163b55";
 const client = "11111111-2222-4333-8444-555555555555";
@@ -99,6 +100,33 @@ try {
   const destination = new URL(callback.headers.get("location")!);
   assert.equal(destination.origin + destination.pathname, `${portal}/dashboard`);
   assert.ok(destination.searchParams.get("ott"), "Convex cross-domain flow returns its one-time token");
+  let callbackHref = destination.href;
+  let verifiedCookie = "";
+  let handoffVerifications = 0;
+  let handoffRefreshes = 0;
+  const completeHandoff = createOAuthHandoff({
+    verify: async token => {
+      handoffVerifications++;
+      const response = await auth.handler(new Request(`${baseURL}/api/auth/cross-domain/one-time-token/verify`, {
+        method: "POST", headers: { "content-type": "application/json", Origin: portal, "better-auth-cookie": "" }, body: JSON.stringify({ token }),
+      }));
+      assert.equal(response.status, 200);
+      verifiedCookie = response.headers.get("set-better-auth-cookie") ?? "";
+      return (await response.json()).session?.token ?? null;
+    },
+    establishSession: async sessionToken => {
+      const cookie = verifiedCookie.split(";")[0];
+      assert.ok(cookie, "The cross-domain endpoint returns the signed session cookie");
+      const checked = await auth.api.getSession({ headers: new Headers({ cookie }) });
+      assert.equal(checked?.session.token, sessionToken);
+      assert.equal(checked?.user.id, user.id);
+    },
+    refreshSession: () => { handoffRefreshes++; },
+  }, { href: () => callbackHref, replace: url => { callbackHref = url.href; } });
+  await Promise.all([completeHandoff(), completeHandoff()]);
+  assert.equal(handoffVerifications, 1, "Concurrent frontend mounts redeem the one-time token once");
+  assert.equal(handoffRefreshes, 1);
+  assert.equal(new URL(callbackHref).searchParams.has("ott"), false);
   const sessions = await context.internalAdapter.listSessions(user.id);
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].userId, user.id, "Operator binding preserves the existing account ID");
