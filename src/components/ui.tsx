@@ -28,6 +28,7 @@ import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/ro
 import { useTranslation } from "react-i18next";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
+import { useSociety } from "../hooks/useSociety";
 // EmptyState variant icons (kept apart from the shared icon import above).
 import { CheckCheck, SearchX } from "lucide-react";
 import { Tooltip } from "./Tooltip";
@@ -268,7 +269,8 @@ export function SettingsShell({
   const resolvedTone: IconTone = identity?.color ?? iconColor ?? "gray";
   const { t } = useTranslation();
   const displayTitle = typeof title === "string" ? translateNavLabel(t, title) : title;
-  useDocumentTitle(typeof displayTitle === "string" ? displayTitle : identity ? translateNavLabel(t, identity.label) : null);
+  const organization = useSociety();
+  useDocumentTitle(typeof displayTitle === "string" ? displayTitle : identity ? translateNavLabel(t, identity.label) : null, organization?.name);
 
   return (
     <div className="settings-shell">

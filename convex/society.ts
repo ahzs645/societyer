@@ -8,6 +8,7 @@ import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } 
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { integrationSettingsValidator } from "./lib/integrationSettings";
+import { invoiceBrandValidator } from "./tables/invoices";
 import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
@@ -20,6 +21,7 @@ import {
 } from "../shared/jurisdictionWorkspace";
 import {
   setLogoInvertInDarkModePortable,
+  setWorkspaceBrandPortable,
   updateModulesPortable,
   cloneSocietyPortable,
   updateComplianceSettingsPortable,
@@ -109,6 +111,16 @@ export const setLogoInvertInDarkMode = authorizedMutation("society:setLogoInvert
   },
   returns: v.id("societies"),
   handler: async (ctx, args) => setLogoInvertInDarkModePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const setWorkspaceBrand = authorizedMutation("society:setWorkspaceBrand", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    brand: v.union(invoiceBrandValidator, v.null()),
+    useAccent: v.boolean(),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, args) => setWorkspaceBrandPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsert = authorizedMutation("society:upsert", mutation)({

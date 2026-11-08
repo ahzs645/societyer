@@ -175,4 +175,5 @@
 @use "ai-connectors"; // Settings → AI connectors: tokens for the remote MCP endpoint
 @use "procurement-review"; // embedded Zoer review plugin: page states and --zoer-* theme mapping
 @use "procurement-analytics"; // procurement reader: Analytics tab and buyer / issued-for pages
+@use "workspace-branding"; // shared Brandkit identity, previews and mobile workspace switcher
 @use "foundations";

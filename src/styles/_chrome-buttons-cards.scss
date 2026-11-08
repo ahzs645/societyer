@@ -121,7 +121,7 @@
   color: token('accent-on');
 }
 .btn--accent .muted {
-  color: rgba(255, 255, 255, 0.9);
+  color: token('accent-on');
 }
 @media (hover: hover) {
   .btn--accent:hover {

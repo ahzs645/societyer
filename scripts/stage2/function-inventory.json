@@ -8263,6 +8263,208 @@
     ]
   },
   {
+    "key": "convex:documentSources:browse",
+    "surface": "convex",
+    "name": "documentSources:browse",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:commitLink",
+    "surface": "convex",
+    "name": "documentSources:commitLink",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actorUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:link",
+    "surface": "convex",
+    "name": "documentSources:link",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:list",
+    "surface": "convex",
+    "name": "documentSources:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:resolve",
+    "surface": "convex",
+    "name": "documentSources:resolve",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:resolveContext",
+    "surface": "convex",
+    "name": "documentSources:resolveContext",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:save",
+    "surface": "convex",
+    "name": "documentSources:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:setEnabled",
+    "surface": "convex",
+    "name": "documentSources:setEnabled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:sourceContext",
+    "surface": "convex",
+    "name": "documentSources:sourceContext",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentSources:unlink",
+    "surface": "convex",
+    "name": "documentSources:unlink",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/documentSources.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:documentVersions:allocateUploadHandle",
     "surface": "convex",
     "name": "documentVersions:allocateUploadHandle",
@@ -9118,6 +9320,56 @@
     ]
   },
   {
+    "key": "convex:entraProvisioning:checkSigningKeys",
+    "surface": "convex",
+    "name": "entraProvisioning:checkSigningKeys",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:entraProvisioning:ensureDirectoryMembership",
+    "surface": "convex",
+    "name": "entraProvisioning:ensureDirectoryMembership",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:entraProvisioning:registerDirectoryMember",
+    "surface": "convex",
+    "name": "entraProvisioning:registerDirectoryMember",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:entraProvisioning:revokeMemberSessions",
+    "surface": "convex",
+    "name": "entraProvisioning:revokeMemberSessions",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/entraProvisioning.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:evidenceRegisters:createManual",
     "surface": "convex",
     "name": "evidenceRegisters:createManual",
@@ -9473,6 +9725,12 @@
       {
         "path": "receiptDocumentId",
         "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
         "array": false,
         "optional": true
       },
@@ -23717,6 +23975,18 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "corporateCardId",
+        "table": "corporateCards",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -25320,6 +25590,22 @@
     "key": "convex:society:setLogoInvertInDarkMode",
     "surface": "convex",
     "name": "society:setLogoInvertInDarkMode",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:society:setWorkspaceBrand",
+    "surface": "convex",
+    "name": "society:setWorkspaceBrand",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/society.ts",
@@ -36010,6 +36296,82 @@
     ]
   },
   {
+    "key": "portable:documentSources:list",
+    "surface": "portable",
+    "name": "documentSources:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:documentSources:save",
+    "surface": "portable",
+    "name": "documentSources:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:documentSources:setEnabled",
+    "surface": "portable",
+    "name": "documentSources:setEnabled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "sourceId",
+        "table": "documentSources",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:documentSources:unlink",
+    "surface": "portable",
+    "name": "documentSources:unlink",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:documentVersions:get",
     "surface": "portable",
     "name": "documentVersions:get",
@@ -36981,6 +37343,12 @@
       {
         "path": "receiptDocumentId",
         "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
         "array": false,
         "optional": true
       },
@@ -48751,6 +49119,18 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      },
+      {
+        "path": "receiptInboxItemId",
+        "table": "receiptInboxItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "corporateCardId",
+        "table": "corporateCards",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -50160,6 +50540,22 @@
     "key": "portable:society:setLogoInvertInDarkMode",
     "surface": "portable",
     "name": "society:setLogoInvertInDarkMode",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:society:setWorkspaceBrand",
+    "surface": "portable",
+    "name": "society:setWorkspaceBrand",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

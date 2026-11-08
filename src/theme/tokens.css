@@ -8,6 +8,12 @@
 .light {
   color-scheme: light;
 
+  /* Fixed preview surfaces show both appearances, regardless of the app theme. */
+  --brand-preview-light-bg: #ffffff;
+  --brand-preview-light-text: #111113;
+  --brand-preview-dark-bg: #111113;
+  --brand-preview-dark-text: #f0f0f3;
+
   /* ---------------- Backgrounds (BACKGROUND_LIGHT) ---------------- */
   --bg-primary:        var(--slate-1);     /* app canvas */
   --bg-secondary:      var(--slate-2);     /* sidebar, topbar */

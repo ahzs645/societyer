@@ -18,7 +18,7 @@
 .organization-registration-profile__review input { margin-top: .3rem; flex-shrink: 0; }
 .organization-registration-profile__retained-evidence ul { padding-left: 1.25rem; }
 .organization-registration-profile__retained-evidence li { overflow-wrap: anywhere; }
-.organization-registration-profile__error { color: var(--danger); padding: var(--s-3); border: 1px solid currentColor; border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.organization-registration-profile__error { color: var(--danger); padding: var(--s-3); border: 1px solid currentColor; border-radius: var(--r-sm); overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .organization-registration-profile__dates { grid-template-columns: minmax(0, 1fr); }
   .organization-registration-profile__head .btn { width: 100%; white-space: normal; min-height: 44px; }

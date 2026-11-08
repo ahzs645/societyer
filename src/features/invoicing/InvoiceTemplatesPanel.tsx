@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useSociety } from "../../hooks/useSociety";
 import { useMutation } from "convex/react";
 import { Archive, Copy, Download, Plus, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -24,6 +26,7 @@ function exportTemplate(config: InvoiceTemplate) {
 }
 
 export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, canWrite, logoUrl }: { workspace: InvoiceWorkspace; societyId: string; canWrite: boolean; logoUrl?: string | null }) {
+  const organization = useSociety();
   const workspace = useMemo(() => ({ ...sourceWorkspace, organization: { ...sourceWorkspace.organization, logoUrl: logoUrl ?? sourceWorkspace.organization.logoUrl } }), [sourceWorkspace, logoUrl]);
   const save = useMutation(api.invoices.upsertTemplate);
   const toast = useToast();
@@ -33,7 +36,7 @@ export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, c
   const [showArchived, setShowArchived] = useState(false);
   const [preview, setPreview] = useState<TemplatePreviewChoice | null>(null);
   const defaultTemplate = workspace.templates?.find(template => template.active && template._id === workspace.settings.defaultTemplateId);
-  const brand = defaultTemplate?.config.brand;
+  const brand = (organization?._id === societyId ? organization.workspaceBrand : undefined) ?? defaultTemplate?.config.brand;
   const open = (next: Draft) => {
     try { setDraft({ ...next, config: cleanInvoiceTemplate({ ...next.config, design: resolveDocumentDesign(next.config) }) }); setError(""); }
     catch (error) { setError(errorMessage(error, "Could not open template.")); }
@@ -90,7 +93,7 @@ export function InvoiceTemplatesPanel({ workspace: sourceWorkspace, societyId, c
       <label className={`btn btn--sm document-designer__import${!canWrite ? " is-disabled" : ""}`}><Upload size={14} /> Import template JSON<input aria-label="Import template JSON" type="file" accept=".json,application/json" disabled={!canWrite || busy} onChange={(e) => { void importTemplate(e.target.files?.[0]); e.target.value = ""; }} /></label>
       <label className={`btn btn--sm document-designer__import${!canWrite || busy ? " is-disabled" : ""}`}><Upload size={14} /> Import Brandkit<input aria-label="Import workspace Brandkit" type="file" accept=".zip,.json,application/zip,application/json" disabled={!canWrite || busy} onChange={event => { void importWorkspaceBrand(event.target.files?.[0]); event.target.value = ""; }} /></label>
       <button className="btn btn--sm btn--accent" disabled={!canWrite || busy} onClick={() => open({ config: brand ? applyDocumentBrand(DEFAULT_INVOICE_TEMPLATE, brand) : { ...DEFAULT_INVOICE_TEMPLATE }, makeDefault: false })}><Plus size={14} /> New template</button></div></div>
-    {brand && <p className="muted document-template-gallery__brand">Workspace Brandkit · {brand.name}</p>}
+    {brand && <p className="muted document-template-gallery__brand">Brand for new designs · {brand.name} · <Link to="/app/settings#workspace-brandkit">Workspace branding</Link></p>}
     {!draft && error && <p className="field__error" role="alert">{error}</p>}
     {hasSavedTemplates ? <>
     <div className="invoice-templates__saved-head"><h3 className="invoice-section-heading">Your saved templates</h3><Checkbox label="Show archived templates" checked={showArchived} onChange={setShowArchived} /></div>

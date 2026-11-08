@@ -231,7 +231,7 @@ export function NotificationsPage() {
                       style={{
                         background: "var(--accent)",
                         borderRadius: 10,
-                        color: "#fff",
+                        color: "var(--accent-on)",
                         fontSize: 10,
                         padding: "1px 6px",
                         marginLeft: 8,

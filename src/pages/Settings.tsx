@@ -44,6 +44,7 @@ import {
 } from "../lib/modules";
 import { organizationKind } from "../../shared/organizationDomain";
 import { NotificationSettingsRow } from "../features/notifications/NotificationSettingsRow";
+import { WorkspaceBrandSettings } from "../components/WorkspaceBrandSettings";
 
 type SettingsTab = "workspace" | "modules" | "runtime";
 
@@ -330,11 +331,12 @@ export function SettingsPage() {
 
       {activeTab === "workspace" && (
       <>
+      <WorkspaceBrandSettings organization={society} canEdit={canEditBranding} canReadTemplates={permissionsLoaded && can("financials:read")} />
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">{t("settings.logoTitle", "Organization logo")}</h2>
           <span className="card__subtitle">
-            {t("settings.logoSubtitle", "Shown in the sidebar. Exported documents use the letterhead below.")}
+            {t("settings.workspaceLogoFallback", "Uploaded logos provide a fallback when no workspace Brandkit is applied. Configure letterhead below.")}
           </span>
         </div>
         <div className="card__body col" style={{ gap: 16 }}>

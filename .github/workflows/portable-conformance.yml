@@ -79,6 +79,7 @@ jobs:
 
       - name: Domain regressions
         run: |
+          npm run test:workspace-branding
           npm run test:voting-power
           npm run test:corporation-equity
           npm run test:procurement-convex

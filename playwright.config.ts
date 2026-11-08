@@ -9,6 +9,7 @@ export default defineConfig({
   // backend (or the Vite dev server's /src modules) and run under their own configs.
   testIgnore: [
     "invoice-commerce.spec.ts",
+    "workspace-branding.spec.ts",
     "invoice-payment-branding.spec.ts",
     "invoice-preview-controls.spec.ts",
     "document-designer.spec.ts",

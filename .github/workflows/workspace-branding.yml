@@ -1,0 +1,65 @@
+name: Workspace branding
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/workspace-branding.yml"
+      - "shared/workspaceBrand*.ts"
+      - "shared/invoiceBranding.ts"
+      - "shared/brandkitLogo.ts"
+      - "src/components/Workspace*.tsx"
+      - "src/components/Layout.tsx"
+      - "src/hooks/useWorkspaceBrandTheme.ts"
+      - "src/pages/Settings.tsx"
+      - "src/pages/Dashboard.tsx"
+      - "src/pages/Portfolio.tsx"
+      - "src/features/invoicing/InvoiceTemplatesPanel.tsx"
+      - "src/styles/_workspace-branding.scss"
+      - "tests/workspace-branding.spec.ts"
+      - "playwright.workspace-branding.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  interface:
+    # Playwright 1.59 does not support the Ubuntu 26.04 image behind ubuntu-latest.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        id: dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium
+        id: chromium
+        run: npx playwright install --with-deps chromium
+      - name: Application typecheck
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npx tsc -b --pretty false
+      - name: Workspace brand browser journeys
+        if: ${{ !cancelled() && steps.chromium.outcome == 'success' }}
+        run: npm run test:workspace-branding-ui
+      - name: Production bundle
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npx vite build
+      - name: Browser evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-branding-browser
+          path: test-results/workspace-branding
+          if-no-files-found: ignore

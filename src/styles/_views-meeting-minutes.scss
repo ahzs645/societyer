@@ -675,7 +675,7 @@
   background: token('accent');
   border-style: solid;
   border-color: token('accent');
-  color: #fff;
+  color: token('accent-on');
 }
 .meeting-minutes-section-item__title-pill.is-active:hover {
   filter: brightness(0.95);
