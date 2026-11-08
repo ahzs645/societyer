@@ -16,14 +16,16 @@ const mapped = MODULE_ACCESS_DEFINITIONS.flatMap((row) =>
 assert.deepEqual([...new Set(mapped)].sort(), [...PERMISSIONS].sort());
 // A grant may cover several areas only when the action policy gates them with
 // it: bills, payroll, corporate cards and investments are in the financials
-// resource group; procurement review reads under documents:read and its folder
-// setting is gated by settings:write. Any other repeat is likely a copy-paste
-// mistake in the projection.
+// resource group; procurement review and external documents read under
+// documents:read and configure their sources under settings:write. Linking or
+// unlinking an external document also requires documents:write. Any other repeat
+// is likely a copy-paste mistake in the projection.
 const SHARED_GRANTS: Record<string, readonly string[]> = {
   "financials:read": ["financials", "bills", "payroll", "cards", "investments"],
   "financials:write": ["financials", "bills", "payroll", "cards", "investments"],
-  "documents:read": ["documents", "procurementReview"],
-  "settings:write": ["settings", "procurementReview"],
+  "documents:read": ["documents", "procurementReview", "externalDocuments"],
+  "documents:write": ["documents", "externalDocuments"],
+  "settings:write": ["settings", "procurementReview", "externalDocuments"],
 };
 const areasByGrant = new Map<string, string[]>();
 for (const row of MODULE_ACCESS_DEFINITIONS) {
@@ -47,6 +49,20 @@ assert.equal(find("Member", "people").actionCoverage.view, "partial");
 assert.equal(find("Member", "voting").actionCoverage.view, "partial");
 assert.equal(find("Viewer", "exports").actionCoverage.view, "partial");
 assert.equal(find("Director", "exports").actionCoverage.view, "full");
+
+// Opting in enables the feature, never a new role grant. Readers retain their
+// record restrictions; Directors can link, while only Admin/Owner manage sources.
+for (const role of ROLES) {
+  const disabled = find(role, "externalDocuments");
+  const enabled = find(role, "externalDocuments", { disabledModules: ["+externalDocuments"] });
+  assert.equal(disabled.enabled, false, `${role}: external documents start disabled`);
+  assert.equal(enabled.enabled, true, `${role}: the workspace opt-in enables the feature`);
+  assert.equal(enabled.actions.view, true, `${role}: document readers have the view grant`);
+  assert.equal(enabled.actions.write, ["Owner", "Admin", "Director"].includes(role), `${role}: linking requires document write permission`);
+  assert.equal(enabled.actions.manage, ["Owner", "Admin"].includes(role), `${role}: source administration requires Admin/Owner`);
+  assert.deepEqual(disabled.actions, enabled.actions, "disabling a feature does not rewrite assigned role grants");
+  assert.ok(disabled.notes.some(note => note.includes("feature switch")));
+}
 
 // A missing module policy is not a permission denial or an inferred grant.
 for (const role of ROLES) {

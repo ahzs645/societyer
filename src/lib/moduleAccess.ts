@@ -130,6 +130,13 @@ const OPTIONAL_POLICY: Record<ModuleKey, Pick<ModuleAccessDefinition, "permissio
     permissions: { view: ["documents:read"], manage: ["settings:write"] },
     notes: ["The published copy is read-only for every role; changes are made in Zoer. Choosing the SharePoint folder requires settings:write, granted to Admin and Owner."],
   },
+  externalDocuments: {
+    permissions: { view: ["documents:read"], write: ["documents:write"], manage: ["settings:write"] },
+    notes: [
+      "Linked records follow document and meeting-material permissions. Browsing, linking and opening originals also require an enabled module and source and the current user's Microsoft access.",
+      "Source administration requires settings:write and an Admin or Owner. Source settings and unlinking remain available when the module or source is disabled.",
+    ],
+  },
 };
 
 /** Every optional module is listed, including modules with no dedicated grant. */
