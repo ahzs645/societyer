@@ -473,6 +473,10 @@
     "procurementReview": {
       "label": "Procurement review",
       "description": "A read-only copy of the bid opportunities a Zoer instance publishes to this workspace's SharePoint folder."
+    },
+    "externalDocuments": {
+      "label": "External documents",
+      "description": "Link documents in approved external libraries and open them with each reader's source permissions."
     }
   },
   "moduleCategories": {

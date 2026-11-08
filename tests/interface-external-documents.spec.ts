@@ -15,10 +15,14 @@ test("external documents opt in, persist source configuration, and keep live acc
   await expect(page.getByRole("button", { name: "Link existing document", exact: true })).toHaveCount(0);
 
   await page.goto("/demo/app/settings?tab=modules");
-  const moduleToggle = page.getByRole("switch", { name: "External documents", exact: true });
-  await expect(moduleToggle).toHaveAttribute("aria-checked", "false");
-  await moduleToggle.click();
-  await expect(moduleToggle).toHaveAttribute("aria-checked", "true");
+  const moduleToggle = page.getByRole("switch", { name: /^External documents\b/ });
+  await expect(moduleToggle).not.toBeChecked();
+  await expect(moduleToggle).toBeEnabled();
+  // Toggle's native input is visually hidden; its containing label is the click target.
+  await page.locator("label.check-row").filter({ has: moduleToggle }).click();
+  await expect(moduleToggle).toBeChecked();
+  // The displayed choice is optimistic; wait for its mutation before navigating.
+  await expect(moduleToggle).toBeEnabled();
 
   await page.goto("/demo/app/documents");
   await page.getByRole("button", { name: "Link existing document", exact: true }).click();
@@ -39,7 +43,7 @@ test("external documents opt in, persist source configuration, and keep live acc
   await settings.getByRole("button", { name: "Save document source", exact: true }).click();
   await expect(settings.getByRole("button", { name: "Enable Board records", exact: true })).toBeVisible();
   await settings.getByRole("button", { name: "Enable Board records", exact: true }).click();
-  await expect(settings.getByRole("button", { name: "Disable Board records", exact: true })).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Disable Board records", exact: true })).toBeEnabled();
 
   await page.reload();
   await expect(settings.getByRole("button", { name: "Disable Board records", exact: true })).toBeVisible();

@@ -7,10 +7,12 @@
 // frontend calls via useMutation/useAction must be accounted for here so a write
 // can never *silently* vanish. A frontend write is acceptable only if it is one
 // of:
-//   1. handled explicitly in staticConvex.ts (an `name === "module:fn"` case),
+//   1. handled explicitly by StaticConvexClient or a legacy dispatcher (including
+//      an explicit capability rejection before dispatch),
 //   2. handled by the generic CRUD fallback (create|update|upsert|issue|setStatus|remove),
 //   3. listed in STATIC_OFFLINE_NOOP_WRITES below (intentionally a no-op offline),
-//   4. listed in STATIC_PENDING_WRITES below (a known, acknowledged gap).
+//   4. listed in STATIC_PENDING_WRITES below (a known, acknowledged gap),
+//   5. listed in STATIC_UNSUPPORTED_WRITES below (an explicit capability rejection).
 //
 // The parity gate FAILS when a frontend write matches none of the above, so new
 // silent gaps cannot be introduced. At runtime the mirror surfaces a pending gap
