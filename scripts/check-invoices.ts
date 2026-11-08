@@ -4,6 +4,7 @@
 // void rules, dues generation + undo, series issue, reminders to the Outbox).
 import assert from "node:assert/strict";
 import {
+  addDays,
   addMonthsClamped,
   allocateProportionally,
   computeInvoiceTotals,
@@ -78,6 +79,8 @@ const line = (quantity: number, unitPriceCents: number, taxRatePercent?: number,
 
 // ---- terms, numbering, recurrence
 {
+  assert.equal(dueDateForTerms("2026-01-31", "net_14"), "2026-02-14");
+  assert.equal(dueDateForTerms("2026-01-31", "net_15"), "2026-02-15");
   assert.equal(dueDateForTerms("2026-01-31", "net_30"), "2026-03-02");
   assert.equal(dueDateForTerms("2026-04-21", "due_on_receipt"), "2026-04-21");
   assert.equal(dueDateForTerms("2026-04-21", "custom", "2026-06-01"), "2026-06-01");
@@ -193,9 +196,11 @@ assert.equal((await db.get("static_invoice_dues_liam")).status, "draft");
 await assert.rejects(() => inv.recordPaymentPortable(ctx, { id: "foreign_invoice", date: today, amountCents: 100, method: "cash" }));
 
 // create, number, mark sent with an Outbox email, duplicate
-const id = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Test Party", billToEmail: "party@example.org", issueDate: today, terms: "net_15", lines: [{ item: "Hall", quantity: 1, unitPriceCents: 45000, taxRatePercent: 5, taxLabel: "GST" }] });
+const id = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Test Party", billToEmail: "party@example.org", issueDate: today, terms: "net_14", lines: [{ item: "Hall", quantity: 1, unitPriceCents: 45000, taxRatePercent: 5, taxLabel: "GST" }] });
 let created = await db.get(id);
 assert.equal(created.number, "RCS-0026");
+assert.equal(created.terms, "net_14");
+assert.equal(created.dueDate, addDays(today, 14));
 assert.equal(created.totalCents, 47250);
 const outboxBefore = (await db.query("pendingEmails").collect()).length;
 result = await inv.markSentPortable(ctx, { societyId: S, ids: [id], draftEmail: true });

@@ -47,7 +47,7 @@ const presets: DocumentTemplatePreset[] = [
       design.page.margins = { top: 42, right: 44, bottom: 52, left: 44 };
       design.logo.width = 210;
       design.typography.header.fontSize = 26;
-      columns(design, ["item", "quantity", "rate", "tax", "amount"], { item: 45, quantity: 12, rate: 15, tax: 10, amount: 18 });
+      columns(design, ["item", "quantity", "rate", "tax", "amount"], { item: 33, quantity: 12, rate: 15, tax: 22, amount: 18 });
       design.footer.text = "Thank you for your business.";
       design.footer.pageNumbers = true;
     }),
@@ -198,7 +198,7 @@ const presets: DocumentTemplatePreset[] = [
       design.typography.header.fontSize = 24;
       design.page.margins = { top: 32, right: 34, bottom: 40, left: 34 };
       design.logo.width = 140;
-      columns(design, ["number", "sku", "item", "quantity", "rate", "tax", "amount"], { number: 5, sku: 12, item: 29, quantity: 9, rate: 15, tax: 10, amount: 20 });
+      columns(design, ["number", "sku", "item", "quantity", "rate", "tax", "amount"], { number: 5, sku: 12, item: 20, quantity: 9, rate: 15, tax: 19, amount: 20 });
       design.table.striped = true;
       design.table.rowPadding = 5;
       design.footer.pageNumbers = true;
@@ -220,7 +220,7 @@ const presets: DocumentTemplatePreset[] = [
       design.typography.table.fontSize = 8;
       design.typography.totals.fontSize = 9;
       design.fields.shipTo = true;
-      columns(design, ["number", "sku", "item", "description", "quantity", "unit", "rate", "tax", "amount"], { number: 4, sku: 10, item: 21, description: 27, quantity: 7, unit: 7, rate: 10, tax: 6, amount: 12 });
+      columns(design, ["number", "sku", "item", "description", "quantity", "unit", "rate", "tax", "amount"], { number: 4, sku: 10, item: 19, description: 22, quantity: 7, unit: 7, rate: 10, tax: 13, amount: 12 });
       design.table.striped = true;
       design.table.rowPadding = 4;
       design.header.repeat = true;

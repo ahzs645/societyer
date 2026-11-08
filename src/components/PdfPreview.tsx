@@ -33,13 +33,15 @@ function freeCanvas(canvas: HTMLCanvasElement) {
  * Every page in one vertical scroll, drawn lazily: placeholders are sized from
  * each page's viewport, pages near the view get a canvas and a selectable text
  * layer, and canvases far from it are released, so a 100+ page PDF on a phone
- * holds only a handful (see `planPdfPages`). Zoom runs from 25% of fit-width
- * to 400%, by buttons or pinch; canvases cap their pixel ratio and size.
+ * holds only a handful (see `planPdfPages`). Buttons and pinch zoom from
+ * 25% to 400% of the fitted size. Canvases cap their pixel ratio and size.
  * The bytes are already verified in memory, so "streaming" here is drawing
  * pages as they are reached rather than fetching byte ranges.
  */
-export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, testId = "file-pdf-preview" }: {
+export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, fitToPage = false, testId = "file-pdf-preview" }: {
   blob: Blob;
+  /** Size the viewport for one unzoomed page and fit within its available height. */
+  fitToPage?: boolean;
   /** Scrolls to this page (1-based) when it or `focusKey` changes. */
   pageNumber?: number;
   /** A new locator on the same page can request focus again after manual scrolling. */
@@ -53,6 +55,7 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, testI
   const [sizesReady, setSizesReady] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(0);
   const [current, setCurrent] = useState(1);
   const [pageDraft, setPageDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -190,19 +193,30 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, testI
   useEffect(() => {
     const element = host.current;
     if (!element) return;
-    const measure = () => setWidth(Math.floor(element.clientWidth));
+    const measure = () => {
+      setWidth(element.clientWidth);
+      if (fitToPage) setHeight(element.clientHeight);
+    };
     measure(); const observer = new ResizeObserver(measure); observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [fitToPage]);
 
+  const fitWidth = Math.max(fitToPage ? 1 : FIT_MIN, Math.min(width - GUTTER * 2, FIT_MAX));
+  const firstPage = sizes[0];
+  const pageViewportHeight = fitToPage && firstPage
+    ? Math.ceil(fitWidth * firstPage.height / firstPage.width) + GUTTER * 2
+    : undefined;
   const boxes = useMemo(() => {
-    const fit = Math.max(FIT_MIN, Math.min(width - GUTTER * 2, FIT_MAX));
     return sizes.map(size => {
-      const scale = fit * zoom / size.width;
+      const widthScale = fitWidth / size.width;
+      const fitScale = fitToPage && height > GUTTER * 2
+        ? Math.min(widthScale, (height - GUTTER * 2) / size.height)
+        : widthScale;
+      const scale = fitScale * zoom;
       const box = { scale, width: Math.floor(size.width * scale), height: Math.floor(size.height * scale) };
       return { ...box, ratio: canvasPixelRatio(box.width, box.height, window.devicePixelRatio) };
     });
-  }, [sizes, width, zoom]);
+  }, [sizes, fitWidth, fitToPage, height, zoom]);
 
   // Publish the current geometry to the drawing loop and restart it.
   useLayoutEffect(() => {
@@ -231,7 +245,7 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, testI
   useLayoutEffect(() => {
     if (!host.current || !sizes.length) return;
     setScroller(verticalScroller(host.current));
-  }, [sizes.length, width]);
+  }, [sizes.length, width, height, zoom]);
 
   useEffect(() => {
     if (!doc || !scroller || !sizes.length) return;
@@ -323,11 +337,11 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, testI
       </label>
       <button type="button" className="btn btn--sm btn--icon" disabled={current >= pageCount} onClick={() => scrollToPage(current + 1)} aria-label="Next page" title="Next page"><ChevronRight size={14} /></button>
       <span className="pdf-preview__nav-gap" aria-hidden="true" />
-      <PreviewZoomControls zoom={zoom} onZoom={next => zoomTo(next)} />
+      <PreviewZoomControls zoom={zoom} onZoom={next => zoomTo(next)} fitLabel={fitToPage ? "Fit page" : undefined} />
     </div>}
     {!drawnAny && !error && <p role="status" className="pdf-preview__status">Rendering PDF…</p>}
     {error && <p role="alert" className="pdf-preview__status">Could not render this PDF: {error}</p>}
-    <ScrollArea ref={host} data-testid={testId} viewportClassName="pdf-preview__viewport" tabIndex={0} role="region" aria-label={pageCount ? `PDF, ${pageCount} pages` : "PDF"}>
+    <ScrollArea ref={host} data-testid={testId} viewportClassName="pdf-preview__viewport" style={{ height: pageViewportHeight }} tabIndex={0} role="region" aria-label={pageCount ? `PDF, ${pageCount} pages` : "PDF"}>
       <div ref={pages} className="pdf-preview__pages">
         {boxes.map((box, index) => <div
           key={index}

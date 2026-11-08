@@ -78,6 +78,30 @@ async function expectPageGeometry(page: Page, exported: PDFDocument) {
 test.beforeAll(async () => { await mkdir(artifacts, { recursive: true }); });
 test.beforeEach(async ({ page }) => { page.setDefaultTimeout(30_000); });
 
+test("a one-page invoice fits the preview and shows both tax rates on the item row", async ({ page, hasTouch }) => {
+  if (!hasTouch) await page.setViewportSize({ width: 1280, height: 720 });
+  const form = await invoiceBuilder(page, hasTouch);
+  await form.getByPlaceholder("What you're billing for", { exact: true }).first().fill("Site services");
+  await activate(form.getByLabel("Tax for line 1", { exact: true }), hasTouch);
+  await activate(page.getByRole("option", { name: "GST 5% + PST 7%", exact: true }), hasTouch);
+  if (hasTouch) await activate(page.getByRole("tab", { name: "Preview", exact: true }), true);
+
+  const scope = page.getByRole("complementary", { name: "Invoice preview" });
+  const preview = scope.getByTestId("invoice-pdf-preview");
+  const layer = preview.locator(".textLayer");
+  const tax = layer.getByText("GST 5% + PST 7%", { exact: true });
+  await expect(preview.locator(".pdf-preview__page")).toHaveCount(1);
+  await expect(tax).toBeVisible();
+  await expect(layer.getByText("Description", { exact: true })).toHaveCount(0);
+  const item = layer.getByText("Site services", { exact: true });
+  expect((await tax.boundingBox())!.y).toBeCloseTo((await item.boundingBox())!.y, 0);
+  await expect.poll(() => preview.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  await activate(scope.getByRole("button", { name: "Zoom in", exact: true }), hasTouch);
+  await expect.poll(() => preview.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(1);
+  await activate(scope.getByRole("button", { name: /fit page/i }), hasTouch);
+  await expect.poll(() => preview.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+});
+
 test("the shared payment manager opens from an unsaved invoice and settings; info works for pointer, touch and keyboard", async ({ page, hasTouch }, info) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -217,7 +241,7 @@ test("actual PDF pages retain export geometry, navigation and zoom on desktop an
   await activate(scope.getByRole("button", { name: "Zoom in", exact: true }), hasTouch);
   await expect.poll(async () => (await first.boundingBox())!.width).toBeGreaterThan(geometry.width + 10);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-  await activate(scope.getByRole("button", { name: /fit to width/i }), hasTouch);
+  await activate(scope.getByRole("button", { name: /fit page/i }), hasTouch);
   await expect.poll(async () => Math.abs((await first.boundingBox())!.width - geometry.width)).toBeLessThan(2);
   await activate(scope.getByRole("button", { name: "Next page", exact: true }), hasTouch);
   const field = scope.getByRole("textbox", { name: `Page number, of ${pdf.getPageCount()}`, exact: true });

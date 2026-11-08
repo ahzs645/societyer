@@ -136,7 +136,7 @@ export const invoiceTables = {
     shipToName: v.optional(v.string()),
     shipToAddress: v.optional(v.string()),
     issueDate: v.string(),
-    terms: v.string(), // due_on_receipt | net_15 | net_30 | net_60 | custom
+    terms: v.string(), // due_on_receipt | net_14 | net_30 | net_60 | custom
     dueDate: v.string(),
     reference: v.optional(v.string()),
     currency: v.string(),

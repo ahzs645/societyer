@@ -17,12 +17,12 @@
  * Money is always integer cents. Dates are `YYYY-MM-DD` calendar dates.
  * Pure TypeScript: no Convex, DOM or Node imports.
  */
-import { addDays, daysBetween, dueDateForTerms, INVOICE_TERMS, INVOICE_TERMS_LABEL, isCalendarDate } from "./invoicing";
+import { addDays, daysBetween, dueDateForTerms, INVOICE_TERMS_LABEL, isCalendarDate } from "./invoicing";
 import { lineTagProblems } from "./transactionLines";
 
 export { addDays, daysBetween, dueDateForTerms, isCalendarDate };
 
-export const BILL_TERMS = INVOICE_TERMS;
+export const BILL_TERMS = ["due_on_receipt", "net_15", "net_30", "net_60", "custom"] as const;
 export type BillTerms = (typeof BILL_TERMS)[number];
 export const BILL_TERMS_LABEL = INVOICE_TERMS_LABEL;
 export const DEFAULT_BILL_TERMS: BillTerms = "net_30";

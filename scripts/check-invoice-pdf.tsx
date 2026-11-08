@@ -15,7 +15,12 @@ import { DEFAULT_INVOICE_TEMPLATE } from "../shared/invoiceCommerce";
 const fonts = [{ family: "Invoice", src: new Uint8Array(await readFile("src/assets/pdf-fonts/NotoSerif-Regular.ttf")) }, { family: "Invoice", src: new Uint8Array(await readFile("src/assets/pdf-fonts/NotoSerif-Bold.ttf")), fontWeight: "bold" as const }];
 for (const layout of ["classic", "modern", "compact"] as const) {
   const long = layout === "modern";
-  const invoice = { number: `INV-${layout}`, issueDate: "2026-10-22", dueDate: "2026-11-21", terms: "net_30", currency: "USD", billToName: "Renée's workshop", billToAddress: "100 Main Street", lines: Array.from({ length: long ? 100 : 2 }, (_, i) => ({ key: String(i), item: `Repair service ${i + 1}`, description: "Inspection and repair", quantity: 1.5, unit: "hour", unitPriceCents: 8500, taxLabel: "GST", taxRatePercent: 5 })), documentTemplate: { ...DEFAULT_INVOICE_TEMPLATE, layout, paperSize: long ? "a4" as const : "letter" as const, footer: "Thank you for your business" }, payments: [{ key: "p1", date: "2026-10-22", amountCents: 5000, method: "e_transfer" }], memo: "Warranty work checked" };
+  const provincialTax = long ? { label: "QST", ratePercent: 9.975 } : { label: "PST", ratePercent: 7 };
+  const lines = Array.from({ length: long ? 100 : 2 }, (_, i) => ({
+    key: String(i), item: `Repair service ${i + 1}`, description: "Inspection and repair", quantity: 1.5, unit: "hour",
+    unitPriceCents: 8500, taxLabel: "GST", taxRatePercent: 5, additionalTaxes: i === 0 ? [provincialTax] : undefined,
+  }));
+  const invoice = { number: `INV-${layout}`, issueDate: "2026-10-22", dueDate: "2026-11-21", terms: "net_30", currency: "USD", billToName: "Renée's workshop", billToAddress: "100 Main Street", lines, documentTemplate: { ...DEFAULT_INVOICE_TEMPLATE, layout, paperSize: long ? "a4" as const : "letter" as const, footer: "Thank you for your business" }, payments: [{ key: "p1", date: "2026-10-22", amountCents: 5000, method: "e_transfer" }], memo: "Warranty work checked" };
   const raw = await renderDocument(<InvoicePdfDocument invoice={invoice} organization={{ name: "Societyer Workshop", gstNumber: "GST-TEST" }} paymentInstructions="Pay by e-transfer" fonts={fonts} />);
   const bytes = await decorateDocumentPdf(raw, { config: cleanInvoiceTemplate(invoice.documentTemplate), fonts });
   const pdf = await PDFDocument.load(bytes);
@@ -25,7 +30,14 @@ for (const layout of ["classic", "modern", "compact"] as const) {
   await writeFile(`test-results/invoice-pdf/${layout}.pdf`, bytes);
   const extracted = await getDocument({ data: bytes.slice(), useSystemFonts: true, disableFontFace: true }).promise;
   const pages: string[] = [];
-  for (let i = 1; i <= extracted.numPages; i++) pages.push((await (await extracted.getPage(i)).getTextContent()).items.map((item: any) => item.str ?? "").join(" "));
+  for (let i = 1; i <= extracted.numPages; i++) {
+    const { items } = await (await extracted.getPage(i)).getTextContent();
+    if (i === 1) {
+      const combined = `GST 5% + ${provincialTax.label} ${provincialTax.ratePercent}%`;
+      assert.ok(items.some(item => "str" in item && item.str === combined), `${layout}: combined tax rates occupy one line`);
+    }
+    pages.push(items.map(item => "str" in item ? item.str : "").join(" "));
+  }
   const text = pages.join(" ");
   for (const expected of [invoice.number, "Renée", "Rate (USD)", "1.5 hour", "GST", "Total USD", "Balance due", "Thank you", "Pay by e-transfer", "Warranty work checked"]) assert.ok(text.includes(expected), `${layout}: PDF contains ${expected}`);
   assert.ok(text.includes(`Repair service ${long ? 100 : 2}`));
