@@ -1,4 +1,5 @@
 import { defaultInvoicePayments, cleanInvoicePaymentMethods, selectInvoicePaymentMethods, invoicePaymentText, type InvoiceReceivingMethod } from "../invoicePaymentMethods";
+import { invoiceDraftReopenBlocker } from "../invoiceDraftCorrection";
 import { cleanInvoiceMoney, convertInvoiceCents, settlementTotals, explicitFxQuote, type InvoiceMoneyOptions } from "../invoiceMoney";
 import { cleanAdditionalTaxes } from "../invoiceMoney";
 import { cleanDocumentExtras, type DocumentExtras } from "../documentExtras";
@@ -72,6 +73,7 @@ import { tagGroupLookup } from "../financeTags";
 import { validateBalancedJournalLines } from "../accountingCore";
 import {
   DUES_REVENUE_CATEGORY,
+  accrualKey,
   accrualPostingLines,
   booksStartLabel,
   foreignCurrencySummary,
@@ -455,6 +457,53 @@ async function issuerLogoUrl(ctx: PortableQueryCtx, row: Row): Promise<string | 
 export async function documentPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
   return { ...decorate(row, await organizationToday(ctx, row.societyId), new Map(), new Map()), issuerLogoUrl: await issuerLogoUrl(ctx, row) };
+}
+
+/** A prior internal finalization is read-only and never becomes a live invoice. */
+export async function previousDocumentPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
+  const revision = await requireOwnedRow<Row>(ctx, "invoiceDocumentRevisions", id);
+  await getOwned(ctx, "invoices", revision.invoiceId, revision.societyId);
+  const row: Row = { ...JSON.parse(revision.snapshotJson), _id: revision.invoiceId, societyId: revision.societyId };
+  if (row.issuerSnapshot) row.issuerSnapshot = { ...row.issuerSnapshot, logoStorageId: revision.issuerLogoStorageId };
+  return { ...decorate(row, await organizationToday(ctx, revision.societyId), new Map(), new Map()), issuerLogoUrl: await issuerLogoUrl(ctx, row) };
+}
+
+/** Reopen only an internal manual finalization, retaining its full prior document. */
+export async function returnToDraftPortable(ctx: PortableMutationCtx, { id, reason }: { id: string; reason: string }) {
+  const row = await requireOwnedRow<Row>(ctx, "invoices", id);
+  const why = cleanText(reason, 500);
+  if (!why) throw new Error("Give a reason for returning this invoice to draft.");
+  const blocker = invoiceDraftReopenBlocker(row as any);
+  if (blocker) throw new Error(blocker);
+  const today = await organizationToday(ctx, row.societyId);
+  await assertBooksOpen(ctx, row.societyId, [row.issueDate, today], "edited");
+  for (const date of [row.issueDate, today]) await assertPeriodOpen(ctx, { societyId: row.societyId, date });
+  const [journal, automationRun, reminder] = await Promise.all([
+    ctx.db.query("journalEntries").withIndex("by_society_source_external", q => q.eq("societyId", row.societyId).eq("source", "invoice").eq("sourceExternalId", accrualKey(id))).first(),
+    ctx.db.query("billingAutomationRuns").withIndex("by_invoice", q => q.eq("invoiceId", id)).first(),
+    ctx.db.query("billingAutomationSchedules").withIndex("by_society_kind_source", q => q.eq("societyId", row.societyId).eq("kind", "invoice_reminder").eq("sourceId", id)).first(),
+  ]);
+  if (journal) throw new Error("This invoice has ledger history. Use a credit or replacement instead.");
+  if (automationRun || reminder) throw new Error("This invoice has billing-automation history. Use a replacement instead.");
+  const actor = await actorName(ctx, row.societyId);
+  const at = nowISO();
+  const actorUserId = await actingUser(ctx, row.societyId);
+  const snapshotJson = JSON.stringify(row);
+  if (new TextEncoder().encode(snapshotJson).byteLength > 900000) throw new Error("This invoice is too large to archive safely. Use a replacement instead.");
+  const previousVersionId = await ctx.db.insert("invoiceDocumentRevisions", {
+    societyId: row.societyId, invoiceId: id, archivedAtISO: at, reason: why, snapshotJson,
+    ...(actor ? { actorName: actor } : {}),
+    ...(actorUserId ? { actorUserId } : {}),
+    ...(row.issuerSnapshot?.logoStorageId ? { issuerLogoStorageId: row.issuerSnapshot.logoStorageId } : {}),
+  });
+  const timeline = [...(row.timeline ?? []), { ...event("returned_to_draft", `Returned to draft: ${why}`, actor), previousVersionId }];
+  if (new TextEncoder().encode(JSON.stringify({ ...row, timeline })).byteLength > 950000) throw new Error("This invoice has too much history to reopen safely. Use a replacement instead.");
+  await ctx.db.patch(id, {
+    status: "draft", issuedAtISO: undefined, issuerSnapshot: undefined, issuerTaxRegistrationsSnapshot: undefined,
+    ...defaultInvoicePayments(await loadSettings(ctx, row.societyId) as any),
+    reopenedAtISO: at, updatedAtISO: at, timeline,
+  });
+  return id;
 }
 
 /** Branding and reusable designs only: report pages do not need billing/bank records. */
@@ -1298,7 +1347,8 @@ export async function duplicatePortable(ctx: PortableMutationCtx, { id }: { id: 
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
-  if (row.status !== "draft" || (row.payments ?? []).length || row.issuerSnapshot || row.issuerTaxRegistrationsSnapshot) throw new Error("Only unpaid drafts that have not been prepared can be deleted. Void an issued or prepared invoice instead.");
+  if (row.status !== "draft" || (row.payments ?? []).length || row.issuerSnapshot || row.issuerTaxRegistrationsSnapshot || row.reopenedAtISO) throw new Error("Only unpaid drafts that have not been prepared can be deleted. Void an issued or prepared invoice instead.");
+  if (await ctx.db.query("invoiceDocumentRevisions").withIndex("by_invoice", q => q.eq("invoiceId", id)).first()) throw new Error("This invoice has a retained previous version. Void it instead of deleting it.");
   await ctx.db.delete(id);
 }
 

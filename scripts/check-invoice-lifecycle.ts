@@ -147,4 +147,71 @@ await assert.rejects(() => owner.mutation(api.invoices.issue, { societyId: ids.s
 assert.deepEqual([(await get(openDraft)).status, (await get(closedDraft)).status], ["draft", "draft"]);
 assert.deepEqual(await counts(), beforeClosed);
 console.log("PASS manual invoice lifecycle: saved-document finalization, immutable issuer/GST and recipient, separate external sending/customer responses/payments, retries, dated corrections, legacy restore, authorization and atomic batches.");
+
+// Returning an internal finalization to draft is distinct from replacing an
+// externally issued or posted document. Exercise the real hosted authorization,
+// indexes and atomic mutation, including the archive and refreshed defaults.
+await t.run(async ctx => {
+  const settings = await ctx.db.query("invoiceSettings").withIndex("by_society", q => q.eq("societyId", ids.societyId)).first();
+  await ctx.db.patch(settings!._id, { defaultRevenueAccountId: undefined, categoryAccounts: [], paymentMethods: [{ id: "bank", name: "Old bank details", type: "eft", details: "Synthetic old receiving details" }], defaultPaymentMethodIds: ["bank"], paymentInstructions: "Original receiving note" });
+  await ctx.db.patch(ids.societyId, { logoStorageId: ids.logoStorageId });
+});
+const correctableId = await owner.mutation(api.invoices.upsert, { ...input, issueDate: "2026-11-08" });
+assert.deepEqual(await owner.mutation(api.invoices.issue, { societyId: ids.societyId, ids: [correctableId] }), { issued: 1, skipped: 0, posted: 0 });
+const beforeReopen = await get(correctableId);
+await t.run(async ctx => {
+  const settings = await ctx.db.query("invoiceSettings").withIndex("by_society", q => q.eq("societyId", ids.societyId)).first();
+  await ctx.db.patch(settings!._id, { paymentMethods: [{ id: "bank", name: "Current EFT details", type: "eft", details: "Transit: 00002 (synthetic fixture)" }], paymentInstructions: "Current receiving note" });
+});
+await assert.rejects(() => viewer.mutation(api.invoices.returnToDraft, { id: correctableId, reason: "Not authorized" }), /permission|financials:write/i);
+await assert.rejects(() => stranger.mutation(api.invoices.returnToDraft, { id: correctableId, reason: "Other workspace" }), /permission|membership|access|workspace/i);
+await assert.rejects(() => owner.mutation(api.invoices.returnToDraft, { id: correctableId, reason: " " }), /reason/i);
+const priorCounts = await counts();
+assert.equal(await owner.mutation(api.invoices.returnToDraft, { id: correctableId, reason: "Never sent; correct the date and taxes" }), correctableId);
+const reopened = await get(correctableId);
+assert.equal(reopened.status, "draft");
+assert.equal(reopened.number, beforeReopen.number);
+assert.deepEqual([reopened.issuedAtISO, reopened.issuerSnapshot, reopened.issuerTaxRegistrationsSnapshot], [undefined, undefined, undefined]);
+assert.equal(reopened.paymentMethods[0].details, "Transit: 00002 (synthetic fixture)");
+assert.equal(reopened.paymentInstructions, "Current receiving note");
+assert.deepEqual(await counts(), priorCounts, "reopening creates no journals, payments or emails");
+const revisionId = reopened.timeline.at(-1).previousVersionId;
+assert.ok(revisionId);
+assert.deepEqual(JSON.parse((await get(revisionId)).snapshotJson), beforeReopen, "the complete earlier saved document remains archived");
+await assert.rejects(() => stranger.query(api.invoices.previousDocument, { id: revisionId }), /permission|membership|access|workspace/i);
+await assert.rejects(() => owner.mutation(api.invoices.remove, { id: correctableId }), /prepared|retained|void/i);
+await assert.rejects(() => owner.mutation(api.invoices.returnToDraft, { id: correctableId, reason: "Retry" }), /finalized/i);
+await owner.mutation(api.invoices.upsert, { ...input, id: correctableId, issueDate: "2026-11-08", lines: [{ ...input.lines[0], unitPriceCents: 20000 }] });
+await owner.mutation(api.invoices.issue, { societyId: ids.societyId, ids: [correctableId] });
+const afterReissue = await owner.query(api.invoices.document, { id: correctableId });
+const previousVersion = await owner.query(api.invoices.previousDocument, { id: revisionId });
+assert.equal(afterReissue.number, beforeReopen.number);
+assert.equal(afterReissue.totalCents, 21000);
+assert.equal(previousVersion.totalCents, 10500);
+assert.equal(previousVersion.paymentInstructions, "Original receiving note");
+assert.equal(typeof previousVersion.issuerLogoUrl, "string");
+const { storageHasRetainedDocumentReference } = await import("../shared/functions/receiptRetention");
+await t.run(async ctx => {
+  await ctx.db.patch(correctableId, { issuerSnapshot: undefined });
+  // Remove every live invoice logo reference to prove the archived version pins it.
+  for (const row of await ctx.db.query("invoices").collect()) if (row.issuerSnapshot?.logoStorageId) await ctx.db.patch(row._id, { issuerSnapshot: { ...row.issuerSnapshot, logoStorageId: undefined } });
+  assert.equal(await storageHasRetainedDocumentReference(ctx as any, ids.societyId, ids.logoStorageId), true);
+});
+for (const blockedId of [id, unsentId, paidDraft, emailDraftId, openDraft]) {
+  await assert.rejects(() => owner.mutation(api.invoices.returnToDraft, { id: blockedId, reason: "Must remain locked" }));
+}
+// An accrual whose backlink was lost must still block editing.
+const orphanId = await owner.mutation(api.invoices.upsert, { ...input, issueDate: "2026-11-08" });
+await owner.mutation(api.invoices.issue, { societyId: ids.societyId, ids: [orphanId] });
+await t.run(async ctx => {
+  const originalEntry = await ctx.db.get(issued.journalEntryId);
+  const { _id, _creationTime, ...fields } = originalEntry! as any;
+  await ctx.db.insert("journalEntries", { ...fields, sourceExternalId: `invoice:${orphanId}` });
+});
+await assert.rejects(() => owner.mutation(api.invoices.returnToDraft, { id: orphanId, reason: "Orphan posting" }), /ledger history/i);
+const scheduledId = await owner.mutation(api.invoices.upsert, { ...input, issueDate: "2026-11-08" });
+await owner.mutation(api.invoices.issue, { societyId: ids.societyId, ids: [scheduledId] });
+await t.run(ctx => ctx.db.insert("billingAutomationSchedules", { societyId: ids.societyId, name: "Synthetic reminder", kind: "invoice_reminder", sourceId: scheduledId, recipients: ["customer@example.invalid"], recipientsConfirmed: true, active: false, timezone: "America/Vancouver", localTime: "09:00", cadence: "monthly", anchorDay: 8, nextLocalDate: "2026-12-08", nextRunAtISO: "2026-12-08T17:00:00Z", createdByUserId: "synthetic", createdAtISO: "2026-11-08T20:00:00Z", updatedAtISO: "2026-11-08T20:00:00Z" }));
+await assert.rejects(() => owner.mutation(api.invoices.returnToDraft, { id: scheduledId, reason: "Prepared reminder" }), /automation history/i);
+console.log("PASS unsent invoice corrections: same number, complete prior version, permission/ownership gates, receiving defaults, no ledger/email effects, retained logos, reissue, delete protection and posting/automation refusals.");
 mock.timers.reset();

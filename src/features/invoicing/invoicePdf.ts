@@ -53,8 +53,8 @@ export async function buildInvoicePdf(props: InvoicePdfProps): Promise<Uint8Arra
   const { cleanInvoiceTemplate } = await import("../../../shared/invoiceCommerce");
   return decorateDocumentPdf(bytes, { config: cleanInvoiceTemplate(props.invoice.documentTemplate), organizationName: organization.name, number: props.invoice.number, fonts, layout: rendered.layout, content: { invoice, organization }, paymentStub: data.paymentStubDetails ? { ...data.paymentStubDetails, height: documentPaymentStubHeight(data) } : undefined });
 }
-export async function downloadInvoicePdf(invoice: InvoicePdfProps["invoice"], organization: InvoicePdfProps["organization"], paymentInstructions?: string) {
+export async function downloadInvoicePdf(invoice: InvoicePdfProps["invoice"], organization: InvoicePdfProps["organization"], paymentInstructions?: string, filenameSuffix = "") {
   const bytes = await buildInvoicePdf({ invoice, organization, paymentInstructions });
-  const filename = `${invoice.number.replace(/[^a-z0-9_-]/gi, "_") || "Document"}.pdf`;
+  const filename = `${invoice.number.replace(/[^a-z0-9_-]/gi, "_") || "Document"}${filenameSuffix.replace(/[^a-z0-9_-]/gi, "_")}.pdf`;
   triggerBlobDownload(new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }), filename);
 }

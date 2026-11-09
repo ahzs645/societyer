@@ -18,6 +18,60 @@ async function invoiceDocument(page: Page, id: string) {
   }, id);
 }
 
+test("correct an unsent unposted invoice in place and retain its previous PDF", async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.clock.setFixedTime(new Date("2026-11-08T20:00:00Z"));
+  await page.goto("/app/invoices");
+  await expect(page.getByRole("button", { name: "New invoice", exact: true })).toBeVisible();
+  const id = await page.evaluate(async name => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { setStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    const { setStoredUserId } = await import("/src/hooks/useCurrentUser.ts");
+    const { societyId } = await client.mutation("society:createWorkspace", { name, jurisdictionCode: "CA-BC", seedDocumentPackets: false, isCharity: false, isMemberFunded: false });
+    const users = await client.query("users:list", { societyId });
+    setStoredSocietyId(societyId);
+    setStoredUserId(users.find((user: any) => user.role === "Owner")._id);
+    const id = await client.mutation("invoices:upsert", { societyId, partyKind: "custom", billToName: "Synthetic correction customer", issueDate: "2026-11-08", terms: "net_15", currency: "CAD", lines: [{ key: "service", item: "Original synthetic website build", quantity: 1, unitPriceCents: 12500 }] });
+    const result = await client.mutation("invoices:issue", { societyId, ids: [id] });
+    if (result.posted) throw new Error("Correction fixture must have no ledger posting");
+    return id;
+  }, `Unsent correction ${testInfo.project.name}`);
+  await page.goto(`/app/invoices?invoice=${id}`);
+  const issued = await invoiceDocument(page, id);
+  const drawer = page.locator(".invoice-drawer");
+  await drawer.getByRole("button", { name: `More actions for ${issued.number}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Return to draft", exact: true }).click();
+  const modal = page.getByRole("dialog", { name: `Return ${issued.number} to draft?`, exact: true });
+  await modal.getByPlaceholder("Reason for the correction (required)").fill("Never sent; correct the service charge");
+  await modal.getByRole("button", { name: "Return to draft", exact: true }).click();
+  const form = page.locator(".invoice-builder__form");
+  await expect(form).toBeVisible();
+  await form.getByPlaceholder("What you're billing for", { exact: true }).first().fill("Updated synthetic website build");
+  await form.locator(".line-editor__field--price input").first().fill("250.00");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(drawer).toBeVisible();
+  await expect(drawer).toContainText("Never sent; correct the service charge");
+  const downloading = page.waitForEvent("download");
+  await drawer.getByRole("button", { name: "Download previous version", exact: true }).click();
+  const prior = await downloading;
+  expect(prior.suggestedFilename()).toContain("previous-finalization");
+  const priorText = await pdfText(prior);
+  expect(priorText).toContain("Original synthetic website build");
+  expect(priorText).not.toContain("Updated synthetic website build");
+  expect(priorText).not.toContain("DRAFT");
+  await page.reload();
+  const corrected = await invoiceDocument(page, id);
+  expect(corrected.number).toBe(issued.number);
+  expect(corrected.lifecycle).toBe("draft");
+  expect(corrected.totalCents).toBe(25000);
+  expect(corrected.sentAtISO).toBeUndefined();
+  await drawer.getByRole("button", { name: `More actions for ${issued.number}`, exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Delete draft", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("same-number-invoice-correction.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});
+
 test("finalize, download, send externally, record responses, and settle without an email", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));

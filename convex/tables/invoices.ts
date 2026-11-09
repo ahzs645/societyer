@@ -111,6 +111,7 @@ export const invoiceTimelineEventValidator = v.object({
   amountCents: v.optional(v.number()),
   externalDelivery: v.optional(invoiceExternalDeliveryValidator),
   clientResponse: v.optional(invoiceClientResponseValidator),
+  previousVersionId: v.optional(v.id("invoiceDocumentRevisions")),
 });
 
 export const invoiceReceivingMethodValidator = v.object({
@@ -141,7 +142,17 @@ export const invoicePriceEntryValidator = v.object({ catalogItemId: v.id("invoic
 export const repairStatusValidator = v.union(v.literal("received"), v.literal("diagnosing"), v.literal("awaiting_approval"), v.literal("in_progress"), v.literal("ready"), v.literal("completed"), v.literal("cancelled"));
 
 export const invoiceTables = {
+  invoiceDocumentRevisions: defineTable({
+    societyId: v.id("societies"), invoiceId: v.id("invoices"),
+    archivedAtISO: v.string(), reason: v.string(), actorName: v.optional(v.string()),
+    actorUserId: v.optional(v.id("users")), issuerLogoStorageId: v.optional(v.id("_storage")),
+    // Immutable historical source values, used only to render the previous document.
+    // Live invoice/society/logo references above are separately typed for transfers.
+    snapshotJson: v.string(),
+  }).index("by_society", ["societyId"]).index("by_invoice", ["invoiceId"])
+    .index("by_issuer_logo", ["issuerLogoStorageId"]),
   invoices: defineTable({
+    reopenedAtISO: v.optional(v.string()),
     issuedAtISO: v.optional(v.string()),
     issuerSnapshot: v.optional(invoiceIssuerSnapshotValidator),
     externalDelivery: v.optional(invoiceExternalDeliveryValidator),

@@ -12,7 +12,7 @@ export type InvoicePaymentView = InvoicePayment & {
   transaction?: { _id: string; date: string; description?: string; amountCents: number };
 };
 
-export type InvoiceTimelineEvent = { atISO: string; kind: string; label: string; actorName?: string; amountCents?: number; externalDelivery?: InvoiceRow["externalDelivery"]; clientResponse?: InvoiceRow["clientResponse"] };
+export type InvoiceTimelineEvent = { atISO: string; kind: string; label: string; actorName?: string; amountCents?: number; externalDelivery?: InvoiceRow["externalDelivery"]; clientResponse?: InvoiceRow["clientResponse"]; previousVersionId?: string };
 
 export type { InvoiceIssuerSnapshot, InvoiceDeliveryMethod } from "../../../shared/invoicing";
 export type InvoiceClientResponse = InvoiceClientResponseKind;
@@ -25,6 +25,7 @@ export type InvoiceRow = {
   status: InvoiceStatus;
   lifecycle: InvoiceLifecycle;
   issuedAtISO?: string;
+  reopenedAtISO?: string;
   issuerSnapshot?: InvoiceIssuerSnapshot;
   issuerLogoUrl?: string | null;
   externalDelivery?: InvoiceExternalDelivery;

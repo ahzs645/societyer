@@ -51,6 +51,9 @@ export async function storageHasRetainedDocumentReference(ctx: PortableQueryCtx,
     .withIndex("by_issuer_logo", q => q.eq("issuerSnapshot.logoStorageId", storageId))
     .first();
   if (invoice) return true;
+  const previousInvoice = await ctx.db.query("invoiceDocumentRevisions")
+    .withIndex("by_issuer_logo", q => q.eq("issuerLogoStorageId", storageId)).first();
+  if (previousInvoice) return true;
   return (await retainedReceiptEvidenceDocumentIds(ctx, societyId, storageId)).length > 0;
 }
 

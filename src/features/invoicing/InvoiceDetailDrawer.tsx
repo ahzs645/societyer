@@ -23,10 +23,12 @@ import { paymentReceiptDocument } from "./billingDocuments";
 import type { NeedsActionFlag } from "../../../shared/invoiceLedger";
 import type { InvoiceRow, InvoiceWorkspace } from "./types";
 import { InvoiceWorkflowPanel } from "./InvoiceWorkflowPanel";
+import { invoiceDraftReopenBlocker } from "../../../shared/invoiceDraftCorrection";
 
 const TIMELINE_ICONS: Record<string, typeof CircleDashed> = {
   created: FilePlus2,
   issued: FileCheck2,
+  returned_to_draft: Pencil,
   client_response: MessageSquare,
   issued_from_series: Repeat,
   duplicated: Copy,
@@ -60,6 +62,7 @@ type Props = {
 export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, canExport, onClose, onEdit, onOpenSeries, onEditMapping, canPost }: Props) {
   const client = useConvex();
   const issue = useMutation(api.invoices.issue);
+  const returnToDraft = useMutation(api.invoices.returnToDraft);
   const voidInvoices = useMutation(api.invoices.voidInvoices);
   const restoreVoided = useMutation(api.invoices.restoreVoided);
   const duplicate = useMutation(api.invoices.duplicate);
@@ -137,18 +140,43 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
     }
   };
 
-  const downloadPdf = async () => {
+  const downloadPdf = async (previousVersionId?: string) => {
     if (documentInFlight.current || !canExport) return;
     documentInFlight.current = true;
     setDocumentBusy(true);
     try {
-      const document = await client.query(api.invoices.document, { id: invoice._id });
+      const document = previousVersionId
+        ? await client.query(api.invoices.previousDocument, { id: previousVersionId })
+        : await client.query(api.invoices.document, { id: invoice._id });
       if (!document) throw new Error("The invoice could not be loaded.");
       const { downloadInvoicePdf } = await import("./invoicePdf");
-      await downloadInvoicePdf(document, organization, workspace.settings.paymentInstructions);
-      toast.success("PDF downloaded");
+      await downloadInvoicePdf(document, organization, workspace.settings.paymentInstructions, previousVersionId ? "-previous-finalization" : "");
+      toast.success(previousVersionId ? "Previous version downloaded" : "PDF downloaded");
     } catch (failure) {
       toast.error("Could not download PDF", failure instanceof Error ? failure.message : undefined);
+    } finally {
+      documentInFlight.current = false;
+      setDocumentBusy(false);
+    }
+  };
+
+  const doReturnToDraft = async () => {
+    if (documentInFlight.current || !canWrite) return;
+    documentInFlight.current = true;
+    setDocumentBusy(true);
+    try {
+      const reason = await prompt({
+        title: `Return ${invoice.number} to draft?`,
+        message: "Use this only if the invoice has never been sent or provided to the client, and has not been reported in a tax return. Its number and previous version stay in the history. Seller and tax details will be refreshed when you finalize again; receiving instructions reset to your current invoice defaults. Enter the reason for the correction.",
+        placeholder: "Reason for the correction (required)", confirmLabel: "Return to draft",
+      });
+      if (reason == null) return;
+      if (!reason.trim()) throw new Error("Enter a reason for the correction.");
+      const id = await returnToDraft({ id: invoice._id, reason: reason.trim() });
+      toast.success(`${invoice.number} returned to draft`, "The prior finalization is retained in its timeline.");
+      onEdit(id);
+    } catch (failure) {
+      toast.error("Could not return invoice to draft", failure instanceof Error ? failure.message : undefined);
     } finally {
       documentInFlight.current = false;
       setDocumentBusy(false);
@@ -194,13 +222,14 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
     { id: "download-pdf", label: invoice.lifecycle === "draft" ? "Download draft PDF" : "Download PDF", icon: <Download size={14} />, disabled: documentBusy || !canExport, onSelect: () => void downloadPdf() },
     { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: documentBusy || !canExport, onSelect: () => window.print() },
     ...(invoice.lifecycle === "draft" ? [{ id: "finalize", label: "Finalize without downloading", icon: <FileCheck2 size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void finalize(false) }] : []),
+    ...(!invoiceDraftReopenBlocker(invoice) ? [{ id: "return-to-draft", label: "Return to draft", icon: <Pencil size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void doReturnToDraft() }] : []),
     { id: "duplicate", label: "Duplicate", icon: <Copy size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void duplicate({ id: invoice._id as any }).then((id: string) => { toast.success(`Duplicated ${invoice.number}`); onEdit(id); }).catch((err: any) => toast.error("Could not duplicate", err?.message)) },
     ...(invoice.seriesId ? [{ id: "series", label: `Open series${invoice.seriesName ? ` · ${invoice.seriesName}` : ""}`, icon: <Repeat size={14} />, onSelect: () => onOpenSeries(invoice.seriesId!) }] : []),
     ...(invoice.payments.length ? [{ id: "revert", label: "Revert to unpaid", icon: <RotateCcw size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void doRevert() }] : []),
     ...(invoice.lifecycle === "void"
       ? [{ id: "restore", label: "Restore from void", icon: <RotateCcw size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void run(() => restoreVoided({ id: invoice._id as any }), `${invoice.number} restored`) }]
       : [{ id: "void", label: "Void invoice", icon: <Ban size={14} />, destructive: true, disabled: documentBusy || !canWrite, onSelect: () => void doVoid() }]),
-    ...(invoice.lifecycle === "draft" && !invoice.issuerSnapshot && !invoice.issuerTaxRegistrationsSnapshot && !invoice.payments.length ? [{ id: "delete", label: "Delete draft", icon: <Trash2 size={14} />, destructive: true, disabled: documentBusy || !canWrite, onSelect: () => void doDelete() }] : []),
+    ...(invoice.lifecycle === "draft" && !invoice.issuerSnapshot && !invoice.issuerTaxRegistrationsSnapshot && !invoice.reopenedAtISO && !invoice.payments.length ? [{ id: "delete", label: "Delete draft", icon: <Trash2 size={14} />, destructive: true, disabled: documentBusy || !canWrite, onSelect: () => void doDelete() }] : []),
   ];
 
   return (
@@ -390,6 +419,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
                 <span className="invoice-timeline__dot" aria-hidden="true"><Icon size={12} /></span>
                 <span className="invoice-timeline__body">
                   <span>{event.label}{event.amountCents != null ? <> · <Money cents={event.amountCents} currency={invoice.currency} /></> : null}</span>
+                  {event.previousVersionId && <button type="button" className="btn btn--ghost btn--sm" disabled={documentBusy || !canExport} onClick={() => void downloadPdf(event.previousVersionId)}>Download previous version</button>}
                   {(event.clientResponse?.note || event.externalDelivery?.note) && <span className="invoice-workflow__note">{event.clientResponse?.note || event.externalDelivery?.note}</span>}
                   {(event.clientResponse?.reference || event.externalDelivery?.reference) && <span className="muted">Reference: {event.clientResponse?.reference || event.externalDelivery?.reference}</span>}
                   {event.externalDelivery?.recipient && <span className="muted">Sent to: {event.externalDelivery.recipient}</span>}
