@@ -42,7 +42,7 @@ export async function signInLive(page: Page, role = "Owner", throughForm = false
     await page.goto("/app", { waitUntil: "domcontentloaded" });
   }
   await expect(page.locator(".app-shell")).toBeVisible();
-  await expect(page.getByText("Checking workspace access…", { exact: true })).toHaveCount(0);
+  await expect(page.locator("[data-route-access-pending]")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("societyer.currentSocietyId"))).toBe(fixture.societyId);
   // A successful shell must belong to the real server runtime; /demo opts into
   // a synthetic actor and would invalidate live authorization evidence.

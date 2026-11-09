@@ -4,6 +4,7 @@ import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess"
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageErrorBoundary } from "./PageErrorBoundary";
+import { PageSkeleton } from "./PageSkeleton";
 
 /** A denied role gets an explicit state before mounting data-dependent pages.
  * Server authorization remains the authority for every request. */
@@ -16,7 +17,9 @@ export function RouteAccessGate({ children }: { children: ReactNode }) {
   // it resets when the route or the selected organization changes.
   const page = <PageErrorBoundary resetKey={`${pathname}|${society?._id ?? ""}`}>{children}</PageErrorBoundary>;
   if (!permission || society === null) return page;
-  if (society === undefined || !loaded) return <div className="page" role="status" aria-busy="true">Checking workspace access…</div>;
+  // Usually settled before the shell mounts (AuthGate waits for it); this
+  // covers a workspace switch. Draw the page outline, not a status line.
+  if (society === undefined || !loaded) return <div className="page" data-route-access-pending=""><PageSkeleton label="Checking workspace access…" /></div>;
   if (!can(permission)) return <div className="page">
     <section className="card"><div className="card__body">
       <h1 style={{ marginTop: 0 }}>Access restricted</h1>

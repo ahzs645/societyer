@@ -14,7 +14,7 @@ for (const route of INTERFACE_ROUTES) {
     } else if (route.kind === "app") {
       await expect(page.locator(".app-shell")).toBeVisible();
       await expect(page.locator(".workbench__content")).toBeVisible();
-      await expect(page.getByText("Checking workspace access…", { exact: true })).toHaveCount(0);
+      await expect(page.locator("[data-route-access-pending]")).toHaveCount(0);
       await expect.poll(() => page.locator(".workbench__content").innerText()).not.toMatch(/^\s*(Loading[^\n]*\s*)?$/i);
     } else {
       await expect.poll(() => page.locator("body").innerText()).not.toMatch(/^\s*(Loading[^\n]*\s*)?$/i);

@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
 import { AuthPending, AuthShell, BusyLabel } from "../auth/AuthShell";
+import { AppBootScreen } from "../components/AppBootScreen";
 import { CheckEmailBody, checkEmailShell, type SentState } from "../auth/CheckEmail";
 import { authEmailDomainHint, useAuthCapabilities, useGatewayAuthProviders } from "../auth/authCapabilities";
 import { AuthFailure, authFailureFromResponse, toAuthFailure } from "../auth/authErrors";
@@ -67,7 +68,7 @@ export function LoginPage() {
     );
   }
   if (auth.isPending) {
-    return <AuthShell title="Signing you in"><AuthPending>Checking your secure workspace access…</AuthPending></AuthShell>;
+    return <AppBootScreen label="Checking your secure workspace access…" />;
   }
   if (auth.session && redirect && auth.membershipState === "ready") {
     return <Navigate to={safeRedirect} replace />;
@@ -83,11 +84,7 @@ export function LoginPage() {
 
   if (auth.mode === "clerk") {
     if (auth.sessionStatus === "loading") {
-      return (
-        <AuthShell title="Sign in">
-          <AuthPending>Checking your session…</AuthPending>
-        </AuthShell>
-      );
+      return <AppBootScreen label="Checking your session…" />;
     }
     if (auth.session) {
       return <Navigate to={safeRedirect} replace />;
