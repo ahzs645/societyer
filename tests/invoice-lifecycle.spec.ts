@@ -167,7 +167,7 @@ test("external finalization replaces unsaved edits with the saved invoice in the
   await expect(item).toBeDisabled();
   await expect(price).toBeDisabled();
   await expect(price).toHaveValue("80.00");
-  await expect(form.getByLabel("Reference", { exact: true })).toBeDisabled();
+  await expect(form.getByLabel("PO or reference", { exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Finalize & download", exact: true })).toHaveCount(0);
 

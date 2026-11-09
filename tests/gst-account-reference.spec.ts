@@ -39,9 +39,10 @@ test("organization GST account can be saved once and referenced while filing", a
   await drawer.getByRole("button", { name: "Save", exact: true }).click();
   await expect(drawer).not.toBeVisible();
   if (testInfo.project.name === "phone") {
-    // The phone card opens the same filing-attestation modal as the desktop action.
+    // Opening the card shows the record inspector; Mark filed is in its actions menu.
     const card = page.getByRole("listitem").filter({ hasText: filingLabel });
-    await card.locator("button.record-phone-card").click();
+    await card.getByRole("button", { name: /^Row actions for / }).click();
+    await page.getByRole("menuitem", { name: "Mark filed", exact: true }).click();
   } else {
     const row = page.getByRole("row").filter({ hasText: filingLabel });
     await expect(row).toBeVisible();
