@@ -935,6 +935,24 @@
     "idArguments": []
   },
   {
+    "key": "convex:accountLinks:operatorInspect",
+    "surface": "convex",
+    "name": "accountLinks:operatorInspect",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:operatorUnlink",
+    "surface": "convex",
+    "name": "accountLinks:operatorUnlink",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:accountLinks:overview",
     "surface": "convex",
     "name": "accountLinks:overview",
@@ -27294,6 +27312,28 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:users:operatorRetireMembership",
+    "surface": "convex",
+    "name": "users:operatorRetireMembership",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/users.ts",
+    "idArguments": [
+      {
+        "path": "retireUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "keepUserId",
+        "table": "users",
         "array": false,
         "optional": false
       }

@@ -57,6 +57,7 @@ Related deployment guides: [DDC North Entra rollout](../ddcnorth-entra-rollout.m
 | --- | --- |
 | `npm run test:workspace-sign-in-policy` | Session evidence, policy validation, Microsoft and email-domain rules, linked password versus Microsoft sessions |
 | `npm run test:account-links` | Link protocol: freshness, single-use codes, conflicts, merge, unlink |
+| `npm run test:operator-identity-tools` | Operator inspect/unlink and retiring a duplicate membership |
 | `npm run test:workspace-domains` | Domain mapping, `resolveOrigin`, audit, canonical links, invoice template install |
 | `npm run test:session-handoff` | Handoff endpoints on the real Better Auth engine |
 | `npm run test:workspace-storage-policy` | Storage policy on every native path, SharePoint versus native, ceiling |

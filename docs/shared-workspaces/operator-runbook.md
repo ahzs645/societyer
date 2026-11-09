@@ -663,7 +663,23 @@ person's identity out of band before using it.
 
 ### See what happened
 
-There is no public query for link history. Read it directly:
+To see who one login is linked to, with every linked login's memberships and
+the recent link events, inspect it by issuer and subject. The issuer is the
+memberships' `authIssuer` (the deployment's `.convex.site` URL); the subject is
+the membership's `authSubject` (see
+[Find workspace and membership IDs](#find-workspace-and-membership-ids)):
+
+```sh
+ISSUER="https://$TARGET.convex.site"   # must equal the rows' authIssuer
+npx convex run --inline-query 'return [...new Set((await ctx.db.query("users").collect()).map((u) => u.authIssuer))]' --deployment "$TARGET"
+npx convex run accountLinks:operatorInspect '{"issuer":"'"$ISSUER"'","subject":"<Better Auth user ID>"}' --deployment "$TARGET"
+```
+
+`state` is `none`, `linked` or `blocked` (several Active links, or a Disabled
+person; `people` shows which). Each entry in `identities` lists its
+`memberships` with `userId`, workspace, role and status.
+
+The whole history, unfiltered:
 
 ```sh
 npx convex run --inline-query 'return await ctx.db.query("accountLinkEvents").order("desc").take(20)' --deployment "$TARGET"
@@ -672,7 +688,8 @@ npx convex run --inline-query 'return (await ctx.db.query("personIdentityLinks")
 
 Events have `action` (`linked`, `unlinked`, `refused`), the acting identity, the
 identities involved and, for refusals, `reason` (`conflict` or
-`identity-disabled`).
+`identity-disabled`). Operator unlinks have actor `operator` /
+`deployment-operator` and your reason.
 
 ### A link was refused with a conflict
 
@@ -681,11 +698,35 @@ The person sees "Can't link these logins. Both logins are members of
 membership in the same workspace. Disabled memberships count. The person's
 role is never chosen for them.
 
-To resolve it, a workspace Owner removes one of the two memberships on the
-**Users** page (row menu → **Remove access**). Disabling isn't enough. Then the person
-starts the link again. Keep the membership with the history that matters.
-Records written by the removed membership keep its old ID, which then points at
-a deleted user. There is no tool that merges two memberships.
+To resolve it, retire one membership in favour of the other. Agree with a
+workspace Owner which one to keep (usually the one with the history that
+matters, and the right role), confirm out of band that both logins are the same
+person, then:
+
+```sh
+# Both memberships, from the inspect output of either login (identities[].memberships[].userId)
+npx convex run accountLinks:operatorInspect '{"issuer":"'"$ISSUER"'","subject":"<one login>"}' --deployment "$TARGET"
+npx convex run users:operatorRetireMembership '{"retireUserId":"<users ID to retire>","keepUserId":"<users ID to keep>","reason":"<ticket / who asked>"}' --deployment "$TARGET"
+```
+
+It refuses rows in different workspaces, a kept row that isn't Active and
+bound to a login, a row already merged, and retiring the last Active Owner
+(unless the kept row is an Active Owner). The retired row stays, Disabled and
+unbound, with `mergedIntoUserId`, so records it wrote still resolve to it. No
+login can reach, re-bind, reactivate or invite it again. The kept row's role is
+never changed. If the retired row had the higher role, the result has
+`roleNotCarried` and the workspace's activity row says so; a workspace Owner
+then decides whether to change the kept row's role on the **Users** page.
+References to the retired ID are not moved to the kept row. Keep the result
+outside the repository: `retiredIdentity` is the binding that was removed.
+
+Then the person starts the link again. It now passes the conflict check, and
+both logins resolve to the kept membership.
+
+Alternative without the operator: a workspace Owner removes one membership on
+the **Users** page (row menu → **Remove access**; disabling isn't enough).
+Records written by a removed membership keep its old ID, which then points at a
+deleted user, so prefer retiring.
 
 ### The person wants to unlink
 
@@ -693,11 +734,18 @@ They do it themselves: **Sign-in methods → Linked logins → Unlink**, from ei
 login. Each login keeps working on its own, and roles don't change. Unlinking
 the last other login removes the person account.
 
-If the person can no longer sign in to either login, there is no operator
-unlink function. In the dashboard, set the person's `personAccounts` row to
-`Disabled`. Links are then ignored at once and no memberships change. That
-person can't start a new link until the remaining `personIdentityLinks` rows are
-also set to `Unlinked`. Record what you changed and why.
+If the person can no longer sign in to a login (or a login was linked by
+mistake), unlink it as the operator. Confirm the request out of band first:
+
+```sh
+npx convex run accountLinks:operatorUnlink '{"issuer":"'"$ISSUER"'","subject":"<Better Auth user ID to unlink>","reason":"<ticket / who asked>"}' --deployment "$TARGET"
+```
+
+Same effect as the person's own unlink: that login stops reaching the other
+logins' memberships at once, roles don't change, and a person left with one
+login is removed (`personRemoved: true`). It also clears a `blocked` login (a
+Disabled person, or duplicate links), so the person can link again. Check with
+`operatorInspect` afterwards; `state` should be `none`.
 
 ## 9. Offboarding
 
@@ -741,4 +789,5 @@ holds through their own login.
 | Storage row | `set` to `allowed` / `deployment-default` |
 | `SOCIETYER_DISABLE_NATIVE_FILE_STORAGE` removed | Set it to `1` |
 | Invoice template | Owner picks another default |
-| A link | The person unlinks. Operator: disable the person account. |
+| A link | The person unlinks. Operator: `accountLinks:operatorUnlink`. |
+| A retired membership | No undo function. In the dashboard, restore the recorded binding and status and clear `mergedIntoUserId` / `mergedAtISO`, only after unlinking the logins (otherwise the workspace becomes ambiguous). |

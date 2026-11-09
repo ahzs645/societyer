@@ -9,6 +9,7 @@
  * See docs/shared-workspaces/architecture.md.
  *
  * Hosted only: local runtimes have no deployment-signed session to prove.
+ * `operatorInspect`/`operatorUnlink` are internal (deployment operator) only.
  */
 import type { PortableDbReader, PortableDoc, PortableMutationCtx, PortablePrincipal, PortableQueryCtx } from "../portable/ctx";
 import {
@@ -100,6 +101,7 @@ async function sideOf(db: PortableDbReader, key: IdentityKey): Promise<Side> {
 async function workspacesOf(db: PortableDbReader, keys: readonly IdentityKey[]) {
   const rows = await membershipsForIdentities<MembershipRow>(db, keys);
   return Promise.all(rows.map(async (row) => ({
+    userId: row._id,
     societyId: row.societyId,
     name: String((await db.get(row.societyId, "societies"))?.name ?? "Unknown workspace"),
     role: String(row.role ?? ""),
@@ -267,7 +269,7 @@ export async function overviewPortable(ctx: PortableQueryCtx): Promise<{ identit
   const own = links.find((link) => sameIdentity(link, me));
   const entries: OverviewIdentity[] = [];
   const describe = async (key: IdentityKey, current: boolean, email?: string, name?: string, linkedAtISO?: string) => {
-    const workspaces = await workspacesOf(ctx.db, [key]);
+    const workspaces = (await workspacesOf(ctx.db, [key])).map(({ societyId, name: workspaceName, role, status }) => ({ societyId, name: workspaceName, role, status }));
     entries.push({ issuer: key.issuer, subject: key.subject, current, workspaces,
       ...(email ? { email } : {}), ...(name ? { name } : {}), ...(linkedAtISO ? { linkedAtISO } : {}) });
   };
@@ -278,14 +280,9 @@ export async function overviewPortable(ctx: PortableQueryCtx): Promise<{ identit
   return { identities: entries };
 }
 
-export async function unlinkPortable(ctx: PortableMutationCtx, args: IdentityKey): Promise<{ status: "unlinked" | "not-linked" | "unauthenticated" }> {
-  const me = signedInIdentity(ctx.principal);
-  if (!me) return { status: "unauthenticated" };
-  const state = await personLinkState(ctx.db, me);
-  if (state.kind !== "linked") return { status: "not-linked" };
-  const links = await activePersonLinks(ctx.db, state.person._id);
-  const target = links.find((link) => sameIdentity(link, args));
-  if (!target) return { status: "not-linked" };
+/** Removes one Active link from its person; a person left with one link is removed. Returns whether it was. */
+async function detachLink(ctx: PortableMutationCtx, target: PersonLinkRow, actor: IdentityKey, reason?: string): Promise<boolean> {
+  const links = await activePersonLinks(ctx.db, target.personAccountId);
   const nowISO = new Date().toISOString();
   await ctx.db.patch(target._id, { status: "Unlinked", unlinkedAtISO: nowISO });
   const remaining = links.filter((link) => link._id !== target._id);
@@ -293,13 +290,114 @@ export async function unlinkPortable(ctx: PortableMutationCtx, args: IdentityKey
   const removePerson = remaining.length < 2;
   if (removePerson) {
     for (const link of remaining) await ctx.db.patch(link._id, { status: "Unlinked", unlinkedAtISO: nowISO });
-    await ctx.db.patch(state.person._id, { status: "Disabled", updatedAtISO: nowISO });
+    await ctx.db.patch(target.personAccountId, { status: "Disabled", updatedAtISO: nowISO });
   } else {
-    await ctx.db.patch(state.person._id, { updatedAtISO: nowISO });
+    await ctx.db.patch(target.personAccountId, { updatedAtISO: nowISO });
   }
+  const why = [removePerson ? "person-removed" : "", reason ?? ""].filter(Boolean).join("; ");
   await recordEvent(ctx, {
-    action: "unlinked", personAccountId: state.person._id, actor: me,
-    identities: removePerson ? [target, ...remaining] : [target], ...(removePerson ? { reason: "person-removed" } : {}),
+    action: "unlinked", personAccountId: target.personAccountId, actor,
+    identities: removePerson ? [target, ...remaining] : [target], ...(why ? { reason: why } : {}),
   });
+  return removePerson;
+}
+
+export async function unlinkPortable(ctx: PortableMutationCtx, args: IdentityKey): Promise<{ status: "unlinked" | "not-linked" | "unauthenticated" }> {
+  const me = signedInIdentity(ctx.principal);
+  if (!me) return { status: "unauthenticated" };
+  const state = await personLinkState(ctx.db, me);
+  if (state.kind !== "linked") return { status: "not-linked" };
+  const target = (await activePersonLinks(ctx.db, state.person._id)).find((link) => sameIdentity(link, args));
+  if (!target) return { status: "not-linked" };
+  await detachLink(ctx, target, me);
   return { status: "unlinked" };
+}
+
+// ---------- Deployment-operator tools (internal functions only; no session involved) ----------
+
+/** Recorded as the actor of operator link changes; never a real issuer. */
+export const OPERATOR_ACTOR: IdentityKey = { issuer: "operator", subject: "deployment-operator" };
+
+export function operatorReason(reason: unknown): string {
+  const trimmed = typeof reason === "string" ? reason.trim() : "";
+  if (!trimmed || trimmed.length > 500) throw new Error("Give a reason of at most 500 characters for the audit log.");
+  return trimmed;
+}
+
+async function identityLinks(db: PortableDbReader, key: IdentityKey): Promise<PersonLinkRow[]> {
+  return db.query<PersonLinkRow>("personIdentityLinks")
+    .withIndex("by_issuer_subject", (q) => q.eq("issuer", key.issuer).eq("subject", key.subject)).collect();
+}
+
+export type OperatorUnlinkResult =
+  | { status: "not-linked" }
+  | { status: "unlinked"; people: Array<{ personAccountId: string; personRemoved: boolean }> };
+
+/**
+ * Removes this identity from every person it is actively linked to, including a
+ * Disabled person or a duplicate link (states the user-facing unlink can't reach).
+ */
+export async function operatorUnlinkPortable(ctx: PortableMutationCtx, args: IdentityKey & { reason: string }): Promise<OperatorUnlinkResult> {
+  const reason = operatorReason(args.reason);
+  const people: Array<{ personAccountId: string; personRemoved: boolean }> = [];
+  for (const candidate of await identityLinks(ctx.db, args)) {
+    // Re-read: removing an earlier person may already have unlinked this row.
+    const target = await ctx.db.get<PersonLinkRow>(candidate._id, "personIdentityLinks");
+    if (target?.status !== "Active") continue;
+    people.push({ personAccountId: target.personAccountId, personRemoved: await detachLink(ctx, target, OPERATOR_ACTOR, reason) });
+  }
+  return people.length ? { status: "unlinked", people } : { status: "not-linked" };
+}
+
+export type InspectedMembership = { userId: string; societyId: string; workspaceName: string; role: string; status: string };
+export type InspectedIdentity = {
+  issuer: string; subject: string; email?: string; name?: string; linkedAtISO?: string;
+  externalIdentity: "active" | "disabled" | "missing"; memberships: InspectedMembership[];
+};
+type LinkEventRow = PortableDoc & {
+  action: string; personAccountId?: string; actorIssuer: string; actorSubject: string; identities: IdentityKey[]; reason?: string; createdAtISO: string;
+};
+
+/** "Who is linked to what" for one identity: its person, every identity in it, their memberships and recent link events. */
+export async function operatorInspectPortable(ctx: PortableQueryCtx, key: IdentityKey) {
+  const db = ctx.db;
+  const links = await identityLinks(db, key);
+  const active = links.filter((link) => link.status === "Active");
+  const state = await personLinkState(db, key);
+  // Blocked identities show every person they are actively linked to, so the operator sees why.
+  const personIds = [...new Set(active.map((link) => link.personAccountId))];
+  const describe = async (identity: IdentityKey, link?: PersonLinkRow): Promise<InspectedIdentity> => ({
+    issuer: identity.issuer, subject: identity.subject,
+    ...(link?.email ? { email: link.email } : {}), ...(link?.displayName ? { name: link.displayName } : {}),
+    ...(link ? { linkedAtISO: link.linkedAtISO } : {}),
+    externalIdentity: await externalIdentityStatus(db, identity),
+    memberships: (await workspacesOf(db, [identity])).map(({ userId, societyId, name, role, status }) => ({ userId, societyId, workspaceName: name, role, status })),
+  });
+  const identities: InspectedIdentity[] = [await describe(key, active.find((link) => sameIdentity(link, key)))];
+  for (const personId of personIds) {
+    for (const link of await activePersonLinks(db, personId)) {
+      if (!identities.some((known) => sameIdentity(known, link))) identities.push(await describe(link, link));
+    }
+  }
+  // Events of any person this identity was ever in, or naming an identity shown (refusals have no person).
+  const everPeople = new Set(links.map((link) => link.personAccountId));
+  const events = (await db.query<LinkEventRow>("accountLinkEvents").order("desc").take(500))
+    .filter((event) => (event.personAccountId && everPeople.has(event.personAccountId))
+      || event.identities.some((identity) => identities.some((known) => sameIdentity(known, identity))))
+    .slice(0, 50)
+    .map(({ action, personAccountId, actorIssuer, actorSubject, identities: involved, reason, createdAtISO }) => ({
+      action, ...(personAccountId ? { personAccountId } : {}), actorIssuer, actorSubject,
+      identities: involved.map(({ issuer, subject }) => ({ issuer, subject })), ...(reason ? { reason } : {}), createdAtISO,
+    }));
+  const people = await Promise.all(personIds.map(async (personAccountId) => ({
+    personAccountId, status: String((await db.get(personAccountId, "personAccounts"))?.status ?? "missing"),
+  })));
+  return {
+    state: state.kind,
+    person: state.kind === "linked" ? { personAccountId: state.person._id, status: state.person.status } : null,
+    // More than one entry, or a Disabled one, explains a "blocked" state.
+    people,
+    identities,
+    events,
+  };
 }

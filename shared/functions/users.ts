@@ -9,7 +9,7 @@
 
 import { assertValid, validateWorkspaceUserInput } from "../recordValidation";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
+import { canActAs, getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { findInvitation, invitationAvailability, invitationIssuerAuthorized, isShareLinkInvitation, LINK_INVITATION_ROLES, type InvitationRow } from "./invitationTokens";
 import { matchesAuthBinding, normalizeAuthIssuer, matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive, linkedIdentityKeys, membershipsForIdentities } from "./identity";
@@ -39,7 +39,12 @@ type UserRow = PortableDoc & {
   authSubject?: string;
   authIssuer?: string;
   externalIdentityId?: string;
+  role?: string;
+  createdAtISO?: string;
+  mergedIntoUserId?: string;
 };
+
+const MERGED_MEMBERSHIP = "This membership was merged into another one and can't be reactivated or bound.";
 
 export const MEMBERSHIP_STATUSES = ["Active", "Invited", "Disabled", "Suspended", "Pending"] as const;
 
@@ -93,7 +98,10 @@ export async function upsertUserPortable(ctx: PortableMutationCtx, args: {
   assertRoleAndStatus(args.role, args.status);
   const target = args.id ? await getOwned(ctx, "users", args.id, args.societyId) : undefined;
   const actor = await requireMembershipManager(ctx, args.societyId, target?.role, args.role, args.actingUserId);
-  const roster = await ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  if (target?.mergedIntoUserId && args.status !== "Disabled") throw new Error(MERGED_MEMBERSHIP);
+  // A merged duplicate keeps its email for history; it doesn't hold the address.
+  const roster = (await ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect())
+    .filter((row) => !row.mergedIntoUserId);
   assertValid(validateWorkspaceUserInput(args, roster as any, target?._id));
   args = { ...args, email: args.email.trim(), displayName: args.displayName.trim() };
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
@@ -142,6 +150,62 @@ export async function securityDisableUserPortable(ctx: PortableMutationCtx, { id
   await recordMembershipChange(ctx, target.societyId, actor._id, id, "security-disabled", `Security incident: ${reason.trim().slice(0, 1000)}`);
 }
 
+export type RetireMembershipResult = {
+  status: "retired"; societyId: string; retiredUserId: string; keptUserId: string; keptRole: string; retiredRole: string;
+  retiredIdentity: { issuer: string; subject: string } | null;
+  // The retired row's role outranked the kept one. Nothing was raised; a human decides.
+  roleNotCarried?: string;
+};
+
+/**
+ * Deployment-operator merge of two memberships in one workspace, for the link
+ * conflict ("both logins are members of …"). The retired row stays, so ids in
+ * history still resolve, but becomes Disabled and unbound, so no identity can
+ * reach or count it. The kept row's role is never changed.
+ */
+export async function operatorRetireMembershipPortable(
+  ctx: PortableMutationCtx,
+  args: { retireUserId: string; keepUserId: string; reason: string },
+): Promise<RetireMembershipResult> {
+  const reason = typeof args.reason === "string" ? args.reason.trim() : "";
+  if (!reason || reason.length > 500) throw new Error("Give a reason of at most 500 characters for the audit log.");
+  if (args.retireUserId === args.keepUserId) throw new Error("Choose two different memberships.");
+  const [retire, keep] = await Promise.all([
+    ctx.db.get<UserRow>(args.retireUserId, "users"), ctx.db.get<UserRow>(args.keepUserId, "users"),
+  ]);
+  if (!retire || !keep) throw new Error("users not found.");
+  if (retire.societyId !== keep.societyId) throw new Error("Both memberships must be in the same workspace.");
+  if (retire.mergedIntoUserId) throw new Error("That membership was already merged.");
+  if (keep.mergedIntoUserId || !isActiveMembership(keep)) throw new Error("The membership to keep must be Active.");
+  if (!keep.authIssuer || !keep.authSubject) throw new Error("The membership to keep must be bound to a login.");
+  await assertExternalIdentityActive(ctx.db, keep);
+  // Same rule as removing access: never leave the workspace without an Active Owner.
+  await assertActiveOwnerRemains(ctx, retire);
+  const retiredRole = String(retire.role ?? "");
+  const keptRole = String(keep.role ?? "");
+  const roleNotCarried = canActAs(keptRole as Role, retiredRole as Role) ? undefined : retiredRole;
+  const now = new Date().toISOString();
+  await ctx.db.patch(retire._id, {
+    status: "Disabled", mergedIntoUserId: keep._id, mergedAtISO: now,
+    authSubject: undefined, authIssuer: undefined, authProvider: undefined, externalIdentityId: undefined,
+  });
+  const retiredName = userDisplayName(retire);
+  const keptName = userDisplayName(keep);
+  await ctx.db.insert("activity", {
+    societyId: retire.societyId, actor: "Deployment operator", entityType: "user", subjectId: retire._id, entityId: retire._id,
+    action: "membership-merged",
+    summary: `Merged duplicate membership ${retiredName} (${retiredRole}, ${retire.status || "Active"}) into ${keptName} (${keptRole}).`
+      + (roleNotCarried ? ` The retired membership was ${roleNotCarried}; ${keptName} stays ${keptRole} until an Owner decides.` : "")
+      + ` Reason: ${reason}`,
+    createdAtISO: now,
+  });
+  return {
+    status: "retired", societyId: retire.societyId, retiredUserId: retire._id, keptUserId: keep._id, keptRole, retiredRole,
+    retiredIdentity: retire.authIssuer && retire.authSubject ? { issuer: retire.authIssuer, subject: retire.authSubject } : null,
+    ...(roleNotCarried ? { roleNotCarried } : {}),
+  };
+}
+
 /**
  * Name shown for a workspace user. Workspaces created locally without a
  * privacy-officer name stored an empty displayName, which left the sidebar
@@ -161,7 +225,12 @@ export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyI
     .query("users")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  return rows.map(withDisplayName);
+  const names = new Map(rows.map((row) => [String(row._id), userDisplayName(row)]));
+  // Retired duplicates (operatorRetireMembership) name the membership they were merged into.
+  return rows.map((row) => {
+    const named = withDisplayName(row);
+    return row.mergedIntoUserId ? { ...named, mergedIntoDisplayName: names.get(String(row.mergedIntoUserId)) ?? "another user" } : named;
+  });
 }
 
 export async function userGet(ctx: PortableQueryCtx, { id }: { id: string }) {
@@ -277,7 +346,7 @@ export async function ensureCurrentMembershipPortable(
   }
 
   const target = invitation.targetUserId ? await ctx.db.get<UserRow>(invitation.targetUserId, "users") : null;
-  if (invitation.targetUserId && (!target || target.societyId !== invitation.societyId || target.email?.trim().toLowerCase() !== invitation.email.trim().toLowerCase() || target.authSubject || target.authIssuer || target.externalIdentityId || target.role !== invitation.role)) return { status: "invalid-invitation" };
+  if (invitation.targetUserId && (!target || target.mergedIntoUserId || target.societyId !== invitation.societyId || target.email?.trim().toLowerCase() !== invitation.email.trim().toLowerCase() || target.authSubject || target.authIssuer || target.externalIdentityId || target.role !== invitation.role)) return { status: "invalid-invitation" };
   if (target && ["Disabled", "Suspended"].includes(String(target.status))) return { status: "membership-disabled" };
   const externalIdentityId = await ensureExternalIdentityPortable(ctx, principal.issuer, principal.subject);
   const membership = {
@@ -325,6 +394,7 @@ export async function bootstrapUserIdentityPortable(
 
   const target = await ctx.db.get<UserRow>(args.userId, "users");
   if (!target) throw new Error("users not found.");
+  if (target.mergedIntoUserId) throw new Error(MERGED_MEMBERSHIP);
   if (target.authSubject && target.authSubject !== authSubject) {
     throw new Error("User is already bound to a different auth subject.");
   }
@@ -392,6 +462,7 @@ export async function migrateUserToClerkPortable(
 ): Promise<string> {
   const target = await ctx.db.get<UserRow>(args.userId, "users");
   if (!target) throw new Error("users not found.");
+  if (target.mergedIntoUserId) throw new Error(MERGED_MEMBERSHIP);
   if (target.authSubject !== args.expectedAuthSubject || target.authProvider !== args.expectedAuthProvider || target.authIssuer !== args.expectedAuthIssuer) {
     throw new Error("User identity changed; expected binding does not match.");
   }
