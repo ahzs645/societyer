@@ -61,6 +61,8 @@ test("organization GST account can be saved once and referenced while filing", a
   await page.goto("/app/society#tax-identifiers");
   await expect(page.locator("#more-organization-details")).toHaveAttribute("open", "");
   await expect(page.locator("#tax-identifiers")).toBeInViewport();
+  // The content scroll must not shift the fixed-height outer layout and clip the page.
+  await expect(page.locator("#main-content")).toHaveJSProperty("scrollTop", 0);
   await page.screenshot({ path: testInfo.outputPath("organization-gst-account.png"), fullPage: true });
   expect(errors).toEqual([]);
 });

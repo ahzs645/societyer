@@ -6,7 +6,7 @@
  *
  * `revealAnchor(id)` asks any fold that owns the id to open, then waits for
  * the target to mount, opens its closed <details> ancestors and scrolls it
- * into view (pages scroll inside `.page`, which scrollIntoView handles).
+ * into view inside the app's `.page` scroll container.
  * `useAnchorReveal()` (src/hooks) runs it whenever the routed location's hash
  * names an element, and for same-page anchor clicks the location can't see.
  */
@@ -74,6 +74,22 @@ function scrollTargetFor(target: HTMLElement): HTMLElement {
   return fold && section === target ? fold : target;
 }
 
+function scrollAnchorIntoView(target: HTMLElement, behavior: ScrollBehavior): void {
+  const page = target.closest<HTMLElement>(".page");
+  if (!page) {
+    target.scrollIntoView({ block: "start", behavior });
+    return;
+  }
+  // Native scrollIntoView also scrolls overflow:hidden layout ancestors.
+  // On phones that can move .main while .page is scrolling, clipping the
+  // page below the fixed navigation. Only the page owns this content scroll.
+  const scrollMarginTop = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop) || 0;
+  const top = target === page ? 0 : page.scrollTop
+    + target.getBoundingClientRect().top - page.getBoundingClientRect().top
+    - page.clientTop - scrollMarginTop;
+  page.scrollTo({ top, behavior });
+}
+
 let pendingReveal: number | null = null;
 
 /** Open whatever hides `#id`, then scroll it into view once it is on the page. */
@@ -96,7 +112,7 @@ export function revealAnchor(id: string, { waitMs = CLICK_WAIT_MS }: { waitMs?: 
       pendingReveal = window.requestAnimationFrame(attempt);
       return;
     }
-    scrollTargetFor(target).scrollIntoView({ block: "start", behavior: reducedMotion ? "auto" : "smooth" });
+    scrollAnchorIntoView(scrollTargetFor(target), reducedMotion ? "auto" : "smooth");
   };
   // Two frames: one for the folds' state update, one for their paint.
   pendingReveal = window.requestAnimationFrame(() => {

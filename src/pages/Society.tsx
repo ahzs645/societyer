@@ -33,6 +33,7 @@ import { Toggle } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
+import { revealAnchor } from "../lib/anchorReveal";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
@@ -190,10 +191,7 @@ export function SocietyPage() {
     const details = moreDetailsRef.current;
     if (!details) return;
     details.open = true;
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    requestAnimationFrame(() => {
-      (document.getElementById(targetId) ?? details).scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
-    });
+    revealAnchor(targetId);
   };
   const formReady = Boolean(form);
   const { hash } = useLocation();
