@@ -191,8 +191,10 @@ functions, called with an admin key the same way `npx convex run` does
 The reviewed per-table policy is
 [`shared/workspaceTransfer/policy.ts`](../../shared/workspaceTransfer/policy.ts).
 Every schema table must be listed (`npm run test:workspace-transfer` fails
-otherwise), and `plan` refuses a table that isn't. At the release commit: 288
-`copy`, 4 `copy-disabled`, 42 `skip`.
+otherwise), and `plan` refuses a table that isn't. At the release commit: 289
+`copy`, 4 `copy-disabled`, 43 `skip`. Access-request settings are copied (they
+only take effect once the operator maps a domain); pending access requests are
+skipped because they name the source deployment's login identities.
 
 | Policy | Tables | Why |
 | --- | --- | --- |

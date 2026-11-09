@@ -143,6 +143,7 @@ export const TRANSFER_POLICY: Readonly<Record<string, TablePolicy>> = {
   documentSources: { mode: "copy", reason: "SharePoint source configuration of the workspace; external references depend on it." },
   externalDocumentReferences: { mode: "copy", reason: "SharePoint locators; they keep working while the destination uses the same SharePoint connection." },
   workspaceMfaPolicies: { mode: "copy", reason: "A workspace MFA requirement must not silently disappear." },
+  workspaceAccessRequestSettings: { mode: "copy", reason: "The organization's own choice; requests only open once the operator maps a domain for the workspace." },
 
   // Copied with schedules, senders and worker keys switched off.
   workflows: {
@@ -190,6 +191,7 @@ export const TRANSFER_POLICY: Readonly<Record<string, TablePolicy>> = {
   mcpOAuthTokens: skip(CREDENTIAL),
   partyPortals: skip(CREDENTIAL),
   invitations: skip("Pending invitation tokens; invite again (targeted invitations bind imported memberships)."),
+  workspaceAccessRequests: skip("Requests name the source deployment's login identities, which don't exist in the destination; people ask again."),
   webhookSubscriptions: skip("Holds an encrypted signing secret; recreate the subscription."),
   webhookDeliveries: skip("Delivery queue of a skipped subscription."),
   pluginInstallations: skip("Bound to API clients that don't move; reinstall."),
