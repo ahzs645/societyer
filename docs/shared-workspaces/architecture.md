@@ -229,25 +229,48 @@ a canonical origin switches in place.
 
 ## Cross-domain session handoff
 
+The destination tab starts every handoff, so a code can only be redeemed by the
+browser tab that asked for it. If the source minted codes on its own, anyone
+could mint one on their own session (with `curl` and a forged `Origin`) and send
+a victim `https://<target>/handoff#code=…`; the victim's browser would redeem it
+and work inside the attacker's session (login CSRF). Instead the target keeps a
+random verifier in its `sessionStorage` and sends only its SHA-256 to the
+source, as in OAuth PKCE. A planted code reaches a tab with no verifier, or the
+wrong one, and is refused.
+
+1. The switcher on the source goes to
+   `<target>/handoff#from=<source>&workspace=<societyId>&next=<path>`.
+2. The target strips the fragment, checks that `from` is another origin that
+   `workspaceDomains:resolveOrigin` maps (so no trusted domain becomes an open
+   redirect), stores `{ verifier, from, workspace, next }` for two minutes and
+   goes to `<source>/handoff#issue=1&target=<target>&challenge=<sha256 hex>`.
+3. The source strips the fragment, checks `target` the same way, asks a
+   signed-out person to sign in there first, else calls `create` and goes to
+   `<target>/handoff#code=<code>`.
+4. The target strips the fragment, takes and deletes its stored request (none,
+   or expired: refused without calling `redeem`), redeems with the verifier,
+   selects the stored workspace only if the person is a member, and continues
+   to the stored `next` if it is a same-origin `/app` path. Workspace and path
+   never come from the code link.
+
 Two Better Auth endpoints are served by a plugin in `shared/sessionHandoff.ts`
-and registered in `hostedAuth.ts`:
+and registered in `hostedAuth.ts`. Both answer `Cache-Control: no-store`.
 
 - `POST /api/auth/societyer-handoff/create`, with the session required and body
-  `{ targetOrigin }`. The target must be a trusted `SITE_URL` origin that differs
-  from the request origin. The endpoint stores a verification value
-  `societyer-handoff:<sha256(code)>` holding `{ sessionId, userId, targetOrigin }`
-  with a 60-second lifetime, and returns `{ code, expiresAt }`.
-- `POST /api/auth/societyer-handoff/redeem`, with body `{ code }`. The request
-  `Origin` must equal the stored `targetOrigin`. The value is deleted on first
-  use. The referenced session must still be valid and belong to `userId`. The
-  endpoint then sets that same session through the cross-domain cookie transport.
-  Redemption is throttled by IP.
-
-The source navigates to
-`<targetOrigin>/handoff#code=<code>&workspace=<societyId>&next=<same-origin path>`.
-The target page removes the fragment from history at once, redeems the code,
-selects the workspace only if the person is a member, and continues to `next` if
-it is a same-origin `/app` path.
+  `{ targetOrigin, challenge }`. The request `Origin` must be a trusted app
+  origin, and the target a trusted `SITE_URL` origin that differs from it. The
+  challenge must be 64 lowercase hex characters. The endpoint stores a
+  verification value `societyer-handoff:<sha256(code)>` holding
+  `{ sessionId, userId, targetOrigin, challenge }` with a 60-second lifetime,
+  and returns `{ code, expiresAt }`.
+- `POST /api/auth/societyer-handoff/redeem`, with body `{ code, verifier }` and
+  the cross-domain client's `Better-Auth-Cookie` header. The value is deleted
+  on first use, before any other check, so a misdirected or planted code is
+  burned. The request `Origin` must equal the stored `targetOrigin`, and
+  `sha256(verifier)` must equal the stored challenge (constant-time compare).
+  The referenced session must still be valid and belong to `userId`. The
+  endpoint then sets that same session through the cross-domain cookie
+  transport. Create and redeem are throttled by IP.
 
 Because the session itself is shared rather than copied, its expiry, Entra proof
 and second-factor state carry over unchanged. A handoff can never upgrade a

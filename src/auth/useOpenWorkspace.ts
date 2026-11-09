@@ -32,7 +32,7 @@ export function useOpenWorkspace() {
     }
     setOpening(societyId);
     try {
-      await startHandoff({ targetOrigin: route.targetOrigin, societyId, next });
+      startHandoff({ targetOrigin: route.targetOrigin, societyId, next });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That workspace couldn't be opened. Try again.");
       setOpening(null);

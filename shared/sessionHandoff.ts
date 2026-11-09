@@ -11,6 +11,12 @@
  * Nothing new is minted, so expiry, Microsoft proof and second-factor proof
  * carry over unchanged, and signing out anywhere ends it everywhere.
  *
+ * The target tab starts the exchange: it keeps a random verifier and sends
+ * only its SHA-256 (the challenge) to the source, which binds the code to it.
+ * Redeeming needs the verifier, so a code minted on someone else's session
+ * (from curl, with a forged Origin) and mailed as a link can't sign a victim
+ * into it: the victim's tab never asked for it and holds no verifier.
+ *
  * Only the SHA-256 of the code is stored. The code travels in a URL fragment
  * (never sent to a server) and is redeemed by POST body. The session token is
  * never put in a URL or a response body.
@@ -18,15 +24,24 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
-import { generateRandomString } from "better-auth/crypto";
+import { constantTimeEqual, generateRandomString } from "better-auth/crypto";
 import { z } from "zod";
 
 export const SESSION_HANDOFF_CREATE = "/societyer-handoff/create";
 export const SESSION_HANDOFF_REDEEM = "/societyer-handoff/redeem";
 export const SESSION_HANDOFF_TTL_MS = 60_000;
 const IDENTIFIER_PREFIX = "societyer-handoff:";
+/** SHA-256 hex of the target tab's verifier. */
+const CHALLENGE = /^[a-f0-9]{64}$/;
+/** 32 random bytes, base64url without padding. */
+const VERIFIER = /^[A-Za-z0-9_-]{43}$/;
 
-const storedValue = z.object({ sessionId: z.string().min(1), userId: z.string().min(1), targetOrigin: z.string().min(1) });
+const storedValue = z.object({
+  sessionId: z.string().min(1),
+  userId: z.string().min(1),
+  targetOrigin: z.string().min(1),
+  challenge: z.string().regex(CHALLENGE),
+});
 
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -70,7 +85,7 @@ export const sessionHandoff = (siteUrls: readonly string[]) => ({
   endpoints: {
     createSessionHandoff: createAuthEndpoint(SESSION_HANDOFF_CREATE, {
       method: "POST",
-      body: z.object({ targetOrigin: z.string().min(1).max(300) }),
+      body: z.object({ targetOrigin: z.string().min(1).max(300), challenge: z.string().regex(CHALLENGE) }),
       use: [sessionMiddleware],
     }, async (ctx) => {
       ctx.setHeader("Cache-Control", "no-store");
@@ -87,14 +102,16 @@ export const sessionHandoff = (siteUrls: readonly string[]) => ({
       const expiresAt = new Date(Date.now() + SESSION_HANDOFF_TTL_MS);
       await ctx.context.internalAdapter.createVerificationValue({
         identifier: await sessionHandoffIdentifier(code),
-        value: JSON.stringify({ sessionId: session.id, userId: user.id, targetOrigin: target }),
+        value: JSON.stringify({ sessionId: session.id, userId: user.id, targetOrigin: target, challenge: ctx.body.challenge }),
         expiresAt,
       });
       return ctx.json({ code, expiresAt: expiresAt.toISOString() });
     }),
     redeemSessionHandoff: createAuthEndpoint(SESSION_HANDOFF_REDEEM, {
       method: "POST",
-      body: z.object({ code: z.string().min(1).max(200) }),
+      // The verifier is optional here so that a missing one still burns the
+      // code below instead of failing validation before the lookup.
+      body: z.object({ code: z.string().min(1).max(200), verifier: z.string().max(200).optional() }),
     }, async (ctx) => {
       ctx.setHeader("Cache-Control", "no-store");
       const origin = appRequestOrigin(ctx.request, appOrigins(siteUrls, ctx.context.trustedOrigins));
@@ -107,8 +124,12 @@ export const sessionHandoff = (siteUrls: readonly string[]) => ({
       const consumed = await ctx.context.internalAdapter.consumeVerificationValue(await sessionHandoffIdentifier(ctx.body.code));
       const parsed = consumed ? storedValue.safeParse(safeJson(consumed.value)) : null;
       if (!parsed?.success) throw new APIError("BAD_REQUEST", { message: "This sign-in link is invalid or has expired." });
-      const { sessionId, userId, targetOrigin } = parsed.data;
+      const { sessionId, userId, targetOrigin, challenge } = parsed.data;
       if (targetOrigin !== origin) throw new APIError("FORBIDDEN", { message: "This sign-in link was issued for another site." });
+      const verifier = ctx.body.verifier;
+      if (!verifier || !VERIFIER.test(verifier) || !constantTimeEqual(await sha256Hex(verifier), challenge)) {
+        throw new APIError("FORBIDDEN", { message: "This sign-in link was not requested by this browser tab." });
+      }
       const row = await ctx.context.adapter.findOne<{ token: string }>({ model: "session", where: [{ field: "id", value: sessionId }] });
       const found = row ? await ctx.context.internalAdapter.findSession(row.token) : null;
       if (!found || found.session.id !== sessionId || found.session.userId !== userId || found.user.id !== userId
