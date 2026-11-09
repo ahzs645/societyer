@@ -15,6 +15,7 @@ import { ycnRegisterTables } from "./tables/ycnRegisters";
 import { legalDocsTables } from "./tables/legalDocs";
 import { formationTables } from "./tables/formation";
 import { platformTables } from "./tables/platform";
+import { sharedWorkspaceTables } from "./tables/sharedWorkspaces";
 import { documentSyncTables } from "./tables/documentSync";
 import { communicationsTables } from "./tables/communications";
 import { waveCacheTables } from "./tables/waveCache";
@@ -554,6 +555,7 @@ export default defineSchema({
 
   // platform — extracted to convex/tables/platform.ts
   ...platformTables,
+  ...sharedWorkspaceTables,
 
   // documentSync — extracted to convex/tables/documentSync.ts
   ...documentSyncTables,
