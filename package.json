@@ -392,6 +392,7 @@
     "test:meeting-source-e2e": "tsx scripts/check-meeting-source-e2e.ts",
     "test:mcp-endpoint": "tsx scripts/check-mcp-endpoint.ts",
     "test:mcp-oauth": "tsx scripts/check-mcp-oauth.ts",
+    "test:mcp-oauth-origins": "tsx scripts/check-mcp-oauth-origins.ts",
     "test:transcript-minutes-draft": "tsx scripts/check-transcript-minutes-draft.ts",
     "test:minutes-transcript-export": "tsx scripts/check-minutes-transcript-export.ts",
     "test:transcript-source-playback": "tsx scripts/check-transcript-source-playback.ts",
