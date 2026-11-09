@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { readPreferenceFlag, writePreferenceFlag } from "../lib/uiPreferenceFlag";
-import { useModuleEnabled } from "./useModules";
+import { isModuleEnabled } from "../lib/modules";
+import { useSociety } from "./useSociety";
 
 const STORAGE_KEY = "societyer.aiChat.hidden";
 const CHANGE_EVENT = "societyer:ai-chat-changed";
@@ -15,7 +16,12 @@ function readStored(): boolean {
  * `hidden` is the effective state; `personallyHidden` is the device choice.
  */
 export function useAiChatVisibility() {
-  const moduleEnabled = useModuleEnabled("aiAgents");
+  const society = useSociety();
+  // While a workspace switch is loading, keep the last known choice so an open
+  // assistant isn't unmounted (losing its draft) between two AI-enabled workspaces.
+  const lastKnownEnabled = useRef(false);
+  if (society !== undefined) lastKnownEnabled.current = isModuleEnabled(society, "aiAgents");
+  const moduleEnabled = lastKnownEnabled.current;
   const [personallyHidden, setHiddenState] = useState<boolean>(() => readStored());
 
   useEffect(() => {
