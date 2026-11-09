@@ -98,9 +98,16 @@ test("Brandkit preview applies explicitly and persists across desktop themes and
   await expect(settings.getByRole("switch", { name: /Use brand accent in the interface/ })).toBeChecked();
 
   await page.goto("/app");
-  const banner = page.getByRole("region", { name: "Current workspace", exact: true });
-  await expect(banner).toContainText(workspaceName);
-  await expect(banner.locator('[data-brand-id="ddcnorth"]')).toBeVisible();
+  await expect(sidebar).toHaveAttribute("title", workspaceName);
+  await expect(sidebar).toHaveAccessibleName(new RegExp(workspaceName));
+  await expect(sidebar.locator(".sidebar__brand-name")).toHaveClass(/sr-only/);
+  await expect(sidebar.locator('[data-brand-id="ddcnorth"]')).toBeVisible();
+  await sidebar.click();
+  const activeWorkspace = page.getByRole("menuitemradio", { name: new RegExp(workspaceName) });
+  await expect(activeWorkspace).toBeVisible();
+  await expect(activeWorkspace).toHaveAttribute("aria-checked", "true");
+  await expect(activeWorkspace.locator('[data-brand-id="ddcnorth"]')).toBeVisible();
+  await sidebar.click();
   await assertContained(page, "desktop light");
   await page.screenshot({ path: testInfo.outputPath("workspace-desktop-light.png"), fullPage: true });
   const lightLogo = sidebar.locator(".workspace-logo__light img");
