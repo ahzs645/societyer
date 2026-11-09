@@ -28,10 +28,11 @@ export default function AccountSecurityPage() {
     key={auth.session.user.id}
     enabled={auth.session.user.twoFactorEnabled === true}
     enrollmentEnabled={enrollmentEnabled}
+    accountPages={auth.mode === "convex"}
   />;
 }
 
-function AuthenticatorSettings({ enabled, enrollmentEnabled }: { enabled: boolean; enrollmentEnabled: boolean }) {
+function AuthenticatorSettings({ enabled, enrollmentEnabled, accountPages }: { enabled: boolean; enrollmentEnabled: boolean; accountPages: boolean }) {
   const [operation, setOperation] = useState<Operation | null>(null);
   const [password, setPassword] = useState("");
   const [setup, setSetup] = useState<{ uri: string; backupCodes: string[] } | null>(null);
@@ -110,7 +111,13 @@ function AuthenticatorSettings({ enabled, enrollmentEnabled }: { enabled: boolea
   return <AuthShell
     title={backupCodes ? "Save your backup codes" : setup ? "Connect your authenticator" : "Account security"}
     stateKey={backupCodes ? "backup-codes" : setup ? "authenticator-setup" : "security"}
-    after={<Link to="/app" className="auth__link">Back to workspace</Link>}
+    after={<nav className="account-links" aria-label="Account">
+      <Link to="/app" className="auth__link">Back to workspace</Link>
+      {accountPages && <>
+        <Link to="/account/workspaces" className="auth__link">My workspaces</Link>
+        <Link to="/account/sign-in-methods" className="auth__link">Sign-in methods</Link>
+      </>}
+    </nav>}
   >
     {backupCodes ? (
       <div className="auth__form">

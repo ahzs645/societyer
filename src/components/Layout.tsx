@@ -91,7 +91,7 @@ import { NotificationBell } from "./NotificationBell";
 import { openGlobalAiAssistant } from "../features/ai/aiAssistantEvents";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
-import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
+import { useSocietySelection } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { useLocalWorkspaceReady } from "../hooks/useLocalWorkspaceReady";
 import { useDialogFocus } from "../lib/useDialogFocus";
@@ -190,7 +190,8 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { BottomNavIndicator } from "./BottomNavIndicator";
 import { PendingInvitations } from "./PendingInvitations";
 import { useAuth } from "../auth/AuthProvider";
-import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
+import { useOpenWorkspace } from "../auth/useOpenWorkspace";
+import { LOCK_REASON_LABEL } from "../auth/WorkspaceList";
 import { WorkspaceLogo } from "./WorkspaceLogo";
 import { useWorkspaceBrandTheme } from "../hooks/useWorkspaceBrandTheme";
 
@@ -202,6 +203,12 @@ export function Layout() {
   const loc = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
+  // Switching opens in place, or hands the session to the workspace's own
+  // domain (convex mode, mapped origins only; see workspaceOpenRoute).
+  const { open: openWorkspace, error: openWorkspaceError } = useOpenWorkspace();
+  useEffect(() => {
+    if (openWorkspaceError) toast.error(openWorkspaceError);
+  }, [openWorkspaceError, toast]);
   const [isMobileNav, setIsMobileNav] = useState(() =>
     window.matchMedia(mobileSidebarMediaQuery).matches,
   );
@@ -1839,11 +1846,11 @@ export function Layout() {
                     role="menuitemradio"
                     aria-checked={active}
                     onClick={() => {
-                      if (!setStoredSocietyId(s._id)) auth.refreshMembership(s._id);
                       setWorkspaceOpen(false);
                       setMobileSidebarOpen(false);
                       // The record URL belongs to the workspace being left.
-                      navigate("/app");
+                      const canonicalOrigin = auth.memberships?.find((membership) => membership.society._id === s._id)?.canonicalOrigin;
+                      void openWorkspace({ societyId: s._id, canonicalOrigin });
                     }}
                     style={{
                       width: "100%",
@@ -1875,12 +1882,31 @@ export function Layout() {
                 );
                 });
               })()}
-              {auth.lockedWorkspaces.length > 0 && (
-                <section aria-label="Workspaces requiring two-factor authentication" style={{ padding: "10px 12px", borderTop: "1px solid var(--border)" }}>
-                  <p className="muted">Two-factor authentication required for {auth.lockedWorkspaces.map(({ name }) => name).join(", ")}.</p>
-                  <WorkspaceMfaActions />
-                </section>
-              )}
+              {auth.lockedWorkspaces.map((workspace) => (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  className="workspace-menu__option"
+                  role="menuitem"
+                  onClick={() => {
+                    setWorkspaceOpen(false);
+                    setMobileSidebarOpen(false);
+                    // Its lock screen offers the missing sign-in step.
+                    void openWorkspace({ societyId: workspace.id, canonicalOrigin: workspace.canonicalOrigin });
+                  }}
+                  style={{ width: "100%", textAlign: "left", padding: "10px 12px", border: "none", background: "var(--bg-panel)", color: "inherit", cursor: "pointer" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <WorkspaceLogo organization={{ name: workspace.name, logoUrl: workspace.logoUrl }} />
+                    <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{workspace.name}</strong>
+                  </div>
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                    {LOCK_REASON_LABEL[workspace.reason ?? "mfa"]}
+                  </div>
+                </button>
+              ))}
               {(!societies || societies.length === 0) && (
                 <div className="empty-state empty-state--sm empty-state--start">
                   {t("sidebar.noSocieties")}

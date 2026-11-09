@@ -135,6 +135,11 @@ const ReceiptInboxPage = React.lazy(() => import("./pages/ReceiptInbox").then((m
 const SpendBudgetsPage = React.lazy(() => import("./pages/SpendBudgets").then((m) => ({ default: m.SpendBudgetsPage })));
 const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
 const AccountSecurityPage = React.lazy(() => import("./pages/AccountSecurity"));
+const MyWorkspacesPage = React.lazy(() => import("./pages/account/MyWorkspaces"));
+const SignInMethodsPage = React.lazy(() => import("./pages/account/SignInMethods"));
+const LinkAccountPage = React.lazy(() => import("./pages/account/LinkAccount"));
+const LinkAccountConfirmPage = React.lazy(() => import("./pages/account/LinkAccountConfirm"));
+const HandoffPage = React.lazy(() => import("./pages/Handoff"));
 const InvitationAcceptPage = React.lazy(() => import("./pages/InvitationAccept").then((m) => ({ default: m.InvitationAcceptPage })));
 const OAuthConsentPage = React.lazy(() => import("./features/aiConnectors/OAuthConsentPage").then((m) => ({ default: m.OAuthConsentPage })));
 const ResetPasswordPage = React.lazy(() => import("./pages/ResetPassword").then((m) => ({ default: m.ResetPasswordPage })));
@@ -388,6 +393,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             )}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/account/security" element={<AccountSecurityPage />} />
+            {/* Personal account pages (convex mode); outside AuthGate so a
+                locked or workspace-less login can still reach them. */}
+            <Route path="/account/workspaces" element={<MyWorkspacesPage />} />
+            <Route path="/account/sign-in-methods" element={<SignInMethodsPage />} />
+            <Route path="/account/link" element={<LinkAccountPage />} />
+            <Route path="/account/link/confirm" element={<LinkAccountConfirmPage />} />
+            {/* Cross-domain session handoff landing; redeemed before session guards. */}
+            <Route path="/handoff" element={<HandoffPage />} />
             <Route path="/invite/:token" element={<InvitationAcceptPage />} />
             {/* AI connector OAuth consent; signs in first, then picks a workspace. */}
             <Route path="/oauth/consent" element={<OAuthConsentPage />} />

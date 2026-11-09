@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { getAuthMode } from "../lib/authMode";
 import { STATIC_DEMO_SOCIETY_ID } from "../lib/staticIds";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
+import { resolvedConvexUrl } from "../lib/appRuntime";
 import { setStoredUserId } from "./useCurrentUser";
 import { useLocalWorkspaceReady } from "./useLocalWorkspaceReady";
 
@@ -30,6 +31,9 @@ let staticSocietyId = (readDemoSelection() ?? STATIC_DEMO_SOCIETY_ID) as Id<"soc
 // reload/new tab, but another tab (possibly with stale memberships) cannot undo it.
 let tabSocietyId: Id<"societies"> | null | undefined;
 let membershipUserIds: Map<Id<"societies">, Id<"users">> | null = null;
+// On a mapped origin the sign-in step picks the workspace; a missing selection
+// must not quietly become the first organization in the list.
+let selectionFallbackAllowed = true;
 
 type SocietyView = Doc<"societies"> & {
   logoUrl?: string;
@@ -39,6 +43,27 @@ type SocietyView = Doc<"societies"> & {
 
 function requiresMembershipSelection() {
   return getAuthMode() !== "none" && !isLocalDataRuntime();
+}
+
+/**
+ * Signed-in selections are remembered per backend, so pointing a build at a
+ * different deployment can't reuse a stale workspace ID. The old unscoped key
+ * is ignored there: at worst the first sign-in after upgrading opens the
+ * domain's or the first workspace. Local and no-auth runtimes keep the old key.
+ */
+function selectionKey() {
+  if (!requiresMembershipSelection()) return KEY;
+  try { return `${KEY}@${resolvedConvexUrl().replace(/\/+$/, "")}`; } catch { return KEY; }
+}
+
+export function setSelectionFallbackAllowed(allowed: boolean) {
+  if (selectionFallbackAllowed === allowed) return;
+  selectionFallbackAllowed = allowed;
+  window.dispatchEvent(new Event(SOCIETY_CHANGED_EVENT));
+}
+
+function getSelectionFallbackAllowed() {
+  return selectionFallbackAllowed;
 }
 
 export function setMembershipSocietyIds(
@@ -52,7 +77,7 @@ export function setMembershipSocietyIds(
 export function getStoredSocietyId(): Id<"societies"> | null {
   if (isStaticDemoRuntime()) return staticSocietyId;
   if (tabSocietyId === undefined) {
-    try { tabSocietyId = localStorage.getItem(KEY) as Id<"societies"> | null; }
+    try { tabSocietyId = localStorage.getItem(selectionKey()) as Id<"societies"> | null; }
     catch { tabSocietyId = null; }
   }
   const value = tabSocietyId;
@@ -78,8 +103,8 @@ export function setStoredSocietyId(id: Id<"societies"> | null) {
   } else {
     tabSocietyId = id;
     try {
-      if (id) localStorage.setItem(KEY, id);
-      else localStorage.removeItem(KEY);
+      if (id) localStorage.setItem(selectionKey(), id);
+      else localStorage.removeItem(selectionKey());
     } catch { /* The tab's in-memory selection still works without storage. */ }
   }
   if (requiresMembershipSelection()) {
@@ -128,6 +153,7 @@ export function useSocieties() {
 export function useSocietySelection() {
   const societies = useSocieties();
   const societyId = useSyncExternalStore(subscribeSocietySelection, getStoredSocietyId, () => null);
+  const fallbackAllowed = useSyncExternalStore(subscribeSocietySelection, getSelectionFallbackAllowed, () => true);
 
   // A local workspace answers queries from its seed until IndexedDB has been
   // read back. Treating that partial list as authoritative rewrites the stored
@@ -147,8 +173,8 @@ export function useSocietySelection() {
     const valid = currentId
       ? societies.some((society) => society._id === currentId)
       : false;
-    if (!valid) setStoredSocietyId(societies[0]._id);
-  }, [societies, societyId, localWorkspaceReady]);
+    if (!valid && fallbackAllowed) setStoredSocietyId(societies[0]._id);
+  }, [societies, societyId, localWorkspaceReady, fallbackAllowed]);
 
   const society = useMemo(() => {
     if (!societies) return undefined;
@@ -156,8 +182,8 @@ export function useSocietySelection() {
     const selected = societyId
       ? societies.find((candidate) => candidate._id === societyId)
       : null;
-    return selected ?? societies[0] ?? null;
-  }, [societies, societyId]);
+    return selected ?? (fallbackAllowed ? societies[0] ?? null : null);
+  }, [societies, societyId, fallbackAllowed]);
 
   return {
     societies,

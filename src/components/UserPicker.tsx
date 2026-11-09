@@ -10,7 +10,7 @@ import {
   setStoredUserId,
 } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { ChevronDown, LogOut, ShieldCheck } from "lucide-react";
+import { ChevronDown, KeyRound, LayoutGrid, Link2, LogOut, ShieldCheck } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { useAuthenticatorEnrollment } from "../auth/authCapabilities";
@@ -126,6 +126,13 @@ export function UserPicker({ compact = false }: { compact?: boolean } = {}) {
         <div className="row sidebar-account__actions">
           {auth.mode === "clerk" && (
             <Suspense fallback={null}><ClerkAccountButton /></Suspense>
+          )}
+          {auth.mode === "convex" && (
+            <>
+              <Link to="/account/workspaces" className="btn btn--ghost btn--sm"><LayoutGrid size={12} /> My workspaces</Link>
+              <Link to="/account/sign-in-methods" className="btn btn--ghost btn--sm"><KeyRound size={12} /> Sign-in methods</Link>
+              <Link to="/account/link" className="btn btn--ghost btn--sm"><Link2 size={12} /> Link an existing account</Link>
+            </>
           )}
           {usesBetterAuthClient(auth.mode) && (authenticatorEnrollment || auth.session?.user.twoFactorEnabled) && (
             <Link to="/account/security" className="btn btn--ghost btn--sm"><ShieldCheck size={12} /> Account security</Link>

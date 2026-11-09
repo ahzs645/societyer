@@ -3,6 +3,8 @@ import { twoFactorClient } from "better-auth/client/plugins";
 import { convexClient, crossDomainClient } from "@convex-dev/better-auth/client/plugins";
 import { convexAuthSiteUrl } from "./convexSite";
 import { createOAuthHandoff } from "../../shared/completeHostedOAuth";
+import { createHandoffRedeemer, type HandoffFetch } from "./sessionHandoff";
+import { rememberStartupWorkspace } from "../auth/startupWorkspace";
 
 /**
  * Better Auth client for the Convex-hosted broker (AUTH_MODE=convex). The app
@@ -45,6 +47,21 @@ export const completeOAuthCallback = createOAuthHandoff({
   },
   refreshSession: () => authClient.updateSession(),
 }, { href: () => window.location.href, replace: url => window.history.replaceState({}, "", url) });
+
+/**
+ * Redeems a cross-domain handoff code on `/handoff` (see sessionHandoff.ts). The
+ * cross-domain plugin stores the shared session from the response, so the
+ * session hook mounts already signed in.
+ */
+export const completeSessionHandoff = createHandoffRedeemer({
+  fetch: authClient.$fetch as unknown as HandoffFetch,
+  refreshSession: () => authClient.updateSession(),
+  rememberWorkspace: rememberStartupWorkspace,
+}, {
+  href: () => window.location.href,
+  replace: url => window.history.replaceState({}, "", url),
+  basePath: import.meta.env.BASE_URL.replace(/\/$/, ""),
+});
 
 /** Convex token minted by the deployment's own signer for the current session. */
 export async function fetchConvexToken(_forceRefresh?: boolean): Promise<string | null> {
