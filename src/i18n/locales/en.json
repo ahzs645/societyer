@@ -277,6 +277,8 @@
     "letterheadHint": "Header image for exported minutes, meeting packs, and the public copy.",
     "sidebarSubtitle": "Choose which sidebar sections show in your workspace.",
     "aiSubtitle": "Show or hide the in-app AI chat features.",
+    "aiModuleOff": "AI is turned off for this workspace.",
+    "aiModuleOffLink": "Turn it on in Modules",
     "aiToggleHint": "When off, the sidebar bot button and the floating AI assistant are removed. Other AI-driven helpers (e.g. transcript generation) stay available.",
     "inventorySubtitle": "Controls for asset and consumable workflows.",
     "inventoryPromptHint": "When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count.",
@@ -477,6 +479,10 @@
     "externalDocuments": {
       "label": "External documents",
       "description": "Link documents in approved external libraries and open them with each reader's source permissions."
+    },
+    "aiAgents": {
+      "label": "AI assistant & agents",
+      "description": "The in-app AI assistant, Ask AI table filters, and the AI agents setup page."
     }
   },
   "moduleCategories": {

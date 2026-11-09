@@ -122,6 +122,7 @@ const OPTIONAL_POLICY: Record<ModuleKey, Pick<ModuleAccessDefinition, "permissio
     notes: [UNMAPPED_NOTE, "Connection configuration requires Admin or Owner. Some document synchronization actions require Director or above."],
   },
   browserConnectors: { permissions: {}, notes: [UNMAPPED_NOTE] },
+  aiAgents: { permissions: {}, notes: [UNMAPPED_NOTE, "The AI agents page requires settings:manage. Each person can also hide the assistant for themselves in Settings."] },
   workflows: {
     permissions: {},
     notes: [UNMAPPED_NOTE, "Workflow edits and execution require tasks:write. Each execution step also checks the current initiating membership; external service capabilities have additional requirements."],

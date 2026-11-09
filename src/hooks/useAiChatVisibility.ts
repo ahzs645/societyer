@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { readPreferenceFlag, writePreferenceFlag } from "../lib/uiPreferenceFlag";
+import { useModuleEnabled } from "./useModules";
 
 const STORAGE_KEY = "societyer.aiChat.hidden";
 const CHANGE_EVENT = "societyer:ai-chat-changed";
@@ -8,8 +9,14 @@ function readStored(): boolean {
   return readPreferenceFlag(STORAGE_KEY);
 }
 
+/**
+ * The AI chat shows only when the workspace has the AI module on (Settings →
+ * Modules, off by default) and this person hasn't hidden it on this device.
+ * `hidden` is the effective state; `personallyHidden` is the device choice.
+ */
 export function useAiChatVisibility() {
-  const [hidden, setHiddenState] = useState<boolean>(() => readStored());
+  const moduleEnabled = useModuleEnabled("aiAgents");
+  const [personallyHidden, setHiddenState] = useState<boolean>(() => readStored());
 
   useEffect(() => {
     const sync = () => setHiddenState(readStored());
@@ -30,5 +37,5 @@ export function useAiChatVisibility() {
     window.dispatchEvent(new Event(CHANGE_EVENT));
   }, []);
 
-  return { hidden, setHidden };
+  return { hidden: personallyHidden || !moduleEnabled, personallyHidden, moduleEnabled, setHidden };
 }

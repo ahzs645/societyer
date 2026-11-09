@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { openRowMenu } from "./helpers/rowActions";
+import { enableAiModule } from "./helpers/aiModule";
 
 test.setTimeout(100_000);
 async function localWorkspace(page: Page, name: string) {
@@ -20,6 +21,7 @@ test("a real local workspace keeps live AI, Paperless and browser sessions unava
     if (/\/ai-chat\/stream|\/api\/v1\/browser-connectors|\/api\/action/.test(request.url())) externalCalls.push(request.url());
   });
   await localWorkspace(page, `Local capability audit ${testInfo.project.name}`);
+  await enableAiModule(page);
   await page.goto("/app/ai-agents");
   await expect(page.getByRole("status").filter({ hasText: "Live AI chat, agents and provider keys require a connected workspace" })).toBeVisible();
   await expect(page.getByLabel("API key", { exact: true })).toBeDisabled();
