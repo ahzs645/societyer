@@ -7,6 +7,7 @@ import { toPortableQueryCtx } from "./lib/portable";
 import { hasPermission, requirePermissionPortable } from "../shared/functions/permissions";
 import { requireTranscriptReaderPortable } from "../shared/functions/minutesPrivacy";
 import { MEETING_SOURCE_CHUNK_BYTES, MEETING_SOURCE_MAX_BYTES, MEETING_TRANSCRIPT_MAX_BYTES, validateMeetingSource } from "../shared/storage/meetingSourceProtocol";
+import { workspaceStorage } from "./providers/env";
 
 async function access(ctx: QueryCtx | MutationCtx, meetingId: Id<"meetings">) {
   const meeting = await ctx.db.get(meetingId);
@@ -155,6 +156,12 @@ export const allocate = internalMutation({
   args: { meetingId: v.id("meetings"), fileName: v.string(), size: v.number(), fingerprint: v.string(), nonce: v.string() }, returns: v.id("meetingSources"),
   handler: async (ctx, args) => {
     const { meeting, actor } = await access(ctx, args.meetingId);
+    // Sources go to the deployment's SharePoint site. On a shared deployment
+    // that site belongs to one organization, so only workspaces whose storage
+    // policy selects SharePoint may send files there.
+    if ((await workspaceStorage(ctx.db, meeting.societyId)).documentVersionProvider !== "sharepoint") {
+      throw new Error("Meeting recordings upload to SharePoint, which isn't enabled for this workspace.");
+    }
     const kind = validateMeetingSource(args.fileName, args.size);
     if (!/^[a-f0-9]{64}$/.test(args.fingerprint) || !/^[a-f0-9-]{36}$/.test(args.nonce)) throw new Error("Invalid upload identity.");
     const existing = await ctx.db.query("meetingSources").withIndex("by_actor_fingerprint", q => q.eq("actorId", actor._id as Id<"users">).eq("meetingId", args.meetingId).eq("fingerprint", args.fingerprint)).order("desc").first();

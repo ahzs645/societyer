@@ -57,6 +57,19 @@ instructions come from each workspace's own records.
 
 `npm run test:brandkit` checks the vector rendering in HTML and PDF.
 
+## Shared workspaces
+
+First Form may later share a Convex deployment with DDC North. Then
+`SOCIETYER_INITIAL_INVOICE_TEMPLATE` stays unset on that deployment, and the
+template is installed for the First Form workspace only with
+`workspaceDefaults:installInvoiceTemplate`. Provisioning and reset links take a
+`societyId` so they open on First Form's own domain. While Entra login is on for
+DDC, every session on that deployment, password sessions too, lasts a fixed
+8 hours. See the [shared workspaces runbook](shared-workspaces/operator-runbook.md)
+and the [migration plan](shared-workspaces/migration-and-cutover.md). In Convex
+CLI 1.49, `convex run` doesn't list `--env-file`; the runbook selects the
+deployment with `--deployment elated-bee-460` instead.
+
 ## Release checks
 
 - Production Pages serves the First Form build and connects to its Convex

@@ -128,6 +128,12 @@ try {
   assert.equal(validateMeetingSource("recording.mp4", MEETING_SOURCE_MAX_BYTES), "recording");
   assert.throws(() => validateMeetingSource("too-large.mp4", MEETING_SOURCE_MAX_BYTES + 1));
   for (const subject of ["member", "foreign"]) assert.equal((await call("start", { meetingId, fileName: "fixture.mp4", size: 3, fingerprint: "b".repeat(64) }, subject)).status, 400);
+  // On a shared deployment the SharePoint site belongs to one organization: a
+  // workspace whose storage policy is native can't send recordings there.
+  const nativePolicy = await test.run(async ctx => ctx.db.insert("workspaceStoragePolicies", { societyId: (await ctx.db.get(meetingId))!.societyId,
+    nativeUploads: "allowed", documentVersionProvider: "native", updatedAtISO: new Date().toISOString(), reason: "Shared deployment check" }));
+  assert.equal((await call("start", { meetingId, fileName: "fixture.mp4", size: 3, fingerprint: "c".repeat(64) })).status, 400, "A native-storage workspace can't upload to SharePoint");
+  await test.run(ctx => ctx.db.delete(nativePolicy));
   assert.equal(graphCalls, 0, "Reject unauthorized users before contacting Microsoft");
   assert.equal((await call("list", { meetingId }, "owner", "https://evil.test")).status, 403);
   const portalOrigin = "https://portal.ddcnorth.com";

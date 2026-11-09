@@ -12,6 +12,7 @@ const PATH = "/account/link";
 type BeginResult =
   | { status: "started"; code: string; expiresAtISO: string }
   | { status: "reauthentication-required" }
+  | { status: "identity-disabled" }
   | { status: "unauthenticated" };
 
 /**
@@ -42,7 +43,9 @@ function LinkAccount({ signOutTo }: { signOutTo: (target: string) => Promise<voi
         await signOutTo(LINK_SIGN_IN_PATH);
         return;
       }
-      setNeedsFreshSignIn(true);
+      if (result.status === "reauthentication-required") setNeedsFreshSignIn(true);
+      else if (result.status === "identity-disabled") setError("This login is disabled. Contact your administrator.");
+      else setError("The link couldn't be started. Sign in again and try once more.");
     } catch (cause) {
       console.error("[societyer-auth] account link could not start", cause);
       setError("The link couldn't be started. Try again.");

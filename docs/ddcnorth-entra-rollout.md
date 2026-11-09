@@ -152,6 +152,25 @@ remain intact. Revoke the dedicated certificate/registration if abandoning the
 integration, and remove the private key from the deployment. Revoking Entra
 credentials alone does not invalidate already-issued app sessions.
 
+## Shared workspaces
+
+`SOCIETYER_ENTRA_SSO_REQUIRED=1` applies to the whole deployment: every session
+needs Microsoft evidence and email sign-in returns 403. That stays correct while
+this deployment holds only DDC North. If First Form's password users join the
+same deployment, DDC's requirement moves to a workspace sign-in policy instead:
+`requiredMethod: "microsoft"` with tenant `220c85f6-1cb1-4bb2-a63b-55d9fd163b55`
+and group `815b3b71-596d-48fe-aafd-f5bf34aafa5c`, checked against how each
+session signed in. Set that policy on every DDC workspace, close sign-up with
+`SOCIETYER_AUTH_MANUAL_PROVISIONING=1` and map `portal.ddcnorth.com` **before**
+removing the deployment-wide flag. The order and checks are in the
+[shared workspaces runbook](shared-workspaces/operator-runbook.md#turning-off-required-sso).
+Don't add an email-domain rule to the DDC policy: Microsoft-only accounts
+created by `registerDirectoryMember` have an unverified email and would be
+locked out.
+
+`revokeMemberSessions` ends every session of the login that owns the Microsoft
+account. If that login also has a password, its password sessions end too.
+
 ## Sources
 
 - [Microsoft certificate assertions](https://learn.microsoft.com/en-us/entra/identity-platform/certificate-credentials)

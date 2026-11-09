@@ -5,7 +5,9 @@ Status: implementation contract, November 8, 2026. It turns the
 concrete tables, functions and screens. The operator steps are in
 [operator-runbook.md](operator-runbook.md), the user-facing behaviour is in
 [user-guide.md](user-guide.md), and the move from two deployments to one is in
-[migration-and-cutover.md](migration-and-cutover.md).
+[migration-and-cutover.md](migration-and-cutover.md). The index is
+[README.md](README.md); staging is in [staging-setup.md](staging-setup.md) and
+test coverage in [acceptance-tests.md](acceptance-tests.md).
 
 ## Goal
 
@@ -46,7 +48,10 @@ All new tables are in `convex/tables/sharedWorkspaces.ts`.
 
 When a workspace has no policy row, the existing behaviour applies: sign-in is
 `any` and storage follows the deployment default. Existing single-organization
-deployments therefore behave exactly as before until an operator adds rows.
+deployments therefore keep their access rules until an operator adds rows. The
+few visible differences after deploying (linking pages are live, a new JWT
+claim, the remembered workspace resets once) are listed in the
+[runbook](operator-runbook.md#is-it-backward-compatible).
 
 `users` rows are not changed. Each one is still one workspace membership bound
 to one exact `authIssuer` and `authSubject`. Linking never rebinds a membership,
@@ -128,12 +133,12 @@ The functions are in `convex/accountLinks.ts`, with portable logic in
 
 | Function | Caller | Result |
 | --- | --- | --- |
-| `accountLinks:begin` (mutation, no args) | Identity A, fresh session | `{ status: "started", code, expiresAtISO }`, `{ status: "reauthentication-required" }` or `{ status: "unauthenticated" }`. It cancels A's earlier pending requests. Only the SHA-256 of the code is stored. |
+| `accountLinks:begin` (mutation, no args) | Identity A, fresh session | `{ status: "started", code, expiresAtISO }`, `{ status: "reauthentication-required" }`, `{ status: "identity-disabled" }` or `{ status: "unauthenticated" }`. It cancels A's earlier pending requests. Only the SHA-256 of the code is stored. |
 | `accountLinks:preview` (query, `{ code }`) | Identity B, fresh session | `{ status: "ready", initiator, current, conflicts: [] }` or a failure status |
 | `accountLinks:confirm` (mutation, `{ code }`) | Identity B, fresh session | `{ status: "linked" }` or a failure status. It consumes the code. |
-| `accountLinks:cancel` (mutation, `{ code }`) | Either side | `{ status: "cancelled" }` |
+| `accountLinks:cancel` (mutation, `{ code }`) | Either side | `{ status: "cancelled" }`, `{ status: "invalid" }` or `{ status: "unauthenticated" }` |
 | `accountLinks:overview` (query) | Any signed-in identity | `{ identities: [{ issuer, subject, email?, name?, current, linkedAtISO?, workspaces: [{ societyId, name, role, status }] }] }` |
-| `accountLinks:unlink` (mutation, `{ issuer, subject }`) | An identity in the same person | `{ status: "unlinked" }` or `{ status: "not-linked" }` |
+| `accountLinks:unlink` (mutation, `{ issuer, subject }`) | An identity in the same person | `{ status: "unlinked" }`, `{ status: "not-linked" }` or `{ status: "unauthenticated" }` |
 
 The failure statuses are `invalid`, `expired`, `same-account`, `already-linked`,
 `reauthentication-required`, `conflict` (with
@@ -168,13 +173,21 @@ A person left with a single link is removed.
 
 ### Sign-in methods on one Better Auth user
 
-Better Auth's explicit `linkSocial` adds a provider, such as Microsoft, to the
-current user. `hostedAuth.ts` sets
-`accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: [], allowDifferentEmails: true }`.
-Implicit linking by matching email stays off. The Microsoft provider still
-enforces its tenant, group, account-type and sign-in recency checks when linking.
-Better Auth refuses a provider account that already belongs to another user. The
-UI then offers **Link an existing account**.
+Provider linking is off. `hostedAuth.ts` sets
+`accountLinking: { enabled: false, disableImplicitLinking: true, trustedProviders: [] }`,
+so neither a matching email nor Better Auth's `linkSocial` can add a provider to
+a login. `linkSocial` is disabled because the Convex cross-domain plugin sets
+`skipStateCookieCheck`: an attacker could start a Microsoft link and have a
+victim finish it in another browser, attaching the victim's Microsoft identity
+to the attacker's login.
+
+The **Sign-in methods** page is therefore read-only for providers. It still
+lists linked logins (the person-level links above) with **Unlink**. A person who
+needs Microsoft sign-in gets an operator-provisioned Microsoft login
+(`entraProvisioning:registerDirectoryMember`) and joins it to their existing
+login with **Link an existing account**. An operator can still attach Microsoft
+to an existing login with `registerDirectoryMember`'s `existingAuthUserId`,
+after confirming the person out of band.
 
 ## Membership lookup returned to the app
 
@@ -188,7 +201,8 @@ UI then offers **Link an existing account**.
   memberships: Array<{ userId; role; user; society /* + logoUrl, logoDarkUrl, letterheadUrl */;
                        canonicalOrigin?: string; viaLinkedIdentity: boolean }>;
   lockedWorkspaces: Array<{ id; name; reason: "mfa" | "microsoft" | "email-domain";
-                            canonicalOrigin?: string; logoUrl?: string; supportEmail?: string }>;
+                            canonicalOrigin?: string; logoUrl?: string; supportEmail?: string;
+                            allowedEmailDomains?: string[] /* email-domain locks only */ }>;
   workspaceMfaAvailable: boolean; secondFactorVerified: boolean;
   sessionMethods: { microsoft: boolean };
   linkedIdentityCount: number;
@@ -225,52 +239,44 @@ Frontend startup on a mapped origin:
 An unmapped origin behaves as before: it uses the remembered workspace, else the
 first one. On a mapped origin, the switcher sends a workspace that has a
 different canonical origin through a handoff to that origin. A workspace without
-a canonical origin switches in place.
+a canonical origin switches in place. A handoff only runs between two mapped
+origins.
+
+Provisioning, reset and invitation links follow the canonical origin. AI
+connector OAuth consent does not: it is served from the first `SITE_URL`
+origin (or `SOCIETYER_MCP_OAUTH_CONSENT_URL`) for every workspace.
 
 ## Cross-domain session handoff
 
-The destination tab starts every handoff, so a code can only be redeemed by the
-browser tab that asked for it. If the source minted codes on its own, anyone
-could mint one on their own session (with `curl` and a forged `Origin`) and send
-a victim `https://<target>/handoff#code=…`; the victim's browser would redeem it
-and work inside the attacker's session (login CSRF). Instead the target keeps a
-random verifier in its `sessionStorage` and sends only its SHA-256 to the
-source, as in OAuth PKCE. A planted code reaches a tab with no verifier, or the
-wrong one, and is refused.
+Each frontend origin keeps its own copy of the session (the cross-domain plugin
+stores it in that origin's `localStorage`), so a second domain starts signed out.
+The handoff gives the destination the **same** session. It starts on the
+destination, so a link minted somewhere else can't sign a victim in as the
+attacker.
 
-1. The switcher on the source goes to
-   `<target>/handoff#from=<source>&workspace=<societyId>&next=<path>`.
-2. The target strips the fragment, checks that `from` is another origin that
-   `workspaceDomains:resolveOrigin` maps (so no trusted domain becomes an open
-   redirect), stores `{ verifier, from, workspace, next }` for two minutes and
-   goes to `<source>/handoff#issue=1&target=<target>&challenge=<sha256 hex>`.
-3. The source strips the fragment, checks `target` the same way, asks a
-   signed-out person to sign in there first, else calls `create` and goes to
-   `<target>/handoff#code=<code>`.
-4. The target strips the fragment, takes and deletes its stored request (none,
-   or expired: refused without calling `redeem`), redeems with the verifier,
-   selects the stored workspace only if the person is a member, and continues
-   to the stored `next` if it is a same-origin `/app` path. Workspace and path
-   never come from the code link.
+1. The source navigates to
+   `<targetOrigin>/handoff#from=<sourceOrigin>&workspace=<societyId>&next=<same-origin path>`.
+2. The destination checks that `from` is a mapped origin (`resolveOrigin`),
+   creates a random nonce in its own `sessionStorage`, and navigates to
+   `<sourceOrigin>/handoff#issue&target=<targetOrigin>&challenge=<sha256(nonce)>`.
+3. The source, signed in, calls `POST /api/auth/societyer-handoff/create` with
+   `{ targetOrigin, challenge }`. The target must be a trusted `SITE_URL` origin
+   other than the request origin. The endpoint stores a verification value
+   `societyer-handoff:<sha256(code)>` holding the session, user, target origin and
+   challenge, valid for 60 seconds, and the source navigates to
+   `<targetOrigin>/handoff#code=<code>`.
+4. The destination removes the fragment from history at once and calls
+   `POST /api/auth/societyer-handoff/redeem` with `{ code, verifier: nonce }`.
+   The request `Origin` must equal the stored target origin, and
+   `sha256(verifier)` must equal the stored challenge. The value is deleted on
+   first use. The referenced session must still be valid and belong to the
+   stored user. The endpoint then delivers that same session through the
+   cross-domain cookie transport.
+5. The destination selects the workspace only if the person is a member, and
+   continues to `next` if it is a same-origin `/app` path.
 
-Two Better Auth endpoints are served by a plugin in `shared/sessionHandoff.ts`
-and registered in `hostedAuth.ts`. Both answer `Cache-Control: no-store`.
-
-- `POST /api/auth/societyer-handoff/create`, with the session required and body
-  `{ targetOrigin, challenge }`. The request `Origin` must be a trusted app
-  origin, and the target a trusted `SITE_URL` origin that differs from it. The
-  challenge must be 64 lowercase hex characters. The endpoint stores a
-  verification value `societyer-handoff:<sha256(code)>` holding
-  `{ sessionId, userId, targetOrigin, challenge }` with a 60-second lifetime,
-  and returns `{ code, expiresAt }`.
-- `POST /api/auth/societyer-handoff/redeem`, with body `{ code, verifier }` and
-  the cross-domain client's `Better-Auth-Cookie` header. The value is deleted
-  on first use, before any other check, so a misdirected or planted code is
-  burned. The request `Origin` must equal the stored `targetOrigin`, and
-  `sha256(verifier)` must equal the stored challenge (constant-time compare).
-  The referenced session must still be valid and belong to `userId`. The
-  endpoint then sets that same session through the cross-domain cookie
-  transport. Create and redeem are throttled by IP.
+Both endpoints are throttled per client IP. Handoff only runs between mapped
+origins.
 
 Because the session itself is shared rather than copied, its expiry, Entra proof
 and second-factor state carry over unchanged. A handoff can never upgrade a
@@ -285,14 +291,22 @@ shared session.
   `SOCIETYER_DISABLE_NATIVE_FILE_STORAGE` or the workspace row says `disabled`.
   The deployment flag is a ceiling.
 - `documentVersionProvider: "sharepoint"` is only possible when the deployment
-  SharePoint connection is configured. `native` forces Convex storage, which then
-  requires native uploads. `deployment-default` keeps today's behaviour.
+  SharePoint connection is configured, and requires `nativeUploads: "disabled"`.
+  `native` uses the deployment's non-SharePoint version storage (RustFS or R2
+  when configured) even where SharePoint is the deployment default, and requires
+  native uploads. `deployment-default` keeps today's behaviour.
 
 Every native upload and document-version path passes the workspace ID to the
 async guard. `workspaceStoragePolicies:forWorkspace` (a member query) returns
 `{ nativeUploads: boolean, documentVersionProvider: "native" | "sharepoint" }`.
 The UI uses it to hide upload controls, while the server guard is what actually
-enforces the policy.
+enforces the policy. The build flags `VITE_DISABLE_NATIVE_FILE_STORAGE` and
+`VITE_DOCUMENT_STORAGE_PROVIDER` remain a ceiling for every workspace opened in
+that build.
+
+Meeting-source uploads through the meeting-transfer Worker go to the
+deployment's SharePoint connection, so `meetingSources:allocate` refuses any
+workspace whose effective provider isn't SharePoint.
 
 ## Workspace defaults
 
@@ -313,3 +327,18 @@ origin when one is configured, and otherwise the first `SITE_URL` origin.
 | Link | Fresh proof of both identities and no membership overlap |
 | Handoff | The same session on another trusted origin. It grants nothing new. |
 | Storage | Workspace policy within the deployment ceiling, enforced on the server |
+
+## Known limitations
+
+- AI connector (MCP) tokens can't show session evidence when used, so the
+  sign-in policy is checked when they are minted. Setting a policy that
+  requires Microsoft or an email domain revokes the workspace's existing
+  connector tokens. API tokens are workspace integration credentials and are
+  not affected by sign-in policy.
+- Offline meeting downloads are precomputed per membership without a live
+  session (`sessionChecksDeferred`); the sign-in policy and MFA are enforced on
+  the real session when downloads are fetched.
+- AI connector OAuth consent is served from one origin for the whole deployment.
+- There is no operator function to unlink logins or to merge two memberships.
+- Nothing here moves records between deployments; see
+  [migration-and-cutover.md](migration-and-cutover.md).

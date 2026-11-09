@@ -39,7 +39,9 @@ export function AuthShell({ title, lede, children, after, help, variant = "card"
   // A domain mapped to one workspace signs in as that workspace.
   const domain = useAuth().domainWorkspace;
   const instance = domain === null ? authInstanceLabel(capabilities) : null;
-  const supportEmail = domain?.signIn.supportEmail ?? capabilities?.supportEmail;
+  // On a mapped domain only that workspace's own contact is shown: the
+  // deployment-wide address may belong to another organization sharing it.
+  const supportEmail = domain ? domain.signIn.supportEmail : domain === null ? capabilities?.supportEmail : undefined;
   const headingRef = useRef<HTMLHeadingElement>(null);
   const liveRef = useRef<HTMLParagraphElement>(null);
   const shownStateKey = useRef(stateKey);

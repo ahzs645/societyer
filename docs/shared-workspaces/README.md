@@ -1,0 +1,69 @@
+# Shared workspaces and linked sign-in
+
+Several organizations can share one Convex deployment and stay separate. DDC
+North and First Form are the first pair. Each workspace keeps its own members,
+roles, sign-in requirement, website, file storage and defaults. One person can
+link their logins and switch between their workspaces without signing out.
+
+What it adds:
+
+- **Workspace sign-in policy.** DDC North can require a Microsoft sign-in from
+  its directory group while First Form accepts passwords on the same deployment.
+  The policy is checked against how the current session signed in, never against
+  login methods someone has linked.
+- **Linked logins.** A person proves two logins are theirs and then reaches the
+  memberships of both. Memberships, roles and history are never moved, merged or
+  reactivated. Adding a provider such as Microsoft to your own login is
+  disabled; an operator provisions Microsoft logins.
+- **Domains.** Each verified frontend origin opens its workspace and shows its
+  branding. Links in emails go to the workspace's own domain.
+- **Cross-domain handoff.** Switching to a workspace on another mapped domain
+  carries the same session across. It never upgrades a password session.
+- **Storage policy.** DDC keeps SharePoint with native uploads off; First Form
+  uses native storage.
+- **Workspace defaults.** The First Form invoice template is installed per
+  workspace instead of per deployment.
+
+## Pages
+
+| Page | For |
+| --- | --- |
+| [architecture.md](architecture.md) | The contract: tables, functions, rules |
+| [operator-runbook.md](operator-runbook.md) | Deploying, policies, domains, storage, accounts, offboarding, rollback |
+| [staging-setup.md](staging-setup.md) | Stage 1: a shared staging deployment, test accounts, preview builds, journeys |
+| [user-guide.md](user-guide.md) | Members and workspace admins |
+| [migration-and-cutover.md](migration-and-cutover.md) | Stages 3–4: inventory, backups, destination choice, cutover, rollback |
+| [acceptance-tests.md](acceptance-tests.md) | Each acceptance criterion mapped to a test or staging journey, with gaps |
+| [Feasibility review](../audits/2026-11-08-shared-workspaces-review.md) | Why, and the staged plan |
+
+## Quick links
+
+- Deploy the new code safely: [runbook step 1](operator-runbook.md#1-deploy-the-new-code-to-each-existing-deployment)
+- Set DDC's Microsoft requirement: [runbook step 2](operator-runbook.md#ddc-north)
+- Turn off deployment-wide required SSO, in order: [runbook](operator-runbook.md#turning-off-required-sso)
+- Map domains and `SITE_URL`: [runbook step 4](operator-runbook.md#4-domains)
+- Storage ceilings to remove: [runbook](operator-runbook.md#ceilings-that-must-go-on-a-shared-deployment)
+- Link two logins: [user guide](user-guide.md#link-an-existing-account)
+- What is not implemented: [migration](migration-and-cutover.md#what-this-change-does-and-doesnt-provide), [acceptance gaps](acceptance-tests.md#acceptance-criteria)
+
+Related deployment guides: [DDC North Entra rollout](../ddcnorth-entra-rollout.md),
+[DDC North deployment](../ddcnorth-cloud-deployment.md),
+[First Form deployment](../firstform-cloud-deployment.md),
+[sign-in hosted in Convex](../convex-hosted-auth-setup.md).
+
+## Tests
+
+| Command | Covers |
+| --- | --- |
+| `npm run test:workspace-sign-in-policy` | Session evidence, policy validation, Microsoft and email-domain rules, linked password versus Microsoft sessions |
+| `npm run test:account-links` | Link protocol: freshness, single-use codes, conflicts, merge, unlink |
+| `npm run test:workspace-domains` | Domain mapping, `resolveOrigin`, audit, canonical links, invoice template install |
+| `npm run test:session-handoff` | Handoff endpoints on the real Better Auth engine |
+| `npm run test:workspace-storage-policy` | Storage policy on every native path, SharePoint versus native, ceiling |
+| `npm run test:shared-workspace-ui` | Startup rules, handoff parsing and redemption, switcher routing, link code storage |
+| `npm run test:workspace-selection` | Per-tab and per-backend workspace selection |
+
+Each runs a single `tsx` (or `node`) script under `scripts/`, so
+`./node_modules/.bin/tsx scripts/check-workspace-sign-in-policy.ts` works as
+well. What each one asserts, and what still needs a manual check, is in
+[acceptance-tests.md](acceptance-tests.md).

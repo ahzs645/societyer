@@ -1,0 +1,57 @@
+# Shared workspaces: acceptance tests
+
+This maps each acceptance criterion in the
+[review](../audits/2026-11-08-shared-workspaces-review.md#7-acceptance-criteria)
+to the automated check that covers it, the manual staging journey
+([staging-setup.md](staging-setup.md#7-journeys)), or a gap. The automated
+checks run locally against `convex-test` and the real Better Auth engine with
+in-memory or SQLite storage. They don't prove a live Entra registration, live
+SharePoint, real browsers or real mail.
+
+## Automated checks
+
+| Command | Script | What it asserts |
+| --- | --- | --- |
+| `npm run test:workspace-sign-in-policy` | `scripts/check-workspace-sign-in-policy.ts` | Session evidence comes only from the signed `societyer_session.*` and `societyer_entra.*` claims, and mistyped or invalid proof is ignored. Deployment-wide required SSO still makes a password session anonymous. `set` refuses a wrong tenant, an unlisted or empty group, a blank reason, Microsoft fields on `any`, bad domains, a bad support email, and Entra being off or broken, and writes nothing then. A DDC Microsoft session opens DDC but not First Form. A DDC password session is refused with the Microsoft message and gets `sign-in-required` with a `microsoft` lock. Expired, wrong-tenant or wrong-group evidence is refused. A First Form password session opens First Form and not DDC. Microsoft evidence never creates a membership. A linked person's password session opens First Form and sees DDC locked; their Microsoft session opens both, each with its own role. Another identity's proof is never reused. The email-domain rule needs a verified email in an allowed domain. `clear` restores access and both changes are logged. |
+| `npm run test:account-links` | `scripts/check-account-links.ts` | `begin` needs a deployment-signed session from the last 15 minutes. Codes are 43 characters, stored only as SHA-256, last 10 minutes, and a new `begin` cancels the old code. Preview shows only the two parties and their workspaces. Stale, same-account and unauthenticated attempts are refused. A confirmed code can't be replayed or reused by a third identity. Either linked session reaches the other's Active memberships with their own roles. Disabled stays Disabled. Only deployment-signed user sessions follow links: gateway, API-token, service and trusted-workspace principals don't. Overview shows only the caller's own person. An invitation accepted through a linked login adds no second membership. A forced overlap makes the workspace unreachable for both. Conflicts (Disabled memberships and already-linked people included) are refused, spend the code and are logged. Disabled identities can't begin or confirm. Expiry, cancel, merging two people, unlink, removing a one-login person and relinking. Better Auth part: no implicit linking by matching email. *The part that exercises explicit `linkSocial` reflects the design before provider linking was disabled and needs updating with that change.* |
+| `npm run test:workspace-domains` | `scripts/check-workspace-domains.ts` | `upsert` normalizes origins and refuses paths, credentials, origins outside `SITE_URL`, missing workspaces and a second Active workspace per origin. A new primary demotes the old one. `resolveOrigin` returns null for unknown, disabled, ambiguous and untrusted origins, and otherwise only the workspace ID, name, origin, logo and sign-in method plus support email. `audit` flags ambiguous, unmapped, untrusted and multiple-primary cases. Provisioning, reset and invitation links use the canonical origin, fall back to the first `SITE_URL`, and honour `appUrl`. `installInvoiceTemplate` installs for one workspace without the deployment flag, is idempotent, and refuses a workspace without an Active Owner. |
+| `npm run test:session-handoff` | `scripts/check-session-handoff.ts` | On the real Better Auth engine with the production plugins: create needs a session and a trusted app origin, refuses untrusted, non-exact and same-origin targets and calls without an `Origin`. Only the code hash is stored, with a 60-second lifetime. Redeem from the wrong origin is refused and burns the code. Success delivers the same session only through the cross-domain header, mints no new session, and can't be replayed. Expired codes, tampered rows, and expired or revoked source sessions are refused. Both endpoints are throttled per IP. *Written for the source-initiated flow. It needs the destination-initiated challenge (`challenge` on create, `verifier` on redeem, origins must be mapped) added with that change.* |
+| `npm run test:workspace-storage-policy` | `scripts/check-workspace-storage-policy.ts` | No row keeps the deployment behaviour, and the deployment flag is a ceiling. `set` validation. A DDC-like SharePoint workspace is refused on every native path (upload URLs, attachments, asset and inventory images, offline meeting files, Paperless pulls, transcript storage, demo versions) and its versions go to SharePoint. A First Form-like native workspace on the same deployment uses native storage. Upload handles are bound to the provider. SharePoint broker routes refuse a native workspace before calling Microsoft. Duplicate rows refuse uploads. |
+| `npm run test:shared-workspace-ui` | `scripts/check-shared-workspace-ui.ts` | Startup rules 1–4 and the unmapped fallback. The pending choice is used once and expires. Handoff `next` is limited to same-origin `/app` paths, fragment parsing, redemption strips the fragment first and selects nothing on failure. Switcher: same origin versus handoff, unsafe canonical origins ignored. `resolveOrigin` result parsing. The link code lives in `sessionStorage` and expires. *Handoff fragment cases follow the old flow and need updating.* |
+| `npm run test:workspace-selection` | `scripts/check-workspace-selection.mjs` | Per-tab selection, plus: selections remembered per backend URL, and no first-workspace fallback on a mapped origin. |
+
+Run all of them, plus the related existing suites:
+
+```sh
+npm run test:workspace-sign-in-policy && npm run test:account-links && npm run test:workspace-domains \
+  && npm run test:session-handoff && npm run test:workspace-storage-policy && npm run test:shared-workspace-ui \
+  && npm run test:workspace-selection && npm run test:hosted-entra && npm run test:identity-binding \
+  && npm run test:workspace-access && npm run test:workspace-mfa && npm run test:document-upload-binding \
+  && npm run test:sharepoint-connection && npm run test:stage2-tenancy && npm run test:multi-user-pipeline
+```
+
+Each script is `tsx scripts/<name>` (or `node` for the `.mjs`). You can run it
+directly with `./node_modules/.bin/tsx scripts/check-….ts`. The stage-two
+harness reports blocked, error and not-applicable outcomes. A harness error is
+not a passed isolation check.
+
+## Acceptance criteria
+
+| Check | Required result | Automated | Manual (staging journey) | Gaps |
+| --- | --- | --- | --- | --- |
+| DDC-only identity | DDC succeeds with Microsoft evidence; First Form denied | sign-in-policy | 3, 7 | Live Entra only on staging |
+| First Form-only identity | Password login works; DDC denied | sign-in-policy | 2, 6, 7 | |
+| Dual membership | Both in the picker, each with its own role | sign-in-policy, account-links | 8 | |
+| Password session switching to DDC | Microsoft required; a linked provider alone isn't enough | sign-in-policy | 4, 5, 9 | |
+| Identity linking | Both proven; replay, expiry, cross-person refused; Disabled stays Disabled | account-links | 8, 13, 16 | The tab-only `sessionStorage` code is checked at unit level; cross-tab behaviour is manual |
+| Duplicate membership conflict | Explicit reconciliation; no role escalation or authorship loss | account-links | 15 | Reconciling means removing one membership. Its records keep a dangling actor ID. No merge tool. |
+| Direct backend calls | Forged workspace, record and file IDs denied regardless of domain | account-links (third identity), sign-in-policy, storage-policy; existing workspace-access, document-upload-binding, stage2-tenancy | 20 | Not re-run as a whole against a shared two-organization deployment. |
+| Branded domains | Correct first workspace, sign-in look, support contact | workspace-domains, shared-workspace-ui | 1, 2, 4 | Visual check is manual |
+| Cross-domain handoff | Exact approved destination, single use, no credential leak, same assurance | session-handoff, shared-workspace-ui | 10, 11, 12 | Tests need updating for the destination-initiated challenge. Live cross-site browser behaviour is manual only. |
+| Invitations, reset, MFA, OAuth | Correct destination; unapproved redirects refused | workspace-domains (links), workspace-mfa, shared-workspace-ui (`next`) | 19 | AI connector OAuth consent is served only from the first `SITE_URL` origin (`shared/mcp/oauth.ts:110-113`, origin check in `convex/mcpOAuthHttp.ts:370`), not the workspace's domain. With DDC's domain first, a First Form password user meets a Microsoft-only sign-in page there. Not covered. |
+| Storage | DDC keeps SharePoint; First Form's provider works; cross-workspace locators denied | storage-policy, document-upload-binding, sharepoint-connection | 6, 17, 18 | meeting-sources also refuses a native-storage workspace's SharePoint upload. Live SharePoint only if staging has a test site. |
+| Offboarding | Removing one membership blocks it without touching others | account-links (Disabled membership, other memberships kept) | 16 | `revokeMemberSessions` ends every session of that login, including password sessions on the same login. Manual only. |
+| Background operations | Jobs and tokens stay scoped and recheck grants | account-links (API-token, gateway and service principals don't follow links); existing workflow-schedule-authorization | | sign-in-policy asserts that setting a Microsoft policy revokes that workspace's earlier AI connector tokens and leaves other workspaces' tokens alone. powersync-invalidation asserts offline downloads still rebuild under a sign-in policy and are refused to a session without the evidence. API tokens are not re-checked ([runbook](operator-runbook.md#revoke-ai-connector-grants-and-api-tokens-issued-before-the-policy)). |
+| Old browser state | A backend change can't mix an old API endpoint with a new auth endpoint; caches scoped | workspace-selection (selection per backend URL) | | Not addressed: a stored runtime server choice (`societyer:app-runtime` in `localStorage`, `src/lib/appRuntime.ts`) overrides the build's `VITE_CONVEX_URL`, while `VITE_CONVEX_SITE_URL` is fixed at build time (`src/lib/convexSite.ts`). Hosted builds only write that choice from the setup page, so the risk is low. |
+| Migration | Counts, references, files and totals reconcile | none | | No import tool exists ([migration-and-cutover.md](migration-and-cutover.md#what-this-change-does-and-doesnt-provide)). |
+| Release comparison | Frontends and backend from one known revision | none | cutover checklist | Manual: deploy from a clean commit with `--commit-dirty=false` and record the hash. |
