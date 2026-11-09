@@ -28,7 +28,7 @@
 }
 
 // ------------------------------------------- corporation people register
-// Missing roles are buttons that open the add form; recorded ones are badges.
+// One status badge per role; adding is the page header's New menu.
 .role-register-actions {
   display: flex;
   flex-wrap: wrap;

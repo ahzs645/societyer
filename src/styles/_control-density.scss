@@ -198,6 +198,15 @@ $tap-block: (
     min-height: token('control-h-touch');
     height: token('control-h-touch');
   }
+  // The picker's button sits inside its 1px-inset pill: the pill, not the
+  // button, is the 36px field height, like the search beside it. (Phones
+  // drop the pill and size the button itself, below.)
+  @media (min-width: 561px) {
+    .record-table__toolbar .record-table__view-switcher:first-child > .record-table__view-button {
+      min-height: calc(#{token('control-h-touch')} - 4px);
+      height: calc(#{token('control-h-touch')} - 4px);
+    }
+  }
   .record-table__toolbar .record-table__toolbar-button {
     min-width: token('control-h-touch');
     justify-content: center;
@@ -766,15 +775,6 @@ $tap-block: (
   }
 }
 
-// ============================================================
-// Other list pages (phones)
-// ============================================================
-.related-views {
-  flex-wrap: wrap;
-}
-@media (max-width: 760px) {
-  .related-views { margin-bottom: token('s-3'); }
-}
 // A filter picker that moves onto the page title's row (Deadlines' status).
 .page__actions .page-header-filter {
   width: auto;

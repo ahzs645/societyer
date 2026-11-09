@@ -1,19 +1,32 @@
 @use "tokens" as *;
+@use "mixins" as *;
 
-// Hosted sign-in account card (UserPicker with real auth). The local/demo
-// user picker is `.user-picker` and keeps its own single-row layout.
-.sidebar-account {
-  display: grid;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  background: token('bg-panel');
-}
-.sidebar-account__head {
-  gap: 8px;
-  align-items: center;
+// Hosted sign-in account row (UserPicker with real auth): avatar, name and
+// role on one line, opening the account menu. The local/demo acting-user
+// picker shares `.user-picker` and keeps its own layout.
+.sidebar-account__trigger {
   min-width: 0;
+  padding: 4px 6px;
+  background: transparent;
+  color: token('text-primary');
+  text-align: left;
+}
+.sidebar-account__trigger:hover,
+.sidebar-account__trigger[aria-expanded='true'] {
+  border-color: transparent;
+  background: token('bg-hover');
+}
+.sidebar-account__avatar {
+  @include inline-flex-center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: token('r-pill');
+  background: token('accent-soft');
+  color: token('accent');
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
 }
 .sidebar-account__name {
   flex: 1 1 0%;
@@ -31,50 +44,40 @@
   color: token('accent');
   font-size: token('fs-xs');
 }
-.sidebar-account__note {
-  font-size: token('fs-sm');
-}
-.sidebar-account__actions {
-  gap: 6px;
-  flex-wrap: wrap;
-  min-width: 0;
+.sidebar-account__chevron {
+  flex-shrink: 0;
+  color: token('text-tertiary');
 }
 
-// Rail: the card opens beside the avatar button instead of sitting in the rail.
-.sidebar-account--popover {
-  position: fixed;
-  z-index: token('z-dropdown');
-  border: 0;
-  box-shadow: token('elevation-2');
-  color: token('text-primary');
+// The rail's round button is the avatar already.
+.app-shell.is-rail .sidebar__identity .sidebar-account__trigger {
+  background: token('accent-soft');
+  color: token('accent');
+}
+.app-shell.is-rail .sidebar__identity .sidebar-account__avatar {
+  width: auto;
+  height: auto;
+  background: none;
+  color: inherit;
+  font-size: inherit;
 }
 
-// Expanded sidebar: keep the account details and theme controls inside the
-// sidebar width. The card's parts join the footer grid instead of nesting a card.
-.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity {
+// Menu header: who is signed in, and their role here.
+.sidebar-account__menu-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > .sidebar-account {
-  display: contents;
-}
-.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity .sidebar-account__head {
-  grid-column: 1 / -1;
-}
-.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity .sidebar-account__note {
-  display: none;
-}
-.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity .sidebar-account__actions {
-  grid-column: 1;
-}
-.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > .sidebar-theme-toggle {
-  grid-column: 2;
-  justify-self: end;
-  align-self: end;
-}
-.app-shell:not(.is-rail):not(.is-collapsed) .sidebar__identity > .user-picker {
-  width: 100%;
+  gap: 1px;
   min-width: 0;
+}
+.sidebar-account__menu-name {
+  overflow: hidden;
+  font-weight: token('fw-medium');
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-account__menu-email,
+.sidebar-account__menu-role {
+  overflow: hidden;
+  font-size: token('fs-sm');
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

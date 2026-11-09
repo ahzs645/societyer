@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
 import { BookOpen, Calendar, FileText, FolderOpen } from "lucide-react";
 import { formatDate, pluralize } from "../lib/format";
@@ -33,8 +33,6 @@ export function LibraryPage() {
         subtitle="Handbooks, policies, governance documents and meeting packets."
         actions={<Link className="btn-action" to="/app/documents"><FolderOpen size={12} /> All documents</Link>}
       />
-
-      <RelatedDocumentViews current="/app/library" />
 
       {data?.counts && (
         <p className="muted library-summary">

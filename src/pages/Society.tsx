@@ -1,6 +1,5 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
 import { NaicsSectorField } from "../features/organizationProfile/NaicsSectorField";
-import { OrganizationRegistrationProfile } from "../components/OrganizationRegistrationProfile";
 import { isModuleEnabled } from "../lib/modules";
 import { MonthDayPicker } from "../components/MonthDayPicker";
 import { formatAddressText } from "../../shared/structuredAddress";
@@ -574,8 +573,6 @@ export function SocietyPage() {
         </>
       )}
 
-      <OrganizationRegistrationProfile key={society._id} organization={society} />
-
       <GstAccountReference identifiers={detail?.identifiers} actions={<>
         <button className="btn-action" type="button" onClick={() => openMoreDetails("tax-identifiers")}>Manage tax identifiers</button>
         {canEdit && <button className="btn-action btn-action--primary" type="button" onClick={() => {
@@ -584,7 +581,7 @@ export function SocietyPage() {
         }}><Plus size={12} /> Add GST/HST account</button>}
       </>} />
 
-      <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+      <fieldset disabled={!canEdit} className="society-fieldset">
       <div className="society-layout">
         <main className="society-layout__main">
           <div className="card">
@@ -785,9 +782,10 @@ export function SocietyPage() {
                   disabled={importingGovernance || missingGovernanceCount === 0}
                   style={{ marginLeft: "auto" }}
                   type="button"
+                  title="Fill missing documents from the registry"
                 >
                   <FileDown size={12} />
-                  {importingGovernance ? "Checking…" : "Auto-fill missing"}
+                  {importingGovernance ? "Checking…" : "Auto-fill"}
                 </button>
               )}
             </div>
@@ -866,17 +864,14 @@ export function SocietyPage() {
         </aside>
       </div>
 
-      <details id="more-organization-details" ref={moreDetailsRef} className="card" style={{ marginTop: 16 }}>
-        <summary style={{ cursor: "pointer", padding: "var(--s-4)", fontWeight: 600 }}>
-          More organization details
-          <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: "var(--fs-sm)" }}>
+      <details id="more-organization-details" ref={moreDetailsRef} className="card">
+        <summary className="org-details-summary">
+          <span className="org-details-summary__title">More organization details</span>
+          <span className="muted org-details-summary__hint">
             Registry classification, lifecycle dates, extra-provincial registrations, and tax identifiers.
           </span>
         </summary>
-        <div className="card__body" style={{ paddingTop: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button className="btn-action" type="button" onClick={backfillExistingRecords}>Backfill records</button>
-          </div>
+        <div className="card__body org-details-body">
 
           <div className="org-details-top">
             <div className="card">
@@ -887,10 +882,12 @@ export function SocietyPage() {
               <div className="card__body">
                 <div className="org-details-field-grid">
                   <OptionSelect label="Entity type" setName="entityTypes" value={form.entityType ?? ""} onChange={(value) => { set("entityType", value); set("legalSubtype", "other"); }} emptyLabel="Needs classification" />
-                  <GoverningActSelect value={form.actFormedUnder} jurisdictionCode={form.jurisdictionCode} onChange={setGoverningAct} otherActName={setupOtherActName(society.onboardingAnswersJson)} />
                   {/* While preparing, the legal formation status below is the one status;
                       the workspace status follows it (see organizationStatusForFormation). */}
                   {!preparing && <OptionSelect label="Organization status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />}
+                  <div className="org-details-field-grid__wide">
+                    <GoverningActSelect value={form.actFormedUnder} jurisdictionCode={form.jurisdictionCode} onChange={setGoverningAct} otherActName={setupOtherActName(society.onboardingAnswersJson)} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -898,7 +895,6 @@ export function SocietyPage() {
             <div className="card">
               <div className="card__head">
                 <h2 className="card__title">Lifecycle dates</h2>
-                <span className="card__subtitle">Primary incorporation plus registry events.</span>
                 <button
                   className="btn btn--sm"
                   type="button"
@@ -913,7 +909,7 @@ export function SocietyPage() {
               <div className="card__body">
                 <div className="org-details-date-list">
                   {lifecycleRows.length === 0 && !addingLifecycleDate && (
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No lifecycle dates recorded.</div>
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No lifecycle dates recorded. Add incorporation or registry events.</div>
                   )}
                   {lifecycleRows.map((item) => (
                     <div className="org-details-date-row" key={item.value}>
@@ -954,20 +950,23 @@ export function SocietyPage() {
 
             <div className="card org-details-classification-card">
               <div className="card__head">
-                <h2 className="card__title">Classification and flags</h2>
+                <h2 className="card__title">Formation, tax and annual dates</h2>
               </div>
               <div className="card__body">
-                <div className="org-details-field-grid">
-                  <Field label="Nice classification">
-                    <input className="input" value={form.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
-                  </Field>
-                </div>
                 <EntitySetupFields form={form} set={set} includeDates documents={evidenceDocuments ?? []} />
-                <div className="org-details-toggle-row">
-                  <Toggle checked={!!form.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
-                  <Toggle checked={!!form.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
-                  <Toggle checked={!!form.solicitingPublicBenefit} onChange={(value) => set("solicitingPublicBenefit", value)} label="Soliciting / public benefit" />
-                </div>
+                <section className="entity-setup-group">
+                  <h3 className="entity-setup-group__title">Other classification</h3>
+                  <div className="org-details-field-grid">
+                    <Field label="Nice classification" hint="Trademark class, if the organization holds a mark.">
+                      <input className="input" value={form.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
+                    </Field>
+                  </div>
+                  <div className="org-details-toggle-row">
+                    <Toggle checked={!!form.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
+                    <Toggle checked={!!form.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
+                    <Toggle checked={!!form.solicitingPublicBenefit} onChange={(value) => set("solicitingPublicBenefit", value)} label="Soliciting / public benefit" />
+                  </div>
+                </section>
               </div>
             </div>
           </div>
@@ -1043,6 +1042,11 @@ export function SocietyPage() {
                 />
               </DetailSection></div>
             </div>
+          </div>
+
+          <div className="org-details-backfill">
+            <span className="muted">Older profiles kept addresses and minute-book items as plain fields. Copy them into the records above.</span>
+            <button className="btn btn--sm" type="button" onClick={backfillExistingRecords}>Backfill records</button>
           </div>
         </div>
       </details>

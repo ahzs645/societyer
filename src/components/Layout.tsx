@@ -64,6 +64,7 @@ import {
   Plug,
   Plus,
   Layers,
+  LayoutGrid,
   Keyboard,
 } from "lucide-react";
 import {
@@ -1916,6 +1917,8 @@ export function Layout() {
             <div style={{ padding: 8, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
               {can("society:write") && <button type="button" className="btn btn--ghost workspace-menu__brand-settings" role="menuitem"
                 onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/app/settings#workspace-brandkit"); }}>Workspace branding</button>}
+              {auth.mode === "convex" && <button type="button" className="btn btn--ghost workspace-menu__brand-settings" role="menuitem"
+                onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/account/workspaces"); }}><LayoutGrid size={14} /> {t("sidebar.manageMyWorkspaces")}</button>}
               <button
                 type="button"
                 className="btn btn--accent"

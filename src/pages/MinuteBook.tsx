@@ -8,7 +8,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
-import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -243,7 +243,6 @@ export function MinuteBookPage() {
         }
       />
 
-      <RelatedDocumentViews current="/app/minute-book" />
       {detail?.restrictedResources?.length > 0 && <p className="muted" role="status">Your role limits access to these record sections: {detail.restrictedResources.join(", ")}. Accessible records remain available.</p>}
 
       {detail?.documentCoverageLimited && <p className="muted" role="status">Some supporting documents are unavailable to your role. Document completeness is unknown.</p>}

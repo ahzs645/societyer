@@ -8,7 +8,6 @@ import { Badge, Drawer, Field } from "./ui";
 import { Select } from "./Select";
 import { DatePicker } from "./DatePicker";
 import { useToast } from "./Toast";
-import { OrganizationCapabilities } from "./OrganizationCapabilities";
 import { formatDate } from "../lib/format";
 import type { CapabilityOrganization } from "../../shared/organizationCapabilities";
 import "./organizationRegistrationProfile.css";
@@ -134,14 +133,13 @@ export function OrganizationRegistrationProfile({ organization }: {
   };
 
   return <div className="organization-registration-profile">
-    <OrganizationCapabilities organization={organization} charityRegistrations={data?.history} assessmentDate={data?.onDate} />
     <section className="card organization-registration-profile__card" id="charity-registration" aria-labelledby="charity-registration-title" data-testid="charity-registration-profile">
       <div className="card__head organization-registration-profile__head">
         <div>
           <h2 className="card__title" id="charity-registration-title"><FileCheck2 size={16} aria-hidden="true" /> Charity registration and evidence</h2>
           <p className="card__subtitle">Record an application, the authority's decision, and the dates it applies.</p>
         </div>
-        <button type="button" className="btn btn--accent" onClick={openEditor} disabled={!canWrite || data === undefined}>
+        <button type="button" className="btn btn--sm" onClick={openEditor} disabled={!canWrite || data === undefined}>
           <Plus size={14} aria-hidden="true" /> Record registration update
         </button>
       </div>
@@ -154,17 +152,15 @@ export function OrganizationRegistrationProfile({ organization }: {
                 <span>{ready ? "Evidence reviewed; each gift and signing action still needs its own checks." : "Donation acknowledgements remain available. Official receipting requires the applicable evidence and gift checks."}</span>
               </div>
               {current?.charityNumber && <p>Registration number: <strong className="mono">{current.charityNumber}</strong></p>}
-              {data.assessment?.reasons?.length > 0 && <ul className="organization-registration-profile__reasons">
-                {data.assessment.reasons.map((reason: { code: string; message: string }) => <li key={reason.code}>{reason.message}</li>)}
-              </ul>}
               {!current && (organization.isCharity || organization.charityStatus === "registered") && <p className="organization-registration-profile__notice">
                 The earlier profile reports charitable registration. Add the decision and supporting evidence here before preparing official receipts.
               </p>}
               {organization.isMemberFunded && current?.status === "registered" && <p className="organization-registration-profile__notice">
                 The profile also reports member-funded status. Review the classification and governing documents before relying on that status.
               </p>}
-              <p className="muted">Evidence review records your organization's review. It does not verify registration with the Canada Revenue Agency.</p>
-              <Link className="setup-inline-link" to="/app/receipts">Open donations and receipts</Link>
+              <p className="muted organization-registration-profile__footnote">
+                Evidence review records your organization's review. It does not verify registration with the Canada Revenue Agency.
+              </p>
               <details className="organization-registration-profile__history">
                 <summary>Registration history ({data.history.length})</summary>
                 {data.history.length === 0 ? <p>No registration revisions have been recorded.</p> : <ol>

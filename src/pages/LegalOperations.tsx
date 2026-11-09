@@ -15,7 +15,7 @@ import { DatePicker } from "../components/DatePicker";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UserCheck, UsersRound } from "lucide-react";
+import { BookTemplate, FileSignature, Landmark, Scale, Trash2, UserCheck, UsersRound } from "lucide-react";
 import { CreateMenu } from "../components/CreateMenu";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { formatDate } from "../lib/format";
@@ -318,6 +318,7 @@ export function RoleHoldersPage() {
               corporationWorkspace && { id: "officer", label: "Officer", onSelect: () => openNew("officer") },
               corporationWorkspace && { id: "shareholder", label: "Shareholder", onSelect: () => openNew("shareholder") },
               corporationWorkspace && { id: "controller", label: "Controller", onSelect: () => openNew("controller") },
+              corporationWorkspace && { id: "authorized_filer", label: "Authorized filer", onSelect: () => openNew("authorized_filer") },
             ]}
           />
         }
@@ -346,21 +347,17 @@ export function RoleHoldersPage() {
               </Link>
             </div>
             <div className="card__body">
-              {/* Recorded roles show as status; missing ones are real buttons that open the add form. */}
+              {/* Status only: adding any of these is the header's New menu. */}
               <div className="role-register-actions">
                 {([
-                  { role: "director", count: roleSummary.directors, recorded: "Directors recorded", add: "Add a director" },
-                  { role: "officer", count: roleSummary.officers, recorded: "Officers recorded", add: "Add an officer" },
-                  { role: "shareholder", count: roleSummary.shareholders, recorded: "Shareholders recorded", add: "Add a shareholder" },
-                  { role: "controller", count: roleSummary.controllers, recorded: "Controllers recorded", add: "Add a controller" },
-                  { role: "authorized_filer", count: roleSummary.authorizedFilers, recorded: "Authorized filers recorded", add: "Add an authorized filer" },
-                ] as const).map((item) => item.count
-                  ? <Badge key={item.role} tone="success">{item.recorded}</Badge>
-                  : (
-                    <button key={item.role} type="button" className="btn btn--sm" disabled={!canWrite} onClick={() => openNew(item.role)}>
-                      <Plus size={12} aria-hidden="true" /> {item.add}
-                    </button>
-                  ))}
+                  { role: "director", count: roleSummary.directors, recorded: "Directors recorded", missing: "No directors yet" },
+                  { role: "officer", count: roleSummary.officers, recorded: "Officers recorded", missing: "No officers yet" },
+                  { role: "shareholder", count: roleSummary.shareholders, recorded: "Shareholders recorded", missing: "No shareholders yet" },
+                  { role: "controller", count: roleSummary.controllers, recorded: "Controllers recorded", missing: "No controllers yet" },
+                  { role: "authorized_filer", count: roleSummary.authorizedFilers, recorded: "Authorized filers recorded", missing: "No authorized filers yet" },
+                ] as const).map((item) => (
+                  <Badge key={item.role} tone={item.count ? "success" : "neutral"}>{item.count ? item.recorded : item.missing}</Badge>
+                ))}
               </div>
             </div>
           </section>

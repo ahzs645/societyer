@@ -25,7 +25,7 @@
 }
 .document-preview-pane__viewport { display: flex; flex-direction: column; }
 .document-preview-pane__viewport > :is(.pdf-preview, .docx-preview) { flex: 1 1 auto; min-height: 0; }
-.document-preview-pane__viewport > :is(.document-preview-pane__origin, .document-preview-pane__text, .document-preview-pane__sheets, .document-preview-pane__message) { flex-shrink: 0; }
+.document-preview-pane__viewport > :is(.document-preview-pane__origin, .document-preview-pane__text, .email-preview, .document-preview-pane__sheets, .document-preview-pane__message) { flex-shrink: 0; }
 .document-preview-pane__viewport > .document-preview-pane__text { max-height: none; overflow: visible; }
 // Tame docx-preview's default gray wrapper the same way the minutes preview
 // does (see .minutes-docx-preview .docx-wrapper) — our own container already
@@ -953,7 +953,7 @@ body > canvas.hiddenCanvasElement { position: absolute; top: 0; left: 0; width: 
   .modal__head > .file-preview-title { flex: 1 1 auto; }
   .modal__body { flex: 1 1 auto; min-height: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
   .document-preview-pane { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; overflow: hidden; display: flex; flex-direction: column; border: 0; border-radius: 0; padding: 0; }
-  .document-preview-pane__message, .document-preview-pane__text, .document-preview-pane__sheets { padding: 12px; }
+  .document-preview-pane__message, .document-preview-pane__text, .document-preview-pane__sheets, .email-preview { padding: 12px; }
   .pdf-preview, .docx-preview { flex: 1 1 auto; min-height: 0; padding: 0; }
   .pdf-preview__viewport, .docx-preview__viewport { flex: 1 1 auto; min-height: 0; }
   .document-preview-pane__image { display: block; max-width: 100%; margin: auto; }

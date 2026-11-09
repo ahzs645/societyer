@@ -168,9 +168,13 @@ export function Select<T extends string>({
   }, [options, query, renderedSearchable]);
 
   const visibleItems: (SelectOption<T> | { value: ""; label: string; _clear: true })[] = useMemo(() => {
-    if (clearable) return [{ value: "" as const, label: clearLabel, _clear: true }, ...filtered];
+    // The clear row only earns its place when there is something to clear,
+    // and it is noise in a filtered result list.
+    if (clearable && value && !query.trim()) {
+      return [{ value: "" as const, label: clearLabel, _clear: true }, ...filtered];
+    }
     return filtered;
-  }, [clearable, clearLabel, filtered]);
+  }, [clearable, clearLabel, filtered, query, value]);
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
@@ -482,11 +486,10 @@ export function Select<T extends string>({
                     const isSelected = o.value === value;
                     const isClear = "_clear" in o;
                     const hasColor = !isClear && "color" in o && o.color;
-                    // A "clear" row renders as an outline-variant Tag so
-                    // it visually reads as an empty state.
-                    const label = isClear ? (
-                      <Tag color="transparent" variant="outline" text={o.label} />
-                    ) : hasColor ? (
+                    // A "clear" row is plain muted text (see
+                    // `.menu__item--clear`), not a chip, so it never reads
+                    // as one of the choices.
+                    const label = hasColor ? (
                       <Tag color={(o as SelectOption<T>).color!} text={o.label} />
                     ) : (
                       o.label

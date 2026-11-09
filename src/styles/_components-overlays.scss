@@ -182,6 +182,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 .menu__search-input {
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
   background: transparent;
@@ -189,6 +190,8 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   font-size: token('fs-md');
   padding: 2px 0;
 }
+.menu__search-input:focus-visible { outline: none; }
+.menu__search:focus-within { color: token('text-secondary'); }
 .menu__list {
   overflow-y: auto;
   flex: 1;
