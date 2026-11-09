@@ -70,6 +70,19 @@ $auth-control-h-desktop: token('control-h-lg'); // 40px
   svg { flex: 0 0 auto; color: token('text-tertiary'); }
 }
 
+// The workspace a mapped domain signs in to (logo + name), in place of the instance pill.
+.auth__workspace {
+  @include inline-flex-center;
+  gap: token('s-2');
+  max-width: 100%;
+  @include text-body;
+  font-weight: token('fw-medium');
+  color: token('text-primary');
+  overflow-wrap: anywhere;
+
+  .workspace-logo { flex: 0 0 auto; }
+}
+
 // ---------- Card ----------
 .auth__card {
   @include surface-card;

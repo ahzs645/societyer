@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Building2 } from "lucide-react";
 import { authInstanceLabel, useAuthCapabilities } from "./authCapabilities";
+import { useAuth } from "./AuthProvider";
+import { WorkspaceLogo } from "../components/WorkspaceLogo";
 
 type AuthShellProps = {
   title: string;
@@ -34,8 +36,10 @@ type AuthShellProps = {
 /** Page frame shared by sign-in, password reset and invitation pages. */
 export function AuthShell({ title, lede, children, after, help, variant = "card", icon, stateKey, announce }: AuthShellProps) {
   const capabilities = useAuthCapabilities();
-  const instance = authInstanceLabel(capabilities);
-  const supportEmail = capabilities?.supportEmail;
+  // A domain mapped to one workspace signs in as that workspace.
+  const domain = useAuth().domainWorkspace;
+  const instance = domain === null ? authInstanceLabel(capabilities) : null;
+  const supportEmail = domain?.signIn.supportEmail ?? capabilities?.supportEmail;
   const headingRef = useRef<HTMLHeadingElement>(null);
   const liveRef = useRef<HTMLParagraphElement>(null);
   const shownStateKey = useRef(stateKey);
@@ -65,6 +69,12 @@ export function AuthShell({ title, lede, children, after, help, variant = "card"
             <SocietyerMark />
             <span>Societyer</span>
           </span>
+          {domain && (
+            <span className="auth__workspace">
+              <WorkspaceLogo organization={{ name: domain.workspaceName, logoUrl: domain.logoUrl, logoDarkUrl: domain.logoDarkUrl }} />
+              <span>{domain.workspaceName}</span>
+            </span>
+          )}
           {instance && (
             <span className="auth__instance">
               <Building2 size={12} aria-hidden="true" />
@@ -99,7 +109,7 @@ export function AuthShell({ title, lede, children, after, help, variant = "card"
         )}
         {/* "/" is Societyer's public product page. A deployment that belongs
             to one organization has no home of its own to go back to. */}
-        {!instance && <Link to="/" className="auth__footer-link">Back to home</Link>}
+        {!instance && domain === null && <Link to="/" className="auth__footer-link">Back to home</Link>}
       </footer>
     </div>
   );

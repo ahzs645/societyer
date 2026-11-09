@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../lib/convexApi";
@@ -10,6 +10,8 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PendingInvitations } from "./PendingInvitations";
 import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
+
+const WorkspaceAccessScreen = lazy(() => import("../auth/WorkspaceAccessScreen"));
 
 export function AuthGate({ children, allowWorkspaceCreation = false }: { children: React.ReactNode; allowWorkspaceCreation?: boolean }) {
   const auth = useAuth();
@@ -79,6 +81,7 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
         </AuthMessage>
       );
     }
+    if (auth.membershipStatus === "sign-in-required") return <AccessScreen />;
     if (auth.membershipStatus === "needs-invitation") {
       if (invitations === undefined) return <AppBootScreen label="Looking for invitations sent to your verified email…" />;
       if (invitations.length) return <div className="page"><h1>Join your workspace</h1><PendingInvitations /><button className="btn" onClick={() => void auth.signOut()}>Sign out</button></div>;
@@ -126,10 +129,21 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
     return <AuthMessage title="Workspace unavailable" message="Your workspace membership could not be confirmed." />;
   }
 
+  // Sign-in chose a workspace this session can't open: never fall through to another one.
+  if (auth.startup?.kind === "locked" || auth.startup?.kind === "no-access-here") return <AccessScreen />;
+
   return (
     <DeploymentCapabilitiesGate>
       <WorkspaceReadyGate>{children}</WorkspaceReadyGate>
     </DeploymentCapabilitiesGate>
+  );
+}
+
+function AccessScreen() {
+  return (
+    <Suspense fallback={<AppBootScreen label="Checking your secure workspace access…" />}>
+      <WorkspaceAccessScreen />
+    </Suspense>
   );
 }
 

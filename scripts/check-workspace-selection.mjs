@@ -38,18 +38,20 @@ const { outputFiles } = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" }, bundle: true, platform: "node", format: "cjs", write: false,
   plugins: [{ name: "transport-fixtures", setup(b) {
     b.onResolve({ filter: /^react$/ }, () => ({ path: require.resolve("react") }));
-    b.onResolve({ filter: /AuthProvider$|^convex\/react$|authMode$|staticRuntime$|useLocalWorkspaceReady$|useRecordQuery$|^@\/lib\/convexApi$/ }, a => ({ path: a.path, namespace: "fixture" }));
+    b.onResolve({ filter: /AuthProvider$|^convex\/react$|authMode$|staticRuntime$|appRuntime$|useLocalWorkspaceReady$|useRecordQuery$|^@\/lib\/convexApi$/ }, a => ({ path: a.path, namespace: "fixture" }));
     b.onLoad({ filter: /.*/, namespace: "fixture" }, a => ({ loader: "js", contents:
       a.path.includes("AuthProvider") ? 'export function useAuth(){return {mode:globalThis.fixture.mode??"convex",isConvexAuthenticated:true,membershipStatus:"bound",societies:globalThis.fixture.societies}}' :
       a.path === "convex/react" ? 'export function useQuery(){return globalThis.fixture.societies}' :
       a.path.includes("authMode") ? 'export function getAuthMode(){return globalThis.fixture?.mode??"convex"}' :
       a.path.includes("staticRuntime") ? 'export function isLocalDataRuntime(){return globalThis.fixture?.local===true};export function isStaticDemoRuntime(){return globalThis.fixture?.demo===true}' :
+      a.path.includes("appRuntime") ? 'export function resolvedConvexUrl(){return globalThis.fixture?.convexUrl??"https://one.convex.cloud/"}' :
       a.path.includes("useLocalWorkspaceReady") ? 'export function useLocalWorkspaceReady(){return true}' :
       a.path.includes("useRecordQuery") ? 'export function useRecordQuery(){return undefined}' : 'export const api={society:{list:"list"},users:{get:"get"}}',
     }));
   } }],
 });
-const SOCIETY = "societyer.currentSocietyId", USER = "societyer.currentUserId";
+// Signed-in selections are remembered per backend (trailing slash trimmed).
+const LEGACY_SOCIETY = "societyer.currentSocietyId", SOCIETY = `${LEGACY_SOCIETY}@https://one.convex.cloud`, USER = "societyer.currentUserId";
 function environment(initial = [[SOCIETY, "a"], [USER, "user-a"]]) {
   const values = new Map(initial), tabs = [], events = [];
   let failWrites = false;
@@ -116,4 +118,23 @@ const local = environment(), localTab = local.tab(); localTab.setup(["a", "b"], 
 localTab.select("b"); assert.ok(localTab.snapshot().every(row => row.startsWith("b:"))); local.close();
 const demo = environment(), demoTab = demo.tab(); demoTab.setup(["a", "b"], { mode: "none", local: true, demo: true });
 demoTab.select("b"); assert.equal(demo.values.get("societyer.demo.currentSocietyId"), "b"); assert.equal(demo.values.get(SOCIETY), "a"); demo.close();
-console.log("Workspace selection passed: stale invitation tab cannot undo switching; per-tab workspace/user/role consistency; reload persistence; unknown membership denial; hydration and mount timing; unavailable storage; local and demo compatibility.");
+// Local runtimes keep the unscoped key.
+const localKey = environment([]), localKeyTab = localKey.tab(); localKeyTab.setup(["a", "b"], { mode: "none", local: true });
+localKeyTab.select("b"); assert.equal(localKey.values.get(LEGACY_SOCIETY), "b"); assert.equal(localKey.values.has(SOCIETY), false); localKey.close();
+
+// A selection remembered for another backend, or under the old unscoped key,
+// is not reused: this deployment falls back to its own first workspace.
+const OTHER = `${LEGACY_SOCIETY}@https://two.convex.cloud`;
+const scoped = environment([[OTHER, "b"], [LEGACY_SOCIETY, "b"]]), scopedTab = scoped.tab();
+scopedTab.setup(["a", "b"]); shows(scopedTab, "a:user-a:Owner");
+assert.equal(scoped.values.get(SOCIETY), "a"); assert.equal(scoped.values.get(OTHER), "b"); assert.equal(scoped.values.get(LEGACY_SOCIETY), "b");
+scopedTab.select("b"); assert.equal(scoped.values.get(SOCIETY), "b"); assert.equal(scoped.values.get(OTHER), "b"); scoped.close();
+
+// On a mapped origin sign-in owns the choice: with no valid selection the
+// hooks show no workspace rather than quietly opening the first one.
+const held = environment([]), heldTab = held.tab();
+heldTab.society.setSelectionFallbackAllowed(false); heldTab.setup(["a", "b"]);
+shows(heldTab, "::"); assert.equal(held.values.has(SOCIETY), false);
+heldTab.select("b"); shows(heldTab, "b:user-b:Admin");
+heldTab.society.setSelectionFallbackAllowed(true); shows(heldTab, "b:user-b:Admin"); held.close();
+console.log("Workspace selection passed: stale invitation tab cannot undo switching; per-tab workspace/user/role consistency; reload persistence; unknown membership denial; hydration and mount timing; unavailable storage; local and demo compatibility; per-deployment remembered selection; no first-workspace fallback on mapped origins.");
