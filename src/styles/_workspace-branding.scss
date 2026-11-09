@@ -60,19 +60,6 @@
 .workspace-menu__option:focus-visible { outline-offset: -3px; }
 .workspace-menu__brand-settings { width: 100%; justify-content: flex-start; margin-bottom: token('s-1'); }
 
-.workspace-brand-banner {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: token('s-4');
-  padding: token('s-3') token('s-4');
-  margin-bottom: token('s-4');
-  border: 1px solid token('border');
-  border-radius: token('r-card');
-  background: token('bg-panel');
-}
-.workspace-brand-banner__identity { display: flex; flex-direction: column; min-width: 0; flex: 1 1 160px; overflow-wrap: anywhere; }
-.workspace-brand-banner__identity .muted { font-size: token('fs-xs'); }
 .workspace-portfolio-identity { display: inline-flex; align-items: center; gap: token('s-2'); max-width: 100%; text-align: left; }
 .workspace-portfolio-identity .workspace-logo { width: 52px; }
 
@@ -140,6 +127,4 @@
   .workspace-brand-settings__footer .btn { min-height: 40px; white-space: normal; }
   .workspace-brand-settings__tools > *,
   .workspace-brand-settings__footer > * { max-width: 100%; }
-  .workspace-brand-banner { gap: token('s-3'); }
-  .workspace-brand-banner > .workspace-logo--full { width: 136px; height: 36px; }
 }

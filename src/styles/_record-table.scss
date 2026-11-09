@@ -57,11 +57,13 @@
   position: relative;
 }
 
+// The picker's pill is the search field's height (28px: 1px border, 1px
+// inset, 24px button) so the toolbar's leading controls line up.
 .record-table__view-switcher:first-child {
   background: token('bg-secondary');
   border: 1px solid token('border-color-medium');
   border-radius: token('r-pill');
-  padding: 3px;
+  padding: 1px;
 }
 
 .record-table__view-button,
@@ -271,7 +273,7 @@
 
 .record-table__segmented {
   @include inline-flex-center;
-  height: 26px;
+  height: 28px;
   padding: 2px;
   border: 1px solid token('border-color-medium');
   border-radius: token('r-sm');
@@ -281,7 +283,7 @@
     @include inline-flex-center;
     justify-content: center;
     width: 24px;
-    height: 20px;
+    height: 22px;
     border: 0;
     border-radius: 4px;
     background: transparent;

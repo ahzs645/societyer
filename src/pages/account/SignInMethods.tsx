@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useAuth } from "../../auth/AuthProvider";
 import { AuthPending, AuthShell } from "../../auth/AuthShell";
-import { useAuthCapabilities } from "../../auth/authCapabilities";
+import { useAuthCapabilities, useAuthenticatorEnrollment } from "../../auth/authCapabilities";
 import { authFailureFromResponse, toAuthFailure } from "../../auth/authErrors";
 import { useConfirm } from "../../components/Modal";
 import { loadSessionAuthClient } from "../../lib/sessionAuthClient";
@@ -36,7 +36,10 @@ export default function SignInMethodsPage() {
  * with person-level linking instead, which proves each login separately.
  */
 function SignInMethods() {
+  const auth = useAuth();
   const capabilities = useAuthCapabilities();
+  const authenticatorEnrollment = useAuthenticatorEnrollment();
+  const twoFactorEnabled = auth.session?.user.twoFactorEnabled === true;
   const [accounts, setAccounts] = useState<SignInAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +82,15 @@ function SignInMethods() {
             To sign in with Microsoft, ask your administrator to set up a Microsoft login for you. Then
             connect it here with <Link className="auth__link" to="/account/link">Link an existing account</Link>.
           </p>
+        )}
+        {(authenticatorEnrollment || twoFactorEnabled) && (
+          <section className="account-section" aria-labelledby="account-two-step">
+            <h2 id="account-two-step" className="account-section__title">Two-step verification</h2>
+            <p className="auth__hint">
+              {twoFactorEnabled ? "An authenticator app is on for this login." : "Add an authenticator app as a second sign-in step."}{" "}
+              <Link className="auth__link" to="/account/security">Account security</Link>
+            </p>
+          </section>
         )}
         <LinkedLogins />
       </div>

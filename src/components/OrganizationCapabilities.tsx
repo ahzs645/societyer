@@ -58,7 +58,7 @@ export function OrganizationCapabilities({ organization, charityRegistrations, a
             const config = WORKFLOWS[workflow.action];
             const nextAction = workflow.reasons.find(reason => reason.nextAction)?.nextAction;
             const to = nextAction?.startsWith("/app/") ? nextAction
-              : nextAction === "review_registration" ? "/app/society#charity-registration"
+              : nextAction === "review_registration" ? "/app/receipts#charity-registration"
                 : config.to;
             return <li key={workflow.action} data-workflow={workflow.action} data-readiness={workflow.readiness}>
               <div className="organization-capabilities__workflow-heading">

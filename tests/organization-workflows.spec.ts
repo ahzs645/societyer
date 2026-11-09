@@ -69,7 +69,7 @@ async function createSociety(page: Page, name: string) {
       certificateEvidenceDocumentId: certificateId, certificateReference: "SYNTHETIC-CERTIFICATE", certificateDate: "2025-01-01",
     });
   }, { societyId, name, certificateId });
-  await page.goto("/app/society");
+  await page.goto("/app/receipts");
   await expect(page.getByTestId("charity-registration-profile")).toContainText("Registration evidence not recorded");
   return societyId;
 }
@@ -97,7 +97,7 @@ async function evidencePdf(page: Page, societyId: string, title: string) {
   }, { societyId, title, bytes });
 }
 
-test("organization profile preserves pending and reviewed registration history on desktop and phone", async ({ page }, testInfo) => {
+test("donations page preserves pending and reviewed registration history on desktop and phone", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.clock.setFixedTime(new Date("2026-11-07T18:00:00Z"));
@@ -171,7 +171,7 @@ test("acknowledgement becomes a separately signed official receipt without chang
   await expect(await receiptAction(page, original.receiptNumber, "Prepare official receipt")).toBeDisabled();
   await page.keyboard.press("Escape");
 
-  await page.goto("/app/society");
+  await page.goto("/app/receipts");
   const evidenceTitle = "Synthetic decision for gift workflow";
   await evidencePdf(page, societyId, evidenceTitle);
   const profile = page.getByTestId("charity-registration-profile");

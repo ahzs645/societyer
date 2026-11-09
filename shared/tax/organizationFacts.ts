@@ -36,7 +36,7 @@ export function organizationTaxFacts(organization: SupplierTaxOrganization | und
   const reasons = conflict
     ? registration.status === "conflict" ? registration.reasons.map(reason => reason.message) : [legacyConflict!]
     : unresolvedClaim
-      ? ["The organization profile or history claims charity registration, but the applicable status is unresolved for this date. Review Organization → Charity registration before confirming this tax assessment."]
+      ? ["The organization profile or history claims charity registration, but the applicable status is unresolved for this date. Review Donations and receipts → Charity registration before confirming this tax assessment."]
       : [];
   // Revisions are immutable. The current revision and its date-specific result
   // identify the facts reviewed without embedding private registration evidence.
@@ -80,7 +80,7 @@ export function organizationTaxProblems(answers: TaxAnswers, organization?: Supp
   if (answers.sellerKind === "charity" && facts.charityRegistrationStatus !== "registered" && !facts.needsReview) {
     problems.push(facts.charityRegistrationStatus === "not_registered"
       ? "This date is outside the reviewed charity-registration period. Review the supply date and registration evidence before using the charity tax rules."
-      : "Record and review the applicable charity-registration evidence in Organization → Charity registration before confirming the charity tax rules.");
+      : "Record and review the applicable charity-registration evidence in Donations and receipts → Charity registration before confirming the charity tax rules.");
   }
   if (checkRecordedFacts && (
     (answers.organizationFactsKey && answers.organizationFactsKey !== facts.factsKey)

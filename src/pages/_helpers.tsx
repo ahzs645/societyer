@@ -1,7 +1,7 @@
-import { ChevronDown, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { InfoPopover } from "../components/InfoPopover";
 import { ReactNode, useState, createElement, useLayoutEffect, useRef } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -10,8 +10,6 @@ import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/ro
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { getRuntimeMode } from "../lib/runtimeMode";
 import { useTranslation } from "react-i18next";
-import { Menu } from "../components/Menu";
-import { useIsMobile } from "../lib/useIsMobile";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
@@ -80,54 +78,6 @@ export function SeedPrompt() {
           <>Create a local society workspace to start storing records and documents.</>
         )}
       </EmptyState>
-    </div>
-  );
-}
-
-/**
- * The five document/record surfaces are scattered across three different
- * sidebar groups (Work, Governance records, Compliance) because each has a
- * legitimate reason to sit next to its neighbours there. That makes it easy
- * to land on one and not realize the other four exist. Rather than restructure
- * nav, each of those five pages renders this single unobtrusive link row
- * (right under its PageHeader) so a user can jump straight across.
- */
-const RELATED_DOCUMENT_VIEWS = [
-  { to: "/app/documents", label: "Documents" },
-  { to: "/app/document-catalog", label: "Document catalog" },
-  { to: "/app/library", label: "Library" },
-  { to: "/app/minute-book", label: "Minute book" },
-  { to: "/app/records-archive", label: "Records archive" },
-] as const;
-
-export function RelatedDocumentViews({ current }: { current: (typeof RELATED_DOCUMENT_VIEWS)[number]["to"] }) {
-  const links = RELATED_DOCUMENT_VIEWS.filter((view) => view.to !== current);
-  const navigate = useNavigate();
-  const isMobile = useIsMobile();
-  // The chips can't fit a phone's width, so they fold into one menu.
-  if (isMobile) {
-    return (
-      <div className="related-views">
-        <Menu
-          label="Related views"
-          trigger={
-            <button type="button" className="btn-action">
-              Related <ChevronDown size={12} aria-hidden="true" />
-            </button>
-          }
-          sections={[{ id: "related", items: links.map((view) => ({ id: view.to, label: view.label, onSelect: () => navigate(view.to) })) }]}
-        />
-      </div>
-    );
-  }
-  return (
-    <div className="row muted related-views" style={{ gap: 6, alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
-      <span>Related:</span>
-      {links.map((view) => (
-        <Link key={view.to} to={view.to} className="chip chip--sm">
-          {view.label}
-        </Link>
-      ))}
     </div>
   );
 }

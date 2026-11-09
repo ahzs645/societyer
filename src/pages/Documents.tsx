@@ -6,7 +6,7 @@ import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
-import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { FileDropZone, useFileDrop } from "../components/FileDropZone";
 import { Tabs } from "../components/primitives";
@@ -384,7 +384,6 @@ export function DocumentsPage() {
         }
       />
 
-      <RelatedDocumentViews current="/app/documents" />
       {permissions.loaded && !canEdit && <p className="muted">Your role can read accessible documents. Document editing permission is required to create, upload, sync or delete records.</p>}
 
       {reviewQueues && <DocumentQueues queues={reviewQueues} />}

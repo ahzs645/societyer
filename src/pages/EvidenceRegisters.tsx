@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
-import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -391,12 +391,7 @@ export function RecordsArchivePage() {
         icon={<Archive size={16} />}
         iconColor="gray"
         subtitle="Archive custody, accessions and source provenance."
-        info={
-          <>
-            <p>Archive custody, accessions, source provenance, and restricted-source handling.</p>
-            <RelatedDocumentViews current="/app/records-archive" />
-          </>
-        }
+        info={<p>Archive custody, accessions, source provenance, and restricted-source handling.</p>}
         actions={<Link className="btn-action" to="/app/imports" aria-label="Review imports"><FileSearch size={12} /> <span className="evidence-action-label">Review imports</span></Link>}
       />
       <div className="stat-grid" style={{ marginBottom: 16 }}>

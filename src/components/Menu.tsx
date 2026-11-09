@@ -53,9 +53,11 @@ type Props = {
   sheetTitle?: string;
   /** Told when the menu opens or closes, however it was dismissed. */
   onOpenChange?: (open: boolean) => void;
+  /** Non-interactive content above the first section (an account's name and email). */
+  header?: ReactNode;
 };
 
-export function Menu({ trigger, sections, minWidth, align = "left", label, sheetTitle, onOpenChange }: Props) {
+export function Menu({ trigger, sections, minWidth, align = "left", label, sheetTitle, onOpenChange, header }: Props) {
   const [open, setOpen] = useState(false);
   const openChange = useRef(onOpenChange);
   openChange.current = onOpenChange;
@@ -260,7 +262,7 @@ export function Menu({ trigger, sections, minWidth, align = "left", label, sheet
 
   const renderSections = () => {
     let runningIdx = 0;
-    return sections.map((section, sIdx) => (
+    const rendered = sections.map((section, sIdx) => (
       <div key={section.id} className="menu__section">
         {section.label && <MenuSectionLabel>{section.label}</MenuSectionLabel>}
         {section.items.map((item) => {
@@ -285,6 +287,14 @@ export function Menu({ trigger, sections, minWidth, align = "left", label, sheet
         {sIdx < sections.length - 1 && <div className="menu__separator" />}
       </div>
     ));
+    if (!header) return rendered;
+    return (
+      <>
+        <div className="menu__header">{header}</div>
+        <div className="menu__separator" />
+        {rendered}
+      </>
+    );
   };
 
   return (

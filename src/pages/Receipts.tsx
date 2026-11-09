@@ -26,6 +26,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { receiptDocumentLabel, type ReceiptDocumentKind } from "../../shared/receipting/policy";
 import { officialReceiptOrganizationIssues, resolveOrganizationContext } from "../../shared/organization/resolveContext";
 import { DocumentPreviewButton } from "../components/DocumentFilePreview";
+import { OrganizationRegistrationProfile } from "../components/OrganizationRegistrationProfile";
 
 export function ReceiptsPage() {
   const { canWrite, canExport } = useFinancePermissions();
@@ -173,7 +174,7 @@ export function ReceiptsPage() {
         actions={<button type="button" className="btn-action btn-action--primary" onClick={() => openNew()} disabled={!canWrite || busy}><Plus size={12} /> New donation record</button>}
       />
       <Banner tone={officialReady ? "info" : "warn"} title={officialReady ? "Official receipt preparation available" : "Acknowledgements available"}>
-        <p>{registrationMessage} <Link to="/app/society">Review organization registrations</Link></p>
+        <p>{registrationMessage} <a href="#charity-registration">Charity registration and evidence</a></p>
         <p>The official route currently supports cash gifts in CAD with no donor advantage. Print the preparation for an authorized paper signature, then retain the signed copy and record its issue.</p>
       </Banner>
       {historicalCount > 0 && <Banner tone="info" title="Historical records retained">
@@ -229,6 +230,9 @@ export function ReceiptsPage() {
             />
           </RecordTableScope>
         ) : null}
+
+      {/* Official receipts depend on this evidence, so it is recorded here, beside them. */}
+      <OrganizationRegistrationProfile key={society._id} organization={society} />
 
       <Drawer open={Boolean(form)} onClose={() => { if (!busy) setForm(null); }} title={form?.documentKind === "official_tax_receipt" ? "Prepare official receipt" : "Record donation acknowledgement"}
         footer={<><button className="btn" onClick={() => setForm(null)} disabled={busy}>Cancel</button><button className="btn btn--accent" onClick={() => void save()} disabled={!canWrite || busy || (form?.documentKind === "official_tax_receipt" && !officialReady)}>{busy ? "Saving…" : form?.documentKind === "official_tax_receipt" ? "Prepare for signature" : "Record acknowledgement"}</button></>}>

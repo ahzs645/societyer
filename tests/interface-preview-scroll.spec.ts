@@ -62,3 +62,30 @@ test("Word and inline PDF readers share the bounded scrolling surface", async ({
   await expect.poll(() => pdf.evaluate(e => e.scrollTop)).toBeGreaterThan(0);
   expect(await page.locator(".document-preview-pane__viewport").evaluate(e => e.scrollHeight - e.clientHeight)).toBe(0);
 });
+
+test("Email receipts render headers, a script-free body and attachments", async ({ page }) => {
+  const remote: string[] = [];
+  page.on("request", request => { if (request.url().includes("tracker.example.com")) remote.push(request.url()); });
+  await page.getByRole("button", { name: "Open receipt email", exact: true }).click();
+  const email = page.locator(".email-preview");
+  await expect(email.locator(".email-preview__subject")).toHaveText("Payment successful");
+  await expect(email.locator(".email-preview__headers")).toContainText("receipts@shop.example.com");
+  const body = page.frameLocator(".email-preview__frame");
+  await expect(body.getByText("$42.00")).toBeVisible();
+  // The inline cid: logo is resolved from the message itself; the tracking pixel stays off.
+  await expect(body.getByAltText("Shop logo")).toHaveAttribute("src", /^data:image\/png;base64,/);
+  await expect(body.getByAltText("tracking pixel")).not.toHaveAttribute("src", /.+/);
+  expect(await body.locator("script, [onerror]").count()).toBe(0);
+  await expect(body.getByText("Bad link")).not.toHaveAttribute("href", /.+/);
+  await expect(body.getByRole("link", { name: "View order" })).toHaveAttribute("target", "_blank");
+  expect(await page.evaluate(() => ({ ...document.body.dataset }))).not.toHaveProperty("emailScript");
+  expect(await page.evaluate(() => ({ ...document.body.dataset }))).not.toHaveProperty("emailHandler");
+  // The frame grows to its content rather than adding a nested scrollbar.
+  const frame = page.locator(".email-preview__frame");
+  const sizes = await frame.evaluate((element: HTMLIFrameElement) => ({ frame: element.clientHeight, content: element.contentDocument!.documentElement.scrollHeight }));
+  expect(sizes.frame).toBeGreaterThanOrEqual(sizes.content);
+  await expect(email.locator(".email-preview__attachments")).toContainText("receipt-1.pdf");
+  expect(remote).toEqual([]);
+  await email.getByRole("button", { name: "Show images", exact: true }).click();
+  await expect(body.getByAltText("tracking pixel")).toHaveAttribute("src", "https://tracker.example.com/pixel.gif");
+});

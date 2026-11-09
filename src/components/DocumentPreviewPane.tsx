@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PdfPreview } from "./PdfPreview";
 import { DocxPreview } from "./DocxPreview";
 import { ScrollArea } from "./ScrollArea";
+import { EmailPreview } from "./EmailPreview";
 import { Download, FileWarning, Loader2, ShieldCheck } from "lucide-react";
 import type { Id } from "../../convex/_generated/dataModel";
 import { restoredDocumentFile } from "../lib/documentOpen";
@@ -10,10 +11,15 @@ import { fetchDocumentDownload } from "../lib/documentDownload";
 import { xlsxToSheets, type SheetPreview } from "../lib/xlsxPreview";
 import { hasPdfSignature, hasZipSignature, hasOleSignature, imageMimeType, mediaMimeType, extensionOf, LEGACY_LABELS } from "../lib/filePreviewSignatures";
 import type { ExternalDocumentReference } from "../features/externalDocuments/types";
+import type { EmailPreview as EmailPreviewData } from "../lib/emailReceipt";
 
 /* ------------------------------- preview pane -------------------------------- */
 
-type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "audio" | "video" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "external" | "error";
+function isEmailMime(mimeType: string | undefined) {
+  return mimeType?.split(";")[0].trim().toLowerCase() === "message/rfc822";
+}
+
+type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "audio" | "video" | "text" | "email" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "external" | "error";
 
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -23,8 +29,9 @@ const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordproces
  * link (finding D-02). PDFs use the shared PDF.js viewer only after the
  * bytes prove to be a PDF (finding D-01); DOCX via docx-preview, fitted to the
  * width with zoom controls (`DocxPreview`); XLSX as plain
- * tables; images as <img>; legacy Office files explain why they cannot render
- * and show the text extracted at import instead.
+ * tables; images as <img>; .eml as a mail-style view (`EmailPreview`);
+ * legacy Office files explain why they cannot render and show the text
+ * extracted at import instead.
  */
 export function DocumentPreviewPane({
   document,
@@ -50,6 +57,7 @@ export function DocumentPreviewPane({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [sheets, setSheets] = useState<SheetPreview[]>([]);
   const [text, setText] = useState<string>("");
+  const [email, setEmail] = useState<EmailPreviewData | null>(null);
   const [origin, setOrigin] = useState<"saved" | "version" | "link" | null>(null);
   const fileName = document?.fileName;
   const ext = extensionOf(fileName);
@@ -64,6 +72,7 @@ export function DocumentPreviewPane({
     setDocxBlob(null);
     setSheets([]);
     setText("");
+    setEmail(null);
     setOrigin(null);
     if (document?.externalReference) {
       setStatus("external");
@@ -104,7 +113,7 @@ export function DocumentPreviewPane({
             return;
           }
           const lower = (fileName ?? "").toLowerCase();
-          const previewable = mimeType?.includes("pdf") || mimeType?.includes("wordprocessingml") || mimeType?.includes("spreadsheetml") || /\.(pdf|docx|xlsx|png|jpe?g|gif|txt|csv|md|json|vtt|srt|mp3|m4a|mp4|wav|webm|ogg|oga|flac|aac|mov|mkv)$/.test(lower);
+          const previewable = mimeType?.includes("pdf") || mimeType?.includes("wordprocessingml") || mimeType?.includes("spreadsheetml") || isEmailMime(mimeType) || /\.(pdf|docx|xlsx|eml|png|jpe?g|gif|txt|csv|md|json|vtt|srt|mp3|m4a|mp4|wav|webm|ogg|oga|flac|aac|mov|mkv)$/.test(lower);
           if (!previewable) {
             setStatus(LEGACY_LABELS[ext] ? "legacy" : "unsupported");
             return;
@@ -163,12 +172,12 @@ export function DocumentPreviewPane({
           setStatus(media.startsWith("audio/") ? "audio" : "video");
           return;
         }
-        if (ext === "eml" || mimeType?.split(";")[0].toLowerCase() === "message/rfc822") {
-          const { previewReceiptEmail } = await import("../lib/emailReceipt");
-          const emailText = await previewReceiptEmail(bytes);
+        if (ext === "eml" || isEmailMime(mimeType)) {
+          const { parseEmailPreview } = await import("../lib/emailReceipt");
+          const parsed = await parseEmailPreview(bytes);
           if (cancelled) return;
-          setText(emailText);
-          setStatus("text");
+          setEmail(parsed);
+          setStatus("email");
           return;
         }
         if (/^(txt|csv|md|json|vtt|srt)$/.test(ext)) {
@@ -238,6 +247,7 @@ export function DocumentPreviewPane({
           {!sheets.length && <p className="muted">This workbook has no readable cells.</p>}
         </div>
       )}
+      {status === "email" && email && <EmailPreview email={email} />}
       {status === "text" && <pre className="document-preview-pane__text">{text}</pre>}
       {(status === "legacy" || status === "unsupported" || status === "not-a-file" || status === "unavailable" || status === "error") && (
         <div className="document-preview-pane__message">

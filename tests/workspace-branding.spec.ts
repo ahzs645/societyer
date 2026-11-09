@@ -38,7 +38,7 @@ async function assertContained(page: Page, location: string) {
     document: document.documentElement.scrollWidth,
     body: document.body.scrollWidth,
     containers: [...document.querySelectorAll<HTMLElement>(
-      "[role=main] .page, .settings-shell, .settings-shell__content, .workspace-brand-settings, .workspace-brand-settings .card__body, .workspace-brand-settings__previews, .workspace-brand-settings__tools, .workspace-brand-settings__footer, .workspace-brand-banner, .workspace-menu",
+      "[role=main] .page, .settings-shell, .settings-shell__content, .workspace-brand-settings, .workspace-brand-settings .card__body, .workspace-brand-settings__previews, .workspace-brand-settings__tools, .workspace-brand-settings__footer, .workspace-menu",
     )].filter(element => element.getClientRects().length).map(element => {
       // Phone settings cards deliberately bleed through the page gutter.
       // Their shell may include that scroll area, while the card and every

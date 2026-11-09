@@ -52,9 +52,33 @@ async function fixtureDocx() {
   zip.file("word/document.xml", `${xml}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`);
   return zip.generateAsync({ type: "arraybuffer" });
 }
-type FixtureKind = "pdf" | "long-pdf" | "docx" | "html" | "wav" | "large";
+/** A receipt email: HTML body with an inline cid: logo, a remote tracking image, hostile markup and a PDF attachment. */
+const INLINE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+async function fixtureEmail() {
+  const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(await fixturePdf())));
+  const html = `<html><head><style>.total{font-weight:700}</style></head><body>
+<p><img src="cid:logo@example" alt="Shop logo" width="16" height="16"></p>
+<h2>Payment successful</h2>
+<img src="https://tracker.example.com/pixel.gif" alt="tracking pixel">
+<script>parent.document.body.dataset.emailScript = "ran"</script>
+<img src="x" onerror="parent.document.body.dataset.emailHandler = 'ran'" alt="broken">
+<table><tr><td>Workshop supplies</td><td>$40.00</td></tr><tr><td class="total">Total</td><td class="total">$42.00</td></tr></table>
+<p><a href="https://shop.example.com/orders/1">View order</a> <a href="javascript:alert(1)">Bad link</a></p>
+</body></html>`;
+  return new TextEncoder().encode([
+    "From: Example Shop <receipts@shop.example.com>", "To: Treasurer <treasurer@society.example>", "Subject: Payment successful",
+    "Date: Thu, 6 Nov 2026 15:24:00 -0800", "MIME-Version: 1.0", 'Content-Type: multipart/mixed; boundary="mixed"', "",
+    "--mixed", 'Content-Type: multipart/related; boundary="related"', "",
+    "--related", "Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: 8bit", "", html, "",
+    "--related", "Content-Type: image/png", "Content-Transfer-Encoding: base64", "Content-ID: <logo@example>", "Content-Disposition: inline", "", INLINE_PNG, "",
+    "--related--", "",
+    "--mixed", 'Content-Type: application/pdf; name="receipt-1.pdf"', "Content-Transfer-Encoding: base64", 'Content-Disposition: attachment; filename="receipt-1.pdf"', "", pdfBase64, "",
+    "--mixed--", "",
+  ].join("\r\n")).buffer as ArrayBuffer;
+}
+type FixtureKind = "pdf" | "long-pdf" | "docx" | "html" | "wav" | "large" | "eml";
 const FIXTURE_NAMES: Record<FixtureKind, string> = {
-  pdf: "pdf-fixture.pdf", "long-pdf": "long-fixture-120-pages.pdf", docx: LONG_DOCX_NAME, html: "html-fixture.pdf", wav: "wav-fixture.wav", large: "large-fixture.pdf",
+  pdf: "pdf-fixture.pdf", "long-pdf": "long-fixture-120-pages.pdf", docx: LONG_DOCX_NAME, html: "html-fixture.pdf", wav: "wav-fixture.wav", large: "large-fixture.pdf", eml: "Payment successful.eml",
 };
 function Fixture() {
   const [kind, setKind] = useState<FixtureKind | null>(null);
@@ -71,13 +95,14 @@ function Fixture() {
     if (kind === "large") throw new Error("Large preview must never request bytes");
     if (kind === "long-pdf") return fixtureLongPdf();
     if (kind === "docx") return fixtureDocx();
+    if (kind === "eml") return fixtureEmail();
     const bytes = kind === "html" ? new TextEncoder().encode('<html><script>alert("must not run")</script>not a PDF</html>').buffer : await fixturePdf();
     signal.throwIfAborted(); return bytes;
   }, [kind]);
-  return <div className="page"><h1>Shared preview regression fixture</h1><button className="btn" onClick={() => setKind("pdf")}>Open synthetic PDF</button><button className="btn" onClick={() => setKind("long-pdf")}>Open 120-page PDF</button><button className="btn" onClick={() => setKind("docx")}>Open wide Word file</button><button className="btn" onClick={() => setInline(true)}>Show 120-page PDF inline</button><button className="btn" onClick={() => setKind("html")}>Open mislabeled PDF</button><button className="btn" onClick={() => setKind("wav")}>Open synthetic audio</button><button className="btn" onClick={() => setKind("large")}>Open 500 MB source</button>
+  return <div className="page"><h1>Shared preview regression fixture</h1><button className="btn" onClick={() => setKind("pdf")}>Open synthetic PDF</button><button className="btn" onClick={() => setKind("long-pdf")}>Open 120-page PDF</button><button className="btn" onClick={() => setKind("docx")}>Open wide Word file</button><button className="btn" onClick={() => setInline(true)}>Show 120-page PDF inline</button><button className="btn" onClick={() => setKind("html")}>Open mislabeled PDF</button><button className="btn" onClick={() => setKind("wav")}>Open synthetic audio</button><button className="btn" onClick={() => setKind("large")}>Open 500 MB source</button><button className="btn" onClick={() => setKind("eml")}>Open receipt email</button>
     {/* The document workbench's inline pane: its own max-height scroll box, not a dialog. */}
     {inline && <DocumentPreviewPane document={{ _id: "inline", fileName: "inline-fixture.pdf", mimeType: "application/pdf" }} fallbackUrl={null} hasAnyFile loadBytes={loadInline} />}
-    {kind && <FilePreviewDialog file={{ id: kind, name: FIXTURE_NAMES[kind], mimeType: kind === "wav" ? "audio/wav" : kind === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf", bytes: kind === "large" ? 500_000_000 : undefined }} loadBytes={load} onClose={() => setKind(null)} onDownload={() => { document.body.dataset.downloaded = kind; }} />}
+    {kind && <FilePreviewDialog file={{ id: kind, name: FIXTURE_NAMES[kind], mimeType: kind === "wav" ? "audio/wav" : kind === "eml" ? "message/rfc822" : kind === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf", bytes: kind === "large" ? 500_000_000 : undefined }} loadBytes={load} onClose={() => setKind(null)} onDownload={() => { document.body.dataset.downloaded = kind; }} />}
   </div>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture />);

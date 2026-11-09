@@ -12,7 +12,7 @@ import { FileText } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
-import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { setupViewStepLink } from "../lib/organizationSetupLinks";
 import { incorporationPreparationForOrganization } from "../../shared/incorporationPreparation";
 import { incorporationWorksheetText, incorporationWorksheetFileName } from "../../shared/incorporationWorksheet";
@@ -211,7 +211,6 @@ export function DocumentCatalogPage() {
         }
       />
 
-      <RelatedDocumentViews current="/app/document-catalog" />
       {!preparation.allowed && <Banner tone="warn">Incorporation route review required. {preparation.message}{allowedPacketKeys.size > 0 ? " Individually reviewed preparation drafts are available below." : ""}</Banner>}
       {generationError && <p role="alert">{generationError}</p>}
 

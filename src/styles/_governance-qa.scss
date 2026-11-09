@@ -330,3 +330,11 @@
     padding-inline: token('s-3');
   }
 }
+// Wider screens: the table's rows run edge to edge like any card table, but
+// the toolbar's controls take the card heading's inset instead of touching
+// the card's edges.
+@media (min-width: 761px) {
+  .role-holders-register > .record-table__toolbar {
+    padding-inline: token('s-4');
+  }
+}

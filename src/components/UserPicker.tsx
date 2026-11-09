@@ -1,6 +1,6 @@
 import { useConvex } from "convex/react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import type { StaticConvexClient, LocalActorChoice } from "../lib/staticConvexClient";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -10,14 +10,15 @@ import {
   setStoredUserId,
 } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { ChevronDown, KeyRound, LayoutGrid, Link2, LogOut, ShieldCheck } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronsUpDown, KeyRound, LayoutGrid, LogOut, ShieldCheck, UserRound, UsersRound } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { useAuthenticatorEnrollment } from "../auth/authCapabilities";
 import { usesBetterAuthClient } from "../lib/authMode";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { Menu, type MenuSection } from "./Menu";
 
-const ClerkAccountButton = lazy(() => import("../auth/ClerkAccountButton"));
+const ClerkProfileOpener = lazy(() => import("../auth/ClerkAccountButton").then((module) => ({ default: module.ClerkProfileOpener })));
 
 /**
  * The active users of the current workspace that the local/demo runtime lets
@@ -50,8 +51,86 @@ export function actAsLocalUser(id: string) {
 
 export function UserPicker({ compact = false }: { compact?: boolean } = {}) {
   const auth = useAuth();
-  const authenticatorEnrollment = useAuthenticatorEnrollment();
   const society = useSociety();
+  if (!society) return null;
+  if (auth.mode !== "none") return <AccountMenu compact={compact} />;
+  return <LocalActorPicker compact={compact} />;
+}
+
+/**
+ * Hosted sign-in: one footer row (avatar, name, role) that opens the account
+ * menu. The rail shows only the avatar; the menu is the same either way.
+ */
+function AccountMenu({ compact }: { compact: boolean }) {
+  const auth = useAuth();
+  const navigate = useNavigate();
+  const authenticatorEnrollment = useAuthenticatorEnrollment();
+  const current = useCurrentUser();
+  const [openClerkProfile, setOpenClerkProfile] = useState<(() => void) | null>(null);
+  // Wrapped: a bare function passed to a state setter would run as an updater.
+  const receiveClerkProfile = useCallback((open: (() => void) | null) => setOpenClerkProfile(() => open), []);
+
+  const email = auth.session?.user.email ?? "";
+  const name = current?.displayName ?? auth.session?.user.name ?? email;
+  const role = current?.role;
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+  const securityAvailable = usesBetterAuthClient(auth.mode) && (authenticatorEnrollment || auth.session?.user.twoFactorEnabled === true);
+
+  const accountItems: MenuSection["items"] = [];
+  if (auth.mode === "convex") {
+    accountItems.push({ id: "workspaces", label: "My workspaces", icon: <LayoutGrid size={14} />, onSelect: () => navigate("/account/workspaces") });
+    // Sign-in methods links on to account security and to linking another login.
+    accountItems.push({ id: "sign-in", label: "Sign-in & security", icon: <KeyRound size={14} />, onSelect: () => navigate("/account/sign-in-methods") });
+  } else if (securityAvailable) {
+    accountItems.push({ id: "security", label: "Account security", icon: <ShieldCheck size={14} />, onSelect: () => navigate("/account/security") });
+  }
+  if (auth.mode === "clerk" && openClerkProfile) {
+    accountItems.push({ id: "clerk-profile", label: "Manage account", icon: <UserRound size={14} />, onSelect: openClerkProfile });
+  }
+  if (current?.memberId) {
+    accountItems.push({ id: "portal", label: "Member portal", icon: <UsersRound size={14} />, onSelect: () => navigate("/portal") });
+  }
+  const sections: MenuSection[] = [
+    ...(accountItems.length ? [{ id: "account", items: accountItems }] : []),
+    { id: "session", items: [{ id: "sign-out", label: "Sign out", icon: <LogOut size={14} />, onSelect: () => void auth.signOut() }] },
+  ];
+
+  return (
+    <>
+      {auth.mode === "clerk" && (
+        <Suspense fallback={null}><ClerkProfileOpener onReady={receiveClerkProfile} /></Suspense>
+      )}
+      <Menu
+        label="Account"
+        minWidth={240}
+        header={
+          <div className="sidebar-account__menu-head">
+            <span className="sidebar-account__menu-name">{name}</span>
+            {email && email !== name && <span className="muted sidebar-account__menu-email">{email}</span>}
+            {role && <span className="muted sidebar-account__menu-role">{role} in this workspace</span>}
+          </div>
+        }
+        sections={sections}
+        trigger={
+          <button
+            type="button"
+            className="user-picker sidebar-account__trigger"
+            title={role ? `${name} (${role})` : name}
+            aria-label={`Account: ${name}`}
+          >
+            <span className="sidebar-account__avatar" aria-hidden="true">{initial}</span>
+            {!compact && <span className="sidebar-account__name">{name}</span>}
+            {!compact && role && <span className="sidebar-account__role">{role}</span>}
+            {!compact && <ChevronsUpDown size={12} className="sidebar-account__chevron" aria-hidden="true" />}
+          </button>
+        }
+      />
+    </>
+  );
+}
+
+/** Local/demo runtimes: pick which workspace user to act as. */
+function LocalActorPicker({ compact }: { compact: boolean }) {
   const users = useLocalActorChoices();
   const current = useCurrentUser();
   const currentId = useCurrentUserId();
@@ -109,84 +188,6 @@ export function UserPicker({ compact = false }: { compact?: boolean } = {}) {
     const owner = users.find((u: any) => u.role === "Owner") ?? users[0];
     if (owner) setStoredUserId(owner._id as Id<"users">);
   }, [currentId, users]);
-
-  if (!society) return null;
-
-  if (auth.mode !== "none") {
-    const name = current?.displayName ?? auth.session?.user.name ?? auth.session?.user.email ?? "";
-    const card = (
-      <>
-        <div className="row sidebar-account__head">
-          <span className="sidebar-account__name">{name}</span>
-          {current?.role && <span className="sidebar-account__role">{current.role}</span>}
-        </div>
-        <div className="muted sidebar-account__note">
-          Signed in to your account. Your workspace membership determines access.
-        </div>
-        <div className="row sidebar-account__actions">
-          {auth.mode === "clerk" && (
-            <Suspense fallback={null}><ClerkAccountButton /></Suspense>
-          )}
-          {auth.mode === "convex" && (
-            <>
-              <Link to="/account/workspaces" className="btn btn--ghost btn--sm"><LayoutGrid size={12} /> My workspaces</Link>
-              <Link to="/account/sign-in-methods" className="btn btn--ghost btn--sm"><KeyRound size={12} /> Sign-in methods</Link>
-              <Link to="/account/link" className="btn btn--ghost btn--sm"><Link2 size={12} /> Link an existing account</Link>
-            </>
-          )}
-          {usesBetterAuthClient(auth.mode) && (authenticatorEnrollment || auth.session?.user.twoFactorEnabled) && (
-            <Link to="/account/security" className="btn btn--ghost btn--sm"><ShieldCheck size={12} /> Account security</Link>
-          )}
-          {current?.memberId && (
-            <Link to="/portal" className="btn btn--ghost btn--sm">
-              Member portal
-            </Link>
-          )}
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={() => auth.signOut()}
-          >
-            <LogOut size={12} /> Sign out
-          </button>
-        </div>
-      </>
-    );
-
-    if (!compact) return <div className="sidebar-account">{card}</div>;
-
-    // Rail: an avatar-sized button that opens the same card beside the rail.
-    return (
-      <>
-        <button
-          ref={btnRef}
-          type="button"
-          className="user-picker"
-          onClick={() => setOpen((v) => !v)}
-          title={current?.role ? `${name} (${current.role})` : name}
-          aria-label={`Account: ${name}`}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-        >
-          <span aria-hidden="true">{name.trim().charAt(0).toUpperCase() || "?"}</span>
-        </button>
-        {open && anchor &&
-          createPortal(
-            <div
-              ref={menuRef}
-              data-floating-layer=""
-              role="dialog"
-              aria-label="Account"
-              tabIndex={-1}
-              className="sidebar-account sidebar-account--popover"
-              style={{ bottom: anchor.bottom, left: anchor.left, width: anchor.width }}
-            >
-              {card}
-            </div>,
-            document.body,
-          )}
-      </>
-    );
-  }
 
   return (
     <>

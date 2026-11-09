@@ -135,6 +135,87 @@
   white-space: nowrap;
   font-size: token('fs-xs');
 }
+
+/* Email (.eml) preview: headers, sandboxed body frame, attachments. */
+.email-preview {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+}
+.email-preview__head {
+  display: grid;
+  gap: token('s-2');
+  padding-bottom: token('s-3');
+  border-bottom: 1px solid token('border');
+}
+.email-preview__subject {
+  margin: 0;
+  font-size: token('fs-lg');
+  color: token('text-primary');
+  overflow-wrap: anywhere;
+}
+.email-preview__headers {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: token('fs-sm');
+  > div {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: token('s-2');
+  }
+  dt { color: token('text-tertiary'); }
+  dd { margin: 0; color: token('text-secondary'); overflow-wrap: anywhere; }
+}
+.email-preview__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+  padding: token('s-1') token('s-2');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+  .btn { margin-left: auto; }
+}
+.email-preview__frame {
+  display: block;
+  width: 100%;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: #fff;
+}
+.email-preview__empty { margin: 0; }
+.email-preview__attachments {
+  display: grid;
+  gap: token('s-2');
+  h4 {
+    display: inline-flex;
+    align-items: center;
+    gap: token('s-1');
+    margin: 0;
+    font-size: token('fs-sm');
+    color: token('text-secondary');
+  }
+  ul { display: grid; gap: token('s-1'); margin: 0; padding: 0; list-style: none; }
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token('s-2');
+    padding: token('s-1') token('s-2');
+    border: 1px solid token('border');
+    border-radius: token('r-sm');
+    font-size: token('fs-sm');
+    .btn { margin-left: auto; }
+  }
+}
+.email-preview__attachment-name {
+  font-weight: 500;
+  color: token('text-primary');
+  overflow-wrap: anywhere;
+}
 .document-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

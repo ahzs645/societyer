@@ -210,6 +210,7 @@
   color: token('text-tertiary');
 }
 .menu__separator { height: 1px; background: token('border'); margin: 4px 0; }
+.menu__header { padding: 6px 10px 4px; min-width: 0; }
 .menu__item--destructive { color: token('danger'); }
 .menu__item--destructive .menu__item-icon { color: token('danger'); }
 .menu__item--destructive.is-active { background: token('danger-soft'); }
