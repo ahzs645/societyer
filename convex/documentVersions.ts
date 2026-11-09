@@ -11,11 +11,17 @@ import {
   createDownloadUrl,
   verifyAndSealUpload,
 } from "./providers/storage";
-import { providers } from "./providers/env";
 import { DOCUMENT_STORAGE_CAPABILITIES } from "../shared/storage/providerCapabilities";
 import { assertDocumentSupportsStoredContent, requireDocumentAccess } from "../shared/functions/documents";
 import { validateUploadMetadata, validateUploadHandle } from "../shared/storage/uploadVerification";
-import { assertNativeFileStorageEnabled, assertDocumentVersionStorageEnabled } from "./providers/env";
+import {
+  assertDocumentVersionStorageAvailable,
+  assertWorkspaceDocumentVersionStorage,
+  assertWorkspaceUploadProvider,
+  documentVersionStorage,
+  workspaceStorage,
+  NATIVE_FILE_STORAGE_DISABLED_MESSAGE,
+} from "./providers/env";
 import { decodeSharePointLocator, sharePointDeployment } from "../shared/storage/sharePointDeployment";
 import { sharePointDownloadBrokerUrl } from "../shared/storage/sharePointBrokerUrl";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -57,16 +63,17 @@ export const beginUpload = authorizedAction("documentVersions:beginUpload", acti
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    assertDocumentVersionStorageEnabled();
+    assertDocumentVersionStorageAvailable(await ctx.runQuery(internal.workspaceStoragePolicies.effective, { societyId: args.societyId }));
+    // The handle records the provider chosen inside the allocating transaction; follow it.
     const allocated = await ctx.runMutation(internal.documentVersions.allocateUploadHandle, args);
-    if (providers.storage().id === "sharepoint") {
+    if (allocated.provider === "sharepoint") {
       const site = process.env.CONVEX_SITE_URL;
       if (!site) throw new Error("The authenticated file broker origin is not configured.");
       const url = new URL("/document-storage/sharepoint/upload", site);
       url.searchParams.set("uploadHandleId", allocated.uploadHandleId);
       return { presigned: { provider: "sharepoint", key: allocated.stagingKey, url: url.href }, uploadHandleId: allocated.uploadHandleId };
     }
-    const presigned = await createUploadUrl({ key: allocated.stagingKey, mimeType: args.mimeType });
+    const presigned = await createUploadUrl({ key: allocated.stagingKey, mimeType: args.mimeType, provider: allocated.provider });
     return { presigned, uploadHandleId: allocated.uploadHandleId };
   },
 });
@@ -75,7 +82,8 @@ export const storageCapabilities = authorizedQuery("documentVersions:storageCapa
   args: { societyId: v.id("societies") }, returns: v.any(),
   handler: async (ctx, { societyId }) => {
     await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
-    return { activeProvider: providers.storage().id, deploymentConfigured: providers.storage().live, connectionVerified: false, providers: DOCUMENT_STORAGE_CAPABILITIES };
+    const storage = documentVersionStorage(await workspaceStorage(ctx.db, societyId));
+    return { activeProvider: storage.id, deploymentConfigured: storage.live, connectionVerified: false, providers: DOCUMENT_STORAGE_CAPABILITIES };
   },
 });
 
@@ -85,7 +93,7 @@ export const allocateUploadHandle = internalMutation({
     mimeType: v.optional(v.string()), fileSizeBytes: v.optional(v.number()), actingUserId: v.optional(v.id("users")),
   }, returns: v.any(),
   handler: async (ctx, args) => {
-    assertDocumentVersionStorageEnabled();
+    const policy = await assertWorkspaceDocumentVersionStorage(ctx.db, args.societyId);
     validateUploadMetadata(args);
     const portable = await toPortableMutationCtx(ctx);
     const actor = await requireSocietyMembership(portable, args.societyId);
@@ -94,7 +102,7 @@ export const allocateUploadHandle = internalMutation({
     const document = await requireDocumentAccess(portable, args.documentId, "manage");
     assertDocumentSupportsStoredContent(document);
     if (String(document.societyId) !== String(args.societyId)) throw new Error("documents not found.");
-    const storage = providers.storage();
+    const storage = documentVersionStorage(policy);
     const provider = storage.id;
     if (!storage.live || provider === "demo") throw new Error("Live upload storage is not configured. Use the explicit demo upload flow.");
     if (provider === "sharepoint" && args.fileSizeBytes! > sharePointDeployment(process.env).maxFileBytes) throw new Error("SharePoint uploads are limited to 8 MiB on this deployment.");
@@ -106,17 +114,17 @@ export const allocateUploadHandle = internalMutation({
       provider, stagingKey, fileName: args.fileName, mimeType: args.mimeType,
       fileSizeBytes: args.fileSizeBytes!, expiresAtISO: new Date(Date.now() + 15 * 60 * 1000).toISOString(), status: "pending",
     });
-    return { uploadHandleId, stagingKey };
+    return { uploadHandleId, stagingKey, provider };
   },
 });
 
 export const claimUploadHandle = internalMutation({
   args: { uploadHandleId: v.id("documentUploadHandles"), requiredProvider: v.optional(v.literal("sharepoint")) }, returns: v.any(),
   handler: async (ctx, { uploadHandleId, requiredProvider }) => {
-    assertDocumentVersionStorageEnabled();
     const handle = await ctx.db.get(uploadHandleId);
     if (!handle) throw new Error("Upload handle not found.");
     if (requiredProvider && handle.provider !== requiredProvider) throw new Error("Upload handle uses a different storage provider.");
+    await assertWorkspaceUploadProvider(ctx.db, handle.societyId, handle.provider);
     const portable = await toPortableMutationCtx(ctx);
     const actor = await requireSocietyMembership(portable, handle.societyId);
     if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
@@ -138,6 +146,7 @@ export const markUploadVerified = internalMutation({
     if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
     assertDocumentSupportsStoredContent(await requireDocumentAccess(portable, handle.documentId, "manage"));
     validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, "verifying");
+    await assertWorkspaceUploadProvider(ctx.db, handle.societyId, handle.provider);
     if (handle.provider === "sharepoint") {
       if (!storageKey) throw new Error("Verified SharePoint metadata is required.");
       decodeSharePointLocator(storageKey, sharePointDeployment(process.env));
@@ -193,7 +202,7 @@ export const recordUploadedVersion = authorizedMutation("documentVersions:record
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    assertDocumentVersionStorageEnabled();
+    await assertWorkspaceDocumentVersionStorage(ctx.db, args.societyId);
     const portableCtx = await toPortableMutationCtx(ctx);
     const uploader = await requireSocietyMembership(portableCtx, args.societyId);
     if (args.actingUserId && String(args.actingUserId) !== uploader._id) {
@@ -213,6 +222,7 @@ export const recordUploadedVersion = authorizedMutation("documentVersions:record
     const handle = await ctx.db.get(args.uploadHandleId);
     validateUploadHandle(handle, { societyId: args.societyId, documentId: args.documentId, actorUserId: uploader._id }, "verified");
     if (!handle?.storageKey || !handle.sha256) throw new Error("Upload verification is incomplete.");
+    await assertWorkspaceUploadProvider(ctx.db, args.societyId, handle.provider);
     // Provider, object identity and checksum come only from the verified handle.
     args = { ...args, storageProvider: handle.provider, storageKey: handle.storageKey, fileName: handle.fileName, mimeType: handle.mimeType, fileSizeBytes: handle.fileSizeBytes, sha256: handle.sha256 };
     await ctx.db.patch(handle._id, { status: "consumed" });
@@ -385,7 +395,8 @@ export const createDemoVersion = authorizedMutation("documentVersions:createDemo
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    assertNativeFileStorageEnabled();
+    const policy = await workspaceStorage(ctx.db, args.societyId);
+    if (!policy.nativeUploads || policy.documentVersionProvider !== "native") throw new Error(NATIVE_FILE_STORAGE_DISABLED_MESSAGE);
     const portableCtx = await toPortableMutationCtx(ctx);
     const uploader = await requireSocietyMembership(portableCtx, args.societyId);
     if (args.actingUserId && String(args.actingUserId) !== uploader._id) {
@@ -396,7 +407,7 @@ export const createDemoVersion = authorizedMutation("documentVersions:createDemo
     }
     await getOwned(portableCtx, "documents", args.documentId, args.societyId);
     assertDocumentSupportsStoredContent(await requireDocumentAccess(portableCtx, args.documentId, "manage"));
-    if (providers.storage().live) throw new Error("Demo versions are unavailable on a live storage deployment.");
+    if (documentVersionStorage(policy).live) throw new Error("Demo versions are unavailable on a live storage deployment.");
     const uploaderId = uploader._id;
     const existing = await ctx.db
       .query("documentVersions")

@@ -44,6 +44,19 @@ export async function activeWorkspaceDomain(db: PortableDbReader, origin: string
   return active.length === 1 ? active[0] : null;
 }
 
+/**
+ * Origin for links sent on a workspace's behalf (provisioning, reset,
+ * invitations): its canonical origin while that is still a trusted SITE_URL
+ * entry, else the first SITE_URL entry. `siteUrls` is the parsed SITE_URL list.
+ */
+export async function workspaceLinkOrigin(db: PortableDbReader, societyId: string | undefined, siteUrls: readonly string[]): Promise<string> {
+  return chooseLinkOrigin(societyId ? await primaryWorkspaceOrigin(db, societyId) : undefined, siteUrls);
+}
+
+export function chooseLinkOrigin(canonicalOrigin: string | undefined, siteUrls: readonly string[]): string {
+  return canonicalOrigin && siteUrls.includes(canonicalOrigin) ? canonicalOrigin : siteUrls[0];
+}
+
 /** The workspace's canonical (primary, Active) origin, if one is configured. */
 export async function primaryWorkspaceOrigin(db: PortableDbReader, societyId: string): Promise<string | undefined> {
   const rows = await db.query<WorkspaceDomainRow>("workspaceDomains")

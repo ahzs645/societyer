@@ -49,8 +49,10 @@ export function buildUploadStorageKey(
 export async function createUploadUrl(args: {
   key: string;
   mimeType?: string;
+  /** The provider the upload handle recorded for its workspace; defaults to the deployment's. */
+  provider?: ReturnType<typeof providers.storage>["id"];
 }): Promise<PresignedUpload> {
-  const p = providers.storage();
+  const p = { id: args.provider ?? providers.storage().id };
   const expiresAtISO = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   if (p.id === "demo") {
     return {

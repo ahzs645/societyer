@@ -1,10 +1,10 @@
-import { httpAction } from "./_generated/server";
+import { httpAction, type ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { HttpRouter } from "convex/server";
 import { hostedPrincipal } from "./lib/authIdentity";
-import { providers } from "./providers/env";
-import { createDeploymentSharePointAdapter, decodeSharePointLocator, encodeSharePointLocator, readBoundedSharePointUpload, sharePointDeployment } from "../shared/storage/sharePointDeployment";
+import { createDeploymentSharePointAdapter, decodeSharePointLocator, encodeSharePointLocator, readBoundedSharePointUpload, sharePointDeployment, sharePointDeploymentConfigured } from "../shared/storage/sharePointDeployment";
+import type { EffectiveWorkspaceStorage } from "../shared/workspaceStoragePolicy";
 import { verifyUploadBytes } from "../shared/storage/uploadVerification";
 
 /** Pinned CORS origins and JWTs, with no Microsoft tokens or bearer transfer URLs returned to clients. */
@@ -22,6 +22,12 @@ export function pinnedSiteCors(request: Request, methods: string): Headers | nul
 
 const cors = (request: Request) => pinnedSiteCors(request, "GET, PUT, OPTIONS");
 
+/** The broker serves only workspaces whose effective version provider is SharePoint. */
+async function workspaceUsesSharePoint(ctx: Pick<ActionCtx, "runQuery">, societyId: Id<"societies">): Promise<boolean> {
+  const storage: EffectiveWorkspaceStorage = await ctx.runQuery(internal.workspaceStoragePolicies.effective, { societyId });
+  return storage.documentVersionProvider === "sharepoint";
+}
+
 export function registerSharePointRoutes(http: HttpRouter) {
   for (const path of ["/document-storage/sharepoint/upload", "/document-storage/sharepoint/download"]) {
     http.route({ path, method: "OPTIONS", handler: httpAction(async (_ctx, request) => {
@@ -32,11 +38,12 @@ export function registerSharePointRoutes(http: HttpRouter) {
     const headers = cors(request);
     if (!headers) return new Response("Origin denied.", { status: 403 });
     if (hostedPrincipal(await ctx.auth.getUserIdentity()).kind !== "user") return new Response("Authentication required.", { status: 401, headers });
-    if (providers.storage().id !== "sharepoint" || !providers.storage().live) return new Response("SharePoint is not connected.", { status: 503, headers });
+    if (!sharePointDeploymentConfigured(process.env)) return new Response("SharePoint is not connected.", { status: 503, headers });
     try {
       const uploadHandleId = new URL(request.url).searchParams.get("uploadHandleId") as Id<"documentUploadHandles"> | null;
       if (!uploadHandleId) return new Response("Upload handle required.", { status: 400, headers });
       const handle = await ctx.runQuery(internal.documentVersions.uploadStatus, { uploadHandleId });
+      if (!await workspaceUsesSharePoint(ctx, handle.societyId)) return new Response("SharePoint storage is not enabled for this workspace.", { status: 403, headers });
       if (handle.provider !== "sharepoint" || handle.status !== "pending") throw new Error("Invalid upload handle.");
       const connection = sharePointDeployment(process.env);
       const bytes = await readBoundedSharePointUpload(request, handle.fileSizeBytes, connection.maxFileBytes);
@@ -63,6 +70,7 @@ export function registerSharePointRoutes(http: HttpRouter) {
       // The existing query enforces workspace membership and current document ACL.
       const version = await ctx.runQuery(api.documentVersions.get, { id: versionId });
       if (version.storageProvider !== "sharepoint" || !version.sha256 || !Number.isSafeInteger(version.fileSizeBytes)) throw new Error("Invalid version.");
+      if (!await workspaceUsesSharePoint(ctx, version.societyId)) throw new Error("SharePoint storage is not enabled for this workspace.");
       const locator = decodeSharePointLocator(version.storageKey, sharePointDeployment(process.env));
       const bytes = await createDeploymentSharePointAdapter(process.env).download(locator);
       if (await verifyUploadBytes(bytes.buffer as ArrayBuffer, version.fileSizeBytes!) !== version.sha256) throw new Error("Stored checksum mismatch.");

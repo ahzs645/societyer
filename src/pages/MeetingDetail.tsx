@@ -46,7 +46,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { useIsMobile } from "../lib/useIsMobile";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
-import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../hooks/useWorkspaceStoragePolicy";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AudioLines, ArrowLeft, BookMarked, NotebookPen, Calendar, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, Merge, MoreHorizontal, PackageCheck, Pencil, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
@@ -195,6 +195,7 @@ function MeetingDetailWorkspace() {
   const { id } = useParams<{ id: string }>();
   const convexClient = useConvex();
   const society = useSociety();
+  const storagePolicy = useWorkspaceStoragePolicy();
   const actingUserId = useCurrentUserId() ?? undefined;
   const { loaded: permissionsLoaded, can } = usePermissions();
   // Resolve only the meeting first. Supporting lists and edit authority stay
@@ -900,8 +901,8 @@ function MeetingDetailWorkspace() {
       toast.error("Choose an audio or video file first.");
       return;
     }
-    if (!isNativeFileStorageEnabled()) {
-      toast.error("File uploads are disabled on this deployment.", "Audio/video can't be stored in Convex here.");
+    if (!storagePolicy.nativeUploads) {
+      toast.error("File uploads are disabled for this workspace.", "Audio/video can't be stored in Convex here.");
       return;
     }
     setPipelineBusy(true);

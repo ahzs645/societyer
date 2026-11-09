@@ -7,7 +7,7 @@ import { Select } from "../../components/Select";
 import { Drawer, Field } from "../../components/ui";
 import { usePermissions } from "../../hooks/usePermissions";
 import { uploadDocumentVersion } from "../../lib/documentVersionUpload";
-import { isDocumentVersionStorageEnabled } from "../../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../../hooks/useWorkspaceStoragePolicy";
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -38,8 +38,9 @@ export function RecordCertificateDrawer({
   onSave: (values: CertificateValues) => Promise<void>;
 }) {
   const { can, loaded } = usePermissions();
+  const storagePolicy = useWorkspaceStoragePolicy();
   const canReadDocuments = loaded && can("documents:read");
-  const canUpload = loaded && can("documents:write") && isDocumentVersionStorageEnabled();
+  const canUpload = loaded && can("documents:write") && storagePolicy.documentVersions;
   const documents = useQuery(api.documents.listSummaries, open && canReadDocuments ? { societyId: society._id } : "skip") as any[] | undefined;
   const createDocument = useMutation(api.documents.create);
   const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);

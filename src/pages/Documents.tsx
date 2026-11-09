@@ -28,7 +28,7 @@ import type { MenuSection } from "../components/Menu";
 import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, BookOpen, ClipboardCheck, MessageSquare, Copy, Layers, FileSearch, Lock, Link2, ExternalLink, Unlink, RefreshCw } from "lucide-react";
 import { formatDate, formatDateTime, pluralize } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
-import { isDocumentVersionStorageEnabled } from "../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../hooks/useWorkspaceStoragePolicy";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
@@ -90,7 +90,7 @@ export function DocumentsPage() {
   const [busy, setBusy] = useState(false);
   const sourceOpenGuidanceShown = useRef(false);
   const [formErrors, setFormErrors] = useState<FieldErrors>({});
-  const nativeStorage = isDocumentVersionStorageEnabled();
+  const nativeStorage = useWorkspaceStoragePolicy().documentVersions;
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const categoryParam = searchParams.get("category");

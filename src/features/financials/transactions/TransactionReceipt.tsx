@@ -9,7 +9,7 @@ import { FileDropZone } from "../../../components/FileDropZone";
 import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { useCreateReceiptDocument } from "../receipts/useCreateReceiptDocument";
-import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../../../hooks/useWorkspaceStoragePolicy";
 import { RECEIPT_ATTENTION_THRESHOLD_CENTS } from "../../../../shared/transactionAttention";
 import { formatMoney } from "../../../lib/money";
 
@@ -51,7 +51,7 @@ export function TransactionReceipt({
   const [busy, setBusy] = useState(false);
   const attached = useQuery(api.documents.get, txn.receiptDocumentId ? { id: txn.receiptDocumentId as any } : "skip") as { _id: string; title?: string; fileName?: string } | null | undefined;
   const library = useQuery(api.documents.listSummaries, picking ? { societyId: societyId as any } : "skip") as Array<{ _id: string; title?: string; category?: string; createdAtISO?: string }> | undefined;
-  const storage = isDocumentVersionStorageEnabled();
+  const storage = useWorkspaceStoragePolicy().documentVersions;
 
   const upload = async (original: File) => {
     if (!canUpload || busy) return;
