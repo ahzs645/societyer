@@ -12,7 +12,7 @@ import { governingDocumentSlots, type GoverningDocumentField } from "../../share
 import { authenticatedFetch } from "@/lib/authToken";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -194,17 +194,8 @@ export function SocietyPage() {
     revealAnchor(targetId);
   };
   const formReady = Boolean(form);
-  const { hash } = useLocation();
-  // Links to #registered-office (setup's "registered office" step, Registered
-  // locations → Manage) or #more-organization-details land on an open
-  // section, scrolled into view, not on a collapsed summary. Other query
-  // parameters (?setup=office) are left alone.
-  useEffect(() => {
-    if (!formReady || !permissions.loaded) return;
-    if (hash === "#registered-office") openMoreDetails("registered-office");
-    else if (hash === "#tax-identifiers") openMoreDetails("tax-identifiers");
-    else if (hash === "#more-organization-details") openMoreDetails();
-  }, [formReady, permissions.loaded, hash]);
+  // The app's useAnchorReveal owns deep links, including opening this section
+  // and correcting its position while asynchronous profile content settles.
   // ?intent=address also opens the new-address form.
   useEffect(() => {
     if (!formReady || !permissions.loaded) return;

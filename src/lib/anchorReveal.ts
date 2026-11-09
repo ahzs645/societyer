@@ -74,50 +74,99 @@ function scrollTargetFor(target: HTMLElement): HTMLElement {
   return fold && section === target ? fold : target;
 }
 
-function scrollAnchorIntoView(target: HTMLElement, behavior: ScrollBehavior): void {
-  const page = target.closest<HTMLElement>(".page");
-  if (!page) {
-    target.scrollIntoView({ block: "start", behavior });
-    return;
-  }
+function anchorPageTop(target: HTMLElement, page: HTMLElement): number {
   // Native scrollIntoView also scrolls overflow:hidden layout ancestors.
   // On phones that can move .main while .page is scrolling, clipping the
   // page below the fixed navigation. Only the page owns this content scroll.
   const scrollMarginTop = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop) || 0;
-  const top = target === page ? 0 : page.scrollTop
+  return target === page ? 0 : page.scrollTop
     + target.getBoundingClientRect().top - page.getBoundingClientRect().top
     - page.clientTop - scrollMarginTop;
-  page.scrollTo({ top, behavior });
 }
 
-let pendingReveal: number | null = null;
+let activeRevealCleanup: (() => void) | null = null;
+
+/** Stop an outstanding reveal when leaving its page, including hashless navigation. */
+export function cancelAnchorReveal(): void {
+  activeRevealCleanup?.();
+}
 
 /** Open whatever hides `#id`, then scroll it into view once it is on the page. */
-export function revealAnchor(id: string, { waitMs = CLICK_WAIT_MS }: { waitMs?: number } = {}): void {
-  if (typeof window === "undefined" || !id) return;
-  window.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: id }));
-  if (pendingReveal != null) window.cancelAnimationFrame(pendingReveal);
+export function revealAnchor(id: string, { waitMs = CLICK_WAIT_MS }: { waitMs?: number } = {}): () => void {
+  cancelAnchorReveal();
+  if (typeof window === "undefined" || !id) return () => {};
+  let pendingFrame: number | null = null;
+  let observer: ResizeObserver | null = null;
+  let stopped = false;
+  const inputEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    if (pendingFrame != null) window.cancelAnimationFrame(pendingFrame);
+    window.clearTimeout(timeout);
+    observer?.disconnect();
+    for (const event of inputEvents) window.removeEventListener(event, stop, true);
+    if (activeRevealCleanup === stop) activeRevealCleanup = null;
+  };
+  const timeout = window.setTimeout(stop, waitMs);
+  activeRevealCleanup = stop;
+  for (const event of inputEvents) window.addEventListener(event, stop, { capture: true, passive: true });
   const deadline = performance.now() + waitMs;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  window.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: id }));
   const attempt = () => {
-    pendingReveal = null;
+    pendingFrame = null;
+    if (stopped) return;
     const target = document.getElementById(id);
     if (!target) {
-      if (performance.now() < deadline) pendingReveal = window.requestAnimationFrame(attempt);
+      if (performance.now() < deadline) pendingFrame = window.requestAnimationFrame(attempt);
+      else stop();
       return;
     }
     // Opening a MobileFold's <details> mounts its body on the next render;
     // wait a frame so the scroll measures the open section.
     if (openDetailsAncestors(target)) {
-      pendingReveal = window.requestAnimationFrame(attempt);
+      pendingFrame = window.requestAnimationFrame(attempt);
       return;
     }
-    scrollAnchorIntoView(scrollTargetFor(target), reducedMotion ? "auto" : "smooth");
+    const scrollTarget = scrollTargetFor(target);
+    const page = scrollTarget.closest<HTMLElement>(".page");
+    if (!page) {
+      scrollTarget.scrollIntoView({ block: "start", behavior: reducedMotion ? "auto" : "smooth" });
+      stop();
+      return;
+    }
+    let top = anchorPageTop(scrollTarget, page);
+    page.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
+    if (typeof ResizeObserver === "undefined") {
+      stop();
+      return;
+    }
+    // Data panels and lazy editors can grow after the target first mounts.
+    // Keep its content offset aligned during startup, without treating our
+    // own smooth scroll as a layout change or fighting later user navigation.
+    observer = new ResizeObserver(() => {
+      if (stopped) return;
+      if (performance.now() >= deadline || !page.isConnected || !scrollTarget.isConnected) {
+        stop();
+        return;
+      }
+      const nextTop = anchorPageTop(scrollTarget, page);
+      if (Math.abs(nextTop - top) < 1) return;
+      top = nextTop;
+      page.scrollTo({ top, behavior: "instant" });
+    });
+    // .page has a fixed viewport: observe its content, including siblings
+    // above the target and its inner containers, rather than only .page.
+    for (const child of page.children) observer.observe(child);
+    for (let node: HTMLElement | null = scrollTarget; node && node !== page; node = node.parentElement) observer.observe(node);
+    observer.observe(page);
   };
   // Two frames: one for the folds' state update, one for their paint.
-  pendingReveal = window.requestAnimationFrame(() => {
-    pendingReveal = window.requestAnimationFrame(attempt);
+  pendingFrame = window.requestAnimationFrame(() => {
+    pendingFrame = window.requestAnimationFrame(attempt);
   });
+  return stop;
 }
 
 function sameDocumentAnchorId(anchor: HTMLAnchorElement): string | null {
@@ -148,7 +197,10 @@ export function installAnchorClickReveal(): () => void {
     }
   };
   document.addEventListener("click", onClick);
-  return () => document.removeEventListener("click", onClick);
+  return () => {
+    document.removeEventListener("click", onClick);
+    cancelAnchorReveal();
+  };
 }
 
 export const ANCHOR_REVEAL_LOAD_WAIT_MS = LOAD_WAIT_MS;

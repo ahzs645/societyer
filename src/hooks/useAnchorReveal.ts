@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import {
   ANCHOR_REVEAL_LOAD_WAIT_MS,
   anchorIdFromHash,
+  cancelAnchorReveal,
   installAnchorClickReveal,
   revealAnchor,
 } from "../lib/anchorReveal";
@@ -14,16 +15,15 @@ import {
  */
 export function useAnchorReveal() {
   const { pathname, hash } = useLocation();
-  const lastPath = useRef<string | null>(null);
 
   useEffect(() => installAnchorClickReveal(), []);
 
   useEffect(() => {
-    const pageChanged = lastPath.current !== pathname;
-    lastPath.current = pathname;
+    // Navigation also cancels imperative same-page reveals started by buttons.
+    cancelAnchorReveal();
     const id = anchorIdFromHash(hash);
-    if (!id) return;
-    // A new page waits for its data before the target exists.
-    revealAnchor(id, pageChanged ? { waitMs: ANCHOR_REVEAL_LOAD_WAIT_MS } : undefined);
+    // Routed hashes wait for page data, including a StrictMode effect replay.
+    // Direct buttons and same-page clicks retain revealAnchor's shorter window.
+    if (id) return revealAnchor(id, { waitMs: ANCHOR_REVEAL_LOAD_WAIT_MS });
   }, [pathname, hash]);
 }
