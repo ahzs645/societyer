@@ -27,6 +27,18 @@ What it adds:
   to join when that workspace turns it on; its Owners and Admins approve or
   decline. Off by default.
 
+## Workspace transfer
+
+`npm run transfer:workspace` moves one workspace from a source deployment's
+`npx convex export --include-file-storage` ZIP into a destination that already
+holds other workspaces, additively: new IDs, every typed and string-held
+reference rewritten, files copied and checksummed, resumable, verified, and
+abortable until it is finalized. Logins are not copied; the operator binds each
+imported membership to a destination login. The steps (`plan`, `apply`,
+`verify`, `finalize`, `bind`, `abort`, `status`), what is copied, disabled and
+skipped, and the limits are in
+[migration-and-cutover.md](migration-and-cutover.md#workspace-transfer).
+
 ## Pages
 
 | Page | For |
@@ -35,7 +47,7 @@ What it adds:
 | [operator-runbook.md](operator-runbook.md) | Deploying, policies, domains, storage, accounts, offboarding, rollback |
 | [staging-setup.md](staging-setup.md) | Stage 1: a shared staging deployment, test accounts, preview builds, journeys |
 | [user-guide.md](user-guide.md) | Members and workspace admins |
-| [migration-and-cutover.md](migration-and-cutover.md) | Stages 3–4: inventory, backups, destination choice, cutover, rollback |
+| [migration-and-cutover.md](migration-and-cutover.md) | Stages 3–4: inventory, backups, destination choice, workspace transfer, cutover, rollback |
 | [acceptance-tests.md](acceptance-tests.md) | Each acceptance criterion mapped to a test or staging journey, with gaps |
 | [Feasibility review](../audits/2026-11-08-shared-workspaces-review.md) | Why, and the staged plan |
 
@@ -48,6 +60,7 @@ What it adds:
 - Storage ceilings to remove: [runbook](operator-runbook.md#ceilings-that-must-go-on-a-shared-deployment)
 - Link two logins: [user guide](user-guide.md#link-an-existing-account)
 - Request access, and approve requests: [user guide](user-guide.md#request-access-to-a-workspace), [admins](user-guide.md#access-requests)
+- Move a workspace between deployments: [workspace transfer](migration-and-cutover.md#workspace-transfer)
 - What is not implemented: [migration](migration-and-cutover.md#what-this-change-does-and-doesnt-provide), [acceptance gaps](acceptance-tests.md#acceptance-criteria)
 
 Related deployment guides: [DDC North Entra rollout](../ddcnorth-entra-rollout.md),
@@ -68,6 +81,7 @@ Related deployment guides: [DDC North Entra rollout](../ddcnorth-entra-rollout.m
 | `npm run test:shared-workspace-ui` | Startup rules, handoff parsing and redemption, switcher routing, link code storage |
 | `npm run test:workspace-selection` | Per-tab and per-backend workspace selection |
 | `npm run test:access-requests` | Request access: discovery rule, limits, Owner/Admin decisions, exact binding, sign-in policy kept |
+| `npm run test:workspace-transfer` | Transfer policy covers every table; plan, apply with resume, verify, finalize, bind and abort against a destination that holds another workspace |
 
 Each runs a single `tsx` (or `node`) script under `scripts/`, so
 `./node_modules/.bin/tsx scripts/check-workspace-sign-in-policy.ts` works as

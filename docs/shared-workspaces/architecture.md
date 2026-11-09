@@ -439,5 +439,6 @@ origin when one is configured, and otherwise the first `SITE_URL` origin.
   invitations ignore it; it can't be reactivated, re-bound or invited. The kept
   row's role never changes; a higher retired role is only reported. References
   to the retired id are not re-pointed.
-- Nothing here moves records between deployments; see
-  [migration-and-cutover.md](migration-and-cutover.md).
+- Records move between deployments only through the operator's workspace
+  transfer (`convex/workspaceTransfer.ts`, internal functions); see
+  [migration-and-cutover.md](migration-and-cutover.md#workspace-transfer).
