@@ -10,6 +10,11 @@ on:
       - "shared/*tax*"
       - "shared/*entity*"
       - "shared/*Entity*"
+      - "shared/invoicing.ts"
+      - "shared/gstAccountReference.ts"
+      - "shared/invoiceLedger.ts"
+      - "shared/functions/invoiceLedger.ts"
+      - "shared/functions/receiptRetention.ts"
       - "shared/functions/invoices.ts"
       - "shared/functions/organizationDetails.ts"
       - "shared/functions/billingDocuments.ts"
@@ -17,6 +22,7 @@ on:
       - "shared/organizationCapabilities.ts"
       - "shared/functions/billingAutomation.ts"
       - "convex/invoices.ts"
+      - "convex/lib/renderBillingDocument.ts"
       - "convex/organizationDetails.ts"
       - "convex/tables/invoices.ts"
       - "convex/validators/*Tax*.ts"
@@ -24,15 +30,24 @@ on:
       - "src/features/invoicing/**"
       - "src/pages/Society.tsx"
       - "src/pages/Invoices.tsx"
+      - "src/pages/Filings.tsx"
       - "src/pages/OrganizationSetup.tsx"
       - "src/components/OrganizationCapabilities.tsx"
       - "src/components/organizationCapabilities.css"
+      - "src/components/GstAccountReference.tsx"
       - "scripts/check-tax-*"
       - "scripts/check-invoice-tax-*"
+      - "scripts/check-invoice-lifecycle*"
+      - "scripts/check-invoice-logo-retention.ts"
+      - "scripts/check-gst-account-reference.tsx"
       - "scripts/check-organization-capabilities.ts"
       - "scripts/check-entity-*"
       - "tests/tax-guidance.spec.ts"
       - "playwright.tax-guidance.config.ts"
+      - "tests/invoice-lifecycle.spec.ts"
+      - "playwright.invoice-lifecycle.config.ts"
+      - "tests/gst-account-reference.spec.ts"
+      - "playwright.gst-account.config.ts"
       - ".github/workflows/entity-tax-guidance.yml"
   workflow_dispatch:
 
@@ -71,6 +86,12 @@ jobs:
       - name: Desktop and phone tax decisions
         if: ${{ !cancelled() }}
         run: npm run test:tax-guidance-ui
+      - name: Manual invoice lifecycle on desktop and phone
+        if: ${{ !cancelled() }}
+        run: npm run test:invoice-lifecycle-ui
+      - name: Organization GST account and filing reference on desktop and phone
+        if: ${{ !cancelled() }}
+        run: npm run test:gst-account-ui
       - name: Existing catalog and customer flows
         if: ${{ !cancelled() }}
         run: npm run test:invoice-catalog-customers-ui

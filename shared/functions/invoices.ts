@@ -8,20 +8,20 @@ import { cleanInvoiceTemplate, invoiceCurrency, REPAIR_TRANSITIONS, REPAIR_STATU
 /**
  * PORTABLE FUNCTIONS: invoicing (receivables).
  *
- * workspace / upsert / markSent / voidInvoices / restoreVoided / duplicate /
+ * workspace / document / upsert / issue / markSent / recordClientResponse / voidInvoices / restoreVoided / duplicate /
  * remove / recordPayment / removePayment / revertToUnpaid / sendReminders /
  * billMemberDues / generateDuesInvoices / undoDuesBatch /
  * upsertCustomer / upsertCatalogItem / setCatalogItemActive / removeCatalogItem /
  * upsertSeries / setSeriesStatus / issueFromSeries / saveSettings.
  *
- * Invoices store their lifecycle (draft | sent | void) and payments; paid,
+ * Invoices store their lifecycle (draft | issued | sent | void) and payments; paid,
  * partially paid and overdue are derived on read from the balance and the due
  * date against the organisation's local today (shared/invoicing.ts).
  * Reminders and "mark sent with an email" create Outbox drafts
  * (pendingEmails); nothing is sent from here.
  *
  * The books (shared/invoiceLedger.ts, shared/functions/invoiceLedger.ts):
- * marking an invoice sent posts its accrual (Dr Accounts receivable / Cr
+ * issuing an invoice posts its accrual (Dr Accounts receivable / Cr
  * revenue per the GL account mapping / Cr tax payable); each payment posts Dr
  * the deposit account / Cr receivable plus its cash-basis recognition; voiding
  * posts the reversal; removing a payment or reverting to unpaid voids the
@@ -91,6 +91,11 @@ import {
   computeInvoiceTotals,
   daysOverdue,
   deriveInvoiceStatus,
+  isIssuedInvoice,
+  INVOICE_DELIVERY_METHODS,
+  INVOICE_DELIVERY_METHOD_LABEL,
+  INVOICE_CLIENT_RESPONSES,
+  INVOICE_CLIENT_RESPONSE_LABEL,
   dueDateForTerms,
   formatInvoiceNumber,
   isCalendarDate,
@@ -106,6 +111,11 @@ import {
   type InvoiceDiscount,
   type InvoiceLine,
   type InvoiceStatus,
+  type InvoiceIssuerSnapshot,
+  type InvoiceDeliveryMethod,
+  type InvoiceExternalDelivery,
+  type InvoiceClientResponseKind,
+  type InvoiceClientResponse,
 } from "../invoicing";
 
 type Row = { paymentMethods?: InvoiceReceivingMethod[]; paymentInstructions?: string; defaultPaymentMethodIds?: string[]; _id: string; societyId: string; [key: string]: any };
@@ -339,7 +349,7 @@ function invoiceLedgerState(row: Row, lctx: InvoiceLedgerContext, postedIds: Rea
   const invoice = asStored(row);
   const posted = (id: string | undefined) => Boolean(id && postedIds.has(id));
   const accrualPosted = posted(invoice.journalEntryId);
-  if (invoice.status !== "sent" || computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money).totalCents <= 0) {
+  if (!isIssuedInvoice(invoice.status) || computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money).totalCents <= 0) {
     return { state: accrualPosted && !invoice.reversalJournalEntryId ? "posted" : "none", entryId: accrualPosted ? invoice.journalEntryId : undefined, reasons: [], paymentsToPost: 0 };
   }
   const payments = (invoice.payments ?? []).filter(payment=>!payment.reversedDate);
@@ -422,6 +432,31 @@ export async function loadIssuerTaxIdentifiers(ctx: PortableQueryCtx, societyId:
   return groups.flat().map(({ kind, number, status, jurisdiction, registeredAt }) => ({ kind, number, status, jurisdiction, registeredAt }));
 }
 
+export async function captureInvoiceIssuerSnapshot(ctx: PortableQueryCtx, societyId: string): Promise<InvoiceIssuerSnapshot> {
+  const organization = await ctx.db.get(societyId, "societies");
+  const name = cleanText(organization?.name, 500);
+  if (!name) throw new Error("Set the organization's legal name before issuing an invoice.");
+  return {
+    name,
+    ...(cleanText(organization?.mailingAddress ?? organization?.registeredOfficeAddress, 4000) ? { address: cleanText(organization?.mailingAddress ?? organization?.registeredOfficeAddress, 4000) } : {}),
+    ...(cleanText(organization?.publicContactEmail ?? organization?.officialEmail ?? organization?.primaryContactEmail, 320) ? { email: cleanText(organization?.publicContactEmail ?? organization?.officialEmail ?? organization?.primaryContactEmail, 320) } : {}),
+    ...(cleanText(organization?.incorporationNumber, 200) ? { registrationNumber: cleanText(organization?.incorporationNumber, 200) } : {}),
+    ...(organization?.logoStorageId ? { logoStorageId: String(organization.logoStorageId) } : {}),
+  };
+}
+
+async function issuerLogoUrl(ctx: PortableQueryCtx, row: Row): Promise<string | undefined> {
+  return row.issuerSnapshot?.logoStorageId
+    ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: row.issuerSnapshot.logoStorageId })).url ?? undefined
+    : undefined;
+}
+
+/** Canonical saved document for export, fetched by id without scanning a workspace. */
+export async function documentPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
+  const row = await requireOwnedRow<Row>(ctx, "invoices", id);
+  return { ...decorate(row, await organizationToday(ctx, row.societyId), new Map(), new Map()), issuerLogoUrl: await issuerLogoUrl(ctx, row) };
+}
+
 /** Branding and reusable designs only: report pages do not need billing/bank records. */
 export async function documentTemplatesPortable(ctx: PortableQueryCtx, { societyId, templateId }: { societyId: string; templateId?: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -497,8 +532,11 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
   const seriesById = new Map((series as Row[]).map((row) => [row._id, row]));
   const txnById = new Map((transactions as Row[]).map((row) => [row._id, row]));
   const postedIds = new Set([...postedEntries.values()].map((entry) => entry._id));
+  const logoIds = [...new Set(invoices.map(row => row.issuerSnapshot?.logoStorageId).filter((id): id is string => Boolean(id)))];
+  const snapshotLogos = new Map(await Promise.all(logoIds.map(async storageKey => [storageKey, (await ctx.capabilities.storage.getDownloadUrl({ storageKey })).url ?? undefined] as const)));
   const decorated = invoices
     .map((row) => Object.assign(decorate(row, today, seriesById, txnById), {
+      issuerLogoUrl: row.issuerSnapshot?.logoStorageId ? snapshotLogos.get(row.issuerSnapshot.logoStorageId) : undefined,
       needsAction: needsActionFor(row, lctx, txnById, postedIds),
       ledger: invoiceLedgerState(row, lctx, postedIds),
     }))
@@ -776,6 +814,7 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: InvoiceArgs
     const taxState = (lines: InvoiceLine[]) => lines.map((line) => ({ key: line.key, item: line.item, description: line.description, catalogItemId: line.catalogItemId, taxRatePercent: line.taxRatePercent ?? 0, taxLabel: line.taxLabel ?? "", additionalTaxes: line.additionalTaxes ?? [], taxAssessment: line.taxAssessment })).sort((a, b) => a.key.localeCompare(b.key));
     if (guidedOrPrepared && JSON.stringify(taxState(original.lines ?? [])) !== JSON.stringify(taxState(fields.lines))) throw new Error("Issued tax decisions are fixed. Void and replace the invoice to change its supply or tax treatment.");
   }
+  if (original?.issuerSnapshot) throw new Error("This finalized or prepared invoice is immutable. Duplicate it for corrections, then void or credit the original as appropriate.");
   if(new TextEncoder().encode(JSON.stringify({...original,...fields})).byteLength>900000)throw new Error("This invoice exceeds 900 KB. Reduce artwork or attachments before saving.");
   const actor = await actorName(ctx, args.societyId);
   const at = nowISO();
@@ -786,7 +825,7 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: InvoiceArgs
     if (fields.totalCents < paid) throw new Error("The new total is less than what has already been paid.");
     // A posted invoice keeps its accrual in step (refused in a closed period, or once payments are recognised).
     let timeline = existing.timeline ?? [];
-    if (existing.status === "sent" && existing.journalEntryId) {
+    if (isIssuedInvoice(existing.status) && existing.journalEntryId) {
       const lctx = await loadInvoiceLedgerContext(ctx, args.societyId);
       const outcome = await syncAccrual(ctx, asStored({ ...existing, ...fields }), lctx, await actingUser(ctx, args.societyId));
       if (outcome.changed) timeline = [...timeline, event("posted", "Entry in the books updated after an edit", actor)];
@@ -979,42 +1018,171 @@ function postedLabel(totalCents: number) {
   return `Posted to the books: ${money(totalCents)} to Accounts receivable`;
 }
 
-/** Mark drafts as sent (optionally drafting an Outbox email for each); each posts its accrual when the books can take it. */
-export async function markSentPortable(ctx: PortableMutationCtx, { societyId, ids, draftEmail }: { societyId: string; ids: string[]; draftEmail?: boolean }) {
+/** Finalize saved drafts and capture the issuer. No email or delivery is recorded. */
+export async function issuePortable(ctx: PortableMutationCtx, { societyId, ids }: { societyId: string; ids: string[] }) {
   const rows = await ownedInvoices(ctx, societyId, ids);
+  const drafts = rows.filter(row => row.status === "draft");
+  if (!drafts.length) return { issued: 0, skipped: rows.length, posted: 0 };
   // Validate the whole batch before posting anything, including on the portable runtime.
-  const taxContext = rows.some(row => row.status === "draft" && row.lines?.some((line: InvoiceLine) => line.taxAssessment))
+  const taxContext = drafts.some(row => row.lines?.some((line: InvoiceLine) => line.taxAssessment))
     ? await loadOrganizationTaxContext(ctx, societyId) : undefined;
-  for (const row of rows) if (row.status === "draft") {
+  for (const row of drafts) {
+    if (!cleanText(row.billToName) || !isCalendarDate(row.issueDate) || !isCalendarDate(row.dueDate) || row.dueDate < row.issueDate) throw new Error("Review the customer, issue date and due date before finalizing this invoice.");
     assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
   }
-  if (taxContext) await assertInvoiceOrganizationFactsCurrent(ctx, societyId, rows.filter(row => row.status === "draft").flatMap(row => row.lines ?? []), taxContext);
-  const identifiers = rows.some(row => row.status === "draft" && !row.issuerTaxRegistrationsSnapshot) ? await loadIssuerTaxIdentifiers(ctx, societyId) : [];
-  const issuerSnapshots = new Map(rows.filter(row => row.status === "draft").map(row => [row._id,
+  if (taxContext) await assertInvoiceOrganizationFactsCurrent(ctx, societyId, drafts.flatMap(row => row.lines ?? []), taxContext);
+  const identifiers = drafts.some(row => !row.issuerTaxRegistrationsSnapshot) ? await loadIssuerTaxIdentifiers(ctx, societyId) : [];
+  const issuerSnapshots = new Map(drafts.map(row => [row._id,
     row.issuerTaxRegistrationsSnapshot ?? captureIssuerTaxRegistrations(identifiers, row.lines ?? [], row.issueDate, nowISO(), taxContext ? snapshotSupplierTaxFacts(row.lines ?? [], taxContext, row.issueDate) : undefined)]));
+  const issuer = drafts.some(row => !row.issuerSnapshot) ? await captureInvoiceIssuerSnapshot(ctx, societyId) : undefined;
   const actor = await actorName(ctx, societyId);
   const userId = await actingUser(ctx, societyId);
   const lctx = await loadInvoiceLedgerContext(ctx, societyId);
-  let sent = 0;
-  let emailed = 0;
-  let skipped = 0;
+  for (const row of drafts) {
+    if (!accrualBlockers(asStored(row), lctx).length) await assertInvoicePostable(ctx, row, lctx, true, []);
+    if (new TextEncoder().encode(JSON.stringify({ ...row, issuerSnapshot: row.issuerSnapshot ?? issuer, issuerTaxRegistrationsSnapshot: issuerSnapshots.get(row._id) })).byteLength > 900000) throw new Error("This invoice is too large to finalize. Reduce inline artwork or attachments.");
+  }
   let posted = 0;
-  for (const row of rows) {
-    if (row.status !== "draft") { skipped += 1; continue; }
-    // Post first: a closed period refuses the send before anything changes.
-    const outcome = await syncAccrual(ctx, asStored({ ...row, status: "sent" }), lctx, userId);
+  for (const row of drafts) {
+    const outcome = await syncAccrual(ctx, asStored({ ...row, status: "issued" }), lctx, userId);
     const at = nowISO();
-    const events = [event("sent", draftEmail && row.billToEmail ? "Marked as sent · email drafted in Outbox" : "Marked as sent", actor)];
+    const events = [event("issued", "Finalized for download; external sending has not been recorded", actor)];
     if (outcome.entryId) events.push(event("posted", postedLabel(computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents), actor));
-    await ctx.db.patch(row._id, { status: "sent", sentAtISO: at, issuerTaxRegistrationsSnapshot: issuerSnapshots.get(row._id), updatedAtISO: at, ...(outcome.entryId ? { journalEntryId: outcome.entryId } : {}), timeline: [...(row.timeline ?? []), ...events] });
-    sent += 1;
+    await ctx.db.patch(row._id, { status: "issued", issuedAtISO: at, issuerSnapshot: row.issuerSnapshot ?? issuer, issuerTaxRegistrationsSnapshot: issuerSnapshots.get(row._id), updatedAtISO: at, ...(outcome.entryId ? { journalEntryId: outcome.entryId } : {}), timeline: [...(row.timeline ?? []), ...events] });
     if (outcome.entryId) posted += 1;
-    if (draftEmail && row.billToEmail) {
+  }
+  return { issued: drafts.length, skipped: rows.length - drafts.length, posted };
+}
+
+type MarkSentArgs = {
+  societyId: string; ids: string[]; draftEmail?: boolean; sentDate?: string;
+  method?: InvoiceDeliveryMethod; recipient?: string; reference?: string; note?: string;
+};
+
+/** Record a manual sending action. Legacy callers may also finalize a saved draft. */
+export async function markSentPortable(ctx: PortableMutationCtx, args: MarkSentArgs) {
+  const { societyId, ids, draftEmail } = args;
+  const rows = await ownedInvoices(ctx, societyId, ids);
+  const eligible = rows.filter(row => row.status === "draft" || row.status === "issued");
+  // Compatibility with the old builder's "draft an email" action: preparing
+  // an Outbox message is not evidence that it was sent to the customer.
+  if (draftEmail) {
+    const result = await issuePortable(ctx, { societyId, ids: eligible.map(row => row._id) });
+    const actor = await actorName(ctx, societyId);
+    let emailed = 0;
+    for (const original of eligible) {
+      const row = await getOwned<Row>(ctx, "invoices", original._id, societyId);
+      if (!row.billToEmail || (row.timeline ?? []).some((entry: any) => entry.kind === "invoice_email_drafted")) continue;
       await draftOutboxEmail(ctx, row, "invoice", row.totalCents - sumPaid(row.payments));
+      await ctx.db.patch(row._id, { updatedAtISO: nowISO(), timeline: [...(row.timeline ?? []), event("invoice_email_drafted", "Email prepared in Outbox; external sending has not been recorded", actor)] });
       emailed += 1;
     }
+    return { sent: 0, emailed, skipped: rows.length - emailed, posted: result.posted };
   }
-  return { sent, emailed, skipped, posted };
+  const today = await organizationToday(ctx, societyId), sentDate = args.sentDate ?? today;
+  const method = args.method ?? "other";
+  if (!(INVOICE_DELIVERY_METHODS as readonly string[]).includes(method)) throw new Error("Choose how you sent the invoice.");
+  if (!isCalendarDate(sentDate) || sentDate > today) throw new Error("Choose a valid sent date on or before today.");
+  for (const row of eligible) if (row.status === "draft") assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
+  // New manual records supply an explicit date. Older automation callers may
+  // prepare a future-dated invoice in their schedule's own timezone; retain
+  // the truthful local sending date rather than inventing a future delivery.
+  if (args.sentDate && eligible.some(row => sentDate < row.issueDate)) throw new Error("The sent date cannot precede the invoice's issue date.");
+  const actor = await actorName(ctx, societyId), userId = await actingUser(ctx, societyId);
+  const result = await issuePortable(ctx, { societyId, ids: eligible.map(row => row._id) });
+  let sent = 0;
+  for (const original of eligible) {
+    const row = await getOwned<Row>(ctx, "invoices", original._id, societyId);
+    const at = nowISO();
+    const externalDelivery: InvoiceExternalDelivery = {
+      sentDate, method, source: "manual", recordedAtISO: at,
+      ...(cleanText(args.recipient ?? row.billToEmail ?? row.billToName, 320) ? { recipient: cleanText(args.recipient ?? row.billToEmail ?? row.billToName, 320) } : {}),
+      ...(cleanText(args.reference, 500) ? { reference: cleanText(args.reference, 500) } : {}),
+      ...(cleanText(args.note, 2000) ? { note: cleanText(args.note, 2000) } : {}),
+      ...(actor ? { recordedByName: actor } : {}), ...(userId ? { recordedByUserId: userId } : {}),
+    };
+    const timeline = [...(row.timeline ?? []), { ...event("sent", `External sending recorded: ${INVOICE_DELIVERY_METHOD_LABEL[method]} on ${sentDate}`, actor), externalDelivery }];
+    if (new TextEncoder().encode(JSON.stringify({ ...row, externalDelivery, timeline })).byteLength > 950000) throw new Error("This invoice is too large for another history entry. Reduce inline artwork before finalizing a replacement.");
+    await ctx.db.patch(row._id, { status: "sent", sentAtISO: at, externalDelivery, updatedAtISO: at, timeline });
+    sent += 1;
+  }
+  return { sent, emailed: 0, skipped: rows.length - eligible.length, posted: result.posted };
+}
+
+/** Internal bookkeeping from persisted provider evidence, never a user-supplied sending assertion. */
+export async function recordAutomatedInvoiceSending(ctx: PortableMutationCtx, { societyId, runId }: { societyId: string; runId: string }) {
+  const run = await getOwned<Row>(ctx, "billingAutomationRuns", runId, societyId);
+  const deliveries = run.deliveries;
+  if (run.status !== "accepted" || !run.invoiceId || !Array.isArray(deliveries) || !deliveries.length || deliveries.length > 20
+    || deliveries.some((delivery: any) => delivery.status !== "accepted" || typeof delivery.to !== "string" || !delivery.to.trim()
+      || typeof delivery.acceptedAtISO !== "string" || !Number.isFinite(Date.parse(delivery.acceptedAtISO)) || Date.parse(delivery.acceptedAtISO) > Date.now())) {
+    throw new Error("Automated invoice sending requires dated provider acceptance for every recipient.");
+  }
+  const original = await getOwned<Row>(ctx, "invoices", run.invoiceId, societyId);
+  if ((original.timeline ?? []).some((entry: any) => entry.externalDelivery?.automationRunId === runId)) return original._id;
+  const organization = await ctx.db.get(societyId, "societies");
+  // The sending date is when all recipients had provider acceptance, even if
+  // bookkeeping retries later or a schedule sends a future-dated invoice.
+  const acceptedAtISO = new Date(Math.max(...deliveries.map((delivery: any) => Date.parse(delivery.acceptedAtISO)))).toISOString();
+  const sentDate = resolutionCalendarDate(acceptedAtISO, resolutionTimeZone(organization as any));
+  if (!sentDate) throw new Error("The provider acceptance date could not be resolved for this organization.");
+  if (original.status === "draft") await issuePortable(ctx, { societyId, ids: [original._id] });
+  const row = await getOwned<Row>(ctx, "invoices", original._id, societyId);
+  const at = nowISO(), actor = await actorName(ctx, societyId), userId = await actingUser(ctx, societyId);
+  const references = deliveries.map((delivery: any) => `${delivery.provider ?? "email"}${delivery.providerId ? `: ${delivery.providerId}` : ""}`);
+  const externalDelivery: InvoiceExternalDelivery = {
+    sentDate, method: "email", source: "automation", automationRunId: runId,
+    recipient: [...new Set(deliveries.map((delivery: any) => delivery.to.trim()))].join(", "),
+    reference: cleanText(references.join("; "), 2000),
+    note: "Automatically emailed by Societyer. The email provider accepted the messages; delivery to the recipients is not confirmed.",
+    recordedAtISO: at,
+    ...(actor ? { recordedByName: actor } : {}), ...(userId ? { recordedByUserId: userId } : {}),
+  };
+  const timeline = [...(row.timeline ?? []), { ...event("sent", `Automated email: provider acceptance on ${sentDate}`, actor), externalDelivery }];
+  if (new TextEncoder().encode(JSON.stringify({ ...row, externalDelivery, timeline })).byteLength > 950000) throw new Error("This invoice is too large for another sending history entry.");
+  // Preserve a later manual sending record and never reopen a void invoice.
+  // Both events remain in the history if a user also sent the invoice manually.
+  await ctx.db.patch(row._id, {
+    status: row.status === "void" ? "void" : "sent",
+    sentAtISO: row.sentAtISO ?? acceptedAtISO,
+    ...(!row.externalDelivery || row.externalDelivery.sentDate <= sentDate ? { externalDelivery } : {}),
+    updatedAtISO: at, timeline,
+  });
+  return row._id;
+}
+
+/** A manually recorded customer response is evidence, never a payment or credit. */
+export async function recordClientResponsePortable(ctx: PortableMutationCtx, args: {
+  id: string; response: InvoiceClientResponseKind; date: string; customerName: string;
+  note?: string; reference?: string; idempotencyKey: string;
+}) {
+  const row = await requireOwnedRow<Row>(ctx, "invoices", args.id);
+  const idempotencyKey = args.idempotencyKey?.trim();
+  if (!idempotencyKey || idempotencyKey.length > 100) throw new Error("Use a response idempotency key of 1–100 characters.");
+  if (!(INVOICE_CLIENT_RESPONSES as readonly string[]).includes(args.response)) throw new Error("Choose a valid customer response.");
+  const customerName = cleanText(args.customerName, 200), note = cleanText(args.note, 2000), reference = cleanText(args.reference, 500);
+  if (!customerName) throw new Error("Record the name of the customer or contact who responded.");
+  if (args.response !== "accepted" && !note) throw new Error("Explain the customer's requested changes, decline or dispute.");
+  const prior = [row.clientResponse, ...(row.timeline ?? []).map((entry: any) => entry.clientResponse)]
+    .find((response: InvoiceClientResponse | undefined) => response?.idempotencyKey === idempotencyKey) as InvoiceClientResponse | undefined;
+  if (prior) {
+    if (prior.response !== args.response || prior.date !== args.date || prior.customerName !== customerName || prior.note !== note || prior.reference !== reference) throw new Error("That response idempotency key already belongs to different details.");
+    return row._id;
+  }
+  if (row.status !== "sent") throw new Error("Record external sending before recording the customer's response. Draft, unsent and void invoices cannot receive responses.");
+  const today = await organizationToday(ctx, row.societyId);
+  const earliest = row.externalDelivery?.sentDate ?? row.issueDate;
+  if (!isCalendarDate(args.date) || args.date > today || args.date < earliest || (row.clientResponse && args.date < row.clientResponse.date)) throw new Error("Choose a response date between the latest sending/response and today.");
+  const at = nowISO(), actor = await actorName(ctx, row.societyId), userId = await actingUser(ctx, row.societyId);
+  const clientResponse: InvoiceClientResponse = {
+    response: args.response, date: args.date, customerName, idempotencyKey, recordedAtISO: at,
+    ...(note ? { note } : {}), ...(reference ? { reference } : {}),
+    ...(actor ? { recordedByName: actor } : {}), ...(userId ? { recordedByUserId: userId } : {}),
+  };
+  const timeline = [...(row.timeline ?? []), { ...event("client_response", `Customer response: ${INVOICE_CLIENT_RESPONSE_LABEL[args.response]} · ${customerName} · ${args.date}`, actor), clientResponse }];
+  if (new TextEncoder().encode(JSON.stringify({ ...row, clientResponse, timeline })).byteLength > 950000) throw new Error("This invoice is too large for another response. Preserve its existing audit history and use a replacement invoice.");
+  await ctx.db.patch(row._id, { clientResponse, timeline, updatedAtISO: at });
+  return row._id;
 }
 
 /** Void invoices without payments; a posted invoice gets a reversing entry (dated today, so closed books refuse it). */
@@ -1056,14 +1224,14 @@ export async function restoreVoidedPortable(ctx: PortableMutationCtx, { id }: { 
     if (siblings.some((other) => other._id !== id && other.status !== "void")) throw new Error("This repair already has an active invoice.");
   }
   const actor = await actorName(ctx, row.societyId);
-  const status = row.sentAtISO ? "sent" : "draft";
+  const status = row.sentAtISO ? "sent" : row.issuedAtISO ? "issued" : "draft";
   const reposting = Boolean(row.reversalJournalEntryId);
   const next: Row = reposting
     ? { ...row, status, journalEntryId: undefined, reversalJournalEntryId: undefined, ledgerRound: (Number(row.ledgerRound) || 1) + 1 }
     : { ...row, status };
   const events = [event("restored", "Restored from void", actor)];
   let journalEntryId = next.journalEntryId;
-  if (status === "sent" && (reposting || !journalEntryId)) {
+  if (isIssuedInvoice(status) && (reposting || !journalEntryId)) {
     const outcome = await syncAccrual(ctx, asStored(next), await loadInvoiceLedgerContext(ctx, row.societyId), await actingUser(ctx, row.societyId));
     if (outcome.entryId) {
       journalEntryId = outcome.entryId;
@@ -1130,7 +1298,7 @@ export async function duplicatePortable(ctx: PortableMutationCtx, { id }: { id: 
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const row = await requireOwnedRow<Row>(ctx, "invoices", id);
-  if (row.status !== "draft" || (row.payments ?? []).length) throw new Error("Only unpaid drafts can be deleted. Void a sent invoice instead.");
+  if (row.status !== "draft" || (row.payments ?? []).length || row.issuerSnapshot || row.issuerTaxRegistrationsSnapshot) throw new Error("Only unpaid drafts that have not been prepared can be deleted. Void an issued or prepared invoice instead.");
   await ctx.db.delete(id);
 }
 
@@ -1176,9 +1344,9 @@ async function assertDepositClaimable(ctx: PortableQueryCtx, societyId: string, 
  * another way, lines that don't balance), so a failure leaves no partial state.
  */
 async function assertInvoicePostable(ctx: PortableQueryCtx, row: Row, lctx: InvoiceLedgerContext, postAccrual: boolean, payments: StoredInvoicePayment[]) {
-  if (postAccrual && computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents > 0) {
+  if (postAccrual && computeInvoiceTotals(row.lines ?? [], row.discount, row.money).grossTotalCents > 0) {
     await assertPostableDates(ctx, row.societyId, [row.issueDate]);
-    const placeholder = { receivableAccountId: "receivable", taxPayableAccountId: "tax" };
+    const placeholder = { receivableAccountId: "receivable", taxPayableAccountId: "tax", withholdingAccountId: "withholding", shippingRevenueAccountId: "shipping" };
     validateBalancedJournalLines(accrualPostingLines(asStored(row), () => "revenue", placeholder));
   }
   for (const payment of payments) {
@@ -1259,15 +1427,18 @@ async function recordSettlement(ctx: PortableMutationCtx, args: SettlementArgs, 
   }
   const actor = await actorName(ctx, row.societyId), userId = await actingUser(ctx, row.societyId), at = nowISO();
   let issuerTaxRegistrationsSnapshot = row.issuerTaxRegistrationsSnapshot;
+  let issuerSnapshot = row.issuerSnapshot;
   if (row.status === "draft") {
     assertInvoiceTaxAssessments(row.lines ?? [], row.issueDate);
     const taxContext = row.lines?.some((line: InvoiceLine) => line.taxAssessment) ? await loadOrganizationTaxContext(ctx, row.societyId) : undefined;
     if (taxContext) await assertInvoiceOrganizationFactsCurrent(ctx, row.societyId, row.lines ?? [], taxContext);
     issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, row.societyId), row.lines ?? [], row.issueDate, at, taxContext ? snapshotSupplierTaxFacts(row.lines ?? [], taxContext, row.issueDate) : undefined);
+    issuerSnapshot ??= await captureInvoiceIssuerSnapshot(ctx, row.societyId);
   }
   let payment: StoredInvoicePayment = { key: randomKey("settlement"), kind, date: args.date, amountCents, method, recordedAtISO: at, ...(idempotencyKey ? { idempotencyKey } : {}), ...(args.sourcePaymentKey ? { sourcePaymentKey: args.sourcePaymentKey } : {}), ...(fxRateMicros ? { fxRateMicros, fxSource: cleanText(args.fxSource, 200) } : {}), ...(args.reference ? { reference: cleanText(args.reference, 100) } : {}), ...(args.note ? { note: cleanText(args.note, 1000) } : {}), ...(actor ? { recordedByName: actor } : {}), ...(txn ? { financialTransactionId: txn._id } : args.depositAccountId && !noncash ? { depositAccountId: args.depositAccountId } : {}) };
   if(new TextEncoder().encode(JSON.stringify({...row,payments:[...previous,payment]})).byteLength>900000)throw new Error("This invoice is too large for another settlement record. Export the audit history and reduce inline attachments.");
-  let next = { ...row, status: "sent", payments: [...previous, payment] } as Row;
+  const lifecycle = row.status === "draft" ? "issued" : row.status;
+  let next = { ...row, status: lifecycle, payments: [...previous, payment] } as Row;
   await assertPostableDates(ctx, row.societyId, row.status === "draft" ? [row.issueDate, args.date] : [args.date]);
   const blockers = accrualBlockers(asStored(next), lctx);
   if (noncash && blockers.length) throw new Error(`Post the invoice before recording a credit or write-off: ${blockers.join(" ")}`);
@@ -1276,7 +1447,7 @@ async function recordSettlement(ctx: PortableMutationCtx, args: SettlementArgs, 
   next.fxRevaluations = fxRevaluations;
   if (txn) payment = { ...payment, transactionBefore: await matchDeposit(ctx, row, txn, lctx, actor) };
   payment = withPosting(payment, await postPayment(ctx, asStored(next), payment, lctx, userId));
-  await ctx.db.patch(row._id, { status: "sent", sentAtISO: row.sentAtISO ?? at, ...(issuerTaxRegistrationsSnapshot ? { issuerTaxRegistrationsSnapshot } : {}), ...(next.journalEntryId ? { journalEntryId: next.journalEntryId } : {}), fxRevaluations, payments: [...previous, payment], paidCents: sumPaid([...previous, payment]), totalCents: total, updatedAtISO: at, timeline: [...(row.timeline ?? []), event(kind, `${kind === "payment" ? "Payment" : kind === "write_off" ? "Write-off" : kind === "credit" ? "Credit" : "Refund"} recorded`, actor, amountCents)] });
+  await ctx.db.patch(row._id, { status: lifecycle, ...(row.status === "draft" ? { issuedAtISO: at } : {}), ...(issuerSnapshot ? { issuerSnapshot } : {}), ...(issuerTaxRegistrationsSnapshot ? { issuerTaxRegistrationsSnapshot } : {}), ...(next.journalEntryId ? { journalEntryId: next.journalEntryId } : {}), fxRevaluations, payments: [...previous, payment], paidCents: sumPaid([...previous, payment]), totalCents: total, updatedAtISO: at, timeline: [...(row.timeline ?? []), ...(row.status === "draft" ? [event("issued", "Finalized when recording settlement; external sending has not been recorded", actor)] : []), event(kind, `${kind === "payment" ? "Payment" : kind === "write_off" ? "Write-off" : kind === "credit" ? "Credit" : "Refund"} recorded`, actor, amountCents)] });
   return payment.key;
 }
 export async function recordPaymentPortable(ctx: PortableMutationCtx, args: SettlementArgs) { return recordSettlement(ctx, args, "payment"); }
@@ -1321,7 +1492,7 @@ export async function revaluePortable(ctx: PortableMutationCtx, args: { id: stri
   const idempotencyKey = args.idempotencyKey.trim();
   const row = await requireOwnedRow<Row>(ctx, "invoices", args.id);
   const lctx = await loadInvoiceLedgerContext(ctx, row.societyId);
-  if (row.status !== "sent" || !row.journalEntryId || !row.money?.fx || row.currency === lctx.workspaceCurrency) throw new Error("Revaluation requires a posted foreign-currency invoice.");
+  if (!isIssuedInvoice(row.status) || !row.journalEntryId || !row.money?.fx || row.currency === lctx.workspaceCurrency) throw new Error("Revaluation requires a posted foreign-currency invoice.");
   const retry = (row.fxRevaluations ?? []).find((value: any) => value.key === idempotencyKey);
   if (retry) { if (retry.date !== args.date || retry.rateMicros !== args.rateMicros || retry.source !== args.source.trim()) throw new Error("That key belongs to another FX revaluation."); return retry.journalEntryId ?? null; }
   if (!isCalendarDate(args.date) || args.date < row.issueDate || args.date > await organizationToday(ctx, row.societyId)) throw new Error("Choose a revaluation date between issue and today.");
@@ -1387,7 +1558,7 @@ export async function linkDepositPortable(
   return paymentKey;
 }
 
-/** Draft a reminder email in the Outbox for each open invoice with an email address. */
+/** Draft a reminder email only after sending has been recorded for an open invoice. */
 export async function sendRemindersPortable(ctx: PortableMutationCtx, { societyId, ids }: { societyId: string; ids: string[] }) {
   const rows = await ownedInvoices(ctx, societyId, ids);
   const today = await organizationToday(ctx, societyId);
@@ -1398,7 +1569,7 @@ export async function sendRemindersPortable(ctx: PortableMutationCtx, { societyI
   for (const row of rows) {
     const total = computeInvoiceTotals(row.lines ?? [], row.discount, row.money).totalCents;
     const status = deriveInvoiceStatus({ status: row.status, dueDate: row.dueDate, totalCents: total, payments: row.payments }, today);
-    if (!isOpenStatus(status)) { skippedNotOpen += 1; continue; }
+    if (row.status !== "sent" || !isOpenStatus(status)) { skippedNotOpen += 1; continue; }
     if (!row.billToEmail) { skippedNoEmail += 1; continue; }
     const balance = total - sumPaid(row.payments);
     await draftOutboxEmail(ctx, row, "reminder", balance);
@@ -1658,7 +1829,7 @@ export async function upsertCustomerPortable(ctx: PortableMutationCtx, args: Cus
     if (!isTheirs(row) || (oneOffKey && row.repairJobId)) continue;
     // Delivery preparation can freeze a draft's public invoice. Preserve its
     // recipient just as we preserve an issued assessment's transaction facts.
-    if ((row.status === "draft" && row.issuerTaxRegistrationsSnapshot) || (row.status !== "draft" && row.lines?.some((line: InvoiceLine) => line.taxAssessment))) continue;
+    if (row.issuerSnapshot || (row.status === "draft" && row.issuerTaxRegistrationsSnapshot) || (row.status !== "draft" && row.lines?.some((line: InvoiceLine) => line.taxAssessment))) continue;
     if (row.status === "draft") {
       const next = { ...row, ...link, ...details(row) };
       await ctx.db.patch(row._id, { ...link, ...details(row), ...(taxTransactionContextChanged(row, next) ? { lines: reassessTaxLines(row.lines, row.issueDate) } : {}), updatedAtISO: nowISO() });

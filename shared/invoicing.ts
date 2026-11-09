@@ -32,13 +32,62 @@ const TERMS_DAYS: Record<Exclude<InvoiceTerms, "custom">, number> = {
   net_60: 60,
 };
 
-export const INVOICE_STATUSES = ["draft", "sent", "partially_paid", "paid", "overdue", "void"] as const;
+export const INVOICE_STATUSES = ["draft", "issued", "sent", "partially_paid", "paid", "overdue", "void"] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 /** What is stored; paid / partially paid / overdue are derived. */
-export type InvoiceLifecycle = "draft" | "sent" | "void";
+export type InvoiceLifecycle = "draft" | "issued" | "sent" | "void";
+
+/** Issuing creates the receivable; sending records a separate external action. */
+export function isIssuedInvoice(status: string): boolean {
+  return status === "issued" || status === "sent";
+}
+
+export type InvoiceIssuerSnapshot = {
+  name: string;
+  address?: string;
+  email?: string;
+  registrationNumber?: string;
+  logoStorageId?: string;
+};
+
+export const INVOICE_DELIVERY_METHODS = ["email", "portal", "post", "hand_delivery", "other"] as const;
+export type InvoiceDeliveryMethod = (typeof INVOICE_DELIVERY_METHODS)[number];
+export const INVOICE_DELIVERY_METHOD_LABEL: Record<InvoiceDeliveryMethod, string> = {
+  email: "Email", portal: "Client portal", post: "Post", hand_delivery: "Hand delivery", other: "Other",
+};
+export type InvoiceExternalDelivery = {
+  sentDate: string;
+  method: InvoiceDeliveryMethod;
+  source?: "manual" | "automation";
+  automationRunId?: string;
+  recipient?: string;
+  reference?: string;
+  note?: string;
+  recordedAtISO: string;
+  recordedByName?: string;
+  recordedByUserId?: string;
+};
+
+export const INVOICE_CLIENT_RESPONSES = ["accepted", "changes_requested", "disputed", "declined"] as const;
+export type InvoiceClientResponseKind = (typeof INVOICE_CLIENT_RESPONSES)[number];
+export const INVOICE_CLIENT_RESPONSE_LABEL: Record<InvoiceClientResponseKind, string> = {
+  accepted: "Accepted", changes_requested: "Changes requested", disputed: "Disputed", declined: "Declined",
+};
+export type InvoiceClientResponse = {
+  response: InvoiceClientResponseKind;
+  date: string;
+  customerName: string;
+  note?: string;
+  reference?: string;
+  idempotencyKey: string;
+  recordedAtISO: string;
+  recordedByName?: string;
+  recordedByUserId?: string;
+};
 
 export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
   draft: "Draft",
+  issued: "Issued",
   sent: "Sent",
   partially_paid: "Partially paid",
   paid: "Paid",
@@ -239,7 +288,7 @@ export function deriveInvoiceStatus(invoice: StatusInput, today: string): Invoic
   if (invoice.totalCents <= 0) return "paid";
   if (invoice.dueDate < today) return "overdue";
   if (paid > 0) return "partially_paid";
-  return "sent";
+  return invoice.status === "issued" ? "issued" : "sent";
 }
 
 export function daysOverdue(dueDate: string, today: string): number {
@@ -248,7 +297,7 @@ export function daysOverdue(dueDate: string, today: string): number {
 
 /** True for sent invoices that still have something to collect. */
 export function isOpenStatus(status: InvoiceStatus): boolean {
-  return status === "sent" || status === "partially_paid" || status === "overdue";
+  return status === "issued" || status === "sent" || status === "partially_paid" || status === "overdue";
 }
 
 export const DEFAULT_INVOICE_PREFIX = "INV-";

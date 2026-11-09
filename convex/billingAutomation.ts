@@ -39,8 +39,10 @@ export const workerContext = internalQuery({ args: run, returns: v.any(), handle
   const schedule = await ctx.db.get(row.scheduleId); const organization = await ctx.db.get(args.societyId);
   const template = schedule?.templateId ? await ctx.db.get(schedule.templateId as any) : null;
   if (template && template.societyId !== args.societyId) throw new Error("Template not found.");
-  const logoUrl = organization?.logoStorageId ? await ctx.storage.getUrl(organization.logoStorageId as any) : null;
-  return { organization: { name: organization?.name ?? "Organization", address: organization?.mailingAddress ?? organization?.registeredOfficeAddress, email: organization?.officialEmail, logoUrl }, config: template?.config };
+  const capturedIssuer = row.snapshot?.invoice?.issuerSnapshot;
+  const logoStorageId = capturedIssuer ? capturedIssuer.logoStorageId : organization?.logoStorageId;
+  const logoUrl = logoStorageId ? await ctx.storage.getUrl(logoStorageId as any) : null;
+  return { organization: { ...(capturedIssuer ?? { name: organization?.name ?? "Organization", address: organization?.mailingAddress ?? organization?.registeredOfficeAddress, email: organization?.officialEmail }), logoUrl }, config: template?.config };
 } });
 /** Source pages remain separately bounded, but execute as the schedule's current owner. */
 export const reportSourceInternal = internalQuery({ args: { ...run, sourceTable: v.string(), cursor: v.union(v.string(), v.null()), pageSize: v.number(), snapshotAtISO: v.optional(v.string()) }, returns: v.any(), handler: async (ctx, args) => {

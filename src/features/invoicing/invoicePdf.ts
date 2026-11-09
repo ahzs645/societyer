@@ -19,6 +19,7 @@ import { resolveDocumentOrganizationLogo } from "./documentOrganizationLogo";
 import { documentPresentation } from "./documentPresentation";
 import { decorateDocumentPdf } from "./documentPdfDecoration";
 import { triggerBlobDownload } from "../../lib/zip";
+import { invoiceDocumentOrganization } from "./invoiceOrganization";
 
 let engineReady: Promise<void> | undefined;
 export async function ensureDocumentPdfEngine(): Promise<void> {
@@ -40,14 +41,17 @@ export async function loadDocumentFonts(config?: Partial<InvoiceTemplate>): Prom
 }
 /** No upload or server required: pdfcn → Forme pagination → vector PDF and real page numbers. */
 export async function buildInvoicePdf(props: InvoicePdfProps): Promise<Uint8Array> {
+  props = { ...props, organization: invoiceDocumentOrganization(props.invoice, props.organization) };
   await ensureDocumentPdfEngine();
   const fonts = props.fonts ?? await loadDocumentFonts(props.invoice.documentTemplate);
   const organization = props.invoice.documentTemplate?.customLogo || props.invoice.documentTemplate?.brand || props.invoice.documentTemplate?.showLogo === false ? props.organization : await resolveDocumentOrganizationLogo(props.organization);
-  const rendered = await renderDocumentWithLayout(createElement(InvoicePdfDocument, { ...props, organization, fonts }));
+  // Keep the resolved historical logo when the renderer reapplies the identity snapshot.
+  const invoice = props.invoice.issuerSnapshot ? { ...props.invoice, issuerLogoUrl: organization.logoUrl } : props.invoice;
+  const rendered = await renderDocumentWithLayout(createElement(InvoicePdfDocument, { ...props, invoice, organization, fonts }));
   const bytes = await appendDocumentAttachments(rendered.pdf, props.invoice);
   const data = documentPresentation(props.invoice);
   const { cleanInvoiceTemplate } = await import("../../../shared/invoiceCommerce");
-  return decorateDocumentPdf(bytes, { config: cleanInvoiceTemplate(props.invoice.documentTemplate), organizationName: props.organization.name, number: props.invoice.number, fonts, layout: rendered.layout, content: { invoice: props.invoice, organization }, paymentStub: data.paymentStubDetails ? { ...data.paymentStubDetails, height: documentPaymentStubHeight(data) } : undefined });
+  return decorateDocumentPdf(bytes, { config: cleanInvoiceTemplate(props.invoice.documentTemplate), organizationName: organization.name, number: props.invoice.number, fonts, layout: rendered.layout, content: { invoice, organization }, paymentStub: data.paymentStubDetails ? { ...data.paymentStubDetails, height: documentPaymentStubHeight(data) } : undefined });
 }
 export async function downloadInvoicePdf(invoice: InvoicePdfProps["invoice"], organization: InvoicePdfProps["organization"], paymentInstructions?: string) {
   const bytes = await buildInvoicePdf({ invoice, organization, paymentInstructions });

@@ -41,10 +41,16 @@ export async function retainedReceiptEvidenceDocumentIds(ctx: PortableQueryCtx, 
   return [...ids];
 }
 
-/** A branding alias must not delete an attached file or a historical proof blob. */
+/** A branding alias must not delete an attached file, historical proof, or the
+ * logo captured by an invoice. Prepared drafts and void invoices also retain
+ * their captured document identity. */
 export async function storageHasRetainedDocumentReference(ctx: PortableQueryCtx, societyId: string, storageId: string): Promise<boolean> {
   const liveDocument = await ctx.db.query("documents").withIndex("by_storage", q => q.eq("storageId", storageId)).first();
   if (liveDocument) return true;
+  const invoice = await ctx.db.query("invoices")
+    .withIndex("by_issuer_logo", q => q.eq("issuerSnapshot.logoStorageId", storageId))
+    .first();
+  if (invoice) return true;
   return (await retainedReceiptEvidenceDocumentIds(ctx, societyId, storageId)).length > 0;
 }
 

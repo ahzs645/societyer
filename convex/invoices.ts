@@ -5,8 +5,11 @@ import {
   upsertTemplatePortable, upsertPriceListPortable, upsertRepairJobPortable, setRepairStatusPortable, invoiceRepairJobPortable,
   workspacePortable,
   documentTemplatesPortable,
+  documentPortable,
   upsertPortable,
+  issuePortable,
   markSentPortable,
+  recordClientResponsePortable,
   voidInvoicesPortable,
   restoreVoidedPortable,
   duplicatePortable,
@@ -32,9 +35,10 @@ import {
   postExistingPortable,
 } from "../shared/functions/invoices";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { buildConvexCapabilities } from "./providers/capabilities";
 import { taxAssessmentValidator } from "./validators/taxAssessment";
 import { invoiceMoneyValidator, invoiceDocumentExtrasValidator, invoiceTaxModeValidator } from "./tables/invoiceMoney";
-import { invoiceReceivingMethodValidator, invoiceTemplateValidator, invoicePriceEntryValidator, repairStatusValidator, invoiceDiscountValidator } from "./tables/invoices";
+import { invoiceReceivingMethodValidator, invoiceTemplateValidator, invoicePriceEntryValidator, repairStatusValidator, invoiceDiscountValidator, invoiceDeliveryMethodValidator, invoiceClientResponseKindValidator } from "./tables/invoices";
 
 // Lines arrive from the builder; the handler normalises and validates them.
 const clientLineValidator = v.object({
@@ -67,13 +71,19 @@ const partyArgs = {
 export const workspace = authorizedQuery("invoices:workspace", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => workspacePortable(await toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => workspacePortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const documentTemplates = authorizedQuery("invoices:documentTemplates", query)({
   args: { societyId: v.id("societies"), templateId: v.optional(v.id("invoiceTemplates")) },
   returns: v.any(),
-  handler: async (ctx, args) => documentTemplatesPortable(await toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => documentTemplatesPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+});
+
+export const document = authorizedQuery("invoices:document", query)({
+  args: { id: v.id("invoices") },
+  returns: v.any(),
+  handler: async (ctx, args) => documentPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const upsert = authorizedMutation("invoices:upsert", mutation)({
@@ -102,10 +112,29 @@ export const upsert = authorizedMutation("invoices:upsert", mutation)({
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
+export const issue = authorizedMutation("invoices:issue", mutation)({
+  args: { societyId: v.id("societies"), ids: v.array(v.id("invoices")) },
+  returns: v.object({ issued: v.number(), skipped: v.number(), posted: v.number() }),
+  handler: async (ctx, args) => issuePortable(await toPortableMutationCtx(ctx), args),
+});
+
 export const markSent = authorizedMutation("invoices:markSent", mutation)({
-  args: { societyId: v.id("societies"), ids: v.array(v.id("invoices")), draftEmail: v.optional(v.boolean()) },
+  args: {
+    societyId: v.id("societies"), ids: v.array(v.id("invoices")), draftEmail: v.optional(v.boolean()),
+    sentDate: v.optional(v.string()), method: v.optional(invoiceDeliveryMethodValidator),
+    recipient: v.optional(v.string()), reference: v.optional(v.string()), note: v.optional(v.string()),
+  },
   returns: v.any(),
   handler: async (ctx, args) => markSentPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const recordClientResponse = authorizedMutation("invoices:recordClientResponse", mutation)({
+  args: {
+    id: v.id("invoices"), response: invoiceClientResponseKindValidator, date: v.string(), customerName: v.string(),
+    note: v.optional(v.string()), reference: v.optional(v.string()), idempotencyKey: v.string(),
+  },
+  returns: v.id("invoices"),
+  handler: async (ctx, args) => recordClientResponsePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const voidInvoices = authorizedMutation("invoices:voidInvoices", mutation)({

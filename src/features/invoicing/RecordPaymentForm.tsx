@@ -92,6 +92,7 @@ export function RecordPaymentForm({ invoice, transactions, today, depositAccount
 
   return (
     <form className="pay-form" onSubmit={submit} aria-label={`Record a payment for ${invoice.number}`}>
+      {invoice.lifecycle === "draft" && <p className="muted">Recording the first payment also finalizes this draft and locks its invoice details. You can record external sending separately.</p>}
       <div className="pay-form__row">
         <Field label="Amount" hint={`Balance ${formatMoney(invoice.balanceCents, { currency: invoice.currency })}. Partial payments are fine.`}>
           <input className="input num" inputMode="decimal" value={amountInput} onChange={(e) => setAmountInput(e.target.value)} aria-invalid={amountCents == null || undefined} />

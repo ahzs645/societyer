@@ -38,6 +38,7 @@ import {
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { calendarDateKey } from "../lib/calendarDates";
 import { Tooltip } from "../components/Tooltip";
+import { GstAccountReference } from "../components/GstAccountReference";
 
 const TAX_FILING_KINDS = ["T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
@@ -73,6 +74,10 @@ export function FilingsPage() {
   const [saving, setSaving] = useState(false);
   const [markingFiled, setMarkingFiled] = useState(false);
   const [viewFiled, setViewFiled] = useState<any | null>(null);
+  const canReadOrganization = can("society:read");
+  const reviewingGst = (open && form?.kind === "GSTHST") || completeDraft?.kind === "GSTHST" || viewFiled?.kind === "GSTHST";
+  const organizationDetails = useQuery(api.organizationDetails.overview,
+    society && canReadOrganization && reviewingGst ? { societyId: society._id } : "skip");
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const filingGuidance = useQuery(
@@ -417,6 +422,7 @@ export function FilingsPage() {
                 options={filingKindOptions}
               />
             </Field>
+            {form.kind === "GSTHST" && <GstAccountReference identifiers={organizationDetails?.identifiers} canRead={canReadOrganization} filing />}
             <Field label="Jurisdiction">
               <Select
                 value={form.jurisdictionCode ?? society.jurisdictionCode ?? ""}
@@ -467,6 +473,7 @@ export function FilingsPage() {
       >
         {viewFiled && (
           <div className="col" style={{ gap: 8 }}>
+            {viewFiled.kind === "GSTHST" && <GstAccountReference identifiers={organizationDetails?.identifiers} canRead={canReadOrganization} filing />}
             {viewFiled.status === "Filed" || viewFiled.status === "Attested" ? (
               <InspectorNote title="Filed records are kept as evidence">
                 Filed filings cannot be deleted. To correct a detail, edit the cell in the table; the original submission evidence stays attached.
@@ -565,6 +572,7 @@ export function FilingsPage() {
       >
         {completeDraft && (
           <div>
+            {completeDraft.kind === "GSTHST" && <GstAccountReference identifiers={organizationDetails?.identifiers} canRead={canReadOrganization} filing />}
             <InspectorNote tone="warn" title="Only mark filed with evidence">
               Capture the filed date, method, confirmation number, and receipt once the submission
               is actually complete so audit trails stay defensible. This records your attestation; it does not independently verify government acceptance.
