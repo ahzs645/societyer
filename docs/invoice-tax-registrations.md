@@ -16,7 +16,21 @@ An older generic `sales_tax` identifier is not guessed to be federal or provinci
 
 First finalization through `issuePortable`, legacy issue-and-send through `markSentPortable`, or a first settlement that issues a draft, records `issuerTaxRegistrationsSnapshot` on the invoice. Its fields are `capturedAtISO`, `effectiveDate`, and `registrations[]`, whose entries carry `taxId`, `label`, `number`, and optional `jurisdiction`. An empty registrations array records that no eligible numbers were selected. Changes to the organization do not update this snapshot. Duplicating an invoice starts a new draft without the previous snapshot. Finalization now has a distinct `issued` lifecycle: it removes Draft and prepares a document without claiming delivery. See [Manual invoice lifecycle](manual-invoice-lifecycle.md).
 
-Confirmed guided lines that collect `CA-GST` or `CA-BC-PST` require the corresponding eligible seller number before any invoice ledger writes. Existing manual tax rates remain compatible and do not gain that new issuance blocker. Storing a number alone never assigns a tax rate, exemption or collection obligation to an item.
+Confirmed guided lines that collect `CA-GST` or ordinary registered `CA-BC-PST` require the corresponding eligible seller number before any invoice ledger writes. BC PST also supports an explicit **Collect PST; registration / number is pending** position in the tax guide. Every line collecting PST must have its transaction assessment confirmed with that position to finalize without a PST number. GST registration is still required for guided GST collection. Existing manual tax rates remain compatible and do not gain that new issuance blocker. Storing a number alone never assigns a tax rate, exemption or collection obligation to an item.
+
+The pending position continues to collect applicable PST; it is not an exemption.
+BC states that a person required to register remains obliged to collect and remit
+PST while unregistered. See [BC's registration guidance](https://www2.gov.bc.ca/gov/content/taxes/sales-taxes/pst/register).
+The invoice retains the confirmed pending decision in its tax assessment, and
+the issuer snapshot contains only actual eligible numbers. No placeholder
+identifier is created. Conflicting or invalid active PST entries must still be
+resolved; the pending path cannot hide them. Supply classification, bundled-sale
+allocation, customer relief, supplier facts and ordinary-scope review still apply.
+
+The November 9 rule-pack revision supports pending collection. Stored assessments
+using the recognized November 6 revision retain their original evaluator instead
+of silently changing their reviewed decision. New and reopened guides use the
+latest revision. Unsupported revisions remain rejected.
 
 A guided standard taxable item cannot claim non-collection based on a seller-registration exception while an eligible active registration for that tax exists. This conflict must be reviewed before issue, including when multiple eligible branch numbers make automatic number selection ambiguous. Genuine exempt, zero-rated, not-subject and customer-relief treatments are unaffected by this conflict check.
 
@@ -24,7 +38,7 @@ Manual recurring delivery freezes these numbers when its outgoing document is pr
 
 ## Public documents and historical records
 
-HTML, print, PDF, PDF positioned address blocks, and payment receipts use the saved snapshot. Guided collecting lines force the seller registration block to remain visible when a template hides its optional tax-registration field. Public tax-treatment disclosures and the purchaser's PST number for a number-based exemption route remain visible independently of optional line-table tax columns. Internal exemption evidence is excluded by the shared tax disclosure helper.
+HTML, print, PDF, PDF positioned address blocks, and payment receipts use the saved snapshot. Guided collecting lines force available seller registrations to remain visible when a template hides its optional tax-registration field. Public tax-treatment disclosures and the purchaser's PST number for a number-based exemption route remain visible independently of optional line-table tax columns in standard exports. PDF export options may omit tax-treatment notes; tax amounts and available required registrations retain their existing visibility rules. **Show PST registration pending notice** adds an optional plain notice and is off by default. An actual captured PST number takes precedence. Internal exemption evidence is excluded by the shared tax disclosure helper.
 
 Old issued invoices without a snapshot do not borrow current organization numbers. An internal detail note explains the missing historical capture and directs the user to the original issued document. No automatic migration invents historical registration evidence.
 

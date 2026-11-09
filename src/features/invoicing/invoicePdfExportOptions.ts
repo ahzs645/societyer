@@ -11,7 +11,10 @@ export type InvoicePdfExportOptions = {
   taxTreatmentNotes: boolean;
   eftCurrency: boolean;
   pageNumbers: "template" | "multiple_pages" | "always" | "off";
+  pstRegistrationPending?: boolean;
 };
+
+export const PST_REGISTRATION_PENDING_NOTICE = "BC PST registration number: pending.";
 
 export const TEMPLATE_PDF_EXPORT: InvoicePdfExportOptions = {
   quantity: "template", rate: "template", tax: "template", taxTreatmentNotes: true, eftCurrency: true, pageNumbers: "template",

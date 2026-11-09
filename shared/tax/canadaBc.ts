@@ -41,7 +41,7 @@ const questions: TaxQuestion[] = [
   { id: "relatedServiceScope", label: "Have related-service exclusions and exemptions been checked?", kind: "choice", when: [{ answer: "itemCategory", oneOf: ["related_services"] }, { answer: "provincialException", oneOf: ["category"] }], hint: "Confirm the service is taxable after reviewing the rules for the particular goods and work. Household-appliance repairs, cleaning, towing and work on real property can have different treatment.", options: [choice("unknown", "Not yet checked"), choice("yes", "Yes — taxable related service and no applicable exception"), choice("no", "No / a specific exemption or property rule may apply")] },
   { id: "legalServiceScope", label: "Have the legal-service location and exemption rules been checked?", kind: "choice", when: [{ answer: "itemCategory", oneOf: ["legal_services"] }, { answer: "provincialException", oneOf: ["category"] }], hint: "This ordinary path covers legal services provided in B.C. to a B.C. resident or business, with no legal-aid or other exemption. Other locations and special arrangements need review.", options: [choice("unknown", "Not yet checked"), choice("yes", "Yes — ordinary B.C. legal services; no exception"), choice("no", "No / another location or exemption needs review")] },
   { id: "pstRegistration", label: "What is the supplier's PST collection position?", kind: "choice", when: [{ answer: "provincialException", oneOf: ["category"] }], hint: "A missing PST number never proves exemption. B.C.'s small-seller conditions are different from the GST/HST small-supplier rules. For a non-taxable category this answer does not change its treatment.", options: [
-    choice("unknown", "Registration needs review"), choice("registered", "Registered to collect PST"), choice("not_required", "Reviewed collection exception / qualifying small seller"), choice("required_not_registered", "Must collect PST; registration is outstanding"),
+    choice("unknown", "Registration needs review"), choice("registered", "Registered to collect PST"), choice("not_required", "Reviewed collection exception / qualifying small seller"), choice("required_not_registered", "Collect PST; registration / number is pending"),
   ] },
   evidence("pstRegistrationEvidence", "PST collection exception and evidence", "pstRegistration", ["not_required"]),
   { id: "customerRelief", label: "Does this customer claim tax relief for this transaction?", kind: "choice", when: [{ answer: "scope", oneOf: ["transaction"] }], hint: "Check the actual eligibility, delivery/use conditions and required evidence. Nonprofit or charity status alone is not blanket customer relief.", options: [
@@ -79,7 +79,7 @@ function federal(a: TaxAnswers): TaxComponentDecision {
   return review(base.taxId, base.label, "Resolve GST/HST registration and record evidence before applying the collection decision.", ["cra-small-supplier"]);
 }
 
-function provincial(a: TaxAnswers): TaxComponentDecision {
+function provincial(a: TaxAnswers, allowPendingRegistration = false): TaxComponentDecision {
   const base = { taxId: "CA-BC-PST", label: "PST", authorityIds: ["bc-pst"] };
   if (["exempt", "not_subject"].includes(a.provincialException)) {
     if (!has(a, "provincialEvidence")) return review(base.taxId, base.label, "Record the PST rule and evidence supporting this exception.", base.authorityIds);
@@ -92,6 +92,7 @@ function provincial(a: TaxAnswers): TaxComponentDecision {
   const categoryScope = ({ software: ["softwareScope", "bc-software"], related_services: ["relatedServiceScope", "bc-related-services"], legal_services: ["legalServiceScope", "bc-legal-services"] } as Record<string, string[]>)[a.itemCategory];
   if (categoryScope && a[categoryScope[0]] !== "yes") return review(base.taxId, base.label, "Confirm the category's location, use and exemption conditions before using ordinary PST guidance.", [categoryScope[1]]);
   if (a.pstRegistration === "registered") return { ...base, treatment: "standard", collection: "collect", ratePercent: 7, reason: "Ordinary taxable B.C. supply with no identified PST exemption." };
+  if (allowPendingRegistration && a.pstRegistration === "required_not_registered") return { ...base, treatment: "standard", collection: "collect", ratePercent: 7, reason: "PST must be collected and remitted while the supplier registration or number is outstanding.", authorityIds: ["bc-register"] };
   if (a.pstRegistration === "not_required" && has(a, "pstRegistrationEvidence")) return { ...base, treatment: "standard", collection: "do_not_collect", ratePercent: 7, reason: "Taxable category; collection exception is supported by the recorded seller assessment.", authorityIds: ["bc-small-seller", "bc-register"] };
   return review(base.taxId, base.label, "Review PST collection obligations. A missing registration does not remove the obligation to collect and remit.", ["bc-register", "bc-small-seller"]);
 }
@@ -115,32 +116,41 @@ export const canadaBcTaxPack: TaxRulePack = {
     { id: "bc-legal-services", title: "B.C.: Legal services (PST 106)", url: "https://www2.gov.bc.ca/assets/gov/taxes/sales-taxes/publications/pst-106-legal-services.pdf" },
     { id: "bc-fin490", title: "B.C.: General certificate of exemption (FIN 490) and eligibility instructions", url: "https://www2.gov.bc.ca/assets/gov/taxes/sales-taxes/forms/fin-490-certificate-exemption-general.pdf" },
   ],
-  evaluate(a) {
-    const issues: string[] = [];
-    if (a.scopeConfirmed !== "yes") issues.push("Confirm the place of supply and ordinary domestic scope. Special or mixed supplies need review.");
-    if (!["business", "nonprofit", "charity"].includes(a.sellerKind)) issues.push("Establish the supplier's tax status. Other public bodies require a reviewed rule pack.");
-    if (!a.itemCategory || ["unknown", "other"].includes(a.itemCategory)) issues.push("Choose a supported supply category or obtain a specific tax review.");
-    if (a.scope === "transaction" && (!a.customerRelief || a.customerRelief === "unknown")) issues.push("Check whether this customer claims transaction-specific relief.");
-    if (a.scope === "catalog" && a.customerRelief !== "none") issues.push("Customer-specific relief belongs on the invoice, not the reusable catalog item.");
-    if (a.scope === "catalog" && (has(a, "customerEvidence") || has(a, "purchaserPstNumber"))) issues.push("Keep customer exemption evidence on the transaction, not the catalog item.");
-    if (["pst", "both"].includes(a.customerRelief)) {
-      if (!["pst_number", "certificate", "other"].includes(a.pstReliefDocumentation) || a.pstReliefConditions !== "confirmed") issues.push("Verify the required purchaser PST exemption documentation route and transaction conditions.");
-      if (a.pstReliefDocumentation === "pst_number" && !/^PST-\d{4}-\d{4}$/.test(a.purchaserPstNumber ?? "")) issues.push("Record a purchaser PST number in PST-1234-5678 format for the invoice.");
-      if (a.pstReliefDocumentation === "certificate" && !has(a, "pstCertificateType")) issues.push("Record the permitted PST certificate form and the purchaser's eligibility to use it.");
-    }
-    let components = [federal(a), provincial(a)];
-    const categoryAuthority = ({ software: "bc-software", related_services: "bc-related-services", legal_services: "bc-legal-services" } as Record<string, string>)[a.itemCategory];
-    if (categoryAuthority) components[1].authorityIds = [...new Set([...components[1].authorityIds, categoryAuthority])];
-    if (["gst", "pst", "both"].includes(a.customerRelief)) {
-      if (!has(a, "customerEvidence")) issues.push("Record the rule, conditions and evidence for customer-specific relief.");
-      else if (a.scope === "transaction") components = components.map((component) => {
-        const applies = a.customerRelief === "both" || (a.customerRelief === "gst" ? component.taxId === "CA-GST" : component.taxId === "CA-BC-PST");
-        // Relief cannot settle a missing underlying classification or supplier registration assessment.
-        if (!applies || component.collection !== "collect") return component;
-        return { ...component, treatment: "relieved", collection: "do_not_collect", reason: "Customer-specific relief is supported by the recorded eligibility, delivery/use conditions and evidence.", authorityIds: [...component.authorityIds, ...(component.taxId === "CA-BC-PST" ? ["bc-exemption-evidence", ...(a.pstReliefDocumentation === "certificate" ? ["bc-fin490"] : [])] : [])] };
-      });
-    }
-    for (const component of components) if (component.collection === "review_required") issues.push(`${component.label}: ${component.reason}`);
-    return { components, issues };
-  },
+  evaluate: (a) => evaluateCanadaBc(a, false),
+};
+
+function evaluateCanadaBc(a: TaxAnswers, allowPendingRegistration: boolean): ReturnType<TaxRulePack["evaluate"]> {
+  const issues: string[] = [];
+  if (a.scopeConfirmed !== "yes") issues.push("Confirm the place of supply and ordinary domestic scope. Special or mixed supplies need review.");
+  if (!["business", "nonprofit", "charity"].includes(a.sellerKind)) issues.push("Establish the supplier's tax status. Other public bodies require a reviewed rule pack.");
+  if (!a.itemCategory || ["unknown", "other"].includes(a.itemCategory)) issues.push("Choose a supported supply category or obtain a specific tax review.");
+  if (a.scope === "transaction" && (!a.customerRelief || a.customerRelief === "unknown")) issues.push("Check whether this customer claims transaction-specific relief.");
+  if (a.scope === "catalog" && a.customerRelief !== "none") issues.push("Customer-specific relief belongs on the invoice, not the reusable catalog item.");
+  if (a.scope === "catalog" && (has(a, "customerEvidence") || has(a, "purchaserPstNumber"))) issues.push("Keep customer exemption evidence on the transaction, not the catalog item.");
+  if (["pst", "both"].includes(a.customerRelief)) {
+    if (!["pst_number", "certificate", "other"].includes(a.pstReliefDocumentation) || a.pstReliefConditions !== "confirmed") issues.push("Verify the required purchaser PST exemption documentation route and transaction conditions.");
+    if (a.pstReliefDocumentation === "pst_number" && !/^PST-\d{4}-\d{4}$/.test(a.purchaserPstNumber ?? "")) issues.push("Record a purchaser PST number in PST-1234-5678 format for the invoice.");
+    if (a.pstReliefDocumentation === "certificate" && !has(a, "pstCertificateType")) issues.push("Record the permitted PST certificate form and the purchaser's eligibility to use it.");
+  }
+  let components = [federal(a), provincial(a, allowPendingRegistration)];
+  const categoryAuthority = ({ software: "bc-software", related_services: "bc-related-services", legal_services: "bc-legal-services" } as Record<string, string>)[a.itemCategory];
+  if (categoryAuthority) components[1].authorityIds = [...new Set([...components[1].authorityIds, categoryAuthority])];
+  if (["gst", "pst", "both"].includes(a.customerRelief)) {
+    if (!has(a, "customerEvidence")) issues.push("Record the rule, conditions and evidence for customer-specific relief.");
+    else if (a.scope === "transaction") components = components.map((component) => {
+      const applies = a.customerRelief === "both" || (a.customerRelief === "gst" ? component.taxId === "CA-GST" : component.taxId === "CA-BC-PST");
+      // Relief cannot settle a missing underlying classification or supplier registration assessment.
+      if (!applies || component.collection !== "collect") return component;
+      return { ...component, treatment: "relieved", collection: "do_not_collect", reason: "Customer-specific relief is supported by the recorded eligibility, delivery/use conditions and evidence.", authorityIds: [...component.authorityIds, ...(component.taxId === "CA-BC-PST" ? ["bc-exemption-evidence", ...(a.pstReliefDocumentation === "certificate" ? ["bc-fin490"] : [])] : [])] };
+    });
+  }
+  for (const component of components) if (component.collection === "review_required") issues.push(`${component.label}: ${component.reason}`);
+  return { components, issues };
+}
+
+/** Preserve the reviewed legacy evaluator for stored assessments; new guides use
+ * the revision that supports collection while a PST number is pending. */
+export const canadaBcPendingPstTaxPack: TaxRulePack = {
+  ...canadaBcTaxPack, version: "2026-11-09.1", reviewedOn: "2026-11-09",
+  evaluate: (a) => evaluateCanadaBc(a, true),
 };

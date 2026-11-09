@@ -57,6 +57,10 @@ Choose **Saved template**, **Simplified**, or adjust individual controls:
   are separate choices. Hiding the latter removes only an exact `Currency: CAD`
   (or matching invoice currency) line from an EFT method. Instructions for a
   different currency and other payment-method text remain intact.
+- **Show PST registration pending notice** is optional and off by default. It
+  prints a plain notice, never an invented PST number, and does not alter tax
+  rates, registration status or finalization rules. A captured PST number takes
+  precedence over the notice.
 
 The **Simplified** preset selects automatic columns, multi-page-only numbering,
 and hides tax treatment notes and repeated EFT currency. GST/PST amounts and

@@ -57,6 +57,30 @@ await assert.rejects(() => owner.mutation(api.invoices.upsert, { ...input, id: i
 await assert.rejects(() => owner.mutation(api.invoices.upsert, { ...input, id: invoiceId, lines: [{ ...line, taxAssessment: undefined, taxRatePercent: 0, taxLabel: undefined, additionalTaxes: undefined }] }), /Issued tax decisions/);
 await assert.rejects(() => owner.mutation(api.invoices.upsert, { ...input, lines: [{ ...line, catalogItemId: ids.foreignCatalogId }] }), /not found|workspace|belong/i);
 
+// A pending seller PST number is independent from whether the supply is taxable.
+const pendingSeller = await t.run(async ctx => {
+  const societyId = await ctx.db.insert("societies", { name: "Synthetic pending PST seller", isCharity: false, isMemberFunded: false, charityStatus: "not_applied", updatedAt: 0 });
+  await ctx.db.insert("users", { societyId, email: "pending-owner@example.invalid", displayName: "Pending owner", role: "Owner", status: "Active", authSubject: "pending-owner", authIssuer: issuer, authProvider: "better-auth", createdAtISO: "2026-11-06T00:00:00Z" });
+  await ctx.db.insert("organizationIdentifiers", { societyId, kind: "gst", number: "987654321RT0001", status: "active", accessLevel: "internal", registeredAt: "2026-01-01", createdAtISO: "2026-11-06T00:00:00Z", updatedAtISO: "2026-11-06T00:00:00Z" });
+  return { societyId };
+});
+const pendingOwner = t.withIdentity({ subject: "pending-owner", issuer });
+const pendingPstAssessment = assessTax({ ...answers, pstRegistration: "required_not_registered" }, true);
+const pendingPstInput = { ...input, societyId: pendingSeller.societyId, lines: [{ ...line, catalogItemId: undefined, taxAssessment: pendingPstAssessment, ...taxAssessmentRates(pendingPstAssessment) }] };
+const pendingPstInvoice = await pendingOwner.mutation(api.invoices.upsert, pendingPstInput);
+await pendingOwner.mutation(api.invoices.issue, { societyId: pendingSeller.societyId, ids: [pendingPstInvoice] });
+const pendingPstIssued: any = await t.run(ctx => ctx.db.get(pendingPstInvoice));
+assert.equal(pendingPstIssued.status, "issued");
+assert.equal(pendingPstIssued.totalCents, 11200);
+assert.equal(pendingPstIssued.lines[0].additionalTaxes[0].ratePercent, 7);
+assert.equal(pendingPstIssued.issuerTaxRegistrationsSnapshot.registrations.length, 1);
+assert.equal(pendingPstIssued.issuerTaxRegistrationsSnapshot.registrations[0].taxId, "CA-GST");
+assert.equal(pendingPstIssued.sentAtISO, undefined);
+assert.equal(pendingPstIssued.payments.length, 0);
+const missingPstInvoice = await pendingOwner.mutation(api.invoices.upsert, { ...pendingPstInput, lines: [{ ...pendingPstInput.lines[0], taxAssessment: assessment, ...taxAssessmentRates(assessment) }] });
+await assert.rejects(() => pendingOwner.mutation(api.invoices.issue, { societyId: pendingSeller.societyId, ids: [missingPstInvoice] }), /active BC PST/);
+assert.equal((await t.run(ctx => ctx.db.get(missingPstInvoice)))?.status, "draft", "ordinary registered status still needs its actual number");
+
 const pending = await owner.mutation(api.invoices.upsert, { ...input, lines: [{ ...line, taxAssessment: assessTax({ ...answers, customerRelief: "unknown" }) }] });
 await assert.rejects(() => owner.mutation(api.invoices.markSent, { societyId: ids.societyId, ids: [pending] }), /Complete and confirm/);
 assert.equal((await t.run((ctx) => ctx.db.get(pending)))?.status, "draft");

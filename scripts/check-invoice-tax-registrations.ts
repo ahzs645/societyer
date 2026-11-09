@@ -3,7 +3,7 @@ import { MemoryDb } from "../shared/portable/memoryDb";
 import { makeCapabilities } from "../shared/portable/capabilities";
 import { tables, society } from "../src/lib/staticConvexFixtures";
 import { normalizeGstRegistration, normalizeBcPstRegistration, selectIssuerTaxRegistrations, captureIssuerTaxRegistrations, invoiceIssuerTaxRegistrations } from "../shared/invoiceTaxRegistrations";
-import { assessTax, defaultTaxAnswers, taxAssessmentRates } from "../shared/tax";
+import { assessTax, cleanTaxAssessment, defaultTaxAnswers, taxAssessmentRates } from "../shared/tax";
 import * as invoices from "../shared/functions/invoices";
 import * as automation from "../shared/functions/billingAutomation";
 import { upsertIdentifierPortable } from "../shared/functions/organizationDetails";
@@ -25,6 +25,22 @@ assert.equal(selectIssuerTaxRegistrations([gst, { ...gst, kind: "business_number
 assert.deepEqual(selectIssuerTaxRegistrations([{ ...pst, jurisdiction: "CA-ON" }], date), []);
 const guided = [{ taxAssessment: { components: [{ taxId: "CA-GST", collection: "collect" }, { taxId: "CA-BC-PST", collection: "collect" }] } }];
 assert.throws(() => captureIssuerTaxRegistrations([gst], guided, date, at), /BC PST/);
+const pendingAnswers = { ...defaultTaxAnswers("transaction", date), jurisdictionCode: "CA-BC", itemCategory: "goods", sellerKind: "business", scopeConfirmed: "yes", federalException: "none", gstRegistration: "registered", provincialException: "category", pstRegistration: "required_not_registered", customerRelief: "none" };
+const pendingAssessment = assessTax(pendingAnswers, true);
+assert.equal(pendingAssessment.confirmed, true);
+assert.equal(taxAssessmentRates(pendingAssessment).additionalTaxes?.[0].ratePercent, 7, "pending PST registration still collects ordinary taxable PST");
+const pendingGuided = [{ taxAssessment: pendingAssessment }];
+const pendingCapture = captureIssuerTaxRegistrations([gst], pendingGuided, date, at);
+assert.deepEqual(pendingCapture.registrations.map(registration => registration.taxId), ["CA-GST"], "no invented PST identifier is captured");
+assert.throws(() => captureIssuerTaxRegistrations([], pendingGuided, date, at), /GST\/HST/, "pending PST cannot waive GST registration");
+for (const invalid of [{ ...pendingAssessment, confirmed: false }, { ...pendingAssessment, status: "review_required" }, { ...pendingAssessment, answers: { ...pendingAnswers, pstRegistration: "unknown" } }]) {
+  assert.throws(() => captureIssuerTaxRegistrations([gst], [{ taxAssessment: invalid }], date, at), /BC PST/);
+}
+assert.throws(() => captureIssuerTaxRegistrations([gst], [...pendingGuided, ...guided], date, at), /BC PST/, "every collecting line must explicitly declare its pending position");
+for (const identifiers of [[gst, pst, { ...pst, number: "PST-8765-4321" }], [gst, { ...pst, number: "invalid" }]]) assert.throws(() => captureIssuerTaxRegistrations(identifiers, pendingGuided, date, at), /BC PST/, "pending cannot hide conflicting or invalid active PST numbers");
+const legacyPending = cleanTaxAssessment({ ...pendingAssessment, rulePackVersion: "2026-11-06.1" })!;
+assert.equal(legacyPending.status, "review_required", "recognized historical assessments retain their original evaluator");
+assert.equal(legacyPending.confirmed, false);
 const frozen = captureIssuerTaxRegistrations([gst, pst], guided, date, at);
 const currentOrganization = { gstNumber: "999999999RT0001", pstNumber: "PST-9999-9999" };
 assert.deepEqual(invoiceIssuerTaxRegistrations({ status: "sent", issuerTaxRegistrationsSnapshot: frozen }, currentOrganization), selected);
