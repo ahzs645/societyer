@@ -1,4 +1,4 @@
-import { invoicePdfExportView, type InvoicePdfExportOptions } from "./invoicePdfExportOptions";
+import { invoicePdfExportView, PST_REGISTRATION_PENDING_NOTICE, type InvoicePdfExportOptions } from "./invoicePdfExportOptions";
 import { invoicePaymentText } from "../../../shared/invoicePaymentMethods";
 import svgpath from "svgpath";
 import { Fragment, type ReactNode } from "react";
@@ -115,6 +115,7 @@ function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts, 
     <Page size={page} margin={margin}>
       {design.sections.map((key) => <Fragment key={key}>{key === "items" && extra("before_items")}{sections[key]}{key === "items" && extra("after_items")}{key === "totals" && extra("after_totals")}</Fragment>)}{extra("end")}
       {showRegistrations && registrationLines.map(line => <Fragment key={line}>{text(line, body)}</Fragment>)}
+      {exportOptions?.pstRegistrationPending && !invoiceIssuerTaxRegistrations(invoice, organization).some(registration => registration.taxId === "CA-BC-PST") && text(PST_REGISTRATION_PENDING_NOTICE, body)}
       {taxDisclosures.length > 0 && paragraphSection("Tax treatment", taxDisclosures.join("\n"), body)}
 
     </Page>

@@ -9,7 +9,7 @@ import { DEFAULT_INVOICE_TEMPLATE, resolveDocumentDesign } from "../shared/invoi
 import { assessTax, defaultTaxAnswers, taxAssessmentRates } from "../shared/tax";
 import { captureIssuerTaxRegistrations } from "../shared/invoiceTaxRegistrations";
 import type { InvoiceDocumentData } from "../src/features/invoicing/InvoiceDocument";
-import { invoicePdfExportView, TEMPLATE_PDF_EXPORT, SIMPLIFIED_PDF_EXPORT, type InvoicePdfExportOptions } from "../src/features/invoicing/invoicePdfExportOptions";
+import { invoicePdfExportView, PST_REGISTRATION_PENDING_NOTICE, TEMPLATE_PDF_EXPORT, SIMPLIFIED_PDF_EXPORT, type InvoicePdfExportOptions } from "../src/features/invoicing/invoicePdfExportOptions";
 
 const date = "2026-11-09";
 const taxAssessment = assessTax({ ...defaultTaxAnswers("transaction", date), jurisdictionCode: "CA-BC", itemCategory: "general_services", sellerKind: "business", scopeConfirmed: "yes", federalException: "none", gstRegistration: "registered", provincialException: "category", pstRegistration: "unknown", customerRelief: "none" }, true);
@@ -44,6 +44,13 @@ for (const value of ["Quantity", "Rate (CAD)", "Tax treatment", "Currency: CAD",
 for (const value of ["Amounts include tax", "$6,666.67", "$333.33", "$7,000.00", "GST 5%", "123456789RT0001", "00001", "12345678"]) assert.ok(simplified.text.includes(value), `simplified retains ${value}`);
 assert.equal(JSON.stringify(invoice), before, "export leaves saved data and payment details untouched");
 assert.equal(invoicePdfExportView(invoice), invoice, "default exports preserve the original projection");
+const pending = await exported(invoice, { ...SIMPLIFIED_PDF_EXPORT, pstRegistrationPending: true });
+assert.ok(pending.text.includes(PST_REGISTRATION_PENDING_NOTICE));
+assert.ok(!simplified.text.includes(PST_REGISTRATION_PENDING_NOTICE), "pending notice is optional and off by default");
+assert.ok(pending.text.includes("$333.33") && pending.text.includes("$7,000.00"), "notice does not change tax or invoice amounts");
+const numbered = { ...invoice, issuerTaxRegistrationsSnapshot: { ...invoice.issuerTaxRegistrationsSnapshot!, registrations: [...invoice.issuerTaxRegistrationsSnapshot!.registrations, { taxId: "CA-BC-PST", label: "BC PST", number: "PST-1234-5678" }] } };
+const registered = await exported(numbered, { ...SIMPLIFIED_PDF_EXPORT, pstRegistrationPending: true });
+assert.ok(!registered.text.includes(PST_REGISTRATION_PENDING_NOTICE) && registered.text.includes("PST-1234-5678"), "an actual captured PST number replaces a pending notice");
 const explicit = await exported(invoice, { ...SIMPLIFIED_PDF_EXPORT, quantity: "show", rate: "show", tax: "show", taxTreatmentNotes: true, eftCurrency: true, pageNumbers: "always" });
 for (const value of ["Quantity", "Rate (CAD)", "Tax treatment", "Currency: CAD", "Page 1 of 1"]) assert.ok(explicit.text.includes(value), `each option can restore ${value}`);
 const foreign = invoicePdfExportView({ ...invoice, paymentMethods: [{ ...invoice.paymentMethods![0], details: "Currency: USD\nAccount number: 12345678" }] }, SIMPLIFIED_PDF_EXPORT);

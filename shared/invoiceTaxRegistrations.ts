@@ -28,7 +28,7 @@ type Identifier = {
   registeredAt?: string;
 };
 
-type TaxLine = { taxAssessment?: { components?: Array<{ taxId: string; collection: string; treatment?: string }> } };
+type TaxLine = { taxAssessment?: { answers?: Record<string, string>; confirmed?: boolean; status?: string; components?: Array<{ taxId: string; collection: string; treatment?: string }> } };
 
 export function normalizeGstRegistration(value: string): string | undefined {
   const number = value.toUpperCase().replace(/[\s-]/g, "");
@@ -74,6 +74,18 @@ export function guidedTaxIdsToCollect(lines: TaxLine[]): string[] {
   return [...new Set(lines.flatMap(line => (line.taxAssessment?.components ?? []).filter(component => component.collection === "collect").map(component => component.taxId)))];
 }
 
+/** A pending number must be explicitly declared on every confirmed collecting
+ * line. Invalid/conflicting active identifiers still need to be resolved. */
+function pendingPstCollectionAllowed(identifiers: Identifier[], lines: TaxLine[], effectiveDate: string): boolean {
+  const hasActiveIdentifier = identifiers.some(identifier => identifier.kind === "pst" && identifier.status === "active"
+    && (!identifier.jurisdiction || ["CA-BC", "british_columbia"].includes(identifier.jurisdiction))
+    && (!identifier.registeredAt || !validDate(identifier.registeredAt) || identifier.registeredAt <= effectiveDate));
+  if (hasActiveIdentifier) return false;
+  const collectingLines = lines.filter(line => line.taxAssessment?.components?.some(component => component.taxId === "CA-BC-PST" && component.collection === "collect"));
+  return collectingLines.length > 0 && collectingLines.every(line => line.taxAssessment?.confirmed
+    && line.taxAssessment.status === "ready" && line.taxAssessment.answers?.pstRegistration === "required_not_registered");
+}
+
 /** Validate before posting any ledger entries, including portable batch sends. */
 export function captureIssuerTaxRegistrations(identifiers: Identifier[], lines: TaxLine[], effectiveDate: string, capturedAtISO: string, supplierFacts?: InvoiceSupplierTaxSnapshot): InvoiceIssuerTaxSnapshot {
   const registrations = selectIssuerTaxRegistrations(identifiers, effectiveDate);
@@ -89,8 +101,9 @@ export function captureIssuerTaxRegistrations(identifiers: Identifier[], lines: 
   for (const taxId of guidedTaxIdsToCollect(lines)) {
     if (!["CA-GST", "CA-BC-PST"].includes(taxId)) continue;
     if (!registrations.some(registration => registration.taxId === taxId)) {
+      if (taxId === "CA-BC-PST" && pendingPstCollectionAllowed(identifiers, lines, effectiveDate)) continue;
       const label = taxId === "CA-GST" ? "GST/HST" : "BC PST";
-      throw new Error(`This invoice collects ${label}. Save one active ${label} registration effective on ${effectiveDate} in Organization → Identifiers. Resolve missing, invalid or conflicting numbers before issuing it.`);
+      throw new Error(`This invoice collects ${label}. Save one active ${label} registration effective on ${effectiveDate} in Organization → Identifiers. Resolve missing, invalid or conflicting numbers before issuing it.${taxId === "CA-BC-PST" ? " If the PST registration or number is pending, explicitly choose that collection position in the tax guide; applicable PST must still be collected." : ""}`);
     }
   }
   return { capturedAtISO, effectiveDate, registrations, ...(supplierFacts ? { supplierFacts } : {}) };

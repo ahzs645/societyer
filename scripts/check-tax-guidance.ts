@@ -19,7 +19,8 @@ assert.equal(assess({ federalException: "exempt" }).status, "review_required", "
 assert.equal(assess({ provincialException: "exempt" }).status, "review_required");
 assert.equal(assess({ gstRegistration: "not_required" }).status, "review_required");
 assert.equal(assess({ pstRegistration: "not_required" }).status, "review_required");
-assert.equal(assess({ pstRegistration: "required_not_registered" }).status, "review_required", "missing number does not erase collection obligation");
+assert.equal(assess({ pstRegistration: "required_not_registered" }).status, "ready", "an explicit pending registration may collect applicable PST without a number");
+assert.equal(priced({ pstRegistration: "required_not_registered" }).additionalTaxes?.[0].ratePercent, 7, "pending registration does not waive PST collection");
 
 const zero = priced({ federalException: "zero_rated", federalEvidence: "Synthetic specific zero-rating review" });
 assert.equal(zero.taxAssessment.components[0].treatment, "zero_rated");

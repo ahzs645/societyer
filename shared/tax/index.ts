@@ -1,10 +1,10 @@
 import { lineTaxes, type InvoiceLineTaxes } from "../invoiceMoney";
-import { canadaBcTaxPack } from "./canadaBc";
+import { canadaBcTaxPack, canadaBcPendingPstTaxPack } from "./canadaBc";
 import type { TaxAnswers, TaxAssessment, TaxQuestion, TaxRulePack } from "./types";
 export type * from "./types";
 
 /** Add reviewed, effective-dated packs here. Never select a pack from a currency or incorporation address. */
-export const TAX_RULE_PACKS: readonly TaxRulePack[] = [canadaBcTaxPack];
+export const TAX_RULE_PACKS: readonly TaxRulePack[] = [canadaBcTaxPack, canadaBcPendingPstTaxPack];
 export const taxQuestionVisible = (question: TaxQuestion, answers: TaxAnswers) => (question.when ?? []).every((condition) => condition.oneOf.includes(answers[condition.answer]));
 const calendarDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 
@@ -24,7 +24,7 @@ export function updateTaxAnswer(answers: TaxAnswers, key: string, value: string)
   return pack?.updateAnswer?.(answers, key, value) ?? next;
 }
 
-function validateAnswers(raw: unknown): TaxAnswers {
+function validateAnswers(raw: unknown, packs: readonly TaxRulePack[] = TAX_RULE_PACKS): TaxAnswers {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Tax assessment answers must be an object.");
   const entries = Object.entries(raw);
   if (entries.length > 40) throw new Error("Too many tax assessment answers.");
@@ -36,7 +36,7 @@ function validateAnswers(raw: unknown): TaxAnswers {
   if (!["catalog", "transaction"].includes(answers.scope)) throw new Error("Choose a catalog or transaction tax assessment.");
   if (!calendarDate(answers.supplyDate)) throw new Error("Choose a valid tax assessment date.");
   if (!answers.jurisdictionCode || answers.jurisdictionCode.length > 40) throw new Error("Choose the supply jurisdiction.");
-  const knownQuestions = (resolveTaxPack(answers.jurisdictionCode, answers.supplyDate) ?? TAX_RULE_PACKS.find((pack) => pack.jurisdictionCode === answers.jurisdictionCode))?.questions ?? [];
+  const knownQuestions = (resolveTaxPack(answers.jurisdictionCode, answers.supplyDate, packs) ?? packs.find((pack) => pack.jurisdictionCode === answers.jurisdictionCode))?.questions ?? [];
   for (const question of knownQuestions) {
     if (answers[question.id] && question.options && !question.options.some((option) => option.value === answers[question.id])) throw new Error(`Choose a supported answer for ${question.label}`);
   }
@@ -44,8 +44,12 @@ function validateAnswers(raw: unknown): TaxAnswers {
 }
 
 export function assessTax(raw: TaxAnswers, confirmed = false): TaxAssessment {
-  const answers = validateAnswers(raw);
-  const pack = resolveTaxPack(answers.jurisdictionCode, answers.supplyDate);
+  return assessTaxWithPacks(raw, confirmed, TAX_RULE_PACKS);
+}
+
+function assessTaxWithPacks(raw: TaxAnswers, confirmed: boolean, packs: readonly TaxRulePack[]): TaxAssessment {
+  const answers = validateAnswers(raw, packs);
+  const pack = resolveTaxPack(answers.jurisdictionCode, answers.supplyDate, packs);
   const result = pack?.evaluate(answers) ?? { components: [], issues: ["No reviewed tax rule pack covers this jurisdiction and date. Obtain a local tax review; no rate or exemption has been inferred."] };
   return {
     schemaVersion: 1, rulePackId: pack?.id ?? "unsupported", rulePackVersion: pack?.version ?? "none", rulesReviewedOn: pack?.reviewedOn ?? "",
@@ -60,7 +64,8 @@ export function cleanTaxAssessment(value: unknown): TaxAssessment | undefined {
   if (typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid tax assessment.");
   const input = value as TaxAssessment;
   if (input.schemaVersion !== 1 || typeof input.confirmed !== "boolean") throw new Error("Unsupported tax assessment format.");
-  const result = assessTax(input.answers, input.confirmed);
+  const recordedPacks = TAX_RULE_PACKS.filter(pack => pack.id === input.rulePackId && pack.version === input.rulePackVersion);
+  const result = assessTaxWithPacks(input.answers, input.confirmed, recordedPacks);
   if (input.rulePackId !== result.rulePackId || input.rulePackVersion !== result.rulePackVersion) throw new Error("The tax guidance version changed. Reopen the tax assessment and review it again.");
   return result;
 }

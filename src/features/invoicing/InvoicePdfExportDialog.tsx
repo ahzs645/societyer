@@ -39,6 +39,8 @@ export function InvoicePdfExportDialog({ invoice, organization, paymentInstructi
         <Field label="Page numbers"><Select value={options.pageNumbers} options={[{ value: "template", label: "Use saved template" }, { value: "multiple_pages", label: "Only on multi-page PDFs" }, { value: "always", label: "Every page" }, { value: "off", label: "Off" }]} onChange={value => patch({ pageNumbers: value as InvoicePdfExportOptions["pageNumbers"] })} /></Field>
         <Checkbox label="Show tax treatment notes" checked={options.taxTreatmentNotes} onChange={taxTreatmentNotes => patch({ taxTreatmentNotes })} />
         <Checkbox label="Repeat invoice currency in EFT instructions" checked={options.eftCurrency} onChange={eftCurrency => patch({ eftCurrency })} />
+        <Checkbox label="Show PST registration pending notice" checked={options.pstRegistrationPending === true} onChange={pstRegistrationPending => patch({ pstRegistrationPending })} />
+        <p className="small muted">Use the notice only while your PST registration is pending. It does not change the taxes on this invoice.</p>
         <p className="small muted">GST/PST amounts and required registration numbers remain visible. EFT instructions for a different currency are always retained.</p>
         {error && <p className="field__error" role="alert">{error}</p>}
       </div>

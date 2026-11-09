@@ -317,6 +317,8 @@ test("PDF export offers template, simplified and independent options without cha
   await activate(dialog.getByLabel("PDF preset", { exact: true }), hasTouch);
   await activate(page.getByRole("option", { name: "Simplified", exact: true }), hasTouch);
   await expect(layer.getByText("Quantity", { exact: true })).toHaveCount(0);
+  await activate(dialog.getByText("Show PST registration pending notice", { exact: true }), hasTouch);
+  await expect(layer.getByText("BC PST registration number: pending.", { exact: true })).toBeVisible();
   const downloaded = page.waitForEvent("download");
   await activate(dialog.getByRole("button", { name: "Download selected PDF", exact: true }), hasTouch);
   const download = await downloaded;
@@ -329,6 +331,7 @@ test("PDF export offers template, simplified and independent options without cha
   expect(text).toContain("Tax: GST 5%");
   expect(text).not.toContain("Quantity");
   expect(text).not.toContain("Rate (CAD)");
+  expect(text).toContain("BC PST registration number: pending.");
   await pdf.destroy();
   await activate(dialog.locator(".modal__foot").getByRole("button", { name: "Close", exact: true }), hasTouch);
   await expect(dialog).not.toBeVisible();
