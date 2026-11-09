@@ -314,10 +314,15 @@ test("public demo creates an issued Brandkit invoice with society EFT instructio
   await page.screenshot({ path: `${artifacts}/public-demo-payment-selection-mobile.png`, fullPage: true });
   await page.setViewportSize({ width: 1600, height: 1100 });
   const invoiceId = await saveInvoice(page);
-  await page.getByRole("button", { name: "Mark as sent", exact: true }).click();
+  await page.getByRole("button", { name: "More invoice actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Finalize without downloading", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Finalize invoice?", exact: true });
+  await confirmation.getByRole("button", { name: "Finalize invoice", exact: true }).click();
   await expect(page.locator(".invoice-builder")).not.toBeVisible();
+  await expect(page.locator(".invoice-drawer").getByRole("region", { name: "Invoice workflow", exact: true })).toContainText("Ready for you to send");
   await page.goto(`/demo/app/invoices?builder=${encodeURIComponent(invoiceId)}`);
   await actualPreview(page);
+  await expect(page.locator(".line-editor__field--price input").first()).toBeDisabled();
   const pdf = await downloadBuilderPdf(page, "public-demo-issued-ddcnorth");
   expect(pdf.text).toContain("Public demo society member");
   expect(pdf.text).toContain("Account: 0001234567");

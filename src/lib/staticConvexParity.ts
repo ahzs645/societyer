@@ -109,6 +109,11 @@ export const STATIC_UNSUPPORTED_WRITES: ReadonlyMap<string, string> = new Map([
   ["accountLinks:confirm", "Linking logins needs a connected workspace with hosted sign-in. It isn't available in local or demo mode."],
   ["accountLinks:cancel", "Linking logins needs a connected workspace with hosted sign-in. It isn't available in local or demo mode."],
   ["accountLinks:unlink", "Linking logins needs a connected workspace with hosted sign-in. It isn't available in local or demo mode."],
+  ["accessRequests:submit", "Access requests need a connected workspace with hosted sign-in. They aren't available in local or demo mode."],
+  ["accessRequests:withdraw", "Access requests need a connected workspace with hosted sign-in. They aren't available in local or demo mode."],
+  ["accessRequests:approve", "Access requests need a connected workspace with hosted sign-in. They aren't available in local or demo mode."],
+  ["accessRequests:decline", "Access requests need a connected workspace with hosted sign-in. They aren't available in local or demo mode."],
+  ["accessRequests:setSettings", "Access requests need a connected workspace with hosted sign-in. They aren't available in local or demo mode."],
   ["meetingTranscription:editSegment", "Paged transcription edits require the connected workspace. Export a timed transcript there and import a local copy to edit on this device."],
 ]);
 export function assertLocalWriteCapability(name: string): void {

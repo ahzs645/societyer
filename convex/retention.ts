@@ -24,8 +24,12 @@ export const flagExpired = internalMutation({
     });
     const now = Date.now();
     const perSociety = new Map<string, number>();
+    // Skip workspaces still being transferred in: abort must find only rows the transfer wrote.
+    const quarantined = new Map<string, boolean>();
     for (const d of batch.page) {
       if (d.archivedAtISO) continue;
+      if (!quarantined.has(d.societyId)) quarantined.set(d.societyId, Boolean((await ctx.db.get(d.societyId))?.transferQuarantinedAtISO));
+      if (quarantined.get(d.societyId)) continue;
       if (d.flaggedForDeletion) continue;
       if (!d.retentionYears || d.retentionYears >= 99) continue;
       const createdMs = new Date(d.createdAtISO).getTime();
@@ -72,6 +76,7 @@ export const openAttestationYear = internalMutation({
     const societies = await ctx.db.query("societies").collect();
     const year = new Date().getFullYear();
     for (const s of societies) {
+      if (s.transferQuarantinedAtISO) continue;
       await ctx.db.insert("notifications", {
         societyId: s._id,
         kind: "general",

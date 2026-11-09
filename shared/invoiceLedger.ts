@@ -28,7 +28,7 @@
  *
  * Money is integer cents. Dates are `YYYY-MM-DD`. Pure TypeScript.
  */
-import { convertInvoiceCents, allocateMoney, type InvoiceMoneyOptions, type InvoicePayment, allocateProportionally, computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine } from "./invoicing";
+import { isIssuedInvoice, convertInvoiceCents, allocateMoney, type InvoiceMoneyOptions, type InvoicePayment, allocateProportionally, computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine } from "./invoicing";
 
 /* ---------------------------------------------------------------- sources */
 
@@ -432,7 +432,7 @@ function centsText(cents: number) {
  * plain explanation and the fix. Drafts and void invoices have none.
  */
 export function invoiceNeedsAction(invoice: NeedsActionInput, context: { workspaceCurrency: string; booksStart: BooksStart }): NeedsActionFlag[] {
-  if (invoice.lifecycle !== "sent") return [];
+  if (!isIssuedInvoice(invoice.lifecycle)) return [];
   const flags: NeedsActionFlag[] = [];
   const currency = String(invoice.currency || context.workspaceCurrency).toUpperCase();
   if (currency !== context.workspaceCurrency.toUpperCase() && !invoice.accrualPosted && !invoice.fxQuoteAvailable) {

@@ -283,7 +283,8 @@ function useRevokeSession() {
  * MCP Inspector. See docs/mcp-connector.md.
  */
 export function AiConnectorsCard({ societyId }: { societyId: Id<"societies"> }) {
-  const overview = useQuery(api.agentConnectors.overview, { societyId }) as ConnectorOverview | undefined;
+  // The server URL for this origin: on a shared deployment, sign-in is then approved on this domain.
+  const overview = useQuery(api.agentConnectors.overview, { societyId, origin: window.location.origin }) as ConnectorOverview | undefined;
   const setEnabled = useMutation(api.agentConnectors.setEnabled);
   const revokeToken = useMutation(api.agentConnectors.revokeToken);
   const confirm = useConfirm();

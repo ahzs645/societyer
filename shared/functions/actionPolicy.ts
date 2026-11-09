@@ -84,6 +84,10 @@ const HANDLER_POLICIES = new Set([
   // and never take a workspace id. Storage policy is a member read checked in the handler.
   "accountLinks:overview", "accountLinks:begin", "accountLinks:preview", "accountLinks:confirm", "accountLinks:cancel", "accountLinks:unlink",
   "workspaceStoragePolicies:forWorkspace",
+  // Access requests: the requester's own identity, or Owner/Admin authority for decisions and settings.
+  // availability reveals nothing unless the workspace has a verified domain and requests turned on.
+  "accessRequests:availability", "accessRequests:submit", "accessRequests:withdraw", "accessRequests:mine",
+  "accessRequests:listForWorkspace", "accessRequests:approve", "accessRequests:decline", "accessRequests:getSettings", "accessRequests:setSettings",
   "http:workspaceCreationAccess", "http:currentPrincipalMemberships", "http:me", "http:gatewayApiPrincipal", "http:gatewayWorkflowBinding", "http:gatewayGeneratedDocumentAccess",
 ]);
 // Public intake/token routes retain their existing narrow, handler-level policy.

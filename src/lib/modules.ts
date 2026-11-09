@@ -29,6 +29,8 @@ export const MODULE_DEFAULTS = {
   procurementReview: false,
   // Linked files remain in their source service until a workspace opts in.
   externalDocuments: false,
+  // Off until a workspace has an AI provider and something for the assistant to do.
+  aiAgents: false,
 } as const;
 
 export type ModuleKey = keyof typeof MODULE_DEFAULTS;
@@ -264,6 +266,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Integrations",
     description: "Link documents in approved external libraries and open them with each reader's source permissions.",
     includes: ["Document source settings", "Link existing document", "Open at source"],
+  },
+  {
+    key: "aiAgents",
+    label: "AI assistant & agents",
+    category: "Integrations",
+    description: "The in-app AI assistant, Ask AI table filters, and the AI agents setup page.",
+    includes: ["AI assistant chat", "Ask AI table filters", "AI agents page"],
   },
 ];
 

@@ -1,6 +1,9 @@
 # Shared workspaces: operator runbook
 
 This runbook covers every operator task for shared workspaces and linked sign-in.
+The current DDC/First Form domains, release evidence and retained source are in
+[production-setup.md](production-setup.md); operational findings are in
+[lessons-learned.md](lessons-learned.md).
 Read [architecture.md](architecture.md) first. It defines the tables and functions
 used here. Moving existing records from two deployments into one is a separate
 procedure, in [migration-and-cutover.md](migration-and-cutover.md). Rehearse
@@ -16,12 +19,15 @@ change sign-in, domain or storage policy from the app.
 
 | Name | Deployment | Frontend | Notes |
 | --- | --- | --- | --- |
-| DDC North production | `industrious-cricket-610` (project `societyer-ddcnorth`) | `https://portal.ddcnorth.com`, Pages project `societyer-ddcnorth` | Entra login, `SOCIETYER_ENTRA_SSO_REQUIRED=1`, SharePoint, mail, meeting-transfer Worker |
-| First Form production | `elated-bee-460` (project `societyer-firstform`) | `https://societyer-firstform.pages.dev`, Pages project `societyer-firstform` | Manually provisioned password accounts, native uploads |
+| DDC North production | `industrious-cricket-610` (project `societyer-ddcnorth`) | `https://portal.ddcnorth.com`, Pages project `societyer-ddcnorth` | Workspace Microsoft/group policies, SharePoint, mail, meeting-transfer Worker |
+| First Form production | Shared `industrious-cricket-610` | `https://portal.1stform.ca`, alias `https://societyer-firstform.pages.dev`; Pages project `societyer-firstform` | Separate password logins, native workspace policy |
+| Former First Form backend | `elated-bee-460` | No current frontend | Retained source; old client identities locked out to prevent split writes |
+| Transfer rehearsal | `rapid-ox-123` | No published frontend | Isolated destination copy and completed rehearsal; temporary key revoked |
 | Shared staging | created in [staging-setup.md](staging-setup.md) | Pages preview branches | Synthetic data only |
 
-The shared production deployment is not chosen yet. See
-[migration-and-cutover.md](migration-and-cutover.md#choose-the-destination-deployment).
+The shared production deployment is `industrious-cricket-610`. See
+[the deployed setup](production-setup.md) and
+[destination decision](migration-and-cutover.md#choose-the-destination-deployment).
 This runbook calls the deployment you are changing `$TARGET`.
 
 ### Command conventions
@@ -49,6 +55,17 @@ printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-ddcnorth
 # First Form. This file already exists with this content.
 printf 'CONVEX_DEPLOYMENT=prod:elated-bee-460\n' > .env.convex-firstform-production.local
 ```
+
+Those are the original per-project selectors, retained for source operations.
+For a **current shared production release**, use a new explicit selector:
+
+```sh
+printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-shared-production.local
+```
+
+Do not use the former First Form selector to release the shared backend. Keep
+`--codegen disable` when deploying this checkout's tracked generated TypeScript
+files, and run its real type checks. See the [release guide](../firstform-cloud-deployment.md#release).
 
 ### Record what you are about to change
 
@@ -102,6 +119,10 @@ organizations.
 
 Deploy the backend first, then the frontend, on each deployment. Build both
 frontends from the same clean commit. Record the commit hash.
+
+For the current consolidated production setup, deploy the shared backend once
+and then both frontends. The separate-backend instructions below describe the
+initial bootstrap; the retired First Form backend is not a routine release target.
 
 ### Is it backward compatible?
 
@@ -167,8 +188,8 @@ git rev-parse HEAD            # record it
 DDC North backend, then frontend:
 
 ```sh
-./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --typecheck disable -y --dry-run
-./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --typecheck disable -y
+./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --codegen disable --typecheck enable --dry-run
+./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --codegen disable --typecheck enable
 
 ./node_modules/.bin/vite build --mode ddcnorth
 CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b ./node_modules/.bin/wrangler pages deploy dist \
@@ -177,11 +198,13 @@ CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b ./node_modules/.bin/wrang
 
 The meeting-transfer Worker has no changes in this release.
 
-First Form backend, then frontend:
+Before consolidation the First Form backend was deployed separately. For the
+current shared deployment, deploy the backend **once** using the shared selector
+above, then publish First Form's frontend:
 
 ```sh
-./node_modules/.bin/convex deploy --env-file .env.convex-firstform-production.local --typecheck disable -y --dry-run
-./node_modules/.bin/convex deploy --env-file .env.convex-firstform-production.local --typecheck disable -y
+./node_modules/.bin/convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable --dry-run
+./node_modules/.bin/convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable
 
 npm run deploy:firstform
 ```
@@ -192,21 +215,24 @@ npm run deploy:firstform
 
 ### Check
 
-On each deployment:
+On the intended deployment, inspect the actual rows (empty only before initial
+policy setup; shared production must retain the configured policies):
 
 ```sh
-npx convex run workspaceSignInPolicies:list --deployment "$TARGET"     # []
-npx convex run workspaceStoragePolicies:list --deployment "$TARGET"    # []
+npx convex run workspaceSignInPolicies:list --deployment "$TARGET"
+npx convex run workspaceStoragePolicies:list --deployment "$TARGET"
 npx convex run workspaceDomains:audit --deployment "$TARGET"
 ```
 
-`audit` reports `site-url-unmapped` for each `SITE_URL` origin until you map it
-in step 4. That is expected. Then:
+During initial setup, `audit` reports `site-url-unmapped` until step 4. Current
+shared production should return `ok: true`. Then:
 
 - Sign in to each production site as a real member and open a record.
-- DDC: password sign-in still returns HTTP 403 ("Use Continue with Microsoft to
-  sign in to this instance.").
-- DDC: the staff admin still accepts a fresh Microsoft session.
+- DDC: the normal login page is Microsoft-only. The shared broker can accept
+  First Form passwords, but a password-only session cannot read DDC and sees it
+  locked. A linked Microsoft provider alone is not session evidence.
+- DDC: the separate staff admin accepts a valid Microsoft token and denies a
+  First Form password token.
 
 ### Rollback
 
@@ -214,13 +240,15 @@ Redeploy the previous commit to the backend and frontend:
 
 ```sh
 git checkout <previous-commit>
-./node_modules/.bin/convex deploy --env-file <selector file> --typecheck disable -y --dry-run
+./node_modules/.bin/convex deploy --env-file <selector file> --codegen disable --typecheck enable --dry-run
 ```
 
-If rows were already written to the new tables, the dry run may refuse a schema
-that no longer declares them. If it does, empty those tables first: clear the
-policies (steps 2 and 5), and delete the domain, link and link-request rows in
-the dashboard. Then deploy.
+If the old revision does not understand workspace policies or links, do not
+roll shared production back to it while both organizations are live. A dry-run
+schema refusal is a stop: do not empty production policy, domain or identity
+tables to make old code deploy. Use a compatible fix or the coordinated
+[recovery procedure](production-setup.md#backups-retained-source-and-rollback).
+Disposable staging fixtures can instead be recreated deliberately.
 
 ## 2. Workspace sign-in policy
 
@@ -402,25 +430,36 @@ On a shared deployment:
 
 ```sh
 npx convex env get SITE_URL --deployment "$TARGET"     # record the old value
-npx convex env set SITE_URL 'https://portal.ddcnorth.com,https://societyer-ddcnorth.pages.dev,https://societyer-firstform.pages.dev' --deployment "$TARGET"
+npx convex env set SITE_URL 'https://portal.ddcnorth.com,https://societyer-ddcnorth.pages.dev,https://ddcnorth.com,https://www.ddcnorth.com,https://societyer-firstform.pages.dev,https://portal.1stform.ca' --deployment "$TARGET"
 ```
 
-Add a First Form custom domain here once it is attached to the Pages project.
+The First Form custom domain is attached and listed above. Add a future customer
+origin only after its frontend domain is verified.
 Only list origins whose frontend build points at `$TARGET`. A domain whose build
 uses another backend breaks sign-in and switching.
 
-On the current separate deployments, map only the origins already in each
-deployment's own `SITE_URL`.
+On a separate deployment, map only the origins already in its own `SITE_URL`.
 
-Known limitation: AI connector OAuth consent (`/oauth/consent`) is served only
-from the **first** `SITE_URL` origin, unless `SOCIETYER_MCP_OAUTH_CONSENT_URL`
-names another. With `https://portal.ddcnorth.com` first, a First Form member who
-connects an AI app lands on DDC's sign-in page, which offers only Microsoft. A
-First Form password user can't finish consent there. Until consent follows the
-workspace's domain, either accept that AI connector OAuth is DDC-only on the
-shared deployment, or point `SOCIETYER_MCP_OAUTH_CONSENT_URL` at a `SITE_URL`
-origin that isn't mapped to a Microsoft-only workspace (an unmapped origin
-offers every method). Test it on staging.
+AI connectors (MCP) on the shared deployment: each `SITE_URL` origin has its
+own server URL, and sign-in for it is approved on that origin's consent page:
+
+- DDC North: `https://<deployment>.convex.site/mcp/portal.ddcnorth.com`
+- First Form: `https://<deployment>.convex.site/mcp/portal.1stform.ca`
+
+Settings → AI connectors shows the right one on each domain; members paste that
+into claude.ai, ChatGPT, Claude Code or Codex. Plain `/mcp` still works and
+approves on the first `SITE_URL` origin (DDC), so a First Form member must use
+First Form's URL. Leave `SOCIETYER_MCP_OAUTH_CONSENT_URL` unset: when set it is
+the consent page for every URL. Every origin must send the consent page headers
+(`/oauth/*`, see [mcp-connector.md](../mcp-connector.md#hosting-requirements)).
+Check each URL's metadata names itself:
+
+```sh
+curl -s "https://<deployment>.convex.site/.well-known/oauth-protected-resource/mcp/societyer-firstform.pages.dev"
+```
+
+Removing an origin from `SITE_URL` stops its MCP URL and the OAuth connections
+made through it. Test both organizations on staging.
 
 ### Map the origins
 
@@ -430,7 +469,8 @@ offers every method). Test it on staging.
 ```sh
 npx convex run workspaceDomains:upsert '{"origin":"https://portal.ddcnorth.com","societyId":"'"$DDC_ID"'","primary":true,"status":"Active","note":"DDC North custom domain"}' --deployment "$TARGET"
 npx convex run workspaceDomains:upsert '{"origin":"https://societyer-ddcnorth.pages.dev","societyId":"'"$DDC_ID"'","primary":false,"status":"Active","note":"Pages default domain"}' --deployment "$TARGET"
-npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":true,"status":"Active"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":false,"status":"Active"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://portal.1stform.ca","societyId":"'"$FF_ID"'","primary":true,"status":"Active"}' --deployment "$TARGET"
 ```
 
 Rules:
@@ -442,6 +482,46 @@ Rules:
 - Map only one workspace per origin. If DDC has several workspaces, map the
   domain to the main one. The others open in place.
 - Origins are stored normalized (lowercase host, no trailing slash).
+
+### Attach a customer's frontend domain
+
+This is currently an operator workflow, not an end-user settings screen. Reuse
+the intended frontend project and shared backend; a custom hostname does not
+require a separate Convex deployment.
+
+1. Verify control of the requested domain and inspect existing records before
+   changing it. For this rollout, `1stform.ca` was already an active zone in the
+   Pages project's Cloudflare account, and `portal.1stform.ca` had no record.
+2. Add the hostname under the intended Pages project's **Custom domains** first.
+   For First Form the project is `societyer-firstform`.
+3. Set the required DNS record. The deployed record is:
+
+   | Type | Name | Target | Proxy | TTL |
+   | --- | --- | --- | --- | --- |
+   | CNAME | `portal.1stform.ca` | `societyer-firstform.pages.dev` | Proxied | Auto |
+
+   Pages used HTTP validation for this same-account zone and requested no TXT
+   record. If a future attachment returns a TXT verification challenge, publish
+   that exact name/value as well. Do not invent a token.
+4. Wait for Pages ownership and HTTPS validation to become Active. A DNS record
+   alone does not attach the hostname to Pages. Check the rendered app in a real
+   browser; a command-line edge block is not an app authentication result.
+5. Add the exact `https://` origin to the shared `SITE_URL`, retaining the
+   existing origins. Set sign-in and storage policy for a new workspace before
+   opening it; domain mapping itself grants no access.
+6. Upsert the Active mapping with `primary: true` only when the host is ready.
+   This demotes the previous primary for that workspace; keep the old domain as
+   a trusted secondary while it remains useful. Run `workspaceDomains:audit`.
+7. Test the new login branding, **My workspaces → Open**, the authenticated
+   handoff, clean final URL and a reload. Check the new domain-specific MCP
+   resource metadata and canonical reset/invitation link origin.
+
+The existing Microsoft redirect is on `.convex.site`, so this frontend-only
+host change did not need a new Entra redirect or credential. No build was needed:
+the existing First Form bundle obtains the hostname and mapping at runtime.
+Steps that change application configuration or code still require the normal
+release checks. [Cloudflare's custom-domain guide](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+describes the Pages attachment/DNS distinction.
 
 ### Audit
 
@@ -477,6 +557,12 @@ runtime:
   origin. A workspace without a canonical origin opens in place.
 - Provisioning, password-reset and invitation links for a workspace use its
   canonical origin.
+- A mapping is what lets non-members find a workspace to **request access** to.
+  Requests are off by default and each workspace's Owners or Admins turn them
+  on from the **Users** page; there is nothing for an operator to configure.
+  Disabling the mapping (or removing the origin from `SITE_URL`) stops new
+  requests at once. Pending requests stay with the workspace's Owners and
+  Admins. See [user-guide.md](user-guide.md#access-requests).
 
 The handoff starts on the destination origin, which sends the browser back to
 the source for a single-use code bound to a challenge only the destination
@@ -486,11 +572,15 @@ holds. It works only between mapped origins. See
 ### Rollback
 
 ```sh
-npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":false,"status":"Disabled"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":true,"status":"Active"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://portal.1stform.ca","societyId":"'"$FF_ID"'","primary":false,"status":"Disabled"}' --deployment "$TARGET"
 ```
 
-There is no delete function. A Disabled row resolves to nothing. Restore the
-recorded `SITE_URL` value if you changed it.
+Promote the working alias before disabling the custom domain so canonical links
+do not fall back to DDC. There is no delete function. A Disabled row resolves to
+nothing. After checking the alias, remove only the retired origin from `SITE_URL`
+and detach its Pages custom domain/DNS record if appropriate. Retain all other
+trusted origins, especially those used by the staff admin.
 
 ## 5. Storage policies
 
@@ -611,7 +701,7 @@ npx convex run hostedAuth:provisionAccount '{"name":"Full Name","email":"confirm
 ```
 
 It returns a one-time, one-hour link
-(`https://societyer-firstform.pages.dev/reset-password#token=…`). Send it
+(`https://portal.1stform.ca/reset-password#token=…`). Send it
 privately. It grants no membership. Follow it with an invitation from the
 workspace's **Users** page. The email must be in
 `SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS` if that is still set.
@@ -663,7 +753,23 @@ person's identity out of band before using it.
 
 ### See what happened
 
-There is no public query for link history. Read it directly:
+To see who one login is linked to, with every linked login's memberships and
+the recent link events, inspect it by issuer and subject. The issuer is the
+memberships' `authIssuer` (the deployment's `.convex.site` URL); the subject is
+the membership's `authSubject` (see
+[Find workspace and membership IDs](#find-workspace-and-membership-ids)):
+
+```sh
+ISSUER="https://$TARGET.convex.site"   # must equal the rows' authIssuer
+npx convex run --inline-query 'return [...new Set((await ctx.db.query("users").collect()).map((u) => u.authIssuer))]' --deployment "$TARGET"
+npx convex run accountLinks:operatorInspect '{"issuer":"'"$ISSUER"'","subject":"<Better Auth user ID>"}' --deployment "$TARGET"
+```
+
+`state` is `none`, `linked` or `blocked` (several Active links, or a Disabled
+person; `people` shows which). Each entry in `identities` lists its
+`memberships` with `userId`, workspace, role and status.
+
+The whole history, unfiltered:
 
 ```sh
 npx convex run --inline-query 'return await ctx.db.query("accountLinkEvents").order("desc").take(20)' --deployment "$TARGET"
@@ -672,7 +778,8 @@ npx convex run --inline-query 'return (await ctx.db.query("personIdentityLinks")
 
 Events have `action` (`linked`, `unlinked`, `refused`), the acting identity, the
 identities involved and, for refusals, `reason` (`conflict` or
-`identity-disabled`).
+`identity-disabled`). Operator unlinks have actor `operator` /
+`deployment-operator` and your reason.
 
 ### A link was refused with a conflict
 
@@ -681,11 +788,35 @@ The person sees "Can't link these logins. Both logins are members of
 membership in the same workspace. Disabled memberships count. The person's
 role is never chosen for them.
 
-To resolve it, a workspace Owner removes one of the two memberships on the
-**Users** page (row menu → **Remove access**). Disabling isn't enough. Then the person
-starts the link again. Keep the membership with the history that matters.
-Records written by the removed membership keep its old ID, which then points at
-a deleted user. There is no tool that merges two memberships.
+To resolve it, retire one membership in favour of the other. Agree with a
+workspace Owner which one to keep (usually the one with the history that
+matters, and the right role), confirm out of band that both logins are the same
+person, then:
+
+```sh
+# Both memberships, from the inspect output of either login (identities[].memberships[].userId)
+npx convex run accountLinks:operatorInspect '{"issuer":"'"$ISSUER"'","subject":"<one login>"}' --deployment "$TARGET"
+npx convex run users:operatorRetireMembership '{"retireUserId":"<users ID to retire>","keepUserId":"<users ID to keep>","reason":"<ticket / who asked>"}' --deployment "$TARGET"
+```
+
+It refuses rows in different workspaces, a kept row that isn't Active and
+bound to a login, a row already merged, and retiring the last Active Owner
+(unless the kept row is an Active Owner). The retired row stays, Disabled and
+unbound, with `mergedIntoUserId`, so records it wrote still resolve to it. No
+login can reach, re-bind, reactivate or invite it again. The kept row's role is
+never changed. If the retired row had the higher role, the result has
+`roleNotCarried` and the workspace's activity row says so; a workspace Owner
+then decides whether to change the kept row's role on the **Users** page.
+References to the retired ID are not moved to the kept row. Keep the result
+outside the repository: `retiredIdentity` is the binding that was removed.
+
+Then the person starts the link again. It now passes the conflict check, and
+both logins resolve to the kept membership.
+
+Alternative without the operator: a workspace Owner removes one membership on
+the **Users** page (row menu → **Remove access**; disabling isn't enough).
+Records written by a removed membership keep its old ID, which then points at a
+deleted user, so prefer retiring.
 
 ### The person wants to unlink
 
@@ -693,11 +824,18 @@ They do it themselves: **Sign-in methods → Linked logins → Unlink**, from ei
 login. Each login keeps working on its own, and roles don't change. Unlinking
 the last other login removes the person account.
 
-If the person can no longer sign in to either login, there is no operator
-unlink function. In the dashboard, set the person's `personAccounts` row to
-`Disabled`. Links are then ignored at once and no memberships change. That
-person can't start a new link until the remaining `personIdentityLinks` rows are
-also set to `Unlinked`. Record what you changed and why.
+If the person can no longer sign in to a login (or a login was linked by
+mistake), unlink it as the operator. Confirm the request out of band first:
+
+```sh
+npx convex run accountLinks:operatorUnlink '{"issuer":"'"$ISSUER"'","subject":"<Better Auth user ID to unlink>","reason":"<ticket / who asked>"}' --deployment "$TARGET"
+```
+
+Same effect as the person's own unlink: that login stops reaching the other
+logins' memberships at once, roles don't change, and a person left with one
+login is removed (`personRemoved: true`). It also clears a `blocked` login (a
+Disabled person, or duplicate links), so the person can link again. Check with
+`operatorInspect` afterwards; `state` should be `none`.
 
 ## 9. Offboarding
 
@@ -729,9 +867,14 @@ holds through their own login.
 
 ## 10. Rollback summary
 
+These individual reversals are not a complete production data rollback. After
+consolidation, keep code that enforces workspace policies, and reconcile any
+destination writes before reopening the old source. Do not delete real policy
+or link rows just to satisfy an older schema.
+
 | Change | Undo |
 | --- | --- |
-| Code deploy | Redeploy the previous commit. Empty the new tables first if the old schema is refused. |
+| Code deploy | Choose a revision compatible with live policies/links. A schema refusal requires a recovery plan, not deleting production tables. |
 | DDC sign-in policy | Fix it with `set`. Clear only while required SSO is on. |
 | First Form sign-in policy | `workspaceSignInPolicies:clear` |
 | `SOCIETYER_ENTRA_SSO_REQUIRED` removed | Set it to `1`. This locks out First Form. |
@@ -741,4 +884,5 @@ holds through their own login.
 | Storage row | `set` to `allowed` / `deployment-default` |
 | `SOCIETYER_DISABLE_NATIVE_FILE_STORAGE` removed | Set it to `1` |
 | Invoice template | Owner picks another default |
-| A link | The person unlinks. Operator: disable the person account. |
+| A link | The person unlinks. Operator: `accountLinks:operatorUnlink`. |
+| A retired membership | No undo function. In the dashboard, restore the recorded binding and status and clear `mergedIntoUserId` / `mergedAtISO`, only after unlinking the logins (otherwise the workspace becomes ambiguous). |

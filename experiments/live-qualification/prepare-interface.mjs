@@ -47,6 +47,10 @@ if (!wave.length) {
   await operator.function(makeFunctionReference("interfaceFixture:seedWave"), undefined, scope);
   wave = await query("waveCache:resources", scope);
 }
+// AI is off by default; the interface checks exercise the assistant and AI agents page.
+const fixtureSociety = await query("society:getById", { id: fixture.societyId });
+const savedModules = fixtureSociety?.disabledModules ?? [];
+if (!savedModules.includes("+aiAgents")) await mutate("society:updateModules", { ...scope, disabledModules: [...savedModules, "+aiAgents"] });
 const [members, meetings, documents, grants, committees, goals, policies, workflows] = await Promise.all([
   query("members:list", scope), query("meetings:list", scope), query("documents:list", scope), query("grants:list", scope), query("committees:list", scope), query("goals:list", scope), query("insurance:list", scope), query("workflows:list", scope),
 ]);

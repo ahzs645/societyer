@@ -10,6 +10,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PendingInvitations } from "./PendingInvitations";
 import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
+import { useAccessRequestAvailability } from "../auth/RequestWorkspaceAccess";
 
 const WorkspaceAccessScreen = lazy(() => import("../auth/WorkspaceAccessScreen"));
 
@@ -17,6 +18,8 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
   const auth = useAuth();
   const creationAccess = useQuery(api.http.workspaceCreationAccess, auth.mode !== "none" && auth.sessionStatus === "authenticated" && auth.convexAuthStatus === "authenticated" && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
   const invitations = useQuery(api.invitations.pendingForAccount, auth.mode !== "none" && auth.isConvexAuthenticated && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
+  // A person with no workspace yet, on a domain whose workspace takes access requests.
+  const accessRequests = useAccessRequestAvailability(auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? auth.domainWorkspace?.societyId : undefined);
   usePrefetchDeploymentCapabilities();
   usePreloadWorkspaceShell(auth.mode !== "none" && Boolean(auth.session));
 
@@ -85,6 +88,8 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
     if (auth.membershipStatus === "needs-invitation") {
       if (invitations === undefined) return <AppBootScreen label="Looking for invitations sent to your verified email…" />;
       if (invitations.length) return <div className="page"><h1>Join your workspace</h1><PendingInvitations /><button className="btn" onClick={() => void auth.signOut()}>Sign out</button></div>;
+      if (auth.mode === "convex" && auth.domainWorkspace && accessRequests === undefined) return <AppBootScreen label="Checking your secure workspace access…" />;
+      if (accessRequests?.enabled) return <AccessScreen />;
       if (creationAccess === undefined) return <AppBootScreen label="Checking whether this account can create its own workspace…" />;
       if (allowWorkspaceCreation && creationAccess.allowed) return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
       return (

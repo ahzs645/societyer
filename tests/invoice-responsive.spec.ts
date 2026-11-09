@@ -180,7 +180,10 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   await expect(page.locator(".line-editor__field--price input")).toHaveValue("70.00");
   await expect(form.getByLabel("Qty", { exact: true })).toHaveValue("2");
   await expect(form.locator(".billto__name")).toHaveText(customerName);
-  await activate(page.getByRole("button", { name: "Mark as sent", exact: true }));
+  await activate(page.getByRole("button", { name: "More invoice actions", exact: true }));
+  await activate(page.getByRole("menuitem", { name: "Finalize without downloading", exact: true }));
+  const confirmation = page.getByRole("dialog", { name: "Finalize invoice?", exact: true });
+  await activate(confirmation.getByRole("button", { name: "Finalize invoice", exact: true }));
   await expect(page.locator(".invoice-builder")).toBeHidden();
 
   const bank = await page.evaluate(async ({ customerName, suffix }) => {
@@ -196,6 +199,7 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   await page.goto(`/app/invoices?invoice=${encodeURIComponent(id)}`);
   drawer = page.getByRole("dialog").last();
   await expect(drawer).toContainText("In the books");
+  await expect(drawer.getByRole("region", { name: "Invoice workflow", exact: true })).toContainText("Ready for you to send");
   await activate(drawer.getByRole("button", { name: "Record payment", exact: true }));
   const payment = drawer.getByRole("form", { name: /^Record a payment for/ });
   await fill(payment.getByLabel("Amount", { exact: true }), "40.00");
@@ -241,7 +245,8 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
     const entries = await Promise.all([invoice.journalEntryId, invoice.payments[0].journalEntryId, invoice.payments[0].cashBasisEntryId].filter(Boolean).map((entryId: string) => client.query("accounting:journalEntry", { id: entryId })));
     return { invoice, transaction, entries, catalog: workspace.catalog.find((item: any) => item._id === invoice.lines[0].catalogItemId), customer: workspace.customers.find((row: any) => row.key === `organization:${invoice.counterpartyId}`) };
   }, id);
-  expect(snapshot.invoice).toMatchObject({ currency: "CAD", totalCents: 14000, balanceCents: 10000, partyKind: "organization", documentTemplate: { name: templateName }, lines: [{ unitPriceCents: 7000, quantity: 2, unit: "hour", sku: "BRAKE-LABOUR" }] });
+  expect(snapshot.invoice).toMatchObject({ lifecycle: "issued", currency: "CAD", totalCents: 14000, balanceCents: 10000, partyKind: "organization", documentTemplate: { name: templateName }, lines: [{ unitPriceCents: 7000, quantity: 2, unit: "hour", sku: "BRAKE-LABOUR" }] });
+  expect(snapshot.invoice.sentAtISO).toBeUndefined();
   expect(snapshot.invoice.payments[0]).toMatchObject({ amountCents: 4000, method: "e_transfer", reference: `RESP-PAY-${suffix}` });
   expect(snapshot.catalog).toMatchObject({ unitPriceCents: 8500, currency: "CAD", kind: "service" });
   expect(snapshot.transaction).toMatchObject({ linkedInvoiceId: id, accountId: bank.accountId, amountCents: 4000 });

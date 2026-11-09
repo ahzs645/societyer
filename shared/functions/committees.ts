@@ -12,6 +12,7 @@ import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { describeCadenceRule, normalizeCadenceRule } from "../continuityRules";
 import { todayDateOnly } from "../dateOnly";
 import { requireLinkablePerson } from "./personMerge";
+import { requirePermissionPortable } from "./permissions";
 
 export async function committeesListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -198,7 +199,6 @@ export async function committeeUpdateMemberPortable(
 ) {
   const row = await requireOwnedRow(ctx, "committeeMembers", args.id);
   const societyId = String(row.societyId);
-  const { requirePermissionPortable } = await import("./permissions");
   await requirePermissionPortable(ctx, societyId, "committees:write");
   const p = args.patch;
   const next: Record<string, unknown> = {};

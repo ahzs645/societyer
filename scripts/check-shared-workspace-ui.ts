@@ -16,6 +16,7 @@ const {
 } = await import("../src/lib/sessionHandoff");
 const { workspaceOpenRoute, parseDomainWorkspace } = await import("../src/lib/workspaceDomain");
 const { saveLinkCode, readLinkCode, clearLinkCode } = await import("../src/pages/account/accountLinkCode");
+const { signInOptions, isAccountLinkSignIn } = await import("../src/auth/signInOptions");
 
 // ---------- chooseStartupWorkspace ----------
 const ddc = { societyId: "ddc", workspaceName: "DDC North", origin: "https://portal.ddcnorth.com", signIn: { requiredMethod: "microsoft" as const } };
@@ -219,4 +220,22 @@ saveLinkCode({ code: "link-code", expiresAtISO: "2026-11-08T12:10:00Z" });
 clearLinkCode();
 assert.equal(readLinkCode(now), null);
 
-console.log("Shared workspace UI passed: startup rules 1-4 and unmapped fallback; pending choice once with expiry; handoff next sanitizing, step parsing, destination-initiated verifier/challenge, redemption only for this tab's own request; switcher same-origin vs handoff; domain result parsing; link code storage.");
+// ---------- which sign-in options /login shows ----------
+// LINK_SIGN_IN_PATH (src/pages/account/accountPage.ts) is `/login?linkAccount=1&redirect=%2Faccount%2Flink%2Fconfirm`.
+assert.equal(isAccountLinkSignIn("1", "/account/link/confirm"), true, "Second login of a link");
+assert.equal(isAccountLinkSignIn(null, "/account/link"), true, "Fresh re-sign-in of the first login");
+assert.equal(isAccountLinkSignIn(null, "/account/link/confirm?x=1"), true);
+assert.equal(isAccountLinkSignIn(null, "/app"), false);
+assert.equal(isAccountLinkSignIn("0", "/account/linked"), false);
+const ddcDomain = { domainRequiresMicrosoft: true, deploymentRequiresMicrosoft: false };
+const passwordAllowed = { microsoftRequired: false, password: true, passwordForLinking: false };
+const microsoftOnly = { microsoftRequired: true, password: false, passwordForLinking: false };
+assert.deepEqual(signInOptions({ ...ddcDomain, linking: false }), microsoftOnly, "Microsoft-only domain outside the link flow");
+assert.deepEqual(signInOptions({ ...ddcDomain, linking: true }), { microsoftRequired: true, password: true, passwordForLinking: true }, "Linking a password login on portal.ddcnorth.com");
+assert.deepEqual(signInOptions({ ...ddcDomain, deploymentRequiresMicrosoft: true, linking: true }), microsoftOnly, "Deployment-wide required SSO refuses /sign-in/email: no form");
+assert.deepEqual(signInOptions({ ...ddcDomain, deploymentRequiresMicrosoft: undefined, linking: true }), microsoftOnly, "Not until capabilities load");
+assert.deepEqual(signInOptions({ domainRequiresMicrosoft: false, deploymentRequiresMicrosoft: false, linking: false }), passwordAllowed);
+assert.deepEqual(signInOptions({ domainRequiresMicrosoft: false, deploymentRequiresMicrosoft: undefined, linking: true }), passwordAllowed, "Other domains unchanged while loading");
+assert.deepEqual(signInOptions({ domainRequiresMicrosoft: false, deploymentRequiresMicrosoft: true, linking: true }), microsoftOnly);
+
+console.log("Shared workspace UI passed: startup rules 1-4 and unmapped fallback; pending choice once with expiry; handoff next sanitizing, step parsing, destination-initiated verifier/challenge, redemption only for this tab's own request; switcher same-origin vs handoff; domain result parsing; link code storage; sign-in options (password on a Microsoft-only domain only for linking, and only when the deployment allows it).");

@@ -278,6 +278,8 @@
     "letterheadHint": "Image d'en-tête pour les procès-verbaux exportés, les trousses de réunion et la copie publique.",
     "sidebarSubtitle": "Choisissez les sections affichées dans la barre latérale de votre espace de travail.",
     "aiSubtitle": "Afficher ou masquer les fonctions de clavardage IA de l'application.",
+    "aiModuleOff": "L'IA est désactivée pour cet espace de travail.",
+    "aiModuleOffLink": "L'activer dans Modules",
     "aiToggleHint": "Lorsque désactivé, le bouton du robot dans la barre latérale et l'assistant IA flottant sont retirés. Les autres aides basées sur l'IA (p. ex. la génération de transcriptions) restent disponibles.",
     "inventorySubtitle": "Paramètres des flux de travail pour les actifs et les consommables.",
     "inventoryPromptHint": "Lors de l'ajout de stock à un article consommable, demander d'abord combien il en reste, puis ajouter la nouvelle quantité à ce compte observé.",
@@ -478,6 +480,10 @@
     "externalDocuments": {
       "label": "Documents externes",
       "description": "Lier des documents dans des bibliothèques externes approuvées et les ouvrir selon les autorisations de chaque lecteur à la source."
+    },
+    "aiAgents": {
+      "label": "Assistant et agents IA",
+      "description": "L'assistant IA intégré, les filtres de tableau « Demander à l'IA » et la page de configuration des agents IA."
     }
   },
   "moduleCategories": {

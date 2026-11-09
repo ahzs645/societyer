@@ -1,7 +1,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { requireSocietyMembership, principalUserId } from "./access";
 import { requirePermissionPortable } from "./permissions";
-import { issueFromSeriesPortable, markSentPortable, loadIssuerTaxIdentifiers } from "./invoices";
+import { issueFromSeriesPortable, recordAutomatedInvoiceSending, loadIssuerTaxIdentifiers, captureInvoiceIssuerSnapshot } from "./invoices";
 import { captureIssuerTaxRegistrations } from "../invoiceTaxRegistrations";
 import { assertInvoiceTaxAssessments } from "../tax";
 import { snapshotSupplierTaxFacts } from "../tax/organizationFacts";
@@ -38,7 +38,7 @@ export async function sourcePagePortable(ctx: PortableQueryCtx, { societyId, kin
   const convert = (r: any): { id: string; name: string; email?: string } | null => {
     if (kind === "template") return r.active ? { id: r._id, name: String(r.config?.name ?? "Document template") } : null;
     if (kind === "report") return !r.archived ? { id: r._id, name: String(r.definition?.name ?? "Saved report") } : null;
-    if (kind === "invoice_reminder") return !["void", "draft"].includes(r.status) && Number(r.totalCents) > Number(r.paidCents ?? 0) ? { id: r._id, name: `${r.number} · ${r.billToName}`, ...(r.billToEmail ? { email: r.billToEmail } : {}) } : null;
+    if (kind === "invoice_reminder") return r.status === "sent" && Number(r.totalCents) > Number(r.paidCents ?? 0) ? { id: r._id, name: `${r.number} · ${r.billToName}`, ...(r.billToEmail ? { email: r.billToEmail } : {}) } : null;
     return r.status !== "ended" && r.nextIssueDate ? { id: r._id, name: String(r.name), ...(r.billToEmail ? { email: r.billToEmail } : {}) } : null;
   };
   const result = await ctx.db.query(table).withIndex("by_society", q => q.eq("societyId", societyId)).order("desc").paginate({ numItems: 100, cursor, maximumBytesRead: 4_000_000 });
@@ -62,7 +62,7 @@ export async function saveSchedulePortable(ctx: PortableMutationCtx, args: SaveB
   if (!["recurring_invoice", "invoice_reminder", "report"].includes(args.kind) || !["daily", "weekly", "monthly"].includes(args.cadence)) throw new Error("Unknown schedule type or cadence.");
   const source = await owned(ctx, args.kind === "report" ? "reportDefinitions" : args.kind === "recurring_invoice" ? "invoiceSeries" : "invoices", args.sourceId, args.societyId);
   if (args.kind === "report" && source.archived) throw new Error("Choose an active saved report.");
-  if (args.kind === "invoice_reminder" && ["draft", "void"].includes(source.status)) throw new Error("Reminders require an issued invoice.");
+  if (args.kind === "invoice_reminder" && source.status !== "sent") throw new Error("Record external sending before scheduling invoice reminders.");
   if (args.templateId) await owned(ctx, "invoiceTemplates", args.templateId, args.societyId);
   if (args.kind === "recurring_invoice") { const duplicate = (await ctx.db.query("billingAutomationSchedules").withIndex("by_society_kind_source", q => q.eq("societyId", args.societyId).eq("kind", "recurring_invoice").eq("sourceId", args.sourceId)).take(2)).find(row => row._id !== args.id); if (duplicate) throw new Error("This recurring series already has a delivery schedule. Edit its existing schedule in Invoices → Automation."); }
   const active = args.active ?? old?.active ?? false;
@@ -83,13 +83,15 @@ async function invoiceSnapshot(ctx: PortableQueryCtx, invoice: any, templateId?:
   const template = templateId ? await owned(ctx, "invoiceTemplates", templateId, invoice.societyId) : null;
   const settings = await ctx.db.query("invoiceSettings").withIndex("by_society", (q) => q.eq("societyId", invoice.societyId)).first();
   const { _id, _creationTime, societyId, ...document } = invoice;
+  const alreadyCaptured = Boolean(document.issuerSnapshot);
   if (document.status === "draft") {
     assertInvoiceTaxAssessments(document.lines ?? [], document.issueDate);
     const taxContext = document.lines?.some((line: { taxAssessment?: unknown }) => line.taxAssessment) ? await loadOrganizationTaxContext(ctx, invoice.societyId) : undefined;
     if (taxContext) await assertInvoiceOrganizationFactsCurrent(ctx, invoice.societyId, document.lines ?? [], taxContext);
     document.issuerTaxRegistrationsSnapshot ??= captureIssuerTaxRegistrations(await loadIssuerTaxIdentifiers(ctx, invoice.societyId), document.lines ?? [], document.issueDate, now(), taxContext ? snapshotSupplierTaxFacts(document.lines ?? [], taxContext, document.issueDate) : undefined);
+    document.issuerSnapshot ??= await captureInvoiceIssuerSnapshot(ctx, invoice.societyId);
   }
-  return { kind: "invoice", invoice: { ...document, status: document.status === "draft" ? "sent" : document.status, documentTemplate: cleanInvoiceTemplate(template?.config ?? invoice.documentTemplate) }, organization: { name: society?.name ?? "Organization", address: society?.mailingAddress ?? society?.registeredOfficeAddress, email: society?.publicContactEmail ?? society?.officialEmail, registrationNumber: society?.incorporationNumber, logoStorageId: society?.logoStorageId }, paymentInstructions: settings?.paymentInstructions };
+  return { kind: "invoice", invoice: { ...document, status: document.status === "draft" ? "issued" : document.status, documentTemplate: cleanInvoiceTemplate(alreadyCaptured ? invoice.documentTemplate : template?.config ?? invoice.documentTemplate) }, organization: document.issuerSnapshot ?? { name: society?.name ?? "Organization", address: society?.mailingAddress ?? society?.registeredOfficeAddress, email: society?.publicContactEmail ?? society?.officialEmail, registrationNumber: society?.incorporationNumber, logoStorageId: society?.logoStorageId }, paymentInstructions: invoice.paymentInstructions ?? settings?.paymentInstructions };
 }
 /** Atomic issuance and occurrence recording: overlapping cron scans cannot duplicate an invoice. */
 export async function prepareDuePortable(ctx: PortableMutationCtx, { societyId, atISO }: { societyId: string; atISO?: string }) {
@@ -135,10 +137,10 @@ export async function prepareDuePortable(ctx: PortableMutationCtx, { societyId, 
         invoiceId = await issueFromSeriesPortable(ownerCtx, { id: series._id });
         snapshot = await invoiceSnapshot(ctx, await ctx.db.get(invoiceId, "invoices"), schedule.templateId);
         // The prepared PDF is frozen before delivery; finalization must keep its seller numbers.
-        await ctx.db.patch(invoiceId, { issuerTaxRegistrationsSnapshot: snapshot.invoice.issuerTaxRegistrationsSnapshot });
+        await ctx.db.patch(invoiceId, { issuerTaxRegistrationsSnapshot: snapshot.invoice.issuerTaxRegistrationsSnapshot, issuerSnapshot: snapshot.invoice.issuerSnapshot, documentTemplate: snapshot.invoice.documentTemplate });
       } else if (schedule.kind === "invoice_reminder") {
         const invoice = await owned(ctx, "invoices", schedule.sourceId, societyId); invoiceId = invoice._id;
-        if (["draft", "void"].includes(invoice.status) || Number(invoice.totalCents) <= Number(invoice.paidCents ?? 0)) skip = "Invoice is paid, void or unissued.";
+        if (invoice.status !== "sent" || Number(invoice.totalCents) <= Number(invoice.paidCents ?? 0)) skip = "Invoice is paid or external sending has not been recorded.";
         else if (invoice.dueDate > schedule.nextLocalDate) skip = "Invoice is not due yet.";
         snapshot = await invoiceSnapshot(ctx, invoice, schedule.templateId);
       } else {
@@ -174,10 +176,11 @@ export async function claimRunPortable(ctx: PortableMutationCtx, { societyId, id
   if (blocked) { await ctx.db.patch(id, { status: "blocked", lastError: blocked, nextAttemptAtISO: billingRetryAt(at, 1), updatedAtISO: at }); return null; }
   if (run.invoiceId) {
     const invoice = await ctx.db.get(run.invoiceId, "invoices");
-    if (!invoice || invoice.societyId !== societyId || invoice.status === "void" || (schedule.kind === "invoice_reminder" && (invoice.status === "draft" || Number(invoice.totalCents) <= Number(invoice.paidCents ?? 0)))) {
+    if (!invoice || invoice.societyId !== societyId || invoice.status === "void" || (schedule.kind === "invoice_reminder" && (invoice.status !== "sent" || Number(invoice.totalCents) <= Number(invoice.paidCents ?? 0)))) {
       const deliveries = run.deliveries.map((delivery: any) => delivery.status === "accepted" ? delivery : { ...delivery, status: "skipped" });
-      for (const delivery of deliveries) if (delivery.status === "skipped" && delivery.pendingEmailId) await ctx.db.patch(delivery.pendingEmailId, { status: "cancelled", providerState: "skipped", notes: "Invoice no longer requires this delivery (paid reminder, void or deleted invoice)." });
-      await ctx.db.patch(id, { status: "skipped", deliveries, lastError: "Invoice no longer requires this delivery (paid reminder, void or deleted invoice).", history: history(run, "skipped", "Invoice no longer requires this delivery (paid reminder, void or deleted invoice)."), updatedAtISO: at }); return null;
+      const reason = "Invoice no longer requires this delivery (unsent or paid reminder, void or deleted invoice).";
+      for (const delivery of deliveries) if (delivery.status === "skipped" && delivery.pendingEmailId) await ctx.db.patch(delivery.pendingEmailId, { status: "cancelled", providerState: "skipped", notes: reason });
+      await ctx.db.patch(id, { status: "skipped", deliveries, lastError: reason, history: history(run, "skipped", reason), updatedAtISO: at }); return null;
     }
   }
   const token = crypto.randomUUID();
@@ -195,7 +198,7 @@ export async function finalizeRunPortable(ctx: PortableMutationCtx, { societyId,
   if (run.status !== "accepted" || run.finalizedAtISO) return null;
   if (run.invoiceId) {
     const schedule = await owned(ctx, "billingAutomationSchedules", run.scheduleId, societyId);
-    if (schedule.kind === "recurring_invoice") await markSentPortable(ctx, { societyId, ids: [run.invoiceId], draftEmail: false });
+    if (schedule.kind === "recurring_invoice") await recordAutomatedInvoiceSending(ctx, { societyId, runId: id });
     else await ctx.db.patch(run.invoiceId, { lastReminderAtISO: now() });
   }
   await ctx.db.patch(id, { finalizedAtISO: now(), history: history(run, "finalized"), lastError: undefined }); return null;

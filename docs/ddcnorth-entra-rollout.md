@@ -1,9 +1,12 @@
 # DDC North Entra sign-in rollout
 
 Registered on November 7 and deployed on November 8, 2026 after operator
-approval. Required-SSO enforcement is active; password sign-in returns HTTP 403.
-Existing password sessions cannot authorize workspace access. Qualify the native
-workspace after enabling enforcement as well as the separate staff admin portal.
+approval. Since the November 8 shared-workspace cutover, DDC's Microsoft
+requirement is enforced by workspace tenant/group policies. Password sessions
+cannot authorize DDC, while provisioned First Form password accounts can use
+First Form on the same broker. The deployment-wide required-SSO flag is unset.
+See [the deployed setup](shared-workspaces/production-setup.md); historical
+deployment IDs and qualification entries below describe the original rollout.
 
 ## Directory and access boundary
 
@@ -53,7 +56,8 @@ MICROSOFT_LOGIN_CLIENT_ID=bfced040-9730-45b5-b943-345a06bb8b60
 MICROSOFT_LOGIN_GROUP_IDS=815b3b71-596d-48fe-aafd-f5bf34aafa5c
 MICROSOFT_LOGIN_PRIVATE_KEY=<PKCS8-private-key>
 MICROSOFT_LOGIN_CERT_SHA256=<base64url-SHA256-certificate-thumbprint>
-SOCIETYER_ENTRA_SSO_REQUIRED=1
+# Shared production: leave SOCIETYER_ENTRA_SSO_REQUIRED unset.
+# DDC requires Microsoft through workspaceSignInPolicies instead.
 ```
 
 The private key never belongs in `VITE_*`, Pages configuration, screenshots or
@@ -146,6 +150,14 @@ roles preserved, but were not interactively tested without their participation.
 
 ## Rollback
 
+On current shared production, fix the DDC workspace policy without relaxing its
+tenant/group requirement. Restoring deployment-wide required SSO also locks
+First Form's password users out; it is an emergency stop, not a routine rollback.
+Disabling the Microsoft provider alone does not clear DDC's workspace policies.
+An intentional change of sign-in method needs an explicitly approved policy
+change and coordinated member access. The original isolated-deployment rollback
+below is historical; see the [shared recovery procedure](shared-workspaces/production-setup.md#backups-retained-source-and-rollback).
+
 Set `SOCIETYER_ENTRA_SSO_REQUIRED=0` first to restore password access, then
 disable `SOCIETYER_ENTRA_LOGIN` if necessary. Existing account IDs and roles
 remain intact. Revoke the dedicated certificate/registration if abandoning the
@@ -156,8 +168,8 @@ credentials alone does not invalidate already-issued app sessions.
 
 `SOCIETYER_ENTRA_SSO_REQUIRED=1` applies to the whole deployment: every session
 needs Microsoft evidence and email sign-in returns 403. That stays correct while
-this deployment holds only DDC North. If First Form's password users join the
-same deployment, DDC's requirement moves to a workspace sign-in policy instead:
+this deployment holds only DDC North. First Form's password users now share the
+deployment, so DDC's requirement has moved to a workspace sign-in policy:
 `requiredMethod: "microsoft"` with tenant `220c85f6-1cb1-4bb2-a63b-55d9fd163b55`
 and group `815b3b71-596d-48fe-aafd-f5bf34aafa5c`, checked against how each
 session signed in. Set that policy on every DDC workspace, close sign-up with

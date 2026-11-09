@@ -263,7 +263,11 @@ assert.deepEqual(lines[1].tagIds, [tag._id], "the line's tag is on its journal l
 await inv.markSentPortable(ctx, { societyId: S, ids: [id] });
 assert.equal((await entries()).filter((entry) => entry.sourceExternalId === accrualKey(id)).length, 1, "sending again posts nothing");
 
-// Editing a posted invoice rewrites its entry in place.
+// Newly finalized documents are immutable. Legacy invoices without a captured
+// issuer keep their older correction path and its posting safeguards.
+await assert.rejects(() => inv.upsertPortable(ctx, { id, societyId: S, partyKind: "custom", billToName: "Ledger Test Party", issueDate: today, terms: "net_15", lines: [{ item: "Coffee service", quantity: 4, unitPriceCents: 1000 }] }), /immutable/);
+await db.patch(id, { issuerSnapshot: undefined });
+// Editing this legacy posted invoice rewrites its entry in place.
 await inv.upsertPortable(ctx, { id, societyId: S, partyKind: "custom", billToName: "Ledger Test Party", issueDate: today, terms: "net_15", lines: [{ item: hall.name, catalogItemId: hall._id, quantity: 1, unitPriceCents: 45000, taxRatePercent: 5, taxLabel: "GST", tagIds: [tag._id] }, { item: "Coffee service", quantity: 4, unitPriceCents: 1000 }] });
 assert.equal((await invoiceRow(id)).journalEntryId, accrual._id, "same entry");
 assert.equal((await linesOf(accrual._id))[0].amountCents, 51250, "with the new total");

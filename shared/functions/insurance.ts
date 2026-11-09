@@ -7,10 +7,13 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
 import { renewalPolicyDraft } from "../insuranceHistory";
 import { assertValid, validateInsurancePolicyInput } from "../recordValidation";
 import { todayDateOnly } from "../dateOnly";
+import { requirePermissionPortable } from "./permissions";
+import { exactDay, requireEvidence, uniqueRows } from "../evidenceReview";
+import { currentRenewalPolicies } from "../insuranceOperations";
 
 export async function createRenewalPortable(ctx: PortableMutationCtx, args: {
   id: string; policyNumber: string; startDate: string; endDate: string;
@@ -102,8 +105,7 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
 }
 
 export async function appendOperations(ctx: PortableMutationCtx, args: { id:string; moneyEntries?:any[]; amendments?:any[]; requirementChecks?:any[] }) {
-  const { requireOwnedRow, principalUserId }=await import('./access');const { requirePermissionPortable }=await import('./permissions');
-  const { requireEvidence, exactDay, uniqueRows }=await import('../evidenceReview');
+
   const policy=await requireOwnedRow(ctx,'insurancePolicies',args.id);const societyId=String(policy.societyId);
   await requirePermissionPortable(ctx,societyId,'financials:write');
   const patch:any={updatedAtISO:new Date().toISOString()};
@@ -128,8 +130,7 @@ export async function appendOperations(ctx: PortableMutationCtx, args: { id:stri
 }
 
 export async function ensureRenewalTasks(ctx:PortableMutationCtx,args:{societyId:string;asOf:string;ownerUserId?:string}){
-  const {requirePermissionPortable}=await import('./permissions');const {principalUserId}=await import('./access');
-  const {exactDay}=await import('../evidenceReview');const {currentRenewalPolicies}=await import('../insuranceOperations');
+
   await requireSocietyMembership(ctx,args.societyId);await requirePermissionPortable(ctx,args.societyId,'financials:read');await requirePermissionPortable(ctx,args.societyId,'tasks:write');
   if(!exactDay(args.asOf))throw new Error('A valid scan day is required.');
   const ownerUserId=args.ownerUserId??await principalUserId(ctx,args.societyId);await getOwned(ctx,'users',ownerUserId,args.societyId);

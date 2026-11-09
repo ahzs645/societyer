@@ -144,8 +144,9 @@ const society = {
   constitutionDocId: "static_document_constitution",
   bylawsDocId: DOCUMENT_BYLAWS_ID,
   demoMode: true,
-  // Procurement review is off by default; the demo turns it on and reads its bundled snapshot (shared/procurementReview/demo.ts).
-  disabledModules: [`${MODULE_OPT_IN_PREFIX}procurementReview`],
+  // Procurement review and AI are off by default; the demo turns them on. Procurement review
+  // reads its bundled snapshot (shared/procurementReview/demo.ts); the assistant answers from demo data.
+  disabledModules: [`${MODULE_OPT_IN_PREFIX}procurementReview`, `${MODULE_OPT_IN_PREFIX}aiAgents`],
   integrationSettings: { ...defaultIntegrationSettings(), procurementReviewFolder: DEMO_PROCUREMENT_REVIEW_FOLDER },
   updatedAt: Date.parse("2026-04-16T16:00:00.000Z"),
 };

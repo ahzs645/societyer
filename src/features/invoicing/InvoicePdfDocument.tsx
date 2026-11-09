@@ -12,6 +12,8 @@ import { invoiceIssuerTaxRegistrations, registrationDisplayLines, guidedTaxIdsTo
 import { invoiceTaxDisclosureLines } from "../../../shared/tax";
 import type { InvoiceDocumentData } from "./InvoiceDocument";
 import type { InvoiceOrganization } from "./types";
+import { invoiceDocumentOrganization } from "./invoiceOrganization";
+import { invoiceDocumentStatus } from "./invoiceDocumentStatus";
 import { documentPdfFontFamily, documentPresentation, numericDocumentColumn, documentAddressLines } from "./documentPresentation";
 import { DocumentAdvancedPdfBlocks } from "./DocumentAdvancedBlocks";
 import { DocumentArtworkPdf } from "./DocumentArtworkPdf";
@@ -40,6 +42,7 @@ export function documentPaymentStubHeight(data: ReturnType<typeof documentPresen
 }
 /** Native Forme tables retain column widths and repeat their heading on every physical page. */
 function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }: InvoicePdfProps) {
+  organization = { ...organization, ...invoiceDocumentOrganization(invoice, organization) };
   paymentInstructions = invoicePaymentText(invoice, paymentInstructions);
   const data = documentPresentation(invoice), { config, design, advanced: a, extras, kind, title, columns, cellValue, summary, metadata, page } = data;
   const registrationLines = registrationDisplayLines(invoiceIssuerTaxRegistrations(invoice, organization));
@@ -69,7 +72,8 @@ function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }
     const style: Style = settings.placement === "absolute" ? { position: "absolute", left: settings.x - margin.left, top: settings.y - margin.top, width: Math.min(settings.width, page.width - settings.x) } : { flex: 1, paddingRight: 14 };
     return <View key={key} style={style}>{!org && (key !== "billing" || a.visibility.billTo) && text(key === "billing" ? design.labels.billTo : design.labels.shipTo, { ...element("labels"), fontWeight: 700 })}{lines.map((line, index) => <Fragment key={index}>{text(line, line.includes(source.name || "\u0000") ? { ...nameStyle, fontWeight: 700 } : addressStyle)}</Fragment>)}</View>;
   };
-  const stamp = (where: typeof a.stamp.placement) => a.visibility.statusStamp && kind === "invoice" && invoice.status && invoice.status !== "draft" && where === a.stamp.placement ? <View bookmark="Societyer status stamp" wrap={false} style={{ width: Math.min(contentWidth, Math.max(90, (a.stamp.text || invoice.status).length * Number(body.fontSize || 10) * 0.75 + 16)), height: Number(body.fontSize || 10) * 1.5 + 10, marginVertical: 8 }} /> : null;
+  const documentStatus = invoiceDocumentStatus(invoice, { visible: a.visibility.statusStamp, text: a.stamp.text });
+  const stamp = (where: typeof a.stamp.placement) => documentStatus.text && !documentStatus.draft && where === a.stamp.placement ? <View bookmark="Societyer status stamp" wrap={false} style={{ width: Math.min(contentWidth, Math.max(90, documentStatus.text.length * Number(body.fontSize || 10) * 0.75 + 16)), height: Number(body.fontSize || 10) * 1.5 + 10, marginVertical: 8 }} /> : null;
   const signature = (receiver = false) => {
     const placement = receiver ? a.receiverSignature : a.signature;
     if (receiver ? !a.receiverSignature.enabled : !design.signature.enabled) return null;

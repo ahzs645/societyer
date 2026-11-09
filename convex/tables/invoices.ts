@@ -85,12 +85,32 @@ export const invoicePaymentValidator = v.object({
   voidedTransactionEntryId: v.optional(v.id("journalEntries")),
 });
 
+export const invoiceDeliveryMethodValidator = v.union(v.literal("email"), v.literal("portal"), v.literal("post"), v.literal("hand_delivery"), v.literal("other"));
+export const invoiceClientResponseKindValidator = v.union(v.literal("accepted"), v.literal("changes_requested"), v.literal("disputed"), v.literal("declined"));
+export const invoiceIssuerSnapshotValidator = v.object({
+  name: v.string(), address: v.optional(v.string()), email: v.optional(v.string()),
+  registrationNumber: v.optional(v.string()), logoStorageId: v.optional(v.id("_storage")),
+});
+export const invoiceExternalDeliveryValidator = v.object({
+  sentDate: v.string(), method: invoiceDeliveryMethodValidator,
+  source: v.optional(v.union(v.literal("manual"), v.literal("automation"))),
+  automationRunId: v.optional(v.id("billingAutomationRuns")),
+  recipient: v.optional(v.string()), reference: v.optional(v.string()), note: v.optional(v.string()),
+  recordedAtISO: v.string(), recordedByName: v.optional(v.string()), recordedByUserId: v.optional(v.id("users")),
+});
+export const invoiceClientResponseValidator = v.object({
+  response: invoiceClientResponseKindValidator, date: v.string(), customerName: v.string(),
+  note: v.optional(v.string()), reference: v.optional(v.string()), idempotencyKey: v.string(),
+  recordedAtISO: v.string(), recordedByName: v.optional(v.string()), recordedByUserId: v.optional(v.id("users")),
+});
 export const invoiceTimelineEventValidator = v.object({
   atISO: v.string(),
   kind: v.string(), // created | sent | reminder | payment | payment_removed | reverted | voided | duplicated | issued_from_series | restored | posted | reversed | deposit
   label: v.string(),
   actorName: v.optional(v.string()),
   amountCents: v.optional(v.number()),
+  externalDelivery: v.optional(invoiceExternalDeliveryValidator),
+  clientResponse: v.optional(invoiceClientResponseValidator),
 });
 
 export const invoiceReceivingMethodValidator = v.object({
@@ -122,11 +142,15 @@ export const repairStatusValidator = v.union(v.literal("received"), v.literal("d
 
 export const invoiceTables = {
   invoices: defineTable({
+    issuedAtISO: v.optional(v.string()),
+    issuerSnapshot: v.optional(invoiceIssuerSnapshotValidator),
+    externalDelivery: v.optional(invoiceExternalDeliveryValidator),
+    clientResponse: v.optional(invoiceClientResponseValidator),
     issuerTaxRegistrationsSnapshot: v.optional(invoiceIssuerTaxSnapshotValidator),
     societyId: v.id("societies"),
     sequence: v.number(),
     number: v.string(),
-    status: v.string(), // draft | sent | void (paid / partially paid / overdue are derived)
+    status: v.string(), // draft | issued | sent | void (paid / partially paid / overdue are derived)
     partyKind: v.string(), // member | organization | custom
     memberId: v.optional(v.id("members")),
     counterpartyId: v.optional(v.id("accountingCounterparties")),
@@ -179,6 +203,7 @@ export const invoiceTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"])
+    .index("by_issuer_logo", ["issuerSnapshot.logoStorageId"])
     .index("by_repair_job", ["repairJobId"])
     .index("by_series", ["seriesId"])
     .index("by_member", ["memberId"]),

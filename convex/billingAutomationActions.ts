@@ -24,7 +24,7 @@ async function deliver(ctx: any, societyId: string, id: string) {
       if (snapshot.kind === "report") {
         const result = await runReportPortable((name, args) => ctx.runQuery(internal("reportSourceInternal"), { societyId, id, sourceTable: args.sourceTable, cursor: args.cursor, pageSize: args.pageSize }), { societyId, definition: snapshot.definition.definition });
         snapshot = { ...snapshot, result, organization: branding.organization, config: branding.config };
-      } else snapshot = { ...snapshot, organization: { ...snapshot.organization, logoUrl: branding.organization.logoUrl } };
+      } else snapshot = { ...snapshot, organization: { ...snapshot.organization, logoUrl: branding.organization.logoUrl }, invoice: { ...snapshot.invoice, ...(snapshot.invoice.issuerSnapshot ? { issuerLogoUrl: branding.organization.logoUrl } : {}) } };
       pdf = await renderBillingDocument(snapshot);
       const pdfStorageId = await ctx.storage.store(new Blob([pdf.slice().buffer as ArrayBuffer], { type: "application/pdf" }));
       const snapshotStorageId = await ctx.storage.store(new Blob([JSON.stringify(snapshot)], { type: "application/json" }));

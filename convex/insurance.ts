@@ -4,6 +4,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { listPortable, createPortable, updatePortable, removePortable, createRenewalPortable } from "../shared/functions/insurance";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import * as insuranceModule from "../shared/functions/insurance";
 
 const coveredParty = v.object({
   name: v.string(),
@@ -273,5 +274,5 @@ export const remove = authorizedMutation("insurance:remove", mutation)({
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const appendOperations = authorizedMutation('insurance:appendOperations', mutation)({args:{id:v.id('insurancePolicies'),moneyEntries:v.optional(v.array(v.any())),amendments:v.optional(v.array(v.any())),requirementChecks:v.optional(v.array(v.any()))},returns:v.any(),handler:async(ctx,args)=>(await import('../shared/functions/insurance')).appendOperations(await toPortableMutationCtx(ctx),args)});
-export const ensureRenewalTasks = authorizedMutation('insurance:ensureRenewalTasks', mutation)({args:{societyId:v.id('societies'),asOf:v.string(),ownerUserId:v.optional(v.id('users'))},returns:v.any(),handler:async(ctx,args)=>(await import('../shared/functions/insurance')).ensureRenewalTasks(await toPortableMutationCtx(ctx),args)});
+export const appendOperations = authorizedMutation('insurance:appendOperations', mutation)({args:{id:v.id('insurancePolicies'),moneyEntries:v.optional(v.array(v.any())),amendments:v.optional(v.array(v.any())),requirementChecks:v.optional(v.array(v.any()))},returns:v.any(),handler:async(ctx,args)=>insuranceModule.appendOperations(await toPortableMutationCtx(ctx),args)});
+export const ensureRenewalTasks = authorizedMutation('insurance:ensureRenewalTasks', mutation)({args:{societyId:v.id('societies'),asOf:v.string(),ownerUserId:v.optional(v.id('users'))},returns:v.any(),handler:async(ctx,args)=>insuranceModule.ensureRenewalTasks(await toPortableMutationCtx(ctx),args)});

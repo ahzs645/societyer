@@ -5,6 +5,12 @@ by side. Each organization keeps its own members, roles, files and sign-in
 rules. If you belong to more than one, you can reach all of them from one
 sign-in and switch between them.
 
+The production entry points are [DDC North](https://portal.ddcnorth.com) and
+[First Form](https://portal.1stform.ca). They share the backend, while each opens
+its own organization. If you have separate DDC and First Form logins, explicitly
+link them to see both sets of memberships together. A First Form password
+session still needs Microsoft verification before it can open DDC.
+
 The words used here:
 
 - **Login**: one way into Societyer with its own credentials, for example your
@@ -41,6 +47,35 @@ A workspace that needs one more step is still listed, with the reason:
 Invitations sent to this login's verified email appear under **Invitations**.
 Select **Join** to accept one.
 
+Your access requests that are waiting, or were declined in the last 30 days,
+appear under **Requests**. Select **Withdraw** to cancel one that is waiting.
+
+## Request access to a workspace
+
+Some organizations let people ask to join from their own website. If you sign
+in there and aren't a member, the "No access to <organization>" page shows
+**Request access** when that organization allows it.
+
+1. Read the organization's message, if it has one.
+2. Add a short note if it helps them recognise you, for example your committee.
+3. Select **Request access**. You'll see "Request sent". You can **Withdraw
+   request** until someone decides.
+
+An Owner or Admin of that organization approves or declines it. When it's
+approved, select **Open <organization>**, or sign in again. You join with the
+login you asked from, so use that login next time. If the organization requires
+Microsoft sign-in, you still need to sign in with Microsoft to open it.
+
+Good to know:
+
+- Your login must have a verified email. The organization sees that email, your
+  name and your note, nothing else about your account.
+- You can send up to five requests a day.
+- If you used to be a member and were disabled, you can't ask again. Contact the
+  organization's administrator.
+- Only an organization's own website offers this. There is no list of
+  organizations to browse.
+
 ## Sign-in methods
 
 **Sign-in methods** shows how this login signs in, such as **Email and
@@ -62,10 +97,11 @@ Before you start:
 
 - You need to be able to sign in to **both** logins yourself.
 - Do it in one browser tab, within 10 minutes.
-- Do it on a site whose sign-in page offers the second login's method. The DDC
-  North site (`portal.ddcnorth.com`) only offers Microsoft. So to link a First
-  Form password and a DDC Microsoft account, use the **First Form site**. Its
-  sign-in page offers both a password and **Continue with Microsoft**.
+- You can start from either site. The DDC North site (`portal.ddcnorth.com`)
+  normally offers only Microsoft, but while you are linking its sign-in page
+  also shows a password form ("Linking a password login? Sign in with it
+  here."). Signing in there with a password never opens DDC North; it only
+  takes you back to the link.
 
 Steps:
 
@@ -156,11 +192,34 @@ What you can't see or do:
 Disabling someone in your workspace doesn't affect their other workspaces.
 Linking can't bring a disabled member back.
 
+### Access requests
+
+Owners and Admins find **Access requests** on the **Users** page. The number
+next to the title is how many are waiting.
+
+- **Settings** turns requests on or off (they start off), sets the suggested
+  role (Viewer or Member) and an optional message people see before they ask.
+  Requests only come from your workspace's own website. If it doesn't have one,
+  the card says nobody can ask yet; the deployment operator sets the website.
+- Each request shows the person's verified email, name, note and date. Pick a
+  role and select **Approve**, or select **Decline**.
+- Admins can approve as Director, Member or Viewer. Owners can also approve as
+  Admin. Nobody joins as Owner from a request: promote them after they join.
+- You get a notification, and an email when your deployment sends email, for
+  each new request.
+- Approval adds them to your workspace only, with the login they asked from.
+  Your workspace's sign-in and two-factor rules still apply to them.
+- Approval is refused if they already have a membership here, if their login is
+  disabled, or if another user here already has that email address.
+
 If a member asks why they can't link their logins: "Can't link these logins.
 Both logins are members of <workspace>." means both logins already have a
-membership in your workspace. Remove the one you don't want (**Remove access**;
-disabling isn't enough), then they can link. Records created by the removed
-membership stay in your workspace.
+membership in your workspace. Ask the deployment operator to merge them: the
+operator retires the duplicate membership in favour of the one you keep. The
+retired one stays on the **Users** page as Disabled ("Merged into <name>"), so
+records it created still show who made them, and the kept membership's role
+doesn't change. Then the member links again. (Removing one yourself with
+**Remove access** also works, but its records then point at a deleted user.)
 
 ## Troubleshooting
 
@@ -171,7 +230,11 @@ membership stay in your workspace.
 | "Microsoft sign-in was not completed. Try again." | The Microsoft round trip failed or was cancelled | Try again. If it keeps failing, your Microsoft account may not be set up for Societyer yet. Ask the organization's administrator. |
 | "Use your <workspace> email" / "<workspace> doesn't accept sign-in as <email>." | The organization only accepts certain email domains | **Use another account** |
 | "Two-factor authentication required" | The workspace requires an authenticator | Verify it, or set it up under **Account security** |
-| "No access to <workspace>" | This login isn't a member there | Open another workspace, link the login you used there, or ask for an invitation |
+| "No access to <workspace>" | This login isn't a member there | Open another workspace, link the login you used there, **Request access** if offered, or ask for an invitation |
+| "Request sent" | Your access request is waiting for an Owner or Admin | Wait, or **Withdraw request** |
+| "Your request to join <workspace> was declined." | An Owner or Admin declined it | Contact the organization, or **Ask again** |
+| "You've sent too many requests today. Try again tomorrow." | Five requests a day at most | Try again tomorrow |
+| "Verify your email address first, then ask again." | Requests need a verified email | Verify your email, then ask |
 | "Workspace locked" / "This sign-in can't open any of your workspaces yet." | Every workspace needs another step | See the labels in the list |
 | "Sign in again first" / "For your security, linking needs a recent sign-in." | Your sign-in is older than 15 minutes | **Sign in again**, then start the link |
 | "This login is disabled. Contact your administrator." | The login you are linking from is disabled | Contact your administrator |
@@ -180,10 +243,10 @@ membership stay in your workspace.
 | "No link in progress" | Different tab, or the link ended | **Start again** |
 | "Link not found" | The link was cancelled, used or replaced | Start again |
 | "Already linked" | Nothing to do | See **My workspaces** |
-| "Can't link these logins" … "Both logins are members of <workspace>." | Two memberships in one workspace | Ask that workspace's administrator to remove one |
+| "Can't link these logins" … "Both logins are members of <workspace>." | Two memberships in one workspace | Ask that workspace's administrator; they (through the deployment operator) merge the two memberships, then link again |
 | "Can't link these logins" / "One of these logins is disabled." | A login is disabled | Contact your administrator |
 | "That workspace couldn't be opened on its own site. Try again, or sign in there directly." | The switch to another website failed | Try again, or go to that site and sign in |
 | "Sign in to continue" / "This link expired or was already used. Sign in to continue." | The switch link was old or used | Sign in on that site |
-| "Workspace access conflict" | Two of your linked logins both have a membership in one workspace, so neither opens it | Ask that workspace's administrator to remove one |
+| "Workspace access conflict" | Two of your linked logins both have a membership in one workspace, so neither opens it | Ask that workspace's administrator to have the two merged (deployment operator) |
 | "Account disabled" | Your membership was disabled | Contact the workspace administrator |
 | "Native file storage is disabled for this workspace. …" | This organization keeps files elsewhere (DDC North uses SharePoint) | Use the document versions upload, or a document connector |

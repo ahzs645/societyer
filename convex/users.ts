@@ -13,7 +13,9 @@ import {
   upsertUserPortable,
   removeUserPortable,
   securityDisableUserPortable,
+  operatorRetireMembershipPortable,
 } from "../shared/functions/users";
+import { internalMutation } from "./lib/untypedServer";
 import { ROLES, canActAs, requireRolePortable, type Role } from "../shared/functions/access";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -101,6 +103,17 @@ export const securityDisable = authorizedMutation("users:securityDisable", mutat
   args: { id: v.id("users"), reason: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => securityDisableUserPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/**
+ * Deployment operator only: retire a duplicate membership in favour of another
+ * in the same workspace. See docs/shared-workspaces/operator-runbook.md.
+ *   npx convex run users:operatorRetireMembership '{"retireUserId":"…","keepUserId":"…","reason":"…"}'
+ */
+export const operatorRetireMembership = internalMutation({
+  args: { retireUserId: v.id("users"), keepUserId: v.id("users"), reason: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => operatorRetireMembershipPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordLogin = authorizedMutation("users:recordLogin", mutation)({

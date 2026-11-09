@@ -23,12 +23,16 @@ async function issueAndOpen(page: Page) {
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page).toHaveURL(/builder=(?!new)[^&]+/);
   const id = new URL(page.url()).searchParams.get("builder")!;
-  await page.getByRole("button", { name: "Mark as sent", exact: true }).click();
+  await page.getByRole("button", { name: "More invoice actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Finalize without downloading", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Finalize invoice?", exact: true });
+  await confirmation.getByRole("button", { name: "Finalize invoice", exact: true }).click();
   await expect(page.locator(".invoice-builder")).not.toBeVisible();
   await page.goto(`/app/invoices?invoice=${encodeURIComponent(id)}`);
   const drawer = page.getByRole("dialog").last();
   await expect(drawer).toBeVisible();
   await expect(drawer).toContainText("In the books");
+  await expect(drawer.getByRole("region", { name: "Invoice workflow", exact: true })).toContainText("Ready for you to send");
   return { id, drawer };
 }
 
@@ -131,6 +135,8 @@ test("inclusive tax, shipping, withholding and audited settlement adjustments pe
   await expect(writtenOff).toContainText("Write-off");
   await expect(figures).toContainText("$0.00");
   const settled = await invoiceSnapshot(page, id);
+  expect(settled.invoice.lifecycle).toBe("issued");
+  expect(settled.invoice.sentAtISO).toBeUndefined();
   expect(settled.invoice.totalCents).toBe(11050);
   expect(settled.invoice.balanceCents).toBe(0);
   expect(settled.invoice).toMatchObject({ cashPaidCents: 5000, creditCents: 1000, writeOffCents: 6050, refundCents: 1000, settledCents: 11050 });
@@ -189,7 +195,9 @@ test("explicit invoice and settlement FX quotes, revaluation reversals and PDF c
   assertBalanced(snapshot.entries);
   const pdf = await downloadPdf(page, persisted, "explicit-fx-settlement");
   for (const text of ["USD", "Browser money service", "$100.00", "$0.00"]) expect(pdf).toContain(text);
-  await persisted.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(persisted.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  // A direct link still shows the original exchange rate in the locked document.
+  await page.goto(`/app/invoices?builder=${encodeURIComponent(id)}`);
   await expect(page.getByLabel("Invoice exchange rate", { exact: true })).toHaveValue("1.3");
   await expect(page.getByLabel("Invoice exchange rate", { exact: true })).toBeDisabled();
   expect(errors).toEqual([]);

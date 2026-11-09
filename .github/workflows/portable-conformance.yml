@@ -38,6 +38,10 @@ jobs:
       - name: Portable manifest drift gate
         run: npm run test:portable-manifest
 
+      # Convex queries/mutations reject dynamic import() at runtime even though deploy succeeds.
+      - name: No dynamic imports in Convex query/mutation code
+        run: npm run test:convex-runtime-imports
+
       - name: Portable conformance suites
         run: |
           npm run test:portable-runtime

@@ -1,8 +1,9 @@
-import { AlertTriangle, Ban, CheckCircle2, CircleDashed, Clock3, PieChart } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, CircleDashed, Clock3, FileCheck2, PieChart } from "lucide-react";
 import { INVOICE_STATUS_LABEL, type InvoiceStatus } from "../../../shared/invoicing";
 
 const ICONS = {
   draft: CircleDashed,
+  issued: FileCheck2,
   sent: Clock3,
   partially_paid: PieChart,
   paid: CheckCircle2,

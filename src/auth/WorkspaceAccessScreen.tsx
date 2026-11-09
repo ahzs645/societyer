@@ -9,6 +9,8 @@ import { toAuthFailure } from "./authErrors";
 import { authEmailDomainHint } from "./authCapabilities";
 import { WorkspaceList } from "./WorkspaceList";
 import { WorkspaceMfaActions } from "./WorkspaceMfaActions";
+import { RequestWorkspaceAccess } from "./RequestWorkspaceAccess";
+import type { DomainWorkspace } from "../lib/workspaceDomain";
 
 /**
  * Shown instead of the app when sign-in opened a workspace this session can't
@@ -19,25 +21,31 @@ export default function WorkspaceAccessScreen() {
   const auth = useAuth();
   const startup = auth.startup;
   if (startup?.kind === "locked") return <LockedScreen workspace={startup.workspace} />;
-  if (startup?.kind === "no-access-here") {
-    const name = startup.domainWorkspace.workspaceName;
-    return (
-      <AuthShell
-        title={`No access to ${name}`}
-        lede={`You're signed in as ${auth.session?.user.email ?? "another account"}. That account isn't a member of ${name}.`}
-        after={<Link className="auth__link" to="/account/link">Joined {name} with a different login? Link that account</Link>}
-      >
-        <div className="auth__state">
-          <WorkspaceList showLabel label="Your workspaces" memberships={auth.memberships ?? []} locked={auth.lockedWorkspaces} />
-          <UseAnotherAccount />
-        </div>
-      </AuthShell>
-    );
-  }
+  if (startup?.kind === "no-access-here") return <NoAccessHere workspace={startup.domainWorkspace} />;
+  // No workspace at all yet, on a domain whose workspace takes access requests (see AuthGate).
+  if (auth.membershipStatus === "needs-invitation" && auth.domainWorkspace) return <NoAccessHere workspace={auth.domainWorkspace} />;
   return (
     <AuthShell title="Workspace locked" lede="This sign-in can't open any of your workspaces yet.">
       <div className="auth__state">
         <WorkspaceList showLabel label="Your workspaces" memberships={[]} locked={auth.lockedWorkspaces} />
+        <UseAnotherAccount />
+      </div>
+    </AuthShell>
+  );
+}
+
+function NoAccessHere({ workspace }: { workspace: DomainWorkspace }) {
+  const auth = useAuth();
+  const name = workspace.workspaceName;
+  return (
+    <AuthShell
+      title={`No access to ${name}`}
+      lede={`You're signed in as ${auth.session?.user.email ?? "another account"}. That account isn't a member of ${name}.`}
+      after={<Link className="auth__link" to="/account/link">Joined {name} with a different login? Link that account</Link>}
+    >
+      <div className="auth__state">
+        <RequestWorkspaceAccess societyId={workspace.societyId} workspaceName={name} />
+        <WorkspaceList showLabel label="Your workspaces" memberships={auth.memberships ?? []} locked={auth.lockedWorkspaces} />
         <UseAnotherAccount />
       </div>
     </AuthShell>

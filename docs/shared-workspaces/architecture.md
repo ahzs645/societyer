@@ -44,7 +44,7 @@ All new tables are in `convex/tables/sharedWorkspaces.ts`.
 | `personAccounts` | One person | Link flow |
 | `personIdentityLinks` | An exact issuer and subject proven to belong to a person | Link flow |
 | `accountLinkRequests` | Short-lived, single-use code proving that a fresh session for identity A started a link | Link flow |
-| `accountLinkEvents` | Append-only audit of linked, unlinked and refused attempts | Link flow |
+| `accountLinkEvents` | Append-only audit of linked, unlinked and refused attempts | Link flow, `accountLinks:operatorUnlink` |
 
 When a workspace has no policy row, the existing behaviour applies: sign-in is
 `any` and storage follows the deployment default. Existing single-organization
@@ -53,9 +53,12 @@ few visible differences after deploying (linking pages are live, a new JWT
 claim, the remembered workspace resets once) are listed in the
 [runbook](operator-runbook.md#is-it-backward-compatible).
 
-`users` rows are not changed. Each one is still one workspace membership bound
-to one exact `authIssuer` and `authSubject`. Linking never rebinds a membership,
-so authorship and history stay attached to the original membership IDs.
+`users` rows are not changed by linking. Each one is still one workspace
+membership bound to one exact `authIssuer` and `authSubject`. Linking never
+rebinds a membership, so authorship and history stay attached to the original
+membership IDs. The only addition is `mergedIntoUserId` / `mergedAtISO`, set
+by the operator's `users:operatorRetireMembership` on a retired duplicate (see
+[Known limitations](#known-limitations)).
 
 ## Session evidence
 
@@ -171,6 +174,22 @@ Unlinking removes one identity from the person. Each identity keeps its own
 Better Auth user and credentials, so every identity can still sign in on its own.
 A person left with a single link is removed.
 
+Operator functions (internal, deployment access only):
+
+| Function | Result |
+| --- | --- |
+| `accountLinks:operatorInspect` (query, `{ issuer, subject }`) | `{ state, person, people, identities: [{ issuer, subject, email?, name?, linkedAtISO?, externalIdentity, memberships: [{ userId, societyId, workspaceName, role, status }] }], events }`. `people` lists every person the identity is actively linked to (explains `blocked`). `events` are the last 50 link events about those people or identities. |
+| `accountLinks:operatorUnlink` (mutation, `{ issuer, subject, reason }`) | Same semantics as `unlink`, for every Active link of the identity, including a Disabled person. Writes `unlinked` with actor `operator` / `deployment-operator` and the reason. `{ status: "unlinked", people: [{ personAccountId, personRemoved }] }` or `{ status: "not-linked" }`. |
+| `users:operatorRetireMembership` (mutation, `{ retireUserId, keepUserId, reason }`) | Both rows in one workspace; keep Active and bound; retire not the last Active Owner. See [Known limitations](#known-limitations). Writes a `membership-merged` activity row (actor "Deployment operator"). Returns `{ status: "retired", societyId, retiredUserId, keptUserId, keptRole, retiredRole, retiredIdentity, roleNotCarried? }`. |
+
+On a domain whose workspace requires Microsoft, `/login` shows only Microsoft,
+except during "Link an existing account" (`?linkAccount=1`, or a redirect to
+`/account/link` or `/account/link/confirm`): then a password form appears below
+it, unless the deployment requires Microsoft (`authCapabilities.microsoft.required`,
+which refuses `/sign-in/email`). The rule is `signInOptions` in
+`src/auth/signInOptions.ts`. A password session there still can't open the
+workspace; the link pages sit outside the workspace gate.
+
 ### Sign-in methods on one Better Auth user
 
 Provider linking is off. `hostedAuth.ts` sets
@@ -243,8 +262,78 @@ a canonical origin switches in place. A handoff only runs between two mapped
 origins.
 
 Provisioning, reset and invitation links follow the canonical origin. AI
-connector OAuth consent does not: it is served from the first `SITE_URL`
-origin (or `SOCIETYER_MCP_OAUTH_CONSENT_URL`) for every workspace.
+connector OAuth consent follows the server URL the person connected with:
+`<convex site>/mcp/<app host>` is approved on that `SITE_URL` origin, and the
+completion is accepted only from the origin stored with the request. Plain
+`/mcp` uses the first `SITE_URL` origin, and `SOCIETYER_MCP_OAUTH_CONSENT_URL`
+overrides both. Settings → AI connectors shows the URL for the domain it's on.
+See [mcp-connector.md](../mcp-connector.md#shared-deployments).
+
+## Access requests
+
+A signed-in person who isn't a member can ask to join a workspace, if that
+workspace allows it; its Owners and Admins approve or decline. Tables are in
+`convex/tables/accessRequests.ts`, logic in `shared/functions/accessRequests.ts`,
+and the hosted wrappers in `convex/accessRequests.ts`. Local and demo runtimes
+reject the writes (`STATIC_UNSUPPORTED_WRITES`).
+
+| Table | Purpose |
+| --- | --- |
+| `workspaceAccessRequestSettings` | `{ societyId, enabled, defaultRole: "Viewer" \| "Member", message?, updatedAtISO, updatedByUserId }`. No row means off. |
+| `workspaceAccessRequests` | `{ societyId, requesterIssuer, requesterSubject, requesterAuthProvider?, email?, emailVerified, name?, note?, status: "pending" \| "approved" \| "declined" \| "withdrawn", createdAtISO, decidedAtISO?, decidedByUserId?, grantedRole?, membershipId? }`, indexed `by_society_status` and `by_requester` (issuer, subject, createdAtISO) |
+
+**Discovery rule.** A non-member can only name a workspace through its domain:
+`resolveOrigin` gives the `societyId` for the origin they're on. A workspace is
+open for requests only when it has an Active `workspaceDomains` row whose origin
+is in `SITE_URL` and resolves uniquely to it, **and** an enabled settings row.
+Otherwise every requester function behaves as if requests were off, so an ID
+alone reveals nothing. There is no directory of workspaces.
+
+**Requester.** Only a deployment-signed user session (`verified-jwt`, with a
+`societyer_session` id, not a gateway or workspace-scoped principal) can ask. The
+request stores that session's exact issuer and subject, never anything from the
+client.
+
+| Function | Caller | Result |
+| --- | --- | --- |
+| `accessRequests:availability` (query, `{ societyId }`) | Signed-in person | `{ enabled: false }`, or `{ enabled: true, message?, alreadyMember, existing?: { id, status, createdAtISO } }`. `alreadyMember` and `existing` are only the caller's own. |
+| `accessRequests:submit` (mutation, `{ societyId, note? }`) | Signed-in person | `{ status: "requested" \| "already-requested", id, createdAtISO }`, or `unavailable`, `email-unverified`, `identity-disabled`, `already-member`, `rate-limited`, `unauthenticated` |
+| `accessRequests:withdraw` (mutation, `{ id }`) | The exact identity that asked | `withdrawn`, `not-pending`, `not-found`, `unauthenticated` |
+| `accessRequests:mine` (query) | Signed-in person | Own `pending` and last-30-days `declined` requests: `[{ id, societyId, workspaceName, status, createdAtISO, decidedAtISO? }]` |
+| `accessRequests:listForWorkspace` (query, `{ societyId }`) | Owner or Admin | Pending requests plus the 10 latest decided: `{ id, status, email, emailVerified, name, note, createdAtISO, decidedAtISO?, grantedRole?, decidedBy? }`. No issuer or subject. |
+| `accessRequests:approve` (mutation, `{ id, role }`) | Owner or Admin | `{ status: "approved", membershipId }`, or `not-pending`, `already-member`, `identity-disabled`, `email-in-use` |
+| `accessRequests:decline` (mutation, `{ id }`) | Owner or Admin | `declined` or `not-pending` |
+| `accessRequests:getSettings` (query, `{ societyId }`) | Owner or Admin | `{ enabled, defaultRole, message?, requestOrigin? }` |
+| `accessRequests:setSettings` (mutation, `{ societyId, enabled, defaultRole, message? }`) | Owner or Admin | `null` |
+
+Rules:
+
+- `submit` needs a verified email (approvers decide on it), refuses anyone with a
+  membership row of **any** status in the workspace across `linkedIdentityKeys`
+  (a Disabled member goes through an administrator), returns the existing pending
+  request instead of a second one, and allows 5 new requests per identity per 24
+  hours across workspaces (withdrawn ones count) and 100 pending per workspace.
+- `submit` writes an `activity` row and an addressed `notifications` row for each
+  Active, bound Owner and Admin, and schedules `accessRequests:deliverEmail`: a
+  plain-text email naming only the verified requester email, the workspace and
+  the Users page link. The note is shown only on the Users page.
+- `approve` and `decline` use `requireMembershipManager`; a missing or foreign
+  request id gives the same "Access request not found." error. `approve` accepts
+  Admin, Director, Member or Viewer, and only an Owner grants Admin. Owner is
+  never granted from a request.
+- `approve` re-checks at decision time that the requester (and every identity
+  linked to it) has no membership row there, that their external identity isn't
+  Disabled, and that no user in the workspace already has that email. It then
+  inserts one Active `users` row bound to the stored issuer and subject through
+  `ensureExternalIdentityPortable`, and records the decision and an audit row.
+- Approval grants nothing more: `resolvePrincipalUser` still applies the
+  workspace's sign-in policy and MFA to every session, so an approved password
+  login on a Microsoft workspace sees the lock screen.
+
+The "No access to <workspace>" screen (and, for a person with no workspace at
+all, `AuthGate` on a mapped origin) shows the request form when `availability`
+is enabled. **My workspaces** lists `mine`. The Users page has the decision list
+and the settings.
 
 ## Cross-domain session handoff
 
@@ -323,7 +412,8 @@ origin when one is configured, and otherwise the first `SITE_URL` origin.
 | Request | Decided by |
 | --- | --- |
 | Reading or writing workspace data | Exactly one Active membership across linked identities, then the sign-in policy and MFA on the current session, then the role or permission |
-| Domain | Presentation and the default workspace only |
+| Domain | Presentation, the default workspace, and which workspace a non-member may ask to join |
+| Access request | An Owner or Admin approving it, within their own role authority |
 | Link | Fresh proof of both identities and no membership overlap |
 | Handoff | The same session on another trusted origin. It grants nothing new. |
 | Storage | Workspace policy within the deployment ceiling, enforced on the server |
@@ -338,7 +428,17 @@ origin when one is configured, and otherwise the first `SITE_URL` origin.
 - Offline meeting downloads are precomputed per membership without a live
   session (`sessionChecksDeferred`); the sign-in policy and MFA are enforced on
   the real session when downloads are fetched.
-- AI connector OAuth consent is served from one origin for the whole deployment.
-- There is no operator function to unlink logins or to merge two memberships.
-- Nothing here moves records between deployments; see
-  [migration-and-cutover.md](migration-and-cutover.md).
+- Operators unlink with `accountLinks:operatorUnlink` and see a person's links
+  with `accountLinks:operatorInspect` (internal functions; the event actor is
+  `operator` / `deployment-operator`). Two memberships in one workspace are
+  reconciled with `users:operatorRetireMembership`, not merged: the retired row
+  stays (so ids in history still resolve) but becomes Disabled, loses its
+  binding (`authIssuer`, `authSubject`, `authProvider`, `externalIdentityId`)
+  and gets `mergedIntoUserId` / `mergedAtISO`. Unbound, it no longer matches
+  `by_auth_identity`, so resolution, the link conflict check, the picker and
+  invitations ignore it; it can't be reactivated, re-bound or invited. The kept
+  row's role never changes; a higher retired role is only reported. References
+  to the retired id are not re-pointed.
+- Records move between deployments only through the operator's workspace
+  transfer (`convex/workspaceTransfer.ts`, internal functions); see
+  [migration-and-cutover.md](migration-and-cutover.md#workspace-transfer).

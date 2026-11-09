@@ -700,7 +700,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               path="integrations"
               element={withModule("workflows", <IntegrationMarketplacePage />)}
             />
-            <Route path="ai-agents" element={<AiAgentsPage />} />
+            <Route path="ai-agents" element={withModule("aiAgents", <AiAgentsPage />)} />
             <Route
               path="workflows"
               element={withModule("workflows", <WorkflowsPage />)}

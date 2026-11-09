@@ -7,9 +7,11 @@ import { useAuth } from "../../auth/AuthProvider";
 import { AuthPending, AuthShell } from "../../auth/AuthShell";
 import { WorkspaceList } from "../../auth/WorkspaceList";
 import { useAccountPage } from "./accountPage";
+import { formatDate } from "../../lib/format";
 
 type PendingInvitation = { id: string; societyId: string; workspaceName: string; role: string; expiresAtISO: string };
 type AcceptResult = { status: string; societyId?: string };
+type MyAccessRequest = { id: string; societyId: string; workspaceName: string; status: "pending" | "declined"; createdAtISO: string; decidedAtISO?: string };
 
 export default function MyWorkspacesPage() {
   const { gate } = useAccountPage("My workspaces", "/account/workspaces");
@@ -37,12 +39,65 @@ function MyWorkspaces() {
           </p>
         )}
         <Invitations />
+        <AccessRequests />
         <nav className="account-links" aria-label="Account">
           <Link className="auth__link" to="/account/sign-in-methods">Sign-in methods</Link>
           <Link className="auth__link" to="/account/link">Link an existing account</Link>
         </nav>
       </div>
     </AuthShell>
+  );
+}
+
+/** This sign-in's own pending and recently declined access requests. */
+function AccessRequests() {
+  const auth = useAuth();
+  const requests = useQuery(api.accessRequests.mine, auth.mode === "convex" && auth.isConvexAuthenticated ? {} : "skip") as MyAccessRequest[] | undefined;
+  const withdraw = useMutation(api.accessRequests.withdraw);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!requests?.length && !error) return null;
+  return (
+    <section className="account-section" aria-labelledby="account-requests">
+      <h2 id="account-requests" className="account-section__title">Requests</h2>
+      {requests?.length ? (
+        <ul className="account-workspaces">
+          {requests.map((request) => (
+            <li key={request.id} className="account-workspace">
+              <span className="account-workspace__text">
+                <strong className="account-workspace__name">{request.workspaceName}</strong>
+                <span className="account-workspace__meta">
+                  {request.status === "pending"
+                    ? `Waiting for approval · sent ${formatDate(request.createdAtISO)}`
+                    : `Declined ${formatDate(request.decidedAtISO ?? request.createdAtISO)}`}
+                </span>
+              </span>
+              {request.status === "pending" && (
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    setBusy(request.id);
+                    setError(null);
+                    try {
+                      await withdraw({ id: request.id });
+                    } catch (cause) {
+                      setError(cause instanceof Error ? cause.message : "Could not withdraw the request.");
+                    } finally {
+                      setBusy(null);
+                    }
+                  }}
+                >
+                  {busy === request.id ? "Withdrawing…" : "Withdraw"}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {error && <p role="alert" className="notice notice--danger auth__notice">{error}</p>}
+    </section>
   );
 }
 

@@ -11,6 +11,8 @@ import { documentPdfFontFamily } from "./documentPresentation";
 import { cleanDocumentLink } from "../../../shared/documentRichContent";
 import { invoiceIssuerTaxRegistrations, registrationDisplayLines } from "../../../shared/invoiceTaxRegistrations";
 import { DocumentRichPdf } from "./DocumentRichContent";
+import { invoiceDocumentOrganization } from "./invoiceOrganization";
+import { invoiceDocumentStatus } from "./invoiceDocumentStatus";
 export type DocumentPdfEngine = Pick<typeof import("@formepdf/core"), "renderDocument" | "renderDocumentWithLayout">;
 export type DocumentPdfDecoration = { config: InvoiceTemplate; organizationName?: string; number?: string; fonts?: FontRegistration[]; engine?: DocumentPdfEngine; layout?: LayoutInfo; content?: { invoice: InvoiceDocumentData; organization: InvoiceOrganization & { logoUrl?: string | null }; suppressCustomerBlocks?: boolean }; paymentStub?: { number: string; customer: string; total: string; balance: string; height: number; totalLabel?: string; balanceLabel?: string; showBalance?: boolean } };
 const color = (hex: string) => rgb(parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255);
@@ -138,7 +140,9 @@ export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, pa
     }
   }
   if (content && pages.length) {
-    const page = pages[0], size = page.getSize(), { invoice, organization } = content;
+    const page = pages[0], size = page.getSize(), { invoice } = content;
+    const organization = invoiceDocumentOrganization(invoice, content.organization);
+    const documentStatus = invoiceDocumentStatus(invoice, { visible: advanced.visibility.statusStamp, text: advanced.stamp.text });
     const drawLines = async (lines: Array<{ value: string; type: typeof headerType }>, x: number, top: number, width: number) => {
       if (x < 0 || top < 0 || x + width > size.width || top >= size.height) throw new Error("An absolute document block is outside the page. Adjust its X, Y or width.");
       let offset = 0;
@@ -164,9 +168,9 @@ export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, pa
       page.drawLine({ start: { x: setting.x, y: size.height - top - 4 }, end: { x: setting.x + setting.width, y: size.height - top - 4 }, thickness: 0.5, color: color(advanced.colors.border) });
       await drawLines([{ value: receiver ? advanced.receiverSignature.name : design.signature.name, type }, { value: receiver ? advanced.receiverSignature.label : design.signature.label, type }], setting.x, top + 6, setting.width);
     }
-    if (advanced.visibility.statusStamp && (invoice.documentKind || "invoice") === "invoice" && invoice.status === "draft") {
+    if (documentStatus.draft) {
       // A draft is marked across every page, faintly, so it can't pass for an issued invoice.
-      const text = advanced.stamp.text || "DRAFT", font = await getFont(documentPdfFontFamily(design.typography.body.fontFamily, fonts));
+      const text = "DRAFT", font = await getFont(documentPdfFontFamily(design.typography.body.fontFamily, fonts));
       for (const target of pages) {
         const { width, height } = target.getSize(), diagonal = Math.SQRT1_2;
         const fontSize = Math.min(150, Math.hypot(width, height) * 0.62 / font.widthOfTextAtSize(text, 1));
@@ -174,13 +178,13 @@ export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, pa
         target.drawText(text, { x: -font.widthOfTextAtSize(text, fontSize) / 2, y: -fontSize / 3, font, size: fontSize, color: color(advanced.stamp.color), opacity: 0.14, blendMode: BlendMode.Multiply });
         target.pushOperators(popGraphicsState());
       }
-    } else if (advanced.visibility.statusStamp && (invoice.documentKind || "invoice") === "invoice" && invoice.status) {
+    } else if (documentStatus.text) {
       let positions = layout;
       if (!positions) { const engine = await engineForRich(), { InvoicePdfDocument } = await import("./InvoicePdfDocument"); positions = (await engine.renderDocumentWithLayout(createElement(InvoicePdfDocument, { invoice, organization, fonts }))).layout; }
       const find = (nodes: ElementInfo[], parent?: ElementInfo): ElementInfo | undefined => { for (const node of nodes) { if ((node as ElementInfo & { bookmark?: string }).bookmark === "Societyer status stamp") return parent || node; const found = find(node.children || [], node); if (found) return found; } };
       for (const [index, info] of positions.pages.entries()) {
         const anchor = find(info.elements); if (!anchor || !pages[index]) continue;
-        const target = pages[index], text = advanced.stamp.text || invoice.status.toUpperCase(), type = design.typography.body, font = await getFont(documentPdfFontFamily(type.fontFamily, fonts));
+        const target = pages[index], text = documentStatus.text, type = design.typography.body, font = await getFont(documentPdfFontFamily(type.fontFamily, fonts));
         const radians = advanced.stamp.rotation * Math.PI / 180, cosine = Math.cos(radians), sine = Math.sin(radians), width = Math.max(anchor.width, font.widthOfTextAtSize(text, type.fontSize) + 14), height = Math.max(anchor.height, type.fontSize + 12);
         const extentX = (Math.abs(width * cosine) + Math.abs(height * sine)) / 2, extentY = (Math.abs(width * sine) + Math.abs(height * cosine)) / 2;
         const x = Math.min(target.getWidth() - extentX - 2, Math.max(extentX + 2, anchor.x + width / 2)), y = Math.min(target.getHeight() - extentY - 2, Math.max(extentY + 2, target.getHeight() - anchor.y - height / 2));
