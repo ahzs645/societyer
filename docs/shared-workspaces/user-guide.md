@@ -41,6 +41,35 @@ A workspace that needs one more step is still listed, with the reason:
 Invitations sent to this login's verified email appear under **Invitations**.
 Select **Join** to accept one.
 
+Your access requests that are waiting, or were declined in the last 30 days,
+appear under **Requests**. Select **Withdraw** to cancel one that is waiting.
+
+## Request access to a workspace
+
+Some organizations let people ask to join from their own website. If you sign
+in there and aren't a member, the "No access to <organization>" page shows
+**Request access** when that organization allows it.
+
+1. Read the organization's message, if it has one.
+2. Add a short note if it helps them recognise you, for example your committee.
+3. Select **Request access**. You'll see "Request sent". You can **Withdraw
+   request** until someone decides.
+
+An Owner or Admin of that organization approves or declines it. When it's
+approved, select **Open <organization>**, or sign in again. You join with the
+login you asked from, so use that login next time. If the organization requires
+Microsoft sign-in, you still need to sign in with Microsoft to open it.
+
+Good to know:
+
+- Your login must have a verified email. The organization sees that email, your
+  name and your note, nothing else about your account.
+- You can send up to five requests a day.
+- If you used to be a member and were disabled, you can't ask again. Contact the
+  organization's administrator.
+- Only an organization's own website offers this. There is no list of
+  organizations to browse.
+
 ## Sign-in methods
 
 **Sign-in methods** shows how this login signs in, such as **Email and
@@ -156,6 +185,26 @@ What you can't see or do:
 Disabling someone in your workspace doesn't affect their other workspaces.
 Linking can't bring a disabled member back.
 
+### Access requests
+
+Owners and Admins find **Access requests** on the **Users** page. The number
+next to the title is how many are waiting.
+
+- **Settings** turns requests on or off (they start off), sets the suggested
+  role (Viewer or Member) and an optional message people see before they ask.
+  Requests only come from your workspace's own website. If it doesn't have one,
+  the card says nobody can ask yet; the deployment operator sets the website.
+- Each request shows the person's verified email, name, note and date. Pick a
+  role and select **Approve**, or select **Decline**.
+- Admins can approve as Director, Member or Viewer. Owners can also approve as
+  Admin. Nobody joins as Owner from a request: promote them after they join.
+- You get a notification, and an email when your deployment sends email, for
+  each new request.
+- Approval adds them to your workspace only, with the login they asked from.
+  Your workspace's sign-in and two-factor rules still apply to them.
+- Approval is refused if they already have a membership here, if their login is
+  disabled, or if another user here already has that email address.
+
 If a member asks why they can't link their logins: "Can't link these logins.
 Both logins are members of <workspace>." means both logins already have a
 membership in your workspace. Remove the one you don't want (**Remove access**;
@@ -171,7 +220,11 @@ membership stay in your workspace.
 | "Microsoft sign-in was not completed. Try again." | The Microsoft round trip failed or was cancelled | Try again. If it keeps failing, your Microsoft account may not be set up for Societyer yet. Ask the organization's administrator. |
 | "Use your <workspace> email" / "<workspace> doesn't accept sign-in as <email>." | The organization only accepts certain email domains | **Use another account** |
 | "Two-factor authentication required" | The workspace requires an authenticator | Verify it, or set it up under **Account security** |
-| "No access to <workspace>" | This login isn't a member there | Open another workspace, link the login you used there, or ask for an invitation |
+| "No access to <workspace>" | This login isn't a member there | Open another workspace, link the login you used there, **Request access** if offered, or ask for an invitation |
+| "Request sent" | Your access request is waiting for an Owner or Admin | Wait, or **Withdraw request** |
+| "Your request to join <workspace> was declined." | An Owner or Admin declined it | Contact the organization, or **Ask again** |
+| "You've sent too many requests today. Try again tomorrow." | Five requests a day at most | Try again tomorrow |
+| "Verify your email address first, then ask again." | Requests need a verified email | Verify your email, then ask |
 | "Workspace locked" / "This sign-in can't open any of your workspaces yet." | Every workspace needs another step | See the labels in the list |
 | "Sign in again first" / "For your security, linking needs a recent sign-in." | Your sign-in is older than 15 minutes | **Sign in again**, then start the link |
 | "This login is disabled. Contact your administrator." | The login you are linking from is disabled | Contact your administrator |

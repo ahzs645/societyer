@@ -23,6 +23,9 @@ What it adds:
   uses native storage.
 - **Workspace defaults.** The First Form invoice template is installed per
   workspace instead of per deployment.
+- **Access requests.** A signed-in non-member on a workspace's own domain can ask
+  to join when that workspace turns it on; its Owners and Admins approve or
+  decline. Off by default.
 
 ## Pages
 
@@ -44,6 +47,7 @@ What it adds:
 - Map domains and `SITE_URL`: [runbook step 4](operator-runbook.md#4-domains)
 - Storage ceilings to remove: [runbook](operator-runbook.md#ceilings-that-must-go-on-a-shared-deployment)
 - Link two logins: [user guide](user-guide.md#link-an-existing-account)
+- Request access, and approve requests: [user guide](user-guide.md#request-access-to-a-workspace), [admins](user-guide.md#access-requests)
 - What is not implemented: [migration](migration-and-cutover.md#what-this-change-does-and-doesnt-provide), [acceptance gaps](acceptance-tests.md#acceptance-criteria)
 
 Related deployment guides: [DDC North Entra rollout](../ddcnorth-entra-rollout.md),
@@ -62,6 +66,7 @@ Related deployment guides: [DDC North Entra rollout](../ddcnorth-entra-rollout.m
 | `npm run test:workspace-storage-policy` | Storage policy on every native path, SharePoint versus native, ceiling |
 | `npm run test:shared-workspace-ui` | Startup rules, handoff parsing and redemption, switcher routing, link code storage |
 | `npm run test:workspace-selection` | Per-tab and per-backend workspace selection |
+| `npm run test:access-requests` | Request access: discovery rule, limits, Owner/Admin decisions, exact binding, sign-in policy kept |
 
 Each runs a single `tsx` (or `node`) script under `scripts/`, so
 `./node_modules/.bin/tsx scripts/check-workspace-sign-in-policy.ts` works as
