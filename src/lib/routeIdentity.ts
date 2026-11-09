@@ -417,7 +417,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   // ---- Advanced setup (technical/admin-only — raw integration & automation internals) ----
   "/app/integrations": { icon: Plug, group: "advanced", label: "Integrations", module: "workflows", permission: "settings:manage" },
   "/app/browser-connectors": { icon: MonitorPlay, group: "advanced", label: "Browser apps", module: "browserConnectors", permission: "settings:manage" },
-  "/app/ai-agents": { icon: Bot, group: "advanced", label: "AI agents", permission: "settings:manage" },
+  "/app/ai-agents": { icon: Bot, group: "advanced", label: "AI agents", module: "aiAgents", permission: "settings:manage" },
   "/app/workflow-packages": { icon: FolderKanban, group: "advanced", label: "Workflow packages", module: "workflows", permission: "settings:manage" },
   "/app/template-engine": { icon: FileCog, group: "advanced", label: "Template engine", permission: "settings:manage" },
   "/app/paperless": { icon: Database, group: "advanced", label: "Paperless-ngx", module: "paperless", permission: "settings:manage" },

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
+import { enableAiModule } from "./helpers/aiModule";
 
 test("local AI text attachments are extracted and reviewed without uploads; drafts persist at every viewport", async ({ page }, testInfo) => {
   test.setTimeout(100_000);
@@ -10,6 +11,7 @@ test("local AI text attachments are extracted and reviewed without uploads; draf
   await page.goto("/setup");
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await completeGuidedOrganizationSetup(page, `AI draft ${testInfo.project.name}`, true);
+  await enableAiModule(page);
   await page.goto("/app/ai-agents");
   await expect(page.getByRole("status").filter({ hasText: "Live AI chat, agents and provider keys require a connected workspace" })).toBeVisible();
   await page.evaluate(() => dispatchEvent(new Event("societyer-ai:open")));
@@ -47,9 +49,11 @@ test("pending attachment extraction cannot follow a user into another local work
   await page.goto("/setup");
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await completeGuidedOrganizationSetup(page, `AI source ${testInfo.project.name}`, true);
+  await enableAiModule(page);
   const firstId = await page.evaluate(() => localStorage.getItem("societyer.currentSocietyId"));
   await page.goto("/app/society/new");
   await completeGuidedOrganizationSetup(page, `AI destination ${testInfo.project.name}`, true);
+  await enableAiModule(page);
   const secondId = await page.evaluate(() => localStorage.getItem("societyer.currentSocietyId"));
   expect(firstId).toBeTruthy();
   expect(secondId).not.toBe(firstId);

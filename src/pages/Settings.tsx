@@ -79,7 +79,7 @@ export function SettingsPage() {
   const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
   const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
     useOperationsDeskVisibility();
-  const { hidden: aiChatHidden, setHidden: setAiChatHidden } = useAiChatVisibility();
+  const { personallyHidden: aiChatHidden, moduleEnabled: aiModuleEnabled, setHidden: setAiChatHidden } = useAiChatVisibility();
   const [moduleSettings, setModuleSettings] = useState(() => normalizeModuleSettings(undefined));
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
   const [inventoryPromptEnabled, setInventoryPromptEnabled] = useState(false);
@@ -606,11 +606,18 @@ export function SettingsPage() {
           <span className="card__subtitle">{t("settings.aiSubtitle", "Show or hide the in-app AI chat features.")}</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
+          {!aiModuleEnabled && (
+            <div className="muted">
+              {t("settings.aiModuleOff", "AI is turned off for this workspace.")}{" "}
+              <Link to="/app/settings?tab=modules">{t("settings.aiModuleOffLink", "Turn it on in Modules")}</Link>
+            </div>
+          )}
           <Toggle
-            checked={!aiChatHidden}
+            checked={aiModuleEnabled && !aiChatHidden}
             onChange={(checked) => setAiChatHidden(!checked)}
             label={t("settings.aiToggle", "Enable AI chat")}
             hint={t("settings.aiToggleHint")}
+            disabled={!aiModuleEnabled}
           />
         </div>
       </div>
