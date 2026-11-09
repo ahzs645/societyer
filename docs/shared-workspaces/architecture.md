@@ -243,8 +243,12 @@ a canonical origin switches in place. A handoff only runs between two mapped
 origins.
 
 Provisioning, reset and invitation links follow the canonical origin. AI
-connector OAuth consent does not: it is served from the first `SITE_URL`
-origin (or `SOCIETYER_MCP_OAUTH_CONSENT_URL`) for every workspace.
+connector OAuth consent follows the server URL the person connected with:
+`<convex site>/mcp/<app host>` is approved on that `SITE_URL` origin, and the
+completion is accepted only from the origin stored with the request. Plain
+`/mcp` uses the first `SITE_URL` origin, and `SOCIETYER_MCP_OAUTH_CONSENT_URL`
+overrides both. Settings → AI connectors shows the URL for the domain it's on.
+See [mcp-connector.md](../mcp-connector.md#shared-deployments).
 
 ## Cross-domain session handoff
 
@@ -338,7 +342,6 @@ origin when one is configured, and otherwise the first `SITE_URL` origin.
 - Offline meeting downloads are precomputed per membership without a live
   session (`sessionChecksDeferred`); the sign-in policy and MFA are enforced on
   the real session when downloads are fetched.
-- AI connector OAuth consent is served from one origin for the whole deployment.
 - There is no operator function to unlink logins or to merge two memberships.
 - Nothing here moves records between deployments; see
   [migration-and-cutover.md](migration-and-cutover.md).

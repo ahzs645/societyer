@@ -33,7 +33,7 @@ type ConsentClient = {
   loopback: boolean;
 };
 type ConsentDetails =
-  | { status: "pending"; client: ConsentClient; requestedScopes: string[]; expiresAtMs: number; workspaces: ConsentWorkspace[] }
+  | { status: "pending"; client: ConsentClient; requestedScopes: string[]; expiresAtMs: number; consentOrigin: string | null; workspaces: ConsentWorkspace[] }
   | { status: "expired" | "used" | "not_found"; client: null; requestedScopes: string[]; workspaces: ConsentWorkspace[] };
 
 const STATUS_MESSAGES: Record<Exclude<ConsentDetails["status"], "pending">, string> = {
@@ -41,6 +41,7 @@ const STATUS_MESSAGES: Record<Exclude<ConsentDetails["status"], "pending">, stri
   used: "This connection request was already answered. Go back to the app and connect again if you need to.",
   not_found: "This connection link isn't valid. Go back to the app and connect again.",
 };
+const WRONG_ORIGIN_MESSAGE = "This connection was started for another Societyer address, so it can't be finished here. Go back to the app and connect again with the server URL from Settings → AI connectors.";
 
 /** The write scope, in plain language: under A4 a connector's writes are drafts a person approves. */
 const WRITE_LABEL = "Can propose changes for you to approve";
@@ -158,6 +159,8 @@ export function OAuthConsentPage() {
   if (loadError) return <ConsentState message={loadError} />;
   if (!details) return <ConsentState pending message="Loading the connection request…" />;
   if (details.status !== "pending") return <ConsentState message={STATUS_MESSAGES[details.status]} />;
+  // The issuer only accepts the decision from the origin the request was started for (a shared deployment has several).
+  if (details.consentOrigin && details.consentOrigin !== window.location.origin) return <ConsentState message={WRONG_ORIGIN_MESSAGE} />;
   return <ConsentForm request={request} details={details} />;
 }
 

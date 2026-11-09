@@ -31,7 +31,7 @@ import {
   validateGrantRequest,
   type ValidGrantRequest,
 } from "../shared/mcp/connectorPolicy";
-import { mcpOAuthConfig } from "../shared/mcp/oauth";
+import { mcpOAuthConfig, mcpServerUrlFor } from "../shared/mcp/oauth";
 
 const AGENT_KEY = "mcp_connector";
 const DAY_MS = 86_400_000;
@@ -69,8 +69,9 @@ async function listedGrant(ctx: QueryCtx, grant: Doc<"agentGrants">, nowMs: numb
 
 /** The AI connectors card: the opt-in, my tokens, and (for Owners and Admins) everyone's active tokens. */
 export const overview = authorizedQuery("agentConnectors:overview", query)({
-  args: { societyId: v.id("societies") },
-  handler: async (ctx, { societyId }) => {
+  /** `origin`: the app origin the card is on, so a shared deployment shows that origin's server URL. */
+  args: { societyId: v.id("societies"), origin: v.optional(v.string()) },
+  handler: async (ctx, { societyId, origin }) => {
     const user = await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
     const rolePermissions: readonly string[] = listPermissionsForRole(String(user.role));
     const canManageWorkspace = isAdmin(user.role);
@@ -84,13 +85,14 @@ export const overview = authorizedQuery("agentConnectors:overview", query)({
       creators.set(grant.userId, creator?.displayName || creator?.email || "Former member");
     }
     const siteUrl = process.env.CONVEX_SITE_URL;
+    const oauth = mcpOAuthConfig(process.env);
     const nowMs = Date.now();
     return {
       enabled: await connectorsEnabled(ctx, societyId),
       canManageWorkspace,
-      endpointUrl: siteUrl ? `${siteUrl.replace(/\/+$/, "")}/mcp` : null,
+      endpointUrl: oauth ? mcpServerUrlFor(oauth, origin) : siteUrl ? `${siteUrl.replace(/\/+$/, "")}/mcp` : null,
       /** Whether claude.ai, ChatGPT and other OAuth clients can connect without a token. */
-      oauthAvailable: mcpOAuthConfig(process.env) !== null,
+      oauthAvailable: oauth !== null,
       scopeOptions: CONNECTOR_SCOPES.map((scope) => ({ ...scope, held: rolePermissions.includes(scope.permission) })),
       defaultScopes: defaultConnectorScopes(rolePermissions),
       limits: { defaultDays: DEFAULT_TOKEN_DAYS, maxDays: MAX_TOKEN_DAYS, requestsPerMinute: rateLimitPerMinute(process.env) },

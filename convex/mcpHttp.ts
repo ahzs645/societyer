@@ -13,7 +13,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { allowedConnectorOrigins, hashConnectorToken, isConnectorTokenShape } from "../shared/mcp/connectorPolicy";
 import { handleMcpHttp, type McpBackend, type McpSession, type McpToolOutcome } from "../shared/mcp/server";
-import { OAUTH_ACCESS_TOKEN_PREFIX, bearerChallenge, hasOpaqueShape, hashOpaque, mcpOAuthConfig } from "../shared/mcp/oauth";
+import { OAUTH_ACCESS_TOKEN_PREFIX, bearerChallenge, hasOpaqueShape, hashOpaque, mcpOAuthConfig, mcpResourceForPath } from "../shared/mcp/oauth";
 
 const INVALID_TOKEN = { ok: false, status: 401, error: "invalid_token", message: "This token isn't recognised." } as const;
 
@@ -26,7 +26,7 @@ function failureFrom(error: unknown): McpToolOutcome {
   return { ok: false, code: "tool_failed", message: "The tool couldn't finish. Try again." };
 }
 
-function convexBackend(ctx: ActionCtx): McpBackend {
+function convexBackend(ctx: ActionCtx, resource: string | undefined): McpBackend {
   const grantId = (session: McpSession) => session.grantId as Id<"agentGrants">;
   return {
     async authenticate(token) {
@@ -34,7 +34,7 @@ function convexBackend(ctx: ActionCtx): McpBackend {
       const result = isConnectorTokenShape(token)
         ? await ctx.runMutation(internal.agentConnectors.authorizeRequest, { tokenHash: await hashConnectorToken(token), nowMs: Date.now() })
         : hasOpaqueShape(token, OAUTH_ACCESS_TOKEN_PREFIX)
-          ? await ctx.runMutation(internal.mcpOAuth.authorizeAccessToken, { accessTokenHash: await hashOpaque(token), nowMs: Date.now() })
+          ? await ctx.runMutation(internal.mcpOAuth.authorizeAccessToken, { accessTokenHash: await hashOpaque(token), ...(resource ? { resource } : {}), nowMs: Date.now() })
           : INVALID_TOKEN;
       return result.ok ? { ok: true, session: result.session } : result;
     },
@@ -55,11 +55,23 @@ function convexBackend(ctx: ActionCtx): McpBackend {
   };
 }
 
+/**
+ * `/mcp`, and on a shared deployment `/mcp/<app host>` (one per `SITE_URL`
+ * origin, see shared/mcp/oauth.ts): the same endpoint, whose 401 points at
+ * that URL's own metadata so sign-in is approved on that origin.
+ */
 const mcp = httpAction(async (ctx, request) => {
   const oauth = mcpOAuthConfig(process.env);
-  return handleMcpHttp(request, convexBackend(ctx), {
+  const path = new URL(request.url).pathname;
+  const target = oauth ? mcpResourceForPath(oauth, path) : null;
+  if (path !== "/mcp" && !target) {
+    return new Response(JSON.stringify({ error: "not_found", error_description: "No MCP endpoint at this URL." }), {
+      status: 404, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    });
+  }
+  return handleMcpHttp(request, convexBackend(ctx, target?.resource), {
     allowedOrigins: allowedConnectorOrigins(process.env),
-    ...(oauth ? { bearerChallenge: (error?: { error: string; description: string }) => bearerChallenge(oauth, error) } : {}),
+    ...(target ? { bearerChallenge: (error?: { error: string; description: string }) => bearerChallenge(target, error) } : {}),
   });
 });
 
@@ -67,5 +79,6 @@ export function registerMcpRoutes(http: HttpRouter) {
   // Every method reaches the handler so GET/DELETE get a 405 with an Allow header, not a 404.
   for (const method of ["POST", "GET", "DELETE", "OPTIONS", "PUT", "PATCH"] as const) {
     http.route({ path: "/mcp", method, handler: mcp });
+    http.route({ pathPrefix: "/mcp/", method, handler: mcp });
   }
 }

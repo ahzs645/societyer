@@ -412,15 +412,26 @@ uses another backend breaks sign-in and switching.
 On the current separate deployments, map only the origins already in each
 deployment's own `SITE_URL`.
 
-Known limitation: AI connector OAuth consent (`/oauth/consent`) is served only
-from the **first** `SITE_URL` origin, unless `SOCIETYER_MCP_OAUTH_CONSENT_URL`
-names another. With `https://portal.ddcnorth.com` first, a First Form member who
-connects an AI app lands on DDC's sign-in page, which offers only Microsoft. A
-First Form password user can't finish consent there. Until consent follows the
-workspace's domain, either accept that AI connector OAuth is DDC-only on the
-shared deployment, or point `SOCIETYER_MCP_OAUTH_CONSENT_URL` at a `SITE_URL`
-origin that isn't mapped to a Microsoft-only workspace (an unmapped origin
-offers every method). Test it on staging.
+AI connectors (MCP) on the shared deployment: each `SITE_URL` origin has its
+own server URL, and sign-in for it is approved on that origin's consent page:
+
+- DDC North: `https://<deployment>.convex.site/mcp/portal.ddcnorth.com`
+- First Form: `https://<deployment>.convex.site/mcp/societyer-firstform.pages.dev`
+
+Settings → AI connectors shows the right one on each domain; members paste that
+into claude.ai, ChatGPT, Claude Code or Codex. Plain `/mcp` still works and
+approves on the first `SITE_URL` origin (DDC), so a First Form member must use
+First Form's URL. Leave `SOCIETYER_MCP_OAUTH_CONSENT_URL` unset: when set it is
+the consent page for every URL. Every origin must send the consent page headers
+(`/oauth/*`, see [mcp-connector.md](../mcp-connector.md#hosting-requirements)).
+Check each URL's metadata names itself:
+
+```sh
+curl -s "https://<deployment>.convex.site/.well-known/oauth-protected-resource/mcp/societyer-firstform.pages.dev"
+```
+
+Removing an origin from `SITE_URL` stops its MCP URL and the OAuth connections
+made through it. Test both organizations on staging.
 
 ### Map the origins
 
