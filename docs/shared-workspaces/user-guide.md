@@ -62,10 +62,11 @@ Before you start:
 
 - You need to be able to sign in to **both** logins yourself.
 - Do it in one browser tab, within 10 minutes.
-- Do it on a site whose sign-in page offers the second login's method. The DDC
-  North site (`portal.ddcnorth.com`) only offers Microsoft. So to link a First
-  Form password and a DDC Microsoft account, use the **First Form site**. Its
-  sign-in page offers both a password and **Continue with Microsoft**.
+- You can start from either site. The DDC North site (`portal.ddcnorth.com`)
+  normally offers only Microsoft, but while you are linking its sign-in page
+  also shows a password form ("Linking a password login? Sign in with it
+  here."). Signing in there with a password never opens DDC North; it only
+  takes you back to the link.
 
 Steps:
 
@@ -158,9 +159,12 @@ Linking can't bring a disabled member back.
 
 If a member asks why they can't link their logins: "Can't link these logins.
 Both logins are members of <workspace>." means both logins already have a
-membership in your workspace. Remove the one you don't want (**Remove access**;
-disabling isn't enough), then they can link. Records created by the removed
-membership stay in your workspace.
+membership in your workspace. Ask the deployment operator to merge them: the
+operator retires the duplicate membership in favour of the one you keep. The
+retired one stays on the **Users** page as Disabled ("Merged into <name>"), so
+records it created still show who made them, and the kept membership's role
+doesn't change. Then the member links again. (Removing one yourself with
+**Remove access** also works, but its records then point at a deleted user.)
 
 ## Troubleshooting
 
@@ -180,10 +184,10 @@ membership stay in your workspace.
 | "No link in progress" | Different tab, or the link ended | **Start again** |
 | "Link not found" | The link was cancelled, used or replaced | Start again |
 | "Already linked" | Nothing to do | See **My workspaces** |
-| "Can't link these logins" … "Both logins are members of <workspace>." | Two memberships in one workspace | Ask that workspace's administrator to remove one |
+| "Can't link these logins" … "Both logins are members of <workspace>." | Two memberships in one workspace | Ask that workspace's administrator; they (through the deployment operator) merge the two memberships, then link again |
 | "Can't link these logins" / "One of these logins is disabled." | A login is disabled | Contact your administrator |
 | "That workspace couldn't be opened on its own site. Try again, or sign in there directly." | The switch to another website failed | Try again, or go to that site and sign in |
 | "Sign in to continue" / "This link expired or was already used. Sign in to continue." | The switch link was old or used | Sign in on that site |
-| "Workspace access conflict" | Two of your linked logins both have a membership in one workspace, so neither opens it | Ask that workspace's administrator to remove one |
+| "Workspace access conflict" | Two of your linked logins both have a membership in one workspace, so neither opens it | Ask that workspace's administrator to have the two merged (deployment operator) |
 | "Account disabled" | Your membership was disabled | Contact the workspace administrator |
 | "Native file storage is disabled for this workspace. …" | This organization keeps files elsewhere (DDC North uses SharePoint) | Use the document versions upload, or a document connector |

@@ -15,6 +15,7 @@ import { loadSessionAuthClient } from "../lib/sessionAuthClient";
 import { authEmailAllowed, authEmailPolicyMessage } from "../../shared/authEmailPolicy";
 import { appUrl, startMicrosoftSignIn } from "../auth/microsoftSignIn";
 import { MicrosoftLogo } from "../auth/MicrosoftLogo";
+import { isAccountLinkSignIn, signInOptions } from "../auth/signInOptions";
 
 const ClerkLogin = lazy(() => import("../auth/ClerkLogin"));
 const SecondFactorPrompt = lazy(() => import("../auth/SecondFactorPrompt"));
@@ -144,9 +145,16 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
   const domain = auth.domainWorkspace;
   const domainRequiresMicrosoft = domain?.signIn.requiredMethod === "microsoft";
   const microsoftEnabled = gatewayMicrosoftEnabled || capabilities?.microsoft?.enabled === true || domainRequiresMicrosoft;
-  const microsoftRequired = capabilities?.microsoft?.required === true || domainRequiresMicrosoft;
   // The second half of "Link an existing account": sign in as the other login.
   const linking = searchParams.get("linkAccount") === "1";
+  // On a Microsoft-only domain the password form appears only to link a
+  // password login; the backend still never opens that workspace for it.
+  const options = signInOptions({
+    domainRequiresMicrosoft,
+    deploymentRequiresMicrosoft: capabilities ? capabilities.microsoft?.required === true : undefined,
+    linking: isAccountLinkSignIn(searchParams.get("linkAccount"), safeRedirect),
+  });
+  const microsoftRequired = options.microsoftRequired;
   const emailDelivery = capabilities?.emailDelivery === true;
   const allowedEmailDomains = useMemo(() => capabilities?.allowedEmailDomains ?? [], [capabilities]);
   const signUpUnavailable = auth.mode === "convex" && (!capabilities || !capabilities.signUpEnabled);
@@ -390,11 +398,12 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
                   <MicrosoftLogo /> Continue with Microsoft
                 </BusyLabel>
               </button>
-              {!microsoftRequired && <div className="auth__divider" role="separator"><span>or</span></div>}
+              {options.password && <div className="auth__divider" role="separator"><span>or</span></div>}
             </>
           )}
+          {options.passwordForLinking && <p className="auth__hint">Linking a password login? Sign in with it here.</p>}
 
-          {!microsoftRequired && <>
+          {options.password && <>
           {mode === "sign-up" && (
             <label className="field auth-field">
               <span className="field__label">Full name</span>
@@ -432,7 +441,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
           {mode !== "forgot" && (
             <PasswordField
               label="Password"
-              labelAction={mode === "sign-in" && canResetByEmail && (
+              labelAction={mode === "sign-in" && canResetByEmail && !microsoftRequired && (
                 <button type="button" className="auth__link auth__link--quiet" onClick={() => switchMode("forgot")}>
                   Forgot password?
                 </button>

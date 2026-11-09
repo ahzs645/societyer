@@ -36,6 +36,9 @@ export const platformTables = {
     createdAtISO: v.string(),
     emailVerifiedAtISO: v.optional(v.string()),
     lastLoginAtISO: v.optional(v.string()),
+    // Set by users:operatorRetireMembership on a Disabled, unbound duplicate kept for history.
+    mergedIntoUserId: v.optional(v.id("users")),
+    mergedAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_email", ["email"])

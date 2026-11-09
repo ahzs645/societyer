@@ -44,7 +44,7 @@ All new tables are in `convex/tables/sharedWorkspaces.ts`.
 | `personAccounts` | One person | Link flow |
 | `personIdentityLinks` | An exact issuer and subject proven to belong to a person | Link flow |
 | `accountLinkRequests` | Short-lived, single-use code proving that a fresh session for identity A started a link | Link flow |
-| `accountLinkEvents` | Append-only audit of linked, unlinked and refused attempts | Link flow |
+| `accountLinkEvents` | Append-only audit of linked, unlinked and refused attempts | Link flow, `accountLinks:operatorUnlink` |
 
 When a workspace has no policy row, the existing behaviour applies: sign-in is
 `any` and storage follows the deployment default. Existing single-organization
@@ -53,9 +53,12 @@ few visible differences after deploying (linking pages are live, a new JWT
 claim, the remembered workspace resets once) are listed in the
 [runbook](operator-runbook.md#is-it-backward-compatible).
 
-`users` rows are not changed. Each one is still one workspace membership bound
-to one exact `authIssuer` and `authSubject`. Linking never rebinds a membership,
-so authorship and history stay attached to the original membership IDs.
+`users` rows are not changed by linking. Each one is still one workspace
+membership bound to one exact `authIssuer` and `authSubject`. Linking never
+rebinds a membership, so authorship and history stay attached to the original
+membership IDs. The only addition is `mergedIntoUserId` / `mergedAtISO`, set
+by the operator's `users:operatorRetireMembership` on a retired duplicate (see
+[Known limitations](#known-limitations)).
 
 ## Session evidence
 
@@ -170,6 +173,22 @@ recognise.
 Unlinking removes one identity from the person. Each identity keeps its own
 Better Auth user and credentials, so every identity can still sign in on its own.
 A person left with a single link is removed.
+
+Operator functions (internal, deployment access only):
+
+| Function | Result |
+| --- | --- |
+| `accountLinks:operatorInspect` (query, `{ issuer, subject }`) | `{ state, person, people, identities: [{ issuer, subject, email?, name?, linkedAtISO?, externalIdentity, memberships: [{ userId, societyId, workspaceName, role, status }] }], events }`. `people` lists every person the identity is actively linked to (explains `blocked`). `events` are the last 50 link events about those people or identities. |
+| `accountLinks:operatorUnlink` (mutation, `{ issuer, subject, reason }`) | Same semantics as `unlink`, for every Active link of the identity, including a Disabled person. Writes `unlinked` with actor `operator` / `deployment-operator` and the reason. `{ status: "unlinked", people: [{ personAccountId, personRemoved }] }` or `{ status: "not-linked" }`. |
+| `users:operatorRetireMembership` (mutation, `{ retireUserId, keepUserId, reason }`) | Both rows in one workspace; keep Active and bound; retire not the last Active Owner. See [Known limitations](#known-limitations). Writes a `membership-merged` activity row (actor "Deployment operator"). Returns `{ status: "retired", societyId, retiredUserId, keptUserId, keptRole, retiredRole, retiredIdentity, roleNotCarried? }`. |
+
+On a domain whose workspace requires Microsoft, `/login` shows only Microsoft,
+except during "Link an existing account" (`?linkAccount=1`, or a redirect to
+`/account/link` or `/account/link/confirm`): then a password form appears below
+it, unless the deployment requires Microsoft (`authCapabilities.microsoft.required`,
+which refuses `/sign-in/email`). The rule is `signInOptions` in
+`src/auth/signInOptions.ts`. A password session there still can't open the
+workspace; the link pages sit outside the workspace gate.
 
 ### Sign-in methods on one Better Auth user
 
@@ -339,6 +358,16 @@ origin when one is configured, and otherwise the first `SITE_URL` origin.
   session (`sessionChecksDeferred`); the sign-in policy and MFA are enforced on
   the real session when downloads are fetched.
 - AI connector OAuth consent is served from one origin for the whole deployment.
-- There is no operator function to unlink logins or to merge two memberships.
+- Operators unlink with `accountLinks:operatorUnlink` and see a person's links
+  with `accountLinks:operatorInspect` (internal functions; the event actor is
+  `operator` / `deployment-operator`). Two memberships in one workspace are
+  reconciled with `users:operatorRetireMembership`, not merged: the retired row
+  stays (so ids in history still resolve) but becomes Disabled, loses its
+  binding (`authIssuer`, `authSubject`, `authProvider`, `externalIdentityId`)
+  and gets `mergedIntoUserId` / `mergedAtISO`. Unbound, it no longer matches
+  `by_auth_identity`, so resolution, the link conflict check, the picker and
+  invitations ignore it; it can't be reactivated, re-bound or invited. The kept
+  row's role never changes; a higher retired role is only reported. References
+  to the retired id are not re-pointed.
 - Nothing here moves records between deployments; see
   [migration-and-cutover.md](migration-and-cutover.md).
