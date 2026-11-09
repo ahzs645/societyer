@@ -477,6 +477,12 @@ runtime:
   origin. A workspace without a canonical origin opens in place.
 - Provisioning, password-reset and invitation links for a workspace use its
   canonical origin.
+- A mapping is what lets non-members find a workspace to **request access** to.
+  Requests are off by default and each workspace's Owners or Admins turn them
+  on from the **Users** page; there is nothing for an operator to configure.
+  Disabling the mapping (or removing the origin from `SITE_URL`) stops new
+  requests at once. Pending requests stay with the workspace's Owners and
+  Admins. See [user-guide.md](user-guide.md#access-requests).
 
 The handoff starts on the destination origin, which sends the browser back to
 the source for a single-use code bound to a challenge only the destination

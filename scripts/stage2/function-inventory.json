@@ -1,5 +1,174 @@
 [
   {
+    "key": "convex:accessRequests:approve",
+    "surface": "convex",
+    "name": "accessRequests:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:availability",
+    "surface": "convex",
+    "name": "accessRequests:availability",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:decline",
+    "surface": "convex",
+    "name": "accessRequests:decline",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:deliverEmail",
+    "surface": "convex",
+    "name": "accessRequests:deliverEmail",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:emailContext",
+    "surface": "convex",
+    "name": "accessRequests:emailContext",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:getSettings",
+    "surface": "convex",
+    "name": "accessRequests:getSettings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:listForWorkspace",
+    "surface": "convex",
+    "name": "accessRequests:listForWorkspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:mine",
+    "surface": "convex",
+    "name": "accessRequests:mine",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accessRequests:setSettings",
+    "surface": "convex",
+    "name": "accessRequests:setSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:submit",
+    "surface": "convex",
+    "name": "accessRequests:submit",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:withdraw",
+    "surface": "convex",
+    "name": "accessRequests:withdraw",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:accounting:accountMappings",
     "surface": "convex",
     "name": "accounting:accountMappings",

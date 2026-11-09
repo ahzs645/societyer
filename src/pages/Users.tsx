@@ -22,6 +22,7 @@ import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
 import { organizationKind } from "../../shared/organizationDomain";
 import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
+import { AccessRequestsPanel } from "../components/AccessRequestsPanel";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 // Share links admit whoever opens them, so they can't grant Owner or Admin.
@@ -261,6 +262,10 @@ export function UsersPage() {
 
       {canManageUsers && (
         <InvitationsPanel societyId={society._id} assignableRoles={assignableRoles} />
+      )}
+
+      {auth.mode === "convex" && permissionsLoaded && (myRole === "Owner" || myRole === "Admin") && (
+        <AccessRequestsPanel key={society._id} societyId={society._id} assignableRoles={assignableRoles} />
       )}
 
       {canManageUsers && users && users.length > 0 && (
