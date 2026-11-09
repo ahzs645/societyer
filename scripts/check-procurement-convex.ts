@@ -125,7 +125,7 @@ async function allPages<Row>(name: unknown, base: Record<string, unknown>, numIt
     cursor = result.continueCursor;
   }
 }
-type ListRow = { recordKey: string; title: string; issuedFor: string; reference: string; documents: number; listedDocuments: number; supplier: string; value: number | null; currency: string; procurementType: string; dateText: string };
+type ListRow = { recordKey: string; title: string; issuedFor: string; reference: string; documents: number; listedDocuments: number; supplier: string; value: number | null; currency: string; procurementType: string; dateText: string; analyticsJson?: string };
 const legacy = await reader.query(api.procurementReview.records, { ...args, paginationOpts: { numItems: 25, cursor: null } });
 assert.equal(legacy.page.length, 25, "Already-open paged-reader tabs remain compatible");
 await assert.rejects(t.query(api.procurementReview.records, args), /auth|sign|identity|access/i);
@@ -142,6 +142,16 @@ assert.deepEqual(awards.map((row) => [row.recordKey, row.value, row.supplier, ro
 assert.equal((await reader.query(api.procurementReview.list, { ...args, paginationOpts: { numItems: 50_000, cursor: null } })).page.length <= 1000, true, "A page never exceeds its row bound");
 assert.equal((await reader.query(api.procurementReview.record, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" })).summary.title, "Bridge 0");
 assert.equal((await reader.query(api.procurementReview.documents, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000", paginationOpts: { numItems: 10, cursor: null } })).page[0].name, "test.pdf");
+// The interactive page carries only the closing fields of a row's analytics; parties, aliases and provenance stay on the server.
+await t.run(async ctx => {
+  const row = await ctx.db.query("procurementRecords").withIndex("by_key", q => q.eq("societyId", ids.societyId).eq("generation", ids.generation).eq("recordKey", "opportunity:0000")).unique();
+  await ctx.db.patch(row!._id, { analyticsJson: JSON.stringify({ closingAt: "2026-10-01T22:00:00.000Z", closingDate: "Oct 1, 2026 3:00 PM (PDT)", buyerAliases: ["Alias"], mappingProvenance: { authority: "proposed" } }) });
+});
+const when = { fieldMetadataId: "when", field: { _id: "when", name: "when" } };
+const browse = await reader.query(api.procurementReview.page, { societyId: ids.societyId, generation: ids.generation, kind: "opportunity", request: JSON.stringify({ columns: [when], sorts: [{ fieldMetadataId: "when", direction: "asc" }] }), asOf: Date.parse("2026-09-30T00:00:00Z"), paginationOpts: { numItems: 50, cursor: null } });
+const browsed = browse.page.find((row: ListRow) => row.recordKey === "opportunity:0000");
+assert.deepEqual(JSON.parse(browsed.analyticsJson), { closingAt: "2026-10-01T22:00:00.000Z", closingDate: "Oct 1, 2026 3:00 PM (PDT)" }, "A browse page keeps only the closing fields of analyticsJson");
+assert.equal(browse.page.filter((row: ListRow) => row.analyticsJson !== undefined).length, 1, "Rows without analytics carry none");
 const catalogReviews = (await allPages<{ recordKey: string; source: string }>(api.procurementReview.reviews, { societyId: ids.societyId, generation: ids.generation }, 500)).rows;
 assert.deepEqual(catalogReviews.map((row) => `${row.recordKey} ${row.source}`).sort(), ["opportunity:0000 procurement_decisions", "opportunity:0000 procurement_requirements", "opportunity:0001 procurement_decisions"], "Every review row in the workspace's catalog, with its record, and none of another workspace's");
 const review = await reader.query(api.procurementReview.review, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" });

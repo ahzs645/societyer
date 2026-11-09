@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { Settings2 } from "lucide-react";
 import { api } from "../../../lib/convexApi";
@@ -8,7 +8,6 @@ import { useSociety } from "../../../hooks/useSociety";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { isStaticDemoRuntime } from "../../../lib/staticRuntime";
 import { FolderSetupCard } from "../components/FolderSetupCard";
-import { SnapshotReviewPage } from "./SnapshotReviewPage";
 import { ProcurementReader } from "../reader/ProcurementReader";
 import { useConvexReaderSource } from "../reader/convexSource";
 import type { ReaderCatalog } from "../reader/source";
@@ -23,8 +22,13 @@ type PublicationStatus = {
   recovery: string | null;
 };
 
+/** The no-login demo's bundled-snapshot reader (plugin bridge, catalog worker) is never needed by a signed-in workspace. */
+const SnapshotReviewPage = lazy(() => import("./SnapshotReviewPage").then((m) => ({ default: m.SnapshotReviewPage })));
+
 export function ProcurementReviewPage() {
-  return isStaticDemoRuntime() ? <SnapshotReviewPage /> : <HostedProcurementReview />;
+  return isStaticDemoRuntime()
+    ? <Suspense fallback={<PageLoading variant="detail" />}><SnapshotReviewPage /></Suspense>
+    : <HostedProcurementReview />;
 }
 
 function HostedProcurementReview() {

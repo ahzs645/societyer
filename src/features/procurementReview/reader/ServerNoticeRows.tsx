@@ -5,7 +5,7 @@ import {
   useRecordTableStoreHandle,
 } from "../../../platform/record-engine/record-table";
 import { toNoticeRow } from "../../../../shared/procurementNoticeRow";
-import { useReaderSource } from "./source";
+import { useReaderSource, type ListRow } from "./source";
 import { useProcurementClock } from "../lib/clock";
 export function ServerNoticeRows({
   kind,
@@ -24,11 +24,15 @@ export function ServerNoticeRows({
     sorts = useRecordTableState((s) => s.sorts),
     searchTerm = useRecordTableState((s) => s.searchTerm),
     dateContext = useRecordTableState((s) => s.dateContext);
+  // The server reads only which field each column id names. Sizes, order,
+  // visibility and option lists stay out of the request (a string, compared by
+  // value), so resizing or hiding a column doesn't send a new query or drop the
+  // loaded pages, and each subscription sends a few hundred bytes, not ~5 KB.
   const request = useMemo(
     () =>
       JSON.stringify({
         party: fixedParty,
-        columns,
+        columns: columns.map((column) => ({ fieldMetadataId: column.fieldMetadataId, field: { _id: column.field._id, name: column.field.name } })),
         filters,
         filterGroups,
         sorts: sorts.slice(0, 1),
@@ -57,12 +61,15 @@ export function ServerNoticeRows({
   }, [sorts, handle]);
   // Only the current bounded page remains subscribed. Previous metadata pages
   // are retained locally; switching any query dimension discards them together.
+  // The clock is not a dimension: a minute tick re-reads the current page and
+  // redraws the loaded rows (relative dates, derived status) in place, rather
+  // than dropping everything scrolled past and loading from the top again.
   const now = useProcurementClock();
-  const queryKey = `${source.catalog.generation}:${kind}:${debounced}:${now}`;
+  const queryKey = `${source.catalog.generation}:${kind}:${debounced}`;
   const [position, setPosition] = useState({ key: queryKey, cursor: null as string | null });
   const cursor = position.key === queryKey ? position.cursor : null;
   const page = source.usePage!(kind, debounced, cursor);
-  const loaded = useRef({ key: queryKey, pages: new Map<string | null, ReturnType<typeof toNoticeRow>[]>() });
+  const loaded = useRef({ key: queryKey, pages: new Map<string | null, ListRow[]>() });
   const [loadedCount, setLoadedCount] = useState(0);
   const advancing = useRef<string | null>(null);
   const emptyBatches = useRef(0);
@@ -79,9 +86,9 @@ export function ServerNoticeRows({
       setPosition({ key: queryKey, cursor: null });
       return;
     }
-    if (page) loaded.current.pages.set(cursor, page.page.map(row => toNoticeRow(row, now)));
+    if (page) loaded.current.pages.set(cursor, page.page);
     // A reactive re-delivery replaces its page, never appends duplicate records.
-    const unique = new Map([...loaded.current.pages.values()].flat().map(row => [row._id, row]));
+    const unique = new Map([...loaded.current.pages.values()].flat().map(row => [row.recordKey, toNoticeRow(row, now)]));
     handle.get().setRecords([...unique.values()]);
     setLoadedCount(unique.size);
     advancing.current = null;

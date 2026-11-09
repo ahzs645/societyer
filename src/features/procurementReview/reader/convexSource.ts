@@ -5,7 +5,7 @@
  * once (one-shot queries, large bounded pages) and kept for the life of the
  * source rather than held open as subscriptions.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../../lib/convexApi";
 import { readProcurementDocument } from "../lib/documents";
@@ -71,10 +71,14 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog)
       const args = { societyId, generation, request: serialized, asOf };
       const result = useQuery(api.procurementAnalytics.get, invalid ? "skip" : args) as { state: "preparing" | "ready" | "failed"; resultJson: string | null; error: string | null; computedAt: number | null; asOf: number; metricVersion: string; mappingVersion: string } | undefined;
       const retry = () => { if (invalid) return; setFailure(null); void enqueue(args).catch(error => setFailure({ key: identity, error: error instanceof Error ? error.message : "Could not prepare analysis." })); };
+      // Prepared (published) results usually arrive before the pause ends; asking
+      // the server to prepare one that is already ready is a wasted mutation.
+      const ready = useRef(false);
+      ready.current = result?.state === "ready";
       useEffect(() => {
         if (invalid) return;
         let live = true;
-        const timer = setTimeout(() => { void enqueue(args).catch(error => { if (live) setFailure({ key: identity, error: error instanceof Error ? error.message : "Could not prepare analysis." }); }); }, 250);
+        const timer = setTimeout(() => { if (ready.current) return; void enqueue(args).catch(error => { if (live) setFailure({ key: identity, error: error instanceof Error ? error.message : "Could not prepare analysis." }); }); }, 250);
         return () => { live = false; clearTimeout(timer); };
       }, [identity, societyId, generation, asOf]); // eslint-disable-line react-hooks/exhaustive-deps -- identity includes every normalized input
       const parsed = useMemo(() => result?.resultJson ? JSON.parse(result.resultJson) as AnalysisResult : null, [result?.resultJson]);

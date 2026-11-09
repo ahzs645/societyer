@@ -268,6 +268,23 @@ export function listRow(row: Doc<"procurementRecords">) {
   };
 }
 
+/** The only `analyticsJson` keys the interactive list reads (procurementDeadlineValue in lib/notice.ts). */
+const PAGE_ANALYTICS_KEYS = ["closingAt", "closingDate"] as const;
+/**
+ * A list row for the interactive page: the provenance, parties, aliases and
+ * classifications in `analyticsJson` are for the server's analytics and party
+ * matching, not for drawing a row, so a page carries only the closing fields.
+ */
+function pageRow(row: ReturnType<typeof listRow>) {
+  const { analyticsJson, ...rest } = row;
+  if (!analyticsJson) return rest;
+  let extra: unknown;
+  try { extra = JSON.parse(analyticsJson); } catch { return row; }
+  if (!extra || typeof extra !== "object" || Array.isArray(extra)) return row;
+  const kept = Object.fromEntries(PAGE_ANALYTICS_KEYS.filter((key) => key in extra).map((key) => [key, (extra as Record<string, unknown>)[key]]));
+  return Object.keys(kept).length ? { ...rest, analyticsJson: JSON.stringify(kept) } : rest;
+}
+
 /**
  * Every record of a kind, in large bounded pages: the reader loads the whole
  * list (small rows: no notice bodies, no search corpus) and sorts, filters and
@@ -744,7 +761,7 @@ export const page = authorizedQuery(
                 search,
               )),
         )
-        .map((r) => r.raw),
+        .map((r) => pageRow(r.raw)),
       isDone: result.isDone,
       continueCursor: result.isDone ? "" : JSON.stringify({ plan: cursorPlan, cursor: result.continueCursor }),
       ...(restart ? { restart: true } : {}),
