@@ -15163,6 +15163,22 @@
     ]
   },
   {
+    "key": "convex:invoices:previousDocument",
+    "surface": "convex",
+    "name": "invoices:previousDocument",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceDocumentRevisions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:recordAdjustment",
     "surface": "convex",
     "name": "invoices:recordAdjustment",
@@ -15286,6 +15302,22 @@
     "key": "convex:invoices:restoreVoided",
     "surface": "convex",
     "name": "invoices:restoreVoided",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:returnToDraft",
+    "surface": "convex",
+    "name": "invoices:returnToDraft",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/invoices.ts",
@@ -42766,6 +42798,22 @@
     ]
   },
   {
+    "key": "portable:invoices:previousDocument",
+    "surface": "portable",
+    "name": "invoices:previousDocument",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceDocumentRevisions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:recordAdjustment",
     "surface": "portable",
     "name": "invoices:recordAdjustment",
@@ -42889,6 +42937,22 @@
     "key": "portable:invoices:restoreVoided",
     "surface": "portable",
     "name": "invoices:restoreVoided",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:returnToDraft",
+    "surface": "portable",
+    "name": "invoices:returnToDraft",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

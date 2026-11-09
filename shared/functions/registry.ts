@@ -191,6 +191,8 @@ const intakeReviewFns = lazyHandlers(() => import("./intakeReview"), "intakeRevi
 const intakeCompactionFns = lazyHandlers(() => import("./intakeCompaction"), "intakeCompaction");
 
 const BILLING_COMMERCE_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableMutation({ name: "invoices:returnToDraft", handler: invoicesFns.returnToDraftPortable }),
+  definePortableQuery({ name: "invoices:previousDocument", handler: invoicesFns.previousDocumentPortable }),
   definePortableQuery({ name: "payrollTd1:workspace", handler: payrollTd1Fns.workspacePortable }),
   definePortableMutation({ name: "payrollTd1:applyReviewed", handler: payrollTd1Fns.applyReviewedPortable }),
   definePortableQuery({ name: "payrollRules:workspace", handler: payrollRulesFns.workspacePortable }),

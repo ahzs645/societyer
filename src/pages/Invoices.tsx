@@ -240,7 +240,7 @@ export function InvoicesPage() {
     return (
       <div className="page page--invoice-builder">
         <InvoiceBuilder
-          key={builder}
+          key={`${builder}:${invoice?.reopenedAtISO ?? ""}`}
           workspace={queriedWorkspace!}
           invoice={invoice}
           prefill={prefill}

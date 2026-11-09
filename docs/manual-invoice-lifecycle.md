@@ -34,6 +34,31 @@ Bulk **Finalize drafts** prepares selected drafts. Bulk **Record external sendin
 
 ## Document integrity
 
+### Correcting a finalization that was never sent
+
+For a standalone manual invoice finalized internally, **More actions → Return to
+draft** keeps the same invoice number and ID. Use it only when the invoice has
+never been provided to the customer and has not been included in a tax return.
+Enter a correction reason. The action is available only before any delivery,
+client response, settlement, ledger posting, adjustment or billing-automation
+history; closed books and closed fiscal periods also refuse it. Other corrections
+continue to use the credit/replacement workflow.
+
+The complete prior saved document is archived atomically with the reopening. Its
+logo remains retained, and **Download previous version** in the timeline renders
+that historical finalization. It is a historical copy; the current invoice remains
+the same record. Prior versions and their typed parent/logo references transfer
+with the workspace. The archive also retains original source values as historical
+JSON, never as live lookup targets.
+
+Reopening resets receiving instructions to the current invoice defaults and clears
+the issuer/tax capture so the next finalization uses current seller details and
+registrations effective on its revised date. Customer, line amounts and design
+remain available to edit. No ledger entry, payment, outgoing message or replacement
+invoice is created. The retained history prevents deleting the reopened invoice;
+void it if it is cancelled. The archive preserves saved data, not the original PDF
+bytes, and regeneration uses the current renderer.
+
 - The final download reads the saved, authorized invoice by ID after finalization. It does not render an unsaved editor buffer. If another view finalizes an invoice while an editor has unsaved changes, preview, print and download switch to the canonical saved record and the fields become read-only.
 - A PDF failure after successful finalization is reported as a download failure. The invoice remains finalized; **Download PDF** retries without allocating another invoice.
 - New finalized invoices preserve the issuer name, address, email, organization registration number, organization logo reference and selected tax registrations. They already preserve their template and receiving instructions. An absent historical value does not fall back to a newly configured value.

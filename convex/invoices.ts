@@ -6,6 +6,8 @@ import {
   workspacePortable,
   documentTemplatesPortable,
   documentPortable,
+  previousDocumentPortable,
+  returnToDraftPortable,
   upsertPortable,
   issuePortable,
   markSentPortable,
@@ -116,6 +118,18 @@ export const issue = authorizedMutation("invoices:issue", mutation)({
   args: { societyId: v.id("societies"), ids: v.array(v.id("invoices")) },
   returns: v.object({ issued: v.number(), skipped: v.number(), posted: v.number() }),
   handler: async (ctx, args) => issuePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const returnToDraft = authorizedMutation("invoices:returnToDraft", mutation)({
+  args: { id: v.id("invoices"), reason: v.string() },
+  returns: v.id("invoices"),
+  handler: async (ctx, args) => returnToDraftPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const previousDocument = authorizedQuery("invoices:previousDocument", query)({
+  args: { id: v.id("invoiceDocumentRevisions") },
+  returns: v.any(),
+  handler: async (ctx, args) => previousDocumentPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const markSent = authorizedMutation("invoices:markSent", mutation)({
