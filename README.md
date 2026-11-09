@@ -211,7 +211,7 @@ Better Auth can also use company Microsoft Entra sign-in. Configure its optional
 single-tenant Microsoft provider using the [Microsoft SSO setup guide](docs/microsoft-sso-setup.md).
 Microsoft sign-in and SharePoint document access have separate permissions.
 
-Several organizations can share one `AUTH_MODE=convex` deployment, each with its own sign-in requirement, domain and storage, while one person reaches all of their workspaces. See [shared workspaces and linked sign-in](docs/shared-workspaces/README.md).
+Several organizations can share one `AUTH_MODE=convex` deployment, each with its own sign-in requirement, domain and storage, while one person reaches all of their workspaces. See [shared workspaces and linked sign-in](docs/shared-workspaces/README.md). The [deployed DDC/First Form setup](docs/shared-workspaces/production-setup.md) records the shared backend, custom domains, access policies, migration evidence and recovery steps; [lessons learned](docs/shared-workspaces/lessons-learned.md) explains the important decisions and remaining limits.
 
 ## Configurable modules
 

@@ -6,6 +6,11 @@ to what now exists. Do it only after staging passes
 ([staging-setup.md](staging-setup.md), [acceptance-tests.md](acceptance-tests.md)).
 Operator commands are in the [runbook](operator-runbook.md).
 
+The DDC/First Form production cutover is complete, using DDC production as the
+destination. The [deployed setup and evidence](production-setup.md) records the
+actual domains, checks, identity decision and retained source. The procedure
+below remains the reusable guide for another migration.
+
 ## What this change does and doesn't provide
 
 Provided:
@@ -38,7 +43,10 @@ transfer keeps its records, history and files.
 
 ## Choose the destination deployment
 
-This is your decision. Make it after the inventory below.
+The November 8 destination chosen after inventory was **DDC production
+(`industrious-cricket-610`)**. It preserved the existing Entra redirect,
+SharePoint/mail settings, staff admin and meeting-transfer connections. The
+alternatives below remain useful for a future migration.
 
 | Option | For | Against |
 | --- | --- | --- |

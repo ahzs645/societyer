@@ -17,6 +17,8 @@ What it adds:
   disabled; an operator provisions Microsoft logins.
 - **Domains.** Each verified frontend origin opens its workspace and shows its
   branding. Links in emails go to the workspace's own domain.
+- **AI connector origins.** Each mapped site's `/mcp/<host>` URL completes
+  consent on that site's domain. Plain `/mcp` retains the first-origin fallback.
 - **Cross-domain handoff.** Switching to a workspace on another mapped domain
   carries the same session across. It never upgrades a password session.
 - **Storage policy.** DDC keeps SharePoint with native uploads off; First Form
@@ -43,6 +45,8 @@ skipped, and the limits are in
 
 | Page | For |
 | --- | --- |
+| [production-setup.md](production-setup.md) | Current deployed domains, backend, policies, accounts, transfer evidence and recovery |
+| [lessons-learned.md](lessons-learned.md) | What surprised us, why the configuration works and what remains operator-managed |
 | [architecture.md](architecture.md) | The contract: tables, functions, rules |
 | [operator-runbook.md](operator-runbook.md) | Deploying, policies, domains, storage, accounts, offboarding, rollback |
 | [staging-setup.md](staging-setup.md) | Stage 1: a shared staging deployment, test accounts, preview builds, journeys |

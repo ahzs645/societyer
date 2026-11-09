@@ -5,6 +5,12 @@ by side. Each organization keeps its own members, roles, files and sign-in
 rules. If you belong to more than one, you can reach all of them from one
 sign-in and switch between them.
 
+The production entry points are [DDC North](https://portal.ddcnorth.com) and
+[First Form](https://portal.1stform.ca). They share the backend, while each opens
+its own organization. If you have separate DDC and First Form logins, explicitly
+link them to see both sets of memberships together. A First Form password
+session still needs Microsoft verification before it can open DDC.
+
 The words used here:
 
 - **Login**: one way into Societyer with its own credentials, for example your
