@@ -77,6 +77,8 @@ test("Email receipts render headers, a script-free body and attachments", async 
   await expect(body.getByAltText("tracking pixel")).not.toHaveAttribute("src", /.+/);
   expect(await body.locator("script, [onerror]").count()).toBe(0);
   await expect(body.getByText("Bad link")).not.toHaveAttribute("href", /.+/);
+  await expect(body.getByText("Encoded bad link")).not.toHaveAttribute("href", /.+/);
+  expect(await body.locator("iframe").count()).toBe(0);
   await expect(body.getByRole("link", { name: "View order" })).toHaveAttribute("target", "_blank");
   expect(await page.evaluate(() => ({ ...document.body.dataset }))).not.toHaveProperty("emailScript");
   expect(await page.evaluate(() => ({ ...document.body.dataset }))).not.toHaveProperty("emailHandler");

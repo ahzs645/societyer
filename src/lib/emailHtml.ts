@@ -21,16 +21,21 @@ export function buildEmailDocument(
   html: string,
   { inlineImages, allowRemoteImages }: { inlineImages: Map<string, string>; allowRemoteImages: boolean },
 ): EmailHtmlDocument {
-  // DOMParser documents are inert: nothing here runs scripts or loads images.
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  doc.querySelectorAll(DROP_ELEMENTS).forEach((element) => element.remove());
+  // Parse in template contents, which have no browsing context. A DOMParser
+  // HTML document can start image/frame requests before we add the CSP.
+  // https://html.spec.whatwg.org/multipage/scripting.html#template-contents
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const content = template.content;
+  content.querySelectorAll(DROP_ELEMENTS).forEach((element) => element.remove());
   let blockedRemoteImages = 0;
 
-  for (const element of Array.from(doc.querySelectorAll("*"))) {
+  for (const element of Array.from(content.querySelectorAll("*"))) {
     for (const attribute of Array.from(element.attributes)) {
       const name = attribute.name.toLowerCase();
       if (name.startsWith("on")) element.removeAttribute(attribute.name);
-      else if (URL_ATTRIBUTES.includes(name) && UNSAFE_URL.test(attribute.value)) element.removeAttribute(attribute.name);
+      // URL parsing ignores ASCII whitespace/control characters in schemes.
+      else if (URL_ATTRIBUTES.includes(name) && UNSAFE_URL.test(attribute.value.replace(/[\u0000-\u0020\u007f]/g, ""))) element.removeAttribute(attribute.name);
     }
     const tag = element.tagName.toLowerCase();
     if (tag === "img" || element.hasAttribute("background")) {
@@ -58,15 +63,11 @@ export function buildEmailDocument(
   }
 
   const imgSrc = allowRemoteImages ? "data: https: http:" : "data:";
-  const head = doc.head;
-  head.insertAdjacentHTML(
-    "afterbegin",
-    `<meta charset="utf-8">`
+  const head = `<meta charset="utf-8">`
       + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'">`
       + `<meta name="referrer" content="no-referrer">`
-      + `<style>html{color-scheme:light}body{margin:0;padding:16px;background:#fff;color:#1f2328;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}</style>`,
-  );
-  return { srcdoc: `<!doctype html>${doc.documentElement.outerHTML}`, blockedRemoteImages };
+      + `<style>html{color-scheme:light}body{margin:0;padding:16px;background:#fff;color:#1f2328;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}</style>`;
+  return { srcdoc: `<!doctype html><html><head>${head}</head><body>${template.innerHTML}</body></html>`, blockedRemoteImages };
 }
 
 /** Wraps a plain-text body so it renders in the same frame as HTML mail. */

@@ -60,10 +60,12 @@ async function fixtureEmail() {
 <p><img src="cid:logo@example" alt="Shop logo" width="16" height="16"></p>
 <h2>Payment successful</h2>
 <img src="https://tracker.example.com/pixel.gif" alt="tracking pixel">
+<iframe src="https://tracker.example.com/frame"></iframe>
 <script>parent.document.body.dataset.emailScript = "ran"</script>
 <img src="x" onerror="parent.document.body.dataset.emailHandler = 'ran'" alt="broken">
 <table><tr><td>Workshop supplies</td><td>$40.00</td></tr><tr><td class="total">Total</td><td class="total">$42.00</td></tr></table>
 <p><a href="https://shop.example.com/orders/1">View order</a> <a href="javascript:alert(1)">Bad link</a></p>
+<p><a href="java&#x09;script:alert(1)">Encoded bad link</a></p>
 </body></html>`;
   return new TextEncoder().encode([
     "From: Example Shop <receipts@shop.example.com>", "To: Treasurer <treasurer@society.example>", "Subject: Payment successful",
