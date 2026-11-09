@@ -18,17 +18,46 @@ export const authClient = createAuthClient({
 
 export type BetterAuthSession = typeof authClient.$Infer.Session;
 
+async function mintConvexToken(): Promise<string | null> {
+  const result = await authClient.convex.token({ fetchOptions: { throw: false } });
+  return result.data?.token ?? null;
+}
+
+/**
+ * A token minted while completing the OAuth hand-off, kept for Convex's first
+ * connection. Tied to the session it was minted for and short-lived, so it can
+ * never be handed to a later sign-in.
+ */
+let handoffConvexToken: { token: string; sessionToken: string; mintedAt: number } | null = null;
+const HANDOFF_TOKEN_TTL_MS = 60_000;
+
 export const completeOAuthCallback = createOAuthHandoff({
+  // Redeeming the one-time token stores the session cookie (cross-domain plugin).
   verify: async token => (await authClient.crossDomain.oneTimeToken.verify({ token })).data?.session?.token ?? null,
-  establishSession: async token => {
-    const result = await authClient.getSession({ fetchOptions: { headers: { Authorization: `Bearer ${token}` } } });
-    if (!result.data?.session) throw new Error("Your sign-in could not be completed. Please sign in again.");
+  // Prove the stored cookie works by minting the Convex token Convex will ask
+  // for next. This replaces a second session fetch and takes the token
+  // request out of the sign-in chain: the session hook still loads the
+  // session on mount, and Convex receives this token straight away.
+  establishSession: async sessionToken => {
+    const token = await mintConvexToken();
+    if (!token) throw new Error("Your sign-in could not be completed. Please sign in again.");
+    handoffConvexToken = { token, sessionToken, mintedAt: Date.now() };
   },
   refreshSession: () => authClient.updateSession(),
 }, { href: () => window.location.href, replace: url => window.history.replaceState({}, "", url) });
 
 /** Convex token minted by the deployment's own signer for the current session. */
 export async function fetchConvexToken(_forceRefresh?: boolean): Promise<string | null> {
-  const result = await authClient.convex.token({ fetchOptions: { throw: false } });
-  return result.data?.token ?? null;
+  // Used once, and only while it is fresh and the stored session is still the
+  // one it was minted for; otherwise mint as usual.
+  const handoff = handoffConvexToken;
+  handoffConvexToken = null;
+  if (
+    handoff &&
+    Date.now() - handoff.mintedAt < HANDOFF_TOKEN_TTL_MS &&
+    authClient.getCookie().includes(`session_token=${handoff.sessionToken}`)
+  ) {
+    return handoff.token;
+  }
+  return mintConvexToken();
 }

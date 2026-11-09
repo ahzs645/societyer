@@ -9,6 +9,7 @@ import { AuthGate } from "./components/AuthGate";
 const Layout = React.lazy(() => import("./components/Layout").then(m => ({ default: m.Layout })));
 import { WebMcpTools } from "./features/webmcp/WebMcpTools";
 import { ModuleGate } from "./components/ModuleGate";
+import { AppBootScreen } from "./components/AppBootScreen";
 import { EntityKindGate } from "./components/EntityKindGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
@@ -245,10 +246,9 @@ const electronLocalRuntime = getRuntimeMode() === "electron-local";
 const Router = electronLocalRuntime ? HashRouter : BrowserRouter;
 const routerBasename = electronLocalRuntime ? undefined : staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
 
+/** Before the shell exists: the same boot screen index.html paints first. */
 function PageLoader() {
-  return (
-    <div style={{ padding: 24, color: "#888", fontSize: 13 }}>Loading…</div>
-  );
+  return <AppBootScreen />;
 }
 
 function AsyncAppProviders() {

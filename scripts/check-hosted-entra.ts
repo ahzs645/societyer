@@ -9,6 +9,7 @@ import { convexTest } from "convex-test";
 import schema from "../convex/schema";
 import { internal } from "../convex/_generated/api";
 import { crossDomain } from "@convex-dev/better-auth/plugins";
+import { getCookie, getSetCookie } from "@convex-dev/better-auth/client/plugins";
 import { makeSignature } from "better-auth/crypto";
 import { createOAuthHandoff } from "../shared/completeHostedOAuth";
 
@@ -117,6 +118,9 @@ try {
     establishSession: async sessionToken => {
       const cookie = verifiedCookie.split(";")[0];
       assert.ok(cookie, "The cross-domain endpoint returns the signed session cookie");
+      // The browser hands its hand-off Convex token to Convex only while the
+      // stored cookie names this session (src/lib/convexAuthClient.ts).
+      assert.ok(getCookie(getSetCookie(verifiedCookie)).includes(`session_token=${sessionToken}`), "The stored cross-domain cookie names the redeemed session");
       const checked = await auth.api.getSession({ headers: new Headers({ cookie }) });
       assert.equal(checked?.session.token, sessionToken);
       assert.equal(checked?.user.id, user.id);

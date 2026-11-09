@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
+import { PageSkeleton } from "./PageSkeleton";
 import { deploymentUnavailableReason, isModuleEnabled, MODULES_BY_KEY, type ModuleKey } from "../lib/modules";
 
 export function ModuleGate({
@@ -13,8 +14,8 @@ export function ModuleGate({
 
   if (society === undefined) {
     return (
-      <div className="page" aria-busy="true">
-        <div className="muted">Loading workspace…</div>
+      <div className="page">
+        <PageSkeleton label="Loading workspace…" />
       </div>
     );
   }

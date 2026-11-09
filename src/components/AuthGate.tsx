@@ -1,8 +1,13 @@
-import { Link, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
-import { DeploymentCapabilitiesGate } from "./DeploymentCapabilities";
+import { DeploymentCapabilitiesGate, usePrefetchDeploymentCapabilities } from "./DeploymentCapabilities";
+import { AppBootScreen } from "./AppBootScreen";
+import { useSociety, useStoredSocietyId } from "../hooks/useSociety";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { PendingInvitations } from "./PendingInvitations";
 import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
 
@@ -10,6 +15,8 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
   const auth = useAuth();
   const creationAccess = useQuery(api.http.workspaceCreationAccess, auth.mode !== "none" && auth.sessionStatus === "authenticated" && auth.convexAuthStatus === "authenticated" && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
   const invitations = useQuery(api.invitations.pendingForAccount, auth.mode !== "none" && auth.isConvexAuthenticated && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
+  usePrefetchDeploymentCapabilities();
+  usePreloadWorkspaceShell(auth.mode !== "none" && Boolean(auth.session));
 
   if (auth.mode === "none") return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
 
@@ -37,7 +44,7 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
     auth.convexAuthStatus === "loading" ||
     auth.membershipState === "loading"
   ) {
-    return <AuthMessage title="Authorizing" message="Checking your secure workspace access…" />;
+    return <AppBootScreen label="Checking your secure workspace access…" />;
   }
 
   if (auth.sessionStatus !== "authenticated") {
@@ -73,9 +80,9 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
       );
     }
     if (auth.membershipStatus === "needs-invitation") {
-      if (invitations === undefined) return <AuthMessage title="Checking invitations" message="Looking for invitations sent to your verified email…" />;
+      if (invitations === undefined) return <AppBootScreen label="Looking for invitations sent to your verified email…" />;
       if (invitations.length) return <div className="page"><h1>Join your workspace</h1><PendingInvitations /><button className="btn" onClick={() => void auth.signOut()}>Sign out</button></div>;
-      if (creationAccess === undefined) return <AuthMessage title="Checking setup access" message="Checking whether this account can create its own workspace…" />;
+      if (creationAccess === undefined) return <AppBootScreen label="Checking whether this account can create its own workspace…" />;
       if (allowWorkspaceCreation && creationAccess.allowed) return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
       return (
         <AuthMessage
@@ -119,7 +126,55 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
     return <AuthMessage title="Workspace unavailable" message="Your workspace membership could not be confirmed." />;
   }
 
-  return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
+  return (
+    <DeploymentCapabilitiesGate>
+      <WorkspaceReadyGate>{children}</WorkspaceReadyGate>
+    </DeploymentCapabilitiesGate>
+  );
+}
+
+/**
+ * Keeps the boot screen up until the selected workspace and the member's
+ * permissions have loaded, so the shell first appears with its real sidebar
+ * and the page skeleton rather than a placeholder workspace and a status line.
+ * Without a resolved user the permission query cannot run; the shell then
+ * renders and its route gate reports the state, rather than holding a
+ * full-screen spinner with no way out.
+ */
+function WorkspaceReadyGate({ children }: { children: React.ReactNode }) {
+  const society = useSociety();
+  const userId = useCurrentUserId();
+  const { loaded } = usePermissions();
+  // Only the first load waits here. A later workspace switch keeps the shell
+  // mounted and lets the route gate draw the page skeleton.
+  const [opened, setOpened] = useState(false);
+  // Sign-in already chose the workspace and member, so look up permissions
+  // alongside the workspace list rather than after it. usePermissions() asks
+  // for the same arguments once the list arrives and shares this
+  // subscription, so keeping it open afterwards costs nothing.
+  const storedSocietyId = useStoredSocietyId();
+  useQuery(api.permissions.myPermissions, storedSocietyId && userId ? { societyId: storedSocietyId, userId } : "skip");
+  const waiting = society === undefined || Boolean(society && userId && !loaded);
+  if (!waiting && !opened) setOpened(true);
+  if (waiting && !opened) return <AppBootScreen label="Opening your workspace…" />;
+  return <>{children}</>;
+}
+
+/**
+ * Fetches the app shell's code (and the dashboard's, when that is where the
+ * member is going) while sign-in is still being checked, so it is ready when
+ * the checks pass. A failed preload is ignored; the route's own lazy import
+ * reports it.
+ */
+function usePreloadWorkspaceShell(signedIn: boolean) {
+  const { pathname } = useLocation();
+  const inApp = pathname === "/app" || pathname.startsWith("/app/");
+  const toDashboard = pathname === "/app" || pathname === "/app/";
+  useEffect(() => {
+    if (!signedIn || !inApp) return;
+    void import("./Layout").catch(() => undefined);
+    if (toDashboard) void import("../pages/Dashboard").catch(() => undefined);
+  }, [signedIn, inApp, toDashboard]);
 }
 
 function AuthMessage({

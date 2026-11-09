@@ -94,6 +94,14 @@ function subscribeSocietySelection(onChange: () => void) {
   return () => window.removeEventListener(SOCIETY_CHANGED_EVENT, onChange);
 }
 
+/**
+ * The workspace chosen at sign-in (or last selected), before the workspace
+ * list has loaded. For starting lookups early; render from `useSociety()`.
+ */
+export function useStoredSocietyId() {
+  return useSyncExternalStore(subscribeSocietySelection, getStoredSocietyId, () => null);
+}
+
 export function useSocieties() {
   const auth = useAuth();
   const queriedSocieties = useQuery(

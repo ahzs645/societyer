@@ -10,7 +10,7 @@ for (const role of ["Owner", "Viewer"]) {
     await signInLive(page, role);
     const assetId = liveFixture().ids.static_asset_projector;
     await page.goto(`/app/assets/${assetId}`);
-    // A protected native route briefly renders an "Authorizing" H1. Wait for
+    // A protected native route briefly renders the boot screen. Wait for
     // the actual detail PageHeader before reading its asset tag as input.
     const title = page.locator(".page__header .page__title-text");
     await expect(title).toBeVisible();

@@ -17,6 +17,7 @@ import { getAuthMode, type AuthMode } from "../lib/authMode";
 import { loadSessionAuthClient, type SessionAuthModule } from "../lib/sessionAuthClient";
 import { registerAuthTokenGetter, type AuthTokenGetter } from "../lib/authToken";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { AppBootScreen } from "../components/AppBootScreen";
 import { setDocumentSourceSessionKey } from "../features/externalDocuments/microsoftAccess";
 import { setPrincipalUsers, setStoredUserId } from "../hooks/useCurrentUser";
 import {
@@ -96,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   if (mode === "clerk") {
     return (
-      <Suspense fallback={<AuthState title="Authorizing" message="Checking your session…" />}>
+      <Suspense fallback={<AppBootScreen label="Checking your session…" />}>
         <ClerkAuthProvider>{children}</ClerkAuthProvider>
       </Suspense>
     );
@@ -179,7 +180,7 @@ function BetterAuthProvider({
         </AuthState>
       );
     }
-    return <AuthState title="Authorizing" message="Checking your session…" />;
+    return <AppBootScreen label="Checking your session…" />;
   }
 
   return (

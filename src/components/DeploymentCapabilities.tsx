@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { api } from "../lib/convexApi";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { setDeploymentUnavailableModules } from "../lib/modules";
+import { AppBootScreen } from "./AppBootScreen";
 import { ALL_CAPABILITIES, LOCAL_RUNTIME_CAPABILITIES, PROCUREMENT_REVIEW_UNAVAILABLE_MESSAGE, STATIC_DEMO_CAPABILITIES, type DeploymentCapabilities } from "../../shared/deploymentCapabilities";
 
 const CapabilitiesContext = createContext<DeploymentCapabilities>(ALL_CAPABILITIES);
@@ -31,8 +32,17 @@ export function DeploymentCapabilitiesGate({ children }: { children: React.React
     });
     return capabilities;
   }, [capabilities, local]);
-  if (!value) return <div className="page"><p className="muted">Loading workspace…</p></div>;
+  if (!value) return <AppBootScreen label="Loading workspace…" />;
   return <CapabilitiesContext.Provider value={value}>{children}</CapabilitiesContext.Provider>;
+}
+
+/**
+ * Starts the capabilities query while sign-in is still being checked (it is
+ * public), so the gate above has its answer as soon as membership resolves
+ * instead of adding a round trip after it. Convex shares the subscription.
+ */
+export function usePrefetchDeploymentCapabilities() {
+  useQuery(api.http.deploymentCapabilities, isLocalDataRuntime() ? "skip" : {});
 }
 
 export function useDeploymentCapabilities(): DeploymentCapabilities {

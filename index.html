@@ -47,9 +47,52 @@
       rel="stylesheet"
     />
     <title>Societyer — BC Societies Act compliance</title>
+    <!-- Boot screen (src/components/AppBootScreen.tsx). Inline so it paints
+         before the stylesheet loads; React replaces it on first render and
+         redraws the same markup until the app shell is ready. -->
+    <style>
+      .boot-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        background: #f9f9fb;
+        color: #8b8d98;
+      }
+      html.dark .boot-screen { background: #18191b; color: #696e77; }
+      .boot-screen__tile { fill: #1c2024; }
+      .boot-screen__glyph { fill: #fcfcfd; }
+      html.dark .boot-screen__tile { fill: #edeef0; }
+      html.dark .boot-screen__glyph { fill: #111113; }
+      .boot-screen__spinner {
+        width: 16px;
+        height: 16px;
+        box-sizing: border-box;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: boot-screen-spin 0.7s linear infinite;
+      }
+      .boot-screen__label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      @keyframes boot-screen-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-screen__spinner { animation-duration: 2.4s; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot-screen" role="status" aria-live="polite" aria-busy="true"><svg class="boot-screen__mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false"><rect class="boot-screen__tile" width="32" height="32" rx="8" /><path class="boot-screen__glyph" d="M10 12c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2v2h-4v-1h-4v3h6c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2h-8c-1.1 0-2-.9-2-2v-2h4v1h4v-3h-6c-1.1 0-2-.9-2-2v-4z" /></svg><span class="boot-screen__spinner" aria-hidden="true"></span><span class="boot-screen__label">Loading Societyer…</span></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
