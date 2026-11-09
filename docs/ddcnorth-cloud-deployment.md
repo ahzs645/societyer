@@ -1,6 +1,21 @@
 # DDC North hosted instance
 
-Configured October 17, 2026.
+Initially configured October 17, 2026; shared-workspace cutover November 8.
+Use [the deployed shared setup](shared-workspaces/production-setup.md),
+[lessons learned](shared-workspaces/lessons-learned.md) and the
+[operator runbook](shared-workspaces/operator-runbook.md) for current operations.
+
+Production now serves DDC at `https://portal.ddcnorth.com` and First Form at
+`https://portal.1stform.ca` from the same `industrious-cricket-610` backend.
+Both DDC workspaces require Microsoft tenant/group evidence and select
+SharePoint through explicit workspace policies. Public sign-up is closed.
+The former global SSO, email-domain and native-upload ceilings are unset so
+First Form can use provisioned passwords and its own native storage policy.
+`.env.ddcnorth` no longer overrides the workspace storage choices.
+
+The sections below retain the October setup and qualification history.
+Empty-database, global-flag and email-signup descriptions below are historical;
+do not reapply them to shared production. Development was not repurposed.
 
 ## Deployment
 

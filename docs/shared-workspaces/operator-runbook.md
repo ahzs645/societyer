@@ -1,6 +1,9 @@
 # Shared workspaces: operator runbook
 
 This runbook covers every operator task for shared workspaces and linked sign-in.
+The current DDC/First Form domains, release evidence and retained source are in
+[production-setup.md](production-setup.md); operational findings are in
+[lessons-learned.md](lessons-learned.md).
 Read [architecture.md](architecture.md) first. It defines the tables and functions
 used here. Moving existing records from two deployments into one is a separate
 procedure, in [migration-and-cutover.md](migration-and-cutover.md). Rehearse
@@ -16,12 +19,15 @@ change sign-in, domain or storage policy from the app.
 
 | Name | Deployment | Frontend | Notes |
 | --- | --- | --- | --- |
-| DDC North production | `industrious-cricket-610` (project `societyer-ddcnorth`) | `https://portal.ddcnorth.com`, Pages project `societyer-ddcnorth` | Entra login, `SOCIETYER_ENTRA_SSO_REQUIRED=1`, SharePoint, mail, meeting-transfer Worker |
-| First Form production | `elated-bee-460` (project `societyer-firstform`) | `https://societyer-firstform.pages.dev`, Pages project `societyer-firstform` | Manually provisioned password accounts, native uploads |
+| DDC North production | `industrious-cricket-610` (project `societyer-ddcnorth`) | `https://portal.ddcnorth.com`, Pages project `societyer-ddcnorth` | Workspace Microsoft/group policies, SharePoint, mail, meeting-transfer Worker |
+| First Form production | Shared `industrious-cricket-610` | `https://portal.1stform.ca`, alias `https://societyer-firstform.pages.dev`; Pages project `societyer-firstform` | Separate password logins, native workspace policy |
+| Former First Form backend | `elated-bee-460` | No current frontend | Retained source; old client identities locked out to prevent split writes |
+| Transfer rehearsal | `rapid-ox-123` | No published frontend | Isolated destination copy and completed rehearsal; temporary key revoked |
 | Shared staging | created in [staging-setup.md](staging-setup.md) | Pages preview branches | Synthetic data only |
 
-The shared production deployment is not chosen yet. See
-[migration-and-cutover.md](migration-and-cutover.md#choose-the-destination-deployment).
+The shared production deployment is `industrious-cricket-610`. See
+[the deployed setup](production-setup.md) and
+[destination decision](migration-and-cutover.md#choose-the-destination-deployment).
 This runbook calls the deployment you are changing `$TARGET`.
 
 ### Command conventions
@@ -49,6 +55,17 @@ printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-ddcnorth
 # First Form. This file already exists with this content.
 printf 'CONVEX_DEPLOYMENT=prod:elated-bee-460\n' > .env.convex-firstform-production.local
 ```
+
+Those are the original per-project selectors, retained for source operations.
+For a **current shared production release**, use a new explicit selector:
+
+```sh
+printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-shared-production.local
+```
+
+Do not use the former First Form selector to release the shared backend. Keep
+`--codegen disable` when deploying this checkout's tracked generated TypeScript
+files, and run its real type checks. See the [release guide](../firstform-cloud-deployment.md#release).
 
 ### Record what you are about to change
 
@@ -102,6 +119,10 @@ organizations.
 
 Deploy the backend first, then the frontend, on each deployment. Build both
 frontends from the same clean commit. Record the commit hash.
+
+For the current consolidated production setup, deploy the shared backend once
+and then both frontends. The separate-backend instructions below describe the
+initial bootstrap; the retired First Form backend is not a routine release target.
 
 ### Is it backward compatible?
 
@@ -167,8 +188,8 @@ git rev-parse HEAD            # record it
 DDC North backend, then frontend:
 
 ```sh
-./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --typecheck disable -y --dry-run
-./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --typecheck disable -y
+./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --codegen disable --typecheck enable --dry-run
+./node_modules/.bin/convex deploy --env-file .env.convex-ddcnorth-deploy.local --codegen disable --typecheck enable
 
 ./node_modules/.bin/vite build --mode ddcnorth
 CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b ./node_modules/.bin/wrangler pages deploy dist \
@@ -177,11 +198,13 @@ CLOUDFLARE_ACCOUNT_ID=479e77f49d4ac5d7498529ee360f194b ./node_modules/.bin/wrang
 
 The meeting-transfer Worker has no changes in this release.
 
-First Form backend, then frontend:
+Before consolidation the First Form backend was deployed separately. For the
+current shared deployment, deploy the backend **once** using the shared selector
+above, then publish First Form's frontend:
 
 ```sh
-./node_modules/.bin/convex deploy --env-file .env.convex-firstform-production.local --typecheck disable -y --dry-run
-./node_modules/.bin/convex deploy --env-file .env.convex-firstform-production.local --typecheck disable -y
+./node_modules/.bin/convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable --dry-run
+./node_modules/.bin/convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable
 
 npm run deploy:firstform
 ```
@@ -192,21 +215,24 @@ npm run deploy:firstform
 
 ### Check
 
-On each deployment:
+On the intended deployment, inspect the actual rows (empty only before initial
+policy setup; shared production must retain the configured policies):
 
 ```sh
-npx convex run workspaceSignInPolicies:list --deployment "$TARGET"     # []
-npx convex run workspaceStoragePolicies:list --deployment "$TARGET"    # []
+npx convex run workspaceSignInPolicies:list --deployment "$TARGET"
+npx convex run workspaceStoragePolicies:list --deployment "$TARGET"
 npx convex run workspaceDomains:audit --deployment "$TARGET"
 ```
 
-`audit` reports `site-url-unmapped` for each `SITE_URL` origin until you map it
-in step 4. That is expected. Then:
+During initial setup, `audit` reports `site-url-unmapped` until step 4. Current
+shared production should return `ok: true`. Then:
 
 - Sign in to each production site as a real member and open a record.
-- DDC: password sign-in still returns HTTP 403 ("Use Continue with Microsoft to
-  sign in to this instance.").
-- DDC: the staff admin still accepts a fresh Microsoft session.
+- DDC: the normal login page is Microsoft-only. The shared broker can accept
+  First Form passwords, but a password-only session cannot read DDC and sees it
+  locked. A linked Microsoft provider alone is not session evidence.
+- DDC: the separate staff admin accepts a valid Microsoft token and denies a
+  First Form password token.
 
 ### Rollback
 
@@ -214,13 +240,15 @@ Redeploy the previous commit to the backend and frontend:
 
 ```sh
 git checkout <previous-commit>
-./node_modules/.bin/convex deploy --env-file <selector file> --typecheck disable -y --dry-run
+./node_modules/.bin/convex deploy --env-file <selector file> --codegen disable --typecheck enable --dry-run
 ```
 
-If rows were already written to the new tables, the dry run may refuse a schema
-that no longer declares them. If it does, empty those tables first: clear the
-policies (steps 2 and 5), and delete the domain, link and link-request rows in
-the dashboard. Then deploy.
+If the old revision does not understand workspace policies or links, do not
+roll shared production back to it while both organizations are live. A dry-run
+schema refusal is a stop: do not empty production policy, domain or identity
+tables to make old code deploy. Use a compatible fix or the coordinated
+[recovery procedure](production-setup.md#backups-retained-source-and-rollback).
+Disposable staging fixtures can instead be recreated deliberately.
 
 ## 2. Workspace sign-in policy
 
@@ -402,21 +430,21 @@ On a shared deployment:
 
 ```sh
 npx convex env get SITE_URL --deployment "$TARGET"     # record the old value
-npx convex env set SITE_URL 'https://portal.ddcnorth.com,https://societyer-ddcnorth.pages.dev,https://societyer-firstform.pages.dev' --deployment "$TARGET"
+npx convex env set SITE_URL 'https://portal.ddcnorth.com,https://societyer-ddcnorth.pages.dev,https://ddcnorth.com,https://www.ddcnorth.com,https://societyer-firstform.pages.dev,https://portal.1stform.ca' --deployment "$TARGET"
 ```
 
-Add a First Form custom domain here once it is attached to the Pages project.
+The First Form custom domain is attached and listed above. Add a future customer
+origin only after its frontend domain is verified.
 Only list origins whose frontend build points at `$TARGET`. A domain whose build
 uses another backend breaks sign-in and switching.
 
-On the current separate deployments, map only the origins already in each
-deployment's own `SITE_URL`.
+On a separate deployment, map only the origins already in its own `SITE_URL`.
 
 AI connectors (MCP) on the shared deployment: each `SITE_URL` origin has its
 own server URL, and sign-in for it is approved on that origin's consent page:
 
 - DDC North: `https://<deployment>.convex.site/mcp/portal.ddcnorth.com`
-- First Form: `https://<deployment>.convex.site/mcp/societyer-firstform.pages.dev`
+- First Form: `https://<deployment>.convex.site/mcp/portal.1stform.ca`
 
 Settings → AI connectors shows the right one on each domain; members paste that
 into claude.ai, ChatGPT, Claude Code or Codex. Plain `/mcp` still works and
@@ -441,7 +469,8 @@ made through it. Test both organizations on staging.
 ```sh
 npx convex run workspaceDomains:upsert '{"origin":"https://portal.ddcnorth.com","societyId":"'"$DDC_ID"'","primary":true,"status":"Active","note":"DDC North custom domain"}' --deployment "$TARGET"
 npx convex run workspaceDomains:upsert '{"origin":"https://societyer-ddcnorth.pages.dev","societyId":"'"$DDC_ID"'","primary":false,"status":"Active","note":"Pages default domain"}' --deployment "$TARGET"
-npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":true,"status":"Active"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":false,"status":"Active"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://portal.1stform.ca","societyId":"'"$FF_ID"'","primary":true,"status":"Active"}' --deployment "$TARGET"
 ```
 
 Rules:
@@ -453,6 +482,46 @@ Rules:
 - Map only one workspace per origin. If DDC has several workspaces, map the
   domain to the main one. The others open in place.
 - Origins are stored normalized (lowercase host, no trailing slash).
+
+### Attach a customer's frontend domain
+
+This is currently an operator workflow, not an end-user settings screen. Reuse
+the intended frontend project and shared backend; a custom hostname does not
+require a separate Convex deployment.
+
+1. Verify control of the requested domain and inspect existing records before
+   changing it. For this rollout, `1stform.ca` was already an active zone in the
+   Pages project's Cloudflare account, and `portal.1stform.ca` had no record.
+2. Add the hostname under the intended Pages project's **Custom domains** first.
+   For First Form the project is `societyer-firstform`.
+3. Set the required DNS record. The deployed record is:
+
+   | Type | Name | Target | Proxy | TTL |
+   | --- | --- | --- | --- | --- |
+   | CNAME | `portal.1stform.ca` | `societyer-firstform.pages.dev` | Proxied | Auto |
+
+   Pages used HTTP validation for this same-account zone and requested no TXT
+   record. If a future attachment returns a TXT verification challenge, publish
+   that exact name/value as well. Do not invent a token.
+4. Wait for Pages ownership and HTTPS validation to become Active. A DNS record
+   alone does not attach the hostname to Pages. Check the rendered app in a real
+   browser; a command-line edge block is not an app authentication result.
+5. Add the exact `https://` origin to the shared `SITE_URL`, retaining the
+   existing origins. Set sign-in and storage policy for a new workspace before
+   opening it; domain mapping itself grants no access.
+6. Upsert the Active mapping with `primary: true` only when the host is ready.
+   This demotes the previous primary for that workspace; keep the old domain as
+   a trusted secondary while it remains useful. Run `workspaceDomains:audit`.
+7. Test the new login branding, **My workspaces → Open**, the authenticated
+   handoff, clean final URL and a reload. Check the new domain-specific MCP
+   resource metadata and canonical reset/invitation link origin.
+
+The existing Microsoft redirect is on `.convex.site`, so this frontend-only
+host change did not need a new Entra redirect or credential. No build was needed:
+the existing First Form bundle obtains the hostname and mapping at runtime.
+Steps that change application configuration or code still require the normal
+release checks. [Cloudflare's custom-domain guide](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+describes the Pages attachment/DNS distinction.
 
 ### Audit
 
@@ -503,11 +572,15 @@ holds. It works only between mapped origins. See
 ### Rollback
 
 ```sh
-npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":false,"status":"Disabled"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://societyer-firstform.pages.dev","societyId":"'"$FF_ID"'","primary":true,"status":"Active"}' --deployment "$TARGET"
+npx convex run workspaceDomains:upsert '{"origin":"https://portal.1stform.ca","societyId":"'"$FF_ID"'","primary":false,"status":"Disabled"}' --deployment "$TARGET"
 ```
 
-There is no delete function. A Disabled row resolves to nothing. Restore the
-recorded `SITE_URL` value if you changed it.
+Promote the working alias before disabling the custom domain so canonical links
+do not fall back to DDC. There is no delete function. A Disabled row resolves to
+nothing. After checking the alias, remove only the retired origin from `SITE_URL`
+and detach its Pages custom domain/DNS record if appropriate. Retain all other
+trusted origins, especially those used by the staff admin.
 
 ## 5. Storage policies
 
@@ -628,7 +701,7 @@ npx convex run hostedAuth:provisionAccount '{"name":"Full Name","email":"confirm
 ```
 
 It returns a one-time, one-hour link
-(`https://societyer-firstform.pages.dev/reset-password#token=…`). Send it
+(`https://portal.1stform.ca/reset-password#token=…`). Send it
 privately. It grants no membership. Follow it with an invitation from the
 workspace's **Users** page. The email must be in
 `SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS` if that is still set.
@@ -794,9 +867,14 @@ holds through their own login.
 
 ## 10. Rollback summary
 
+These individual reversals are not a complete production data rollback. After
+consolidation, keep code that enforces workspace policies, and reconcile any
+destination writes before reopening the old source. Do not delete real policy
+or link rows just to satisfy an older schema.
+
 | Change | Undo |
 | --- | --- |
-| Code deploy | Redeploy the previous commit. Empty the new tables first if the old schema is refused. |
+| Code deploy | Choose a revision compatible with live policies/links. A schema refusal requires a recovery plan, not deleting production tables. |
 | DDC sign-in policy | Fix it with `set`. Clear only while required SSO is on. |
 | First Form sign-in policy | `workspaceSignInPolicies:clear` |
 | `SOCIETYER_ENTRA_SSO_REQUIRED` removed | Set it to `1`. This locks out First Form. |
