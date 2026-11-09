@@ -5,14 +5,14 @@ import type { InvoiceRow, InvoiceWorkspace, RepairJob } from "./types";
 import { settlementTotals, type InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
 import type { BillingQuote, CustomerStatement } from "../../../shared/billingDocuments";
 
-type ReceiptSource = Pick<InvoiceRow, "number" | "lifecycle" | "status" | "currency" | "billToName" | "billToEmail" | "billToAddress" | "documentTemplate" | "lines" | "discount" | "payments" | "issuerTaxRegistrationsSnapshot"> & { money?: InvoiceMoneyOptions };
+type ReceiptSource = Pick<InvoiceRow, "number" | "lifecycle" | "status" | "currency" | "billToName" | "billToEmail" | "billToAddress" | "documentTemplate" | "lines" | "discount" | "payments" | "issuerTaxRegistrationsSnapshot" | "issuerSnapshot" | "issuerLogoUrl"> & { money?: InvoiceMoneyOptions };
 type PaymentContext = Pick<InvoiceWorkspace, "transactions" | "ledger">;
 
 const money = (cents: number, currency: string) => new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(cents / 100);
 
 /** A receipt acknowledges one extant recorded payment, never the invoice's face value. */
 export function paymentReceiptDocument(invoice: ReceiptSource, paymentKey: string, context: PaymentContext): InvoiceDocumentData {
-  if (invoice.lifecycle !== "sent" || invoice.status === "draft" || invoice.status === "void") throw new Error("Receipts are available for payments on issued invoices.");
+  if (!["issued", "sent"].includes(invoice.lifecycle) || invoice.status === "draft" || invoice.status === "void") throw new Error("Receipts are available for payments on issued invoices.");
   const payment = invoice.payments.find((row) => row.key === paymentKey);
   if (!payment) throw new Error("This payment is no longer recorded. Close the preview and select a current payment.");
   if (payment.reversedDate || (payment.kind && payment.kind !== "payment")) throw new Error("Receipts acknowledge active cash payments. Credit notes, write-offs, refunds and reversed payments use their settlement records.");
@@ -43,6 +43,8 @@ export function paymentReceiptDocument(invoice: ReceiptSource, paymentKey: strin
   return {
     documentKind: "receipt",
     issuerTaxRegistrationsSnapshot: invoice.issuerTaxRegistrationsSnapshot,
+    issuerSnapshot: invoice.issuerSnapshot,
+    issuerLogoUrl: invoice.issuerLogoUrl,
     documentTemplate: cleanInvoiceTemplate(invoice.documentTemplate),
     // Payment keys are stable and retained in the document even when dates/amounts coincide.
     number: `RCPT-${invoice.number}-${payment.key}`,

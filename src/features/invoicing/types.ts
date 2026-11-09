@@ -2,7 +2,7 @@ import type { InvoiceReceivingMethod } from "../../../shared/invoicePaymentMetho
 import type { InvoiceMoneyOptions } from "../../../shared/invoiceMoney";
 import type { DocumentExtras } from "../../../shared/documentExtras";
 import type { InvoiceTemplate, InvoicePriceList, RepairStatus } from "../../../shared/invoiceCommerce";
-import type { CustomerSummary, InvoiceLine, InvoicePayment, InvoiceStatus, InvoiceTotals } from "../../../shared/invoicing";
+import type { CustomerSummary, InvoiceLifecycle, InvoiceLine, InvoicePayment, InvoiceStatus, InvoiceTotals, InvoiceIssuerSnapshot, InvoiceExternalDelivery, InvoiceClientResponseKind, InvoiceClientResponse as RecordedInvoiceClientResponse } from "../../../shared/invoicing";
 import type { BooksStart, CategoryAccount, NeedsActionFlag } from "../../../shared/invoiceLedger";
 import type { InvoiceIssuerTaxSnapshot, IssuerTaxRegistration } from "../../../shared/invoiceTaxRegistrations";
 import type { CharityRegistrationProjection } from "../../../shared/receipting/registration";
@@ -12,7 +12,10 @@ export type InvoicePaymentView = InvoicePayment & {
   transaction?: { _id: string; date: string; description?: string; amountCents: number };
 };
 
-export type InvoiceTimelineEvent = { atISO: string; kind: string; label: string; actorName?: string; amountCents?: number };
+export type InvoiceTimelineEvent = { atISO: string; kind: string; label: string; actorName?: string; amountCents?: number; externalDelivery?: InvoiceRow["externalDelivery"]; clientResponse?: InvoiceRow["clientResponse"] };
+
+export type { InvoiceIssuerSnapshot, InvoiceDeliveryMethod } from "../../../shared/invoicing";
+export type InvoiceClientResponse = InvoiceClientResponseKind;
 
 export type InvoiceRow = {
   _id: string;
@@ -20,7 +23,12 @@ export type InvoiceRow = {
   sequence: number;
   number: string;
   status: InvoiceStatus;
-  lifecycle: "draft" | "sent" | "void";
+  lifecycle: InvoiceLifecycle;
+  issuedAtISO?: string;
+  issuerSnapshot?: InvoiceIssuerSnapshot;
+  issuerLogoUrl?: string | null;
+  externalDelivery?: InvoiceExternalDelivery;
+  clientResponse?: RecordedInvoiceClientResponse;
   issuerTaxRegistrationsSnapshot?: InvoiceIssuerTaxSnapshot;
   partyKind: "member" | "organization" | "custom";
   memberId?: string;

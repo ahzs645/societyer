@@ -14939,6 +14939,22 @@
     ]
   },
   {
+    "key": "convex:invoices:document",
+    "surface": "convex",
+    "name": "invoices:document",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:invoices:documentTemplates",
     "surface": "convex",
     "name": "invoices:documentTemplates",
@@ -15010,6 +15026,28 @@
         "path": "id",
         "table": "repairJobs",
         "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:issue",
+    "surface": "convex",
+    "name": "invoices:issue",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
         "optional": false
       }
     ]
@@ -15149,6 +15187,22 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:recordClientResponse",
+    "surface": "convex",
+    "name": "invoices:recordClientResponse",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -42488,6 +42542,22 @@
     ]
   },
   {
+    "key": "portable:invoices:document",
+    "surface": "portable",
+    "name": "invoices:document",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:invoices:documentTemplates",
     "surface": "portable",
     "name": "invoices:documentTemplates",
@@ -42559,6 +42629,28 @@
         "path": "id",
         "table": "repairJobs",
         "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:issue",
+    "surface": "portable",
+    "name": "invoices:issue",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
         "optional": false
       }
     ]
@@ -42698,6 +42790,22 @@
         "table": "financialAccounts",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:recordClientResponse",
+    "surface": "portable",
+    "name": "invoices:recordClientResponse",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
       }
     ]
   },

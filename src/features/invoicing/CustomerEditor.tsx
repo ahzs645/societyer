@@ -64,12 +64,13 @@ function CustomerForm({ customer, societyId, canWrite, asModal, onClose, onSaved
   const form = (
     <div>
       {error && <p className="field__error" role="alert">{error}</p>}
+      {customer.oneOffName && <p className="muted">Save this customer for future invoices. Editable drafts can follow the customer record; finalized invoice details stay unchanged.</p>}
       <Field label="Name" required>
         <input className="input" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Riverside Farmers Market" />
       </Field>
       {showSentChoice && (
         <div className="field">
-          <Checkbox checked={updateSentInvoices} onChange={setUpdateSentInvoices} label="Also change the name on sent invoices" hint="Draft invoices and recurring series always update. Sent invoices keep the name they were issued with unless you tick this." />
+          <Checkbox checked={updateSentInvoices} onChange={setUpdateSentInvoices} label="Also rename older sent invoices" hint="This affects only sent invoices without locked document details. Prepared and finalized invoices stay unchanged. Editable drafts and recurring series update automatically." />
         </div>
       )}
       <Field label="Contact person"><input className="input" value={draft.contactName ?? ""} onChange={(e) => update({ contactName: e.target.value })} /></Field>

@@ -18,10 +18,12 @@ const { InvoicePdfDocument } = await import("../src/features/invoicing/InvoicePd
 // The builder constructs its own document projection. Guard that integration
 // separately: direct renderer fixtures cannot catch a dropped saved snapshot.
 const builderSource = await readFile(new URL("../src/features/invoicing/InvoiceBuilder.tsx", import.meta.url), "utf8");
-const builderPreview = builderSource.match(/const previewData = \{([\s\S]*?)\n  \};/)?.[1];
+const builderPreview = builderSource.match(/const draftPreviewData = \{([\s\S]*?)\n  \};/)?.[1];
 assert.ok(builderPreview, "the builder document projection is present");
 assert.match(builderPreview, /issuerTaxRegistrationsSnapshot:\s*invoice\?\.issuerTaxRegistrationsSnapshot\s*[,\n]/, "builder preview, download and print retain the saved issuer registrations instead of falling back to current organization data");
-assert.match(builderSource, /downloadInvoicePdf\(previewData,/, "PDF download uses the guarded projection");
+assert.match(builderSource, /const previewData = invoice && documentLocked \? invoice : draftPreviewData/, "reactively finalized and prepared previews use the saved record, not stale local draft edits");
+assert.match(builderSource, /client\.query\(api\.invoices\.document, \{ id: invoice\._id \}\)/, "finalized PDF download fetches the saved document");
+assert.match(builderSource, /downloadInvoicePdf\(document,/, "PDF download uses the canonical document projection");
 assert.match(builderSource, /<InvoicePdfPreview invoice=\{previewData\}/, "PDF preview uses the guarded projection");
 assert.match(builderSource, /<InvoicePrintPortal invoice=\{previewData\}/, "printing uses the guarded projection");
 

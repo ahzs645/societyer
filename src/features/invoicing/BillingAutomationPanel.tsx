@@ -37,7 +37,12 @@ export function BillingAutomationPanel({ societyId, canWrite }: { societyId: str
               const config = branding.selectedTemplate?.config ?? branding.templates.find((t: any) => t._id === snapshot.templateId)?.config;
               snapshot = { ...snapshot, result, organization: branding.organization, config };
               bytes = await buildBrandedReportPdf({ report: commerceReportDocument(result), organization: branding.organization, template: config, includeGraphs: true });
-            } else { const { buildInvoicePdf } = await import("./invoicePdf"); snapshot = { ...snapshot, organization: { ...snapshot.organization, logoUrl: branding.organization.logoUrl } }; bytes = await buildInvoicePdf(snapshot); }
+            } else {
+              const { buildInvoicePdf } = await import("./invoicePdf");
+              const saved = snapshot.invoice.issuerSnapshot ? await client.query(api.invoices.document, { id: run.invoiceId ?? snapshot.invoice._id }) : null;
+              snapshot = { ...snapshot, invoice: { ...snapshot.invoice, ...(saved ? { issuerLogoUrl: saved.issuerLogoUrl } : {}) }, organization: { ...snapshot.organization, logoUrl: saved ? saved.issuerLogoUrl : branding.organization.logoUrl } };
+              bytes = await buildInvoicePdf(snapshot);
+            }
           }
           let base64 = run.localPdfBase64;
           if (bytes) { const chunks: string[] = []; for (let offset = 0; offset < bytes.length; offset += 0x8000) chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))); base64 = btoa(chunks.join("")); }

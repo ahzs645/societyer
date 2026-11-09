@@ -6,6 +6,7 @@ import { formatDate } from "../../lib/format";
 import { InvoiceStatusPill, NeedsActionPill } from "./InvoiceStatusPill";
 import { DEFAULT_INVOICE_LIST_VIEW, type InvoiceListView } from "../../../shared/billingPricing";
 import type { InvoiceRow } from "./types";
+import { INVOICE_CLIENT_RESPONSE_LABEL as CLIENT_RESPONSE_LABEL } from "../../../shared/invoicing";
 
 type SortKey = InvoiceListView['sortKey'];
 export function InvoiceListTable({ rows, columns, sort, selected, openId, onSort, onToggle, onSelectAll, onOpen }: {
@@ -23,7 +24,7 @@ export function InvoiceListTable({ rows, columns, sort, selected, openId, onSort
       case 'total': return <Money cents={row.totalCents} currency={row.currency} struck={row.status === 'void'} />;
       case 'balance': return row.status === 'void' || row.balanceCents === 0 ? <span className="muted">—</span> : <Money cents={row.balanceCents} currency={row.currency} />;
       case 'paid': return <Money cents={row.paidCents} currency={row.currency} />;
-      case 'status': return <span className="invoice-status-cell"><InvoiceStatusPill status={row.status} daysOverdue={row.daysOverdue} partial={row.paidCents > 0} /><NeedsActionPill flags={row.needsAction} /></span>;
+      case 'status': return <span className="invoice-status-cell"><InvoiceStatusPill status={row.status} daysOverdue={row.daysOverdue} partial={row.paidCents > 0} /><NeedsActionPill flags={row.needsAction} />{row.lifecycle === "issued" && <span className="invoice-workflow__delivery muted">Sending not recorded</span>}{row.clientResponse && <span className="invoice-workflow__delivery" title={row.clientResponse.note}>{CLIENT_RESPONSE_LABEL[row.clientResponse.response]}</span>}</span>;
       case 'currency': return row.currency;
       case 'email': return row.billToEmail || '—';
       case 'reference': return row.reference || '—';

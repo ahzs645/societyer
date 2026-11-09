@@ -20,7 +20,7 @@ import { assertBooksOpen, booksSettingsRow } from "./booksLock";
 import { cashLedgerAccountId } from "./bankAccounts";
 import { validateBalancedJournalLines } from "../accountingCore";
 import { openingBalanceDate } from "../accountingBackfill";
-import { explicitFxQuote, convertInvoiceCents, allocateMoney, paidCents, type InvoiceMoneyOptions, computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine, type InvoicePayment } from "../invoicing";
+import { isIssuedInvoice, explicitFxQuote, convertInvoiceCents, allocateMoney, paidCents, type InvoiceMoneyOptions, computeInvoiceTotals, type InvoiceDiscount, type InvoiceLine, type InvoicePayment } from "../invoicing";
 import {
   INVOICE_POSTINGS,
   INVOICE_POSTING_SOURCES,
@@ -524,7 +524,7 @@ export type AccrualOutcome = { entryId?: string; skipped?: string; changed: bool
  * change, unless its payments are already recognised on the cash basis.
  */
 export async function syncAccrual(ctx: PortableMutationCtx, invoice: StoredInvoice, lctx: InvoiceLedgerContext, createdByUserId?: string): Promise<AccrualOutcome> {
-  if (invoice.status !== "sent") return { skipped: "Only sent invoices are in the books.", changed: false };
+  if (!isIssuedInvoice(invoice.status)) return { skipped: "Only issued invoices are in the books.", changed: false };
   const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount, invoice.money);
   if (!(totals.grossTotalCents > 0)) return { skipped: "Nothing to post: the gross total is zero.", changed: false };
   const blockers = accrualBlockers(invoice, lctx);

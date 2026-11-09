@@ -8,7 +8,7 @@ import { RepairJobsPanel } from "../features/invoicing/RepairJobsPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, Ban, Bell, BookCheck, Download, FileSpreadsheet, FileText, Landmark, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, Bell, BookCheck, Download, FileCheck2, FileSpreadsheet, FileText, Landmark, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
@@ -80,11 +80,11 @@ function rowsForTab(rows: InvoiceRow[], tab: InvoiceTab): InvoiceRow[] {
 
 const EMPTY: Record<string, { title: string; description: string }> = {
   all: { title: "No invoices yet", description: "Create an invoice for a rental, a program fee or a sponsorship, then record payments as they arrive." },
-  drafts: { title: "No drafts", description: "Invoices you're still working on wait here until you mark them as sent." },
-  outstanding: { title: "Nothing outstanding", description: "Every sent invoice has been paid." },
-  overdue: { title: "Nothing overdue", description: "No sent invoice is past its due date." },
+  drafts: { title: "No drafts", description: "Invoices you're still working on wait here until you finalize them." },
+  outstanding: { title: "Nothing outstanding", description: "Every finalized invoice has been settled." },
+  overdue: { title: "Nothing overdue", description: "No finalized invoice is past its due date." },
   paid: { title: "No paid invoices yet", description: "Invoices move here once their balance is zero." },
-  needs_action: { title: "Nothing needs action", description: "Every sent invoice is in the books and its payments match their deposits." },
+  needs_action: { title: "Nothing needs action", description: "Every finalized invoice is in the books and its payments match their deposits." },
 };
 
 /**
@@ -110,6 +110,7 @@ export function InvoicesPage() {
     customers: summarizeCustomers(queriedWorkspace.invoices.filter((row) => row.currency === currency), queriedWorkspace.parties.organizations),
   } : undefined, [queriedWorkspace, currency]);
   const markSent = useMutation(api.invoices.markSent);
+  const issue = useMutation(api.invoices.issue);
   const sendReminders = useMutation(api.invoices.sendReminders);
   const voidInvoices = useMutation(api.invoices.voidInvoices);
   const confirm = useConfirm();
@@ -250,6 +251,7 @@ export function InvoicesPage() {
           canExport={canExport}
           onClose={closeBuilder}
           onSaved={(id) => setParam({ builder: id })}
+          onFinalized={(id) => setParam({ builder: null, invoice: id })}
           onOpenBuilder={(id) => openBuilder(id)}
         />
       </div>
@@ -278,13 +280,32 @@ export function InvoicesPage() {
     }
   };
 
-  const bulkMarkSent = async () => {
+  const bulkFinalize = async () => {
     const drafts = selectedRows.filter((row) => row.lifecycle === "draft");
-    if (!drafts.length) return toast.info("Only drafts can be marked as sent");
+    if (!drafts.length) return toast.info("Select draft invoices to finalize");
+    const ok = await confirm({ title: `Finalize ${pluralize(drafts.length, "draft invoice")}?`, message: "This locks their details and records the invoices in the books when their accounts are configured. Download and send each invoice yourself afterward.", confirmLabel: "Finalize drafts" });
+    if (!ok) return;
     setBusy(true);
     try {
-      const result: any = await markSent({ societyId: society._id, ids: drafts.map((row) => row._id) as any });
-      toast.success(`${pluralize(result.sent, "invoice")} marked as sent`);
+      const result: any = await issue({ societyId: society._id, ids: drafts.map((row) => row._id) });
+      toast.success(`${pluralize(result.issued, "invoice")} finalized`, "Open an invoice to download it and record external sending.");
+      setSelected(new Set());
+    } catch (err: any) {
+      toast.error("Could not finalize invoices", err?.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const bulkMarkSent = async () => {
+    const issued = selectedRows.filter((row) => row.lifecycle === "issued");
+    if (!issued.length) return toast.info("Select finalized invoices whose sending has not been recorded");
+    const ok = await confirm({ title: "Record external sending today?", message: `Confirm that you have already sent ${pluralize(issued.length, "invoice")} yourself today. Societyer will record today's date and will not send an email. For another date or delivery details, open each invoice.`, confirmLabel: "Record sending" });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const result: any = await markSent({ societyId: society._id, ids: issued.map((row) => row._id), sentDate: workspace!.today, method: "other" });
+      toast.success(`External sending recorded for ${pluralize(result.sent, "invoice")}`);
       setSelected(new Set());
     } catch (err: any) {
       toast.error("Could not mark as sent", err?.message);
@@ -294,7 +315,7 @@ export function InvoicesPage() {
   };
 
   const bulkRemind = async () => {
-    const open = selectedRows.filter((row) => isOpenStatus(row.status));
+    const open = selectedRows.filter((row) => row.lifecycle === "sent" && isOpenStatus(row.status));
     if (!open.length) return toast.info("Reminders are for sent invoices with a balance");
     setBusy(true);
     try {
@@ -407,7 +428,7 @@ export function InvoicesPage() {
         info={
           <p>
             Invoices are numbered in order and never reuse a number. Status follows the payments you record and the due date in your
-            organization's time zone. Sending stays in your hands: mark an invoice as sent, or draft the email in the Outbox and send it from there.
+            organization's time zone. Finalize and download the invoice, send it yourself, then record external sending and the client's response. Payments are recorded separately.
           </p>
         }
         actions={
@@ -475,7 +496,7 @@ export function InvoicesPage() {
       )}
       {section.id === "invoices" && workspace && workspace.ledger.readyCount > 0 && (
         <Banner tone="info" className="invoice-banner" title={`${pluralize(workspace.ledger.readyCount, "invoice")} not in the books yet`}>
-          Sent invoices from before the books were connected, or recorded while their accounts weren't mapped, can be posted now.{" "}
+          Finalized invoices from before the books were connected, or recorded while their accounts weren't mapped, can be posted now.{" "}
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setPostExistingOpen(true)}>Post existing invoices</button>
         </Banner>
       )}
@@ -582,10 +603,11 @@ export function InvoicesPage() {
               <span><strong>{selectedRows.length}</strong> selected · <Money currency={currency} cents={selectedTotal} /> due</span>
               <div className="invoice-bulkbar__actions">
                 <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkRemind()}>
-                  <Bell size={12} aria-hidden="true" /> Send reminder
+                  <Bell size={12} aria-hidden="true" /> Draft reminder email
                 </button>
+                <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkFinalize()}><FileCheck2 size={12} aria-hidden="true" /> Finalize drafts</button>
                 <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkMarkSent()}>
-                  <Send size={12} aria-hidden="true" /> Mark as sent
+                  <Send size={12} aria-hidden="true" /> Record external sending
                 </button>
                 <button type="button" className="btn btn--sm" disabled={!canExport} onClick={() => void exportRows(selectedRows, "selected")}>
                   <Download size={12} aria-hidden="true" /> Export

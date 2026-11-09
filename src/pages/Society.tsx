@@ -12,7 +12,7 @@ import { governingDocumentSlots, type GoverningDocumentField } from "../../share
 import { authenticatedFetch } from "@/lib/authToken";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -33,6 +33,7 @@ import { Toggle } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
+import { revealAnchor } from "../lib/anchorReveal";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
@@ -40,6 +41,7 @@ import { homeJurisdictionCode, isCorporation, isPreparingIncorporation, isSociet
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { TooltipCopyable } from "../components/TooltipCopyable";
+import { GstAccountReference } from "../components/GstAccountReference";
 import { useAuth } from "../auth/AuthProvider";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import {
@@ -189,22 +191,11 @@ export function SocietyPage() {
     const details = moreDetailsRef.current;
     if (!details) return;
     details.open = true;
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    requestAnimationFrame(() => {
-      (document.getElementById(targetId) ?? details).scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
-    });
+    revealAnchor(targetId);
   };
   const formReady = Boolean(form);
-  const { hash } = useLocation();
-  // Links to #registered-office (setup's "registered office" step, Registered
-  // locations → Manage) or #more-organization-details land on an open
-  // section, scrolled into view, not on a collapsed summary. Other query
-  // parameters (?setup=office) are left alone.
-  useEffect(() => {
-    if (!formReady || !permissions.loaded) return;
-    if (hash === "#registered-office") openMoreDetails("registered-office");
-    else if (hash === "#more-organization-details") openMoreDetails();
-  }, [formReady, permissions.loaded, hash]);
+  // The app's useAnchorReveal owns deep links, including opening this section
+  // and correcting its position while asynchronous profile content settles.
   // ?intent=address also opens the new-address form.
   useEffect(() => {
     if (!formReady || !permissions.loaded) return;
@@ -584,6 +575,14 @@ export function SocietyPage() {
       )}
 
       <OrganizationRegistrationProfile key={society._id} organization={society} />
+
+      <GstAccountReference identifiers={detail?.identifiers} actions={<>
+        <button className="btn-action" type="button" onClick={() => openMoreDetails("tax-identifiers")}>Manage tax identifiers</button>
+        {canEdit && <button className="btn-action btn-action--primary" type="button" onClick={() => {
+          setDrawerKind("identifier");
+          setDraft({ kind: "gst", number: "", status: "needs_review", accessLevel: "internal", jurisdiction: "federal__canada_" });
+        }}><Plus size={12} /> Add GST/HST account</button>}
+      </>} />
 
       <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div className="society-layout">
@@ -1021,7 +1020,7 @@ export function SocietyPage() {
                 />
               </DetailSection>
 
-              <DetailSection
+              <div id="tax-identifiers" style={{ scrollMarginTop: 16 }}><DetailSection
                 icon={<KeyRound size={14} />}
                 title="Tax and registry identifiers"
                 count={detail?.identifiers?.length ?? 0}
@@ -1042,7 +1041,7 @@ export function SocietyPage() {
                     <RowActions key="a" onEdit={() => { setDrawerKind("identifier"); setDraft(row); }} onRemove={() => removeDetailRow("identifier", row)} />,
                   ]}
                 />
-              </DetailSection>
+              </DetailSection></div>
             </div>
           </div>
         </div>

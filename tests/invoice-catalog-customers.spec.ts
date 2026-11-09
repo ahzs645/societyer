@@ -9,6 +9,22 @@ async function newItem(page: Page, name: string, price: string | null) {
   await expect(form).not.toBeVisible();
 }
 
+async function requestFinalization(page: Page) {
+  await page.getByRole("button", { name: "More invoice actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Finalize without downloading", exact: true }).click();
+}
+
+async function finalizeInvoice(page: Page) {
+  await requestFinalization(page);
+  const confirmation = page.getByRole("dialog", { name: "Finalize invoice?", exact: true });
+  await confirmation.getByRole("button", { name: "Finalize invoice", exact: true }).click();
+  await expect(page).toHaveURL(/invoice=[^&]+/);
+  await expect(page.locator(".invoice-builder__form")).toHaveCount(0);
+  const drawer = page.locator(".invoice-drawer");
+  await expect(drawer.getByRole("region", { name: "Invoice workflow", exact: true })).toContainText("Ready for you to send");
+  await expect(drawer.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+}
+
 test("set, overridden and open prices share one item form across the catalog, invoices and repairs", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -40,7 +56,7 @@ test("set, overridden and open prices share one item form across the catalog, in
   await expect(price(0)).toHaveValue("85.00");
   await price(0).fill("70.00");
 
-  // An open price starts empty, survives a quantity change and blocks sending until it's filled.
+  // An open price starts empty, survives a quantity change and blocks finalization until it's filled.
   await fromCatalog.click();
   await page.getByRole("menuitem", { name: new RegExp(openItem) }).click();
   await expect(price(1)).toHaveValue("");
@@ -50,7 +66,7 @@ test("set, overridden and open prices share one item form across the catalog, in
 
   await form.getByRole("combobox", { name: "Bill to", exact: true }).fill(`Pricing customer ${suffix}`);
   await page.getByRole("option", { name: /Create customer/ }).click();
-  await page.getByRole("button", { name: "Mark as sent", exact: true }).click();
+  await requestFinalization(page);
   await expect(form).toContainText(`${openItem} has no set price`);
   await price(1).fill("40.00");
   await expect(line(1)).not.toContainText("No set price");
@@ -75,7 +91,7 @@ test("set, overridden and open prices share one item form across the catalog, in
   await expect(line(3).getByRole("button", { name: "Save to catalog", exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect.poll(() => new URL(page.url()).searchParams.get("builder")).not.toBe("new");
+  await expect(page).toHaveURL(/builder=(?!new)[^&]+/);
   await expect(price(1)).toHaveValue("40.00");
   await expect(line(0)).toContainText("The set price is $85.00");
 
@@ -116,17 +132,14 @@ test("customers can be added, edited and renamed without rewriting what was issu
   await expect(form.locator(".billto__field--wide textarea")).toHaveValue("1 Main St");
   await form.locator(".line-editor__row").first().getByLabel("Item", { exact: true }).fill("Consulting");
   await form.locator(".line-editor__row").first().getByLabel("Price (CAD)", { exact: true }).fill("100.00");
-  await page.getByRole("button", { name: "Mark as sent", exact: true }).click();
-  await expect(page.locator(".invoice-builder__form")).toHaveCount(0);
+  await finalizeInvoice(page);
 
-  // A rename shows straight away but leaves the sent invoice as issued.
+  // A rename shows straight away but preserves the finalized invoice's recipient.
   await page.goto("/app/invoices?tab=customers");
   await row(original).getByRole("button", { name: `Edit ${original}`, exact: true }).click();
   drawer = page.getByRole("dialog");
   await expect(drawer.getByLabel("Billing address", { exact: true })).toHaveValue("1 Main St");
-  await expect(drawer.getByText("Also change the name on sent invoices", { exact: true })).toHaveCount(0);
   await drawer.getByLabel("Name", { exact: true }).fill(corrected);
-  await expect(drawer.getByText("Also change the name on sent invoices", { exact: true })).toBeVisible();
   await drawer.getByRole("button", { name: "Save", exact: true }).click();
   await expect(drawer).not.toBeVisible();
   await expect(row(corrected)).toBeVisible();
@@ -145,21 +158,29 @@ test("customers can be added, edited and renamed without rewriting what was issu
   await expect(modal).not.toBeVisible();
   await expect(form.getByLabel("Email", { exact: true })).toHaveValue("billing@acme.example");
 
-  // A one-off can be saved as a customer without leaving a duplicate behind.
+  // Save a one-off as a customer while its invoice is still an editable draft.
+  // Draft-only recipients do not appear in billed-customer history, so use the bill-to picker.
   await page.goto("/app/invoices?builder=new");
   await form.getByRole("combobox", { name: "Bill to", exact: true }).fill(oneOff);
   await page.getByRole("option", { name: /once/ }).click();
   await form.locator(".line-editor__row").first().getByLabel("Item", { exact: true }).fill("Door sale");
   await form.locator(".line-editor__row").first().getByLabel("Price (CAD)", { exact: true }).fill("25.00");
-  await page.getByRole("button", { name: "Mark as sent", exact: true }).click();
-  await expect(page.locator(".invoice-builder__form")).toHaveCount(0);
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page).toHaveURL(/builder=(?!new)[^&]+/);
+  const draftId = new URL(page.url()).searchParams.get("builder")!;
+  await expect(form.locator(".billto__kind")).toHaveText("One-off");
+  await form.getByRole("button", { name: `Change who to bill (currently ${oneOff})`, exact: true }).click();
+  await form.getByRole("combobox", { name: "Bill to", exact: true }).fill(oneOff);
+  await page.getByRole("option", { name: `Create customer “${oneOff}”` }).click();
+  await expect(form.locator(".billto__kind")).toHaveText("Customer");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(async () => page.evaluate(async (id) => {
+    const path = "/src/lib/localDataClient.ts";
+    const { localDataClient: client } = await import(path);
+    const invoice = await client.query("invoices:document", { id });
+    return { lifecycle: invoice.lifecycle, partyKind: invoice.partyKind, name: invoice.billToName, linked: Boolean(invoice.counterpartyId) };
+  }, draftId)).toEqual({ lifecycle: "draft", partyKind: "organization", name: oneOff, linked: true });
   await page.goto("/app/invoices?tab=customers");
-  await expect(row(oneOff)).toContainText("One-off");
-  await row(oneOff).getByRole("button", { name: `Edit ${oneOff}`, exact: true }).click();
-  drawer = page.getByRole("dialog");
-  await expect(drawer.getByRole("heading", { name: "Save as customer" })).toBeVisible();
-  await drawer.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(drawer).not.toBeVisible();
   await expect(row(oneOff)).toHaveCount(1);
   await expect(row(oneOff)).not.toContainText("One-off");
 
