@@ -35,6 +35,7 @@ test("correct an unsent unposted invoice in place and retain its previous PDF", 
     const id = await client.mutation("invoices:upsert", { societyId, partyKind: "custom", billToName: "Synthetic correction customer", issueDate: "2026-11-08", terms: "net_15", currency: "CAD", lines: [{ key: "service", item: "Original synthetic website build", quantity: 1, unitPriceCents: 12500 }] });
     const result = await client.mutation("invoices:issue", { societyId, ids: [id] });
     if (result.posted) throw new Error("Correction fixture must have no ledger posting");
+    await client.mutation("invoices:saveSettings", { societyId, prefix: "INV-", nextNumber: 2, defaultTerms: "net_15", paymentMethods: [{ id: "eft", name: "Current synthetic EFT", type: "eft", details: "Synthetic receiving details with transit 00002" }], defaultPaymentMethodIds: ["eft"], paymentInstructions: "Current synthetic receiving instructions" });
     return id;
   }, `Unsent correction ${testInfo.project.name}`);
   await page.goto(`/app/invoices?invoice=${id}`);
@@ -50,6 +51,9 @@ test("correct an unsent unposted invoice in place and retain its previous PDF", 
   await form.getByPlaceholder("What you're billing for", { exact: true }).first().fill("Updated synthetic website build");
   await form.locator(".line-editor__field--price input").first().fill("250.00");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Invoice saved", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Invoices", exact: true }).click();
+  await page.getByRole("button", { name: issued.number, exact: true }).click();
   await expect(drawer).toBeVisible();
   await expect(drawer).toContainText("Never sent; correct the service charge");
   const downloading = page.waitForEvent("download");
@@ -66,6 +70,8 @@ test("correct an unsent unposted invoice in place and retain its previous PDF", 
   expect(corrected.lifecycle).toBe("draft");
   expect(corrected.totalCents).toBe(25000);
   expect(corrected.sentAtISO).toBeUndefined();
+  expect(corrected.paymentMethods[0].name).toBe("Current synthetic EFT");
+  expect(corrected.paymentInstructions).toBe("Current synthetic receiving instructions");
   await drawer.getByRole("button", { name: `More actions for ${issued.number}`, exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Delete draft", exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("same-number-invoice-correction.png"), fullPage: true });

@@ -490,7 +490,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
                     ? [{ id: "finalize", label: "Finalize without downloading", icon: <FileCheck2 size={14} />, disabled: working, onSelect: () => void finalizeInvoice(false) }]
                     : []),
                   ...(invoice ? [{ id: "duplicate", label: "Duplicate", icon: <Copy size={14} />, disabled: working || !canWrite, onSelect: () => void doDuplicate() }] : []),
-                  ...(invoice?.lifecycle === "draft" && !documentLocked && !invoice.payments.length
+                  ...(invoice?.lifecycle === "draft" && !documentLocked && !invoice.reopenedAtISO && !invoice.payments.length
                     ? [{ id: "delete", label: "Delete draft", icon: <Trash2 size={14} />, destructive: true, disabled: working || !canWrite, onSelect: () => void doDelete() }]
                     : []),
                 ],
