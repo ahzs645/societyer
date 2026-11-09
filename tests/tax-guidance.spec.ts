@@ -78,7 +78,8 @@ test("catalog guidance persists; invoice assessment distinguishes exemptions and
   await guide.getByRole("button", { name: "Confirm and apply tax treatment", exact: true }).click();
   await expect(line).toContainText("GST: Zero-rated; PST: Exempt");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect.poll(() => new URL(page.url()).searchParams.get("builder")).not.toBe("new");
+  await expect(page).toHaveURL(/builder=(?!new)[^&]+/);
+  const invoiceId = new URL(page.url()).searchParams.get("builder")!;
   await page.reload();
   await expect(form.locator(".line-editor__row").first()).toContainText("GST: Zero-rated; PST: Exempt");
 
@@ -90,8 +91,23 @@ test("catalog guidance persists; invoice assessment distinguishes exemptions and
   await expect(guide.getByRole("button", { name: "Confirm and apply tax treatment", exact: true })).toBeDisabled();
   await guide.getByRole("button", { name: "Keep for review", exact: true }).click();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await page.getByRole("button", { name: "Mark as sent", exact: true }).click();
-  await expect(form).toContainText("Complete and confirm the tax assessment");
+  await page.getByRole("button", { name: "More invoice actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Finalize without downloading", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Finalize invoice?", exact: true });
+  await confirmation.getByRole("button", { name: "Finalize invoice", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Could not finalize invoice" })).toContainText("Complete and confirm the tax assessment");
+  await expect(form).toBeVisible();
+  await expect(page).toHaveURL(url => url.searchParams.get("builder") === invoiceId);
+  await expect(page.locator(".invoice-print-portal .document-preview__watermark")).toContainText("DRAFT");
+  const document = await page.evaluate(async (id) => {
+    const path = "/src/lib/localDataClient.ts";
+    const { localDataClient: client } = await import(path);
+    return client.query("invoices:document", { id });
+  }, invoiceId);
+  expect(document.lifecycle).toBe("draft");
+  expect(document.issuedAtISO).toBeUndefined();
+  expect(document.sentAtISO).toBeUndefined();
+  expect(document.issuerSnapshot).toBeUndefined();
   await page.screenshot({ path: testInfo.outputPath("tax-assessment.png"), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   expect(errors).toEqual([]);

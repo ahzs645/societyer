@@ -17,6 +17,7 @@
   line-height: 1.4;
   white-space: nowrap;
   &--draft { background: token(bg-muted); color: token(text-secondary); }
+  &--issued { background: token(info-soft); color: token(info); }
   &--sent { background: token(info-soft); color: token(info); }
   &--partially-paid { background: token(accent-soft); color: token(accent); }
   &--paid { background: token(success-soft); color: token(font-color-success); }

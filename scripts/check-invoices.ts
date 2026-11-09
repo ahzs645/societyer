@@ -204,7 +204,9 @@ assert.equal(created.dueDate, addDays(today, 14));
 assert.equal(created.totalCents, 47250);
 const outboxBefore = (await db.query("pendingEmails").collect()).length;
 result = await inv.markSentPortable(ctx, { societyId: S, ids: [id], draftEmail: true });
-assert.deepEqual(result, { sent: 1, emailed: 1, skipped: 0, posted: 1 });
+assert.deepEqual(result, { sent: 0, emailed: 1, skipped: 0, posted: 1 });
+assert.equal((await db.get(id)).status, "issued", "preparing an Outbox email does not assert delivery");
+assert.equal((await db.get(id)).sentAtISO, undefined);
 assert.equal((await db.query("pendingEmails").collect()).length, outboxBefore + 1);
 const dup = await inv.duplicatePortable(ctx, { id });
 assert.equal((await db.get(dup)).number, "RCS-0027");
@@ -268,13 +270,15 @@ assert.equal((await db.get(acmeSent)).billToName, "Acme Sevices", "sent invoices
 ws = await inv.workspacePortable(ctx, { societyId: S });
 assert.equal(ws.customers.find((row: any) => row.counterpartyId === customerId).name, "Acme Services", "the list shows the current name");
 await inv.upsertCustomerPortable(ctx, { id: customerId, societyId: S, name: "Acme Services Ltd", email: "billing@acme.example", address: "1 Main St", updateSentInvoices: true });
-assert.equal((await db.get(acmeSent)).billToName, "Acme Services Ltd", "the opt-in corrects sent invoices");
-assert.ok((await db.get(acmeSent)).timeline.some((event: any) => event.kind === "customer_updated"), "and records it on the invoice");
+assert.equal((await db.get(acmeSent)).billToName, "Acme Sevices", "finalized invoices retain their recipient even when master edits opt into legacy renaming");
+assert.ok(!(await db.get(acmeSent)).timeline.some((event: any) => event.kind === "customer_updated"), "a customer master rename cannot rewrite a finalized invoice's audit history");
 await assert.rejects(() => inv.upsertCustomerPortable(ctx, { id: customerId, societyId: "other_society", name: "Taken over" }));
 
 // customers: a one-off becomes a saved customer and keeps its history
 const oneOffInvoice = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Walk-in Wes", issueDate: today, terms: "net_30", currency: "CAD", lines: [line(1, 2500)] });
 await inv.markSentPortable(ctx, { societyId: S, ids: [oneOffInvoice] });
+// Model a legacy invoice that predates captured issuer/recipient immutability.
+await db.patch(oneOffInvoice, { issuerSnapshot: undefined });
 const savedOneOff = await inv.upsertCustomerPortable(ctx, { societyId: S, name: "Wes Walker", oneOffName: "walk-in wes " });
 assert.deepEqual([(await db.get(oneOffInvoice)).partyKind, (await db.get(oneOffInvoice)).counterpartyId, (await db.get(oneOffInvoice)).billToName], ["organization", savedOneOff, "Walk-in Wes"]);
 ws = await inv.workspacePortable(ctx, { societyId: S });

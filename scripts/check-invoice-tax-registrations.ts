@@ -101,10 +101,19 @@ const manualSchedule = await automation.saveSchedulePortable(ctx, { ...scheduleA
 await automation.prepareDuePortable(ctx, { societyId, atISO: at });
 const run = await db.query("billingAutomationRuns").withIndex("by_schedule_occurrence", q => q.eq("scheduleId", manualSchedule).eq("occurrenceKey", date)).unique();
 const reserved = (await db.get(run!.invoiceId))!.issuerTaxRegistrationsSnapshot;
+const reservedIssuer = (await db.get(run!.invoiceId))!.issuerSnapshot;
+const reservedTemplate = (await db.get(run!.invoiceId))!.documentTemplate;
 assert.deepEqual(run!.snapshot.invoice.issuerTaxRegistrationsSnapshot, reserved);
+assert.deepEqual(run!.snapshot.invoice.issuerSnapshot, reservedIssuer);
+assert.equal(run!.snapshot.invoice.status, "issued", "a prepared attachment does not claim customer delivery");
+await assert.rejects(() => invoices.removePortable(ctx, { id: run!.invoiceId }), /have not been prepared/, "prepared delivery keeps its invoice and retained logo references");
+await db.patch(societyId, { name: "Changed after recurring attachment preparation", mailingAddress: "Changed synthetic address" });
+await assert.rejects(() => invoices.upsertPortable(ctx, { ...input, id: run!.invoiceId, lines: (run!.snapshot.invoice.lines as any[]).map(line => ({ ...line, quantity: 2 })) }), /immutable/);
 await upsertIdentifierPortable(ctx, { societyId, id: gstId, ...gst, number: "111222333RT0001" });
 // Simulate provider acceptance; this test never invokes a delivery provider.
-await db.patch(run!._id, { status: "accepted" });
+await db.patch(run!._id, { status: "accepted", deliveries: run!.deliveries.map((delivery: any) => ({ ...delivery, status: "accepted", acceptedAtISO: new Date().toISOString(), provider: "synthetic", providerId: "synthetic-accepted-message" })) });
 await automation.finalizeRunPortable(ctx, { societyId, id: run!._id });
 assert.deepEqual((await db.get(run!.invoiceId))!.issuerTaxRegistrationsSnapshot, reserved);
+assert.deepEqual((await db.get(run!.invoiceId))!.issuerSnapshot, reservedIssuer, "later delivery finalization preserves the attachment's original issuer");
+assert.deepEqual((await db.get(run!.invoiceId))!.documentTemplate, reservedTemplate);
 console.log("PASS invoice tax registrations: formats, active/effective selection, ambiguity, issue/payment gates, historical snapshots, and recurring preparation/finalization.");

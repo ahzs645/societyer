@@ -11,9 +11,9 @@ import { assignedPriceList, quantityCatalogRate, type BillingPricingWorkspace } 
 import { partyKey as billingPartyKey } from "../../../shared/invoicing";
 import type { DocumentExtras } from "../../../shared/documentExtras";
 import { INVOICE_CURRENCIES, catalogRate, cleanInvoiceTemplate, resolveDocumentDesign, type InvoiceTemplate } from "../../../shared/invoiceCommerce";
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, Download, Copy, Eye, MoreHorizontal, Pencil, Printer, Repeat, Save, Send, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useConvex, useMutation, useQuery } from "convex/react";
+import { ArrowLeft, Download, Copy, Eye, FileCheck2, MoreHorizontal, Pencil, Printer, Repeat, Save, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Banner, Drawer, Field } from "../../components/ui";
 import { Toggle } from "../../components/Controls";
@@ -152,13 +152,15 @@ type Props = {
   onClose: () => void;
   /** Called after the first save so the URL can point at the saved invoice. */
   onSaved: (id: string) => void;
+  onFinalized: (id: string) => void;
   onOpenBuilder: (id: string) => void;
 };
 
 /** Full-page invoice builder with a live, printable preview. */
-export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl, showMembers, canWrite, canExport, onClose, onSaved, onOpenBuilder }: Props) {
+export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl, showMembers, canWrite, canExport, onClose, onSaved, onFinalized, onOpenBuilder }: Props) {
+  const client = useConvex();
   const upsert = useMutation(api.invoices.upsert);
-  const markSent = useMutation(api.invoices.markSent);
+  const issue = useMutation(api.invoices.issue);
   const duplicate = useMutation(api.invoices.duplicate);
   const remove = useMutation(api.invoices.remove);
   const upsertSeries = useMutation(api.invoices.upsertSeries);
@@ -171,6 +173,9 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const [pricingChanged,setPricingChanged] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const finalizationInFlight = useRef(false);
+  const savedId = useRef<string | null>(invoice?._id ?? null);
   const [error, setError] = useState<string | null>(null);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [paymentMethodsOpen, setPaymentMethodsOpen] = useState(false);
@@ -179,7 +184,15 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const [duplicateOk, setDuplicateOk] = useState(false);
   const [duplicateRetry, setDuplicateRetry] = useState<null | (() => void)>(null);
 
-  const readOnly = !canWrite || invoice?.lifecycle === "void";
+  const documentLocked = Boolean(invoice && (invoice.lifecycle !== "draft" || invoice.issuerSnapshot || invoice.issuerTaxRegistrationsSnapshot));
+  const readOnly = !canWrite || documentLocked || finalizing;
+  const working = busy || finalizing;
+  useEffect(() => {
+    if (invoice && documentLocked) {
+      setDraft(initialDraft(workspace, invoice));
+      setDirty(false);
+    }
+  }, [invoice?._id, invoice?.lifecycle, invoice?.issuedAtISO, documentLocked]);
   const update = (patch: Partial<Draft>) => {
     const repricing = ["issueDate","priceListId","currency","partyKind","memberId","counterpartyId","billToName"].some(key=>Object.prototype.hasOwnProperty.call(patch,key));
     if(repricing)setPricingChanged(true);
@@ -213,7 +226,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   });
   const hasTax = totals.taxes.length > 0;
 
-  const previewData = {
+  const draftPreviewData = {
     number,
     issueDate: draft.issueDate,
     dueDate,
@@ -234,8 +247,16 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     memo: draft.memo || undefined,
     payments: invoice?.payments,
     status: invoice?.status ?? "draft",
+    lifecycle: invoice?.lifecycle ?? "draft",
+    issuedAtISO: invoice?.issuedAtISO,
+    sentAtISO: invoice?.sentAtISO,
+    issuerSnapshot: invoice?.issuerSnapshot,
+    issuerLogoUrl: invoice?.issuerLogoUrl,
     issuerTaxRegistrationsSnapshot: invoice?.issuerTaxRegistrationsSnapshot,
   };
+  // Another tab may finalize this invoice while this builder has unsaved edits.
+  // All finalized preview/print/export content must come from the saved record.
+  const previewData = invoice && documentLocked ? invoice : draftPreviewData;
   const organization = { ...workspace.organization, logoUrl };
   const partyKey = (party: { partyKind: string; memberId?: string; counterpartyId?: string; billToName: string }) =>
     party.partyKind === "member" && party.memberId ? `member:${party.memberId}` : party.partyKind === "organization" && party.counterpartyId ? `org:${party.counterpartyId}` : `name:${party.billToName.trim().toLowerCase()}`;
@@ -260,7 +281,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     return null;
   };
 
-  const save = async (): Promise<string | null> => {
+  const save = async (navigateAfterSave = true): Promise<string | null> => {
     const problem = validate();
     if (problem) {
       setError(problem);
@@ -269,7 +290,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     setBusy(true);
     try {
       const id: string = await upsert({
-        id: invoice?._id as any,
+        id: (invoice?._id ?? savedId.current ?? undefined) as any,
         societyId: societyId as any,
         partyKind: draft.partyKind,
         memberId: draft.partyKind === "member" ? (draft.memberId as any) : undefined,
@@ -289,6 +310,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         discount,
         memo: draft.memo || undefined,
       });
+      savedId.current = id;
       if (draft.repeat.enabled && !invoice?.seriesId) {
         await upsertSeries({
           societyId: societyId as any,
@@ -318,7 +340,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         setDraft((current) => ({ ...current, repeat: { ...current.repeat, enabled: false } }));
       }
       setDirty(false);
-      if (!invoice) onSaved(id);
+      if (!invoice && navigateAfterSave) onSaved(id);
       return id;
     } catch (err: any) {
       setError(err?.message ?? "Could not save the invoice.");
@@ -334,24 +356,40 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     if (id) toast.success(invoice ? "Invoice saved" : `Draft ${number} saved`);
   };
 
-  const sendNow = async (draftEmail: boolean, force = false) => {
-    if (!force && guardDuplicate(() => void sendNow(draftEmail, true))) return;
+  const finalizeInvoice = async (download: boolean, force = false) => {
+    if (finalizationInFlight.current || readOnly || (download && !canExport)) return;
+    if (!force && guardDuplicate(() => void finalizeInvoice(download, true))) return;
     const unpriced = lines.find((line) => !line.unitPriceCents && activeCatalog.some((item) => item._id === line.catalogItemId && item.openPrice));
     if (unpriced) {
-      setError(`${unpriced.item} has no set price. Enter the amount before sending.`);
+      setError(`${unpriced.item} has no set price. Enter the amount before finalizing.`);
       return;
     }
-    const id = await save();
-    if (!id) return;
+    finalizationInFlight.current = true;
+    setFinalizing(true);
+    let id: string | null = null;
+    let finalized = false;
     try {
-      const result: any = await markSent({ societyId: societyId as any, ids: [id as any], draftEmail });
-      toast.success(
-        `${number} marked as sent`,
-        result.emailed ? "An email is waiting in the Outbox for you to send." : draftEmail ? "No email address, so no Outbox draft was made." : undefined,
-      );
-      onClose();
+      const ok = await confirm({ title: "Finalize invoice?", message: "This locks the invoice details, removes Draft, and records the invoice in the books when its accounts are configured. You will send it to the client yourself and record sending afterward.", confirmLabel: download ? "Finalize and download" : "Finalize invoice" });
+      if (!ok) return;
+      id = await save(false);
+      if (!id) return;
+      const result = await issue({ societyId, ids: [id] });
+      finalized = result.issued > 0;
+      const document = await client.query(api.invoices.document, { id });
+      if (!document || document.lifecycle === "draft" || document.lifecycle === "void") throw new Error("The finalized invoice could not be loaded. Open the invoice and review its current state.");
+      finalized = true;
+      if (download) {
+        const { downloadInvoicePdf } = await import("./invoicePdf");
+        await downloadInvoicePdf(document, organization, workspace.settings.paymentInstructions);
+      }
+      toast.success(download ? "Invoice finalized and PDF downloaded" : "Invoice finalized", "Ready for you to send to the client.");
     } catch (err: any) {
-      toast.error("Could not mark as sent", err?.message);
+      toast.error(finalized ? download ? "Invoice finalized; PDF download failed" : "Invoice finalized; refresh needed" : "Could not finalize invoice", finalized ? `${err?.message ?? "Please try again."} Open the invoice panel${download ? " and use Download PDF to retry" : " to review it"}; the invoice is already finalized.` : err?.message);
+    } finally {
+      finalizationInFlight.current = false;
+      setFinalizing(false);
+      if (id && finalized) onFinalized(id);
+      else if (!invoice && savedId.current) onSaved(savedId.current);
     }
   };
 
@@ -403,16 +441,21 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const downloadPdf = async () => {
     if (!canExport) return;
     setBusy(true);
-    try { const { downloadInvoicePdf } = await import("./invoicePdf"); await downloadInvoicePdf(previewData, organization, workspace.settings.paymentInstructions); }
+    try {
+      const document = invoice && documentLocked ? await client.query(api.invoices.document, { id: invoice._id }) : previewData;
+      if (!document) throw new Error("The saved invoice could not be loaded.");
+      const { downloadInvoicePdf } = await import("./invoicePdf");
+      await downloadInvoicePdf(document, organization, workspace.settings.paymentInstructions);
+    }
     catch (e) { toast.error("Could not generate PDF", e instanceof Error ? e.message : undefined); }
     finally { setBusy(false); }
   };
-  const title = invoice ? `${invoice.lifecycle === "draft" ? "Edit draft" : "Edit invoice"} ${invoice.number}` : `New invoice ${number}`;
+  const title = invoice ? `${invoice.lifecycle === "draft" ? documentLocked ? "Prepared invoice" : "Edit draft" : "Invoice"} ${invoice.number}` : `New invoice ${number}`;
 
   return (
     <div className="invoice-builder">
       <div className="invoice-builder__bar">
-        <button type="button" className="btn btn--ghost btn--sm" onClick={() => void back()}>
+        <button type="button" className="btn btn--ghost btn--sm" disabled={working} onClick={() => void back()}>
           <ArrowLeft size={14} aria-hidden="true" /> Invoices
         </button>
         <h1 className="invoice-builder__title">
@@ -421,13 +464,13 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
         </h1>
         <div className="invoice-builder__actions">
           {!readOnly && (
-            <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void saveDraft()}>
+            <button type="button" className="btn btn--sm" disabled={working} onClick={() => void saveDraft()}>
               <Save size={14} aria-hidden="true" /> {invoice && invoice.lifecycle !== "draft" ? "Save" : "Save draft"}
             </button>
           )}
           {!readOnly && (!invoice || invoice.lifecycle === "draft") && (
-            <button type="button" className="btn btn--sm btn--accent" disabled={busy} onClick={() => void sendNow(false)}>
-              <Send size={14} aria-hidden="true" /> Mark as sent
+            <button type="button" className="btn btn--sm btn--accent" disabled={working || !canExport} onClick={() => void finalizeInvoice(true)}>
+              <Download size={14} aria-hidden="true" /> {finalizing ? "Finalizing…" : "Finalize & download"}
             </button>
           )}
           <Menu
@@ -441,14 +484,14 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
               {
                 id: "main",
                 items: [
-                  { id: "download-pdf", label: "Download PDF", icon: <Download size={14} />, disabled: busy || !canExport, onSelect: () => void downloadPdf() },
-                  { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: !canExport, onSelect: () => window.print() },
+                  { id: "download-pdf", label: !invoice || invoice.lifecycle === "draft" ? "Download draft PDF" : "Download PDF", icon: <Download size={14} />, disabled: working || !canExport, onSelect: () => void downloadPdf() },
+                  { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: working || !canExport, onSelect: () => window.print() },
                   ...(!readOnly && (!invoice || invoice.lifecycle === "draft")
-                    ? [{ id: "send-email", label: "Mark as sent and draft email", icon: <Send size={14} />, disabled: !draft.billToEmail, hint: draft.billToEmail ? "Outbox" : "Needs an email", onSelect: () => void sendNow(true) }]
+                    ? [{ id: "finalize", label: "Finalize without downloading", icon: <FileCheck2 size={14} />, disabled: working, onSelect: () => void finalizeInvoice(false) }]
                     : []),
-                  ...(invoice ? [{ id: "duplicate", label: "Duplicate", icon: <Copy size={14} />, disabled: !canWrite, onSelect: () => void doDuplicate() }] : []),
-                  ...(invoice?.lifecycle === "draft" && !invoice.payments.length
-                    ? [{ id: "delete", label: "Delete draft", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => void doDelete() }]
+                  ...(invoice ? [{ id: "duplicate", label: "Duplicate", icon: <Copy size={14} />, disabled: working || !canWrite, onSelect: () => void doDuplicate() }] : []),
+                  ...(invoice?.lifecycle === "draft" && !documentLocked && !invoice.payments.length
+                    ? [{ id: "delete", label: "Delete draft", icon: <Trash2 size={14} />, destructive: true, disabled: working || !canWrite, onSelect: () => void doDelete() }]
                     : []),
                 ],
               },
@@ -468,9 +511,11 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
 
       <div className={`invoice-builder__grid is-${mobileView}`}>
         <div className="invoice-builder__form">
-          {invoice?.lifecycle === "void" && <Banner tone="warn" title="This invoice is void">Restore it from the invoice panel to make changes.</Banner>}
+          {invoice?.lifecycle === "void" && <Banner tone="warn" title="This invoice is void">Use the invoice panel to restore it, or duplicate it to prepare a replacement. Finalized document details remain locked.</Banner>}
+          {invoice && documentLocked && invoice.lifecycle !== "void" && <Banner tone="info" title={invoice.lifecycle === "draft" ? "Prepared invoice" : "Finalized invoice"}>{invoice.lifecycle === "draft" ? "This document has been prepared and its details are locked. Use the invoice panel to finalize it, or duplicate it to prepare a changed version." : "These document details are locked. Use the invoice panel to record sending, a client response, payments, or adjustments. Duplicate the invoice to prepare a replacement."}</Banner>}
+          {!documentLocked && <p className="muted">Save a draft while you work. Finalize &amp; download removes Draft and prepares the invoice for you to send.</p>}
           {invoice && invoice.payments.length > 0 && invoice.lifecycle !== "void" && (
-            <Banner tone="info" title="Payments recorded">The total can't drop below the <Money cents={invoice.paidCents} currency={draft.currency} /> already paid.</Banner>
+            <Banner tone="info" title="Payments recorded"><Money cents={invoice.paidCents} currency={draft.currency} /> has been recorded against this invoice. Use the invoice panel to review payments and adjustments.</Banner>
           )}
           {invoice && invoice.lifecycle !== "draft" && invoice.lines.some((line) => line.taxAssessment) && <Banner tone="info" title="Issued tax assessment">The supply, tax decisions, recipient, delivery details and date are fixed to this invoice. Void and replace it if those facts need to change.</Banner>}
           {error && <Banner tone="danger" title="Check the invoice">{error}</Banner>}

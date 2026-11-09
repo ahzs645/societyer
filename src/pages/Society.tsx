@@ -40,6 +40,7 @@ import { homeJurisdictionCode, isCorporation, isPreparingIncorporation, isSociet
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { TooltipCopyable } from "../components/TooltipCopyable";
+import { GstAccountReference } from "../components/GstAccountReference";
 import { useAuth } from "../auth/AuthProvider";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import {
@@ -203,6 +204,7 @@ export function SocietyPage() {
   useEffect(() => {
     if (!formReady || !permissions.loaded) return;
     if (hash === "#registered-office") openMoreDetails("registered-office");
+    else if (hash === "#tax-identifiers") openMoreDetails("tax-identifiers");
     else if (hash === "#more-organization-details") openMoreDetails();
   }, [formReady, permissions.loaded, hash]);
   // ?intent=address also opens the new-address form.
@@ -584,6 +586,14 @@ export function SocietyPage() {
       )}
 
       <OrganizationRegistrationProfile key={society._id} organization={society} />
+
+      <GstAccountReference identifiers={detail?.identifiers} actions={<>
+        <button className="btn-action" type="button" onClick={() => openMoreDetails("tax-identifiers")}>Manage tax identifiers</button>
+        {canEdit && <button className="btn-action btn-action--primary" type="button" onClick={() => {
+          setDrawerKind("identifier");
+          setDraft({ kind: "gst", number: "", status: "needs_review", accessLevel: "internal", jurisdiction: "federal__canada_" });
+        }}><Plus size={12} /> Add GST/HST account</button>}
+      </>} />
 
       <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div className="society-layout">
@@ -1021,7 +1031,7 @@ export function SocietyPage() {
                 />
               </DetailSection>
 
-              <DetailSection
+              <div id="tax-identifiers" style={{ scrollMarginTop: 16 }}><DetailSection
                 icon={<KeyRound size={14} />}
                 title="Tax and registry identifiers"
                 count={detail?.identifiers?.length ?? 0}
@@ -1042,7 +1052,7 @@ export function SocietyPage() {
                     <RowActions key="a" onEdit={() => { setDrawerKind("identifier"); setDraft(row); }} onRemove={() => removeDetailRow("identifier", row)} />,
                   ]}
                 />
-              </DetailSection>
+              </DetailSection></div>
             </div>
           </div>
         </div>

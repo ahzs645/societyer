@@ -1,9 +1,9 @@
 import { InvoicePdfPreview } from "./InvoicePdfPreview";
 import { InvoiceAdjustmentsPanel } from "./InvoiceAdjustmentsPanel";
-import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useRef, useState } from "react";
+import { useConvex, useMutation } from "convex/react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Ban, Bell, BookCheck, CheckCircle2, CircleDashed, Copy, Download, Eye, FilePlus2, Landmark, Link2, MoreHorizontal, Pencil, Printer, Repeat, RotateCcw, Send, Trash2, Undo2, Wallet } from "lucide-react";
+import { AlertTriangle, Ban, Bell, BookCheck, CheckCircle2, CircleDashed, Copy, Download, Eye, FileCheck2, FilePlus2, Landmark, Link2, MessageSquare, MoreHorizontal, Pencil, Printer, Repeat, RotateCcw, Send, Trash2, Undo2, Wallet } from "lucide-react";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "@/lib/convexApi";
 import { Drawer } from "../../components/ui";
@@ -22,9 +22,12 @@ import { BillingDocumentPreview } from "./BillingDocumentPreview";
 import { paymentReceiptDocument } from "./billingDocuments";
 import type { NeedsActionFlag } from "../../../shared/invoiceLedger";
 import type { InvoiceRow, InvoiceWorkspace } from "./types";
+import { InvoiceWorkflowPanel } from "./InvoiceWorkflowPanel";
 
 const TIMELINE_ICONS: Record<string, typeof CircleDashed> = {
   created: FilePlus2,
+  issued: FileCheck2,
+  client_response: MessageSquare,
   issued_from_series: Repeat,
   duplicated: Copy,
   sent: Send,
@@ -55,7 +58,8 @@ type Props = {
 
 /** Invoice panel: balance, actions, payments (with bank links), timeline and a preview. */
 export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, canExport, onClose, onEdit, onOpenSeries, onEditMapping, canPost }: Props) {
-  const markSent = useMutation(api.invoices.markSent);
+  const client = useConvex();
+  const issue = useMutation(api.invoices.issue);
   const voidInvoices = useMutation(api.invoices.voidInvoices);
   const restoreVoided = useMutation(api.invoices.restoreVoided);
   const duplicate = useMutation(api.invoices.duplicate);
@@ -71,6 +75,8 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
   const [showPreview, setShowPreview] = useState(false);
   const [linkingKey, setLinkingKey] = useState<string | null>(null);
   const [receiptKey, setReceiptKey] = useState<string | null>(null);
+  const [documentBusy, setDocumentBusy] = useState(false);
+  const documentInFlight = useRef(false);
   const depositLabel = (id: string | undefined) => workspace.ledger.accounts.deposit.find((account) => account._id === id)?.label;
   const defaultDeposit = depositLabel(workspace.settings.depositAccountId) ?? workspace.ledger.defaults.deposit?.label ?? "Undeposited funds";
 
@@ -101,6 +107,51 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
       toast.success(success, description);
     } catch (err: any) {
       toast.error("Something went wrong", err?.message);
+    }
+  };
+
+  const finalize = async (download: boolean) => {
+    if (documentInFlight.current || !canWrite || (download && !canExport)) return;
+    documentInFlight.current = true;
+    setDocumentBusy(true);
+    let finalized = false;
+    try {
+      const ok = await confirm({ title: `Finalize ${invoice.number}?`, message: "This locks the invoice details, removes Draft, and records the invoice in the books when its accounts are configured. You will send it yourself and record sending afterward.", confirmLabel: download ? "Finalize and download" : "Finalize invoice" });
+      if (!ok) return;
+      const result = await issue({ societyId: invoice.societyId, ids: [invoice._id] });
+      finalized = result.issued > 0;
+      const document = await client.query(api.invoices.document, { id: invoice._id });
+      if (!document || document.lifecycle === "draft" || document.lifecycle === "void") throw new Error("The finalized invoice could not be loaded. Review its current state.");
+      finalized = true;
+      if (download) {
+        const { downloadInvoicePdf } = await import("./invoicePdf");
+        await downloadInvoicePdf(document, organization, workspace.settings.paymentInstructions);
+      }
+      toast.success(download ? "Invoice finalized and PDF downloaded" : "Invoice finalized", "Ready for you to send to the client.");
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : "Please try again.";
+      toast.error(finalized ? download ? "Invoice finalized; PDF download failed" : "Invoice finalized; refresh needed" : "Could not finalize invoice", finalized ? `${message} ${download ? "Use Download PDF to retry" : "Refresh the invoice panel to review it"}; the invoice is already finalized.` : message);
+    } finally {
+      setDocumentBusy(false);
+      documentInFlight.current = false;
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (documentInFlight.current || !canExport) return;
+    documentInFlight.current = true;
+    setDocumentBusy(true);
+    try {
+      const document = await client.query(api.invoices.document, { id: invoice._id });
+      if (!document) throw new Error("The invoice could not be loaded.");
+      const { downloadInvoicePdf } = await import("./invoicePdf");
+      await downloadInvoicePdf(document, organization, workspace.settings.paymentInstructions);
+      toast.success("PDF downloaded");
+    } catch (failure) {
+      toast.error("Could not download PDF", failure instanceof Error ? failure.message : undefined);
+    } finally {
+      documentInFlight.current = false;
+      setDocumentBusy(false);
     }
   };
 
@@ -140,15 +191,16 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
 
   const moreItems = [
     { id: "preview", label: showPreview ? "Hide preview" : "Preview invoice", icon: <Eye size={14} />, onSelect: () => setShowPreview((v) => !v) },
-    { id: "download-pdf", label: "Download PDF", icon: <Download size={14} />, disabled: !canExport, onSelect: () => void run(async () => { const { downloadInvoicePdf } = await import("./invoicePdf"); await downloadInvoicePdf(invoice, organization, workspace.settings.paymentInstructions); }, "PDF downloaded") },
-    { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: !canExport, onSelect: () => window.print() },
-    { id: "duplicate", label: "Duplicate", icon: <Copy size={14} />, disabled: !canWrite, onSelect: () => void duplicate({ id: invoice._id as any }).then((id: string) => { toast.success(`Duplicated ${invoice.number}`); onEdit(id); }).catch((err: any) => toast.error("Could not duplicate", err?.message)) },
+    { id: "download-pdf", label: invoice.lifecycle === "draft" ? "Download draft PDF" : "Download PDF", icon: <Download size={14} />, disabled: documentBusy || !canExport, onSelect: () => void downloadPdf() },
+    { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: documentBusy || !canExport, onSelect: () => window.print() },
+    ...(invoice.lifecycle === "draft" ? [{ id: "finalize", label: "Finalize without downloading", icon: <FileCheck2 size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void finalize(false) }] : []),
+    { id: "duplicate", label: "Duplicate", icon: <Copy size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void duplicate({ id: invoice._id as any }).then((id: string) => { toast.success(`Duplicated ${invoice.number}`); onEdit(id); }).catch((err: any) => toast.error("Could not duplicate", err?.message)) },
     ...(invoice.seriesId ? [{ id: "series", label: `Open series${invoice.seriesName ? ` · ${invoice.seriesName}` : ""}`, icon: <Repeat size={14} />, onSelect: () => onOpenSeries(invoice.seriesId!) }] : []),
-    ...(invoice.payments.length ? [{ id: "revert", label: "Revert to unpaid", icon: <RotateCcw size={14} />, disabled: !canWrite, onSelect: () => void doRevert() }] : []),
+    ...(invoice.payments.length ? [{ id: "revert", label: "Revert to unpaid", icon: <RotateCcw size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void doRevert() }] : []),
     ...(invoice.lifecycle === "void"
-      ? [{ id: "restore", label: "Restore from void", icon: <RotateCcw size={14} />, disabled: !canWrite, onSelect: () => void run(() => restoreVoided({ id: invoice._id as any }), `${invoice.number} restored`) }]
-      : [{ id: "void", label: "Void invoice", icon: <Ban size={14} />, destructive: true, disabled: !canWrite, onSelect: () => void doVoid() }]),
-    ...(invoice.lifecycle === "draft" && !invoice.payments.length ? [{ id: "delete", label: "Delete draft", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => void doDelete() }] : []),
+      ? [{ id: "restore", label: "Restore from void", icon: <RotateCcw size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void run(() => restoreVoided({ id: invoice._id as any }), `${invoice.number} restored`) }]
+      : [{ id: "void", label: "Void invoice", icon: <Ban size={14} />, destructive: true, disabled: documentBusy || !canWrite, onSelect: () => void doVoid() }]),
+    ...(invoice.lifecycle === "draft" && !invoice.issuerSnapshot && !invoice.issuerTaxRegistrationsSnapshot && !invoice.payments.length ? [{ id: "delete", label: "Delete draft", icon: <Trash2 size={14} />, destructive: true, disabled: documentBusy || !canWrite, onSelect: () => void doDelete() }] : []),
   ];
 
   return (
@@ -170,7 +222,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
         <div>
           <div className="invoice-drawer__party">{invoice.billToName}</div>
           <div className="muted invoice-drawer__meta">
-            Issued {formatDate(invoice.issueDate)} · {invoice.status === "draft" ? "Due" : invoice.status === "overdue" ? "Was due" : "Due"} {formatDate(invoice.dueDate)} · {INVOICE_TERMS_LABEL[invoice.terms as InvoiceTerms] ?? invoice.terms}
+            {invoice.lifecycle === "draft" ? "Invoice date" : "Issued"} {formatDate(invoice.issueDate)} · {invoice.status === "draft" ? "Due" : invoice.status === "overdue" ? "Was due" : "Due"} {formatDate(invoice.dueDate)} · {INVOICE_TERMS_LABEL[invoice.terms as InvoiceTerms] ?? invoice.terms}
             {invoice.reference ? ` · Ref ${invoice.reference}` : ""}
           </div>
         </div>
@@ -185,22 +237,23 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
       </section>
 
       <div className="invoice-drawer__actions">
-        {invoice.lifecycle !== "void" && (
-          <button type="button" className="btn btn--sm invoice-drawer__action-edit" aria-label="Edit" disabled={!canWrite} onClick={() => onEdit(invoice._id)}>
+        {invoice.lifecycle === "draft" && !invoice.issuerSnapshot && !invoice.issuerTaxRegistrationsSnapshot && (
+          <button type="button" className="btn btn--sm invoice-drawer__action-edit" aria-label="Edit" disabled={documentBusy || !canWrite} onClick={() => onEdit(invoice._id)}>
             <Pencil size={14} aria-hidden="true" /> <span className="invoice-drawer__action-wide">Edit</span>
           </button>
         )}
         {invoice.lifecycle === "draft" && (
-          <button type="button" className="btn btn--sm btn--accent" disabled={!canWrite} onClick={() => void run(() => markSent({ societyId: invoice.societyId as any, ids: [invoice._id as any] }), `${invoice.number} marked as sent`)}>
-            <Send size={14} aria-hidden="true" /> Mark as sent
+          <button type="button" className="btn btn--sm btn--accent" disabled={documentBusy || !canWrite || !canExport} onClick={() => void finalize(true)}>
+            <Download size={14} aria-hidden="true" /> {documentBusy ? "Preparing…" : "Finalize & download"}
           </button>
         )}
+        {invoice.lifecycle !== "draft" && <button type="button" className="btn btn--sm" disabled={documentBusy || !canExport} onClick={() => void downloadPdf()}><Download size={14} aria-hidden="true" />Download PDF</button>}
         {(open || invoice.lifecycle === "draft") && invoice.balanceCents > 0 && (
-          <button type="button" className={`btn btn--sm${invoice.lifecycle === "draft" ? "" : " btn--accent"}`} aria-label="Record payment" disabled={!canWrite} aria-expanded={paying} onClick={() => setPaying((v) => !v)}>
+          <button type="button" className={`btn btn--sm${invoice.lifecycle === "draft" ? "" : " btn--accent"}`} aria-label="Record payment" disabled={documentBusy || !canWrite} aria-expanded={paying} onClick={() => setPaying((v) => !v)}>
             <Wallet size={14} aria-hidden="true" /> <span className="invoice-drawer__action-wide">Record payment</span><span className="invoice-drawer__action-short">Payment</span>
           </button>
         )}
-        {open && (
+        {open && invoice.lifecycle === "sent" && (
           <button
             type="button"
             className="btn btn--sm"
@@ -208,7 +261,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
             title={invoice.billToEmail ? undefined : "Add an email address to send reminders"}
             onClick={() => void sendReminders({ societyId: invoice.societyId as any, ids: [invoice._id as any] }).then((r: any) => toast.success(r.created ? "Reminder drafted in the Outbox" : "No reminder drafted", r.created ? "Review and send it from the Outbox." : undefined)).catch((err: any) => toast.error("Could not draft a reminder", err?.message))}
           >
-            <Bell size={14} aria-hidden="true" /> Reminder
+            <Bell size={14} aria-hidden="true" /> Draft reminder email
           </button>
         )}
         <Menu
@@ -221,6 +274,8 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
           sections={[{ id: "more", items: moreItems }]}
         />
       </div>
+
+      <InvoiceWorkflowPanel invoice={invoice} today={workspace.today} canWrite={canWrite && !documentBusy} />
 
       {invoice.voidReason && invoice.lifecycle === "void" && <p className="muted invoice-drawer__note">Voided: {invoice.voidReason}</p>}
 
@@ -245,7 +300,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
         </section>
       )}
 
-      {(invoice.lifecycle === "sent" || invoice.sentAtISO) && !invoice.issuerTaxRegistrationsSnapshot && <p className="muted" style={{ fontSize: 13 }}>Tax registration numbers were not saved when this invoice was issued. Its preview does not substitute today's organization numbers; consult the original issued document for those details.</p>}
+      {(invoice.lifecycle === "issued" || invoice.lifecycle === "sent" || invoice.sentAtISO) && !invoice.issuerTaxRegistrationsSnapshot && <p className="muted" style={{ fontSize: 13 }}>Tax registration numbers were not saved when this invoice was issued. Its preview does not substitute today's organization numbers; consult the original issued document for those details.</p>}
       {ledgerNote && (
         <p className="muted invoice-drawer__note invoice-drawer__ledger">
           <BookCheck size={14} aria-hidden="true" /> {ledgerNote}
@@ -294,7 +349,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
                   )}
                 </span>
                 <Money cents={payment.amountCents} currency={invoice.currency} tone="in" />
-                {invoice.lifecycle === "sent" && !payment.reversedDate && (payment.kind??"payment")==="payment" && payment.amountCents>0 && <button type="button" className="btn btn--ghost btn--sm" aria-label={`Preview receipt for payment ${payment.key}`} onClick={() => setReceiptKey(payment.key)}><Eye size={14} aria-hidden="true" />Receipt</button>}
+                {["issued", "sent"].includes(invoice.lifecycle) && !payment.reversedDate && (payment.kind??"payment")==="payment" && payment.amountCents>0 && <button type="button" className="btn btn--ghost btn--sm" aria-label={`Preview receipt for payment ${payment.key}`} onClick={() => setReceiptKey(payment.key)}><Eye size={14} aria-hidden="true" />Receipt</button>}
                 {canWrite && !payment.reversedDate && (payment.kind??"payment")==="payment" && linkingKey !== payment.key && (
                   <button
                     type="button"
@@ -335,6 +390,9 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
                 <span className="invoice-timeline__dot" aria-hidden="true"><Icon size={12} /></span>
                 <span className="invoice-timeline__body">
                   <span>{event.label}{event.amountCents != null ? <> · <Money cents={event.amountCents} currency={invoice.currency} /></> : null}</span>
+                  {(event.clientResponse?.note || event.externalDelivery?.note) && <span className="invoice-workflow__note">{event.clientResponse?.note || event.externalDelivery?.note}</span>}
+                  {(event.clientResponse?.reference || event.externalDelivery?.reference) && <span className="muted">Reference: {event.clientResponse?.reference || event.externalDelivery?.reference}</span>}
+                  {event.externalDelivery?.recipient && <span className="muted">Sent to: {event.externalDelivery.recipient}</span>}
                   <span className="muted">{formatDateTime(event.atISO)}{event.actorName ? ` · ${event.actorName}` : ""}</span>
                 </span>
               </li>

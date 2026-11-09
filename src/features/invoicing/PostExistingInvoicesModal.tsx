@@ -57,7 +57,7 @@ export function PostExistingInvoicesModal({ open, onClose, societyId, canPost, o
       ) : (
         <div className="invoice-backfill">
           <p className="muted">
-            Sent invoices that aren't in the books yet post their receivable and revenue on the issue date, and their payments on the payment
+            Finalized invoices that aren't in the books yet post their receivable and revenue on the issue date, and their payments on the payment
             date. Anything already posted is left alone, so this can be run again safely.
             {preview.booksStart ? ` Activity on or before ${formatDate(preview.booksStart.replace(/^the /, ""))} belongs to the opening balances and is not posted.` : ""}
           </p>

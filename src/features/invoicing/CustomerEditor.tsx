@@ -69,7 +69,7 @@ function CustomerForm({ customer, societyId, canWrite, asModal, onClose, onSaved
       </Field>
       {showSentChoice && (
         <div className="field">
-          <Checkbox checked={updateSentInvoices} onChange={setUpdateSentInvoices} label="Also change the name on sent invoices" hint="Draft invoices and recurring series always update. Sent invoices keep the name they were issued with unless you tick this." />
+          <Checkbox checked={updateSentInvoices} onChange={setUpdateSentInvoices} label="Also rename older sent invoices" hint="This affects only sent invoices without locked document details. Prepared and finalized invoices stay unchanged. Editable drafts and recurring series update automatically." />
         </div>
       )}
       <Field label="Contact person"><input className="input" value={draft.contactName ?? ""} onChange={(e) => update({ contactName: e.target.value })} /></Field>

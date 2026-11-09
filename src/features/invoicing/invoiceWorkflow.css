@@ -1,0 +1,14 @@
+.invoice-workflow { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 8px 0 18px; }
+.invoice-workflow__stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 14px 0; }
+.invoice-workflow__stages dt { font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; }
+.invoice-workflow__stages dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.invoice-workflow__stages small { display: block; font-weight: 400; margin-top: 4px; }
+.invoice-workflow__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.invoice-workflow__note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.invoice-workflow__form { display: grid; gap: 16px; }
+.invoice-workflow > p { font-size: 13px; overflow-wrap: anywhere; }
+.invoice-status-cell .invoice-workflow__delivery { font-size: 11px; }
+@media (max-width: 600px) {
+  .invoice-workflow__stages { grid-template-columns: 1fr; gap: 12px; }
+  .invoice-workflow__actions > button { flex: 1 1 100%; justify-content: center; }
+}
