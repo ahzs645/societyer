@@ -150,7 +150,7 @@ export async function resolvePrincipalUser(
   if (principal.assurance === "verified-jwt") {
     const membership = bindings[0];
     await assertExternalIdentityActive(ctx.db, membership);
-    if (!principal.gatewayService && isActiveMembership(membership)) {
+    if (!principal.gatewayService && !principal.sessionChecksDeferred && isActiveMembership(membership)) {
       // Requirements always come from the current session, never from the
       // identity the membership happens to be bound to.
       const signIn = evaluateWorkspaceSignIn(await workspaceSignInPolicy(ctx, societyId), principal);

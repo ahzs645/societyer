@@ -97,10 +97,23 @@ export const set = internalMutation({
     for (const row of duplicates) await ctx.db.delete(row._id);
     if (existing) await ctx.db.replace(existing._id, policy);
     const id = existing?._id ?? await ctx.db.insert("workspaceSignInPolicies", policy);
+    // AI connector tokens act without a session, so the policy can't be
+    // checked when they are used; it is checked when they are minted. Tokens
+    // minted before a requirement existed are revoked, and members mint new
+    // ones from a session that meets it.
+    let revokedGrants = 0;
+    if (args.requiredMethod !== "any" || allowedEmailDomains.length) {
+      const nowISO = new Date().toISOString();
+      for (const grant of await ctx.db.query("agentGrants").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect()) {
+        if (grant.revokedAtISO) continue;
+        await ctx.db.patch(grant._id, { revokedAtISO: nowISO });
+        revokedGrants += 1;
+      }
+    }
     const requirement = args.requiredMethod === "microsoft"
       ? `Microsoft sign-in (tenant ${microsoftTenantId}, groups ${microsoftGroupIds!.join(", ")})` : "any sign-in method";
     await audit(ctx, args.societyId, "sign-in-policy-set",
-      `Workspace sign-in now requires ${requirement}${allowedEmailDomains.length ? ` from ${allowedEmailDomains.map((d) => `@${d}`).join(", ")}` : ""}. Reason: ${reason}`);
+      `Workspace sign-in now requires ${requirement}${allowedEmailDomains.length ? ` from ${allowedEmailDomains.map((d) => `@${d}`).join(", ")}` : ""}.${revokedGrants ? ` Revoked ${revokedGrants} AI connector token${revokedGrants === 1 ? "" : "s"} minted before the requirement.` : ""} Reason: ${reason}`);
     return id;
   },
 });

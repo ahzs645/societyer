@@ -1,6 +1,6 @@
 {
-  "completedAt": "2026-10-05T02:11:23.600Z",
-  "passed": 12,
+  "completedAt": "2026-11-09T01:58:18.645Z",
+  "passed": 13,
   "results": [
     {
       "name": "Original document/material grants independently gate replication; unauthorized and foreign mutations are denied",
@@ -44,6 +44,10 @@
     },
     {
       "name": "Retired and foreign issuer memberships cannot block current actors or receive replicated snapshots",
+      "passed": true
+    },
+    {
+      "name": "A workspace sign-in policy defers to delivery: rebuilds keep working, sessions without the evidence get nothing",
       "passed": true
     },
     {

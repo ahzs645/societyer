@@ -117,7 +117,16 @@ process.env.MICROSOFT_LOGIN_PRIVATE_KEY = "";
 await assert.rejects(set({ requiredMethod: "microsoft", microsoftTenantId: tenant, microsoftGroupIds: [ddcGroup] }), /configuration is invalid/);
 process.env.MICROSOFT_LOGIN_PRIVATE_KEY = savedKey;
 assert.equal((await t.run((ctx) => ctx.db.query("workspaceSignInPolicies").collect())).length, 0, "Refused policies write nothing");
+// AI connector tokens can't show session evidence when used, so a stricter
+// policy revokes the workspace's tokens minted before it; other workspaces keep theirs.
+const grant = (societyId: typeof fixture.ddc, userId: typeof fixture.personDdc) => t.run((ctx) => ctx.db.insert("agentGrants", {
+  societyId, userId, kind: "token", name: "Assistant", tokenHash: `hash-${societyId}`, scopes: ["meetings:read"],
+  createdAtISO: new Date(0).toISOString(), expiresAtISO: new Date(now + 86_400_000).toISOString() }));
+const ddcGrant = await grant(fixture.ddc, fixture.personDdc);
+const firstFormGrant = await grant(fixture.firstForm, fixture.personFirstForm);
 await set({ requiredMethod: "microsoft", microsoftTenantId: tenant.toUpperCase(), microsoftGroupIds: [ddcGroup.toUpperCase(), ddcGroup], supportEmail: "it@ddcnorth.example" });
+assert.ok((await t.run((ctx) => ctx.db.get(ddcGrant)))?.revokedAtISO, "A token minted before the Microsoft requirement is revoked");
+assert.equal((await t.run((ctx) => ctx.db.get(firstFormGrant)))?.revokedAtISO, undefined, "Another workspace's tokens are untouched");
 const stored = await t.query(internal.workspaceSignInPolicies.get, { societyId: fixture.ddc });
 assert.equal(stored.microsoftTenantId, tenant);
 assert.deepEqual(stored.microsoftGroupIds, [ddcGroup], "Directory IDs are lowercased and deduplicated");

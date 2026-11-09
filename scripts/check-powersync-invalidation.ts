@@ -169,6 +169,20 @@ await check("Retired and foreign issuer memberships cannot block current actors 
   });
   await assert.rejects(() => isolated.actor("owner-a", "https://foreign.example.test").query(queryRef("offlineMeetings:syncIdentity"), { societyId: isolated.ids.societyA }), /OFFLINE_ACCESS_DENIED/);
 });
+await check("A workspace sign-in policy defers to delivery: rebuilds keep working, sessions without the evidence get nothing", async () => {
+  const isolated = await createFixture(), actor = isolated.actor("owner-a");
+  const newKeys = Object.fromEntries(["meeting", "minutes", "agenda", "item", "document", "material"].map(name => [name, randomUUID()]));
+  await actor.mutation(isolated.meetingApply, { societyId: isolated.ids.societyA, command: { version: 1, kind: "create-meeting", operationId: randomUUID(), meetingUuid: newKeys.meeting, baseRevision: 0, keys: newKeys, title: "Policy rebuild", scheduledAt: "2026-12-01", notes: "", agendaTitle: "Review" } });
+  const meetingId = JSON.parse((await isolated.native.run(ctx => ctx.db.query("offlineMeetingAggregates").first()))!.mappings).find((row: any) => row.table === "meetings").nativeId;
+  await isolated.native.run(ctx => ctx.db.insert("workspaceSignInPolicies", { societyId: isolated.ids.societyA, requiredMethod: "microsoft",
+    microsoftTenantId: "220c85f6-1cb1-4bb2-a63b-55d9fd163b55", microsoftGroupIds: ["815b3b71-596d-48fe-aafd-f5bf34aafa5c"], updatedAtISO: new Date().toISOString(), reason: "Regression check" }));
+  // A server-side write rebuilds every member's view without a live session.
+  await isolated.native.run(ctx => withMeetingDownloadInvalidation(ctx, next => next.db.patch(meetingId, { notes: "Rebuilt under a sign-in policy" })));
+  const rows = await isolated.native.run(ctx => ctx.db.query("offlineMeetingDownloads").collect());
+  assert.ok(rows.length > 0 && rows.every(row => JSON.parse(row.payload).notes === "Rebuilt under a sign-in policy"));
+  await assert.rejects(() => actor.query(isolated.meetingDownloads, { societyId: isolated.ids.societyA }));
+  await assert.rejects(() => actor.query(queryRef("offlineMeetings:syncIdentity"), { societyId: isolated.ids.societyA }), /OFFLINE_ACCESS_DENIED/);
+});
 await check("Feature-disabled deployments cannot issue download authority or accept offline commands", async () => {
   delete process.env.OFFLINE_MEETING_PREPARATION_ENABLED;
   try {

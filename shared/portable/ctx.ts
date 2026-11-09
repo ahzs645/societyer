@@ -65,6 +65,13 @@ export type PortablePrincipal =
        * against it; a linked login method is not session evidence.
        */
       sessionEvidence?: PrincipalSessionEvidence;
+      /**
+       * Set only by server code that precomputes a member's view without a
+       * live session (offline meeting downloads). Sign-in policy and MFA are
+       * skipped while building it and enforced on the real session when the
+       * view is delivered. No request-derived principal ever carries it.
+       */
+      sessionChecksDeferred?: true;
     }
   | {
       kind: "service";

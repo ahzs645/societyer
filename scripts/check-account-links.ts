@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { convexTest } from "convex-test";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
+import { crossDomain } from "@convex-dev/better-auth/plugins";
 import { exportJWK, exportPKCS8, generateKeyPair, SignJWT } from "jose";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
@@ -283,9 +284,9 @@ try {
   const auth = betterAuth({
     baseURL, secret: environment.BETTER_AUTH_SECRET, database, trustedOrigins: [portal],
     emailAndPassword: { enabled: true },
-    socialProviders: { microsoft: createHostedEntraProvider(config) }, plugins: [hostedEntraPlugin(config)],
+    socialProviders: { microsoft: createHostedEntraProvider(config) }, plugins: [hostedEntraPlugin(config), crossDomain({ siteUrl: portal })],
     // Exactly convex/hostedAuth.ts.
-    account: { accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: ["microsoft"], allowDifferentEmails: true } },
+    account: { accountLinking: { enabled: false, disableImplicitLinking: true, trustedProviders: [] } },
     session: { expiresIn: 8 * 3600, disableSessionRefresh: true },
   });
   await (await getMigrations(auth.options)).runMigrations();
@@ -317,31 +318,23 @@ try {
   assert.deepEqual((await context.internalAdapter.findAccounts(member.id)).map((account) => account.providerId), ["credential"]);
   assert.equal((await context.internalAdapter.listSessions(member.id)).length, 1);
 
-  // Explicit link from the password session. Entra ID tokens usually carry no
-  // email-verification claim; Microsoft is trusted for explicit links only.
-  const groupless = await oauth("/link-social", {}, passwordCookie, await idToken({ groups: [] }));
-  assert.ok(groupless.location?.searchParams.get("error"), "Group, tenant, account-type and recency checks still apply when linking");
-  const stale = await oauth("/link-social", {}, passwordCookie, await idToken({ auth_time: Math.floor(Date.now() / 1000) - 3600 }));
-  assert.ok(stale.location?.searchParams.get("error"), "A Microsoft sign-in older than five minutes can't be linked");
-  const linked = await oauth("/link-social", {}, passwordCookie, await idToken({ email: "Member.Work@example.test" }));
-  assert.equal(linked.location?.href, `${portal}/done`, "A directory identity links without an email-verified claim, even when its address differs");
-  assert.deepEqual((await context.internalAdapter.findAccounts(member.id)).map((account) => [account.providerId, account.accountId]).sort(),
-    [["credential", member.id], ["microsoft", objectId]]);
-  assert.equal((await context.internalAdapter.listSessions(member.id)).length, 1, "Linking creates no session");
-  assert.deepEqual(await hostedEntraClaims(context.adapter, member.id, passwordSession.id, config), {}, "Linking never turns the password session into a Microsoft session");
-  assert.equal((await post("/link-social", { provider: "microsoft", callbackURL: `${portal}/done` }, passwordCookie)).status, 403, "One Microsoft identity per account");
-
-  // Another account can't take a Microsoft identity that is already linked.
-  const other = await post("/sign-up/email", { email: "other@example.test", password: "correct horse battery", name: "Other" });
-  const taken = await oauth("/link-social", {}, cookiesOf(other).join("; "), await idToken({ verified_primary_email: ["member@example.test"] }));
-  assert.equal(taken.location?.searchParams.get("error"), "account_already_linked_to_different_user");
-
-  // The linked identity now signs in on its own and gets a per-session Microsoft proof.
-  const signIn = await oauth("/sign-in/social", {}, "", await idToken());
-  assert.equal(signIn.location?.href.startsWith(`${portal}/done`), true);
-  const sessions = await context.internalAdapter.listSessions(member.id);
-  assert.equal(sessions.length, 2);
-  const microsoftSession = sessions.find((row) => row.id !== passwordSession.id)!;
-  assert.equal((await hostedEntraClaims(context.adapter, member.id, microsoftSession.id, config)).societyer_entra?.objectId, objectId);
-  console.log("Better Auth linking passed: no implicit same-email linking, explicit linkSocial with Entra checks, stale-sign-in refusal, single Microsoft identity, ownership conflict, no session upgrade.");
+  // Provider linking is off. The cross-domain plugin skips the OAuth state
+  // cookie, so a link started by one person could be completed in another
+  // person's browser; refusing it at the callback closes that path.
+  const cookieless = await post("/link-social", { provider: "microsoft", callbackURL: `${portal}/done`, errorCallbackURL: `${portal}/failed` }, passwordCookie);
+  if (cookieless.status === 200) {
+    callbackToken = await idToken({ oid: "6d56e6df-2945-4880-b112-4ffb0f0a1a11", email: "victim@example.test" });
+    const state = new URL((await cookieless.json()).url).searchParams.get("state")!;
+    // Completed without the starting browser's cookies, as a victim would.
+    const callback = await auth.handler(new Request(`${baseURL}/api/auth/callback/microsoft?code=fixture&state=${encodeURIComponent(state)}`));
+    assert.ok(new URL(callback.headers.get("location")!).searchParams.get("error"), "A link callback is refused");
+  } else {
+    assert.ok(cookieless.status >= 400, "linkSocial is refused up front");
+  }
+  const linked = await oauth("/link-social", {}, passwordCookie, await idToken());
+  assert.ok(linked.started.status >= 400 || linked.location?.searchParams.get("error"), "Even the account's own browser can't link a provider");
+  assert.deepEqual((await context.internalAdapter.findAccounts(member.id)).map((account) => account.providerId), ["credential"], "No provider account was added");
+  assert.equal((await context.internalAdapter.listSessions(member.id)).length, 1, "Linking attempts create no session");
+  assert.deepEqual(await hostedEntraClaims(context.adapter, member.id, passwordSession.id, config), {}, "A password session never gains Microsoft proof");
+  console.log("Better Auth linking passed: no implicit same-email linking, provider linking refused (including cross-browser completion), no session upgrade.");
 } finally { database.close(); globalThis.fetch = realFetch; }

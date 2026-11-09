@@ -5,7 +5,7 @@ import { getAuthMode } from "./authMode";
  * call stays behind `fetchConvexToken`; everything else is the shared core API.
  */
 export type SessionAuthModule = {
-  authClient: Pick<typeof import("./authClient").authClient, "$fetch" | "useSession" | "signIn" | "signUp" | "signOut" | "requestPasswordReset" | "resetPassword" | "sendVerificationEmail" | "twoFactor" | "listAccounts" | "linkSocial" | "unlinkAccount">;
+  authClient: Pick<typeof import("./authClient").authClient, "$fetch" | "useSession" | "signIn" | "signUp" | "signOut" | "requestPasswordReset" | "resetPassword" | "sendVerificationEmail" | "twoFactor" | "listAccounts">;
   fetchConvexToken: (forceRefresh?: boolean) => Promise<string | null>;
   completeOAuthCallback?: () => Promise<void>;
   completeSessionHandoff?: () => Promise<void>;

@@ -8,7 +8,8 @@ export { rebuildMeetingDownloads } from "./lib/offlineMeetingProjection";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { assertWorkspaceNativeUploads } from "./providers/env";
 import { requirePermissionPortable } from "../shared/functions/permissions";
-import { claimStorageId, getOwned, WorkspaceMfaRequiredError, WorkspaceSignInRequiredError } from "../shared/functions/access";
+import { claimStorageId, getOwned, requireSocietyMembership, WorkspaceMfaRequiredError, WorkspaceSignInRequiredError } from "../shared/functions/access";
+import type { PortableQueryCtx } from "../shared/portable/ctx";
 import { requireDocumentAccess } from "../shared/functions/documents";
 import { assertReceiptEvidenceContentUnchanged } from "../shared/functions/receiptRetention";
 import { documentAccessContextForActor } from "./lib/access/documentAccess";
@@ -67,6 +68,17 @@ export const applyCommand = authorizedMutation("offlineMeetings:applyCommand", m
 });
 
 export const authorizedSnapshot = authorizedQuery("offlineMeetings:authorizedSnapshot", query)({ args: { societyId: v.id("societies") }, handler: async (ctx, args) => visibleSnapshots(await toPortableQueryCtx(ctx), args.societyId) });
+/**
+ * Downloads are projected per membership binding (offlineMeetingProjection),
+ * so a session reaching a membership through a linked login reads that
+ * membership's view rather than one keyed by its own identity.
+ */
+async function offlineActorKey(portable: PortableQueryCtx, societyId: string): Promise<string> {
+  const membership = await requireSocietyMembership(portable, societyId);
+  if (!membership.authIssuer || !membership.authSubject) throw new Error("Verified user identity required.");
+  return `${membership.authIssuer}|${membership.authSubject}`;
+}
+
 export const syncIdentity = authorizedQuery("offlineMeetings:syncIdentity", query)({ args: { societyId: v.id("societies") }, handler: async (ctx, args) => {
   assertOfflineMeetingPreparationEnabled();
   const portable = await toPortableQueryCtx(ctx);
@@ -81,7 +93,7 @@ export const syncIdentity = authorizedQuery("offlineMeetings:syncIdentity", quer
     }
     throw error;
   }
-  return { actorKey: `${portable.principal.issuer}|${portable.principal.subject}`, societyId: args.societyId };
+  return { actorKey: await offlineActorKey(portable, args.societyId), societyId: args.societyId };
 } });
 export const downloads = authorizedQuery("offlineMeetings:downloads", query)({ args: { societyId: v.id("societies") }, handler: async (ctx, args) => {
   assertOfflineMeetingPreparationEnabled();
@@ -89,7 +101,7 @@ export const downloads = authorizedQuery("offlineMeetings:downloads", query)({ a
   for (const permission of ["meetings:read", "minutes:read", "agendas:read", "documents:read"] as const) await requirePermissionPortable(portable, args.societyId, permission);
   if (portable.principal.kind !== "user") throw new Error("User identity required.");
   await assertMeetingScopeAvailable(portable, args.societyId);
-  const actorKey = `${portable.principal.issuer}|${portable.principal.subject}`;
+  const actorKey = await offlineActorKey(portable, args.societyId);
   return ctx.db.query("offlineMeetingDownloads").withIndex("by_actor", q => q.eq("actor_key", actorKey).eq("society_id", args.societyId)).collect();
 } });
 
