@@ -13,31 +13,28 @@ Provided:
 - Per-workspace sign-in policy, domains, storage policy and invoice defaults.
 - Linked logins and the cross-domain handoff.
 - Operator tools to provision accounts and links on the destination.
+- **Workspace transfer** ([below](#workspace-transfer)): copies one
+  organization's workspace from a source deployment's export into a destination
+  that already holds other workspaces. It inserts rows with new IDs, rewrites
+  every typed and string-held reference, copies native files with checksums,
+  resumes after an interruption, proves counts, references, files and totals,
+  and can be aborted before it is opened. It never replaces or edits the
+  destination's other rows.
 
-**Not provided:** an organization-aware, cloud-to-cloud import. Nothing in this
-change copies one organization's records from one Convex deployment into another
-that already holds a different organization. Specifically, there is no tool that:
+Not provided:
 
-- inserts one deployment's rows into another with new IDs and rewrites every
-  typed and string-held reference;
-- copies native file bytes and maps old `_storage` IDs to new ones;
-- carries Better Auth users, accounts and credentials across deployments;
-- resumes a partial transfer or proves the counts reconcile.
+- Better Auth users, accounts, password hashes and sessions are not carried
+  across. Each person gets a login on the destination and the operator binds
+  their imported membership to it explicitly ([identity](#5-identity-reconciliation)).
+- Vault secrets are not carried across (their ciphertext is sealed with the
+  source's `SECRET_VAULT_ENCRYPTION_KEY`). They are copied as records that say
+  *Needs review*; re-enter them.
+- Files in SharePoint, RustFS or R2 are not copied; their locators are kept.
+- No undo after `finalize`. Before it, `abort` removes everything the run wrote.
 
-[local-to-convex-promotion.md](../local-to-convex-promotion.md) is a design for a
-related problem (local workspace into a hosted one), not an implementation. The
-workspace archive restores local records and strips auth bindings.
-
-So there are two ways forward:
-
-1. **Start First Form fresh on the shared deployment.** Create the workspace,
-   re-provision accounts, and re-enter or re-upload what First Form needs. Keep
-   the old deployment read-only for reference. This needs no import tool.
-2. **Build the import tool first.** Then rehearse it as below. Budget it as its
-   own project.
-
-The rest of this page assumes option 2 for the rehearsal steps and applies to
-both for the cutover.
+Starting First Form fresh on the shared deployment remains possible (create the
+workspace, re-provision accounts, re-enter what First Form needs), but the
+transfer keeps its records, history and files.
 
 ## Choose the destination deployment
 
@@ -125,38 +122,42 @@ collide, and nothing rewrites the references between rows.
 A full snapshot import is only useful into an **empty** rehearsal deployment, to
 get a working copy of one source.
 
-### 4. Rehearsal with the import tool
+### 4. Rehearsal with the workspace transfer
 
-Into a rehearsal deployment that already holds a copy of the destination:
+Use a rehearsal deployment that runs the release commit and holds a copy of the
+destination (an export of the destination imported into an **empty** deployment;
+see step 3). Run the whole [workspace transfer](#workspace-transfer) from `plan`
+to `bind`, sign in as a moved person and as a destination person, and keep the
+`plan.json` and `verify.json` reports and the timings. `abort` before `finalize`
+and repeat as often as you need; after a `finalize`, recreate the rehearsal
+deployment instead.
 
-1. Import one organization additively, with durable old-to-new ID mappings and
-   resumable progress.
-2. Keep historical actor references (`users` IDs on records) pointing at the
-   new membership rows.
-3. Copy native file bytes and verify each SHA-256 against the source. Keep
-   SharePoint locators where the connection stays the same.
-4. Verify typed and string-held references, counts per table and workspace,
-   attachment checksums, and representative invoice and financial totals.
-5. Reissue operational credentials, invitations, AI connector grants and
-   workflow schedule grants. Don't copy them.
+The transfer itself never copies operational credentials, invitations, AI
+connector grants, webhook secrets or workflow schedule grants. Reissue them
+after cutover.
 
 ### 5. Identity reconciliation
 
-Never match people by email.
+Never match people by email. The transfer doesn't.
 
+- Imported memberships (`users` rows) keep their role, status, profile and every
+  record that points at them, but arrive **unbound**: `authIssuer`, `authSubject`,
+  `authProvider`, `externalIdentityId`, `emailVerifiedAtISO` and `lastLoginAtISO`
+  are removed (the same rule as restoring a workspace archive). Nobody can open
+  the workspace through them until the operator binds them.
 - Better Auth users on the source deployment are bound to the source's issuer
-  (its Convex site URL). The destination doesn't accept them. Every person who
-  moves gets a new login on the destination: `hostedAuth:provisionAccount` for
-  passwords, `entraProvisioning:registerDirectoryMember` for Microsoft. Each
-  person sets a new password from the link.
-- Rebind each moved membership to the person's new login only with explicit
-  operator evidence (who confirmed which person is which), never automatically.
-- A person who will belong to both organizations either gets one login with both
-  methods (`registerDirectoryMember` with `existingAuthUserId`) or links two
-  logins themselves after cutover ([user guide](user-guide.md#link-an-existing-account)).
-- Check for overlap before import: a person must not end up with two memberships
-  in one workspace. Linking refuses that case, and the resolver denies access to
-  that workspace.
+  (its Convex site URL) and secret, so the destination can't accept them, and
+  their password hashes and sessions are credentials, not records. The Better
+  Auth component tables are therefore **not** copied. Each person who moves gets
+  a login on the destination, and the operator binds their imported membership
+  to exactly that login with `bind` ([below](#7-bind-memberships)).
+- Bind only with explicit operator evidence of who is who (the `reason` column
+  records it in the workspace's activity log).
+- A person who will belong to both organizations can have the moved membership
+  bound to their existing destination login, or get a second login and link the
+  two themselves after cutover ([user guide](user-guide.md#link-an-existing-account)).
+- `bind` refuses a second membership in one workspace for the same login or for
+  any login linked to it, so overlap can't happen silently.
 
 ### 6. Dependent clients to repoint
 
@@ -172,13 +173,255 @@ Only for clients whose backend changes:
 | Mail sender, SharePoint, RustFS or R2 | Their server variables on the destination |
 | AI connector clients | Reconnect against the destination; old grants don't move |
 
+## Workspace transfer
+
+`npm run transfer:workspace` (`scripts/workspace-transfer.ts`) moves **one**
+workspace (one `societies` row and everything that belongs to it) from a source
+deployment's export ZIP into a destination that already holds other workspaces.
+It only ever inserts the workspace's own rows and files and then patches those
+same rows; it never replaces, edits or deletes the destination's other data.
+
+It reads the source only from its export, so it never needs the source's keys.
+It writes to the destination only through the internal `workspaceTransfer:*`
+functions, called with an admin key the same way `npx convex run` does
+(`ConvexHttpClient.setAdminAuth`). None of them is public.
+
+### What is copied, disabled and skipped
+
+The reviewed per-table policy is
+[`shared/workspaceTransfer/policy.ts`](../../shared/workspaceTransfer/policy.ts).
+Every schema table must be listed (`npm run test:workspace-transfer` fails
+otherwise), and `plan` refuses a table that isn't. At the release commit: 288
+`copy`, 4 `copy-disabled`, 42 `skip`.
+
+| Policy | Tables | Why |
+| --- | --- | --- |
+| `copy` | Every workspace record: members, directors, meetings, minutes, agendas, documents and versions, filings, finance, payroll, invoices, grants, procurement and so on | Copied with new IDs; every reference rewritten |
+| `copy`, with changes | `societies` (no `calendarFeedToken`; public slug held back until `finalize`), `users` (login bindings removed), `secretVaultItems` (ciphertext and preview removed, status *NeedsReview*), `aiProviderSettings` (status *needs_validation*), `meetingSources` (upload-session URL and worker lease removed), `billingAutomationRuns` (lease removed) | Bearer secrets and source-bound credentials don't move |
+| `copy-disabled` | `workflows` (`scheduleEnabled: false`, schedule grant and next run removed, as in archive restore), `billingAutomationSchedules` (`active: false`), `billingAutomationSettings` (`enabled` and `senderConfirmed` false), `meetingTranscriptionConnections` (`enabled: false`, worker key hash revoked) | Nothing acts on its own until someone re-enables it on the destination |
+| `skip` | Logins and links (`externalIdentities`, `personAccounts`, `personIdentityLinks`, `accountLinkRequests`, `accountLinkEvents`, `clerkMfaSessions`), credentials (`apiClients`, `apiTokens`, `agentGrants`, `agentConnectorSettings`, `mcpOAuth*`, `partyPortals`, `webhookSubscriptions`), pending `invitations`, queues and cursors (`webhookDeliveries`, `integrationSyncStates`, `pluginInstallations`, `authEmailOutbox`, `documentUploadHandles`), per-deployment configuration (`workspaceDomains`, `workspaceSignInPolicies`, `workspaceStoragePolicies`), offline projections (`offlineMeetingDownloads`, `offlineMeetingScopes`, `offlineMeetingReceipts`, `powersync_checkpoints`), caches (`aiModelCatalogCache`, `waveCache*`), `storageOwnership` (regenerated), global `jurisdictionMetadata`, `supportLogs`, `authRateLimits`, `developmentAuthEmails`, `procurementMaintenanceLeases`, and the transfer's own tables | Set these up again on the destination with their own commands |
+
+`workspaceMfaPolicies` is copied so an MFA requirement can't silently disappear.
+Rows that can't be moved safely while they're running block the plan:
+billing-automation runs that are queued, retrying, blocked, working or accepted
+but not finalized; filing submissions that are queued or dispatching; procurement
+imports and syncs that aren't finished. Finish or cancel them at the source
+before the final export.
+
+Which rows belong to the workspace: every row whose `societyId` is the workspace,
+then everything they reference by typed ID, and child rows without a `societyId`
+that point into it (`meetingSourceText`, `notificationPrefs`,
+`procurementSyncBatches`). A row without a workspace in a table that has an
+optional `societyId` (for example a legacy `peopleDirectory` row) is *adopted*:
+copied with the new workspace's ID. **Blocking**: any reference to a row of
+another workspace, a required reference to a skipped or missing row, a child row
+also used outside the workspace, a row that doesn't match this release's schema,
+a file another workspace claims, or a missing file. **Warnings**: optional
+references to skipped or missing rows (dropped), and strings that hold the ID of
+a row that isn't moving (left unchanged).
+
+### 1. Before you start
+
+- The source export, this CLI checkout and the destination must be the **same
+  release**. `apply` compares a digest of every table validator with the
+  destination's and refuses a mismatch; `plan` refuses rows that don't match the
+  schema.
+- Destination admin key: a deploy key from the destination's dashboard
+  (Settings → Deploy keys; a deploy key is an admin key). Put it in an
+  environment variable and pass the variable's **name**. The CLI never prints it.
+  Delete the key when the transfer is done.
+- Run on a machine with enough memory for the workspace's rows (a few times
+  their JSON size) and its largest file.
+
+```sh
+read -rs DEST_ADMIN_KEY && export DEST_ADMIN_KEY      # paste the key; not echoed
+DEST=https://industrious-cricket-610.convex.cloud     # the destination's Convex URL
+ZIP=~/societyer-backups/firstform-final.zip
+SRC_SOCIETY=<the source societies _id, from the inventory>
+RUN=firstform-2026-11                                  # a new label per attempt
+```
+
+### 2. Export the source
+
+After the write freeze:
+
+```sh
+npx convex export --include-file-storage --deployment elated-bee-460 --path "$ZIP"
+```
+
+The ZIP layout the tool reads (the Convex backend builds it; the CLI downloads
+it): `<table>/documents.jsonl` (one document per line) and
+`<table>/generated_schema.jsonl` for each table, `_storage/documents.jsonl`
+(file metadata with a base64 SHA-256) plus `_storage/<id>[.<ext>]` (bytes),
+`_components/<component>/…` (Better Auth; reported, not copied) and `README.md`.
+Anything else is a blocking finding. ZIP64 archives are supported; entries are
+streamed and each one's CRC-32 is checked.
+
+### 3. Plan (offline)
+
+```sh
+npm run transfer:workspace -- plan --export "$ZIP" --society "$SRC_SOCIETY" --out plan.json
+```
+
+It prints the workspace, row and file counts, insert layers and every finding,
+and exits 1 while anything blocks. `plan.json` also has per-table counts
+(copied, excluded, adopted), string-held ID rewrites per field, files kept in
+external stores, and financial totals (invoices and bills by currency, journal
+lines by side, bank transactions). Fix blocking findings at the source and
+export again.
+
+### 4. Apply
+
+```sh
+npm run transfer:workspace -- apply --export "$ZIP" --society "$SRC_SOCIETY" \
+  --url "$DEST" --admin-key-env DEST_ADMIN_KEY --run "$RUN" --source elated-bee-460 --note "First Form cutover"
+```
+
+1. Re-plans and stops on blocking findings.
+2. Starts (or resumes) run `$RUN`. A label is bound to one export and plan; a
+   second live run for the same source workspace is refused.
+3. Creates the workspace **quarantined** (`societies.transferQuarantinedAtISO`).
+   Nobody can be bound to it, the alert, digest, retention and attestation jobs
+   and the workflow scheduler skip it, and its public slug is held back.
+4. Uploads each file through an upload URL; the destination checks its own
+   SHA-256 and size against the export, claims the file for the workspace and
+   records the mapping (a mismatched upload is deleted).
+5. Pass 1 inserts rows in dependency order of their required references, with
+   optional references left out. Each row's mapping is written in the same
+   transaction as the row, so a repeated batch is skipped instead of inserted
+   twice.
+6. Pass 2 replaces every row with its final document: all typed references
+   (required, optional, nested, in arrays and records) and every string-held ID
+   of a moved row (also inside longer strings and JSON) point at the new IDs.
+
+Writes go in batches of at most 100 rows and 512 KiB. Every destination write
+re-applies the table policy and refuses a row whose `societyId` or any
+reference points outside the rows this run wrote.
+
+If it stops for any reason, run the same command again. It reloads the run's ID
+map and continues.
+
+### 5. Verify
+
+```sh
+npm run transfer:workspace -- verify --export "$ZIP" --society "$SRC_SOCIETY" \
+  --url "$DEST" --admin-key-env DEST_ADMIN_KEY --run "$RUN" --out verify.json
+```
+
+- On the destination: every row and file the run wrote exists, belongs to the
+  workspace, and every typed reference resolves to a row this run wrote; each
+  file is claimed by the workspace alone; the workspace is still quarantined.
+- In the CLI: every row equals what the export and ID map say it should be
+  (field by field); per-table counts equal the plan; each file's SHA-256 and
+  size equal the export; no other row on the destination carries the
+  workspace's ID (through each table's `societyId` index); financial totals
+  equal the export's.
+
+The result is recorded on the run. Any later write to the run clears it.
+
+### 6. Finalize
+
+```sh
+npm run transfer:workspace -- finalize --url "$DEST" --admin-key-env DEST_ADMIN_KEY --run "$RUN"
+```
+
+Requires a passing verify, clears the quarantine and restores the public slug.
+If another workspace already uses the slug, it refuses; add
+`--drop-public-slug` and pick a new slug in the workspace settings later.
+
+### 7. Bind memberships
+
+Binding is allowed only after `finalize`, so nobody can open a half-copied
+workspace. Each line of the CSV names one imported membership (its **source**
+`users` ID, or its email when that is unique in the workspace), and the exact
+destination login it belongs to:
+
+```csv
+sourceUserId,authIssuer,authSubject,reason
+jx7abc…,https://industrious-cricket-610.convex.site,k57def…,Sam confirmed by phone 2026-11-20
+sam@firstform.ca,https://industrious-cricket-610.convex.site,k57ghi…,
+```
+
+```sh
+npm run transfer:workspace -- bind --url "$DEST" --admin-key-env DEST_ADMIN_KEY --run "$RUN" \
+  --mapping bind.csv --reason "Confirmed against the First Form roster"
+```
+
+`authIssuer` must be the destination's `CONVEX_SITE_URL`; `authSubject` is the
+Better Auth user ID. `bind` keeps the membership's role and status (a Disabled
+membership stays Disabled), creates or reuses the login's external identity,
+and logs the reason in the workspace's activity. It refuses a row that isn't
+part of this run or is already bound, and a login that already has a membership
+in the workspace directly or through a linked login. One call per person is
+`workspaceTransfer:bindMembership({ runId, userId, authIssuer, authSubject, reason })`
+with the destination `users` ID.
+
+How each organization gets its logins:
+
+- **First Form (passwords).** For each person, create a login and send the
+  private setup link:
+  `npx convex run hostedAuth:provisionAccount '{"email":"sam@firstform.ca","name":"Sam","societyId":"<destination workspace id>"}' --deployment industrious-cricket-610`.
+  Find the new login's ID with
+  `npx convex data user --component betterAuth --format jsonl --limit 10000 --deployment industrious-cricket-610`
+  (match the address you just provisioned yourself), then bind. Alternatively,
+  bind the Owner, and let them invite the rest from **Users**: an invitation to
+  an existing unbound member (`invitations:create` with `targetUserId`) binds
+  that row when the person accepts with a verified email.
+- **DDC North (Microsoft).** If DDC is the destination, nothing moves. If DDC is
+  the workspace being transferred, provision and bind in one step:
+  `npx convex run entraProvisioning:registerDirectoryMember '{"societyId":"<destination workspace id>","objectId":"<Entra object ID>","email":"dee@ddcnorth.ca","name":"Dee","transferredMembership":{"runId":"<run id>","userId":"<destination users id>","reason":"…"}}'`.
+  It creates (or reuses) the Microsoft login and binds the imported membership
+  instead of adding a Viewer. Without `transferredMembership` it refuses a
+  quarantined workspace.
+- **Someone in both.** Bind the moved membership to the login they already have
+  on the destination, or give them a new login and let them link the two.
+
+`status` prints the run, including how many memberships are bound. Unbound
+memberships stay as they are; their history is kept and nobody can use them.
+
+### 8. After the transfer
+
+Re-create what was skipped: domains, sign-in and storage policies
+([runbook](operator-runbook.md)), API tokens, AI connector grants, webhooks,
+integrations and invitations. Re-enter vault secrets. Re-enable workflow
+schedules, billing automation (confirm the sender first) and transcription
+workers deliberately.
+
+### Abort and rollback
+
+```sh
+npm run transfer:workspace -- abort --url "$DEST" --admin-key-env DEST_ADMIN_KEY --run "$RUN"
+```
+
+Before `finalize`, this deletes everything the run wrote, found through its ID
+map (rows, files and their claims, and the workspace last), in pages, and marks
+the run aborted. It never deletes a row of another workspace. Start again with a
+new label. After `finalize` it refuses: members may already have written, so
+use the [rollback](#rollback) below instead.
+
+### Limits
+
+- One workspace per run, into a fresh quarantined workspace. Merging into an
+  existing workspace is not supported.
+- `_creationTime` is new on the destination; dates stored in fields are kept.
+- The CLI keeps the moved workspace's rows in memory and reads each file whole
+  before uploading it. Destination pages are bounded at 100–200 rows and about
+  4 MB read per call.
+- Values plain JSON can't carry (int64, bytes, special floats) are refused
+  rather than guessed (the schema uses none today).
+- String-held IDs are rewritten by token: any part of a string equal to the ID
+  of a moved row. IDs of rows that don't move stay as they are and are listed in
+  the plan.
+- Files in SharePoint, RustFS or R2 keep their locators; the destination must
+  reach the same store.
+
 ## Stage 4: cutover checklist
 
 Before the window:
 
 - [ ] Staging passed every journey in [staging-setup.md](staging-setup.md) from
       the release commit.
-- [ ] Rehearsal reconciled (if importing).
+- [ ] Rehearsal transfer verified (`verify` passed) and timed.
 - [ ] Destination runs the release commit. Both frontend builds come from that
       same clean commit (`--commit-dirty=false`).
 - [ ] Destination sign-in policies, domains, storage policies and defaults are set
@@ -195,12 +438,14 @@ During the window:
    freeze. For a hard stop, publish a holding page on the source's Pages
    project. Changing roles to Viewer would itself be a write you'd have to undo.
 2. Take the final exports (step 2).
-3. Run the final transfer and reconcile it (if importing).
+3. Run the final [workspace transfer](#workspace-transfer): `plan`, `apply`,
+   `verify`, `finalize`, then `bind`.
 4. Apply the deployment-wide settings in the order in
    [runbook step 3](operator-runbook.md#turning-off-required-sso).
 5. Publish both frontends pointing at the destination. Update the Worker, staff
    admin and Entra redirect URI as needed.
-6. Provision or reset accounts and send the links privately.
+6. Provision or reset accounts, send the links privately, and bind the moved
+   memberships ([step 7](#7-bind-memberships)).
 7. Revoke and reissue AI connector grants and API tokens
    ([runbook](operator-runbook.md#revoke-ai-connector-grants-and-api-tokens-issued-before-the-policy)).
 8. Run the production checks below.
@@ -226,8 +471,9 @@ redirect URI, staff admin). The source still holds everything.
 
 After members have written to the destination, repointing the frontends back is
 not a data rollback. Those writes exist only on the destination. Decide before
-cutover how they will be carried back (re-entry, or the same import tool in the
-other direction), and keep the window between cutover and sign-off short.
+cutover how they will be carried back (re-entry, or a workspace transfer of the
+destination's export into a fresh deployment), and keep the window between
+cutover and sign-off short. `abort` only applies before `finalize`.
 
 Don't restore a backup over a deployment that holds the other organization:
 `--replace` deletes its rows (see above).

@@ -16,6 +16,7 @@ import { legalDocsTables } from "./tables/legalDocs";
 import { formationTables } from "./tables/formation";
 import { platformTables } from "./tables/platform";
 import { sharedWorkspaceTables } from "./tables/sharedWorkspaces";
+import { workspaceTransferTables } from "./tables/workspaceTransfer";
 import { documentSyncTables } from "./tables/documentSync";
 import { communicationsTables } from "./tables/communications";
 import { waveCacheTables } from "./tables/waveCache";
@@ -89,6 +90,7 @@ export default defineSchema({
     provider: v.optional(v.string()), acceptedAtMs: v.optional(v.number()),
   }).index("by_recipient_createdAtMs", ["to", "createdAtMs"]),
   ...meetingTranscriptionTables,
+  ...workspaceTransferTables,
   ...procurementTables,
   ...procurementAnalyticsTables,
   developmentAuthEmails: defineTable({
@@ -177,6 +179,9 @@ export default defineSchema({
     organizationStatus: v.optional(v.string()),
     archivedAtISO: v.optional(v.string()),
     removedAtISO: v.optional(v.string()),
+    // Set while a workspace transfer is still copying this society in; nobody
+    // can be bound to it and scheduled jobs skip it until finalize clears it.
+    transferQuarantinedAtISO: v.optional(v.string()),
     continuanceDate: v.optional(v.string()),
     amalgamationDate: v.optional(v.string()),
     naicsCode: v.optional(v.string()),

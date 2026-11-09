@@ -340,5 +340,6 @@ origin when one is configured, and otherwise the first `SITE_URL` origin.
   the real session when downloads are fetched.
 - AI connector OAuth consent is served from one origin for the whole deployment.
 - There is no operator function to unlink logins or to merge two memberships.
-- Nothing here moves records between deployments; see
-  [migration-and-cutover.md](migration-and-cutover.md).
+- Records move between deployments only through the operator's workspace
+  transfer (`convex/workspaceTransfer.ts`, internal functions); see
+  [migration-and-cutover.md](migration-and-cutover.md#workspace-transfer).

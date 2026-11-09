@@ -256,7 +256,8 @@ export const scanUpcoming = internalMutation({
     const portable = await toPortableMutationCtx(ctx);
     let created = 0;
     for (const s of societies) {
-      if (!s) continue;
+      // A workspace still being transferred in has no reachable members yet.
+      if (!s || s.transferQuarantinedAtISO) continue;
       created += (await scanSocietyAlerts(portable, s._id)).created;
     }
     return { societies: societies.length, created };
@@ -330,7 +331,7 @@ async function deliverToEverySociety(ctx: any, cadence: DigestCadence) {
 export const societyIds = internalQuery({
   args: {},
   returns: v.any(),
-  handler: async (ctx) => (await ctx.db.query("societies").collect()).map((s) => s._id),
+  handler: async (ctx) => (await ctx.db.query("societies").collect()).filter((s) => !s.transferQuarantinedAtISO).map((s) => s._id),
 });
 
 // Cron entry: the daily digest for every workspace.

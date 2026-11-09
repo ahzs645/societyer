@@ -63,7 +63,7 @@ async function currentAuthorizer(ctx: Reader, workflow: Workflow): Promise<Autho
   catch { return { state: "blocked", reason: "The authorizer's external identity is disabled or changed. Review and authorize the schedule again." }; }
   const society = await ctx.db.get(workflow.societyId);
   const modules = normalizeModuleSettings(society);
-  if (!society || society.removedAtISO || !modules.workflows) {
+  if (!society || society.removedAtISO || society.transferQuarantinedAtISO || !modules.workflows) {
     return { state: "blocked", reason: "Workflow execution is disabled or this workspace is unavailable." };
   }
   if (workflow.recipe === "insurance_renewal" && (!modules.insurance || !hasPermission(user.role, "financials:read"))) {
