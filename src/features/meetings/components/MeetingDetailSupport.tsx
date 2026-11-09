@@ -12,7 +12,7 @@ import { Badge, Field } from "../../../components/ui";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { formatDate } from "../../../lib/format";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
-import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../../../hooks/useWorkspaceStoragePolicy";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
 import { minutesQuorumLabel } from "../../../../shared/minutesQuorum";
 import { materialEffectiveStatus } from "../lib/meetingMaterialAccess";
@@ -318,7 +318,8 @@ export function SourceDocumentRow({
   const [busy, setBusy] = useState(false);
   // Pulling copies the Paperless file into Convex, which the no-native-storage
   // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
-  const canPull = canPullSource && !isLocalDataRuntime() && !!externalId?.match(/^paperless:\d+$/i) && isNativeFileStorageEnabled();
+  const nativeUploads = useWorkspaceStoragePolicy().nativeUploads;
+  const canPull = canPullSource && !isLocalDataRuntime() && !!externalId?.match(/^paperless:\d+$/i) && nativeUploads;
   const hasActions = !!document.latestVersionId || !!document.fileName || !!document.sha256 || !!downloadUrl || (!!document.url && !downloadUrl) || canPull;
 
   const pull = async () => {

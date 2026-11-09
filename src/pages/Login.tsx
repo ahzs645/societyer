@@ -13,6 +13,9 @@ import { PasswordField } from "../auth/PasswordField";
 import { getSafeAuthRedirect } from "../lib/authRedirect";
 import { loadSessionAuthClient } from "../lib/sessionAuthClient";
 import { authEmailAllowed, authEmailPolicyMessage } from "../../shared/authEmailPolicy";
+import { appUrl, startMicrosoftSignIn } from "../auth/microsoftSignIn";
+import { MicrosoftLogo } from "../auth/MicrosoftLogo";
+import { isAccountLinkSignIn, signInOptions } from "../auth/signInOptions";
 
 const ClerkLogin = lazy(() => import("../auth/ClerkLogin"));
 const SecondFactorPrompt = lazy(() => import("../auth/SecondFactorPrompt"));
@@ -20,12 +23,6 @@ const SecondFactorPrompt = lazy(() => import("../auth/SecondFactorPrompt"));
 type Mode = "sign-in" | "sign-up" | "forgot";
 
 const SIGN_UP_UNAVAILABLE = "Public sign-up is closed. Contact your workspace administrator for an account.";
-
-/** Absolute app URL for links in auth emails; the auth server is on another origin. */
-function appUrl(path: string) {
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  return new URL(`${basePath}${path}`, window.location.origin).href;
-}
 
 export function LoginPage() {
   const auth = useAuth();
@@ -77,7 +74,7 @@ export function LoginPage() {
     auth.session &&
     auth.convexAuthStatus === "authenticated" &&
     auth.membershipState === "ready" &&
-    (auth.membershipStatus === "needs-invitation" || auth.membershipStatus === "mfa-required")
+    (auth.membershipStatus === "needs-invitation" || auth.membershipStatus === "mfa-required" || auth.membershipStatus === "sign-in-required")
   ) {
     return <Navigate to={safeRedirect} replace />;
   }
@@ -96,6 +93,12 @@ export function LoginPage() {
         </Suspense>
       </AuthShell>
     );
+  }
+
+  // Wait for this origin's workspace, so a Microsoft-only domain never shows
+  // the password form first. Unmapped or failed lookups settle as null.
+  if (auth.mode === "convex" && auth.domainWorkspace === undefined) {
+    return <AuthShell title="Sign in"><AuthPending>Loading sign-in…</AuthPending></AuthShell>;
   }
 
   return <EmailSignIn safeRedirect={safeRedirect} onSecondFactor={() => setNeedsSecondFactor(true)} />;
@@ -139,8 +142,19 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
   // Convex-hosted sign-in can only verify emails and reset passwords when the
   // deployment has a mail sender configured.
   const capabilities = useAuthCapabilities();
-  const microsoftEnabled = gatewayMicrosoftEnabled || capabilities?.microsoft?.enabled === true;
-  const microsoftRequired = capabilities?.microsoft?.required === true;
+  const domain = auth.domainWorkspace;
+  const domainRequiresMicrosoft = domain?.signIn.requiredMethod === "microsoft";
+  const microsoftEnabled = gatewayMicrosoftEnabled || capabilities?.microsoft?.enabled === true || domainRequiresMicrosoft;
+  // The second half of "Link an existing account": sign in as the other login.
+  const linking = searchParams.get("linkAccount") === "1";
+  // On a Microsoft-only domain the password form appears only to link a
+  // password login; the backend still never opens that workspace for it.
+  const options = signInOptions({
+    domainRequiresMicrosoft,
+    deploymentRequiresMicrosoft: capabilities ? capabilities.microsoft?.required === true : undefined,
+    linking: isAccountLinkSignIn(searchParams.get("linkAccount"), safeRedirect),
+  });
+  const microsoftRequired = options.microsoftRequired;
   const emailDelivery = capabilities?.emailDelivery === true;
   const allowedEmailDomains = useMemo(() => capabilities?.allowedEmailDomains ?? [], [capabilities]);
   const signUpUnavailable = auth.mode === "convex" && (!capabilities || !capabilities.signUpEnabled);
@@ -293,18 +307,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
     setBusy("microsoft");
     setError(null);
     try {
-      const { authClient } = await loadSessionAuthClient();
-      const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const callbackURL = new URL(`${basePath}${safeRedirect}`, window.location.origin).href;
-      const errorCallbackURL = new URL(`${basePath}/login`, window.location.origin);
-      errorCallbackURL.searchParams.set("redirect", safeRedirect);
-      errorCallbackURL.searchParams.set("sso", "failed");
-      const result = await authClient.signIn.social({
-        provider: "microsoft",
-        callbackURL,
-        errorCallbackURL: errorCallbackURL.href,
-      });
-      if (result.error) throw authFailureFromResponse(result.error, "Microsoft sign-in failed. Please try again.");
+      await startMicrosoftSignIn({ redirect: safeRedirect });
     } catch (err: unknown) {
       fail(err, "Microsoft sign-in failed. Please try again.");
     } finally {
@@ -353,6 +356,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
   }
 
   const copy = MODE_COPY[mode];
+  const title = mode === "sign-in" && domain ? `Sign in to ${domain.workspaceName}` : copy.title;
   const lede = microsoftRequired ? "Use your work Microsoft account to continue." : mode === "sign-up" && canResetByEmail
     ? "Use your work email. We'll send you a link to confirm it."
     : copy.lede;
@@ -360,10 +364,10 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
 
   return (
     <AuthShell
-      title={copy.title}
+      title={title}
       lede={lede}
       stateKey={mode}
-      after={!microsoftRequired && (
+      after={!microsoftRequired && !(linking && mode === "sign-in") && (
         <ModeSwitch
           mode={mode}
           busy={busy !== null}
@@ -374,6 +378,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
       )}
       help={mode === "sign-in" && !canResetByEmail ? "Trouble signing in?" : undefined}
     >
+      {linking && <p role="status" className="notice auth__notice">Sign in to the account you want to link.</p>}
       {invitation && <p className="notice auth__notice">You’re invited to <strong>{invitation.workspaceName}</strong>. {invitation.email ? `Use ${invitation.email}. ` : ""}Sign in or verify a new account to join directly. You don’t need to create an organization.</p>}
       {notice && <div role="status" className="notice notice--success auth__notice">{notice}</div>}
       {mode === "sign-up" && capabilities?.signUpEnabled === false && (
@@ -393,11 +398,12 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
                   <MicrosoftLogo /> Continue with Microsoft
                 </BusyLabel>
               </button>
-              {!microsoftRequired && <div className="auth__divider" role="separator"><span>or</span></div>}
+              {options.password && <div className="auth__divider" role="separator"><span>or</span></div>}
             </>
           )}
+          {options.passwordForLinking && <p className="auth__hint">Linking a password login? Sign in with it here.</p>}
 
-          {!microsoftRequired && <>
+          {options.password && <>
           {mode === "sign-up" && (
             <label className="field auth-field">
               <span className="field__label">Full name</span>
@@ -435,7 +441,7 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
           {mode !== "forgot" && (
             <PasswordField
               label="Password"
-              labelAction={mode === "sign-in" && canResetByEmail && (
+              labelAction={mode === "sign-in" && canResetByEmail && !microsoftRequired && (
                 <button type="button" className="auth__link auth__link--quiet" onClick={() => switchMode("forgot")}>
                   Forgot password?
                 </button>
@@ -524,16 +530,5 @@ function DevMailNotice() {
         <a href="http://127.0.0.1:4599" target="_blank" rel="noopener noreferrer">local test inbox</a>.
       </span>
     </p>
-  );
-}
-
-function MicrosoftLogo() {
-  return (
-    <svg className="auth__sso-logo" viewBox="0 0 21 21" width="16" height="16" aria-hidden="true" focusable="false">
-      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-    </svg>
   );
 }

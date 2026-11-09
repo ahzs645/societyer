@@ -2,10 +2,10 @@
  * OAuth 2.1 routes for the remote MCP endpoint, on this deployment's HTTP
  * actions origin (the issuer):
  *
- *   GET  /.well-known/oauth-protected-resource[/mcp]    RFC 9728 metadata for /mcp
- *   GET  /.well-known/oauth-authorization-server[/mcp]  RFC 8414 metadata
- *   GET  /oauth/authorize   checks the request, binds it to this browser (a cookie), then sends it to the app's consent page
- *   POST /oauth/authorize/complete  the consent page's form after a decision: checks Origin, token and binding, then redirects to the app
+ *   GET  /.well-known/oauth-protected-resource[/mcp[/<host>]]    RFC 9728 metadata for /mcp (or /mcp/<host>)
+ *   GET  /.well-known/oauth-authorization-server[/mcp[/<host>]]  RFC 8414 metadata
+ *   GET  /oauth/authorize   checks the request, binds it to this browser (a cookie), then sends it to the consent page its resource picks
+ *   POST /oauth/authorize/complete  the consent page's form after a decision: checks Origin (the request's own consent origin), token and binding, then redirects to the app
  *   POST /oauth/token       authorization_code (PKCE S256) and refresh_token (rotating)
  *   POST /oauth/register    dynamic client registration (RFC 7591), rate-limited
  *   POST /oauth/revoke      RFC 7009
@@ -39,6 +39,7 @@ import {
   bindingCookie,
   bindingCookieName,
   clientMetadataCacheSeconds,
+  consentOrigins,
   generateOpaque,
   hasOpaqueShape,
   hashOpaque,
@@ -46,13 +47,14 @@ import {
   isCodeVerifier,
   isS256Challenge,
   mcpOAuthConfig,
+  mcpResource,
+  mcpResourceForPath,
   parseClientMetadataDocument,
   parseRegistrationRequest,
   protectedResourceMetadata,
   readCookie,
   redirectUriMatches,
   requestedConnectorScopes,
-  resourceMatches,
   s256Challenge,
   scopeIsIgnorable,
   throttleIpKey,
@@ -292,11 +294,26 @@ function withConfig(handler: (ctx: ActionCtx, request: Request, config: McpOAuth
   });
 }
 
-const resourceMetadata = withConfig(async (_ctx, _request, config) =>
-  json(protectedResourceMetadata(config), 200, { "Cache-Control": "public, max-age=300" }));
+/** The resource a well-known URL is for: its path after the well-known prefix (RFC 9728 §3.1), `/mcp` when there is none. */
+function wellKnownTarget(config: McpOAuthConfig, request: Request, prefix: string) {
+  const suffix = new URL(request.url).pathname.slice(prefix.length);
+  return mcpResourceForPath(config, suffix || "/mcp");
+}
 
-const serverMetadata = withConfig(async (_ctx, _request, config) =>
-  json(authorizationServerMetadata(config), 200, { "Cache-Control": "public, max-age=300" }));
+const PROTECTED_RESOURCE = "/.well-known/oauth-protected-resource";
+const AUTHORIZATION_SERVER = "/.well-known/oauth-authorization-server";
+
+const resourceMetadata = withConfig(async (_ctx, request, config) => {
+  const target = wellKnownTarget(config, request, PROTECTED_RESOURCE);
+  if (!target) return json({ error: "not_found", error_description: "No MCP endpoint at this URL." }, 404);
+  return json(protectedResourceMetadata(config, target), 200, { "Cache-Control": "public, max-age=300" });
+});
+
+/** One authorization server for every resource URL; the path-suffixed variants are for clients that insert the resource path. */
+const serverMetadata = withConfig(async (_ctx, request, config) => {
+  if (!wellKnownTarget(config, request, AUTHORIZATION_SERVER)) return json({ error: "not_found", error_description: "No MCP endpoint at this URL." }, 404);
+  return json(authorizationServerMetadata(config), 200, { "Cache-Control": "public, max-age=300" });
+});
 
 const preflight = httpAction(async () => new Response(null, { status: 204, headers: CORS }));
 
@@ -333,8 +350,10 @@ const authorize = withConfig(async (ctx, request, config) => {
   if (params.get("code_challenge_method") !== "S256") return fail("invalid_request", "Only code_challenge_method=S256 is supported.");
   if (!isS256Challenge(challenge)) return fail("invalid_request", "code_challenge must be a 43-character base64url S256 value.");
   if (state && state.length > MAX_STATE_LENGTH) return fail("invalid_request", "state is too long.");
+  // The resource picks the consent page: `<issuer>/mcp/<host>` is approved on that SITE_URL origin; none, the default.
   const resource = params.get("resource");
-  if (resource !== undefined && !resourceMatches(config, resource)) return fail("invalid_target", `resource must be ${config.resource}.`);
+  const target = mcpResource(config, resource ?? config.resource);
+  if (!target) return fail("invalid_target", `resource must be ${config.resource}, or the server URL Societyer showed you.`);
 
   const handle = generateOpaque(OAUTH_REQUEST_PREFIX);
   const requestHash = await hashOpaque(handle);
@@ -348,36 +367,40 @@ const authorize = withConfig(async (ctx, request, config) => {
     codeChallenge: challenge,
     ...(state ? { state } : {}),
     requestedScopes: requestedConnectorScopes(params.get("scope")),
-    resource: config.resource,
+    resource: target.resource,
+    consentOrigin: target.appOrigin,
     nowMs,
   });
-  const consent = new URL(config.consentUrl);
+  const consent = new URL(target.consentUrl);
   consent.searchParams.set("request", handle);
   return redirect(consent.toString(), { "Set-Cookie": bindingCookie(bindingCookieName(requestHash), binding, AUTHORIZATION_REQUEST_SECONDS) });
 });
 
 /**
  * The consent page's form after a decision (a top-level POST navigation from
- * the app's origin). Three checks before the app gets its code or
- * access_denied: the request's `Origin` is the app's (so no other site can
- * post it: CSRF), the one-time completion token matches the decision (only
- * the decider received it), and the binding cookie is the one
+ * the consent page). Three checks before the app gets its code or
+ * access_denied: the request's `Origin` is the consent origin stored with
+ * the request at /oauth/authorize (so no other site, nor another trusted
+ * app origin, can post it: CSRF), the one-time completion token matches the
+ * decision (only the decider received it), and the binding cookie is the one
  * /oauth/authorize set on this browser for this request. The cookie is
  * SameSite=None because Lax isn't sent on a cross-site POST; it is
  * first-party here, since the issuer is the site being navigated to.
  */
 const complete = withConfig(async (ctx, request, config) => {
-  if (request.headers.get("origin") !== config.appOrigin) {
-    // Unauthenticated, so logged once per caller (address or /64, or the shared unknown key) per hour, with a count.
+  const origin = request.headers.get("origin");
+  // Unauthenticated, so logged once per caller (address or /64, or the shared unknown key) per hour, with a count.
+  const refuse = async (eventType: string) => {
     const { key } = await callerKey(ctx, "complete-rejected");
     await ctx.runMutation(internal.mcpOAuth.recordEvent, {
-      eventType: "completion_cross_site",
-      detail: { origin: (request.headers.get("origin") ?? "none").slice(0, 200) },
+      eventType,
+      detail: { origin: (origin ?? "none").slice(0, 200) },
       throttleKeyHash: await hashOpaque(key),
       nowMs: Date.now(),
     });
     return errorPage("This connection can only be finished from Societyer's consent page. Start connecting again from the app.", 403);
-  }
+  };
+  if (!origin || !consentOrigins(config).includes(origin)) return refuse("completion_cross_site");
   let params: Map<string, string>;
   try {
     params = await readForm(request);
@@ -395,11 +418,14 @@ const complete = withConfig(async (ctx, request, config) => {
   const code = generateOpaque(OAUTH_CODE_PREFIX);
   const result = await ctx.runMutation(internal.mcpOAuth.completeDecision, {
     requestHash,
+    origin,
     ...(binding && hasOpaqueShape(binding, OAUTH_BINDING_PREFIX) ? { bindingHash: await hashOpaque(binding) } : {}),
     decisionHash: await hashOpaque(decision),
     codeHash: await hashOpaque(code),
     nowMs: Date.now(),
   });
+  // Another trusted app origin's page posted it: refused, and the request is left as it was.
+  if (!result.ok && result.wrongOrigin) return refuse("completion_wrong_origin");
   const clearBinding = { "Set-Cookie": bindingCookie(cookieName, "", 0) };
   if (!result.ok) return errorPage(result.message, 400, result.ended ? clearBinding : {});
   const location = result.outcome === "approved"
@@ -417,7 +443,7 @@ async function issueTokens(
 ): Promise<Response> {
   const grantType = form.get("grant_type");
   const resource = form.get("resource");
-  if (resource !== undefined && !resourceMatches(config, resource)) throw new OAuthError("invalid_target", `resource must be ${config.resource}.`);
+  if (resource !== undefined && !mcpResource(config, resource)) throw new OAuthError("invalid_target", `resource must be ${config.resource}, or the server URL Societyer showed you.`);
   const accessToken = generateOpaque(OAUTH_ACCESS_TOKEN_PREFIX);
   const refreshToken = generateOpaque(OAUTH_REFRESH_TOKEN_PREFIX);
   const issued = {
@@ -543,13 +569,14 @@ const revoke = withConfig(async (ctx, request) => {
 });
 
 export function registerMcpOAuthRoutes(http: HttpRouter) {
-  for (const path of ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]) {
-    http.route({ path, method: "GET", handler: resourceMetadata });
-    http.route({ path, method: "OPTIONS", handler: preflight });
-  }
-  for (const path of ["/.well-known/oauth-authorization-server", "/.well-known/oauth-authorization-server/mcp"]) {
-    http.route({ path, method: "GET", handler: serverMetadata });
-    http.route({ path, method: "OPTIONS", handler: preflight });
+  for (const [prefix, handler] of [[PROTECTED_RESOURCE, resourceMetadata], [AUTHORIZATION_SERVER, serverMetadata]] as const) {
+    for (const path of [prefix, `${prefix}/mcp`]) {
+      http.route({ path, method: "GET", handler });
+      http.route({ path, method: "OPTIONS", handler: preflight });
+    }
+    // Per-origin resource URLs on a shared deployment: `<prefix>/mcp/<host>`.
+    http.route({ pathPrefix: `${prefix}/mcp/`, method: "GET", handler });
+    http.route({ pathPrefix: `${prefix}/mcp/`, method: "OPTIONS", handler: preflight });
   }
   http.route({ path: "/oauth/authorize", method: "GET", handler: authorize });
   http.route({ path: "/oauth/authorize/complete", method: "POST", handler: complete });

@@ -281,6 +281,29 @@ The tradeoff of the per-account limit: someone who knows an email address can
 deliberately trigger the limit and lock that person out for a while. Lockouts
 are temporary, never permanent. Passwords must be at least 10 characters.
 
+### Shared workspaces: domains, linked logins and handoff
+
+One deployment can serve several organizations on several frontend origins. See
+[shared workspaces](shared-workspaces/README.md).
+
+- **`SITE_URL` lists every frontend origin.** Only listed origins can sign in.
+  The first is the fallback for links. Map each origin to its workspace with
+  `workspaceDomains:upsert`; links for a mapped workspace then use its own
+  origin. Pass `societyId` to `hostedAuth:provisionAccount` and
+  `hostedAuth:issuePasswordResetLink`.
+- **Logins are never linked by email, and providers aren't linked either.**
+  `accountLinking` stays `{ enabled: false, disableImplicitLinking: true, trustedProviders: [] }`.
+  Two logins become one person only through **Link an existing account**, which
+  needs a fresh sign-in to both. Memberships stay bound to their own login.
+- **Handoff.** Switching to a workspace on another mapped origin carries the
+  same session across through `/api/auth/societyer-handoff/*`. It never upgrades
+  how the session signed in.
+- **Per-workspace rules.** Sign-in requirements and storage can be set per
+  workspace. `SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS` and
+  `SOCIETYER_ENTRA_SSO_REQUIRED` still apply to every workspace on the
+  deployment, so a shared deployment unsets them
+  ([runbook](shared-workspaces/operator-runbook.md#3-deployment-wide-sign-in-settings-on-a-shared-deployment)).
+
 ## 2. Build the frontend
 
 ```dotenv

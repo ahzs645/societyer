@@ -3,12 +3,14 @@ import { api } from "@/lib/convexApi";
 import { isDemoMode } from "../../../lib/demoMode";
 import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
-import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
+import { getDocumentStorageProvider } from "../../../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../../../hooks/useWorkspaceStoragePolicy";
 import { validateUploadMetadata } from "../../../../shared/storage/uploadVerification";
 
 /** A receipt uses the configured version store, or the deployment's existing workspace file storage. */
 export function useCreateReceiptDocument(societyId: string) {
   const convex = useConvex();
+  const { nativeUploads } = useWorkspaceStoragePolicy();
   const createDocument = useMutation(api.documents.create);
   const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
   const beginUpload = useAction(api.documentVersions.beginUpload);
@@ -25,7 +27,7 @@ export function useCreateReceiptDocument(societyId: string) {
     const metadata = {
       societyId, title, category: "Receipt", fileName: file.name, mimeType: file.type || undefined, tags, retentionYears,
     };
-    if (!isDemoMode() && !isLocalDataRuntime() && getDocumentStorageProvider() !== "local-filesystem" && isNativeFileStorageEnabled()) {
+    if (!isDemoMode() && !isLocalDataRuntime() && getDocumentStorageProvider() !== "local-filesystem" && nativeUploads) {
       const capabilities = await convex.query(api.documentVersions.storageCapabilities, { societyId }) as { deploymentConfigured: boolean };
       if (!capabilities.deploymentConfigured) {
         const uploadUrl = await generateUploadUrl({ societyId, purpose: "document" });

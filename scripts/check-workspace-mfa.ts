@@ -84,7 +84,7 @@ for (const role of ["Director", "Member", "Viewer"]) {
 const lookup = await oldOwner.query(api.http.currentPrincipalMemberships, {});
 assert.equal(lookup.status, "bound");
 assert.deepEqual(lookup.memberships.map((item: any) => item.society._id), [secondary]);
-assert.deepEqual(lookup.lockedWorkspaces, [{ id: primary, name: "Primary" }]);
+assert.deepEqual(lookup.lockedWorkspaces, [{ id: primary, name: "Primary", reason: "mfa" }]);
 assert.deepEqual((await oldOwner.query(api.society.list, {})).map((item: any) => item._id), [secondary]);
 assert.equal(await owner.query(api.workspaceMfa.getPolicy, { societyId: secondary }), "optional");
 

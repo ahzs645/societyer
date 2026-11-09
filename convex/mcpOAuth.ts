@@ -184,6 +184,7 @@ export const createRequest = internalMutation({
     state: v.optional(v.string()),
     requestedScopes: v.array(v.string()),
     resource: v.string(),
+    consentOrigin: v.string(),
     nowMs: v.number(),
   },
   returns: v.null(),
@@ -251,6 +252,11 @@ function requestStatus(request: Doc<"mcpOAuthRequests"> | null, nowMs: number): 
   return request.expiresAtMs <= nowMs ? "expired" : "pending";
 }
 
+/** The origin a request's consent page is on: stored at /oauth/authorize, else (older rows) the default. */
+function boundConsentOrigin(request: Doc<"mcpOAuthRequests">): string | null {
+  return request.consentOrigin ?? mcpOAuthConfig(process.env)?.appOrigin ?? null;
+}
+
 /** What the consent page shows. */
 export const consentContext = internalQuery({
   args: { requestHash: v.string(), nowMs: v.number() },
@@ -291,6 +297,8 @@ export const consentContext = internalQuery({
       },
       requestedScopes: request.requestedScopes,
       expiresAtMs: request.expiresAtMs,
+      /** Where this request must be decided; the page refuses to offer a decision anywhere else. */
+      consentOrigin: boundConsentOrigin(request),
       workspaces,
     };
   },
@@ -398,25 +406,30 @@ export const recordDenial = internalMutation({
 
 type Completion =
   | { ok: true; outcome: "approved" | "denied"; redirectUri: string; state?: string }
-  /** `ended`: the request can't be completed any more, so the binding cookie can go. */
-  | { ok: false; message: string; ended: boolean };
+  /** `ended`: the request can't be completed any more, so the binding cookie can go. `wrongOrigin`: posted from another consent origin. */
+  | { ok: false; message: string; ended: boolean; wrongOrigin?: true };
 
 const START_AGAIN = "Start connecting again from the app.";
 
 /**
- * /oauth/authorize/complete: apply the recorded decision, but only for the
- * browser holding the request's binding cookie and the decision just made.
- * A binding mismatch means the person deciding isn't in the browser that
- * started the request (a forwarded consent link): the decision is discarded
- * and audited, and the request stays open for the browser that started it,
- * so someone who learns a request link can't cancel it either.
+ * /oauth/authorize/complete: apply the recorded decision, but only when it
+ * was posted from the request's own consent origin, for the browser holding
+ * the request's binding cookie and the decision just made. A post from
+ * another (trusted) consent origin changes nothing. A binding mismatch means
+ * the person deciding isn't in the browser that started the request (a
+ * forwarded consent link): the decision is discarded and audited, and the
+ * request stays open for the browser that started it, so someone who learns
+ * a request link can't cancel it either.
  */
 export const completeDecision = internalMutation({
-  args: { requestHash: v.string(), bindingHash: v.optional(v.string()), decisionHash: v.string(), codeHash: v.string(), nowMs: v.number() },
-  handler: async (ctx, { requestHash, bindingHash, decisionHash, codeHash, nowMs }): Promise<Completion> => {
+  args: { requestHash: v.string(), origin: v.string(), bindingHash: v.optional(v.string()), decisionHash: v.string(), codeHash: v.string(), nowMs: v.number() },
+  handler: async (ctx, { requestHash, origin, bindingHash, decisionHash, codeHash, nowMs }): Promise<Completion> => {
     const request = await requestByHash(ctx, requestHash);
     const status = requestStatus(request, nowMs);
     if (!request || status === "not_found") return { ok: false, ended: true, message: `This connection request isn't valid. ${START_AGAIN}` };
+    if (boundConsentOrigin(request) !== origin) {
+      return { ok: false, ended: false, wrongOrigin: true, message: `This connection can only be finished on the consent page it was started for. ${START_AGAIN}` };
+    }
     if (status === "used") return { ok: false, ended: true, message: `This connection request was already answered. ${START_AGAIN}` };
     if (status === "expired") return { ok: false, ended: true, message: `This connection request expired. ${START_AGAIN}` };
     const decision = request.decision;
@@ -721,10 +734,15 @@ export const revokeToken = internalMutation({
 
 // --- /mcp ---------------------------------------------------------------------------------------------
 
-/** Resolve an OAuth access token for `/mcp`: not expired or revoked, bound to this resource, then the grant checks. */
+/**
+ * Resolve an OAuth access token for the resource URL `resource` was called
+ * at: not expired or revoked, then bound to that resource (or to the default
+ * `<issuer>/mcp`, which clients that don't send `resource` get), then the
+ * grant checks. A token for `<issuer>/mcp/<host>` works only there.
+ */
 export const authorizeAccessToken = internalMutation({
-  args: { accessTokenHash: v.string(), nowMs: v.number() },
-  handler: async (ctx, { accessTokenHash, nowMs }) => {
+  args: { accessTokenHash: v.string(), resource: v.optional(v.string()), nowMs: v.number() },
+  handler: async (ctx, { accessTokenHash, resource, nowMs }) => {
     const unknown = { ok: false as const, status: 401 as const, error: "invalid_token", message: "This access token isn't recognised." };
     const config = mcpOAuthConfig(process.env);
     if (!config) return { ...unknown, message: "OAuth sign-in for AI connectors is turned off on this deployment." };
@@ -732,7 +750,7 @@ export const authorizeAccessToken = internalMutation({
     if (!row) return unknown;
     if (row.revokedAtMs) return { ...unknown, message: "This access token was revoked." };
     if (row.accessExpiresAtMs <= nowMs) return { ...unknown, message: "This access token has expired. Refresh it." };
-    if (row.resource !== config.resource) return { ...unknown, message: "This access token was issued for another resource." };
+    if (row.resource !== config.resource && row.resource !== (resource ?? config.resource)) return { ...unknown, message: "This access token was issued for another resource." };
     const admitted = await admitGrant(ctx, await ctx.db.get(row.grantId), nowMs);
     if (admitted.ok) await touchFamily(ctx, row.familyId, nowMs);
     return admitted;

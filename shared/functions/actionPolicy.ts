@@ -80,10 +80,18 @@ const HANDLER_POLICIES = new Set([
   "invitations:accept", "invitations:getByToken", "invitations:pendingForAccount", "invitations:acceptForAccount", "invitations:resend", "permissions:myPermissions", "permissions:check", "permissions:listAll",
   "society:createWorkspace", "society:create", "society:list", "society:listMine", "society:current", "firm:list", "firm:organizations",
   "workspaceMfa:getPolicy", "workspaceMfa:setPolicy",
+  // Shared workspaces: personal account linking. Handlers check the signed-in identity themselves
+  // and never take a workspace id. Storage policy is a member read checked in the handler.
+  "accountLinks:overview", "accountLinks:begin", "accountLinks:preview", "accountLinks:confirm", "accountLinks:cancel", "accountLinks:unlink",
+  "workspaceStoragePolicies:forWorkspace",
+  // Access requests: the requester's own identity, or Owner/Admin authority for decisions and settings.
+  // availability reveals nothing unless the workspace has a verified domain and requests turned on.
+  "accessRequests:availability", "accessRequests:submit", "accessRequests:withdraw", "accessRequests:mine",
+  "accessRequests:listForWorkspace", "accessRequests:approve", "accessRequests:decline", "accessRequests:getSettings", "accessRequests:setSettings",
   "http:workspaceCreationAccess", "http:currentPrincipalMemberships", "http:me", "http:gatewayApiPrincipal", "http:gatewayWorkflowBinding", "http:gatewayGeneratedDocumentAccess",
 ]);
 // Public intake/token routes retain their existing narrow, handler-level policy.
-const PUBLIC_HANDLERS = new Set(["http:authCapabilities", "http:deploymentCapabilities", "publicPortal:getSocietyBySlug", "publicPortal:volunteerIntakeContext", "publicPortal:grantIntakeContext", "transparency:publicCenter", "partyPortals:center", "volunteers:submitApplication","grants:submitApplication", "publicPortal:getByToken", "publicPortal:submit", "partyPortals:getByToken", "partyPortals:respond"]);
+const PUBLIC_HANDLERS = new Set(["http:authCapabilities", "workspaceDomains:resolveOrigin", "http:deploymentCapabilities", "publicPortal:getSocietyBySlug", "publicPortal:volunteerIntakeContext", "publicPortal:grantIntakeContext", "transparency:publicCenter", "partyPortals:center", "volunteers:submitApplication","grants:submitApplication", "publicPortal:getByToken", "publicPortal:submit", "partyPortals:getByToken", "partyPortals:respond"]);
 
 // These identifiers are citation keys or provider identifiers, never local row
 // references. Keep the exceptions endpoint-specific: targetId and other row

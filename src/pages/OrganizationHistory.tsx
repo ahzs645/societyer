@@ -15,7 +15,7 @@ import { Modal } from "../components/Modal";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
-import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../hooks/useWorkspaceStoragePolicy";
 import { Tabs } from "../components/primitives";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -1910,7 +1910,8 @@ function SourceDocumentRow({ source, societyId }: { source: any; societyId: any 
   const url = sourceUrl(source);
   // Pulling copies the Paperless file into Convex, which the no-native-storage
   // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
-  const canPull = !isLocalDataRuntime() && Boolean(source?._id && sourcePaperlessExternalId(source)) && isNativeFileStorageEnabled();
+  const nativeUploads = useWorkspaceStoragePolicy().nativeUploads;
+  const canPull = !isLocalDataRuntime() && Boolean(source?._id && sourcePaperlessExternalId(source)) && nativeUploads;
 
   const pull = async () => {
     const externalId = sourcePaperlessExternalId(source);

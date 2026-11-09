@@ -59,6 +59,19 @@ export type PortablePrincipal =
       name?: string;
       userId?: string;
       societyId?: string;
+      /**
+       * How THIS session authenticated, validated server-side from signed
+       * claims. Never client-supplied. Workspace sign-in policies compare
+       * against it; a linked login method is not session evidence.
+       */
+      sessionEvidence?: PrincipalSessionEvidence;
+      /**
+       * Set only by server code that precomputes a member's view without a
+       * live session (offline meeting downloads). Sign-in policy and MFA are
+       * skipped while building it and enforced on the real session when the
+       * view is delivered. No request-derived principal ever carries it.
+       */
+      sessionChecksDeferred?: true;
     }
   | {
       kind: "service";
@@ -70,6 +83,22 @@ export type PortablePrincipal =
       clientId?: string;
       scopes: readonly string[];
     };
+
+/** Validated authentication evidence for one session (see PortablePrincipal). */
+export type PrincipalSessionEvidence = {
+  /** Session id from the deployment-signed JWT. */
+  sessionId?: string;
+  /** Epoch ms when the session was created by an actual sign-in. */
+  authenticatedAt?: number;
+  /** Present only when this session completed a Microsoft sign-in that passed the deployment's checks. */
+  microsoft?: {
+    tenantId: string;
+    objectId: string;
+    groupIds: readonly string[];
+    authenticatedAt: number;
+    expiresAt: number;
+  };
+};
 
 /** A stored document. Every row has a string `_id`; most carry `societyId`. */
 export type PortableDoc = Record<string, any> & {

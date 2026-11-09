@@ -47,6 +47,12 @@ export const mcpOAuthTables = {
     state: v.optional(v.string()),
     requestedScopes: v.array(v.string()),
     resource: v.string(),
+    /**
+     * The consent page's origin, chosen from `resource` at /oauth/authorize:
+     * the only `Origin` a completion POST may come from. Requests from before
+     * it was stored use the deployment's default consent origin.
+     */
+    consentOrigin: v.optional(v.string()),
     createdAtMs: v.number(),
     expiresAtMs: v.number(),
     status: v.union(v.literal("pending"), v.literal("approved"), v.literal("denied"), v.literal("exchanged")),

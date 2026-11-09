@@ -12,6 +12,9 @@
  * - Tokens are opaque, stored as SHA-256 hashes, and bound to the MCP
  *   resource (RFC 8707). Every grant is an `agentGrants` row, so `/mcp`
  *   checks an OAuth token exactly like a personal token.
+ * - Shared deployments: `<issuer>/mcp/<host>` names one `SITE_URL` origin.
+ *   A request for that resource is approved on that origin's consent page,
+ *   and its completion is accepted only from that origin (stored with it).
  */
 import { CONNECTOR_READ_SCOPES, CONNECTOR_SCOPES, hashConnectorToken } from "./connectorPolicy";
 
@@ -67,18 +70,33 @@ export class OAuthError extends Error {
   }
 }
 
-export type McpOAuthConfig = {
-  /** The authorization server's issuer: this deployment's HTTP actions origin. */
-  issuer: string;
-  /** The protected resource every token is bound to: `<issuer>/mcp`. */
+/**
+ * One URL the MCP endpoint is served at, and where sign-ins started from it
+ * are approved. A shared deployment (several `SITE_URL` origins) also serves
+ * `<issuer>/mcp/<app host>` per origin, so each organization approves on its
+ * own domain; `<issuer>/mcp` uses the default (first) origin.
+ */
+export type McpResourceTarget = {
+  /** The protected resource a token is bound to (RFC 8707). */
   resource: string;
+  /** Its RFC 9728 metadata: `<issuer>/.well-known/oauth-protected-resource<resource path>`. */
   resourceMetadataUrl: string;
   /** The app's consent page, which the authorization endpoint redirects to. */
   consentUrl: string;
-  /** The consent page's origin: the only `Origin` a completion POST may come from. */
+  /** The consent page's origin: the only `Origin` a completion POST for such a request may come from. */
   appOrigin: string;
+};
+
+/** The default target (`<issuer>/mcp`), plus what the per-origin URLs need. */
+export type McpOAuthConfig = McpResourceTarget & {
+  /** The authorization server's issuer: this deployment's HTTP actions origin. */
+  issuer: string;
   /** Extra exact redirect URIs an operator allows (SOCIETYER_MCP_OAUTH_REDIRECT_URIS). */
   extraRedirectUris: string[];
+  /** Exact `SITE_URL` origins a resource URL may name (`<issuer>/mcp/<host>`). */
+  appOrigins: string[];
+  /** SOCIETYER_MCP_OAUTH_CONSENT_URL is set: it is the consent page for every resource URL. */
+  consentOverride: boolean;
 };
 
 function trimSlash(value: string): string {
@@ -108,28 +126,96 @@ export function mcpOAuthConfig(env: Record<string, string | undefined>): McpOAut
   if (env.SOCIETYER_MCP_OAUTH === "0") return null;
   const site = httpsOrLocal(env.CONVEX_SITE_URL);
   if (!site) return null;
-  const appOrigin = (env.SITE_URL ?? "").split(",").map((value) => value.trim()).find(Boolean);
-  const consent = httpsOrLocal(env.SOCIETYER_MCP_OAUTH_CONSENT_URL)
-    ?? (httpsOrLocal(appOrigin) ? new URL("/oauth/consent", trimSlash(appOrigin as string)) : null);
+  const entries = (env.SITE_URL ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  const override = httpsOrLocal(env.SOCIETYER_MCP_OAUTH_CONSENT_URL);
+  const consent = override ?? (httpsOrLocal(entries[0]) ? new URL("/oauth/consent", trimSlash(entries[0])) : null);
   if (!consent) return null;
   const issuer = trimSlash(site.origin);
+  const resource = `${issuer}/mcp`;
   return {
     issuer,
-    resource: `${issuer}/mcp`,
-    resourceMetadataUrl: `${issuer}/.well-known/oauth-protected-resource/mcp`,
+    resource,
+    resourceMetadataUrl: metadataUrlFor(issuer, resource),
     consentUrl: consent.toString(),
     appOrigin: consent.origin,
     extraRedirectUris: (env.SOCIETYER_MCP_OAUTH_REDIRECT_URIS ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter((value) => httpsOrLocal(value) !== null),
+    // Bare origins only, so `<issuer>/mcp/<host>` names exactly one.
+    appOrigins: [...new Set(entries.map(httpsOrLocal)
+      .filter((url): url is URL => url !== null && url.pathname === "/" && !url.search)
+      .map((url) => url.origin))],
+    consentOverride: override !== null,
   };
 }
 
-/** RFC 9728 metadata for `/mcp`. `scopes_supported` is the read set: what a client should ask for by default. */
-export function protectedResourceMetadata(config: McpOAuthConfig) {
+function metadataUrlFor(issuer: string, resource: string): string {
+  return `${issuer}/.well-known/oauth-protected-resource${new URL(resource).pathname}`;
+}
+
+function defaultTarget({ resource, resourceMetadataUrl, consentUrl, appOrigin }: McpOAuthConfig): McpResourceTarget {
+  return { resource, resourceMetadataUrl, consentUrl, appOrigin };
+}
+
+/** The `SITE_URL` origin whose host is `host`, if exactly one is. */
+function appOriginForHost(config: McpOAuthConfig, host: string): string | null {
+  const matches = config.appOrigins.filter((origin) => new URL(origin).host === host.toLowerCase());
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function originTarget(config: McpOAuthConfig, origin: string): McpResourceTarget {
+  const resource = `${config.resource}/${new URL(origin).host}`;
+  const consentUrl = config.consentOverride ? config.consentUrl : new URL("/oauth/consent", origin).toString();
+  return { resource, resourceMetadataUrl: metadataUrlFor(config.issuer, resource), consentUrl, appOrigin: new URL(consentUrl).origin };
+}
+
+/**
+ * RFC 8707: the target a `resource` names, or null if this server doesn't
+ * serve it. `<issuer>/mcp` (or the bare issuer, which some clients send) is
+ * the default; `<issuer>/mcp/<host>` is the one `SITE_URL` origin with that
+ * host, and nothing else. Scheme and host compare case-insensitively; a
+ * trailing slash is ignored.
+ */
+export function mcpResource(config: McpOAuthConfig, value: string): McpResourceTarget | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.hash || url.search || url.username || url.password) return null;
+  const normalized = trimSlash(`${url.origin}${url.pathname}`);
+  if (normalized === config.resource || normalized === config.issuer) return defaultTarget(config);
+  if (!normalized.startsWith(`${config.resource}/`)) return null;
+  const origin = appOriginForHost(config, normalized.slice(config.resource.length + 1));
+  return origin ? originTarget(config, origin) : null;
+}
+
+/** The target for a path on the issuer (`/mcp`, `/mcp/<host>`), or null. */
+export function mcpResourceForPath(config: McpOAuthConfig, pathname: string): McpResourceTarget | null {
+  return pathname === "/mcp" || pathname.startsWith("/mcp/") ? mcpResource(config, `${config.issuer}${pathname}`) : null;
+}
+
+/** Every origin a consent page may be served from: the only origins a completion POST may come from at all. */
+export function consentOrigins(config: McpOAuthConfig): string[] {
+  return config.consentOverride ? [config.appOrigin] : [...new Set([config.appOrigin, ...config.appOrigins])];
+}
+
+/**
+ * The server URL to show someone using the app at `origin`: on a shared
+ * deployment (several `SITE_URL` origins, no consent override) the URL for
+ * that origin, so sign-in is approved there; otherwise `<issuer>/mcp`.
+ */
+export function mcpServerUrlFor(config: McpOAuthConfig, origin: string | undefined): string {
+  if (config.consentOverride || config.appOrigins.length < 2 || !origin || !config.appOrigins.includes(origin)) return config.resource;
+  return appOriginForHost(config, new URL(origin).host) ? originTarget(config, origin).resource : config.resource;
+}
+
+/** RFC 9728 metadata for one resource URL. `scopes_supported` is the read set: what a client should ask for by default. */
+export function protectedResourceMetadata(config: McpOAuthConfig, target: McpResourceTarget) {
   return {
-    resource: config.resource,
+    resource: target.resource,
     authorization_servers: [config.issuer],
     scopes_supported: [...CONNECTOR_READ_SCOPES],
     bearer_methods_supported: ["header"],
@@ -157,32 +243,15 @@ export function authorizationServerMetadata(config: McpOAuthConfig) {
   };
 }
 
-/** The `WWW-Authenticate` value for a 401 from `/mcp` when OAuth is on. */
-export function bearerChallenge(config: McpOAuthConfig, error?: { error: string; description: string }): string {
+/** The `WWW-Authenticate` value for a 401 from a resource URL when OAuth is on: its own metadata. */
+export function bearerChallenge(target: Pick<McpResourceTarget, "resourceMetadataUrl">, error?: { error: string; description: string }): string {
   const parts = [
     'Bearer realm="societyer-mcp"',
-    `resource_metadata="${config.resourceMetadataUrl}"`,
+    `resource_metadata="${target.resourceMetadataUrl}"`,
     `scope="${CONNECTOR_READ_SCOPES.join(" ")}"`,
   ];
   if (error) parts.push(`error="${error.error}"`, `error_description="${error.description.replace(/["\\]/g, "'")}"`);
   return parts.join(", ");
-}
-
-/**
- * RFC 8707: the `resource` a client names must be this MCP server. Its origin
- * is accepted too (some clients send the origin), and both bind to `/mcp`.
- * Scheme and host compare case-insensitively; a trailing slash is ignored.
- */
-export function resourceMatches(config: McpOAuthConfig, value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (url.hash || url.search || url.username || url.password) return false;
-  const normalized = trimSlash(`${url.origin}${url.pathname}`);
-  return normalized === config.resource || normalized === config.issuer;
 }
 
 // --- Redirect URIs --------------------------------------------------------------------
@@ -251,8 +320,8 @@ export function authorizationResponseUrl(redirectUri: string, params: Record<str
 // consent page is on the app's origin and can't read it. After a decision the
 // page submits a form (a top-level POST navigation) to the issuer's
 // /oauth/authorize/complete with a one-time completion token only the decider
-// received. The issuer checks the request's `Origin` is the app, the token
-// and the cookie. SameSite=Lax cookies aren't sent on a cross-site POST, so
+// received. The issuer checks the request's `Origin` is the consent origin
+// stored with the request, the token and the cookie. SameSite=Lax cookies aren't sent on a cross-site POST, so
 // the cookie is SameSite=None; it is still first-party in that navigation
 // (the issuer is the top-level site being navigated to), so third-party
 // cookie blocking doesn't apply, and it's never Partitioned. The Origin check,

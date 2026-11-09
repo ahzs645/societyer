@@ -1,5 +1,174 @@
 [
   {
+    "key": "convex:accessRequests:approve",
+    "surface": "convex",
+    "name": "accessRequests:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:availability",
+    "surface": "convex",
+    "name": "accessRequests:availability",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:decline",
+    "surface": "convex",
+    "name": "accessRequests:decline",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:deliverEmail",
+    "surface": "convex",
+    "name": "accessRequests:deliverEmail",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:emailContext",
+    "surface": "convex",
+    "name": "accessRequests:emailContext",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:getSettings",
+    "surface": "convex",
+    "name": "accessRequests:getSettings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:listForWorkspace",
+    "surface": "convex",
+    "name": "accessRequests:listForWorkspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:mine",
+    "surface": "convex",
+    "name": "accessRequests:mine",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accessRequests:setSettings",
+    "surface": "convex",
+    "name": "accessRequests:setSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:submit",
+    "surface": "convex",
+    "name": "accessRequests:submit",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:accessRequests:withdraw",
+    "surface": "convex",
+    "name": "accessRequests:withdraw",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accessRequests.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workspaceAccessRequests",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:accounting:accountMappings",
     "surface": "convex",
     "name": "accounting:accountMappings",
@@ -906,6 +1075,78 @@
         "optional": true
       }
     ]
+  },
+  {
+    "key": "convex:accountLinks:begin",
+    "surface": "convex",
+    "name": "accountLinks:begin",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:cancel",
+    "surface": "convex",
+    "name": "accountLinks:cancel",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:confirm",
+    "surface": "convex",
+    "name": "accountLinks:confirm",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:operatorInspect",
+    "surface": "convex",
+    "name": "accountLinks:operatorInspect",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:operatorUnlink",
+    "surface": "convex",
+    "name": "accountLinks:operatorUnlink",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:overview",
+    "surface": "convex",
+    "name": "accountLinks:overview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:preview",
+    "surface": "convex",
+    "name": "accountLinks:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:unlink",
+    "surface": "convex",
+    "name": "accountLinks:unlink",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
   },
   {
     "key": "convex:activity:list",
@@ -9341,6 +9582,18 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "transferredMembership.runId",
+        "table": "workspaceTransferRuns",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "transferredMembership.userId",
+        "table": "users",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -9357,6 +9610,18 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "transferredMembership.runId",
+        "table": "workspaceTransferRuns",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "transferredMembership.userId",
+        "table": "users",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -12443,7 +12708,14 @@
     "kind": "mutation",
     "access": "service",
     "source": "convex/hostedAuth.ts",
-    "idArguments": []
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
   },
   {
     "key": "convex:hostedAuth:issuePasswordResetLink",
@@ -12452,7 +12724,14 @@
     "kind": "action",
     "access": "service",
     "source": "convex/hostedAuth.ts",
-    "idArguments": []
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
   },
   {
     "key": "convex:hostedAuth:provisionAccount",
@@ -12461,7 +12740,14 @@
     "kind": "action",
     "access": "service",
     "source": "convex/hostedAuth.ts",
-    "idArguments": []
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
   },
   {
     "key": "convex:importSessions:applyApprovedDocuments",
@@ -27279,6 +27565,28 @@
     ]
   },
   {
+    "key": "convex:users:operatorRetireMembership",
+    "surface": "convex",
+    "name": "users:operatorRetireMembership",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/users.ts",
+    "idArguments": [
+      {
+        "path": "retireUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "keepUserId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:users:recordLogin",
     "surface": "convex",
     "name": "users:recordLogin",
@@ -28983,6 +29291,81 @@
     ]
   },
   {
+    "key": "convex:workspaceDefaults:installInvoiceTemplate",
+    "surface": "convex",
+    "name": "workspaceDefaults:installInvoiceTemplate",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceDefaults.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceDomains:audit",
+    "surface": "convex",
+    "name": "workspaceDomains:audit",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceDomains.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceDomains:linkOrigin",
+    "surface": "convex",
+    "name": "workspaceDomains:linkOrigin",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceDomains.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceDomains:list",
+    "surface": "convex",
+    "name": "workspaceDomains:list",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceDomains.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceDomains:resolveOrigin",
+    "surface": "convex",
+    "name": "workspaceDomains:resolveOrigin",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/workspaceDomains.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceDomains:upsert",
+    "surface": "convex",
+    "name": "workspaceDomains:upsert",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceDomains.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:workspaceMfa:getPolicy",
     "surface": "convex",
     "name": "workspaceMfa:getPolicy",
@@ -29031,6 +29414,296 @@
         "optional": false
       }
     ]
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:clear",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:clear",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:get",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:get",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:list",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:list",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:set",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:set",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceStoragePolicies:audit",
+    "surface": "convex",
+    "name": "workspaceStoragePolicies:audit",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceStoragePolicies.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceStoragePolicies:effective",
+    "surface": "convex",
+    "name": "workspaceStoragePolicies:effective",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceStoragePolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceStoragePolicies:forWorkspace",
+    "surface": "convex",
+    "name": "workspaceStoragePolicies:forWorkspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/workspaceStoragePolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceStoragePolicies:get",
+    "surface": "convex",
+    "name": "workspaceStoragePolicies:get",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceStoragePolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceStoragePolicies:list",
+    "surface": "convex",
+    "name": "workspaceStoragePolicies:list",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceStoragePolicies.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceStoragePolicies:set",
+    "surface": "convex",
+    "name": "workspaceStoragePolicies:set",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceStoragePolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceTransfer:abort",
+    "surface": "convex",
+    "name": "workspaceTransfer:abort",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:begin",
+    "surface": "convex",
+    "name": "workspaceTransfer:begin",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:bindMembership",
+    "surface": "convex",
+    "name": "workspaceTransfer:bindMembership",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": [
+      {
+        "path": "userId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceTransfer:completeApply",
+    "surface": "convex",
+    "name": "workspaceTransfer:completeApply",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:countSocietyRows",
+    "surface": "convex",
+    "name": "workspaceTransfer:countSocietyRows",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:exportPage",
+    "surface": "convex",
+    "name": "workspaceTransfer:exportPage",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:finalize",
+    "surface": "convex",
+    "name": "workspaceTransfer:finalize",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:generateUploadUrl",
+    "surface": "convex",
+    "name": "workspaceTransfer:generateUploadUrl",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:idMapPage",
+    "surface": "convex",
+    "name": "workspaceTransfer:idMapPage",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:importedMembership",
+    "surface": "convex",
+    "name": "workspaceTransfer:importedMembership",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:insertBatch",
+    "surface": "convex",
+    "name": "workspaceTransfer:insertBatch",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:recordFile",
+    "surface": "convex",
+    "name": "workspaceTransfer:recordFile",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:recordVerification",
+    "surface": "convex",
+    "name": "workspaceTransfer:recordVerification",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:rewriteBatch",
+    "surface": "convex",
+    "name": "workspaceTransfer:rewriteBatch",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:status",
+    "surface": "convex",
+    "name": "workspaceTransfer:status",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceTransfer:verifyPage",
+    "surface": "convex",
+    "name": "workspaceTransfer:verifyPage",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceTransfer.ts",
+    "idArguments": []
   },
   {
     "key": "convex:writtenResolutions:certifyVoteCount",

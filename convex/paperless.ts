@@ -15,7 +15,7 @@ import {
   uploadDocumentToPaperless,
 } from "./providers/paperless";
 import { createDownloadUrl } from "./providers/storage";
-import { assertNativeFileStorageEnabled } from "./providers/env";
+import { assertWorkspaceNativeUploads, NATIVE_FILE_STORAGE_DISABLED_MESSAGE } from "./providers/env";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import {
   tagProfilesPortable,
@@ -251,7 +251,9 @@ export const pullSourceDocument = authorizedAction("paperless:pullSourceDocument
     // Pulling copies the Paperless file into Convex's native storage, which the
     // "no native file storage" mode forbids. The connector still works as a
     // read-only source (list/link/open at Paperless) — it just won't cache here.
-    assertNativeFileStorageEnabled();
+    // recordPulledSourceDocument re-checks inside its transaction.
+    const storage = await ctx.runQuery(internal.workspaceStoragePolicies.effective, { societyId: args.societyId });
+    if (!storage.nativeUploads) throw new Error(NATIVE_FILE_STORAGE_DISABLED_MESSAGE);
     const { document } = await ctx.runQuery(api.paperless.sourcePullContext, {
       societyId: args.societyId,
       documentId: args.documentId,
@@ -303,7 +305,7 @@ export const recordPulledSourceDocument = authorizedMutation("paperless:recordPu
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    assertNativeFileStorageEnabled();
+    await assertWorkspaceNativeUploads(ctx.db, args.societyId);
     const portableCtx = await toPortableMutationCtx(ctx);
     await requireSocietyMembership(portableCtx, args.societyId);
     const document = await getOwned(portableCtx, "documents", args.documentId, args.societyId);

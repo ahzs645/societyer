@@ -8,7 +8,7 @@ import { useToast } from "./Toast";
 import { isDemoMode } from "../lib/demoMode";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { readFileDataUrl } from "../lib/readFileDataUrl";
-import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../hooks/useWorkspaceStoragePolicy";
 
 export type ImageValue = { imageStorageId?: string; imageUrl?: string };
 
@@ -38,7 +38,7 @@ export function ImageUploadField({
   const preview = value.imageUrl;
   // When native file storage is disabled there is nowhere to upload bytes to,
   // so we only offer the external image-URL path.
-  const canUpload = isNativeFileStorageEnabled();
+  const canUpload = useWorkspaceStoragePolicy().nativeUploads;
 
   const pickFile = async (file: File | null) => {
     if (!file) return;

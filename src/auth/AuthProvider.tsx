@@ -23,8 +23,12 @@ import { setPrincipalUsers, setStoredUserId } from "../hooks/useCurrentUser";
 import {
   getStoredSocietyId,
   setMembershipSocietyIds,
+  setSelectionFallbackAllowed,
   setStoredSocietyId,
 } from "../hooks/useSociety";
+import type { DomainWorkspace } from "../lib/workspaceDomain";
+import { useDomainWorkspace } from "./useDomainWorkspace";
+import { chooseStartupWorkspace, takeStartupWorkspace, type StartupChoice } from "./startupWorkspace";
 
 export type AuthSession = {
   user: { id: string; name: string; email: string; twoFactorEnabled?: boolean | null };
@@ -36,7 +40,7 @@ const ClerkAuthProvider = lazy(() => import("./ClerkAuthProvider"));
 export type AuthStage = "idle" | "loading" | "ready" | "error";
 export type SessionStatus = "loading" | "authenticated" | "unauthenticated" | "error";
 export type ConvexAuthStatus = "idle" | "loading" | "authenticated" | "unauthenticated" | "error";
-export type MembershipStatus = MembershipResolution["status"] | "membership-revoked" | "mfa-required";
+export type MembershipStatus = MembershipResolution["status"] | "membership-revoked" | "mfa-required" | "sign-in-required";
 export type AuthFailureKind =
   | "expired-session"
   | "jwks-token"
@@ -50,20 +54,39 @@ export type AuthFailure = {
   retryable: boolean;
 };
 
-type PrincipalMembership = {
+export type PrincipalMembership = {
   userId: Id<"users">;
   role: string;
   user: Doc<"users">;
-  society: Doc<"societies">;
+  society: Doc<"societies"> & { logoUrl?: string; logoDarkUrl?: string };
+  /** The workspace's own domain, when one is configured. */
+  canonicalOrigin?: string;
+  /** Bound to another login linked to this one. */
+  viaLinkedIdentity?: boolean;
 };
+
+/** "mfa" when an older deployment sends no reason. */
+export type WorkspaceLockReason = "mfa" | "microsoft" | "email-domain";
+export type LockedWorkspace = {
+  id: Id<"societies">;
+  name: string;
+  reason?: WorkspaceLockReason;
+  canonicalOrigin?: string;
+  logoUrl?: string;
+  supportEmail?: string;
+  /** Optional, for the email-domain lock copy; not in the contract yet. */
+  allowedEmailDomains?: string[];
+};
+export type WorkspaceStartup = StartupChoice<LockedWorkspace, DomainWorkspace>;
 
 type MembershipLookup = {
   status: MembershipStatus;
   authSubject?: string;
   memberships: PrincipalMembership[];
-  lockedWorkspaces?: Array<{ id: Id<"societies">; name: string }>;
+  lockedWorkspaces?: LockedWorkspace[];
   workspaceMfaAvailable?: boolean;
   secondFactorVerified?: boolean;
+  sessionMethods?: { microsoft: boolean };
 };
 
 type AuthContextValue = {
@@ -74,7 +97,18 @@ type AuthContextValue = {
   membershipState: AuthStage;
   membershipStatus: MembershipStatus | null;
   societies: Doc<"societies">[] | undefined;
-  lockedWorkspaces: NonNullable<MembershipLookup["lockedWorkspaces"]>;
+  /** The memberships behind `societies`, with role, domain and link details. */
+  memberships: PrincipalMembership[] | undefined;
+  lockedWorkspaces: LockedWorkspace[];
+  /**
+   * The workspace mapped to this origin (convex mode): undefined while it
+   * loads, null when the origin is unmapped or in other modes.
+   */
+  domainWorkspace: DomainWorkspace | null | undefined;
+  /** What sign-in opened: a workspace, a lock screen, or "no access here". */
+  startup: WorkspaceStartup | null;
+  /** This session signed in with Microsoft (convex mode). */
+  sessionMicrosoft: boolean;
   workspaceMfaAvailable: boolean;
   secondFactorVerified: boolean;
   fatalError: AuthFailure | null;
@@ -82,6 +116,8 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isConvexAuthenticated: boolean;
   refreshMembership: (preferredSocietyId?: Id<"societies">) => void;
+  /** Open a workspace in this tab, or show its lock screen, without a refetch. */
+  selectWorkspace: (societyId: Id<"societies">) => void;
   retryAuthentication: () => void;
   signOut: () => Promise<void>;
 };
@@ -122,7 +158,11 @@ function NoAuthProvider({
       membershipState: "ready",
       membershipStatus: "bound",
       societies: undefined,
+      memberships: undefined,
       lockedWorkspaces: [],
+      domainWorkspace: null,
+      startup: null,
+      sessionMicrosoft: false,
       workspaceMfaAvailable: false,
       secondFactorVerified: false,
       fatalError: null,
@@ -130,6 +170,7 @@ function NoAuthProvider({
       isAuthenticated: true,
       isConvexAuthenticated: true,
       refreshMembership: () => undefined,
+      selectWorkspace: (societyId) => { setStoredSocietyId(societyId); },
       retryAuthentication: () => undefined,
       signOut: async () => {
         setStoredSocietyId(null);
@@ -304,13 +345,52 @@ function MembershipProviderReady({
   const [lockedWorkspaces, setLockedWorkspaces] = useState<AuthContextValue["lockedWorkspaces"]>([]);
   const [workspaceMfaAvailable, setWorkspaceMfaAvailable] = useState(false);
   const [secondFactorVerified, setSecondFactorVerified] = useState(false);
+  const [sessionMicrosoft, setSessionMicrosoft] = useState(false);
+  const [startup, setStartup] = useState<WorkspaceStartup | null>(null);
   const [membershipRefresh, setMembershipRefresh] = useState(0);
   const hadSessionRef = useRef(false);
   const hadMembershipRef = useRef(false);
   const signingOutRef = useRef(false);
   const preferredSocietyIdRef = useRef<Id<"societies"> | null>(null);
+  const domainWorkspace = useDomainWorkspace(mode === "convex");
+  const domainRef = useRef(domainWorkspace);
+  const lookupRef = useRef<MembershipLookup | null>(null);
+  // The session the startup choice was made for. After that, the tab's own
+  // selection counts as explicit, so live membership updates don't move it.
+  const startupSessionRef = useRef<string | null>(null);
 
   const sessionKey = session ? `${session.user.id}:${session.session?.id ?? ""}` : null;
+  const sessionKeyRef = useRef(sessionKey);
+  sessionKeyRef.current = sessionKey;
+
+  const applyStartup = useCallback(() => {
+    const lookup = lookupRef.current;
+    const domain = domainRef.current;
+    if (!lookup || domain === undefined) return;
+    const accessible = lookup.status === "bound" ? lookup.memberships : [];
+    const resumed = startupSessionRef.current !== null && startupSessionRef.current === sessionKeyRef.current;
+    const choice = chooseStartupWorkspace({
+      memberships: accessible.map((membership) => ({ societyId: membership.society._id })),
+      lockedWorkspaces: lookup.lockedWorkspaces ?? [],
+      domainWorkspace: domain,
+      explicitSocietyId: preferredSocietyIdRef.current ?? takeStartupWorkspace() ?? (resumed ? getStoredSocietyId() : null),
+      rememberedSocietyId: getStoredSocietyId(),
+    });
+    preferredSocietyIdRef.current = null;
+    startupSessionRef.current = sessionKeyRef.current;
+    setStartup(choice);
+    const selected = choice.kind === "open"
+      ? accessible.find((membership) => membership.society._id === choice.societyId)
+      : undefined;
+    setStoredSocietyId(selected?.society._id ?? null);
+    setStoredUserId(selected?.userId ?? null);
+  }, []);
+
+  useEffect(() => {
+    domainRef.current = domainWorkspace;
+    setSelectionFallbackAllowed(domainWorkspace === null);
+    applyStartup();
+  }, [applyStartup, domainWorkspace]);
   const sessionSignedOut = !session && !sessionPending && !sessionError;
   const sessionFailure = sessionError
     ? authFailure(sessionError, "Your session could not be checked.")
@@ -351,6 +431,10 @@ function MembershipProviderReady({
       setLockedWorkspaces([]);
       setWorkspaceMfaAvailable(false);
       setSecondFactorVerified(false);
+      setSessionMicrosoft(false);
+      setStartup(null);
+      lookupRef.current = null;
+      if (!session) startupSessionRef.current = null;
       setMembershipFailure(null);
       return;
     }
@@ -360,6 +444,8 @@ function MembershipProviderReady({
     setMembershipStatus(null);
     setLockedWorkspaces([]);
     setSecondFactorVerified(false);
+    setStartup(null);
+    lookupRef.current = null;
     setMembershipFailure(null);
     const timeout = setTimeout(() => {
       if (!active) return;
@@ -383,26 +469,17 @@ function MembershipProviderReady({
         setLockedWorkspaces(lookup.lockedWorkspaces ?? []);
         setWorkspaceMfaAvailable(lookup.workspaceMfaAvailable === true);
         setSecondFactorVerified(lookup.secondFactorVerified === true);
+        setSessionMicrosoft(lookup.sessionMethods?.microsoft === true);
 
         setMembershipSocietyIds(lookup.memberships.map((membership) => ({
           societyId: membership.society._id,
           userId: membership.userId,
         })));
         setPrincipalUsers(lookup.memberships.map((membership) => membership.user));
-        if (resolvedStatus !== "bound" || lookup.memberships.length === 0) {
-          setStoredSocietyId(null);
-          setStoredUserId(null);
-          return;
-        }
-
-        hadMembershipRef.current = true;
-        const storedSocietyId = preferredSocietyIdRef.current ?? getStoredSocietyId();
-        const selected = lookup.memberships.find(
-          (membership) => membership.society._id === storedSocietyId,
-        ) ?? lookup.memberships[0];
-        preferredSocietyIdRef.current = null;
-        setStoredSocietyId(selected.society._id);
-        setStoredUserId(selected.userId);
+        if (resolvedStatus === "bound" && lookup.memberships.length > 0) hadMembershipRef.current = true;
+        lookupRef.current = { ...lookup, status: resolvedStatus };
+        // Waits for the origin's mapping when it hasn't loaded yet.
+        applyStartup();
       } catch (error) {
         clearTimeout(timeout);
         console.error("[societyer-auth] failed to resolve principal memberships", error);
@@ -425,7 +502,7 @@ function MembershipProviderReady({
       clearTimeout(timeout);
       unsubscribe();
     };
-  }, [convex, convexAuth.isAuthenticated, membershipRefresh, sessionKey, sessionSignedOut]);
+  }, [applyStartup, convex, convexAuth.isAuthenticated, membershipRefresh, sessionKey, sessionSignedOut]);
 
   const sessionStatus: SessionStatus = sessionPending && !session
     ? "loading"
@@ -447,7 +524,7 @@ function MembershipProviderReady({
     ? "error"
     : !session || !convexAuth.isAuthenticated
       ? "idle"
-      : memberships === null || membershipStatus === null
+      : memberships === null || membershipStatus === null || startup === null
         ? "loading"
         : "ready";
   const fatalError = sessionFailure ?? tokenFailure ?? providerTokenFailure ?? membershipFailure;
@@ -466,7 +543,11 @@ function MembershipProviderReady({
       membershipState,
       membershipStatus,
       societies: memberships?.map((membership) => membership.society),
+      memberships: memberships ?? undefined,
       lockedWorkspaces,
+      domainWorkspace,
+      startup,
+      sessionMicrosoft,
       workspaceMfaAvailable,
       secondFactorVerified,
       fatalError,
@@ -478,6 +559,20 @@ function MembershipProviderReady({
       isConvexAuthenticated: convexAuthStatus === "authenticated",
       refreshMembership: (preferredSocietyId) => {
         preferredSocietyIdRef.current = preferredSocietyId ?? null;
+        setMemberships(null);
+        setMembershipStatus(null);
+        setMembershipRefresh((value) => value + 1);
+      },
+      selectWorkspace: (societyId) => {
+        preferredSocietyIdRef.current = societyId;
+        const lookup = lookupRef.current;
+        const known = lookup?.memberships.some((membership) => membership.society._id === societyId)
+          || lookup?.lockedWorkspaces?.some((workspace) => workspace.id === societyId);
+        if (known) {
+          applyStartup();
+          return;
+        }
+        // A workspace created or joined since the last lookup.
         setMemberships(null);
         setMembershipStatus(null);
         setMembershipRefresh((value) => value + 1);
@@ -502,12 +597,21 @@ function MembershipProviderReady({
         setLockedWorkspaces([]);
         setWorkspaceMfaAvailable(false);
         setSecondFactorVerified(false);
+        setSessionMicrosoft(false);
+        setStartup(null);
+        lookupRef.current = null;
+        startupSessionRef.current = null;
+        takeStartupWorkspace();
         setTokenFailure(null);
         setMembershipFailure(null);
         await providerSignOut();
       },
     }),
     [
+      applyStartup,
+      domainWorkspace,
+      startup,
+      sessionMicrosoft,
       providerSignOut,
       retryProviderAuthentication,
       convexAuthStatus,

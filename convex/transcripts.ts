@@ -6,7 +6,7 @@ import { Id } from "./_generated/dataModel";
 import { transcribeAudio } from "./providers/transcription";
 import { resolveMinutesEndpoint, summarizeMinutes } from "./providers/llm";
 import { draftToMinutesArgs } from "../shared/ai/draftToMinutesArgs";
-import { providers } from "./providers/env";
+import { assertWorkspaceNativeUploads, providers } from "./providers/env";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import {
   getByMeetingPortable,
@@ -199,6 +199,8 @@ export const _claimPipelineStorage = internalMutation({
   handler: async (ctx, args) => {
     const portableCtx = await toPortableMutationCtx(ctx);
     await requireSocietyMembership(portableCtx, args.societyId);
+    // A blob uploaded through the branding-only logo URL must not become a workspace file.
+    await assertWorkspaceNativeUploads(ctx.db, args.societyId);
     await claimStorageId(portableCtx, args.storageId, args.societyId);
     return null;
   },

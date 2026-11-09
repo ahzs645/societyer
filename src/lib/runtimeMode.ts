@@ -72,6 +72,27 @@ export function isDocumentVersionStorageEnabled(): boolean {
   return getDocumentStorageProvider() === "sharepoint" || isNativeFileStorageEnabled();
 }
 
+/** The server's effective storage policy for one workspace (workspaceStoragePolicies:forWorkspace). */
+export type WorkspaceStoragePolicy = { nativeUploads: boolean; documentVersionProvider: "native" | "sharepoint" };
+export type WorkspaceStorageAffordances = { nativeUploads: boolean; documentVersions: boolean };
+
+/**
+ * Upload affordances for the selected workspace. The build flags stay a
+ * ceiling; the workspace policy can only narrow them. `null` means no
+ * workspace policy applies (local, demo and auth-less runtimes keep the build
+ * flags); `undefined` means it is still loading, so uploads stay hidden.
+ */
+export function workspaceStorageAffordances(policy: WorkspaceStoragePolicy | null | undefined): WorkspaceStorageAffordances {
+  const nativeUploads = isNativeFileStorageEnabled();
+  if (policy === null) return { nativeUploads, documentVersions: isDocumentVersionStorageEnabled() };
+  if (!policy) return { nativeUploads: false, documentVersions: false };
+  const workspaceNative = nativeUploads && policy.nativeUploads;
+  return {
+    nativeUploads: workspaceNative,
+    documentVersions: policy.documentVersionProvider === "sharepoint" ? isDocumentVersionStorageEnabled() : workspaceNative,
+  };
+}
+
 export function getRuntimeDescriptor(): RuntimeDescriptor {
   const mode = getRuntimeMode();
   return {

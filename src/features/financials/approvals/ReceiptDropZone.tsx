@@ -2,7 +2,7 @@ import { useState } from "react";
 import { FileDropZone, type FileRejection } from "../../../components/FileDropZone";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { useCreateReceiptDocument } from "../receipts/useCreateReceiptDocument";
-import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../../../hooks/useWorkspaceStoragePolicy";
 
 const ACCEPT = "image/*,application/pdf,.heic,.heif,.eml,message/rfc822";
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -24,11 +24,12 @@ export function ReceiptDropZone({
   disabled?: boolean;
 }) {
   const permissions = usePermissions();
+  const storagePolicy = useWorkspaceStoragePolicy();
   const createReceipt = useCreateReceiptDocument(societyId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canUpload = permissions.loaded && permissions.can("documents:write") && isDocumentVersionStorageEnabled();
+  const canUpload = permissions.loaded && permissions.can("documents:write") && storagePolicy.documentVersions;
   const off = disabled || busy || !canUpload;
 
   const upload = async (original: File | undefined) => {
@@ -57,7 +58,7 @@ export function ReceiptDropZone({
 
   const hint = !permissions.loaded
     ? ""
-    : !isDocumentVersionStorageEnabled()
+    : !storagePolicy.documentVersions
       ? "File upload is turned off on this deployment. Link a receipt from Documents instead."
       : !permissions.can("documents:write")
         ? "Uploading receipts needs document edit access."

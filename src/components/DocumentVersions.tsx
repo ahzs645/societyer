@@ -14,7 +14,7 @@ import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { getRestoredFile } from "../lib/workspaceArchiveFiles";
 import { triggerBlobDownload } from "../lib/zip";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
-import { isDocumentVersionStorageEnabled } from "../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../hooks/useWorkspaceStoragePolicy";
 
 export function DocumentVersionsDrawer({
   open,
@@ -45,7 +45,7 @@ export function DocumentVersionsDrawer({
   const canEdit = permissions.loaded && permissions.can("documents:write");
   const [changeNote, setChangeNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const nativeStorage = isDocumentVersionStorageEnabled();
+  const nativeStorage = useWorkspaceStoragePolicy().documentVersions;
 
   const handleFile = async (file: File) => {
     if (!documentId || !canEdit || busy) return;

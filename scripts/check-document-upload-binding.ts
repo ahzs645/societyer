@@ -44,6 +44,7 @@ const modules = {
   "./files.js": () => import("../convex/files"),
   "./society.js": () => import("../convex/society"),
   "./documentVersions.js": () => import("../convex/documentVersions"),
+  "./workspaceStoragePolicies.js": () => import("../convex/workspaceStoragePolicies"),
 };
 const test = convexTest(schema, modules);
 const issuer = "https://upload.test";

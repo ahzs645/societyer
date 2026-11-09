@@ -6,7 +6,9 @@ CLI, MCP Inspector, the OpenAI Responses API) can read the workspace through the
 agent tools the browser offers over WebMCP (see [agent-tools.md](agent-tools.md)).
 
 - **URL:** `https://<deployment>.convex.site/mcp` (the deployment's HTTP actions origin,
-  `CONVEX_SITE_URL`). Settings → AI connectors shows the exact URL.
+  `CONVEX_SITE_URL`). On a deployment shared by several app domains it is
+  `https://<deployment>.convex.site/mcp/<app host>`, one per domain (see
+  [Shared deployments](#shared-deployments)). Settings → AI connectors shows the exact URL.
 - **Auth:** OAuth 2.1 sign-in (claude.ai, ChatGPT, and Claude Code or Codex without a
   pasted token; see [Connecting with OAuth](#connecting-with-oauth)), or a personal
   access token (`Authorization: Bearer soc_mcp_…`). Both end in the same kind of grant.
@@ -160,7 +162,9 @@ revocation and audit.
 you're an active member.
 
 The server URL to paste everywhere is the endpoint itself:
-`https://<deployment>.convex.site/mcp` (Settings → AI connectors shows it).
+`https://<deployment>.convex.site/mcp`, or on a shared deployment the URL for your
+organization's domain (`…/mcp/<app host>`). Settings → AI connectors shows the right one
+for the domain you're on.
 
 **claude.ai (web, Desktop, mobile)**
 
@@ -220,6 +224,11 @@ sign-in link someone else started and sent you would connect *their* app to your
 workspace. Connecting the same app to the same workspace again keeps one connection
 (its scopes become the ones you chose) and adds a new **session**.
 
+**Finish on the same domain.** On a shared deployment the server URL you pasted decides
+which domain's consent page you approve on, and only that page can finish it. A consent
+page on another of the deployment's domains is refused ("This connection was started for
+another Societyer address"); connect again with the URL from Settings → AI connectors.
+
 **Finish in the same browser.** After you decide, the page posts your decision back to
 Societyer's sign-in server, which checks that it came from the consent page and that
 this browser holds the cookie it set when the app started connecting. A consent link
@@ -249,6 +258,7 @@ approval; then the app asks you to connect again.
 | --- | --- |
 | The app says it couldn't reach the server / no sign-in window | Use the URL ending in `/mcp`. Check that `<deployment>.convex.site/.well-known/oauth-protected-resource/mcp` returns JSON; a `404` means OAuth is off on this deployment (see [Deployment](#deployment-settings)). |
 | "Can't connect this app to Societyer" page | The app's redirect URI isn't one Societyer allows, its metadata document couldn't be fetched or doesn't match its URL, or the link was malformed. Operators can allow extra exact redirect URIs. |
+| The sign-in page offers a method you don't use (for example only Microsoft) | You pasted another organization's server URL on a shared deployment. Use the URL Settings → AI connectors shows on your own domain, and connect again. |
 | "No workspace allows AI connectors" | An Owner or Admin has to turn on the opt-in. |
 | "This connection request expired" | Requests last 10 minutes. Start connecting again from the app. |
 | "Finish connecting in the browser where you started" | The consent page was opened in another browser (or profile) than the one the app opened, or the link came from someone else. Start again from the app and finish in the window it opens. Browsers that block all cookies for `*.convex.site` can't connect. |
@@ -323,16 +333,17 @@ works in every auth mode because consent runs in the app with the app's normal s
 
 | Route (on `CONVEX_SITE_URL`) | Purpose |
 | --- | --- |
-| `GET /.well-known/oauth-protected-resource/mcp` (and without `/mcp`) | RFC 9728: `resource` `<site>/mcp`, `authorization_servers` `[<site>]`, `scopes_supported` = the read scopes |
-| `GET /.well-known/oauth-authorization-server` (and `/mcp` suffixed) | RFC 8414: endpoints, `code_challenge_methods_supported: ["S256"]`, `client_id_metadata_document_supported: true`, `token_endpoint_auth_methods_supported: ["none", "client_secret_post", "client_secret_basic"]`, `scopes_supported` = all connector scopes + `offline_access`, `authorization_response_iss_parameter_supported: true` |
-| `GET /oauth/authorize` | Validates the client and redirect URI (errors shown on a page, never redirected), then PKCE, `response_type`, `resource`; stores the request, sets the browser binding cookie and redirects to the app's consent page |
-| `POST /oauth/authorize/complete` | The consent page's form after a decision (`request`, `completion`): checks `Origin` is the app, the one-time completion token and the binding cookie, then `303`s to the app with `code` (or `error=access_denied`), `state` and `iss`. There is no `GET` |
+| `GET /.well-known/oauth-protected-resource/mcp` (and without `/mcp`; `/mcp/<host>` for a per-domain URL) | RFC 9728: `resource` `<site>/mcp` (or `<site>/mcp/<host>`), `authorization_servers` `[<site>]`, `scopes_supported` = the read scopes. An unknown `<host>` is `404` |
+| `GET /.well-known/oauth-authorization-server` (and `/mcp` or `/mcp/<host>` suffixed) | RFC 8414: endpoints, `code_challenge_methods_supported: ["S256"]`, `client_id_metadata_document_supported: true`, `token_endpoint_auth_methods_supported: ["none", "client_secret_post", "client_secret_basic"]`, `scopes_supported` = all connector scopes + `offline_access`, `authorization_response_iss_parameter_supported: true` |
+| `GET /oauth/authorize` | Validates the client and redirect URI (errors shown on a page, never redirected), then PKCE, `response_type`, `resource`; stores the request with the consent origin its `resource` picks, sets the browser binding cookie and redirects to that consent page |
+| `POST /oauth/authorize/complete` | The consent page's form after a decision (`request`, `completion`): checks `Origin` is the consent origin stored with the request, the one-time completion token and the binding cookie, then `303`s to the app with `code` (or `error=access_denied`), `state` and `iss`. There is no `GET` |
 | `POST /oauth/token` | Form-encoded. `authorization_code` (PKCE S256 required) and `refresh_token` (rotating) |
 | `POST /oauth/register` | RFC 7591 dynamic registration, JSON, rate-limited (10 at once, then 20/hour per IPv4 address or IPv6 /64); clients nobody connects are deleted after a week |
 | `POST /oauth/revoke` | RFC 7009; revokes the token's family |
 
 A `401` from `/mcp` now carries
-`WWW-Authenticate: Bearer realm="societyer-mcp", resource_metadata="<site>/.well-known/oauth-protected-resource/mcp", scope="<read scopes>"`.
+`WWW-Authenticate: Bearer realm="societyer-mcp", resource_metadata="<site>/.well-known/oauth-protected-resource/mcp", scope="<read scopes>"`;
+from `/mcp/<host>`, that URL's own metadata (`…/oauth-protected-resource/mcp/<host>`).
 
 **Clients.** A `client_id` that is an https URL with a path is a Client ID Metadata
 Document: fetched through the outbound URL policy (https only; private, loopback,
@@ -358,9 +369,10 @@ minutes), codes (`soc_mac_…`, 5 minutes, single use), access tokens (`soc_mat_
 hour) and refresh tokens (`soc_mrt_…`, 30 days, never past the grant's 90 days). Each
 code exchange starts a token family; every refresh marks the old row rotated and issues
 a new pair. Presenting a rotated refresh token, or a code a second time, revokes the
-whole family. Tokens are bound to the resource `<site>/mcp` (a `resource` naming another
-server is `invalid_target`; the bare origin is accepted as the same server), and `/mcp`
-refuses an access token bound to anything else. A code is spent by its first exchange
+whole family. Tokens are bound to the resource the request named: `<site>/mcp` (also
+when it named none, or the bare origin) or `<site>/mcp/<host>`. Any other `resource` is
+`invalid_target`. `/mcp/<host>` accepts tokens bound to itself or to `<site>/mcp`
+(clients that send no `resource`); `/mcp` refuses a token bound to anything else. A code is spent by its first exchange
 attempt, whatever the outcome, so a wrong verifier can't be retried.
 
 **Consent.** The app's `/oauth/consent?request=…` page requires the normal sign-in
@@ -392,8 +404,11 @@ These came out of a security review of the connector (2026-10-17).
   per request, so two connections in one browser don't clash. After a decision the
   consent page (on `SITE_URL`, a different site) submits a form, a top-level `POST`
   navigation, to `/oauth/authorize/complete` with the request and the one-time
-  completion token. Completion requires all three: `Origin` is the app's origin (another
-  site can't post the form: CSRF; refusals are logged as `completion_cross_site`), the
+  completion token. Completion requires all three: `Origin` is the consent origin stored
+  with the request at `/oauth/authorize` (another site can't post the form: CSRF;
+  refusals are logged as `completion_cross_site`; another of the deployment's own
+  domains is refused too, logged as `completion_wrong_origin`, and the request is left
+  as it was), the
   token matches the recorded decision (only the decider received it), and the binding
   cookie. A missing or wrong cookie discards the decision, nothing is granted, and the
   decider's workspace gets `oauth_consent_binding_failed`; the request stays open for the
@@ -481,11 +496,38 @@ OAuth is on when the deployment knows its own URL and the app's:
 | Variable | Purpose |
 | --- | --- |
 | `CONVEX_SITE_URL` | Set by Convex. The issuer and the `/mcp` resource. |
-| `SITE_URL` | The app's origin (first entry). The consent page is `<SITE_URL>/oauth/consent`. Already required for `AUTH_MODE=convex`. |
-| `SOCIETYER_MCP_OAUTH_CONSENT_URL` | Optional. The consent page's full URL when the app isn't at the root of `SITE_URL` or `SITE_URL` isn't set (other auth modes). |
+| `SITE_URL` | The app's origins. `<site>/mcp` uses the first entry's consent page (`<first>/oauth/consent`); `<site>/mcp/<host>` uses the entry with that host. Already required for `AUTH_MODE=convex`. |
+| `SOCIETYER_MCP_OAUTH_CONSENT_URL` | Optional. The consent page's full URL when the app isn't at the root of `SITE_URL` or `SITE_URL` isn't set (other auth modes). When set it is the consent page for every server URL, including `/mcp/<host>`. |
 | `SOCIETYER_MCP_OAUTH_REDIRECT_URIS` | Optional, comma-separated exact redirect URIs to allow beyond Claude's, ChatGPT's and loopback. |
 | `SOCIETYER_MCP_OAUTH=0` | Turns OAuth off: the well-known routes and `/oauth/*` answer `404` and the `401` loses `resource_metadata`. Personal tokens keep working. |
 | `SOCIETYER_MCP_OAUTH_UNKNOWN_IP_AUTHORIZE_PER_HOUR`, `SOCIETYER_MCP_OAUTH_UNKNOWN_IP_REGISTER_PER_HOUR` | Optional positive integers: the hourly allowance (burst a tenth of it) of the shared bucket for requests whose client address Convex can't give. Defaults 600 and 200. See [Security](#security). |
+
+### Shared deployments
+
+When one deployment serves several organizations on their own domains (`SITE_URL` lists
+several origins, see [shared-workspaces/architecture.md](shared-workspaces/architecture.md#domains)),
+each domain has its own server URL:
+
+```
+https://<deployment>.convex.site/mcp/portal.ddcnorth.com
+https://<deployment>.convex.site/mcp/societyer-firstform.pages.dev
+```
+
+`<host>` is the host (with any port) of exactly one `SITE_URL` origin; anything else is
+`404` at `/mcp/<host>` and its metadata, and `invalid_target` at `/oauth/authorize` and
+`/oauth/token`. The URL is the resource (RFC 8707/9728): its metadata and `401` name it,
+the client sends it as `resource`, and `/oauth/authorize` stores that origin with the
+request and redirects to `<origin>/oauth/consent`. Completion is accepted only from that
+stored origin, not from any trusted one. So a First Form member signs in on First Form's
+page (with a password) and a DDC member on DDC's (with Microsoft). The consent page still
+lists every workspace the person belongs to; the domain only decides where they sign in.
+
+Settings → AI connectors shows the URL for the domain it's opened on whenever `SITE_URL`
+lists more than one origin (and `SOCIETYER_MCP_OAUTH_CONSENT_URL` isn't set); otherwise
+it shows `/mcp`. Plain `/mcp` keeps working on a shared deployment and uses the first
+origin, as before. A client that doesn't send `resource` (pre-2025-06 MCP clients) also
+lands on the first origin. Removing an origin from `SITE_URL` stops its URL and the
+tokens bound to it; its people connect again.
 
 Claude reaches the deployment from `160.79.104.0/21`; a firewall in front of
 `*.convex.site` must allow it for discovery, registration and tokens.
@@ -494,7 +536,8 @@ Claude reaches the deployment from `160.79.104.0/21`; a firewall in front of
 
 The app's CSP is a `<meta>` tag (`index.html`), which can't set `frame-ancestors`, so the
 static host has to send these on `/oauth/*` (the consent page), and route
-`/oauth/consent` to `index.html`:
+`/oauth/consent` to `index.html`. On a shared deployment that applies to every `SITE_URL`
+origin, since each serves its own consent page:
 
 ```
 Content-Security-Policy: frame-ancestors 'none'

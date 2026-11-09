@@ -22,6 +22,8 @@ import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
 import { organizationKind } from "../../shared/organizationDomain";
 import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
+import { AccessRequestsPanel } from "../components/AccessRequestsPanel";
+import { membershipStatusLabel } from "../../shared/membershipStatusLabel";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 // Share links admit whoever opens them, so they can't grant Owner or Admin.
@@ -142,7 +144,9 @@ export function UsersPage() {
               const mayManage = canManageUsers && (myRole === "Owner" || !["Owner", "Admin"].includes(u.role));
               const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
               const status = u.status ?? "Active";
-              const displayStatus = auth.mode !== "none" && !u.authSubject && status === "Active" ? "Not joined" : status;
+              const displayStatus = membershipStatusLabel(u, auth.mode !== "none");
+              // A duplicate retired by an operator stays only so history keeps resolving.
+              const retired = Boolean(u.mergedIntoUserId);
               const removeUser = async () => {
                 const ok = await confirm({
                   title: "Remove user access?",
@@ -160,10 +164,10 @@ export function UsersPage() {
               };
               const rowActions: MenuItem[] = [
                 canManageUsers && { id: "access", label: "View module access", icon: <ShieldCheck size={14} />, onSelect: () => setSelectedUserId(u._id) },
-                mayManage && auth.mode !== "none" && !u.authSubject && !u.authIssuer && !["Disabled", "Suspended"].includes(status) && { id: "invite", label: "Invite to join", icon: <PlusCircle size={14} />, onSelect: () => setInviteParams({ intent: "invite", inviteEmail: u.email, inviteRole: u.role, inviteUserId: u._id }) },
-                mayManage && { id: "edit", label: "Edit user", icon: <Pencil size={14} />, onSelect: () => setDraft(u) },
-                mayManage && status !== "Disabled" && { id: "disable", label: "Security disable", icon: <ShieldOff size={14} />, onSelect: () => setIncident({ id: u._id, name: u.displayName, reason: "" }) },
-                {
+                mayManage && !retired && auth.mode !== "none" && !u.authSubject && !u.authIssuer && !["Disabled", "Suspended"].includes(status) && { id: "invite", label: "Invite to join", icon: <PlusCircle size={14} />, onSelect: () => setInviteParams({ intent: "invite", inviteEmail: u.email, inviteRole: u.role, inviteUserId: u._id }) },
+                mayManage && !retired && { id: "edit", label: "Edit user", icon: <Pencil size={14} />, onSelect: () => setDraft(u) },
+                mayManage && !retired && status !== "Disabled" && { id: "disable", label: "Security disable", icon: <ShieldOff size={14} />, onSelect: () => setIncident({ id: u._id, name: u.displayName, reason: "" }) },
+                !retired && {
                   id: "remove",
                   label: "Remove access",
                   icon: <Trash2 size={14} />,
@@ -184,7 +188,7 @@ export function UsersPage() {
                       {auth.mode !== "none" && !u.authSubject && <span className="muted">No linked sign-in</span>}
                     </span>
                     {status !== "Active" && (
-                      <span className="users-table__narrow-status"><Badge tone={status === "Invited" ? "warn" : "neutral"}>{status}</Badge></span>
+                      <span className="users-table__narrow-status"><Badge tone={status === "Invited" ? "warn" : "neutral"}>{retired ? displayStatus : status}</Badge></span>
                     )}
                   </div>
                 </td>
@@ -261,6 +265,10 @@ export function UsersPage() {
 
       {canManageUsers && (
         <InvitationsPanel societyId={society._id} assignableRoles={assignableRoles} />
+      )}
+
+      {auth.mode === "convex" && permissionsLoaded && (myRole === "Owner" || myRole === "Admin") && (
+        <AccessRequestsPanel key={society._id} societyId={society._id} assignableRoles={assignableRoles} />
       )}
 
       {canManageUsers && users && users.length > 0 && (

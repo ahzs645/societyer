@@ -6,7 +6,7 @@ import { FileDropZone, type FileRejection } from "../../../components/FileDropZo
 import { useToast } from "../../../components/Toast";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { useCreateReceiptDocument } from "./useCreateReceiptDocument";
-import { isDocumentVersionStorageEnabled } from "../../../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../../../hooks/useWorkspaceStoragePolicy";
 import { pluralize } from "../../../lib/format";
 import { parseReceiptFilename, type ReceiptPrefill } from "../../../../shared/receiptMatching";
 import { errorMessage } from "../banking/types";
@@ -27,7 +27,7 @@ export function ReceiptBulkUpload({ societyId, canWrite }: { societyId: string; 
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const storage = isDocumentVersionStorageEnabled();
+  const storage = useWorkspaceStoragePolicy().documentVersions;
   const canUpload = canWrite && storage && permissions.loaded && permissions.can("documents:write");
 
   const upload = async (files: File[]) => {

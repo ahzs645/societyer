@@ -39,6 +39,12 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route",
     "redirectTo": "/demo/app"
   },
+  // Personal account pages and the handoff landing are convex-mode only.
+  { pattern: "/account/workspaces", path: "/demo/account/workspaces", kind: "public", fixture: "route", redirectTo: "/demo/app" },
+  { pattern: "/account/sign-in-methods", path: "/demo/account/sign-in-methods", kind: "public", fixture: "route", redirectTo: "/demo/app" },
+  { pattern: "/account/link", path: "/demo/account/link", kind: "public", fixture: "route", redirectTo: "/demo/app" },
+  { pattern: "/account/link/confirm", path: "/demo/account/link/confirm", kind: "public", fixture: "route", redirectTo: "/demo/app" },
+  { pattern: "/handoff", path: "/demo/handoff", kind: "public", fixture: "route", redirectTo: "/demo/app" },
   {
     "pattern": "/invite/:token",
     "path": "/demo/invite/interface-audit-missing",

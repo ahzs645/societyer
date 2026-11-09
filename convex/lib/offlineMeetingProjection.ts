@@ -101,7 +101,9 @@ export async function rebuildMeetingDownloads(ctx: any, societyId: string) {
     const principal = hostedPrincipal({ issuer: user.authIssuer, subject: user.authSubject, tokenIdentifier: actorKey } as any);
     // Historical bindings for an unconfigured/retired issuer receive no download authority.
     if (principal.kind !== "user" || principal.assurance !== "verified-jwt") continue;
-    const scoped = { ...portable, principal };
+    // Sign-in policy and MFA belong to a live session; `downloads` and
+    // `syncIdentity` enforce them on the real session before delivery.
+    const scoped = { ...portable, principal: { ...principal, sessionChecksDeferred: true as const } };
     // Only membership/permission denial clears this actor's view. Other errors
     // must abort rebuilding, rather than silently publishing an incomplete view.
     let snapshots: Snapshot[];

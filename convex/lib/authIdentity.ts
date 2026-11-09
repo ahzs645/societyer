@@ -1,5 +1,5 @@
 import type { UserIdentity } from "convex/server";
-import type { PortablePrincipal } from "../../shared/portable/ctx";
+import type { PortablePrincipal, PrincipalSessionEvidence } from "../../shared/portable/ctx";
 import { resolveAuthIssuer, resolveClerkIssuer, resolveSessionBroker } from "../../shared/authConfiguration";
 import { allowedAuthEmailDomains, authEmailAllowed, manualAuthProvisioningEnabled } from "../../shared/authEmailPolicy";
 import { entraSsoRequired, validEntraProof } from "../../shared/hostedMicrosoftSso";
@@ -42,6 +42,7 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
     // Only this deployment's own signer is trusted; there is no machine bridge.
     const convexIssuer = convexHostedIssuer();
     if (!convexIssuer || identity.issuer !== convexIssuer) return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
+    const sessionEvidence = hostedSessionEvidence(identity, entraVerified ? entraProof : undefined);
     return {
       kind: "user",
       runtime: "convex-hosted",
@@ -54,6 +55,7 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
       emailVerified: identity.emailVerified,
       ...(identity.societyer_mfa_verified === true ? { secondFactorVerified: true } : {}),
       ...(identity.name ? { name: identity.name } : {}),
+      sessionEvidence,
     };
   }
   const isBetterAuth = identity.issuer === betterAuthIssuer();
@@ -84,4 +86,24 @@ export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipa
     ...(bridgeIssuer ? { gatewayService: true } : {}),
     ...(identity.name ? { name: identity.name } : {}),
   };
+}
+
+/**
+ * How this Convex-hosted session authenticated, from deployment-signed claims
+ * (flattened to dotted keys, like the Entra proof). Pass `entraProof` only
+ * after it validated against this deployment and the JWT subject.
+ */
+function hostedSessionEvidence(identity: UserIdentity, entraProof?: Record<string, unknown>): PrincipalSessionEvidence {
+  const sessionId = identity["societyer_session.id"];
+  const createdAt = identity["societyer_session.createdAt"];
+  const evidence: PrincipalSessionEvidence = {
+    ...(typeof sessionId === "string" && sessionId ? { sessionId } : {}),
+    ...(typeof createdAt === "number" && Number.isFinite(createdAt) ? { authenticatedAt: createdAt } : {}),
+  };
+  if (!entraProof) return evidence;
+  const { tenantId, objectId, groupIds, authenticatedAt, expiresAt } = entraProof;
+  if (typeof tenantId !== "string" || typeof objectId !== "string" || !Array.isArray(groupIds)
+    || typeof authenticatedAt !== "number" || typeof expiresAt !== "number") return evidence;
+  const groups = groupIds.filter((id): id is string => typeof id === "string").map((id) => id.toLowerCase());
+  return { ...evidence, microsoft: { tenantId: tenantId.toLowerCase(), objectId: objectId.toLowerCase(), groupIds: groups, authenticatedAt, expiresAt } };
 }

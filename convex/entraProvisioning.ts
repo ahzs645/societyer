@@ -6,6 +6,9 @@ import type { Id } from "./_generated/dataModel";
 import { createAuth } from "./hostedAuth";
 import { hostedEntraConfig } from "../shared/hostedMicrosoftSso";
 import { createRemoteJWKSet } from "jose";
+import { toPortableQueryCtx } from "./lib/portable";
+import { activePersonLinks, membershipsForIdentities, personLinkState } from "../shared/functions/identity";
+import { bindTransferredMembership } from "./workspaceTransfer";
 
 /** Checks the public signing-key endpoint without collecting a user's token. */
 export const checkSigningKeys = internalAction({
@@ -38,6 +41,8 @@ export const registerDirectoryMember = internalAction({
   args: {
     societyId: v.id("societies"), objectId: v.string(), email: v.string(), name: v.string(),
     existingAuthUserId: v.optional(v.string()),
+    // Bind this membership imported by a workspace transfer instead of adding a Viewer.
+    transferredMembership: v.optional(v.object({ runId: v.id("workspaceTransferRuns"), userId: v.id("users"), reason: v.string() })),
   },
   returns: v.object({ authUserId: v.string(), membershipId: v.id("users"), role: v.string() }),
   handler: async (ctx, args): Promise<{ authUserId: string; membershipId: Id<"users">; role: string }> => {
@@ -63,6 +68,7 @@ export const registerDirectoryMember = internalAction({
     }
     const membership = await ctx.runMutation(internal.entraProvisioning.ensureDirectoryMembership, {
       societyId: args.societyId, authUserId: user.id, email, name: args.name.trim(),
+      ...(args.transferredMembership ? { transferredMembership: args.transferredMembership } : {}),
     });
     console.info("Entra operator provisioning completed", { objectId: args.objectId, authUserId: user.id, membershipId: membership.membershipId });
     return { authUserId: user.id, ...membership };
@@ -70,17 +76,41 @@ export const registerDirectoryMember = internalAction({
 });
 
 export const ensureDirectoryMembership = internalMutation({
-  args: { societyId: v.id("societies"), authUserId: v.string(), email: v.string(), name: v.string() },
+  args: {
+    societyId: v.id("societies"), authUserId: v.string(), email: v.string(), name: v.string(),
+    transferredMembership: v.optional(v.object({ runId: v.id("workspaceTransferRuns"), userId: v.id("users"), reason: v.string() })),
+  },
   returns: v.object({ membershipId: v.id("users"), role: v.string() }),
   handler: async (ctx, args) => {
-    if (!await ctx.db.get(args.societyId)) throw new Error("Workspace not found.");
+    const society = await ctx.db.get(args.societyId);
+    if (!society) throw new Error("Workspace not found.");
+    if (society.transferQuarantinedAtISO) throw new Error("This workspace is still being transferred; finalize the transfer first.");
     const issuer = process.env.CONVEX_SITE_URL;
     if (!issuer) throw new Error("Convex issuer is missing.");
+    if (args.transferredMembership) {
+      const imported = await ctx.db.get(args.transferredMembership.userId);
+      if (!imported || imported.societyId !== args.societyId || imported.email.trim().toLowerCase() !== args.email.trim().toLowerCase()) {
+        throw new Error("The transferred membership is not this directory user's membership in this workspace.");
+      }
+      const bound = await bindTransferredMembership(ctx, { ...args.transferredMembership, authIssuer: issuer, authSubject: args.authUserId,
+        actor: "Deployment operator (Entra provisioning)" });
+      return { membershipId: bound.userId, role: bound.role };
+    }
     const memberships = await ctx.db.query("users").withIndex("by_auth_identity", q => q.eq("authIssuer", issuer).eq("authSubject", args.authUserId)).take(100);
     const existing = memberships.find(user => user.societyId === args.societyId);
     if (existing) {
       if (existing.status !== "Active") throw new Error("Disabled memberships are never reactivated by provisioning.");
       return { membershipId: existing._id, role: existing.role };
+    }
+    // A second membership through a linked identity would make the workspace
+    // ambiguous for this person, which denies both.
+    const db = (await toPortableQueryCtx(ctx)).db;
+    const link = await personLinkState(db, { issuer, subject: args.authUserId });
+    if (link.kind === "linked") {
+      const linked = await membershipsForIdentities(db, await activePersonLinks(db, link.person._id));
+      if (linked.some(user => user.societyId === args.societyId)) {
+        throw new Error("This person already has a membership in this workspace through a linked account.");
+      }
     }
     let identity = await ctx.db.query("externalIdentities").withIndex("by_issuer_subject", q => q.eq("issuer", issuer).eq("subject", args.authUserId)).unique();
     if (identity && identity.status !== "Active") throw new Error("Disabled identities are never reactivated by provisioning.");
