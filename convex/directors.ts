@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { directorsList, directorCreate, directorUpdate, directorRemove } from "../shared/functions/directors";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import * as rosterPromotionModule from "../shared/functions/rosterPromotion";
 
 export const list = authorizedQuery("directors:list", query)({
   args: { societyId: v.id("societies") },
@@ -68,11 +69,11 @@ export const remove = authorizedMutation("directors:remove", mutation)({
 export const rosterSuggestions = authorizedQuery("directors:rosterSuggestions", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => (await import("../shared/functions/rosterPromotion")).rosterSuggestions(await toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => rosterPromotionModule.rosterSuggestions(await toPortableQueryCtx(ctx), args),
 });
 
 export const promoteRosterObservation = authorizedMutation("directors:promoteRosterObservation", mutation)({
   args: { seatId: v.id("organizationSeats"), observationId: v.string(), termStart: v.optional(v.string()), position: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, args) => (await import("../shared/functions/rosterPromotion")).promoteRosterObservation(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => rosterPromotionModule.promoteRosterObservation(await toPortableMutationCtx(ctx), args),
 });

@@ -11,6 +11,7 @@ import {
   taskRemove,
 } from "../shared/functions/tasks";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import * as tasksModule from "../shared/functions/tasks";
 
 export const list = authorizedQuery("tasks:list", query)({
   args: { societyId: v.id("societies") },
@@ -114,17 +115,17 @@ export const remove = authorizedMutation("tasks:remove", mutation)({
 
 export const observeAction = authorizedMutation('tasks:observeAction', mutation)({
   args: { societyId: v.id('societies'), registerKey: v.string(), externalActionId: v.string(), title: v.string(), observation: v.any() }, returns: v.any(),
-  handler: async (ctx, args) => (await import('../shared/functions/tasks')).observeAction(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => tasksModule.observeAction(await toPortableMutationCtx(ctx), args),
 });
 
 export const consolidateHistoricalActions = authorizedMutation("tasks:consolidateHistoricalActions", mutation)({
   args: { societyId: v.id("societies"), dryRun: v.optional(v.boolean()), options: v.optional(v.object({ dedupe: v.optional(v.boolean()), unknownStatus: v.optional(v.boolean()), assignees: v.optional(v.boolean()), committees: v.optional(v.boolean()) })) },
   returns: v.any(),
-  handler: async (ctx, args) => (await import("../shared/functions/tasks")).consolidateHistoricalActions(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => tasksModule.consolidateHistoricalActions(await toPortableMutationCtx(ctx), args),
 });
 
 export const promoteHistoricalAction = authorizedMutation("tasks:promoteHistoricalAction", mutation)({
   args: { id: v.id("tasks"), title: v.optional(v.string()), dueDate: v.optional(v.string()), responsibleUserIds: v.optional(v.array(v.id("users"))), note: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, args) => (await import("../shared/functions/tasks")).promoteHistoricalAction(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => tasksModule.promoteHistoricalAction(await toPortableMutationCtx(ctx), args),
 });

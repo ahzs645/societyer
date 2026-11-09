@@ -16,6 +16,7 @@ import {
 } from "../shared/functions/committees";
 import { cadenceRuleValidator, committeeMandateVersionValidator } from "./validators/gaps";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import * as rosterPromotionModule from "../shared/functions/rosterPromotion";
 
 export const list = authorizedQuery("committees:list", query)({
   args: { societyId: v.id("societies") },
@@ -143,5 +144,5 @@ export const updateMember = authorizedMutation("committees:updateMember", mutati
 export const buildRostersFromSeats = authorizedMutation("committees:buildRostersFromSeats", mutation)({
   args: { societyId: v.id("societies"), dryRun: v.optional(v.boolean()), createMissingCommittees: v.optional(v.boolean()) },
   returns: v.any(),
-  handler: async (ctx, args) => (await import("../shared/functions/rosterPromotion")).buildRostersFromSeats(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => rosterPromotionModule.buildRostersFromSeats(await toPortableMutationCtx(ctx), args),
 });
