@@ -28,6 +28,9 @@ import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage, manu
 import { emailProviderConfiguration } from "../shared/emailConfiguration";
 import { developmentMailConfigured, assertDevelopmentMail } from "../shared/developmentMailConfiguration";
 import { hostedEntraConfig, createHostedEntraProvider, hostedEntraPlugin, hostedEntraClaims, entraSsoRequired } from "../shared/hostedMicrosoftSso";
+import { SESSION_HANDOFF_CREATE, SESSION_HANDOFF_REDEEM, sessionHandoff } from "../shared/sessionHandoff";
+import { workspaceLinkOrigin } from "../shared/workspaceDomains";
+import { convexPortableDb } from "./lib/portable";
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
@@ -75,6 +78,9 @@ const THROTTLES: Record<string, { email?: Allowance; ip?: Allowance }> = {
   "/send-verification-email": { email: { capacity: 3, perHour: 3 }, ip: { capacity: 10, perHour: 10 } },
   "/reset-password": { ip: { capacity: 10, perHour: 10 } },
   [PASSWORD_RESET_LINK_CHECK]: { ip: { capacity: 30, perHour: 30 } },
+  // Codes are unguessable; these bound load and replay probing from one client.
+  [SESSION_HANDOFF_CREATE]: { ip: { capacity: 30, perHour: 120 } },
+  [SESSION_HANDOFF_REDEEM]: { ip: { capacity: 20, perHour: 60 } },
 };
 
 const throttleEmail = (body: unknown) => {
@@ -212,6 +218,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       twoFactor({ issuer: authInstanceDetails(process.env).instanceName ?? "Societyer" }),
       workspaceMfaProof,
       passwordResetLink,
+      sessionHandoff(siteUrls),
       crossDomain({ siteUrl: siteUrls[0] }),
       convex({
         authConfig,
@@ -241,16 +248,19 @@ async function savePasswordResetToken(adapter: HostedAuthAdapter, userId: string
   });
 }
 
-/** Create a login for an operator-confirmed address and return its private setup link. */
+/**
+ * Create a login for an operator-confirmed address and return its private
+ * setup link. Pass `societyId` to send it to that workspace's canonical origin.
+ */
 export const provisionAccount = internalAction({
-  args: { email: v.string(), name: v.string() },
+  args: { email: v.string(), name: v.string(), societyId: v.optional(v.id("societies")) },
   returns: v.string(),
   handler: async (ctx, args): Promise<string> =>
     ctx.runMutation(internal.hostedAuth.createProvisionedAccount, { ...args, token: generateRandomString(32) }),
 });
 
 export const createProvisionedAccount = internalMutation({
-  args: { email: v.string(), name: v.string(), token: v.string() },
+  args: { email: v.string(), name: v.string(), token: v.string(), societyId: v.optional(v.id("societies")) },
   returns: v.string(),
   handler: async (ctx, args) => {
     if (resolveSessionBroker(process.env) !== "convex" || !manualAuthProvisioningEnabled(process.env)) {
@@ -263,7 +273,7 @@ export const createProvisionedAccount = internalMutation({
     const domains = allowedAuthEmailDomains(process.env);
     if (!authEmailAllowed(email, domains)) throw new Error(authEmailPolicyMessage(domains));
 
-    const base = resolveConvexAuthSiteUrls(process.env)[0];
+    const base = await workspaceLinkOrigin(convexPortableDb(ctx.db), args.societyId, resolveConvexAuthSiteUrls(process.env));
     const { internalAdapter } = await createAuth(ctx).$context;
     if (await internalAdapter.findUserByEmail(email)) throw new Error("An account already uses this email address.");
     const user = await internalAdapter.createUser({ email, name, emailVerified: true }, { method: "admin" });
@@ -276,24 +286,25 @@ export const createProvisionedAccount = internalMutation({
  * Operator-only recovery when the deployment has no mail sender: returns a
  * one-hour password-reset link to hand to the account holder yourself.
  *
- *   npx convex run hostedAuth:issuePasswordResetLink '{"email":"sam@example.org"}'
+ *   npx convex run hostedAuth:issuePasswordResetLink '{"email":"sam@example.org","societyId":"…"}'
  *
  * Internal, so only someone with deployment access (CLI or dashboard) can run
  * it. Workspace Owners can't: an account may belong to other workspaces, and
  * resetting its password would hand over those too. Using the link ends the
- * account's other sessions.
+ * account's other sessions. `societyId` picks that workspace's canonical
+ * origin; `appUrl` overrides both.
  */
 export const issuePasswordResetLink = internalAction({
-  args: { email: v.string(), appUrl: v.optional(v.string()) },
+  args: { email: v.string(), appUrl: v.optional(v.string()), societyId: v.optional(v.id("societies")) },
   returns: v.string(),
-  handler: async (ctx, { email, appUrl }) => {
+  handler: async (ctx, { email, appUrl, societyId }) => {
     if (resolveSessionBroker(process.env) !== "convex") throw new Error("Reset links are for AUTH_MODE=convex deployments.");
     const auth = createAuth(ctx);
     const authContext = await auth.$context;
     const account = await authContext.internalAdapter.findUserByEmail(email.trim().toLowerCase());
     if (!account) throw new Error(`No account uses ${email.trim()}.`);
     // The app's own reset page; pass appUrl when it is served under a sub-path.
-    const base = appUrl ?? resolveConvexAuthSiteUrls(process.env)[0];
+    const base: string = appUrl ?? await ctx.runQuery(internal.workspaceDomains.linkOrigin, { societyId });
     const token = generateRandomString(32);
     await savePasswordResetToken(authContext.internalAdapter, account.user.id, token);
     console.log(`Issued a password-reset link for account ${account.user.id}.`);

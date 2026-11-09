@@ -14,6 +14,7 @@ import { internalAction, internalMutation, internalQuery } from "./_generated/se
 import { internal } from "./_generated/api";
 import { findInvitation, hashInvitationToken, invitationAvailability, invitationIssuerAuthorized } from "../shared/functions/invitationTokens";
 import { resolveConvexAuthSiteUrls } from "../shared/authConfiguration";
+import { chooseLinkOrigin, primaryWorkspaceOrigin } from "../shared/workspaceDomains";
 import { sendEmail } from "./providers/email";
 
 export const list = authorizedQuery("invitations:list", query)({
@@ -87,7 +88,9 @@ export const emailContext = internalQuery({
     const invitation = await findInvitation(portable, token);
     if (!invitation || invitation._id !== id || invitation.kind === "link" || invitationAvailability(invitation) || !await invitationIssuerAuthorized(portable, invitation)) return null;
     const society = await ctx.db.get(invitation.societyId as any);
-    return society ? { email: invitation.email, role: invitation.role, workspaceName: String((society as any).name), expiresAtISO: invitation.expiresAtISO, demo: (society as any).isDemo === true } : null;
+    if (!society) return null;
+    const canonicalOrigin = await primaryWorkspaceOrigin(portable.db, String(invitation.societyId));
+    return { email: invitation.email, role: invitation.role, workspaceName: String((society as any).name), expiresAtISO: invitation.expiresAtISO, demo: (society as any).isDemo === true, canonicalOrigin };
   },
 });
 
@@ -107,7 +110,7 @@ export const deliverEmail = internalAction({
     const invitation = await ctx.runQuery(internal.invitations.emailContext, { id: args.id, token: args.token });
     if (!invitation) return null;
     try {
-      const url = `${resolveConvexAuthSiteUrls(process.env)[0]}/invite/${encodeURIComponent(args.token)}`;
+      const url = `${chooseLinkOrigin(invitation.canonicalOrigin, resolveConvexAuthSiteUrls(process.env))}/invite/${encodeURIComponent(args.token)}`;
       const sent = await sendEmail({ to: invitation.email, subject: `Join ${invitation.workspaceName} on Societyer`, text: `You have been invited to ${invitation.workspaceName} as ${invitation.role}.\n\n${url}\n\nSign in or create an account with ${invitation.email}. Verify your email, then join the invited workspace; you do not need to create an organization.\n\nThis invitation expires ${invitation.expiresAtISO}. If you were not expecting it, you can ignore this email.`, tag: "workspace-invitation", demo: invitation.demo });
       await ctx.runMutation(internal.invitations.recordEmail, { id: args.id, tokenHash: await hashInvitationToken(args.token), accepted: true, provider: sent.provider });
     } catch {

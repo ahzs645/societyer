@@ -6,7 +6,7 @@ import { visibleSnapshots, rebuildMeetingDownloads, blockMeetingDownloads, asser
 import { authorizedQuery, authorizedMutation } from "./lib/authorizedServer";
 export { rebuildMeetingDownloads } from "./lib/offlineMeetingProjection";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
-import { assertNativeFileStorageEnabled } from "./providers/env";
+import { assertWorkspaceNativeUploads } from "./providers/env";
 import { requirePermissionPortable } from "../shared/functions/permissions";
 import { claimStorageId, getOwned, WorkspaceMfaRequiredError } from "../shared/functions/access";
 import { requireDocumentAccess } from "../shared/functions/documents";
@@ -95,19 +95,20 @@ export const downloads = authorizedQuery("offlineMeetings:downloads", query)({ a
 
 export const prepareFileUpload = authorizedMutation("offlineMeetings:prepareFileUpload", mutation)({ args: { societyId: v.id("societies") }, handler: async (ctx, args) => {
   assertOfflineMeetingPreparationEnabled();
-  assertNativeFileStorageEnabled();
   const portable = await toPortableMutationCtx(ctx);
   await requirePermissionPortable(portable, args.societyId, "meetings:write");
   await requirePermissionPortable(portable, args.societyId, "documents:write");
+  // After the permission checks, so only members learn the workspace's storage policy.
+  await assertWorkspaceNativeUploads(ctx.db, args.societyId);
   return ctx.storage.generateUploadUrl();
 } });
 
 export const commitFile = authorizedMutation("offlineMeetings:commitFile", mutation)({ args: { societyId: v.id("societies"), meetingUuid: v.string(), storageId: v.id("_storage") }, handler: async (ctx, args) => {
   assertOfflineMeetingPreparationEnabled();
-  assertNativeFileStorageEnabled();
   const portable = await toPortableMutationCtx(ctx);
   await requirePermissionPortable(portable, args.societyId, "meetings:write");
   await requirePermissionPortable(portable, args.societyId, "documents:write");
+  await assertWorkspaceNativeUploads(ctx.db, args.societyId);
   const aggregate = await ctx.db.query("offlineMeetingAggregates").withIndex("by_society_uuid", q => q.eq("societyId", args.societyId).eq("uuid", args.meetingUuid)).unique();
   if (!aggregate?.file) throw new Error("PARENT_NOT_ACCEPTED");
   const file: FileDescriptor = JSON.parse(aggregate.file);

@@ -5,15 +5,16 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { FileDropZone, type FileRejection } from "../../components/FileDropZone";
 import { usePermissions } from "../../hooks/usePermissions";
 import { uploadDocumentVersion } from "../../lib/documentVersionUpload";
-import { isDocumentVersionStorageEnabled } from "../../lib/runtimeMode";
+import { useWorkspaceStoragePolicy } from "../../hooks/useWorkspaceStoragePolicy";
 
 const ACCEPT = "image/*,application/pdf,.heic,.heif";
 const MAX_BYTES = 25 * 1024 * 1024;
 
-/** Whether this person can upload a bill file on this deployment. */
+/** Whether this person can upload a bill file in this workspace. */
 export function useCanUploadBill() {
   const permissions = usePermissions();
-  return permissions.loaded && permissions.can("documents:write") && isDocumentVersionStorageEnabled();
+  const storagePolicy = useWorkspaceStoragePolicy();
+  return permissions.loaded && permissions.can("documents:write") && storagePolicy.documentVersions;
 }
 
 /**
@@ -63,6 +64,7 @@ export function BillDocumentDropZone({
   disabled?: boolean;
 }) {
   const permissions = usePermissions();
+  const storagePolicy = useWorkspaceStoragePolicy();
   const canUpload = useCanUploadBill();
   const upload = useUploadBillDocument(societyId);
   const [busy, setBusy] = useState(false);
@@ -84,7 +86,7 @@ export function BillDocumentDropZone({
 
   const hint = !permissions.loaded
     ? ""
-    : !isDocumentVersionStorageEnabled()
+    : !storagePolicy.documentVersions
       ? "File upload is turned off on this deployment."
       : !permissions.can("documents:write")
         ? "Uploading bills needs document edit access."

@@ -11,11 +11,12 @@ import { getDocumentStorageProvider, isDocumentVersionStorageEnabled } from "../
 import { isLocalDataRuntime } from "../../lib/staticRuntime";
 import { isDemoMode } from "../../lib/demoMode";
 import { getOriginal } from "./originalsCache";
+import { useWorkspaceStoragePolicy } from "../../hooks/useWorkspaceStoragePolicy";
 
 export type SourceDocumentRef = { fileKey: string; documentId: string; name: string; sha256?: string; mimeType?: string };
 
-export function canStoreOriginals(): boolean {
-  if (!isDocumentVersionStorageEnabled()) return false;
+export function canStoreOriginals(documentVersions = isDocumentVersionStorageEnabled()): boolean {
+  if (!documentVersions) return false;
   if (isDemoMode()) return true;
   if (getDocumentStorageProvider() === "local-filesystem") return true;
   // The browser local workspace keeps originals in IndexedDB (exported in ZIP backups).
@@ -24,12 +25,13 @@ export function canStoreOriginals(): boolean {
 }
 
 export function useStoreOriginals(allowed: boolean) {
+  const { documentVersions } = useWorkspaceStoragePolicy();
   const createDemoVersion = usePermissionedMutation(api.documentVersions.createDemoVersion, allowed);
   const beginUpload = useAction(api.documentVersions.beginUpload);
   const completeUpload = useAction(api.documentVersions.completeUpload);
   const recordUploadedVersion = usePermissionedMutation(api.documentVersions.recordUploadedVersion, allowed);
   return async (societyId: string, documents: SourceDocumentRef[]): Promise<{ stored: number; missing: number; skipped: boolean; errors: string[] }> => {
-    if (!allowed || !canStoreOriginals()) return { stored: 0, missing: 0, skipped: true, errors: [] };
+    if (!allowed || !canStoreOriginals(documentVersions)) return { stored: 0, missing: 0, skipped: true, errors: [] };
     let stored = 0;
     let missing = 0;
     const errors: string[] = [];

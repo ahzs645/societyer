@@ -41,6 +41,7 @@ await assert.rejects(() => token({ ...binding, tenantId: "foreign" }), /outside/
 const test = convexTest(schema, {
   "./_generated/api.js": () => import("../convex/_generated/api.js"), "./_generated/server.js": () => import("../convex/_generated/server.js"),
   "./authorization.js": () => import("../convex/authorization"), "./documentVersions.js": () => import("../convex/documentVersions"),
+  "./workspaceStoragePolicies.js": () => import("../convex/workspaceStoragePolicies"),
   "./http.js": () => import("../convex/http"), "./files.js": () => import("../convex/files"),
 } as any);
 const seeded = await test.run(async ctx => {

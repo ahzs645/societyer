@@ -2,7 +2,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { assertNativeFileStorageEnabled } from "./providers/env";
+import { assertWorkspaceNativeUploads } from "./providers/env";
 import { assertDocumentSupportsStoredContent, requireDocumentAccess } from "../shared/functions/documents";
 import { assertReceiptEvidenceContentUnchanged } from "../shared/functions/receiptRetention";
 import { getUrlPortable, generateUploadUrlPortable, generateLogoUploadUrlPortable } from "../shared/functions/files";
@@ -21,7 +21,7 @@ export const generateUploadUrl = authorizedMutation("files:generateUploadUrl", m
   },
   returns: v.string(),
   handler: async (ctx, args) => {
-    assertNativeFileStorageEnabled();
+    await assertWorkspaceNativeUploads(ctx.db, args.societyId);
     return generateUploadUrlPortable(await toPortableMutationCtx(ctx, buildConvexCapabilities(ctx)), args);
   },
 });
@@ -47,9 +47,9 @@ export const attachUploadedFileToDocument = authorizedMutation("files:attachUplo
   },
   returns: v.any(),
   handler: async (ctx, { documentId, storageId, fileName, mimeType, fileSizeBytes }) => {
-    assertNativeFileStorageEnabled();
     const portableCtx = await toPortableMutationCtx(ctx);
     const document = await requireOwnedRow(portableCtx, "documents", documentId);
+    await assertWorkspaceNativeUploads(ctx.db, document.societyId);
     await requireRolePortable(portableCtx, { societyId: String(document.societyId), required: "Director" });
     await requireDocumentAccess(portableCtx, documentId, "manage");
     assertDocumentSupportsStoredContent(document);

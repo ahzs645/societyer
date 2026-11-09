@@ -1,6 +1,6 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
-import { assertNativeFileStorageEnabled } from "./providers/env";
+import { assertWorkspaceNativeUploads } from "./providers/env";
 import { mutation, query } from "./lib/untypedServer";
 import {
   listPortable,
@@ -212,7 +212,7 @@ export const create = authorizedMutation("assets:create", mutation)({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.imageStorageId) assertNativeFileStorageEnabled();
+    if (args.imageStorageId) await assertWorkspaceNativeUploads(ctx.db, args.societyId);
     return createPortable(await toPortableMutationCtx(ctx), args);
   },
 });
@@ -223,7 +223,7 @@ export const update = authorizedMutation("assets:update", mutation)({
   handler: async (ctx, args) => {
     if (args.patch.imageStorageId) {
       const current = await ctx.db.get(args.id);
-      if (current?.imageStorageId !== args.patch.imageStorageId) assertNativeFileStorageEnabled();
+      if (current?.imageStorageId !== args.patch.imageStorageId) await assertWorkspaceNativeUploads(ctx.db, current?.societyId);
     }
     return updatePortable(await toPortableMutationCtx(ctx), args);
   },
