@@ -34,7 +34,10 @@ jobs:
       - name: Portable manifest for a standalone manual run
         if: github.event_name == 'workflow_dispatch'
         run: npm run test:portable-manifest
-      - run: npm run build
+      # Legal governance builds every PR and main push; build here only for a standalone run.
+      - name: Production build for a standalone manual run
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run build
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
