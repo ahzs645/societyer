@@ -41,6 +41,12 @@ export function hostedAuthSignUpEnabled(env: Record<string, string | undefined> 
   return !manualAuthProvisioningEnabled(env) && (!allowedAuthEmailDomains(env).length || hostedAuthEmailConfigured(env));
 }
 
+/** JWT claim naming this Better Auth session and when its sign-in happened (epoch ms). */
+export function sessionClaim(session: { id: string; createdAt: Date | string | number }): { id: string; createdAt?: number } {
+  const createdAt = new Date(session.createdAt).getTime();
+  return { id: session.id, ...(Number.isFinite(createdAt) ? { createdAt } : {}) };
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
@@ -197,8 +203,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       },
     } : {}),
     account: {
-      // Same policy as the gateway broker: a matching email never links accounts.
-      accountLinking: { enabled: false, disableImplicitLinking: true, trustedProviders: [] },
+      // Only explicit `linkSocial` from a signed-in session adds a provider; a
+      // matching email never links accounts (disableImplicitLinking). A linked
+      // provider is a way to sign in later, not evidence for this session.
+      accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: [], allowDifferentEmails: true },
     },
     session: entra ? { expiresIn: 8 * 3600, disableSessionRefresh: true } : hostedSessionConfiguration(process.env),
     // Better Auth's limiter reads the client IP from request headers, which
@@ -219,8 +227,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
           expirationSeconds: 5 * 60,
           // Convex passes custom-JWT claims through under their own names, so
           // `emailVerified` (not OIDC's `email_verified`) is what identity exposes.
+          // `societyer_session` lets the backend judge sign-in recency (account
+          // linking) without trusting the browser; refreshes keep `createdAt`.
           definePayload: async ({ user, session }): Promise<Record<string, unknown>> => ({
             email: user.email, emailVerified: user.emailVerified === true, name: user.name,
+            societyer_session: sessionClaim(session),
             ...await betterAuthMfaClaims((await auth.$context).adapter, user, session),
             ...await hostedEntraClaims((await auth.$context).adapter, user.id, session.id, entra),
           }),

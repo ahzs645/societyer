@@ -18,8 +18,8 @@ import type {
 import { validateIntegrationSettings, type IntegrationSettings } from "../integrationSettings";
 import { isValidFiscalYearEnd } from "../entitySetup";
 import { requirePermissionPortable } from "./permissions";
-import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
-import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership, WorkspaceMfaRequiredError } from "./access";
+import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive, linkedIdentityKeys, membershipsForIdentities } from "./identity";
+import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership, resolvePrincipalUser, WorkspaceMfaRequiredError, WorkspaceSignInRequiredError } from "./access";
 import { storageHasRetainedDocumentReference } from "./receiptRetention";
 import type { InvoiceBrand } from "../invoiceBranding";
 import { cleanWorkspaceBrand } from "../workspaceBrandValidation";
@@ -50,8 +50,12 @@ export async function assertWorkspaceCreator(ctx: PortableQueryCtx, actingUserId
   if (!access.allowed) throw new Error(access.reason);
   if (actingUserId && ctx.principal.kind === "user" && ctx.principal.assurance === "verified-jwt") {
     const user = await ctx.db.get(actingUserId, "users");
-    if (!user?.societyId || !matchesVerifiedIdentity(user, ctx.principal) || !isActiveMembership(user)) throw new Error("Authenticated actor does not match the current principal.");
-    await requireSocietyMembership(ctx, String(user.societyId));
+    if (!user?.societyId || !isActiveMembership(user)) throw new Error("Authenticated actor does not match the current principal.");
+    // The actor may be a membership reached through a linked identity; the
+    // resolver decides, exactly as it would for any other workspace call.
+    if ((await resolvePrincipalUser(ctx, String(user.societyId)))?._id !== actingUserId) {
+      throw new Error("Authenticated actor does not match the current principal.");
+    }
   }
 }
 
@@ -167,19 +171,18 @@ async function principalMemberships(ctx: PortableQueryCtx): Promise<PortableDoc[
     if (actor?.societyId) return [await requireSocietyMembership(ctx, String(actor.societyId))];
   }
   if (principal.kind !== "user") throw new Error("Society membership not found.");
-  const memberships = await ctx.db
-    .query("users")
-    .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
-    .collect();
-  const activeMemberships = memberships.filter(
-    (membership) => matchesVerifiedIdentity(membership, principal) && (!membership.status || membership.status === "Active"),
-  );
+  const memberships = await membershipsForIdentities(ctx.db, await linkedIdentityKeys(ctx));
+  const perSociety = new Map<string, number>();
+  for (const membership of memberships) perSociety.set(String(membership.societyId), (perSociety.get(String(membership.societyId)) ?? 0) + 1);
+  const activeMemberships = memberships.filter((membership) => !membership.status || membership.status === "Active");
   if (!activeMemberships.length) throw new Error("Society membership not found.");
   const accessible = await Promise.all(activeMemberships.map(async (membership) => {
+    // Two memberships in one workspace across linked identities grant neither.
+    if ((perSociety.get(String(membership.societyId)) ?? 0) > 1) return null;
     try {
       return await requireSocietyMembership(ctx, String(membership.societyId));
     } catch (error) {
-      if (error instanceof WorkspaceMfaRequiredError) return null;
+      if (error instanceof WorkspaceMfaRequiredError || error instanceof WorkspaceSignInRequiredError) return null;
       throw error;
     }
   }));

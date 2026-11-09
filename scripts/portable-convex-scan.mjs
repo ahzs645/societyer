@@ -17,6 +17,8 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   "apiPlatform:migrateUserToClerk",
   "workspaceMfa:getPolicy",
   "workspaceMfa:setPolicy",
+  // Linking proves deployment-signed sessions; a local runtime has none to prove.
+  "accountLinks:overview", "accountLinks:begin", "accountLinks:preview", "accountLinks:confirm", "accountLinks:cancel", "accountLinks:unlink",
   // AI connector tokens serve the hosted /mcp endpoint, which the local runtimes don't have.
   "agentConnectors:overview",
   "agentConnectors:setEnabled",

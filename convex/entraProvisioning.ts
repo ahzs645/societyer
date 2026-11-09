@@ -6,6 +6,8 @@ import type { Id } from "./_generated/dataModel";
 import { createAuth } from "./hostedAuth";
 import { hostedEntraConfig } from "../shared/hostedMicrosoftSso";
 import { createRemoteJWKSet } from "jose";
+import { toPortableQueryCtx } from "./lib/portable";
+import { activePersonLinks, membershipsForIdentities, personLinkState } from "../shared/functions/identity";
 
 /** Checks the public signing-key endpoint without collecting a user's token. */
 export const checkSigningKeys = internalAction({
@@ -81,6 +83,16 @@ export const ensureDirectoryMembership = internalMutation({
     if (existing) {
       if (existing.status !== "Active") throw new Error("Disabled memberships are never reactivated by provisioning.");
       return { membershipId: existing._id, role: existing.role };
+    }
+    // A second membership through a linked identity would make the workspace
+    // ambiguous for this person, which denies both.
+    const db = (await toPortableQueryCtx(ctx)).db;
+    const link = await personLinkState(db, { issuer, subject: args.authUserId });
+    if (link.kind === "linked") {
+      const linked = await membershipsForIdentities(db, await activePersonLinks(db, link.person._id));
+      if (linked.some(user => user.societyId === args.societyId)) {
+        throw new Error("This person already has a membership in this workspace through a linked account.");
+      }
     }
     let identity = await ctx.db.query("externalIdentities").withIndex("by_issuer_subject", q => q.eq("issuer", issuer).eq("subject", args.authUserId)).unique();
     if (identity && identity.status !== "Active") throw new Error("Disabled identities are never reactivated by provisioning.");
