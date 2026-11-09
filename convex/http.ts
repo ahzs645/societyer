@@ -128,7 +128,7 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
       viaLinkedIdentity: boolean;
     }> = [];
     const lockedWorkspaces: Array<{ id: Id<"societies">; name: string; reason: "mfa" | SignInRequirement;
-      canonicalOrigin?: string; logoUrl?: string; supportEmail?: string }> = [];
+      canonicalOrigin?: string; logoUrl?: string; supportEmail?: string; allowedEmailDomains?: readonly string[] }> = [];
     for (const user of activeRows) {
       const viaLinkedIdentity = !matchesVerifiedIdentity(user, principal);
       // Membership/lifecycle checks also apply to the picker and direct HTTP endpoints.
@@ -149,9 +149,13 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
       const canonicalOrigin = await primaryWorkspaceOrigin(portableCtx.db, society._id);
       if (reason) {
         const logoUrl = society.logoStorageId ? await ctx.storage.getUrl(society.logoStorageId) : null;
-        const supportEmail = (await workspaceSignInPolicy(portableCtx, society._id))?.supportEmail;
+        const policy = await workspaceSignInPolicy(portableCtx, society._id);
+        const supportEmail = policy?.supportEmail;
+        // A member who is locked out by email may see which domains the workspace accepts.
+        const allowedEmailDomains = reason === "email-domain" ? policy?.allowedEmailDomains : undefined;
         lockedWorkspaces.push({ id: society._id, name: society.name, reason,
-          ...(canonicalOrigin ? { canonicalOrigin } : {}), ...(logoUrl ? { logoUrl } : {}), ...(supportEmail ? { supportEmail } : {}) });
+          ...(canonicalOrigin ? { canonicalOrigin } : {}), ...(logoUrl ? { logoUrl } : {}), ...(supportEmail ? { supportEmail } : {}),
+          ...(allowedEmailDomains?.length ? { allowedEmailDomains } : {}) });
         continue;
       }
       const [logoUrl, logoDarkUrl, letterheadUrl] = await Promise.all([

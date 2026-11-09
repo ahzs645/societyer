@@ -212,7 +212,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       // Only explicit `linkSocial` from a signed-in session adds a provider; a
       // matching email never links accounts (disableImplicitLinking). A linked
       // provider is a way to sign in later, not evidence for this session.
-      accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: [], allowDifferentEmails: true },
+      // Microsoft is trusted for explicit links only: Entra ID tokens carry no
+      // email-verified claim, and the identity is proven by the tenant, group,
+      // member-account and recency checks rather than by its email. With
+      // disableImplicitLinking, trust never links accounts by email.
+      accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: entra ? ["microsoft"] : [], allowDifferentEmails: true },
     },
     session: entra ? { expiresIn: 8 * 3600, disableSessionRefresh: true } : hostedSessionConfiguration(process.env),
     // Better Auth's limiter reads the client IP from request headers, which

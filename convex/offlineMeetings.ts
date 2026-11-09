@@ -8,7 +8,7 @@ export { rebuildMeetingDownloads } from "./lib/offlineMeetingProjection";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { assertWorkspaceNativeUploads } from "./providers/env";
 import { requirePermissionPortable } from "../shared/functions/permissions";
-import { claimStorageId, getOwned, WorkspaceMfaRequiredError } from "../shared/functions/access";
+import { claimStorageId, getOwned, WorkspaceMfaRequiredError, WorkspaceSignInRequiredError } from "../shared/functions/access";
 import { requireDocumentAccess } from "../shared/functions/documents";
 import { assertReceiptEvidenceContentUnchanged } from "../shared/functions/receiptRetention";
 import { documentAccessContextForActor } from "./lib/access/documentAccess";
@@ -75,7 +75,7 @@ export const syncIdentity = authorizedQuery("offlineMeetings:syncIdentity", quer
     if (portable.principal.kind !== "user" || portable.principal.assurance !== "verified-jwt") throw new Error("Verified user identity required.");
     await assertMeetingScopeAvailable(portable, args.societyId);
   } catch (error) {
-    if (error instanceof WorkspaceMfaRequiredError ||
+    if (error instanceof WorkspaceMfaRequiredError || error instanceof WorkspaceSignInRequiredError ||
         /membership not found|membership is not active|User is disabled|External identity is disabled|Permission (meetings|minutes|agendas|documents):read required|Verified user identity required|Authentication required/.test(String(error))) {
       throw new ConvexError({ code: "OFFLINE_ACCESS_DENIED", message: "Meeting preparation access denied." });
     }

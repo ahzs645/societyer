@@ -285,7 +285,7 @@ try {
     emailAndPassword: { enabled: true },
     socialProviders: { microsoft: createHostedEntraProvider(config) }, plugins: [hostedEntraPlugin(config)],
     // Exactly convex/hostedAuth.ts.
-    account: { accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: [], allowDifferentEmails: true } },
+    account: { accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: ["microsoft"], allowDifferentEmails: true } },
     session: { expiresIn: 8 * 3600, disableSessionRefresh: true },
   });
   await (await getMigrations(auth.options)).runMigrations();
@@ -318,13 +318,13 @@ try {
   assert.equal((await context.internalAdapter.listSessions(member.id)).length, 1);
 
   // Explicit link from the password session. Entra ID tokens usually carry no
-  // email-verification claim, and with no trusted providers Better Auth refuses.
-  const unverified = await oauth("/link-social", {}, passwordCookie, await idToken());
-  assert.equal(unverified.location?.searchParams.get("error"), "unable_to_link_account");
-  const groupless = await oauth("/link-social", {}, passwordCookie, await idToken({ verified_primary_email: ["member@example.test"], groups: [] }));
+  // email-verification claim; Microsoft is trusted for explicit links only.
+  const groupless = await oauth("/link-social", {}, passwordCookie, await idToken({ groups: [] }));
   assert.ok(groupless.location?.searchParams.get("error"), "Group, tenant, account-type and recency checks still apply when linking");
-  const linked = await oauth("/link-social", {}, passwordCookie, await idToken({ email: "Member.Work@example.test", verified_primary_email: ["Member.Work@example.test"] }));
-  assert.equal(linked.location?.href, `${portal}/done`, "A verified directory address links, even when it differs from the account email");
+  const stale = await oauth("/link-social", {}, passwordCookie, await idToken({ auth_time: Math.floor(Date.now() / 1000) - 3600 }));
+  assert.ok(stale.location?.searchParams.get("error"), "A Microsoft sign-in older than five minutes can't be linked");
+  const linked = await oauth("/link-social", {}, passwordCookie, await idToken({ email: "Member.Work@example.test" }));
+  assert.equal(linked.location?.href, `${portal}/done`, "A directory identity links without an email-verified claim, even when its address differs");
   assert.deepEqual((await context.internalAdapter.findAccounts(member.id)).map((account) => [account.providerId, account.accountId]).sort(),
     [["credential", member.id], ["microsoft", objectId]]);
   assert.equal((await context.internalAdapter.listSessions(member.id)).length, 1, "Linking creates no session");
@@ -343,5 +343,5 @@ try {
   assert.equal(sessions.length, 2);
   const microsoftSession = sessions.find((row) => row.id !== passwordSession.id)!;
   assert.equal((await hostedEntraClaims(context.adapter, member.id, microsoftSession.id, config)).societyer_entra?.objectId, objectId);
-  console.log("Better Auth linking passed: no implicit same-email linking, explicit linkSocial with Entra checks, unverified-email refusal, single Microsoft identity, ownership conflict, no session upgrade.");
+  console.log("Better Auth linking passed: no implicit same-email linking, explicit linkSocial with Entra checks, stale-sign-in refusal, single Microsoft identity, ownership conflict, no session upgrade.");
 } finally { database.close(); globalThis.fetch = realFetch; }
