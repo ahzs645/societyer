@@ -908,6 +908,60 @@
     ]
   },
   {
+    "key": "convex:accountLinks:begin",
+    "surface": "convex",
+    "name": "accountLinks:begin",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:cancel",
+    "surface": "convex",
+    "name": "accountLinks:cancel",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:confirm",
+    "surface": "convex",
+    "name": "accountLinks:confirm",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:overview",
+    "surface": "convex",
+    "name": "accountLinks:overview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:preview",
+    "surface": "convex",
+    "name": "accountLinks:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:accountLinks:unlink",
+    "surface": "convex",
+    "name": "accountLinks:unlink",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accountLinks.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:activity:list",
     "surface": "convex",
     "name": "activity:list",
@@ -28969,6 +29023,63 @@
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/workspaceMfa.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:clear",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:clear",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:get",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:get",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:list",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:list",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:workspaceSignInPolicies:set",
+    "surface": "convex",
+    "name": "workspaceSignInPolicies:set",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/workspaceSignInPolicies.ts",
     "idArguments": [
       {
         "path": "societyId",

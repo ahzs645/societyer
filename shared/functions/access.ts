@@ -30,15 +30,31 @@ import type {
   PortableQueryCtx,
   TableName,
 } from "../portable/ctx";
-import { matchesVerifiedIdentity, assertExternalIdentityActive } from "./identity";
+import { assertExternalIdentityActive, linkedIdentityKeys, membershipsForIdentities } from "./identity";
 import { PORTABLE_ACCESS_ENFORCEMENT } from "../portable/define";
 import { matchesAuthBinding } from "./identity";
 import { workspaceRequiresMfa, type WorkspaceMfaPolicy } from "../workspaceMfa";
+import { evaluateWorkspaceSignIn, signInRequirementMessage, type SignInRequirement, type WorkspaceSignInPolicy } from "../workspaceSignInPolicy";
 
 export class WorkspaceMfaRequiredError extends Error {
   constructor() {
     super("This workspace requires two-factor authentication. Sign in with a second factor to continue.");
   }
+}
+
+/** The session is a member but didn't authenticate the way this workspace requires. */
+export class WorkspaceSignInRequiredError extends Error {
+  readonly requirement: SignInRequirement;
+  constructor(requirement: SignInRequirement) {
+    super(signInRequirementMessage(requirement));
+    this.requirement = requirement;
+  }
+}
+
+export async function workspaceSignInPolicy(ctx: PortableQueryCtx, societyId: string) {
+  return ctx.db.query<PortableDoc & WorkspaceSignInPolicy>("workspaceSignInPolicies")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .unique();
 }
 
 export async function hasVerifiedSecondFactor(ctx: PortableQueryCtx): Promise<boolean> {
@@ -121,16 +137,24 @@ export async function resolvePrincipalUser(
   }
 
   if (principal.kind !== "user") return null;
-  const matches = await ctx.db
-    .query<PortableUserRow>("users")
-    .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
-    .collect();
-  const bindings = matches.filter((user) => user.societyId === societyId && (principal.assurance === "trusted-workspace" || matchesVerifiedIdentity(user, principal)));
+  // A verified session reaches memberships bound to its own exact identity or
+  // to an identity proven to belong to the same person. Any status counts
+  // toward ambiguity, so a Disabled row can't be bypassed by a linked one.
+  const bindings = principal.assurance === "trusted-workspace"
+    ? (await ctx.db.query<PortableUserRow>("users")
+      .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
+      .collect()).filter((user) => user.societyId === societyId)
+    : (await membershipsForIdentities<PortableUserRow>(ctx.db, await linkedIdentityKeys(ctx)))
+      .filter((user) => user.societyId === societyId);
   if (bindings.length !== 1 || (principal.userId && principal.userId !== bindings[0]._id)) return null;
   if (principal.assurance === "verified-jwt") {
     const membership = bindings[0];
     await assertExternalIdentityActive(ctx.db, membership);
     if (!principal.gatewayService && isActiveMembership(membership)) {
+      // Requirements always come from the current session, never from the
+      // identity the membership happens to be bound to.
+      const signIn = evaluateWorkspaceSignIn(await workspaceSignInPolicy(ctx, societyId), principal);
+      if (!signIn.ok) throw new WorkspaceSignInRequiredError(signIn.requirement);
       const policy = await workspaceMfaPolicy(ctx, societyId);
       if (workspaceRequiresMfa(policy?.policy, membership.role) && !await hasVerifiedSecondFactor(ctx)) {
         throw new WorkspaceMfaRequiredError();

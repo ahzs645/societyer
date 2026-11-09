@@ -12,7 +12,7 @@ import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../port
 import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { findInvitation, invitationAvailability, invitationIssuerAuthorized, isShareLinkInvitation, LINK_INVITATION_ROLES, type InvitationRow } from "./invitationTokens";
-import { matchesAuthBinding, normalizeAuthIssuer, matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
+import { matchesAuthBinding, normalizeAuthIssuer, matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive, linkedIdentityKeys, membershipsForIdentities } from "./identity";
 
 export type MembershipResolution =
   | { status: "bound"; societyId: string; userId: string }
@@ -219,13 +219,10 @@ export async function ensureCurrentMembershipPortable(
     throw new Error("Society membership not found.");
   }
 
-  const existingByAuth = await ctx.db
-    .query<UserRow>("users")
-    .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
-    .collect();
-  const matchingBindings = existingByAuth.filter(
-    (row) => row.societyId === args.societyId && matchesVerifiedIdentity(row, principal),
-  );
+  // A membership bound to a linked identity counts as existing, so an
+  // invitation never adds a second one; it is never rebound or reactivated.
+  const matchingBindings = (await membershipsForIdentities<UserRow>(ctx.db, await linkedIdentityKeys(ctx)))
+    .filter((row) => row.societyId === args.societyId);
   if (matchingBindings.length > 1) return { status: "ambiguous-binding" };
 
   const existing = matchingBindings[0];
@@ -233,6 +230,11 @@ export async function ensureCurrentMembershipPortable(
   if (existing) {
     await assertExternalIdentityActive(ctx.db, existing);
     if (!isActiveMembership(existing)) return { status: "membership-disabled" };
+    if (!matchesVerifiedIdentity(existing, principal)) {
+      // Profile fields belong to the identity the membership is bound to.
+      await ctx.db.patch(existing._id, { lastLoginAtISO: now });
+      return { status: "bound", societyId: args.societyId, userId: existing._id };
+    }
     const profilePatch: Record<string, string> = { lastLoginAtISO: now };
     if (principal.email) profilePatch.email = principal.email;
     if (principal.name?.trim()) profilePatch.displayName = principal.name.trim();

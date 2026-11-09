@@ -12,11 +12,12 @@ import { buildICalendar } from "../shared/icalendar";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { hasPermission } from "../shared/functions/permissions";
 import { requireDocumentAccess } from "../shared/functions/documents";
-import { hasVerifiedSecondFactor, requireSocietyMembership, WorkspaceMfaRequiredError } from "../shared/functions/access";
+import { hasVerifiedSecondFactor, requireSocietyMembership, WorkspaceMfaRequiredError, WorkspaceSignInRequiredError, workspaceSignInPolicy } from "../shared/functions/access";
 import { toPortableQueryCtx } from "./lib/portable";
 import type { Doc, Id } from "./_generated/dataModel";
-import { hostedPrincipal } from "./lib/authIdentity";
-import { assertExternalIdentityActive, matchesAuthBinding } from "../shared/functions/identity";
+import { assertExternalIdentityActive, linkedIdentityKeys, matchesVerifiedIdentity, membershipsForIdentities } from "../shared/functions/identity";
+import type { SignInRequirement } from "../shared/workspaceSignInPolicy";
+import { primaryWorkspaceOrigin } from "../shared/workspaceDomains";
 import { workspaceCreationAccessPortable } from "../shared/functions/society";
 import { authenticatorEnrollmentEnabled, resolveSessionBroker } from "../shared/authConfiguration";
 import { allowedAuthEmailDomains } from "../shared/authEmailPolicy";
@@ -97,30 +98,22 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
-    const principal = hostedPrincipal(await ctx.auth.getUserIdentity());
+    const portableCtx = await toPortableQueryCtx(ctx);
+    const principal = portableCtx.principal;
+    const sessionMethods = { microsoft: principal.kind === "user" && Boolean(principal.sessionEvidence?.microsoft) };
     if (principal.kind !== "user" || !principal.subject) {
-      return { status: "unauthenticated", memberships: [] };
+      return { status: "unauthenticated", memberships: [], lockedWorkspaces: [], workspaceMfaAvailable: true,
+        secondFactorVerified: false, sessionMethods, linkedIdentityCount: 0 };
     }
 
-    const rows = await ctx.db
-      .query("users")
-      .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
-      .collect();
-    const boundRows = rows.filter((row) => matchesAuthBinding(row, principal));
-    const activeRows = boundRows.filter((row) => !row.status || row.status === "Active");
-    const activeSocietyIds = new Set(activeRows.map((row) => String(row.societyId)));
-    if (activeSocietyIds.size !== activeRows.length) {
-      return { status: "ambiguous-binding", memberships: [] };
-    }
-    if (activeRows.length === 0) {
-      return {
-        status: boundRows.some((row) => row.status === "Disabled")
-          ? "membership-disabled"
-          : "needs-invitation",
-        memberships: [],
-        workspaceMfaAvailable: true,
-      };
-    }
+    // Rows bound to this exact identity or to an identity proven to belong to
+    // the same person. Any status counts toward a workspace's ambiguity.
+    const keys = await linkedIdentityKeys(portableCtx);
+    const rows = await membershipsForIdentities<Doc<"users">>(portableCtx.db, keys);
+    const perSociety = new Map<string, number>();
+    for (const row of rows) perSociety.set(String(row.societyId), (perSociety.get(String(row.societyId)) ?? 0) + 1);
+    const ambiguous = [...perSociety.values()].some((count) => count > 1);
+    const activeRows = rows.filter((row) => (!row.status || row.status === "Active") && perSociety.get(String(row.societyId)) === 1);
 
     const memberships: Array<{
       userId: Id<"users">;
@@ -131,21 +124,36 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
         logoDarkUrl?: string;
         letterheadUrl?: string;
       };
+      canonicalOrigin?: string;
+      viaLinkedIdentity: boolean;
     }> = [];
-    const lockedWorkspaces: Array<{ id: Id<"societies">; name: string }> = [];
-    const portableCtx = await toPortableQueryCtx(ctx);
+    const lockedWorkspaces: Array<{ id: Id<"societies">; name: string; reason: "mfa" | SignInRequirement;
+      canonicalOrigin?: string; logoUrl?: string; supportEmail?: string }> = [];
     for (const user of activeRows) {
+      const viaLinkedIdentity = !matchesVerifiedIdentity(user, principal);
       // Membership/lifecycle checks also apply to the picker and direct HTTP endpoints.
+      let reason: "mfa" | SignInRequirement | undefined;
       try {
-        await requireSocietyMembership(portableCtx, String(user.societyId));
+        const resolved = await requireSocietyMembership(portableCtx, String(user.societyId));
+        if (resolved._id !== user._id) continue;
       } catch (error) {
-        if (!(error instanceof WorkspaceMfaRequiredError)) throw error;
-        const society = await ctx.db.get(user.societyId);
-        if (society) lockedWorkspaces.push({ id: society._id, name: society.name });
-        continue;
+        if (error instanceof WorkspaceMfaRequiredError) reason = "mfa";
+        else if (error instanceof WorkspaceSignInRequiredError) reason = error.requirement;
+        // A broken binding on a linked identity hides that workspace; it must
+        // not lock this session out of its own memberships.
+        else if (viaLinkedIdentity) continue;
+        else throw error;
       }
       const society = await ctx.db.get(user.societyId);
       if (!society) continue;
+      const canonicalOrigin = await primaryWorkspaceOrigin(portableCtx.db, society._id);
+      if (reason) {
+        const logoUrl = society.logoStorageId ? await ctx.storage.getUrl(society.logoStorageId) : null;
+        const supportEmail = (await workspaceSignInPolicy(portableCtx, society._id))?.supportEmail;
+        lockedWorkspaces.push({ id: society._id, name: society.name, reason,
+          ...(canonicalOrigin ? { canonicalOrigin } : {}), ...(logoUrl ? { logoUrl } : {}), ...(supportEmail ? { supportEmail } : {}) });
+        continue;
+      }
       const [logoUrl, logoDarkUrl, letterheadUrl] = await Promise.all([
         society.logoStorageId ? ctx.storage.getUrl(society.logoStorageId) : null,
         society.logoDarkStorageId ? ctx.storage.getUrl(society.logoDarkStorageId) : null,
@@ -161,10 +169,17 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
           logoDarkUrl: logoDarkUrl ?? undefined,
           letterheadUrl: letterheadUrl ?? undefined,
         },
+        ...(canonicalOrigin ? { canonicalOrigin } : {}),
+        viaLinkedIdentity,
       });
     }
+    const status = memberships.length > 0 ? "bound"
+      : lockedWorkspaces.length > 0 ? (lockedWorkspaces.every((lock) => lock.reason === "mfa") ? "mfa-required" : "sign-in-required")
+      : ambiguous ? "ambiguous-binding"
+      : rows.some((row) => row.status === "Disabled") ? "membership-disabled"
+      : "needs-invitation";
     return {
-      status: memberships.length > 0 ? "bound" : lockedWorkspaces.length > 0 ? "mfa-required" : "needs-invitation",
+      status,
       authSubject: principal.subject,
       authIssuer: principal.issuer,
       authProvider: principal.authProvider,
@@ -172,6 +187,9 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
       workspaceMfaAvailable: true,
       lockedWorkspaces,
       secondFactorVerified: await hasVerifiedSecondFactor(portableCtx),
+      sessionMethods,
+      // Other identities this session can currently reach memberships through.
+      linkedIdentityCount: Math.max(0, keys.length - 1),
     };
   },
 });

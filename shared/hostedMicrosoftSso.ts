@@ -1,5 +1,5 @@
 import { importPKCS8, SignJWT } from "jose";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import type { BetterAuthPlugin } from "better-auth";
 import type { DBAdapter } from "better-auth/types";
 import { createMicrosoftSsoProvider, type MicrosoftSsoConfig } from "./microsoftSso";
@@ -91,7 +91,22 @@ export function hostedEntraPlugin(config: HostedEntraConfig): BetterAuthPlugin {
         },
       }) } };
     },
-    hooks: { after: [{
+    hooks: { before: [{
+      // The proof below reads the user's one Microsoft account. A second
+      // directory identity on the same user would make that lookup ambiguous.
+      matcher: ({ path }) => path === "/link-social",
+      handler: createAuthMiddleware(async (ctx) => {
+        if ((ctx.body as { provider?: unknown } | undefined)?.provider !== "microsoft") return;
+        const session = await getSessionFromCtx(ctx);
+        if (!session) return; // The endpoint itself rejects a missing session.
+        const existing = await ctx.context.adapter.findOne({
+          model: "account", where: [{ field: "userId", value: session.user.id }, { field: "providerId", value: "microsoft" }],
+        });
+        if (existing) throw new APIError("FORBIDDEN", { message: "This account already signs in with Microsoft." });
+      }),
+    }], after: [{
+      // A link callback (`linkSocial`) adds an account but creates no session,
+      // so `newSession` is unset and no proof is recorded for the linking session.
       matcher: ({ path, params }) => (path === "/callback/:id" && params?.id === "microsoft") || path === "/callback/microsoft",
       handler: createAuthMiddleware(async ({ context }) => {
         const signedIn = context.newSession;
