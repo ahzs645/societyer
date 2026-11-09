@@ -1,3 +1,4 @@
+import type { InvoicePdfExportOptions } from "./invoicePdfExportOptions";
 import { BlendMode, pushGraphicsState, popGraphicsState, rectangle, clip, endPath, concatTransformationMatrix, PDFDocument, PDFArray, PDFDict, PDFString, PDFHexString, PDFName, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage, type PDFEmbeddedPage, type PDFNumber } from "pdf-lib";
 import type { FontRegistration } from "@formepdf/react";
 import { createElement } from "react";
@@ -14,7 +15,7 @@ import { DocumentRichPdf } from "./DocumentRichContent";
 import { invoiceDocumentOrganization } from "./invoiceOrganization";
 import { invoiceDocumentStatus } from "./invoiceDocumentStatus";
 export type DocumentPdfEngine = Pick<typeof import("@formepdf/core"), "renderDocument" | "renderDocumentWithLayout">;
-export type DocumentPdfDecoration = { config: InvoiceTemplate; organizationName?: string; number?: string; fonts?: FontRegistration[]; engine?: DocumentPdfEngine; layout?: LayoutInfo; content?: { invoice: InvoiceDocumentData; organization: InvoiceOrganization & { logoUrl?: string | null }; suppressCustomerBlocks?: boolean }; paymentStub?: { number: string; customer: string; total: string; balance: string; height: number; totalLabel?: string; balanceLabel?: string; showBalance?: boolean } };
+export type DocumentPdfDecoration = { config: InvoiceTemplate; pageNumbers?: InvoicePdfExportOptions["pageNumbers"]; organizationName?: string; number?: string; fonts?: FontRegistration[]; engine?: DocumentPdfEngine; layout?: LayoutInfo; content?: { invoice: InvoiceDocumentData; organization: InvoiceOrganization & { logoUrl?: string | null }; suppressCustomerBlocks?: boolean }; paymentStub?: { number: string; customer: string; total: string; balance: string; height: number; totalLabel?: string; balanceLabel?: string; showBalance?: boolean } };
 const color = (hex: string) => rgb(parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255);
 const imageBytes = (data: string) => Uint8Array.from(atob(data.slice(data.indexOf(",") + 1)), (character) => character.charCodeAt(0));
 function wrapText(text: string, font: PDFFont, size: number, width: number) {
@@ -61,7 +62,7 @@ async function underlayBackgrounds(bytes: Uint8Array, config: InvoiceTemplate): 
   return pdf.save();
 }
 /** Genuine page counts, rich first/continuation bands, positioned page numbers and payment stubs. */
-export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, paymentStub, content, layout, engine: suppliedEngine }: DocumentPdfDecoration): Promise<Uint8Array> {
+export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, paymentStub, content, layout, pageNumbers, engine: suppliedEngine }: DocumentPdfDecoration): Promise<Uint8Array> {
   const design = resolveDocumentDesign(config), advanced = resolveDocumentAdvanced(design);
   const bytes = await underlayBackgrounds(input, config);
   if (!design.header.text && !design.header.continuationText && !design.footer.text && !design.footer.continuationText && !design.footer.pageNumbers && !Object.values(advanced.rich).some(Boolean) && !advanced.paymentStub.enabled && !content) return bytes;
@@ -106,6 +107,7 @@ export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, pa
     for (const link of band.links) { const reference = pdf.context.register(pdf.context.obj({ Type: "Annot", Subtype: "Link", Rect: [x + link.rect[0], y + link.rect[1], x + link.rect[2], y + link.rect[3]], Border: [0, 0, 0], A: { Type: "Action", S: "URI", URI: PDFString.of(link.href) } })); page.node.addAnnot(reference); }
   };
   const pages = pdf.getPages();
+  const showPageNumbers = design.footer.pageNumbers && (pageNumbers !== "multiple_pages" || pages.length > 1);
   for (let index = 0; index < pages.length; index++) {
     const page = pages[index], { width, height } = page.getSize(), margin = design.page.margins, contentWidth = width - margin.left - margin.right;
     const header = index === 0 ? design.header.text : design.header.repeat ? design.header.continuationText || design.header.text : "";
@@ -118,14 +120,14 @@ export async function decorateDocumentPdf(input: Uint8Array, { config, fonts, pa
       if (text && lines.length * size * 1.2 > availableHeight) throw new Error(`${label} text does not fit the page margin. Increase the ${label.toLowerCase()} margin or shorten the text.`);
       return { size, lines, height: text ? lines.length * size * 1.2 : 0 };
     };
-    const headerSpace = margin.top - 10, footerSpace = margin.bottom - 10 - (design.footer.pageNumbers ? footerType.fontSize * 1.5 : 0);
+    const headerSpace = margin.top - 10, footerSpace = margin.bottom - 10 - (showPageNumbers ? footerType.fontSize * 1.5 : 0);
     const head = band(header, headerFont, headerType.fontSize, headerHtml ? headerSpace / 2 : headerSpace, "Header");
     const foot = band(footer, footerFont, footerType.fontSize, footerHtml ? footerSpace / 2 : footerSpace, "Footer");
     head.lines.forEach((line, row) => { if (header) page.drawText(line, { x: margin.left, y: height - 5 - head.size - row * head.size * 1.2, size: head.size, font: headerFont, color: color(headerType.color) }); });
     foot.lines.forEach((line, row) => { if (footer) page.drawText(line, { x: margin.left, y: margin.bottom - 5 - foot.size - row * foot.size * 1.2, size: foot.size, font: footerFont, color: color(footerType.color) }); });
     if (headerHtml) { const available = headerSpace - head.height - (header ? 3 : 0), embedded = await richBand(headerHtml, contentWidth, available, headerType); drawRichBand(page, embedded, margin.left, height - 5 - head.height - (header ? 3 : 0) - available, contentWidth, available); }
     if (footerHtml) { const available = footerSpace - foot.height - (footer ? 3 : 0), embedded = await richBand(footerHtml, contentWidth, available, footerType); drawRichBand(page, embedded, margin.left, margin.bottom - 5 - foot.height - (footer ? 3 : 0) - available, contentWidth, available); }
-    if (design.footer.pageNumbers) {
+    if (showPageNumbers) {
       const text = design.footer.pageNumberFormat === "page_of_total" ? `Page ${index + 1} of ${pages.length}` : String(index + 1), size = Math.min(footerType.fontSize, Math.max(6, margin.bottom / 3)), setting = advanced.page.pageNumber;
       const textWidth = footerFont.widthOfTextAtSize(text, size), x = setting.position === "custom" ? setting.x : setting.alignment === "left" ? margin.left : setting.alignment === "center" ? (width - textWidth) / 2 : width - margin.right - textWidth, y = setting.position === "custom" ? setting.y : 5;
       if (x + textWidth > width || y + size > height) throw new Error("The custom page-number position is outside the page.");

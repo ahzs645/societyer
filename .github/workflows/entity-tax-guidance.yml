@@ -92,6 +92,9 @@ jobs:
       - name: Organization GST account and filing reference on desktop and phone
         if: ${{ !cancelled() }}
         run: npm run test:gst-account-ui
+      - name: PDF export options on desktop and phone
+        if: ${{ !cancelled() }}
+        run: npm run test:invoice-preview-controls-ui
       - name: Existing catalog and customer flows
         if: ${{ !cancelled() }}
         run: npm run test:invoice-catalog-customers-ui

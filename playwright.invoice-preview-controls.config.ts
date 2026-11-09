@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests",
   testMatch: "invoice-preview-controls.spec.ts",
-  outputDir: "/workspace/scratch/invoice-preview-controls/browser-results",
+  outputDir: "test-results/invoice-preview-controls/browser-results",
   timeout: 240_000,
   expect: { timeout: 30_000 },
   workers: 1,

@@ -1,3 +1,5 @@
+import { InvoicePdfExportDialog } from "./InvoicePdfExportDialog";
+import type { InvoiceDocumentData } from "./InvoiceDocument";
 import { InvoicePdfPreview } from "./InvoicePdfPreview";
 import { InvoiceAdjustmentsPanel } from "./InvoiceAdjustmentsPanel";
 import { useRef, useState } from "react";
@@ -79,6 +81,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
   const [linkingKey, setLinkingKey] = useState<string | null>(null);
   const [receiptKey, setReceiptKey] = useState<string | null>(null);
   const [documentBusy, setDocumentBusy] = useState(false);
+  const [exportDocument, setExportDocument] = useState<InvoiceDocumentData | null>(null);
   const documentInFlight = useRef(false);
   const depositLabel = (id: string | undefined) => workspace.ledger.accounts.deposit.find((account) => account._id === id)?.label;
   const defaultDeposit = depositLabel(workspace.settings.depositAccountId) ?? workspace.ledger.defaults.deposit?.label ?? "Undeposited funds";
@@ -160,6 +163,18 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
     }
   };
 
+  const openPdfOptions = async () => {
+    if (documentInFlight.current || !canExport) return;
+    documentInFlight.current = true;
+    setDocumentBusy(true);
+    try {
+      const document = await client.query(api.invoices.document, { id: invoice._id });
+      if (!document) throw new Error("The saved invoice could not be loaded.");
+      setExportDocument(document);
+    } catch (failure) { toast.error("Could not open PDF options", failure instanceof Error ? failure.message : undefined); }
+    finally { documentInFlight.current = false; setDocumentBusy(false); }
+  };
+
   const doReturnToDraft = async () => {
     if (documentInFlight.current || !canWrite) return;
     documentInFlight.current = true;
@@ -220,6 +235,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
   const moreItems = [
     { id: "preview", label: showPreview ? "Hide preview" : "Preview invoice", icon: <Eye size={14} />, onSelect: () => setShowPreview((v) => !v) },
     { id: "download-pdf", label: invoice.lifecycle === "draft" ? "Download draft PDF" : "Download PDF", icon: <Download size={14} />, disabled: documentBusy || !canExport, onSelect: () => void downloadPdf() },
+    { id: "pdf-options", label: "PDF export options", icon: <Download size={14} />, disabled: documentBusy || !canExport, onSelect: () => void openPdfOptions() },
     { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: documentBusy || !canExport, onSelect: () => window.print() },
     ...(invoice.lifecycle === "draft" ? [{ id: "finalize", label: "Finalize without downloading", icon: <FileCheck2 size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void finalize(false) }] : []),
     ...(!invoiceDraftReopenBlocker(invoice) ? [{ id: "return-to-draft", label: "Return to draft", icon: <Pencil size={14} />, disabled: documentBusy || !canWrite, onSelect: () => void doReturnToDraft() }] : []),
@@ -277,6 +293,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
           </button>
         )}
         {invoice.lifecycle !== "draft" && <button type="button" className="btn btn--sm" disabled={documentBusy || !canExport} onClick={() => void downloadPdf()}><Download size={14} aria-hidden="true" />Download PDF</button>}
+        <button type="button" className="btn btn--sm" disabled={documentBusy || !canExport} onClick={() => void openPdfOptions()}>PDF options</button>
         {(open || invoice.lifecycle === "draft") && invoice.balanceCents > 0 && (
           <button type="button" className={`btn btn--sm${invoice.lifecycle === "draft" ? "" : " btn--accent"}`} aria-label="Record payment" disabled={documentBusy || !canWrite} aria-expanded={paying} onClick={() => setPaying((v) => !v)}>
             <Wallet size={14} aria-hidden="true" /> <span className="invoice-drawer__action-wide">Record payment</span><span className="invoice-drawer__action-short">Payment</span>
@@ -438,6 +455,7 @@ export function InvoiceDetailDrawer({ invoice, workspace, logoUrl, canWrite, can
           </div>
         </section>
       )}
+      {exportDocument && <InvoicePdfExportDialog invoice={exportDocument} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} onClose={() => setExportDocument(null)} />}
       <InvoicePrintPortal invoice={invoice} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
       {receiptKey && receipt && <BillingDocumentPreview title={`Receipt ${invoice.number} · ${invoice.payments.find((payment) => payment.key === receiptKey)?.date}`} document={receipt} organization={organization} downloadLabel="Download receipt PDF" canExport={canExport} onClose={() => setReceiptKey(null)} />}
       {receiptKey && receiptError && <Modal open title="Receipt unavailable" onClose={() => setReceiptKey(null)} footer={<button className="btn" onClick={() => setReceiptKey(null)}>Close</button>}><p className="field__error" role="alert">{receiptError}</p></Modal>}

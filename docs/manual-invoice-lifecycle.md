@@ -34,6 +34,41 @@ Bulk **Finalize drafts** prepares selected drafts. Bulk **Record external sendin
 
 ## Document integrity
 
+### PDF export choices
+
+**PDF options** on the invoice panel, or **More invoice actions → PDF export
+options** in the builder, opens an exact PDF preview. Receipt and other billing
+document previews offer the same options. Ordinary **Download PDF** and
+**Finalize & download** continue to use the saved template.
+
+Choose **Saved template**, **Simplified**, or adjust individual controls:
+
+- Quantity, rate and tax columns each support **Use saved template**,
+  **Automatic**, **Show** and **Hide**.
+- Automatic quantity/rate display omits those columns only when every line is
+  quantity one, has no unit and the amount column is visible. Hourly, unit-based
+  and multiple-quantity work keeps those details. Automatic tax display keeps
+  mixed rates/treatments, mixed tax-inclusive/exclusive lines and pending tax
+  reviews visible.
+- Page numbering can follow the template, appear only on multi-page PDFs,
+  appear on every page, or be off. The multi-page choice counts the actual
+  final PDF, including appended attachments.
+- Tax treatment notes and the repeated invoice currency in EFT instructions
+  are separate choices. Hiding the latter removes only an exact `Currency: CAD`
+  (or matching invoice currency) line from an EFT method. Instructions for a
+  different currency and other payment-method text remain intact.
+
+The **Simplified** preset selects automatic columns, multi-page-only numbering,
+and hides tax treatment notes and repeated EFT currency. GST/PST amounts and
+required seller registrations retain their existing visibility rules. The
+tax-inclusive caption reads **Amounts include tax** when no rate is shown.
+
+**Download selected PDF** exports the same settings as the preview. Choices last
+only while the dialog is open; they do not alter stored invoice data, its saved
+template, the journal, tax decisions, delivery status or receiving instructions.
+Close the dialog to return to the original document. Previous-version downloads
+continue to use their archived template without these overrides.
+
 ### Correcting a finalization that was never sent
 
 For a standalone manual invoice finalized internally, **More actions → Return to
@@ -98,6 +133,8 @@ Focused checks:
 
 ```sh
 npm run test:invoice-lifecycle
+npm run test:invoice-pdf-export
+npm run test:invoice-preview-controls-ui
 npm run test:gst-account
 npm run test:invoices
 npm run test:tax-guidance

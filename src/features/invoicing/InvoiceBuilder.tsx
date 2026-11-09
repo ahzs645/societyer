@@ -1,3 +1,5 @@
+import { InvoicePdfExportDialog } from "./InvoicePdfExportDialog";
+import type { InvoiceDocumentData } from "./InvoiceDocument";
 import { defaultInvoicePayments, type InvoiceReceivingMethod } from "../../../shared/invoicePaymentMethods";
 import { InvoicePaymentMethodsSelector } from "./InvoicePaymentMethodsSelector";
 import { InvoiceSettingsDrawer } from "./InvoiceSettingsDrawer";
@@ -174,6 +176,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [exportDocument, setExportDocument] = useState<InvoiceDocumentData | null>(null);
   const finalizationInFlight = useRef(false);
   const savedId = useRef<string | null>(invoice?._id ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -438,12 +441,13 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
       }
     : undefined;
 
-  const downloadPdf = async () => {
+  const downloadPdf = async (withOptions = false) => {
     if (!canExport) return;
     setBusy(true);
     try {
       const document = invoice && documentLocked ? await client.query(api.invoices.document, { id: invoice._id }) : previewData;
       if (!document) throw new Error("The saved invoice could not be loaded.");
+      if (withOptions) { setExportDocument(document); return; }
       const { downloadInvoicePdf } = await import("./invoicePdf");
       await downloadInvoicePdf(document, organization, workspace.settings.paymentInstructions);
     }
@@ -485,6 +489,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
                 id: "main",
                 items: [
                   { id: "download-pdf", label: !invoice || invoice.lifecycle === "draft" ? "Download draft PDF" : "Download PDF", icon: <Download size={14} />, disabled: working || !canExport, onSelect: () => void downloadPdf() },
+                  { id: "pdf-options", label: "PDF export options", icon: <Download size={14} />, disabled: working || !canExport, onSelect: () => void downloadPdf(true) },
                   { id: "print", label: "Print / Save as PDF", icon: <Printer size={14} />, disabled: working || !canExport, onSelect: () => window.print() },
                   ...(!readOnly && (!invoice || invoice.lifecycle === "draft")
                     ? [{ id: "finalize", label: "Finalize without downloading", icon: <FileCheck2 size={14} />, disabled: working, onSelect: () => void finalizeInvoice(false) }]
@@ -706,6 +711,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
           <div className="invoice-builder__preview-head">
             <span>PDF preview</span>
             <button type="button" className="btn btn--ghost btn--sm" disabled={busy || !canExport} onClick={() => void downloadPdf()}><Download size={14} aria-hidden="true" /> Download PDF</button>
+            <button type="button" className="btn btn--ghost btn--sm" disabled={busy || !canExport} onClick={() => void downloadPdf(true)}>PDF options</button>
             <button type="button" className="btn btn--ghost btn--sm" disabled={!canExport} onClick={() => window.print()}>
               <Printer size={14} aria-hidden="true" /> Print / Save as PDF
             </button>
@@ -715,6 +721,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
           </div>
         </aside>
       </div>
+      {exportDocument && <InvoicePdfExportDialog invoice={exportDocument} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} onClose={() => setExportDocument(null)} />}
       <InvoicePrintPortal invoice={previewData} organization={organization} paymentInstructions={workspace.settings.paymentInstructions} />
       {paymentMethodsOpen && <InvoiceSettingsDrawer open paymentsOnly settings={workspace.settings} societyId={societyId} canWrite={!readOnly} onClose={() => setPaymentMethodsOpen(false)} onPaymentMethodsSaved={({ methods, addedIds, instructions }) => {
         const retained = draft.paymentMethods.flatMap((method) => {

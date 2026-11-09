@@ -1,3 +1,4 @@
+import { invoicePdfExportView, type InvoicePdfExportOptions } from "./invoicePdfExportOptions";
 import { invoicePaymentText, type InvoiceReceivingMethod } from "../../../shared/invoicePaymentMethods";
 import { invoiceBrandLogo } from "../../../shared/invoiceBranding";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
@@ -56,15 +57,17 @@ export type InvoiceDocumentProps = {
   invoice: InvoiceDocumentData;
   organization: InvoiceOrganization & { logoUrl?: string | null };
   paymentInstructions?: string;
+  exportOptions?: InvoicePdfExportOptions;
 };
 
 /** The flowing HTML preview shares its normalized data, settings and blocks with the PDF. */
-export function InvoiceDocument({ invoice, organization, paymentInstructions }: InvoiceDocumentProps) {
+export function InvoiceDocument({ invoice, organization, paymentInstructions, exportOptions }: InvoiceDocumentProps) {
+  invoice = invoicePdfExportView(invoice, exportOptions);
   organization = invoiceDocumentOrganization(invoice, organization);
   const data = documentPresentation(invoice), { config, design, advanced: a, extras, kind, title, columns, cellValue, summary, metadata, page } = data;
   const registrationLines = registrationDisplayLines(invoiceIssuerTaxRegistrations(invoice, organization));
   const showRegistrations = design.fields.taxRegistration || guidedTaxIdsToCollect(invoice.lines).length > 0;
-  const taxDisclosures = invoiceTaxDisclosureLines(invoice.lines);
+  const taxDisclosures = exportOptions?.taxTreatmentNotes === false ? [] : invoiceTaxDisclosureLines(invoice.lines);
   paymentInstructions = invoicePaymentText(invoice, paymentInstructions);
   const brand = config.brand;
   const logoBrand = config.customLogo ? undefined : brand;
@@ -123,7 +126,7 @@ export function InvoiceDocument({ invoice, organization, paymentInstructions }: 
     {showRegistrations && registrationLines.map(line => <div key={line} className="document-preview__tax" style={typography("body")}>{line}</div>)}
     {taxDisclosures.length > 0 && <section aria-label="Tax treatment" className="document-preview__tax" style={typography("body")}><strong>Tax treatment</strong>{taxDisclosures.map((line, index) => <p key={index}>{line}</p>)}</section>}
     {data.paymentStubDetails && <section className="document-preview__stub" style={element("payment")}><strong>{a.labels.paymentStub}</strong><p>{invoice.number} · {invoice.billToName}</p><p>{data.paymentStubDetails.totalLabel}: {data.paymentStubDetails.total}{data.paymentStubDetails.showBalance && <> · {data.paymentStubDetails.balanceLabel}: {data.paymentStubDetails.balance}</>}</p><p>{a.paymentStub.instructions}</p></section>}
-    <footer className="document-preview__footer" style={{ ...typography("footer"), backgroundColor: a.backgrounds.footer.color }}><div aria-hidden="true" className="document-preview__artwork" style={{ ...documentBackgroundCss(a.backgrounds.footer), opacity: a.backgrounds.footer.opacity }} />{design.footer.text && <p>{design.footer.text}</p>}{a.rich.footerHtml && <DocumentRichContent html={a.rich.footerHtml} />}{design.footer.pageNumbers && <span style={{ textAlign: a.page.pageNumber.alignment }}>{design.footer.pageNumberFormat === "page_of_total" ? "Page 1" : "1"}</span>}</footer>
+    <footer className="document-preview__footer" style={{ ...typography("footer"), backgroundColor: a.backgrounds.footer.color }}><div aria-hidden="true" className="document-preview__artwork" style={{ ...documentBackgroundCss(a.backgrounds.footer), opacity: a.backgrounds.footer.opacity }} />{design.footer.text && <p>{design.footer.text}</p>}{a.rich.footerHtml && <DocumentRichContent html={a.rich.footerHtml} />}{design.footer.pageNumbers && exportOptions?.pageNumbers !== "multiple_pages" && <span style={{ textAlign: a.page.pageNumber.alignment }}>{design.footer.pageNumberFormat === "page_of_total" ? "Page 1" : "1"}</span>}</footer>
     {design.fields.organization && a.addresses.organization.placement === "absolute" && address("organization")}{a.addresses.billing.placement === "absolute" && address("billing")}{design.fields.shipTo && a.addresses.shipping.placement === "absolute" && address("shipping")}{a.signature.placement === "absolute" && signature()}{a.receiverSignature.placement === "absolute" && signature(true)}
     {a.annexures.enabled && (extras.annexures || []).map((annex, index) => <section className="document-preview__appendix" key={`annex-${index}`}><h2>{annex.title}</h2><table className="document-preview__table"><thead><tr>{annex.columns.map((column, i) => <th key={i}>{column}</th>)}</tr></thead><tbody>{annex.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></section>)}
     {a.annexures.enabled && data.inventoryRows.length > 0 && <section className="document-preview__appendix"><h2>{a.annexures.title}</h2><table className="document-preview__table"><thead><tr><th>{design.labels.item}</th><th>{design.labels.sku}</th><th>Batch</th><th>Serial numbers</th></tr></thead><tbody>{data.inventoryRows.map((row, i) => <tr key={i}><td>{row.item}</td><td>{row.sku}</td><td>{row.batch}</td><td>{row.serials}</td></tr>)}</tbody></table></section>}

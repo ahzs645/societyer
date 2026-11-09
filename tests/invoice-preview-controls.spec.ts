@@ -3,7 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-const artifacts = "/workspace/scratch/invoice-preview-controls";
+const artifacts = "test-results/invoice-preview-controls";
 const managerLabel = "Manage payment methods";
 const paymentInfoLabel = "About invoice payment methods";
 
@@ -291,4 +291,47 @@ test("actual PDF pages retain export geometry, navigation and zoom on desktop an
   await expectPageGeometry(page, pdf);
   await detail.getByRole("region", { name: "Invoice preview", exact: true }).screenshot({ path: `${artifacts}/${info.project.name}-detail-actual-pdf-preview.png`, animations: "disabled" });
   expect(errors).toEqual([]);
+});
+
+test("PDF export offers template, simplified and independent options without changing the invoice", async ({ page, hasTouch }) => {
+  const form = await invoiceBuilder(page, hasTouch, "PDF options customer");
+  await activate(form.getByLabel("Tax for line 1", { exact: true }), hasTouch);
+  await activate(page.getByRole("option", { name: "GST 5%", exact: true }), hasTouch);
+  if (hasTouch) await activate(page.getByRole("tab", { name: "Preview", exact: true }), true);
+  await activate(page.getByRole("complementary", { name: "Invoice preview" }).getByRole("button", { name: "PDF options", exact: true }), hasTouch);
+  const dialog = page.getByRole("dialog", { name: /PDF export/ });
+  await expect(dialog).toBeVisible();
+  const layer = dialog.locator(".textLayer");
+  await expect(layer.getByText("Quantity", { exact: true })).toBeVisible();
+  await activate(dialog.getByLabel("PDF preset", { exact: true }), hasTouch);
+  await activate(page.getByRole("option", { name: "Simplified", exact: true }), hasTouch);
+  await expect(layer.getByText("Quantity", { exact: true })).toHaveCount(0);
+  await expect(layer.getByText("Rate (CAD)", { exact: true })).toHaveCount(0);
+  await expect(layer.getByText("Tax", { exact: true })).toHaveCount(0);
+  await expect(layer.getByText("Tax: GST 5%", { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel("Show tax treatment notes", { exact: true })).not.toBeChecked();
+  await expect(dialog.getByLabel("Repeat invoice currency in EFT instructions", { exact: true })).not.toBeChecked();
+  await activate(dialog.getByLabel("Quantity column", { exact: true }), hasTouch);
+  await activate(page.getByRole("option", { name: "Show", exact: true }), hasTouch);
+  await expect(layer.getByText("Quantity", { exact: true })).toBeVisible();
+  await activate(dialog.getByLabel("PDF preset", { exact: true }), hasTouch);
+  await activate(page.getByRole("option", { name: "Simplified", exact: true }), hasTouch);
+  await expect(layer.getByText("Quantity", { exact: true })).toHaveCount(0);
+  const downloaded = page.waitForEvent("download");
+  await activate(dialog.getByRole("button", { name: "Download selected PDF", exact: true }), hasTouch);
+  const download = await downloaded;
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const pdf = await getDocument({ data: new Uint8Array(await readFile(path!)), useSystemFonts: true, disableFontFace: true, verbosity: 0 }).promise;
+  expect(pdf.numPages).toBe(1);
+  const text = (await (await pdf.getPage(1)).getTextContent()).items.map((item: any) => item.str ?? "").join(" ");
+  expect(text).toContain("Preserved unsaved invoice service");
+  expect(text).toContain("Tax: GST 5%");
+  expect(text).not.toContain("Quantity");
+  expect(text).not.toContain("Rate (CAD)");
+  await pdf.destroy();
+  await activate(dialog.locator(".modal__foot").getByRole("button", { name: "Close", exact: true }), hasTouch);
+  await expect(dialog).not.toBeVisible();
+  if (hasTouch) await activate(page.getByRole("tab", { name: "Edit", exact: true }), true);
+  await expect(form.locator(".line-editor__field--price input").first()).toHaveValue("145.50");
 });
