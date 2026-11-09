@@ -34,11 +34,25 @@ test("organization GST account can be saved once and referenced while filing", a
   await page.getByRole("option", { name: "GST/HST return", exact: true }).click();
   await expect(drawer.getByTestId("gst-account-reference")).toContainText("123456789RT0001");
   await expect(drawer.getByTestId("gst-account-reference")).toContainText("Current organization account");
-  await drawer.getByLabel("Period / label", { exact: true }).fill(`Synthetic GST ${testInfo.project.name}`);
+  const filingLabel = `Synthetic GST ${testInfo.project.name}`;
+  await drawer.getByLabel("Period / label", { exact: true }).fill(filingLabel);
   await drawer.getByRole("button", { name: "Save", exact: true }).click();
   await expect(drawer).not.toBeVisible();
-  const row = page.getByRole("row").filter({ hasText: `Synthetic GST ${testInfo.project.name}` });
-  await row.getByRole("button", { name: "Mark filed", exact: true }).click();
+  if (testInfo.project.name === "phone") {
+    // The phone card opens the same filing-attestation modal as the desktop action.
+    const card = page.getByRole("listitem").filter({ hasText: filingLabel });
+    await card.locator("button.record-phone-card").click();
+  } else {
+    const row = page.getByRole("row").filter({ hasText: filingLabel });
+    await expect(row).toBeVisible();
+    const markFiled = row.getByRole("button", { name: "Mark filed", exact: true });
+    if (await markFiled.isVisible()) {
+      await markFiled.click();
+    } else {
+      await row.getByRole("button", { name: /^Row actions for / }).click();
+      await page.getByRole("menuitem", { name: "Mark filed", exact: true }).click();
+    }
+  }
   const filingModal = page.getByRole("dialog", { name: "Mark filing as filed", exact: true });
   await expect(filingModal.getByTestId("gst-account-reference")).toContainText("123456789RT0001");
   await expect(filingModal.getByTestId("gst-account-reference")).toContainText("does not change or verify a submitted return");

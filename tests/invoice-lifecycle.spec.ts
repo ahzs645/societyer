@@ -27,7 +27,7 @@ test("finalize, download, send externally, record responses, and settle without 
   await expect(form).toBeVisible();
   const customer = `Manual client ${testInfo.project.name}`;
   await form.getByRole("combobox", { name: "Bill to", exact: true }).fill(customer);
-  await page.getByRole("option", { name: `Bill “${customer}” once`, exact: true }).click();
+  await page.getByRole("option", { name: `Bill “${customer}” once` }).click();
   await form.getByPlaceholder("What you're billing for", { exact: true }).first().fill("Synthetic consulting service");
   await form.locator(".line-editor__field--price input").first().fill("125.00");
 
@@ -102,6 +102,8 @@ test("finalize, download, send externally, record responses, and settle without 
   await drawer.getByRole("button", { name: "Record payment", exact: true }).click();
   const payment = drawer.getByRole("form", { name: /^Record a payment/ });
   await payment.getByLabel("Amount", { exact: true }).fill("25.00");
+  const unlinkPayment = payment.getByRole("button", { name: "Don't link", exact: true });
+  if (await unlinkPayment.isVisible()) await unlinkPayment.click();
   await payment.getByRole("button", { name: "Record $25.00", exact: true }).click();
   await expect(payment).not.toBeVisible();
   const partial = await invoiceDocument(page, id);
@@ -112,6 +114,7 @@ test("finalize, download, send externally, record responses, and settle without 
   await expect(workflow).toContainText("client@example.test");
   await drawer.getByRole("button", { name: "Record payment", exact: true }).click();
   await payment.getByLabel("Amount", { exact: true }).fill((partial.balanceCents / 100).toFixed(2));
+  if (await unlinkPayment.isVisible()) await unlinkPayment.click();
   await payment.getByRole("button", { name: /^Record \$/ }).click();
   await expect(payment).not.toBeVisible();
   expect((await invoiceDocument(page, id)).status).toBe("paid");
@@ -131,7 +134,7 @@ test("external finalization replaces unsaved edits with the saved invoice in the
   const item = form.getByPlaceholder("What you're billing for", { exact: true }).first();
   const price = form.locator(".line-editor__field--price input").first();
   await form.getByRole("combobox", { name: "Bill to", exact: true }).fill(customer);
-  await page.getByRole("option", { name: `Bill “${customer}” once`, exact: true }).click();
+  await page.getByRole("option", { name: `Bill “${customer}” once` }).click();
   await item.fill("Saved service before finalization");
   await price.fill("80.00");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();

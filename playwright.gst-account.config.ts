@@ -6,6 +6,7 @@ export default defineConfig({
   timeout: 180_000, expect: { timeout: 30_000 }, workers: 1, retries: 0,
   use: {
     baseURL: "http://127.0.0.1:4216", headless: true, launchOptions: chromiumLaunchOptions(),
+    actionTimeout: 30_000,
     screenshot: "only-on-failure", trace: "retain-on-failure",
   },
   projects: [

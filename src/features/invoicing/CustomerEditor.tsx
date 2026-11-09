@@ -64,6 +64,7 @@ function CustomerForm({ customer, societyId, canWrite, asModal, onClose, onSaved
   const form = (
     <div>
       {error && <p className="field__error" role="alert">{error}</p>}
+      {customer.oneOffName && <p className="muted">Save this customer for future invoices. Editable drafts can follow the customer record; finalized invoice details stay unchanged.</p>}
       <Field label="Name" required>
         <input className="input" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Riverside Farmers Market" />
       </Field>

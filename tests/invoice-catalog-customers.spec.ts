@@ -159,6 +159,7 @@ test("customers can be added, edited and renamed without rewriting what was issu
   await expect(form.getByLabel("Email", { exact: true })).toHaveValue("billing@acme.example");
 
   // Save a one-off as a customer while its invoice is still an editable draft.
+  // Draft-only recipients do not appear in billed-customer history, so use the bill-to picker.
   await page.goto("/app/invoices?builder=new");
   await form.getByRole("combobox", { name: "Bill to", exact: true }).fill(oneOff);
   await page.getByRole("option", { name: /once/ }).click();
@@ -166,13 +167,20 @@ test("customers can be added, edited and renamed without rewriting what was issu
   await form.locator(".line-editor__row").first().getByLabel("Price (CAD)", { exact: true }).fill("25.00");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page).toHaveURL(/builder=(?!new)[^&]+/);
+  const draftId = new URL(page.url()).searchParams.get("builder")!;
+  await expect(form.locator(".billto__kind")).toHaveText("One-off");
+  await form.getByRole("button", { name: `Change who to bill (currently ${oneOff})`, exact: true }).click();
+  await form.getByRole("combobox", { name: "Bill to", exact: true }).fill(oneOff);
+  await page.getByRole("option", { name: `Create customer “${oneOff}”` }).click();
+  await expect(form.locator(".billto__kind")).toHaveText("Customer");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(async () => page.evaluate(async (id) => {
+    const path = "/src/lib/localDataClient.ts";
+    const { localDataClient: client } = await import(path);
+    const invoice = await client.query("invoices:document", { id });
+    return { lifecycle: invoice.lifecycle, partyKind: invoice.partyKind, name: invoice.billToName, linked: Boolean(invoice.counterpartyId) };
+  }, draftId)).toEqual({ lifecycle: "draft", partyKind: "organization", name: oneOff, linked: true });
   await page.goto("/app/invoices?tab=customers");
-  await expect(row(oneOff)).toContainText("One-off");
-  await row(oneOff).getByRole("button", { name: `Edit ${oneOff}`, exact: true }).click();
-  drawer = page.getByRole("dialog");
-  await expect(drawer.getByRole("heading", { name: "Save as customer" })).toBeVisible();
-  await drawer.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(drawer).not.toBeVisible();
   await expect(row(oneOff)).toHaveCount(1);
   await expect(row(oneOff)).not.toContainText("One-off");
 
