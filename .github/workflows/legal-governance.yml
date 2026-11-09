@@ -53,6 +53,17 @@ jobs:
     # selects 26.04, where its Chromium dependency installer refuses to run.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # The entity sweep is CPU-bound (24 route shards on 4 workers, ~6 min on one
+    # runner). Two legs halve it; each leg sets up and verdicts its own workspaces.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: corporations
+            workspaces: bc-corp,cbca-corp,obca-corp,custom
+          - group: society-and-demos
+            workspaces: bc-society,bc-demo,cbca-demo,obca-demo
+    name: legal-governance-browser (${{ matrix.group }})
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,22 +88,23 @@ jobs:
         timeout-minutes: 30
         env:
           ENTITY_SWEEP_STRICT: "1"
+          ENTITY_SWEEP_WORKSPACES: ${{ matrix.workspaces }}
           PR_CRITICAL_ROUTES: ${{ github.event_name == 'pull_request' && steps.scope.outputs.full != 'true' }}
       - name: Corporation flow and governance copy
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.group == 'corporations' }}
         run: npx playwright test -c playwright.corporation.config.ts
         timeout-minutes: 15
       # PRs run these same desktop specs in interaction-audit / existing-browser.
       # Keep this coverage here for main pushes and standalone manual runs.
       - name: Legal record forms and tasks (desktop)
-        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && matrix.group == 'society-and-demos' }}
         run: npx playwright test -c playwright.interface.config.ts tests/interface-records.spec.ts tests/interface-tasks.spec.ts --project=desktop
         timeout-minutes: 15
       - name: Upload browser results
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: legal-governance-browser-results
+          name: legal-governance-browser-results-${{ matrix.group }}
           path: |
             tmp/entity-sweep
             tmp/entity-sweep-results
