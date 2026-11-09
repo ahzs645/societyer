@@ -1,0 +1,7 @@
+.invoice-pdf-export__layout { display: grid; grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.5fr); gap: 24px; margin-top: 16px; }
+.invoice-pdf-export__controls { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.invoice-pdf-export__controls fieldset { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
+.invoice-pdf-export__controls legend { padding: 0 4px; }
+.invoice-pdf-export__controls p { margin: 0; }
+.invoice-pdf-export__preview { min-width: 0; }
+@media (max-width: 720px) { .invoice-pdf-export__layout { grid-template-columns: minmax(0, 1fr); } }

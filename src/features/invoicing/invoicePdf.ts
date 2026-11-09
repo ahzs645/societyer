@@ -1,3 +1,4 @@
+import { invoicePdfExportView, type InvoicePdfExportOptions } from "./invoicePdfExportOptions";
 import openSansUrl from "../../assets/invoice-branding/OpenSans-Regular.ttf?url";
 import openSansBoldUrl from "../../assets/invoice-branding/OpenSans-Bold.ttf?url";
 import liberationSerifUrl from "../../assets/invoice-branding/LiberationSerif-Regular.ttf?url";
@@ -41,7 +42,7 @@ export async function loadDocumentFonts(config?: Partial<InvoiceTemplate>): Prom
 }
 /** No upload or server required: pdfcn → Forme pagination → vector PDF and real page numbers. */
 export async function buildInvoicePdf(props: InvoicePdfProps): Promise<Uint8Array> {
-  props = { ...props, organization: invoiceDocumentOrganization(props.invoice, props.organization) };
+  props = { ...props, invoice: invoicePdfExportView(props.invoice, props.exportOptions), organization: invoiceDocumentOrganization(props.invoice, props.organization) };
   await ensureDocumentPdfEngine();
   const fonts = props.fonts ?? await loadDocumentFonts(props.invoice.documentTemplate);
   const organization = props.invoice.documentTemplate?.customLogo || props.invoice.documentTemplate?.brand || props.invoice.documentTemplate?.showLogo === false ? props.organization : await resolveDocumentOrganizationLogo(props.organization);
@@ -51,10 +52,10 @@ export async function buildInvoicePdf(props: InvoicePdfProps): Promise<Uint8Arra
   const bytes = await appendDocumentAttachments(rendered.pdf, props.invoice);
   const data = documentPresentation(props.invoice);
   const { cleanInvoiceTemplate } = await import("../../../shared/invoiceCommerce");
-  return decorateDocumentPdf(bytes, { config: cleanInvoiceTemplate(props.invoice.documentTemplate), organizationName: organization.name, number: props.invoice.number, fonts, layout: rendered.layout, content: { invoice, organization }, paymentStub: data.paymentStubDetails ? { ...data.paymentStubDetails, height: documentPaymentStubHeight(data) } : undefined });
+  return decorateDocumentPdf(bytes, { config: cleanInvoiceTemplate(props.invoice.documentTemplate), pageNumbers: props.exportOptions?.pageNumbers, organizationName: organization.name, number: props.invoice.number, fonts, layout: rendered.layout, content: { invoice, organization }, paymentStub: data.paymentStubDetails ? { ...data.paymentStubDetails, height: documentPaymentStubHeight(data) } : undefined });
 }
-export async function downloadInvoicePdf(invoice: InvoicePdfProps["invoice"], organization: InvoicePdfProps["organization"], paymentInstructions?: string, filenameSuffix = "") {
-  const bytes = await buildInvoicePdf({ invoice, organization, paymentInstructions });
+export async function downloadInvoicePdf(invoice: InvoicePdfProps["invoice"], organization: InvoicePdfProps["organization"], paymentInstructions?: string, filenameSuffix = "", exportOptions?: InvoicePdfExportOptions) {
+  const bytes = await buildInvoicePdf({ invoice, organization, paymentInstructions, exportOptions });
   const filename = `${invoice.number.replace(/[^a-z0-9_-]/gi, "_") || "Document"}${filenameSuffix.replace(/[^a-z0-9_-]/gi, "_")}.pdf`;
   triggerBlobDownload(new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }), filename);
 }

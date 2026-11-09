@@ -53,8 +53,8 @@ export function documentPresentation(invoice: InvoiceDocumentData) {
   const money = (cents: number, currency = invoice.currency || "CAD") => new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(cents / 100);
   const baseMoney = invoice.money?.fx ? (cents: number) => money(convertInvoiceCents(cents, invoice.money!.fx!.rateMicros), invoice.money!.fx!.baseCurrency) : undefined;
   const taxModes = new Set(invoice.lines.map((line) => line.taxMode || invoice.money?.taxMode || "exclusive"));
-  const taxModeLabel = taxModes.has("inclusive") ? taxModes.size === 1 ? "Rates include tax" : "Tax treatment varies by line" : "";
   const columns = lineItemColumns(design, invoice.lines);
+  const taxModeLabel = taxModes.has("inclusive") ? taxModes.size === 1 ? columns.some(column => column.key === "rate") ? "Rates include tax" : "Amounts include tax" : "Tax treatment varies by line" : "";
   const cellValue = (key: DocumentColumnKey, line: InvoiceDocumentData["lines"][number], index: number): string => {
     switch (key) {
       case "number": return String(index + 1);

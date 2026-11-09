@@ -1,3 +1,4 @@
+import { invoicePdfExportView, type InvoicePdfExportOptions } from "./invoicePdfExportOptions";
 import { invoicePaymentText } from "../../../shared/invoicePaymentMethods";
 import svgpath from "svgpath";
 import { Fragment, type ReactNode } from "react";
@@ -19,7 +20,7 @@ import { DocumentAdvancedPdfBlocks } from "./DocumentAdvancedBlocks";
 import { DocumentArtworkPdf } from "./DocumentArtworkPdf";
 import { DocumentRichPdf } from "./DocumentRichContent";
 
-export type InvoicePdfProps = { invoice: InvoiceDocumentData; organization: InvoiceOrganization & { logoUrl?: string | null; logoAspectRatio?: number }; paymentInstructions?: string; fonts?: FontRegistration[] };
+export type InvoicePdfProps = { invoice: InvoiceDocumentData; organization: InvoiceOrganization & { logoUrl?: string | null; logoAspectRatio?: number }; paymentInstructions?: string; fonts?: FontRegistration[]; exportOptions?: InvoicePdfExportOptions };
 
 export function sizedBrandSvg(brand: NonNullable<InvoicePdfProps["invoice"]["documentTemplate"]>["brand"], variant: "primary" | "black" | "reverse" | undefined, width: number, height: number) {
   if (!brand) return "";
@@ -41,13 +42,13 @@ export function documentPaymentStubHeight(data: ReturnType<typeof documentPresen
   return 24 + (3 + lines) * size * 1.3;
 }
 /** Native Forme tables retain column widths and repeat their heading on every physical page. */
-function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }: InvoicePdfProps) {
+function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts, exportOptions }: InvoicePdfProps) {
   organization = { ...organization, ...invoiceDocumentOrganization(invoice, organization) };
   paymentInstructions = invoicePaymentText(invoice, paymentInstructions);
   const data = documentPresentation(invoice), { config, design, advanced: a, extras, kind, title, columns, cellValue, summary, metadata, page } = data;
   const registrationLines = registrationDisplayLines(invoiceIssuerTaxRegistrations(invoice, organization));
   const showRegistrations = design.fields.taxRegistration || guidedTaxIdsToCollect(invoice.lines).length > 0;
-  const taxDisclosures = invoiceTaxDisclosureLines(invoice.lines);
+  const taxDisclosures = exportOptions?.taxTreatmentNotes === false ? [] : invoiceTaxDisclosureLines(invoice.lines);
   const margin = { ...design.page.margins, bottom: design.page.margins.bottom + documentPaymentStubHeight(data) };
   const extraPageMargin = { ...design.page.margins, bottom: design.page.margins.bottom + (a.paymentStub.firstPageOnly ? 0 : documentPaymentStubHeight(data)) };
   const contentWidth = page.width - margin.left - margin.right;
@@ -123,6 +124,7 @@ function InvoicePdfContent({ invoice, organization, paymentInstructions, fonts }
   </Document>;
 }
 export function InvoicePdfDocument(props: InvoicePdfProps) {
+  props = { ...props, invoice: invoicePdfExportView(props.invoice, props.exportOptions) };
   const { config, design } = documentPresentation(props.invoice), family = documentPdfFontFamily(design.typography.body.fontFamily, props.fonts);
   const theme = { ...professionalTheme, colors: { ...professionalTheme.colors, primary: config.accentColor }, typography: { ...professionalTheme.typography, body: { ...professionalTheme.typography.body, fontFamily: family }, heading: { ...professionalTheme.typography.heading, fontFamily: family } } };
   return <PdfcnThemeProvider theme={theme}><InvoicePdfContent {...props} /></PdfcnThemeProvider>;

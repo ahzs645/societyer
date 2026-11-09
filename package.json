@@ -219,7 +219,7 @@
     "test:brandkit": "tsx scripts/check-brandkit-profiles.tsx",
     "test:workspace-branding": "node --import tsx scripts/check-workspace-branding-backend.ts && node --import tsx scripts/check-workspace-branding.tsx",
     "test:workspace-branding-ui": "playwright test --config playwright.workspace-branding.config.ts",
-    "test:invoices": "tsx scripts/check-invoices.ts && tsx scripts/check-invoice-ledger.ts && tsx scripts/check-invoice-commerce.ts && tsx scripts/check-invoice-pdf.tsx && tsx scripts/check-invoice-logo-fidelity.tsx && npm run test:invoice-lifecycle",
+    "test:invoices": "tsx scripts/check-invoices.ts && tsx scripts/check-invoice-ledger.ts && tsx scripts/check-invoice-commerce.ts && tsx scripts/check-invoice-pdf.tsx && npm run test:invoice-pdf-export && tsx scripts/check-invoice-logo-fidelity.tsx && npm run test:invoice-lifecycle",
     "test:invoice-lifecycle": "node --import tsx scripts/check-invoice-lifecycle.ts && node --import tsx scripts/check-invoice-lifecycle-documents.tsx && node --import tsx scripts/check-invoice-logo-retention.ts",
     "test:invoice-lifecycle-ui": "playwright test --config playwright.invoice-lifecycle.config.ts",
     "test:gst-account": "node --import tsx scripts/check-gst-account-reference.tsx",
@@ -486,7 +486,8 @@
     "test:organization-capabilities": "node --import tsx scripts/check-organization-capabilities.ts",
     "test:document-sources": "node --import tsx scripts/check-document-sources.ts && node --import tsx scripts/check-document-sources-backend.ts && node --import tsx scripts/check-document-sources-local.ts",
     "test:interface-external-documents": "playwright test -c playwright.external-documents.config.ts",
-    "test:interaction-audit:focused": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks"
+    "test:interaction-audit:focused": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks",
+    "test:invoice-pdf-export": "tsx scripts/check-invoice-pdf-export.tsx"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",
