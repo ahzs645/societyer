@@ -14,6 +14,8 @@ import { normalizeTaskChecklist, type TaskChecklistItem } from "../taskChecklist
 import { isInCameraSection, sectionTitleAt } from "../minutesPrivacy";
 import { tasksForReader } from "./minutesPrivacy";
 import { assertTaskEditBaseline, normalizedTaskPatch, type TaskClearableField, type TaskEditBaseline } from "../taskEditing";
+import { requirePermissionPortable } from "./permissions";
+import { exactDay, partialDate, requireEvidence } from "../evidenceReview";
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -284,9 +286,7 @@ export async function taskRemove(ctx: PortableMutationCtx, { id }: { id: string 
 /** A rolling source action reuses the canonical task, scoped to its register. */
 export async function observeAction(ctx: PortableMutationCtx, args: { societyId: string; registerKey: string; externalActionId: string; title: string; observation: any }) {
   await requireSocietyMembership(ctx, args.societyId);
-  const { requirePermissionPortable } = await import('./permissions');
   await requirePermissionPortable(ctx, args.societyId, 'tasks:write');
-  const { requireEvidence, partialDate, exactDay } = await import('../evidenceReview');
   const row = args.observation;
   requireEvidence(row);
   if (!row.id || !partialDate(row.observedDate) || !row.observedDate) throw new Error('A stable observation ID and source date are required.');
@@ -345,7 +345,6 @@ function untouchedHistorical(task: any) {
  */
 export async function consolidateHistoricalActions(ctx: PortableMutationCtx, args: { societyId: string; dryRun?: boolean; options?: ConsolidateOptions }) {
   await requireSocietyMembership(ctx, args.societyId);
-  const { requirePermissionPortable } = await import("./permissions");
   await requirePermissionPortable(ctx, args.societyId, "tasks:write");
   const options = { dedupe: true, unknownStatus: true, assignees: true, committees: true, ...(args.options ?? {}) };
   const dryRun = args.dryRun !== false;
@@ -427,7 +426,6 @@ export async function promoteHistoricalAction(ctx: PortableMutationCtx, args: { 
   const candidate = await ctx.db.get(args.id, "tasks");
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("tasks not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
-  const { requirePermissionPortable } = await import("./permissions");
   await requirePermissionPortable(ctx, candidate.societyId, "tasks:write");
   const task = await getOwned(ctx, "tasks", args.id, candidate.societyId);
   if (!isHistoricalSourceAction(task)) throw new Error("This task is already a current task.");

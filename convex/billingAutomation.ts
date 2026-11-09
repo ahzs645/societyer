@@ -5,6 +5,7 @@ import { toPortableQueryCtx, toPortableMutationCtx, convexPortableDb } from "./l
 import { makeCapabilities } from "../shared/portable/capabilities";
 import * as h from "../shared/functions/billingAutomation";
 import { buildConvexCapabilities } from "./providers/capabilities";
+import * as commerceReportsModule from "../shared/functions/commerceReports";
 const society = { societyId: v.id("societies") };
 const run = { ...society, id: v.id("billingAutomationRuns") };
 export const workspace = authorizedQuery("billingAutomation:workspace", query)({ args: { ...society, collection: v.optional(v.union(v.literal("schedules"), v.literal("runs"))), scheduleCursor: v.optional(v.union(v.string(), v.null())), runCursor: v.optional(v.union(v.string(), v.null())) }, returns: v.any(), handler: async (ctx, args) => h.workspacePortable(await toPortableQueryCtx(ctx), args) });
@@ -47,6 +48,6 @@ export const workerContext = internalQuery({ args: run, returns: v.any(), handle
 /** Source pages remain separately bounded, but execute as the schedule's current owner. */
 export const reportSourceInternal = internalQuery({ args: { ...run, sourceTable: v.string(), cursor: v.union(v.string(), v.null()), pageSize: v.number(), snapshotAtISO: v.optional(v.string()) }, returns: v.any(), handler: async (ctx, args) => {
   const row = await ctx.db.get(args.id); if (!row || row.societyId !== args.societyId) throw new Error("Delivery not found.");
-  const reports = await import("../shared/functions/commerceReports");
+  const reports = commerceReportsModule;
   return reports.sourcePagePortable(await serviceContext(ctx, row), args as any);
 } });
