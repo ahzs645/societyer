@@ -193,7 +193,7 @@ function RecordTableCardItem({
   renderRowActions?: RecordTableCardActionsValue["renderRowActions"];
   rowMenuSections?: RecordTableCardActionsValue["rowMenuSections"];
 }) {
-  const { objectMetadata, onRecordClick } = useRecordTableContextOrThrow();
+  const { objectMetadata, onRecordClick, onRecordIntent } = useRecordTableContextOrThrow();
   const handle = useRecordTableStoreHandle();
   const recordId = String(record._id);
   const selecting = useRecordTableState((s) => selectable && s.mobileSelectionMode);
@@ -236,7 +236,7 @@ function RecordTableCardItem({
   ].filter(Boolean).join(" ");
 
   return (
-    <div className={className} role="listitem" {...position} {...longPress}>
+    <div className={className} role="listitem" {...position} {...longPress} onPointerEnter={() => onRecordIntent?.(recordId, record)} onFocusCapture={() => onRecordIntent?.(recordId, record)}>
       <RecordTableCardActionsContext.Provider value={actions}>
         {renderCard(record, helpers)}
       </RecordTableCardActionsContext.Provider>

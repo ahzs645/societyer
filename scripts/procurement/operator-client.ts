@@ -8,6 +8,7 @@ import { jsonToConvex, type Value } from "convex/values";
 
 const alternateSettings = ["CONVEX_DEPLOY_KEY", "CONVEX_DEPLOYMENT_TOKEN", "CONVEX_OVERRIDE_ACCESS_TOKEN", "CONVEX_PROVISION_HOST", "CONVEX_SELF_HOSTED_URL", "CONVEX_SELF_HOSTED_ADMIN_KEY"];
 const functions = new Set([
+  "procurementCatalog:recordPublication", "procurementCatalogOperator:page", "procurementCatalogOperator:verifyParity", "procurementCatalogOperator:publicationPolicy",
   "procurementAnalytics:seed",
   "procurementImport:state", "procurementImport:beginJob", "procurementImport:jobProgress",
   "procurementImport:beginTaxonomy", "procurementImport:countPage", "procurementImport:activate", "procurementImport:commit",
@@ -22,7 +23,10 @@ export type OperatorOptions = {
 };
 
 /**
- * Mirrors Convex 1.42.1 CLI handleDeploymentName + runFunctionAndLog.
+ * Mirrors Convex 1.42.1 and 1.49.0 CLI handleDeploymentName + runFunctionAndLog.
+ * Reviewed 1.49.0: same deployment-name authorization body, CLI login file,
+ * setAdminAuth and /api/function encoded-value contract. Neither version uses
+ * an acting-as identity here. Keep the exact-version gate for future upgrades.
  * The CLI source imports optional build dependencies absent from installations,
  * so this narrow fallback pins its authorization contract and refuses alternate
  * auth/host modes rather than silently changing the CLI's precedence rules.
@@ -30,7 +34,7 @@ export type OperatorOptions = {
 export async function createPersistentOperator(deployment: string, options: OperatorOptions = {}) {
   const require = createRequire(import.meta.url);
   const version = JSON.parse(readFileSync(require.resolve("convex/package.json"), "utf8")).version;
-  if (version !== "1.42.1") throw new Error("Persistent operator requires reviewed Convex CLI version 1.42.1.");
+  if (!["1.42.1", "1.49.0"].includes(version)) throw new Error("Persistent operator requires reviewed Convex CLI version 1.42.1 or 1.49.0.");
   if (!/^[a-z][a-z0-9-]*-[0-9]+$/.test(deployment)) throw new Error("Persistent operator requires an explicit cloud deployment name.");
   const cwd = options.cwd ?? process.cwd(), environment = options.environment ?? process.env;
   const readText = options.readText ?? ((path: string) => existsSync(path) ? readFileSync(path, "utf8") : undefined);

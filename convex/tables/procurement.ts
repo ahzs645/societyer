@@ -69,6 +69,13 @@ export const procurementPublicationFields = {
   coverage: v.optional(v.object({ complete: v.boolean(), sources: v.array(v.object({ source: v.string(), complete: v.boolean(), windowStart: v.optional(v.string()), windowEnd: v.optional(v.string()), collectedAt: v.optional(v.string()), error: v.optional(v.string()) })) })),
 };
 export const procurementTables = {
+  // Serving receipts and qualification evidence, never another copy of catalog rows.
+  procurementServicePublications: defineTable({
+    societyId: v.id("societies"), folder: v.string(), publicationId: v.string(), generation: v.string(), inventoryHash: v.string(),
+    receiptJson: v.string(), publishedAtMs: v.number(), activatedAt: v.number(),
+    parityVerifiedAt: v.optional(v.number()), parityReportHash: v.optional(v.string()),
+  }).index("by_identity", ["societyId", "folder", "publicationId"]).index("by_latest", ["societyId", "folder", "publishedAtMs", "publicationId"]),
+  procurementServiceRollouts: defineTable({ societyId: v.id("societies"), folder: v.string(), cutoverAt: v.number(), fallbackUntil: v.number(), qualificationPublications: v.array(v.string()) }).index("by_society", ["societyId"]),
   procurementSourcePublications: defineTable({
     societyId: v.id("societies"), folder: v.string(), publicationId: v.string(), sourceSnapshotId: v.string(), generation: v.string(),
     publishedAt: v.string(), publishedAtMs: v.number(), collectedAt: v.optional(v.string()), complete: v.boolean(), coverageJson: v.optional(v.string()),

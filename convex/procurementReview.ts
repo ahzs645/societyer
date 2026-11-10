@@ -87,6 +87,7 @@ export const setFolder = authorizedMutation(
         ...defaultIntegrationSettings(),
         ...society.integrationSettings,
         procurementReviewFolder,
+        procurementCatalogSource: society.integrationSettings?.procurementReviewFolder === procurementReviewFolder ? society.integrationSettings?.procurementCatalogSource ?? "convex" : "convex",
       },
       updatedAt: Date.now(),
     });

@@ -584,6 +584,7 @@ export async function updateIntegrationSettingsPortable(
   // The procurement review folder is only changed by procurementReview:setFolder, which checks it against other workspaces.
   const society = await ctx.db.get(societyId, "societies");
   settings.procurementReviewFolder = society?.integrationSettings?.procurementReviewFolder ?? "";
+  settings.procurementCatalogSource = society?.integrationSettings?.procurementCatalogSource ?? "convex";
   await ctx.db.patch(societyId, { integrationSettings: settings, updatedAt: Date.now() });
   return societyId;
 }

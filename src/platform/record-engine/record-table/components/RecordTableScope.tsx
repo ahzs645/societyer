@@ -44,6 +44,7 @@ export function RecordTableScope({
   hydratedView,
   records,
   onRecordClick,
+  onRecordIntent,
   onUpdate,
   canEditRecord,
   onCreate,
@@ -62,6 +63,7 @@ export function RecordTableScope({
   hydratedView: HydratedView | null;
   records: any[];
   onRecordClick?: RecordTableContextValue["onRecordClick"];
+  onRecordIntent?: RecordTableContextValue["onRecordIntent"];
   onUpdate?: RecordTableContextValue["onUpdate"];
   canEditRecord?: RecordTableContextValue["canEditRecord"];
   onCreate?: RecordTableContextValue["onCreate"];
@@ -269,6 +271,7 @@ export function RecordTableScope({
       tableId,
       objectMetadata,
       onRecordClick: onRecordClick || recordPreview ? handleRecordClick : undefined,
+      onRecordIntent,
       onUpdate,
       canEditRecord,
       onCreate,
@@ -276,7 +279,7 @@ export function RecordTableScope({
       cellPreview: cellPreviews ? cellPreview : undefined,
       displayDefaults: { mode: defaultDisplayMode, pageSize: normalizedPageSize },
     }),
-    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, canEditRecord, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
+    [tableId, objectMetadata, onRecordClick, onRecordIntent, recordPreview, handleRecordClick, onUpdate, canEditRecord, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
   );
 
   const currentSidePanelRecord = activeSidePanelRecord

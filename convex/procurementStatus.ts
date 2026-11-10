@@ -27,7 +27,8 @@ export const reportSource = internalMutation({
     const prior=await ctx.db.query("procurementSourcePublications").withIndex("by_identity",q=>q.eq("societyId",args.societyId).eq("folder",args.folder).eq("publicationId",args.publicationId)).unique();
     if(prior&&(prior.sourceSnapshotId!==args.sourceSnapshotId||prior.generation!==generation||prior.publishedAtMs!==publishedAtMs||prior.collectedAt!==args.collectedAt||prior.complete!==args.complete||prior.coverageJson!==coverageJson))throw new Error("Source publication identity or immutable metadata changed.");
     const active=await ctx.db.query("procurementCatalogs").withIndex("by_society",q=>q.eq("societyId",args.societyId)).unique();
-    const serving=active?.folder===args.folder&&!active.syncRunId&&active.generation===generation&&(active.publicationId===args.publicationId||(!active.publicationId&&active.sourceSnapshotId===args.sourceSnapshotId));
+    const service = society?.integrationSettings?.procurementCatalogSource === "service" ? await ctx.db.query("procurementServicePublications").withIndex("by_identity", q => q.eq("societyId",args.societyId).eq("folder",args.folder).eq("publicationId",args.publicationId)).unique() : null;
+    const serving=!!(service?.generation===generation)||(active?.folder===args.folder&&!active.syncRunId&&active.generation===generation&&(active.publicationId===args.publicationId||(!active.publicationId&&active.sourceSnapshotId===args.sourceSnapshotId)));
     if(args.state==="ready"&&!serving&&prior?.state!=="ready")throw new Error("Cannot report a source publication ready before its catalog is serving.");
     const state=serving||prior?.state==="ready"?"ready" as const:args.state;
     const rank={published:0,failed:1,ready:2};
@@ -54,6 +55,16 @@ export const get = authorizedQuery("procurementStatus:get", query)({
     const empty = { lastSuccessful: null, source: null, run: null, recovery: null };
     if (!folder) return { state: "unconfigured" as const, ...empty };
     validateWorkspaceProcurementReviewFolder(societyId, folder);
+    if (society.integrationSettings?.procurementCatalogSource === "service") {
+      const latest = await ctx.db.query("procurementServicePublications").withIndex("by_latest", q => q.eq("societyId",societyId).eq("folder",folder)).order("desc").first();
+      const announced = await ctx.db.query("procurementSourcePublications").withIndex("by_latest", q => q.eq("societyId",societyId).eq("folder",folder)).order("desc").first();
+      const receipt = latest ? JSON.parse(latest.receiptJson) : null;
+      const pending = announced && (!latest || announced.publishedAtMs > latest.publishedAtMs);
+      return { state: pending ? announced.state === "failed" ? "failed" as const : "available" as const : receipt ? "ready" as const : "empty" as const,
+        lastSuccessful: receipt ? { generation: receipt.generation, publishedAt: receipt.publishedAt, collectedAt: receipt.collectedAt ?? null, activatedAt: latest!.activatedAt, counts: receipt.counts } : null,
+        source: announced ? { generation: announced.generation, publishedAt: announced.publishedAt, collectedAt: announced.collectedAt ?? null, complete: announced.complete, phase: pending ? announced.phase : "ready", error: pending ? announced.error ?? null : null, heartbeatAt: announced.heartbeatAt } : null,
+        run: null, recovery: pending ? "The last activated service catalog remains readable. Retry this exact publication using the catalog publisher." : null };
+    }
     const catalog = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", societyId)).unique();
     const active = catalog?.folder === folder ? catalog : null;
     const latestJob = await ctx.db.query("procurementImportJobs").withIndex("by_society_folder", q => q.eq("societyId", societyId).eq("folder",folder)).order("desc").first();

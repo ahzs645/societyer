@@ -27,6 +27,8 @@ export type RecordTableContextValue = {
     record: any,
     options: RecordTableOpenOptions,
   ) => void;
+  /** Optional preparation when a reader hovers or focuses a record. */
+  onRecordIntent?: (recordId: string, record: any) => void;
   /** Fires when a cell is edited + submitted. Receives { recordId, fieldName, value }. */
   onUpdate?: (args: { recordId: string; fieldName: string; value: unknown }) => void | Promise<void>;
   /** Hide editing affordances for derived/locked records; omitted preserves normal editing. */

@@ -10,4 +10,5 @@ export const integrationSettingsValidator = v.object({
   custodianContact: v.string(), offboardingPlan: v.string(),
   // Optional so workspaces saved before procurement review stay valid.
   procurementReviewFolder: v.optional(v.string()),
+  procurementCatalogSource: v.optional(v.union(v.literal("convex"), v.literal("service"))),
 });

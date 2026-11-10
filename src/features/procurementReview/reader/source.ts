@@ -15,7 +15,7 @@ import type { AnalysisRequest, AnalysisState } from "../../../../shared/procurem
 
 export type RecordSummary = { recordKey: string; kind: string; title: string; organization: string; date: string; status: string; dateText?: string };
 export type DocumentPage = { page: StoredProcurementDocument[]; isDone: boolean; continueCursor: string };
-export type ReaderCatalog = { generation: string; publishedAt: string; counts: Record<string, number> };
+export type ReaderCatalog = { generation: string; publishedAt: string; counts: Record<string, number>; publicationId?: string };
 
 /**
  * One record as the list, the buyer pages and the analytics see it. A kind's
@@ -44,7 +44,9 @@ export type ReaderSource = {
   useList(kind: string): RecordList | undefined;
   /** Every published review row in the catalog (bounded; `truncated` past the bound); for the insights. Loaded once, on first use. */
   useReviews(): { rows: CatalogReviewRow[]; truncated: boolean } | undefined;
-  useRecord(recordKey: string): { summary: RecordSummary; dataJson: string } | null | undefined;
+  useRecord(recordKey: string): { summary: RecordSummary; dataJson: string; removed?: boolean } | null | undefined;
+  prefetchRecord?: (recordKey: string) => void;
+  searchText?: (query: string, kind: string, signal?: AbortSignal) => Promise<{ matches: { recordKey: string; title: string; snippet: string }[]; truncated: boolean }>;
   useDocuments(recordKey: string, cursor: string | null): DocumentPage | undefined;
   /**
    * The list's paperclip tooltip names, prepared on the server (a few names

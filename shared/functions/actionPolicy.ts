@@ -150,6 +150,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   const [domain, action] = name.split(":");
   if (domain === "seed" || domain.endsWith("Backfill") || domain === "seedRecordTableMetadata") return null;
   if (domain === "microsoftMeetings" || domain === "microsoftMeetingsActions") return "settings:write";
+  if (name === "procurementCatalog:setSource") return "settings:write";
+  if (domain === "procurementCatalog" || domain === "procurementCatalogActions") return "documents:read";
   const resource = RESOURCES[domain];
   if (!resource) throw new Error(`Unclassified application action: ${name}.`);
   // Raw meeting sources are working material for meeting editors, including reads.

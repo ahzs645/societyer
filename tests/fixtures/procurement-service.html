@@ -1,0 +1,57 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Procurement service fixture</title></head><body><div id="root"></div><script type="module">
+// The shared table reads the signed-in user; the no-login demo runtime (chosen by a /demo path) provides one without a server.
+history.replaceState(null, '', `/demo/procurement-browse${location.search}`);
+const React = (await import('react')).default;
+const { createRoot } = await import('react-dom/client');
+const { BrowserRouter } = await import('react-router-dom');
+await import('/src/i18n');
+await import('/src/theme/palette.css');
+await import('/src/theme/tokens.css');
+await import('/src/styles/index.scss');
+const { AuthProvider } = await import('/src/auth/AuthProvider');
+const { ConvexProvider } = await import('convex/react');
+const { localDataClient } = await import('/src/lib/localDataClient');
+const { ToastProvider } = await import('/src/components/Toast');
+const { ConfirmProvider, PromptProvider } = await import('/src/components/Modal');
+const { useSociety } = await import('/src/hooks/useSociety');
+const h = React.createElement;
+// The hosted page renders its reader once the workspace has loaded; so does this one.
+function WorkspaceReady({ children }) { return useSociety() ? children : null; }
+const { CatalogBrowser } = await import('/src/features/procurementReview/reader/CatalogBrowser');
+const { ReaderSourceContext } = await import('/src/features/procurementReview/reader/source');
+// Synthetic HTTP responses exercise the actual service reader with all 21,877 awards.
+const { createHttpReaderSource, useCatalogAccess } = await import('/src/features/procurementReview/reader/httpSource');
+const { ProcurementReader } = await import('/src/features/procurementReview/reader/ProcurementReader');
+const { getFunctionName } = await import('convex/server');
+const { buildAnalysis } = await import('/shared/procurementAnalytics');
+const TOTAL = 21877;
+const awards = Array.from({length:TOTAL},(_,i)=>({recordKey:`award:${String(i).padStart(5,'0')}`,kind:'award',title:`Synthetic award ${i}`,organization:'Example municipality',issuedFor:'',status:'Awarded',date:'2026-11-01',dateText:'',reference:'',documents:i===0?12:0,listedDocuments:i===0?12:0,supplier:`Supplier ${i%50}`,value:1000+i,currency:'CAD',procurementType:'Services'}));
+const closingAt = new URLSearchParams(location.search).has('deadlineSoon') ? new Date(Date.now()+5000).toISOString() : '2027-01-01T20:00:00Z';
+const opportunity = {...awards[0],recordKey:'opportunity:roads',kind:'opportunity',title:'Fictional road project',status:'Open',date:'2027-01-01',analyticsJson:JSON.stringify({closingAt,sourceId:'bcbid'})};
+const catalog = {publicationId:'synthetic',generation:'synthetic-reader-v2',publishedAt:new Date().toISOString(),counts:{opportunity:1,award:TOTAL}};
+window.__catalogRequests=[];
+window.__analysisRequests=[];
+const nativeFetch=window.fetch;
+window.fetch=async function(url,init){
+  // Keep the browser receiver requirement: an arrow mock hid a native fetch
+  // Illegal invocation when the client stored fetch as an instance method.
+  if(this!==window) throw new TypeError('Illegal invocation: fetch requires the browser receiver');
+  if(!String(url).startsWith('https://catalog.fixture.test/')) return nativeFetch.call(window,url,init);
+  window.__catalogRequests.push(String(url));
+  const path=new URL(String(url)).pathname;
+  if(path.endsWith('/list/opportunity.json')) return Response.json([opportunity]);
+  if(path.endsWith('/list/award.json')) return Response.json(awards);
+  if(path.endsWith('/notice')) { const key=new URL(String(url)).searchParams.get('key'), row=key?.startsWith('award:')?awards[Number(key.split(':')[1])]:opportunity;return Response.json({summary:row,dataJson:JSON.stringify({description:'Underground zebra conduits'}),removed:false,documents:Array.from({length:12},(_,i)=>({documentKey:'doc-'+i,name:'Addendum '+(i+1)+'.pdf',mediaType:'application/pdf',sha256:'a'.repeat(64),bytes:0,parts:0,available:false}))}); }
+  if(path.endsWith('/review')||path.endsWith('/reviews'))return Response.json({rows:[],truncated:false});
+  if(path.endsWith('/search'))return Response.json({matches:[{recordKey:'award:00000',title:'Synthetic award 0',snippet:'Underground zebra conduits'}],truncated:false});
+  if(path.endsWith('/analysis')){const value=JSON.parse(init.body);window.__analysisRequests.push(value);return Response.json({result:buildAnalysis(value.request.view==='opportunities'?[opportunity]:awards,[],value.request,value.asOf),asOf:value.asOf,computedAt:Date.now()});}
+  throw Error('Unexpected synthetic catalog path '+path);
+};
+const originalAction=localDataClient.action.bind(localDataClient);
+localDataClient.action=(reference,args)=>getFunctionName(reference)==='procurementCatalogActions:grant'?Promise.resolve({token:'synthetic-only',expiresAt:Date.now()+600000,baseUrl:'https://catalog.fixture.test'}):originalAction(reference,args);
+function ServiceFixture(){const access=useCatalogAccess('synthetic-workspace','https://catalog.fixture.test');const source=React.useMemo(()=>createHttpReaderSource(access,catalog),[access]);return h(ProcurementReader,{source,header:h('h1',null,'Synthetic service catalog')});}
+createRoot(document.getElementById('root')).render(
+  h(React.StrictMode,null,h(ConvexProvider, { client: localDataClient }, h(AuthProvider, null, h(ToastProvider, null, h(ConfirmProvider, null, h(PromptProvider, null, h(BrowserRouter, null,
+    h(WorkspaceReady, null, h('main', {className:'page procurement-review',style:{height:'100dvh',overflowY:'auto'}}, h(ServiceFixture))))))))),
+));
+</script></body></html>
