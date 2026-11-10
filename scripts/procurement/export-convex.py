@@ -144,7 +144,9 @@ def project_record(row, society, generation, documents=()):
     if value is not None: item['value'] = value
     analytics_keys = ('sourceId','industryCategories','industryCategoryCodes','sourceRegionCodes','sourceRegionPath','opportunityTypeGroupCode','opportunityTypeGroup','historicalTypeReferenceId','gsinTermIds','detailNeedsRefresh','detailCaptureVersion','identityKey','identityStatus','identityVersion','sourceRevision','contractValueParsed','contractValueText','contractNumber','justification','buyerId','supplierId','canonicalBuyerId','canonicalSupplierId','buyerAliases','supplierAliases','buyerHierarchy','buyerParentId','mappingVersion','partyMappingVersion','mappingProvenance','parserVersion','observedAt','collectionRunId','taxonomyReleaseId','classificationCodes','commodityClassifications','urlExcluded','urlExclusionReason','closingAt','closingDate','awardDate','issueDate','publishedAt','postedDate','datePrecision','dateTimezone','timezone','buyerDisplayName','buyerGroup','buyerOrganization','buyerOrganizationId','buyerOriginal','buyerParticipants','buyerType','contractNumberMissing','justificationMissing','sourceAwardId')
     analytics = {key:data[key] for key in analytics_keys if data.get(key) is not None}
-    analytics.setdefault('sourceId', data.get('sourceId') or 'bc-bid')
+    if award:
+        for key in ('sourceId','industryCategories','industryCategoryCodes','sourceRegionCodes','sourceRegionPath','opportunityTypeGroupCode','opportunityTypeGroup','historicalTypeReferenceId','gsinTermIds','detailNeedsRefresh','detailCaptureVersion'): analytics.pop(key,None)
+    else: analytics.setdefault('sourceId', data.get('sourceId') or 'bc-bid')
     if analytics:
         encoded = json.dumps(analytics,separators=(',',':'),ensure_ascii=False,allow_nan=False)
         if len(encoded.encode()) > 100000: raise ValueError('Analytical provenance exceeds projection budget')
