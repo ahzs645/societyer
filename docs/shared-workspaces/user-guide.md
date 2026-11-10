@@ -25,7 +25,7 @@ Open the account card at the bottom of the sidebar. It has:
 
 - **My workspaces**: every workspace you can open, with your role.
 - **Sign-in methods**: how this login signs in, and the other logins linked to it.
-- **Link an existing account**: join a second login to this one.
+- **Add another account** (also in the workspace menu at the top of the sidebar): join a second login to this one.
 - **Account security**: two-factor authentication, when your deployment offers it.
 
 These pages work even when no workspace is open, for example on a lock screen.
@@ -88,10 +88,17 @@ the two (next section).
 **Linked logins** lists your other logins, with their workspaces and roles.
 Select **Unlink** to separate one (see [Unlinking](#unlinking)).
 
-## Link an existing account
+## Add another account
 
 Use this when you joined a second organization with a different login, for
-example a First Form password and a DDC Microsoft account.
+example a First Form password and a DDC Microsoft account. It works from either
+website: you can add your DDC North login while on `portal.1stform.ca`, and the
+other way round. Once linked, the workspace menu lists both workspaces and
+switching takes you to the other website already signed in.
+
+If you sign in on one organization's website with a login that only belongs to
+the other one, you see "No access to …". From there, **Open** goes to your own
+workspace, and **Add your … login** starts this link.
 
 Before you start:
 
@@ -105,12 +112,13 @@ Before you start:
 
 Steps:
 
-1. Sign in to one of the two logins. If you signed in more than 15 minutes ago,
-   sign out and in again first.
-2. Open **Link an existing account** and select **Continue**. Societyer signs you
+1. Sign in to one of the two logins.
+2. Open the workspace menu and select **Add another account**, then **Continue**.
+   If you signed in more than 15 minutes ago, Societyer first asks you to sign in
+   again as the same login; the link then continues by itself. Societyer signs you
    out of this login.
-3. The sign-in page says "Sign in to the account you want to link." Sign in to
-   the **other** login, the way its organization requires.
+3. The sign-in page says "Sign in to your other account." Sign in to the
+   **other** login, the way its organization requires.
 4. Check the two cards: **Started from** and **Signed in now**. Each shows the
    email address and the workspaces of that login. If you don't recognise either
    one, select **Cancel**.

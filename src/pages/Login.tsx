@@ -356,10 +356,20 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
   }
 
   const copy = MODE_COPY[mode];
-  const title = mode === "sign-in" && domain ? `Sign in to ${domain.workspaceName}` : copy.title;
-  const lede = microsoftRequired ? "Use your work Microsoft account to continue." : mode === "sign-up" && canResetByEmail
-    ? "Use your work email. We'll send you a link to confirm it."
-    : copy.lede;
+  // Either half of "Link an existing account" isn't about this domain's
+  // workspace: the other login can belong to any workspace on the deployment.
+  const relinking = !linking && isAccountLinkSignIn(searchParams.get("linkAccount"), safeRedirect);
+  const title = mode !== "sign-in" ? copy.title
+    : linking ? "Sign in to your other account"
+    : relinking ? "Confirm it’s you"
+    : domain ? `Sign in to ${domain.workspaceName}` : copy.title;
+  const lede = linking && mode === "sign-in"
+    ? `Use the login you want to link, even if it belongs to another workspace${domain ? ` than ${domain.workspaceName}` : ""}.`
+    : relinking && mode === "sign-in"
+      ? "Sign in again with the account you're linking from, then continue the link."
+      : microsoftRequired ? "Use your work Microsoft account to continue." : mode === "sign-up" && canResetByEmail
+        ? "Use your work email. We'll send you a link to confirm it."
+        : copy.lede;
   const domainHint = authEmailDomainHint(allowedEmailDomains);
 
   return (
@@ -378,7 +388,6 @@ function EmailSignIn({ safeRedirect, onSecondFactor }: { safeRedirect: string; o
       )}
       help={mode === "sign-in" && !canResetByEmail ? "Trouble signing in?" : undefined}
     >
-      {linking && <p role="status" className="notice auth__notice">Sign in to the account you want to link.</p>}
       {invitation && <p className="notice auth__notice">You’re invited to <strong>{invitation.workspaceName}</strong>. {invitation.email ? `Use ${invitation.email}. ` : ""}Sign in or verify a new account to join directly. You don’t need to create an organization.</p>}
       {notice && <div role="status" className="notice notice--success auth__notice">{notice}</div>}
       {mode === "sign-up" && capabilities?.signUpEnabled === false && (

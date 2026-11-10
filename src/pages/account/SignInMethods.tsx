@@ -80,7 +80,7 @@ function SignInMethods() {
         {microsoftAvailable && accounts !== null && !hasMicrosoft && (
           <p className="auth__hint">
             To sign in with Microsoft, ask your administrator to set up a Microsoft login for you. Then
-            connect it here with <Link className="auth__link" to="/account/link">Link an existing account</Link>.
+            connect it here with <Link className="auth__link" to="/account/link">Add another account</Link>.
           </p>
         )}
         {(authenticatorEnrollment || twoFactorEnabled) && (
@@ -112,7 +112,7 @@ function LinkedLogins() {
     <section className="account-section" aria-labelledby="account-linked-logins">
       <h2 id="account-linked-logins" className="account-section__title">Linked logins</h2>
       {overview === undefined ? <AuthPending>Loading linked logins…</AuthPending> : others.length === 0 ? (
-        <p className="auth__hint">No other logins are linked. <Link className="auth__link" to="/account/link">Link an existing account</Link></p>
+        <p className="auth__hint">No other logins are linked. <Link className="auth__link" to="/account/link">Add another account</Link></p>
       ) : (
         <ul className="account-workspaces" aria-label="Linked logins">
           {others.map((identity) => {

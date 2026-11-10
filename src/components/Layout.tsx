@@ -63,6 +63,8 @@ import {
   Bot,
   Plug,
   Plus,
+  Check,
+  UserPlus,
   Layers,
   LayoutGrid,
   Keyboard,
@@ -1747,80 +1749,45 @@ export function Layout() {
               event.preventDefault(); options[next].focus();
             }}
             style={{
-              position: "fixed",
               top: workspaceAnchor.top,
               bottom: workspaceAnchor.bottom,
               left: workspaceAnchor.left,
               width: workspaceAnchor.width,
-              background: "var(--bg-panel)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--r-md)",
-              boxShadow: "var(--shadow-lg)",
-              zIndex: "var(--z-dropdown)",
-              overflow: "hidden",
               maxHeight: workspaceAnchor.maxHeight,
-              color: "var(--text-primary)",
-              display: "flex",
-              flexDirection: "column",
             }}
           >
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-              <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.workspaces")}</strong>
-            </div>
+            <div className="workspace-menu__header">{t("sidebar.workspaces")}</div>
             {societies.length > 7 && (
-              <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+              <div className="workspace-menu__filter">
                 <input
                   type="text"
                   autoFocus
+                  className="workspace-menu__filter-input"
                   value={workspaceFilter}
                   onChange={(e) => setWorkspaceFilter(e.target.value)}
                   placeholder={t("sidebar.filterEntities")}
                   aria-label={t("sidebar.filterEntities")}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--r-sm)",
-                    background: "var(--bg-subtle)",
-                    color: "inherit",
-                    fontSize: "var(--fs-sm)",
-                  }}
                 />
               </div>
             )}
-            {societies.length > 1 && (
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setWorkspaceOpen(false);
-                  navigate("/app/portfolio");
-                }}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "10px 12px",
-                  border: "none",
-                  borderBottom: "1px solid var(--border)",
-                  background: "var(--bg-panel)",
-                  color: "inherit",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexShrink: 0,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; }}
-              >
-                <Layers size={15} />
-                <span style={{ flex: 1 }}>
-                  <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.viewAllEntities")}</strong>
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t("sidebar.viewAllEntitiesHint")}</div>
-                </span>
-              </button>
-            )}
-            <div style={{ overflowY: "auto", minHeight: 0 }}>
+            <div className="workspace-menu__list">
+              {societies.length > 1 && (
+                <button
+                  type="button"
+                  className="workspace-menu__option"
+                  role="menuitem"
+                  onClick={() => {
+                    setWorkspaceOpen(false);
+                    navigate("/app/portfolio");
+                  }}
+                >
+                  <span className="workspace-menu__option-icon"><Layers size={15} /></span>
+                  <span className="workspace-menu__option-text">
+                    <span className="workspace-menu__option-name">{t("sidebar.viewAllEntities")}</span>
+                    <span className="workspace-menu__option-meta">{t("sidebar.viewAllEntitiesHint")}</span>
+                  </span>
+                </button>
+              )}
               {(() => {
                 const wf = workspaceFilter.trim().toLowerCase();
                 const list = wf
@@ -1840,73 +1807,64 @@ export function Layout() {
                 return list.map((s: any) => {
                 const active = s._id === society?._id;
                 return (
-                  <button
-                    key={s._id}
-                    type="button"
-                    className="workspace-menu__option"
-                    role="menuitemradio"
-                    aria-checked={active}
-                    onClick={() => {
-                      setWorkspaceOpen(false);
-                      setMobileSidebarOpen(false);
-                      // The record URL belongs to the workspace being left.
-                      const canonicalOrigin = auth.memberships?.find((membership) => membership.society._id === s._id)?.canonicalOrigin;
-                      void openWorkspace({ societyId: s._id, canonicalOrigin });
-                    }}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "10px 12px",
-                      border: "none",
-                      background: active ? "var(--bg-subtle)" : "var(--bg-panel)",
-                      color: "inherit",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) e.currentTarget.style.background = "var(--bg-hover)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = active ? "var(--bg-subtle)" : "var(--bg-panel)";
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div key={s._id} className={`workspace-menu__row${active ? " is-active" : ""}`}>
+                    <button
+                      type="button"
+                      className="workspace-menu__option"
+                      role="menuitemradio"
+                      aria-checked={active}
+                      onClick={() => {
+                        setWorkspaceOpen(false);
+                        setMobileSidebarOpen(false);
+                        // The record URL belongs to the workspace being left.
+                        const canonicalOrigin = auth.memberships?.find((membership) => membership.society._id === s._id)?.canonicalOrigin;
+                        void openWorkspace({ societyId: s._id, canonicalOrigin });
+                      }}
+                    >
                       <WorkspaceLogo organization={s} />
-                      <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{s.name}</strong>
-                      {active && <Pill size="sm">{t("sidebar.activeWorkspace")}</Pill>}
-                    </div>
-                    {s.incorporationNumber && (
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
-                        {s.incorporationNumber}
-                      </div>
+                      <span className="workspace-menu__option-text">
+                        <span className="workspace-menu__option-name">{s.name}</span>
+                        {s.incorporationNumber && <span className="workspace-menu__option-meta">{s.incorporationNumber}</span>}
+                      </span>
+                      {active && <Check size={14} className="workspace-menu__check" aria-label={t("sidebar.activeWorkspace")} />}
+                    </button>
+                    {active && can("society:write") && (
+                      <Tooltip content={t("sidebar.workspaceBranding", "Workspace branding")} placement="top" delay={250}>
+                        <button
+                          type="button"
+                          className="workspace-menu__settings"
+                          role="menuitem"
+                          aria-label={t("sidebar.workspaceBranding", "Workspace branding")}
+                          onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/app/settings#workspace-brandkit"); }}
+                        >
+                          <Settings size={14} />
+                        </button>
+                      </Tooltip>
                     )}
-                  </button>
+                  </div>
                 );
                 });
               })()}
               {auth.lockedWorkspaces.map((workspace) => (
-                <button
-                  key={workspace.id}
-                  type="button"
-                  className="workspace-menu__option"
-                  role="menuitem"
-                  onClick={() => {
-                    setWorkspaceOpen(false);
-                    setMobileSidebarOpen(false);
-                    // Its lock screen offers the missing sign-in step.
-                    void openWorkspace({ societyId: workspace.id, canonicalOrigin: workspace.canonicalOrigin });
-                  }}
-                  style={{ width: "100%", textAlign: "left", padding: "10px 12px", border: "none", background: "var(--bg-panel)", color: "inherit", cursor: "pointer" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div key={workspace.id} className="workspace-menu__row">
+                  <button
+                    type="button"
+                    className="workspace-menu__option"
+                    role="menuitem"
+                    onClick={() => {
+                      setWorkspaceOpen(false);
+                      setMobileSidebarOpen(false);
+                      // Its lock screen offers the missing sign-in step.
+                      void openWorkspace({ societyId: workspace.id, canonicalOrigin: workspace.canonicalOrigin });
+                    }}
+                  >
                     <WorkspaceLogo organization={{ name: workspace.name, logoUrl: workspace.logoUrl }} />
-                    <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{workspace.name}</strong>
-                  </div>
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
-                    {LOCK_REASON_LABEL[workspace.reason ?? "mfa"]}
-                  </div>
-                </button>
+                    <span className="workspace-menu__option-text">
+                      <span className="workspace-menu__option-name">{workspace.name}</span>
+                      <span className="workspace-menu__option-meta">{LOCK_REASON_LABEL[workspace.reason ?? "mfa"]}</span>
+                    </span>
+                  </button>
+                </div>
               ))}
               {(!societies || societies.length === 0) && (
                 <div className="empty-state empty-state--sm empty-state--start">
@@ -1914,23 +1872,40 @@ export function Layout() {
                 </div>
               )}
             </div>
-            <div style={{ padding: 8, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-              {can("society:write") && <button type="button" className="btn btn--ghost workspace-menu__brand-settings" role="menuitem"
-                onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/app/settings#workspace-brandkit"); }}>Workspace branding</button>}
-              {auth.mode === "convex" && <button type="button" className="btn btn--ghost workspace-menu__brand-settings" role="menuitem"
-                onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/account/workspaces"); }}><LayoutGrid size={14} /> {t("sidebar.manageMyWorkspaces")}</button>}
+            <div className="workspace-menu__footer">
+              {auth.mode === "convex" && (
+                // Another login's workspaces join this list once the two are
+                // linked (docs/shared-workspaces/user-guide.md, "Add another account").
+                <button
+                  type="button"
+                  className="menu__item"
+                  role="menuitem"
+                  onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/account/link"); }}
+                >
+                  <span className="menu__item-main"><span className="menu__item-icon"><UserPlus /></span><span className="menu__item-label">{t("sidebar.addAccount")}</span></span>
+                </button>
+              )}
               <button
                 type="button"
-                className="btn btn--accent"
+                className="menu__item"
                 role="menuitem"
-                style={{ width: "100%", justifyContent: "center" }}
                 onClick={() => {
                   setWorkspaceOpen(false);
                   navigate("/app/society/new");
                 }}
               >
-                <Plus size={14} /> {t("sidebar.addWorkspace")}
+                <span className="menu__item-main"><span className="menu__item-icon"><Plus /></span><span className="menu__item-label">{t("sidebar.addWorkspace")}</span></span>
               </button>
+              {auth.mode === "convex" && (
+                <button
+                  type="button"
+                  className="menu__item"
+                  role="menuitem"
+                  onClick={() => { setWorkspaceOpen(false); setMobileSidebarOpen(false); navigate("/account/workspaces"); }}
+                >
+                  <span className="menu__item-main"><span className="menu__item-icon"><LayoutGrid /></span><span className="menu__item-label">{t("sidebar.manageMyWorkspaces")}</span></span>
+                </button>
+              )}
             </div>
           </div>,
           document.body,

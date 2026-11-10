@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { UserPlus } from "lucide-react";
 import { AuthShell, BusyLabel } from "./AuthShell";
 import { useAuth, type LockedWorkspace } from "./AuthProvider";
 import { MicrosoftLogo } from "./MicrosoftLogo";
@@ -37,15 +38,22 @@ export default function WorkspaceAccessScreen() {
 function NoAccessHere({ workspace }: { workspace: DomainWorkspace }) {
   const auth = useAuth();
   const name = workspace.workspaceName;
+  const memberships = auth.memberships ?? [];
+  const elsewhere = memberships.length + auth.lockedWorkspaces.length > 0;
   return (
     <AuthShell
       title={`No access to ${name}`}
-      lede={`You're signed in as ${auth.session?.user.email ?? "another account"}. That account isn't a member of ${name}.`}
-      after={<Link className="auth__link" to="/account/link">Joined {name} with a different login? Link that account</Link>}
+      lede={`You're signed in as ${auth.session?.user.email ?? "another account"}, which isn't a member of ${name}.${
+        elsewhere ? " You can open your own workspaces below." : ""}`}
     >
       <div className="auth__state">
+        {/* Each Open button carries this session to that workspace's own website. */}
+        <WorkspaceList showLabel label="Your workspaces" memberships={memberships} locked={auth.lockedWorkspaces} />
+        <section className="account-section" aria-label={`Add your ${name} login`}>
+          <p className="auth__hint">Joined {name} with a different login? Add that login once, and either one opens both workspaces.</p>
+          <Link className="btn btn--primary auth__submit" to="/account/link"><UserPlus size={14} /> Add your {name} login</Link>
+        </section>
         <RequestWorkspaceAccess societyId={workspace.societyId} workspaceName={name} />
-        <WorkspaceList showLabel label="Your workspaces" memberships={auth.memberships ?? []} locked={auth.lockedWorkspaces} />
         <UseAnotherAccount />
       </div>
     </AuthShell>

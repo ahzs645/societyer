@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { UserPlus } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -40,9 +41,14 @@ function MyWorkspaces() {
         )}
         <Invitations />
         <AccessRequests />
+        {ready && (
+          <section className="account-section" aria-label="Add another account">
+            <p className="auth__hint">Missing a workspace? If you joined it with a different login, for example on another website, add that login to see both here.</p>
+            <Link className="btn auth__submit" to="/account/link"><UserPlus size={14} /> Add another account</Link>
+          </section>
+        )}
         <nav className="account-links" aria-label="Account">
           <Link className="auth__link" to="/account/sign-in-methods">Sign-in methods</Link>
-          <Link className="auth__link" to="/account/link">Link an existing account</Link>
         </nav>
       </div>
     </AuthShell>

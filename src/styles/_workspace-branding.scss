@@ -1,4 +1,5 @@
 @use "tokens" as *;
+@use "mixins" as *;
 
 /* One contained logo treatment for every workspace identity surface. */
 .workspace-logo {
@@ -55,10 +56,107 @@
 .sidebar__brand--branded .sidebar__brand-workspace { grid-row: 1; grid-column: 2; }
 .sidebar__brand--branded .sidebar__brand-actions { padding-top: 0; }
 .app-shell.is-rail .sidebar__brand--branded .sidebar__workspace { display: flex; }
-.workspace-menu__option { overflow-wrap: anywhere; }
-.workspace-menu__option .workspace-logo { width: 54px; }
+/* Sidebar workspace switcher (Layout.tsx). Position and size come inline from the anchor. */
+.workspace-menu {
+  position: fixed;
+  z-index: token('z-dropdown');
+  @include surface-floating;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: token('text-primary');
+  @include appear-pop(top left);
+}
+.workspace-menu__header {
+  padding: 10px 12px 4px;
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: token('text-tertiary');
+  flex-shrink: 0;
+}
+.workspace-menu__filter { padding: 4px 8px; flex-shrink: 0; }
+.workspace-menu__filter-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+  color: inherit;
+  font-size: token('fs-sm');
+}
+.workspace-menu__list {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.workspace-menu__row {
+  display: flex;
+  align-items: center;
+  border-radius: token('r-md');
+}
+.workspace-menu__row:hover { background: token('bg-hover-alpha'); }
+.workspace-menu__row.is-active { background: token('bg-selected-alpha'); }
+.workspace-menu__option {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: token('r-md');
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-menu__list > .workspace-menu__option:hover { background: token('bg-hover-alpha'); }
 .workspace-menu__option:focus-visible { outline-offset: -3px; }
-.workspace-menu__brand-settings { width: 100%; justify-content: flex-start; margin-bottom: token('s-1'); }
+.workspace-menu__option .workspace-logo { width: 54px; flex-shrink: 0; }
+.workspace-menu__option-icon { display: inline-flex; justify-content: center; width: 54px; flex-shrink: 0; color: token('text-tertiary'); }
+.workspace-menu__option-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.workspace-menu__option-name {
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-menu__option-meta {
+  font-size: token('fs-sm');
+  color: token('text-tertiary');
+  overflow-wrap: anywhere;
+}
+.workspace-menu__check { flex-shrink: 0; color: token('accent'); }
+.workspace-menu__settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.workspace-menu__settings:hover,
+.workspace-menu__settings:focus-visible { background: token('bg-hover-alpha'); color: token('text-primary'); }
+.workspace-menu__footer {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-top: 1px solid token('border');
+  flex-shrink: 0;
+}
 
 .workspace-portfolio-identity { display: inline-flex; align-items: center; gap: token('s-2'); max-width: 100%; text-align: left; }
 .workspace-portfolio-identity .workspace-logo { width: 52px; }
