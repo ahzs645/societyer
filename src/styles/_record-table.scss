@@ -1514,6 +1514,29 @@ select.record-table__menu-select,
   }
 }
 
+/* An endless list's last row: loading more, end of results, or a "keep checking" action. */
+.record-table__list-footer td {
+  padding: 0;
+  border-bottom: 0;
+  background: token('bg-panel');
+}
+
+/* Held at the left of the frame, so a wide table's footer stays in view when scrolled sideways. */
+.record-table__list-footer-content,
+.record-cards__footer {
+  position: sticky;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: max-content;
+  max-width: 100%;
+  padding: 10px 12px;
+  color: token('text-tertiary');
+  font-size: 12px;
+}
+
 .record-table-field-lab__status {
   display: flex;
   align-items: baseline;
@@ -2665,7 +2688,9 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     min-width: 0 !important;
   }
   .record-table__scroll .record-table > tbody > .record-table__action-row > td:first-child,
-  .record-table__virtuoso .record-table > tbody > .record-table__action-row > td:first-child {
+  .record-table__virtuoso .record-table > tbody > .record-table__action-row > td:first-child,
+  .record-table__scroll .record-table > tbody > .record-table__list-footer > td:first-child,
+  .record-table__virtuoso .record-table > tbody > .record-table__list-footer > td:first-child {
     position: static;
     width: auto !important;
     min-width: 100% !important;
@@ -2699,7 +2724,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__scroll-frame.is-scrolled-x,
   .record-table__interaction-root.is-scrolled-x {
     .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > thead > tr > th:first-child,
-    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > tbody > tr:not(.record-table__action-row, .record-table__group-row) > td:first-child,
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > tbody > tr:not(.record-table__action-row, .record-table__group-row, .record-table__list-footer) > td:first-child,
     .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > tfoot > tr > td:first-child {
       width: 38px !important;
       overflow: hidden;
@@ -2747,7 +2772,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__scroll-frame.is-scrolled-x,
   .record-table__interaction-root.is-scrolled-x {
     .record-table > thead > tr > th:first-child::after,
-    .record-table > tbody > tr:not(.record-table__action-row, .record-table__group-row) > td:first-child::after,
+    .record-table > tbody > tr:not(.record-table__action-row, .record-table__group-row, .record-table__list-footer) > td:first-child::after,
     .record-table > tfoot > tr > td:first-child::after {
       content: "";
       position: absolute;
@@ -2762,7 +2787,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
       pointer-events: none;
     }
 
-    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child {
+    .record-table > tbody > tr:not(.record-table__action-row, .record-table__list-footer) > td:first-child {
       overflow: visible;
     }
   }
@@ -2777,7 +2802,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 @media (max-width: 760px) {
   [data-phone-fit] :is(.record-table__scroll, .record-table__virtuoso) .record-table {
     > thead > tr > th:first-child,
-    > tbody > tr:not(.record-table__group-row, .record-table__action-row) > td:first-child,
+    > tbody > tr:not(.record-table__group-row, .record-table__action-row, .record-table__list-footer) > td:first-child,
     > tfoot > tr > td:first-child {
       width: calc(var(--rt-col-size, 46vw) * var(--rt-stretch, 1)) !important;
     }
@@ -2843,7 +2868,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .is-mobile-selecting.record-table__scroll-frame,
   .is-mobile-selecting.record-table__interaction-root {
     .record-table > thead > tr > th:first-child,
-    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child,
+    .record-table > tbody > tr:not(.record-table__action-row, .record-table__list-footer) > td:first-child,
     .record-table > tfoot > tr > td:first-child {
       width: 46vw !important;
     }

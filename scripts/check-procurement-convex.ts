@@ -142,6 +142,18 @@ assert.deepEqual(awards.map((row) => [row.recordKey, row.value, row.supplier, ro
 assert.equal((await reader.query(api.procurementReview.list, { ...args, paginationOpts: { numItems: 50_000, cursor: null } })).page.length <= 1000, true, "A page never exceeds its row bound");
 assert.equal((await reader.query(api.procurementReview.record, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" })).summary.title, "Bridge 0");
 assert.equal((await reader.query(api.procurementReview.documents, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000", paginationOpts: { numItems: 10, cursor: null } })).page[0].name, "test.pdf");
+// The paperclip tooltip gets names only: published files, and the notice's links that weren't downloaded.
+await t.run(async ctx => {
+  const detail = await ctx.db.query("procurementDetails").withIndex("by_key", q => q.eq("societyId", ids.societyId).eq("generation", ids.generation).eq("recordKey", "opportunity:0000")).unique();
+  await ctx.db.patch(detail!._id, { dataJson: JSON.stringify({ descriptionText: "x".repeat(50_000), attachments: [{ name: "TEST.pdf" }, { name: "Addendum 1.pdf", url: "https://example.invalid/a1" }], addenda: ["Drawings.zip"] }) });
+});
+const tipArgs = { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" };
+const tip = await reader.query(api.procurementReview.documentTip, tipArgs);
+assert.deepEqual(tip, { files: ["test.pdf"], linked: ["Addendum 1.pdf", "Drawings.zip"], linkedTotal: 2 }, "Names only; a stored file isn't listed again as a link");
+assert.ok(JSON.stringify(tip).length < 200, "The notice body never reaches the tooltip");
+assert.deepEqual(await reader.query(api.procurementReview.documentTip, { ...tipArgs, recordKey: "opportunity:0001" }), { files: [], linked: [], linkedTotal: 0 });
+assert.equal(await reader.query(api.procurementReview.documentTip, { ...tipArgs, generation: "another" }), null);
+await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).query(api.procurementReview.documentTip, tipArgs), /membership|access|workspace|bound/i);
 // The interactive page carries only the closing fields of a row's analytics; parties, aliases and provenance stay on the server.
 await t.run(async ctx => {
   const row = await ctx.db.query("procurementRecords").withIndex("by_key", q => q.eq("societyId", ids.societyId).eq("generation", ids.generation).eq("recordKey", "opportunity:0000")).unique();

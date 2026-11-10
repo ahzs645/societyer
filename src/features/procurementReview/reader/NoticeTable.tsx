@@ -442,10 +442,11 @@ export function NoticeTable({
   const loading = progress ? !progress.done && records.length === 0 : false;
   const [filtering, setFiltering] = useState(false);
 
-  const renderTable = (onEndReached?: () => void, serverLoading = false, hasMore = false) => (
+  const renderTable = (onEndReached?: () => void, serverLoading = false, hasMore = false, footer?: ReactNode) => (
         <RecordTable
           fillViewport
           onEndReached={onEndReached}
+          listFooter={footer}
           loading={loading || serverLoading}
           showAggregateFooter={false}
           renderCell={renderCell}
@@ -462,11 +463,12 @@ export function NoticeTable({
                 </div>
                 <div className="record-table__empty-desc">
                   {serverPaging && hasMore
-                    ? "Load more to check the remaining notices."
+                    ? "None of the notices checked so far match."
                     : search
                     ? "Try fewer or different words."
                     : "Choose another view, or change the filters, to see more."}
                 </div>
+                {serverPaging && hasMore && footer && <div className="record-table__empty-action">{footer}</div>}
               </div>
             )
           }
@@ -513,7 +515,7 @@ export function NoticeTable({
         <RecordTableFilterChips />
         {serverPaging ? (
           <ServerNoticeRows kind={kind} fixedParty={fixedParty}>
-            {({ onEndReached, loading: serverLoading, hasMore }) => renderTable(onEndReached, serverLoading, hasMore)}
+            {({ onEndReached, loading: serverLoading, hasMore, footer }) => renderTable(onEndReached, serverLoading, hasMore, footer)}
           </ServerNoticeRows>
         ) : renderTable()}
 

@@ -2,19 +2,16 @@
  * The list's documents cell: a paperclip with how many files Zoer downloaded
  * and published for the notice (nothing when there are none). Hovering or
  * focusing it names them, and separately the files the notice links to that
- * weren't downloaded; both are read only once the tooltip opens. Clicking it
+ * weren't downloaded; both are read only once the tooltip opens, and the
+ * hosted reader reads just the names (convex/procurementReview.ts documentTip). Clicking it
  * opens the notice's Documents tab.
  */
 import { useMemo } from "react";
 import { Paperclip } from "lucide-react";
 import { Tooltip } from "../../../components/Tooltip";
-import { describeNotice } from "../lib/notice";
-import { useReaderSource } from "./source";
+import { documentTipNames, type DocumentTipNames } from "../lib/notice";
+import { useReaderSource, type ReaderSource } from "./source";
 
-/** Names a tooltip lists before "and N more". */
-const SHOWN = 8;
-
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const files = (count: number) => `${count} ${count === 1 ? "document" : "documents"}`;
 
 export function DocumentsCell({ recordKey, documents, onOpen }: { recordKey: string; documents: number; onOpen: () => void }) {
@@ -49,27 +46,43 @@ function parse(json: string): unknown {
   try { return JSON.parse(json); } catch { return {}; }
 }
 
-/** Mounted only while the tooltip shows. */
+/** Mounted only while the tooltip shows. The hosted reader asks for the names alone; the offline snapshot reads its local files. */
 function DocumentsTip({ recordKey, documents }: { recordKey: string; documents: number }) {
+  const source = useReaderSource();
+  return source.useDocumentTip
+    ? <ServerDocumentsTip recordKey={recordKey} documents={documents} useTip={source.useDocumentTip} />
+    : <SnapshotDocumentsTip recordKey={recordKey} documents={documents} />;
+}
+
+function ServerDocumentsTip({ recordKey, documents, useTip }: { recordKey: string; documents: number; useTip: NonNullable<ReaderSource["useDocumentTip"]> }) {
+  const tip = useTip(recordKey);
+  if (tip === undefined) return <span role="status">{files(documents)} · loading names…</span>;
+  return <TipNames documents={documents} names={tip ?? { files: [], linked: [], linkedTotal: 0 }} />;
+}
+
+function SnapshotDocumentsTip({ recordKey, documents }: { recordKey: string; documents: number }) {
   const source = useReaderSource();
   const stored = source.useDocuments(recordKey, null);
   const record = source.useRecord(recordKey);
-  const attachments = useMemo(() => (record ? describeNotice(record.summary, parse(record.dataJson)).attachments : null), [record]);
-  if (!stored || attachments === null) return <span role="status">{files(documents)} · loading names…</span>;
-  const published = stored.page.filter((document) => document.available);
-  const shown = published.slice(0, SHOWN);
-  // Matched against every stored file, as the notice's Documents tab does; only known once all of them are read.
-  const linked = stored.isDone ? attachments.filter((item) => !stored.page.some((document) => sameName(document.name, item.name))) : [];
+  const names = useMemo(
+    () => (stored && record !== undefined ? documentTipNames(stored.page, record ? parse(record.dataJson) : {}, stored.isDone) : null),
+    [stored, record],
+  );
+  if (!names) return <span role="status">{files(documents)} · loading names…</span>;
+  return <TipNames documents={documents} names={names} />;
+}
+
+function TipNames({ documents, names }: { documents: number; names: DocumentTipNames }) {
   return (
     <span className="procurement-reader__docs-tip">
       <span className="procurement-reader__docs-tip-head">{files(documents)}</span>
-      <ul>{shown.map((document) => <li key={document.documentKey}>{document.name}</li>)}</ul>
-      {documents > shown.length && <span className="procurement-reader__docs-tip-more">and {documents - shown.length} more</span>}
-      {linked.length > 0 && (
+      <ul>{names.files.map((name, index) => <li key={`${name}:${index}`}>{name}</li>)}</ul>
+      {documents > names.files.length && <span className="procurement-reader__docs-tip-more">and {documents - names.files.length} more</span>}
+      {names.linkedTotal > 0 && (
         <>
           <span className="procurement-reader__docs-tip-head">Linked from the notice, not downloaded</span>
-          <ul>{linked.slice(0, SHOWN).map((item, index) => <li key={`${item.name}:${index}`}>{item.name}</li>)}</ul>
-          {linked.length > SHOWN && <span className="procurement-reader__docs-tip-more">and {linked.length - SHOWN} more</span>}
+          <ul>{names.linked.map((name, index) => <li key={`${name}:${index}`}>{name}</li>)}</ul>
+          {names.linkedTotal > names.linked.length && <span className="procurement-reader__docs-tip-more">and {names.linkedTotal - names.linked.length} more</span>}
         </>
       )}
     </span>

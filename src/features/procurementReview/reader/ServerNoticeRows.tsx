@@ -4,6 +4,7 @@ import {
   useRecordTableState,
   useRecordTableStoreHandle,
 } from "../../../platform/record-engine/record-table";
+import { getViewGroupBy } from "../../../platform/record-engine/record-table/utils/groupRecords";
 import { toNoticeRow } from "../../../../shared/procurementNoticeRow";
 import { useReaderSource, type ListRow } from "./source";
 import { useProcurementClock } from "../lib/clock";
@@ -12,7 +13,7 @@ export function ServerNoticeRows({
   fixedParty,
   children,
 }: {
-  children: (props: { onEndReached: () => void; loading: boolean; hasMore: boolean }) => ReactNode;
+  children: (props: { onEndReached: () => void; loading: boolean; hasMore: boolean; footer: ReactNode }) => ReactNode;
   kind: string;
   fixedParty?: { field: "organization" | "issuedFor"; name: string };
 }) {
@@ -23,12 +24,13 @@ export function ServerNoticeRows({
     filterGroups = useRecordTableState((s) => s.filterGroups),
     sorts = useRecordTableState((s) => s.sorts),
     searchTerm = useRecordTableState((s) => s.searchTerm),
-    dateContext = useRecordTableState((s) => s.dateContext);
+    dateContext = useRecordTableState((s) => s.dateContext),
+    grouped = useRecordTableState((s) => getViewGroupBy(s.viewGroups) !== null);
   // The server reads only which field each column id names. Sizes, order,
   // visibility and option lists stay out of the request (a string, compared by
   // value), so resizing or hiding a column doesn't send a new query or drop the
   // loaded pages, and each subscription sends a few hundred bytes, not ~5 KB.
-  const request = useMemo(
+  const shape = useMemo(
     () =>
       JSON.stringify({
         party: fixedParty,
@@ -36,7 +38,6 @@ export function ServerNoticeRows({
         filters,
         filterGroups,
         sorts: sorts.slice(0, 1),
-        searchTerm,
         dateContext,
       }),
     [
@@ -44,17 +45,26 @@ export function ServerNoticeRows({
       filters,
       filterGroups,
       sorts,
-      searchTerm,
       dateContext,
       fixedParty?.field,
       fixedParty?.name,
     ],
   );
-  const [debounced, setDebounced] = useState(request);
+  // The search sent to the server: typing waits for a pause; filters, sorts and
+  // views are single clicks and apply at once. The first request waits one
+  // effect for the table to settle (the URL's search is put into the box by an
+  // earlier effect), so a link with a search doesn't first load the list without it.
+  const [appliedSearch, setAppliedSearch] = useState<string | null>(null);
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(request), 250);
+    if (appliedSearch === null) { setAppliedSearch(handle.get().searchTerm); return; }
+    if (searchTerm === appliedSearch) return;
+    const timer = setTimeout(() => setAppliedSearch(searchTerm), 250);
     return () => clearTimeout(timer);
-  }, [request]);
+  }, [searchTerm, appliedSearch, handle]);
+  const debounced = useMemo(
+    () => (appliedSearch === null ? null : JSON.stringify({ ...JSON.parse(shape), searchTerm: appliedSearch })),
+    [shape, appliedSearch],
+  );
   // The shared table offers multi-sort; this server view replaces it with one indexed ordering.
   useEffect(() => {
     if (sorts.length > 1) handle.get().setSorts(sorts.slice(0, 1));
@@ -72,11 +82,15 @@ export function ServerNoticeRows({
   const loaded = useRef({ key: queryKey, pages: new Map<string | null, ListRow[]>() });
   const [loadedCount, setLoadedCount] = useState(0);
   const advancing = useRef<string | null>(null);
-  const emptyBatches = useRef(0);
+  // Notices read in a row without one matching the filters (a page can come back empty).
+  const unmatchedRef = useRef(0);
+  const [unmatched, setUnmatched] = useState(0);
+  const counted = useRef<unknown>(null);
   useEffect(() => {
     if (loaded.current.key !== queryKey) {
       loaded.current = { key: queryKey, pages: new Map() };
-      emptyBatches.current = 0;
+      unmatchedRef.current = 0;
+      setUnmatched(0);
       advancing.current = null;
     }
     if (page?.restart && cursor !== null) {
@@ -93,25 +107,44 @@ export function ServerNoticeRows({
     setLoadedCount(unique.size);
     advancing.current = null;
   }, [page, cursor, queryKey, handle, now]);
-  const pending = !page || request !== debounced;
+  const pending = !page || searchTerm !== appliedSearch;
   const loadMore = useCallback(() => {
     if (pending || !page || page.isDone || page.continueCursor === cursor || advancing.current === page.continueCursor) return;
     advancing.current = page.continueCursor;
     setPosition({ key: queryKey, cursor: page.continueCursor });
   }, [pending, page, cursor, queryKey]);
-  // Filters may leave an empty bounded batch. Continue a few, then give the
-  // person an explicit continuation rather than scanning an entire catalog.
+  // A narrow filter or search can leave bounded pages empty. Keep reading on
+  // its own until UNMATCHED_BUDGET notices in a row haven't matched, then ask
+  // before reading further rather than scanning a whole catalog unattended.
+  const stalled = !!page && !pending && !page.isDone && page.page.length === 0 && unmatched >= UNMATCHED_BUDGET;
   useEffect(() => {
-    if (!page || pending || page.isDone) return;
-    if (page.page.length > 0) { emptyBatches.current = 0; return; }
-    if (emptyBatches.current++ < 4) loadMore();
+    if (!page || pending || page.isDone || counted.current === page) return;
+    counted.current = page;
+    unmatchedRef.current = page.page.length > 0 ? 0 : unmatchedRef.current + page.scanned;
+    setUnmatched(unmatchedRef.current);
+    if (page.page.length === 0 && unmatchedRef.current < UNMATCHED_BUDGET) loadMore();
   }, [page, pending, loadMore]);
+  const keepChecking = () => {
+    unmatchedRef.current = 0;
+    setUnmatched(0);
+    loadMore();
+  };
+  const loaded_ = loadedCount.toLocaleString("en-CA");
+  // The list's own last row (inside the scroller, where the reader is), not a bar under the table.
+  const footer = !page && loadedCount === 0 ? null
+    : stalled ? (
+      <>
+        <span role="status">{loadedCount ? `${loaded_} loaded. ` : ""}The next {unmatched.toLocaleString("en-CA")} notices didn't match.</span>
+        <button type="button" className="btn btn--secondary btn--sm" onClick={keepChecking}>Keep checking</button>
+      </>
+    )
+    : pending ? <span role="status" aria-live="polite">{loadedCount ? `${loaded_} loaded · loading more…` : "Loading notices…"}</span>
+    : page?.isDone ? (loadedCount ? <span role="status">{loaded_} {loadedCount === 1 ? "result" : "results"} · end of results</span> : null)
+    : <span>{loaded_} loaded · more load as you scroll{grouped ? " · groups cover loaded results" : ""}</span>;
   return <>
-    {children({ onEndReached: () => { if (page?.page.length) loadMore(); }, loading: pending && loadedCount === 0, hasMore: !page?.isDone })}
-    <div className="procurement-reader__pager" style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 0", flexWrap: "wrap" }}>
-      <span role="status">{pending ? "Loading notices…" : `${loadedCount.toLocaleString()} results loaded${page?.isDone ? " · end of results" : ""}`}</span>
-      {!page?.isDone && <button className="btn btn--secondary btn--sm" disabled={pending} onClick={() => { emptyBatches.current = 0; loadMore(); }}>Load more</button>}
-      <small className="muted">More results load as you scroll. Grouping covers loaded results.</small>
-    </div>
+    {children({ onEndReached: () => { if (!stalled) loadMore(); }, loading: pending && loadedCount === 0, hasMore: !page?.isDone, footer })}
   </>;
 }
+
+/** Notices read in a row without a match before the list asks to keep checking (bounded pages read at most 100). */
+const UNMATCHED_BUDGET = 1000;

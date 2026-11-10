@@ -11,7 +11,7 @@ import { api } from "../../../lib/convexApi";
 import { readProcurementDocument } from "../lib/documents";
 import type { ReviewRow } from "../lib/review";
 import { useProcurementClock, useProcurementDeadline } from "../lib/clock";
-import { deadlineInstant, procurementDeadlineValue } from "../lib/notice";
+import { deadlineInstant, procurementDeadlineValue, type DocumentTipNames } from "../lib/notice";
 import { analysisIdentity, normalizeAnalysisRequest, type AnalysisRequest, type AnalysisResult } from "../../../../shared/procurementAnalytics";
 import { progressive, useProgressive, type CatalogReviewRow, type DocumentPage, type ListRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary } from "./source";
 
@@ -23,7 +23,19 @@ const REVIEW_LIMIT = 5000;
 
 type Page<T> = { page: T[]; isDone: boolean; continueCursor: string };
 
-export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog): ReaderSource {
+/** A store with nothing in it yet, for hooks that mustn't start a whole-kind load before the generation is confirmed. */
+const PENDING: Progressive<never> = { read: () => undefined, subscribe: () => () => {} };
+
+/**
+ * `confirmed` is false while `catalog` is the one this device remembered
+ * (lib/lastCatalog.ts) and the live catalog is still on its way. The queries
+ * are subscribed straight away, so they travel alongside the catalog's, but
+ * every hook reads as loading until the generation is confirmed: a remembered
+ * generation that has since been replaced reads as empty on the server, and
+ * that must never show as "no notices". A replaced generation remounts the
+ * reader (its key) with the live catalog.
+ */
+export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog, confirmed = true): ReaderSource {
   const { generation } = catalog;
   const client = useConvex();
   // Kept apart from the source object, which follows `catalog`, so a re-delivered catalog never drops loaded lists.
@@ -69,18 +81,19 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog)
       const enqueue = useMutation(api.procurementAnalytics.request);
       const [failure, setFailure] = useState<{ key: string; error: string } | null>(null);
       const args = { societyId, generation, request: serialized, asOf };
-      const result = useQuery(api.procurementAnalytics.get, invalid ? "skip" : args) as { state: "preparing" | "ready" | "failed"; resultJson: string | null; error: string | null; computedAt: number | null; asOf: number; metricVersion: string; mappingVersion: string } | undefined;
+      // Analysis refuses a generation that isn't the active one, so it waits for confirmation rather than failing on a stale one.
+      const result = useQuery(api.procurementAnalytics.get, invalid || !confirmed ? "skip" : args) as { state: "preparing" | "ready" | "failed"; resultJson: string | null; error: string | null; computedAt: number | null; asOf: number; metricVersion: string; mappingVersion: string } | undefined;
       const retry = () => { if (invalid) return; setFailure(null); void enqueue(args).catch(error => setFailure({ key: identity, error: error instanceof Error ? error.message : "Could not prepare analysis." })); };
       // Prepared (published) results usually arrive before the pause ends; asking
       // the server to prepare one that is already ready is a wasted mutation.
       const ready = useRef(false);
       ready.current = result?.state === "ready";
       useEffect(() => {
-        if (invalid) return;
+        if (invalid || !confirmed) return;
         let live = true;
         const timer = setTimeout(() => { if (ready.current) return; void enqueue(args).catch(error => { if (live) setFailure({ key: identity, error: error instanceof Error ? error.message : "Could not prepare analysis." }); }); }, 250);
         return () => { live = false; clearTimeout(timer); };
-      }, [identity, societyId, generation, asOf]); // eslint-disable-line react-hooks/exhaustive-deps -- identity includes every normalized input
+      }, [identity, societyId, generation, asOf, confirmed]); // eslint-disable-line react-hooks/exhaustive-deps -- identity includes every normalized input
       const parsed = useMemo(() => result?.resultJson ? JSON.parse(result.resultJson) as AnalysisResult : null, [result?.resultJson]);
       const boundary = parsed?.type === "opportunities" || parsed?.type === "decisions" ? parsed.data.nextBoundaryAt : parsed?.type === "party" ? parsed.data.opportunities.nextBoundaryAt : null;
       useProcurementDeadline(boundary);
@@ -89,27 +102,34 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog)
     },
     usePage(kind, request, cursor) {
       const asOf = useProcurementClock();
-      const result = useQuery(api.procurementReview.page, { societyId, generation, kind, request, asOf, paginationOpts: { numItems: 50, cursor } }) as any;
+      const result = useQuery(api.procurementReview.page, request === null ? "skip" : { societyId, generation, kind, request, asOf, paginationOpts: { numItems: 50, cursor } }) as any;
       const deadlines: number[] = (result?.page ?? []).map((row: ListRow) => deadlineInstant(procurementDeadlineValue(row))).filter((at: number | null): at is number => at !== null && at >= asOf);
       useProcurementDeadline(deadlines.length ? Math.min(...deadlines) + 1 : null);
-      return result;
+      return confirmed ? result : undefined;
     },
     useList(kind: string) {
-      return useProgressive(loaded.list(kind, catalog.counts[kind] ?? 0));
+      return useProgressive(confirmed ? loaded.list(kind, catalog.counts[kind] ?? 0) : PENDING);
     },
     useReviews() {
-      return useProgressive(loaded.reviews);
+      return useProgressive(confirmed ? loaded.reviews : PENDING);
     },
     useRecord(recordKey: string) {
-      return useQuery(api.procurementReview.record, { societyId, generation, recordKey }) as { summary: RecordSummary; dataJson: string } | null | undefined;
+      const result = useQuery(api.procurementReview.record, { societyId, generation, recordKey }) as { summary: RecordSummary; dataJson: string } | null | undefined;
+      return confirmed ? result : undefined;
     },
     useDocuments(recordKey: string, cursor: string | null) {
-      return useQuery(api.procurementReview.documents, { societyId, generation, recordKey, paginationOpts: { numItems: 10, cursor } }) as DocumentPage | undefined;
+      const result = useQuery(api.procurementReview.documents, { societyId, generation, recordKey, paginationOpts: { numItems: 10, cursor } }) as DocumentPage | undefined;
+      return confirmed ? result : undefined;
+    },
+    useDocumentTip(recordKey: string) {
+      const result = useQuery(api.procurementReview.documentTip, { societyId, generation, recordKey }) as DocumentTipNames | null | undefined;
+      return confirmed ? result : undefined;
     },
     useReview(recordKey: string) {
-      return useQuery(api.procurementReview.review, { societyId, generation, recordKey }) as { rows: ReviewRow[]; truncated: boolean } | undefined;
+      const result = useQuery(api.procurementReview.review, { societyId, generation, recordKey }) as { rows: ReviewRow[]; truncated: boolean } | undefined;
+      return confirmed ? result : undefined;
     },
     readDocument: (document, signal) => readProcurementDocument(societyId, document, signal),
     previewId: (document) => `procurement:${societyId}:${generation}:${document.documentKey}`,
-  }), [societyId, generation, catalog, loaded]);
+  }), [societyId, generation, catalog, loaded, confirmed]);
 }

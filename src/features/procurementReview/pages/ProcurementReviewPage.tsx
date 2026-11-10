@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { Settings2 } from "lucide-react";
 import { api } from "../../../lib/convexApi";
@@ -13,6 +13,7 @@ import { useConvexReaderSource } from "../reader/convexSource";
 import type { ReaderCatalog } from "../reader/source";
 import { publishedSummary } from "../reader/summary";
 import { useProcurementClock } from "../lib/clock";
+import { readLastCatalog, rememberCatalog } from "../lib/lastCatalog";
 
 type PublicationStatus = {
   state: "unconfigured" | "empty" | "ready" | "available" | "importing" | "stalled" | "failed";
@@ -36,8 +37,16 @@ function HostedProcurementReview() {
   const { can, loaded } = usePermissions();
   const [settings, setSettings] = useState(false);
   const folder = society?.integrationSettings?.procurementReviewFolder ?? "";
-  const catalog = useQuery(api.procurementReview.catalog, society && loaded && folder ? { societyId: society._id } : "skip") as ReaderCatalog | null | undefined;
-  const publication = useQuery(api.procurementStatus.get, society && loaded && folder ? { societyId: society._id } : "skip") as PublicationStatus | undefined;
+  const societyId = society?._id;
+  // The server authorizes both reads itself; they needn't wait for the permissions query (only the settings button does).
+  const live = useQuery(api.procurementReview.catalog, societyId && folder ? { societyId } : "skip") as ReaderCatalog | null | undefined;
+  const publication = useQuery(api.procurementStatus.get, societyId && folder ? { societyId } : "skip") as PublicationStatus | undefined;
+  // Start the reader's queries from the catalog this device saw last rather than a round trip later; the live one confirms or replaces it.
+  const remembered = useMemo(() => (societyId && folder ? readLastCatalog(societyId, folder) : null), [societyId, folder]);
+  useEffect(() => {
+    if (societyId && folder && live !== undefined) rememberCatalog(societyId, folder, live);
+  }, [societyId, folder, live]);
+  const catalog = live === undefined ? remembered ?? undefined : live;
   if (!society || !loaded) return <PageLoading variant="detail" />;
   const canConfigure = can("settings:write");
   const header = (
@@ -62,7 +71,7 @@ function HostedProcurementReview() {
       </> : catalog === null ? <>
         {header}
         <PublicationState status={publication} />
-      </> : <HostedReader key={`${society._id}:${catalog.generation}`} societyId={society._id} catalog={catalog} header={<>{header}<PublicationState status={publication} compact /></>} />}
+      </> : <HostedReader key={`${society._id}:${catalog.generation}`} societyId={society._id} catalog={catalog} confirmed={live !== undefined} header={<>{header}<PublicationState status={publication} compact /></>} />}
     </div>
   );
 }
@@ -91,7 +100,7 @@ function PublicationState({ status, compact = false }: { status: PublicationStat
   </section>;
 }
 
-function HostedReader({ societyId, catalog, header }: { societyId: string; catalog: ReaderCatalog; header: ReactNode }) {
-  const source = useConvexReaderSource(societyId, catalog);
+function HostedReader({ societyId, catalog, confirmed, header }: { societyId: string; catalog: ReaderCatalog; confirmed: boolean; header: ReactNode }) {
+  const source = useConvexReaderSource(societyId, catalog, confirmed);
   return <ProcurementReader source={source} header={header} />;
 }
