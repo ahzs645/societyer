@@ -23498,6 +23498,22 @@
     ]
   },
   {
+    "key": "convex:procurementReview:documentTip",
+    "surface": "convex",
+    "name": "procurementReview:documentTip",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/procurementReview.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:procurementReview:evidence",
     "surface": "convex",
     "name": "procurementReview:evidence",
