@@ -199,6 +199,7 @@ export function NoticePage({
   return (
     <div ref={top} className="procurement-notice">
       {back}
+      {record.removed && <p className="card card__body" role="status">This notice was removed from the current source. Its last published details are retained for reference.</p>}
       <PageHeader
         title={model.title}
         routeKey={NOTICE_ROUTE_KEY}

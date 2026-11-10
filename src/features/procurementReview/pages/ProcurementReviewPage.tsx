@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, useRef, useCallback, type ReactNode } from "react";
 import { useQuery } from "convex/react";
+import { useSearchParams } from "react-router-dom";
 import { Settings2, TriangleAlert } from "lucide-react";
 import { api } from "../../../lib/convexApi";
 import { PageHeader, PageLoading } from "../../../pages/_helpers";
@@ -10,7 +11,8 @@ import { isStaticDemoRuntime } from "../../../lib/staticRuntime";
 import { FolderSetupCard } from "../components/FolderSetupCard";
 import { ProcurementReader } from "../reader/ProcurementReader";
 import { useConvexReaderSource } from "../reader/convexSource";
-import type { ReaderCatalog } from "../reader/source";
+import type { ReaderCatalog, ReaderSource } from "../reader/source";
+import { createHttpReaderSource, useCatalogAccess, type ServiceCatalog } from "../reader/httpSource";
 import { exactWhen, updatedSummary } from "../reader/summary";
 import { useProcurementClock } from "../lib/clock";
 import { readLastCatalog, rememberCatalog } from "../lib/lastCatalog";
@@ -29,7 +31,41 @@ const SnapshotReviewPage = lazy(() => import("./SnapshotReviewPage").then((m) =>
 export function ProcurementReviewPage() {
   return isStaticDemoRuntime()
     ? <Suspense fallback={<PageLoading variant="detail" />}><SnapshotReviewPage /></Suspense>
-    : <HostedProcurementReview />;
+    : <HostedSourceChoice />;
+}
+
+function HostedSourceChoice() {
+  const society = useSociety();
+  const [params] = useSearchParams(), preview = params.get("catalogPreview") === "service";
+  return society && (society.integrationSettings?.procurementCatalogSource === "service" || preview) && society.integrationSettings?.procurementReviewFolder
+    ? <ServiceHost key={society._id} societyId={society._id} preview={preview} /> : <HostedProcurementReview />;
+}
+function ServiceHost({ societyId, preview }: { societyId: string; preview: boolean }) {
+  const configuration = useQuery(api.procurementCatalog.configuration, { societyId, preview }) as { source: string; baseUrl: string | null } | undefined;
+  return configuration?.baseUrl ? <ServiceReaderHost societyId={societyId} baseUrl={configuration.baseUrl} preview={preview && configuration.source !== "service"} /> : <PageLoading variant="detail" />;
+}
+function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string; baseUrl: string; preview: boolean }) {
+  const access = useCatalogAccess(societyId, baseUrl);
+  const publication = useQuery(api.procurementStatus.get, { societyId }) as PublicationStatus | undefined;
+  const [source, setSource] = useState<ReaderSource | null>(null), [error, setError] = useState<string | null>(null);
+  const current = useRef<ReaderSource | null>(null), sequence = useRef(0);
+  const refresh = useCallback(async (live: () => boolean = () => true) => {
+    const attempt = ++sequence.current;
+    try {
+      const catalog = await access.read<ServiceCatalog | null>("/catalog");
+      if (!catalog) { if (!current.current && live()) setError("No catalog has been activated yet."); return; }
+      if (catalog.publicationId === current.current?.catalog.publicationId) { if (live()) setError(null); return; }
+      const next = createHttpReaderSource(access, catalog);
+      // Keep the entire previous reader visible until the replacement list is ready.
+      const kind = new URLSearchParams(window.location.search).get("kind") === "award" ? "award" : "opportunity";
+      await next.warm(catalog.counts[kind] ? kind : catalog.counts.opportunity ? "opportunity" : "award");
+      if (attempt !== sequence.current || !live()) return;
+      current.current = next; setSource(next); setError(null);
+    } catch (failure) { if (attempt === sequence.current && live()) setError(failure instanceof Error ? failure.message : "The catalog is temporarily unavailable."); }
+  }, [access]);
+  useEffect(() => { let active = true; const load = () => void refresh(() => active); load(); window.addEventListener("focus", load); return () => { active = false; window.removeEventListener("focus", load); }; }, [refresh, publication?.lastSuccessful?.generation]);
+  const header = <><PageHeader title="Procurement review" subtitle={source ? updatedSummary(source.catalog.publishedAt) : "Bid opportunities and awards published by Zoer."} info={publication ? <PublicationDetails status={publication} /> : undefined} />{preview && <p className="card card__body" role="status">Catalog service preview. Other workspace readers continue using the current catalog source.</p>}{error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}</>;
+  return <div className="page procurement-review">{source ? <ProcurementReader key={source.catalog.publicationId} source={source} header={header} /> : <>{header}{!error && <p role="status">Loading procurement…</p>}</>}</div>;
 }
 
 function HostedProcurementReview() {

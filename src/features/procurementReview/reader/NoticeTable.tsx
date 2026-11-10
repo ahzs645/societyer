@@ -438,6 +438,7 @@ export function NoticeTable({
   emptyState?: ReactNode;
 }) {
   const nav = useReaderNavigation();
+  const source = useReaderSource();
   const { objectMetadata } = TABLES[kind];
   const hidden = hiddenFields.join(",");
   const now = useProcurementClock();
@@ -569,6 +570,7 @@ export function NoticeTable({
             : null
         }
         onRecordClick={(recordId) => openNotice(recordId)}
+        onRecordIntent={source.prefetchRecord}
       >
         {onSearch && <SearchSync search={search ?? ""} onSearch={onSearch} />}
         <RecordTableToolbar

@@ -215,7 +215,8 @@ export function RecordTableCell({
       // that mismatch is what made renaming feel janky). Edit it via the hover
       // pencil instead. Other editable columns keep double-click-to-edit.
       onDoubleClick={opensRecord ? undefined : startEdit}
-      onMouseEnter={() => handle.get().setHoverPosition({ rowIndex, columnIndex })}
+      onMouseEnter={() => { handle.get().setHoverPosition({ rowIndex, columnIndex }); tableCtx.onRecordIntent?.(recordId, record); }}
+      onFocusCapture={() => tableCtx.onRecordIntent?.(recordId, record)}
       onMouseLeave={() => {
         const latest = handle.get().hoverPosition;
         if (latest?.rowIndex === rowIndex && latest.columnIndex === columnIndex) {

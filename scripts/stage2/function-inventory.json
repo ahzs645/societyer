@@ -23394,6 +23394,134 @@
     ]
   },
   {
+    "key": "convex:procurementCatalog:authorizeGrant",
+    "surface": "convex",
+    "name": "procurementCatalog:authorizeGrant",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementCatalog.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalog:configuration",
+    "surface": "convex",
+    "name": "procurementCatalog:configuration",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/procurementCatalog.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalog:recordPublication",
+    "surface": "convex",
+    "name": "procurementCatalog:recordPublication",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalog.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalog:setSource",
+    "surface": "convex",
+    "name": "procurementCatalog:setSource",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/procurementCatalog.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalogActions:grant",
+    "surface": "convex",
+    "name": "procurementCatalogActions:grant",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/procurementCatalogActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalogOperator:page",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:page",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalogOperator:publicationPolicy",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:publicationPolicy",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalogOperator:verifyParity",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:verifyParity",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:procurementImport:activate",
     "surface": "convex",
     "name": "procurementImport:activate",

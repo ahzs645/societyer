@@ -1,0 +1,33 @@
+[Unit]
+Description=Workspace procurement catalog
+After=network.target
+
+[Service]
+Type=simple
+User=catalog-publisher
+Group=catalog-publisher
+WorkingDirectory=/opt/procurement-catalog/current
+Environment=HOST=127.0.0.1 PORT=8788 CATALOG_ADMIN_PORT=8789 CATALOG_CONFIG_FILE=/etc/procurement-catalog/config.json
+ExecStart=/opt/procurement-catalog/node/bin/node /opt/procurement-catalog/current/main.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/srv/procurement-catalog
+MemoryMax=4G
+TasksMax=64
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

@@ -21,13 +21,15 @@ export type IntegrationSettings = {
   offboardingPlan: string;
   /** Drive-relative SharePoint folder a Zoer publishes this workspace's procurement snapshot to; "" until configured. */
   procurementReviewFolder?: string;
+  /** Opt-in serving source. Workspaces without it keep reading Convex. */
+  procurementCatalogSource?: "convex" | "service";
 };
 
 export function defaultIntegrationSettings(): IntegrationSettings {
   return { preferredProvider: "existing", authorizationMode: "delegated", tenantId: "", siteId: "", libraryId: "",
     consentStatus: "unknown", resourceGrantStatus: "unknown", permissionEvidence: "",
     canadianResidencyRequired: false, storageRegion: "", residencyEvidence: "", custodian: "organization",
-    custodianContact: "", offboardingPlan: "", procurementReviewFolder: "" };
+    custodianContact: "", offboardingPlan: "", procurementReviewFolder: "", procurementCatalogSource: "convex" };
 }
 
 const TEXT_FIELDS = ["tenantId", "siteId", "libraryId", "permissionEvidence", "storageRegion", "residencyEvidence", "custodianContact", "offboardingPlan"] as const;
@@ -57,6 +59,7 @@ export function validateIntegrationSettings(value: unknown): IntegrationSettings
     if (typeof input.procurementReviewFolder !== "string") throw new Error("Invalid procurement review folder.");
     result.procurementReviewFolder = input.procurementReviewFolder.trim() ? validateProcurementReviewFolder(input.procurementReviewFolder) : "";
   }
+  if (input.procurementCatalogSource !== undefined && !["convex", "service"].includes(String(input.procurementCatalogSource))) throw new Error("Choose a supported procurement catalog source.");
   if (result.preferredProvider === "sharepoint" && (result.consentStatus === "recorded" || result.resourceGrantStatus === "recorded")) {
     if (!result.tenantId || !result.permissionEvidence) throw new Error("Record the tenant and permission evidence reference before recording consent or a resource grant.");
     if (result.resourceGrantStatus === "recorded" && (!result.siteId || !result.libraryId)) throw new Error("Record the selected site and library for the resource grant.");

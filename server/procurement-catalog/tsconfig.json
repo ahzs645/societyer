@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.server.json",
+  "compilerOptions": { "types": ["node", "vite/client"] },
+  "include": ["./**/*.ts", "../../scripts/procurement/catalog-transport.ts", "../../scripts/procurement/publish-catalog-service.ts", "../../scripts/procurement/qualify-catalog-service.ts", "../../scripts/procurement/install-sqlite-rsync.ts"]
+}

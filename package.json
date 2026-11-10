@@ -488,7 +488,10 @@
     "test:document-sources": "node --import tsx scripts/check-document-sources.ts && node --import tsx scripts/check-document-sources-backend.ts && node --import tsx scripts/check-document-sources-local.ts",
     "test:interface-external-documents": "playwright test -c playwright.external-documents.config.ts",
     "test:interaction-audit:focused": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks",
-    "test:invoice-pdf-export": "tsx scripts/check-invoice-pdf-export.tsx"
+    "test:invoice-pdf-export": "tsx scripts/check-invoice-pdf-export.tsx",
+    "catalog:build": "node scripts/procurement/build-catalog-service.mjs",
+    "catalog:typecheck": "tsc -p server/procurement-catalog/tsconfig.json --noEmit",
+    "test:procurement-catalog": "tsx scripts/check-procurement-catalog-db.ts && tsx scripts/check-procurement-catalog-grants.ts && tsx scripts/check-procurement-catalog-authority.ts && tsx scripts/check-procurement-catalog-service.ts && tsx scripts/check-procurement-catalog-client.ts && python3 scripts/procurement/test-catalog-ssh-gateway.py"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",
@@ -567,6 +570,7 @@
     "convex-test": "^0.0.54",
     "electron": "^42.3.0",
     "electron-builder": "^26.8.1",
+    "esbuild": "0.27.0",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "pngjs": "^7.0.0",

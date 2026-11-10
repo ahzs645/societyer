@@ -1,0 +1,24 @@
+[Unit]
+Description=Cloudflare Tunnel for DDC procurement catalog
+After=network-online.target procurement-catalog.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cloudflared-catalog
+Group=cloudflared-catalog
+ExecStart=/opt/procurement-catalog/tools/cloudflared tunnel --no-autoupdate --loglevel warn --metrics 127.0.0.1:20241 run --token-file /etc/procurement-catalog/cloudflared-token
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=40
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=256M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

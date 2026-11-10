@@ -83,6 +83,8 @@ const inFlight = (states: readonly string[], field = "status") => (row: Transfer
 
 export const TRANSFER_POLICY: Readonly<Record<string, TablePolicy>> = {
   ...Object.fromEntries(TRANSFER_COPY_TABLES.map((table) => [table, { mode: "copy", reason: RECORDS } satisfies TablePolicy])),
+  procurementServicePublications: skip(OPERATOR),
+  procurementServiceRollouts: skip(OPERATOR),
 
   // Copied with changes.
   societies: {
@@ -239,6 +241,7 @@ export function applyPolicy(table: string, row: TransferRow): TransferRow {
   const out: TransferRow = {};
   for (const [key, value] of Object.entries(row)) if (key !== "_id" && key !== "_creationTime" && value !== undefined) out[key] = value;
   for (const field of policy.strip ?? []) delete out[field];
+  if (table === "societies" && out.integrationSettings && typeof out.integrationSettings === "object") out.integrationSettings = { ...(out.integrationSettings as Record<string, unknown>), procurementCatalogSource: "convex" };
   return { ...out, ...(policy.set ?? {}) };
 }
 
