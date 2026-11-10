@@ -934,11 +934,14 @@ select.record-table__menu-select,
   height: token('row-h-comfortable');
 }
 
+// Above every sticky layer of the rows that scroll under it (identifier 3,
+// focused 4, selection 5, phone group-row actions 6). The header is its own
+// stacking context, so its cells' z-index can't lift it past those otherwise.
 .record-table__thead {
   background: token('bg-panel');
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 7;
 }
 
 .record-table__header-row {

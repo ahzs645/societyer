@@ -59,9 +59,13 @@ const VirtuosoTable = forwardRef<HTMLTableElement, React.TableHTMLAttributes<HTM
   },
 );
 
+// Virtuoso gives its sticky header an inline `z-index: 2`, below the sticky
+// identifier, selection and row-action cells (z-index 3–6) of rows scrolling
+// under it, so a row's title was drawn over the first column's header. Lift it
+// above them, as the footer below is.
 const VirtuosoTableHead = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   function VirtuosoTableHead(props, ref) {
-    return <thead ref={ref} {...props} className="record-table__thead" />;
+    return <thead ref={ref} {...props} style={{ ...props.style, zIndex: 7 }} className="record-table__thead" />;
   },
 );
 

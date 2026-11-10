@@ -73,3 +73,28 @@ test("a minute passing keeps the rows already loaded", async ({ page, isMobile }
   expect(await page.evaluate(() => (window as unknown as { __pageRequests: (string | null)[] }).__pageRequests.slice(-1)[0])).not.toBeNull();
   expect(await requests(page)).toBe(loaded);
 });
+
+test("the header stays on top of the rows scrolling under it", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones show cards, not a table header");
+  await page.goto("/tests/fixtures/procurement-browse.html");
+  await expect(page.getByText("Synthetic award 0", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+  const scroller = page.locator(".record-table__virtuoso");
+  // Every header cell must be what a click on it reaches, wherever the rows are: mid-list, then the end of a grown list.
+  const coveredHeaders = () => page.evaluate(() => [...document.querySelectorAll(".record-table__virtuoso thead th")].flatMap((cell) => {
+    const box = cell.getBoundingClientRect();
+    // An empty, click-through header (the row actions column's) is hit-tested past on purpose.
+    if (box.width < 4 || getComputedStyle(cell).pointerEvents === "none") return [];
+    const hit = document.elementFromPoint(box.left + Math.min(20, box.width / 2), box.top + box.height / 2);
+    return hit && cell.contains(hit) ? [] : [`${cell.textContent?.trim() || "(blank)"} ← ${hit?.closest("td")?.textContent?.trim().slice(0, 30) ?? hit?.tagName}`];
+  }));
+  for (const position of [600, 1200]) {
+    await scroller.evaluate((element, top) => { element.scrollTop = top; }, position);
+    await page.waitForTimeout(300);
+    expect(await coveredHeaders(), `scrollTop ${position}`).toEqual([]);
+  }
+  for (let step = 0; step < 4; step++) {
+    await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await page.waitForTimeout(400);
+    expect(await coveredHeaders(), `end of the list, step ${step}`).toEqual([]);
+  }
+});
