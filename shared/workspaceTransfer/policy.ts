@@ -171,6 +171,9 @@ export const TRANSFER_POLICY: Readonly<Record<string, TablePolicy>> = {
   },
 
   // Never copied.
+  microsoftMeetingCandidates: skip("Expiring Microsoft discovery cache; discover again on the destination."),
+  microsoftMeetingPeople: skip("Reviewed login bindings are deployment-specific; review again on the destination."),
+  microsoftMeetingImports: { mode: "copy", reason: "Historical meeting import provenance, not authority to fetch Microsoft data." },
   accountLinkEvents: skip(IDENTITY),
   accountLinkRequests: skip(IDENTITY),
   personAccounts: skip(IDENTITY),

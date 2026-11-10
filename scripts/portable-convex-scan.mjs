@@ -5,6 +5,7 @@ import ts from "typescript";
 
 export const SERVER_ONLY_KINDS = new Set(["action", "internalQuery", "internalMutation", "internalAction"]);
 export const EXPLICIT_SERVER_ONLY = new Set([
+  "microsoftMeetings:settings", "microsoftMeetings:participants", "microsoftMeetings:assignSpeakerToUser",
   // A local backup/demo cannot mint or validate unattended hosted authority.
   "workflows:scheduleStatus", "workflows:authorizeSchedule", "workflows:revokeSchedule",
   "seed:run",

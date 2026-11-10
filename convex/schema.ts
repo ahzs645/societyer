@@ -3,6 +3,7 @@ import { payrollRoeWorkflowTables } from "./tables/payrollRoeWorkflow";
 import { payrollRuleTables } from "./tables/payrollRules";
 import { payrollTd1Tables } from "./tables/payrollTd1";
 import { meetingTranscriptionTables } from "./tables/meetingTranscription";
+import { microsoftMeetingTables } from "./tables/microsoftMeetings";
 import { privacyAssessmentValidators } from "./lib/privacyValidators";
 import { naicsSectorValidator } from "./lib/naics";
 import {personHistoryTables} from './tables/personHistory';
@@ -91,6 +92,7 @@ export default defineSchema({
     provider: v.optional(v.string()), acceptedAtMs: v.optional(v.number()),
   }).index("by_recipient_createdAtMs", ["to", "createdAtMs"]),
   ...meetingTranscriptionTables,
+  ...microsoftMeetingTables,
   ...workspaceTransferTables,
   ...procurementTables,
   ...procurementAnalyticsTables,
