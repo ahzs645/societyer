@@ -72,8 +72,19 @@ implicitly, and no project database is created or replaced.
   with the actual DDC Owner session. The first live service preview caught a
   native browser `fetch` receiver error hidden by an arrow-function mock; the
   client now binds its default transport to the browser global and the browser
-  fixture preserves that receiver requirement. Repeat the signed-in preview
-  after deploying this correction before recording it as verified.
+  fixture preserves that receiver requirement. The corrected live Owner preview
+  passed: 4,323 opportunities, all 21,877 awards, local title filtering, 23
+  description-search results for `tariffs`, a complete real notice and all five
+  of its document entries, plus award Overview and Opportunities analytics.
+  The service switch remained disabled at two of three qualifications.
+- The actual browser download of `Requirements & Specifications - Requirements
+  and Specifications.pdf` succeeded through the existing SharePoint broker.
+  The downloaded file is 205,384 bytes with SHA-256
+  `9b66259d169273884bb72f15bf6dc23f56b8b7dea0404f579f3b15f5fddac41f`,
+  matching this publication's `procurementDocuments` row for
+  `opportunity:235592`. The browser automation download-event wait timed out;
+  the downloaded file's timestamp, size, PDF header and hash supplied the
+  completion evidence instead. No download failure was inferred from that wait.
 - The dedicated Cloudflare tunnel is healthy with four connections. DNS for
   `catalog.ddcnorth.com` is proxied to it; HTTPS health succeeds, anonymous
   catalog access returns 401 and public operator routes return 404.
@@ -113,9 +124,61 @@ implicitly, and no project database is created or replaced.
   both services are active and administrator SSH checksums remain unchanged.
   The installer now preflights service-account readability and checks HTTP
   readiness after restart. No catalog records were lost or source flag changed.
-- Source selection remains **Convex**. Two live parity publications are qualified; one more
-  distinct consecutive real publication is still required before cutover. The active collector/publisher is independently maintained;
+- The third real publication, `20261110T230124Z-71be4fbbef92`, also passed full
+  parity: 4,383 opportunities, 21,877 awards, 26,260 details, 3,163 documents,
+  91 evidence rows and 89,972 taxonomy terms. It transferred 25,491,618 bytes
+  incrementally. Its full parity report hash is
+  `3539f79504e7c55820e90798faa5a4e61da20fbec95e89b425481dd249ea4f19`.
+  Source coverage remains explicitly incomplete; the unavailable attachment was
+  not relabelled as downloaded.
+- Source selection remains **Convex**. All three distinct consecutive real
+  publications are qualified. Automatic catalog publication must be connected
+  before cutover. The active collector/publisher is independently maintained;
   coordinate exact tested commits and source hashes before changing its runtime.
+
+## Release and publisher evidence
+
+The implementation merged through [Societyer #89](https://github.com/ahzs645/societyer/pull/89)
+as `6d8339b56547277794ebc0d1ce7018d9d95a10f3`. All nine CI checks passed
+for the tested implementation head `2f13a0ecfccdc925a817f3c4f9f7d85a40e5e45b`.
+This evidence update is documentation only; it does not claim those checks
+were rerun for prose changes.
+
+The live Pages deployments contain that tested implementation:
+
+| Frontend | Custom domain | Deployment |
+| --- | --- | --- |
+| `societyer-ddcnorth` | `portal.ddcnorth.com` | `a0f8a817` |
+| `societyer-firstform` | `portal.1stform.ca` | `15ae6732` |
+
+Both are direct uploads to their existing projects. Their public configuration
+still targets the same shared Convex deployment, `industrious-cricket-610`.
+The service code is `211a30dd`; the subsequent browser fix and installer
+readiness check do not change its bundled server code.
+
+An isolated 17-file operator source closure was also qualified using the exact
+Mac binary referenced by the finite publication conductor: **Node 24.22.1 /
+SQLite 3.53.4**, Convex 1.49.0, tsx 4.21.0 and JSZip 3.10.1. This is distinct
+from the OTE backend's Node 22 environment. The Mac runtime reused this task's
+installed dependencies, with their versions, package hashes, target and lockfile
+hash recorded explicitly; source files were copied independently.
+
+The same real second publication transferred 4,114 bytes through pinned
+`sqlite3_rsync` 3.54.1, read back the immutable ready receipt, and passed all five
+tables, two list projections and ten analytical views again. The retained full
+parity report hash is
+`37279f1affaceb55645f1c0f03007bfd43a8feccd00a282bd8954b087c2c369f`.
+The private runtime qualification manifest records source, binary, dependency,
+transport, strict known-hosts, restricted-key fingerprint and configuration
+hashes. Its location was handed to the existing publisher operator for review;
+private keys and configuration values are not committed here.
+
+Automatic adoption is **not enabled**. The reviewed proposed hook is local to
+the finite conductor, after exact Convex serving readback and before baseline
+advancement: publish the service, then complete full parity. A failure retains
+that same wave for inspection/retry. It does not fabricate a new publication,
+restart the collector/backend, or move administrator credentials to OTE. The
+conductor's stopped/partial-source resume mode must be reviewed before adoption.
 
 This state must be updated from observed results after recovery and each rollout
 gate. Never infer serving readiness from an export, upload, directory or test.
@@ -156,20 +219,22 @@ source choice to Convex and do not inherit deployment-bound service receipts.
 
 ## Remaining rollout gates
 
-1. Adopt and qualify the optional parallel publisher in its agreed private
-   runtime, including its complete source closure, pinned SQLite transport,
-   restricted workspace key, existing operator authorization and a full Node
-   22 run. Do not restart the independent collector or backend for this step.
-2. Qualify the next legitimate real publication through that active publisher;
-   do not replay or invent publication IDs to satisfy the third-match gate.
-3. Foreign-origin rejection is verified (403); verify the real signed-in Owner
-   through the public hostname after the browser transport correction.
-4. Complete the administrator preview; verify lists,
-   filters, notice details, all document metadata, a real broker download, body
-   search and time-sensitive analysis. Do not fabricate an identity for this.
-5. Run complete parity while each exact generation is still serving in Convex.
+1. Review and adopt the qualified isolated Mac parallel publisher and the
+   stopped conductor's exact resume mode. Its complete source closure, pinned
+   transport, restricted workspace key, existing operator authorization and
+   full Node 24 run are verified. Do not restart the independent collector or
+   backend for this step.
+2. Three legitimate real publications are qualified. Continue full qualification
+   through the adopted parallel publisher; never replay or invent publication
+   IDs to satisfy the gate.
+3. Signed-in Owner preview, public-origin restrictions, lists, filters, notice
+   details, selected notice document metadata, a real broker download, body
+   search and live analysis are verified. Exact within-minute deadline refresh
+   is additionally covered by the browser fixture; it was not observed by
+   changing the production clock.
+4. Run complete parity while each exact generation is still serving in Convex.
    Retain the checksummed reports and qualify three distinct consecutive real
    publications. Coordinate adoption of the new Zoer source closure first.
-6. Explicitly select the service, retain parallel publishing for 14 days, and
+5. Explicitly select the service, retain parallel publishing for 14 days, and
    monitor. Roll back by selecting Convex if needed. Backups and a separate
    bounded retirement review are prerequisites to any later cleanup.

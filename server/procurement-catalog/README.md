@@ -88,9 +88,61 @@ Run `publish-catalog-service.ts --input EXPORT --config CONFIG --deployment NAME
 copy is automatic; `--full-copy` provides a clean-snapshot fallback. Private keys
 and SSH host keys must already be configured; unknown hosts are rejected. A
 per-origin lock rejects concurrent publishers. After an interrupted process,
-inspect its lock and PID before removing the stale lock directory. A first build
-interrupted before its initial transaction commits must rebuild to a new origin
-file; it cannot be silently rebound to a different publication/workspace.
+retain the exact export and follow the recovery steps below; never discard an
+unknown outcome by publishing a replacement generation.
+
+### Recover the same export after an interrupted catalog step
+
+Pause this workspace's publisher/baseline advancement, keeping the collector
+independent. Retain its exact export directory, `activation.json`, immutable
+source files, any `catalog-service-receipt.json` / `catalog-service-parity.json`,
+origin file, configuration, source closure and attempt logs. Compare the retained
+workspace, folder, publication, generation and inventory with the failed wave.
+Do not rerun the SharePoint publication or Convex import to retry a catalog step.
+
+If the original local process died, inspect its recorded PID/process tree and
+`lsof` on the origin. Confirm that its Node, `sqlite3_rsync` and SSH children have
+exited and no other publisher is using that origin. The origin lock is an empty
+directory named `ORIGIN.publisher-lock`; only after these checks may the operator
+remove that **empty directory** with `rmdir`. Never remove a lock because it is
+old, and never remove the database, its SQLite journal, or a nonempty lock.
+Ordinary caught failures already remove the local lock in `finally`.
+
+With the same restricted key and strict known-hosts arguments used by the CLI,
+run the gateway's literal `status` command. It takes the server's kernel lock;
+a busy lock means wait/inspect, not force unlock. Never delete the server's
+`.publisher.lock` file: the kernel releases its lock when the holding process
+exits. If a timed-out activation is still running, leave it to finish and inspect
+status again. A prepared directory alone is not serving evidence.
+
+Then, using the exact qualified runtime and the **same** `EXPORT`, `CONFIG` and
+deployment, run only:
+
+```sh
+node --import tsx scripts/procurement/publish-catalog-service.ts --input EXPORT --config CONFIG --deployment DEPLOYMENT
+node --import tsx scripts/procurement/qualify-catalog-service.ts --input EXPORT --config CONFIG --deployment DEPLOYMENT
+```
+
+The first command rebuilds/verifies the same origin, repeats replication if
+needed, reuses an existing same-identity immutable release, independently reads
+back the serving pointer, and repeats idempotent `recordPublication`. A timeout
+after remote activation or after a committed-but-unacknowledged receipt does
+not require a new publication. An identity mismatch, a newer serving generation,
+or a changed Convex generation stops recovery for inspection.
+
+The second command reruns the complete comparison. If a passed report was saved
+before its ACK was lost, it retains that report's analytical clock and requires
+the identical evidence hash before repeating `verifyParity`. Do not delete the
+report or invent a new clock. If an acknowledged report was lost, restore the
+original evidence before proceeding. Only after both commands succeed and exact
+serving identity is checked may the wrapper mark this **same wave** successful
+and advance its baseline. Any failure must retain a catalog-only recovery phase;
+it must not fall back into the preceding import or start a replacement wave.
+
+A first build interrupted before its initial transaction commits is a separate
+case: if the file has no valid publication metadata, retain it for inspection
+and review a new explicit derived-origin path/configuration for rebuilding the
+same export. Do not silently discard it or rebind it to another workspace.
 
 `qualify-catalog-service.ts` compares every active row in all five tables, both
 thin lists and all ten default analytics views at one clock. Convex reads are
