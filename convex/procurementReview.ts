@@ -15,6 +15,9 @@ import { matchesProcurementParty } from "../shared/procurementAnalytics";
 import { documentTipNames } from "../src/features/procurementReview/lib/notice";
 import { procurementPredicate } from "../shared/procurementBrowseFilters";
 import { toNoticeRow } from "../shared/procurementNoticeRow";
+import { isTriageArchived, isTriageClassification, triageRank, TRIAGE_UNCLASSIFIED_RANK } from "../shared/procurementTriage";
+import { requireSocietyMembership } from "../shared/functions/access";
+import { toPortableQueryCtx } from "./lib/portable";
 import { v } from "convex/values";
 import {
   paginationOptsValidator,
@@ -606,7 +609,7 @@ export const page = authorizedQuery(
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
-    page: v.array(v.object(listRowFields)),
+    page: v.array(v.object({ ...listRowFields, reviewed: v.optional(v.boolean()), classification: v.optional(v.string()) })),
     isDone: v.boolean(),
     continueCursor: v.string(),
     scanned: v.number(),
@@ -665,9 +668,18 @@ export const page = authorizedQuery(
       documents: "documents",
       status: "status",
       source: "recordKey",
+      classification: "classification",
     };
     const field = fields[sortName];
     if (!field) throw new Error("Unsupported sort field.");
+    // The workspace's bid triage lives in its own table (it outlasts catalog
+    // generations), so ordering by it reads that table first: classified
+    // notices best (or worst) first, then every notice not yet classified.
+    const triaged = a.kind === "opportunity";
+    const triageSort = triaged && field === "classification";
+    if (field === "classification" && !triageSort) throw new Error("Unsupported sort field.");
+    const showArchived = request.showArchived === true;
+    const recordField = triageSort ? "date" : field;
     const storage = active.storageGeneration ?? active.generation;
     const base = ctx.db.query("procurementRecords");
     const search = searchTerm.trim();
@@ -706,40 +718,45 @@ export const page = authorizedQuery(
       throw new Error("Invalid party filter.");
     // Numeric ordering and numeric filters share the same range index. Skip
     // zero-document rows before paging instead of producing many empty batches.
-    const numericFilters = field === "documents" || field === "value"
+    const numericFilters = recordField === "documents" || recordField === "value"
       ? filters.filter((f: any) => conjunctive(f) && columns.find((column: any) => column.fieldMetadataId === f.fieldMetadataId)?.field?.name === sortName && typeof f.value === "number" && Number.isFinite(f.value))
       : [];
     const indexed = base
       .withIndex(
-        `by_live_kind_${field}` as "by_live_kind_date",
+        `by_live_kind_${recordField}` as "by_live_kind_date",
         (q) => {
           let scoped: any = q
             .eq("societyId", a.societyId)
             .eq("generation", storage)
             .eq("archived", undefined)
             .eq("kind", a.kind);
-          if (field === "date" && from) scoped = scoped.gte("date", from);
+          if (recordField === "date" && from) scoped = scoped.gte("date", from);
           if (numericFilters.length) {
             const lower = numericFilters.filter((f: any) => ["eq", "gt", "gte"].includes(f.operator)).sort((a: any, b: any) => b.value - a.value || Number(b.operator === "gt") - Number(a.operator === "gt"))[0];
             const upper = numericFilters.filter((f: any) => ["eq", "lt", "lte"].includes(f.operator)).sort((a: any, b: any) => a.value - b.value || Number(b.operator === "lt") - Number(a.operator === "lt"))[0];
-            const lowerExcludesLegacyZero = field !== "documents" || (lower?.operator === "gt" ? lower.value >= 0 : lower?.value > 0);
-            if (lower && lowerExcludesLegacyZero) scoped = lower.operator === "gt" ? scoped.gt(field, lower.value) : scoped.gte(field, lower.value);
-            if (upper) scoped = upper.operator === "lt" ? scoped.lt(field, upper.value) : scoped.lte(field, upper.value);
+            const lowerExcludesLegacyZero = recordField !== "documents" || (lower?.operator === "gt" ? lower.value >= 0 : lower?.value > 0);
+            if (lower && lowerExcludesLegacyZero) scoped = lower.operator === "gt" ? scoped.gt(recordField, lower.value) : scoped.gte(recordField, lower.value);
+            if (upper) scoped = upper.operator === "lt" ? scoped.lt(recordField, upper.value) : scoped.lte(recordField, upper.value);
           }
           return scoped;
         },
       )
-      .order(sorts[0]?.direction === "asc" ? "asc" : "desc");
+      // After the classified notices, the rest follow by closing date: soonest first when the view starts today.
+      .order(triageSort ? (from ? "asc" : "desc") : sorts[0]?.direction === "asc" ? "asc" : "desc");
     // Opaque cursors carry the query-plan version. A deployed index/range
     // change must not feed an older native cursor into a different query.
-    const cursorPlan = JSON.stringify([4, sourceFilters, storage, a.societyId, a.kind, field, sorts[0]?.direction ?? "desc", party ?? null, from, numericFilters.map((f: any) => [f.operator, f.value]), active.searchReady && sorts.length === 0 ? search : ""]);
+    const cursorPlan = JSON.stringify([5, showArchived, sourceFilters, storage, a.societyId, a.kind, field, sorts[0]?.direction ?? "desc", party ?? null, from, numericFilters.map((f: any) => [f.operator, f.value]), active.searchReady && sorts.length === 0 ? search : ""]);
     let nativeCursor: string | null = null;
     let restart = false;
+    // Ordering by classification has two phases: the triage table, then the unclassified rest.
+    let phase: "triage" | "rest" = "triage";
     if (a.paginationOpts.cursor) {
       try {
         const saved = JSON.parse(a.paginationOpts.cursor);
+        const restStart = triageSort && saved.phase === "rest" && saved.cursor === null;
         if (saved.plan === cursorPlan && typeof saved.cursor === "string") nativeCursor = saved.cursor;
-        else restart = true;
+        else if (saved.plan !== cursorPlan || !restStart) restart = true;
+        if (!restart && triageSort && saved.phase === "rest") phase = "rest";
       } catch { restart = true; }
     }
     const opts = {
@@ -786,13 +803,50 @@ export const page = authorizedQuery(
         ...candidates,
         page: records.filter((r): r is Doc<"procurementRecords"> => r !== null),
       };
+    } else if (triageSort && phase === "triage") {
+      const classified = await ctx.db
+        .query("procurementTriage")
+        .withIndex("by_rank", (q) => q.eq("societyId", a.societyId).lt("rank", TRIAGE_UNCLASSIFIED_RANK))
+        .order(sorts[0]?.direction === "desc" ? "desc" : "asc")
+        .paginate(opts);
+      const records = await Promise.all(
+        classified.page.map((entry) =>
+          ctx.db
+            .query("procurementRecords")
+            .withIndex("by_key", (q) => q.eq("societyId", a.societyId).eq("generation", storage).eq("recordKey", entry.recordKey))
+            .unique(),
+        ),
+      );
+      result = {
+        ...classified,
+        page: records.filter((r): r is Doc<"procurementRecords"> => r !== null && r.kind === a.kind && (!from || r.date >= from)),
+      };
     } else result = await indexed.paginate(opts);
+    const scanned = result.page.length;
+    const triage = triaged
+      ? await Promise.all(
+          result.page.map((r) =>
+            ctx.db
+              .query("procurementTriage")
+              .withIndex("by_record", (q) => q.eq("societyId", a.societyId).eq("recordKey", r.recordKey))
+              .unique(),
+          ),
+        )
+      : [];
     const visible = result.page
-      .filter((r) => !r.archived)
-      .map((r) => ({
-        raw: listRow(r),
-        drawn: toNoticeRow(listRow(r), a.asOf),
-      }));
+      .map((r, index) => ({ r, triage: triage[index] ?? null }))
+      // The classified notices were already listed by the first phase.
+      .filter(({ r, triage }) => !r.archived && !(triageSort && phase === "rest" && triage?.classification))
+      .map(({ r, triage }) => {
+        const raw = triaged
+          ? { ...listRow(r), reviewed: triage?.reviewed ?? false, classification: triage?.classification ?? "" }
+          : listRow(r);
+        return { raw, drawn: toNoticeRow(raw, a.asOf) };
+      })
+      // Reviewed and not doable: kept, but left out of the list unless asked for.
+      .filter((r) => showArchived || !r.drawn.archived);
+    // The classified phase ending only starts the rest; the list is done when that ends.
+    const startRest = triageSort && phase === "triage" && result.isDone;
     const matches = procurementPredicate(
       columns,
       filters,
@@ -812,11 +866,93 @@ export const page = authorizedQuery(
               )),
         )
         .map((r) => pageRow(r.raw)),
-      isDone: result.isDone,
-      continueCursor: result.isDone ? "" : JSON.stringify({ plan: cursorPlan, cursor: result.continueCursor }),
+      isDone: result.isDone && !startRest,
+      continueCursor: startRest
+        ? JSON.stringify({ plan: cursorPlan, phase: "rest", cursor: null })
+        : result.isDone ? "" : JSON.stringify({ plan: cursorPlan, phase, cursor: result.continueCursor }),
       ...(restart ? { restart: true } : {}),
-      scanned: result.page.length,
+      scanned,
       relevance: !!search && !!candidateQuery && !!active.searchReady && sorts.length === 0,
+    };
+  },
+});
+
+/**
+ * The workspace's own bid triage of one opportunity: the "reviewed" tick and
+ * the classification (shared/procurementTriage.ts). Saved here, shared by the
+ * workspace's members, and never written back to Zoer. Clearing both removes
+ * the row.
+ */
+export const setTriage = authorizedMutation(
+  "procurementReview:setTriage",
+  mutation,
+)({
+  args: {
+    societyId: v.id("societies"),
+    recordKey: v.string(),
+    reviewed: v.boolean(),
+    classification: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { societyId, recordKey, reviewed, classification }) => {
+    if (recordKey.length > 500 || (classification !== "" && !isTriageClassification(classification)))
+      throw new Error("Invalid triage.");
+    const active = await activeCatalog(ctx, societyId);
+    if (!active) throw new Error("Procurement review has no published catalog.");
+    const storage = active.storageGeneration ?? active.generation;
+    const record = await ctx.db
+      .query("procurementRecords")
+      .withIndex("by_key", (q) => q.eq("societyId", societyId).eq("generation", storage).eq("recordKey", recordKey))
+      .unique();
+    if (!record || record.kind !== "opportunity") throw new Error("Opportunity not found.");
+    const member = await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId) as Record<string, unknown>;
+    const updatedBy = [member.displayName, member.name, member.email].find((value): value is string => typeof value === "string" && !!value.trim());
+    const existing = await ctx.db
+      .query("procurementTriage")
+      .withIndex("by_record", (q) => q.eq("societyId", societyId).eq("recordKey", recordKey))
+      .unique();
+    if (!reviewed && !classification) {
+      if (existing) await ctx.db.delete(existing._id);
+      return null;
+    }
+    const row = {
+      reviewed,
+      classification,
+      rank: triageRank(classification),
+      hidden: isTriageArchived({ reviewed, classification: classification as "" }),
+      updatedAt: Date.now(),
+      ...(updatedBy ? { updatedBy: updatedBy.trim().slice(0, 200) } : {}),
+    };
+    if (existing) await ctx.db.patch(existing._id, row);
+    else await ctx.db.insert("procurementTriage", { societyId, recordKey, ...row });
+    return null;
+  },
+});
+
+/** One opportunity's bid triage, for its notice page; unset reads as not reviewed and unclassified. */
+export const triage = authorizedQuery(
+  "procurementReview:triage",
+  query,
+)({
+  args: { societyId: v.id("societies"), recordKey: v.string() },
+  returns: v.object({
+    reviewed: v.boolean(),
+    classification: v.string(),
+    updatedBy: v.union(v.string(), v.null()),
+    updatedAt: v.union(v.number(), v.null()),
+  }),
+  handler: async (ctx, { societyId, recordKey }) => {
+    requireDeploymentSupport();
+    await requireEnabledModule(ctx, societyId, "procurementReview");
+    const row = await ctx.db
+      .query("procurementTriage")
+      .withIndex("by_record", (q) => q.eq("societyId", societyId).eq("recordKey", recordKey))
+      .unique();
+    return {
+      reviewed: row?.reviewed ?? false,
+      classification: row?.classification ?? "",
+      updatedBy: row?.updatedBy ?? null,
+      updatedAt: row?.updatedAt ?? null,
     };
   },
 });

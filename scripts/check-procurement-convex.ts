@@ -164,6 +164,39 @@ const browse = await reader.query(api.procurementReview.page, { societyId: ids.s
 const browsed = browse.page.find((row: ListRow) => row.recordKey === "opportunity:0000");
 assert.deepEqual(JSON.parse(browsed.analyticsJson), { closingAt: "2026-10-01T22:00:00.000Z", closingDate: "Oct 1, 2026 3:00 PM (PDT)" }, "A browse page keeps only the closing fields of analyticsJson");
 assert.equal(browse.page.filter((row: ListRow) => row.analyticsJson !== undefined).length, 1, "Rows without analytics carry none");
+
+// The workspace's own bid triage: saved here (never in Zoer), shown on every page row, ordered best first, and
+// "reviewed + not doable" archived out of the list unless asked for.
+await t.run(async ctx => { await ctx.db.insert("users", { societyId: ids.societyId, email: "triager@example.invalid", displayName: "Triager", role: "Director", status: "Active", authSubject: "triager", authIssuer: issuer, authProvider: "better-auth", createdAtISO: "2026-11-10" }); });
+const triager = t.withIdentity({ subject: "triager", issuer });
+const triageOf = (recordKey: string, reviewed: boolean, classification: string) => ({ societyId: ids.societyId, recordKey, reviewed, classification });
+await assert.rejects(reader.mutation(api.procurementReview.setTriage, triageOf("opportunity:0001", true, "doable")), /Permission/, "A viewer cannot triage");
+await assert.rejects(triager.mutation(api.procurementReview.setTriage, triageOf("opportunity:0001", true, "great")), /Invalid/);
+await assert.rejects(triager.mutation(api.procurementReview.setTriage, triageOf("award:a", true, "doable")), /not found/);
+await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).mutation(api.procurementReview.setTriage, triageOf("opportunity:0001", true, "doable")), /membership|access|workspace|bound|Permission/i);
+for (const [key, reviewed, classification] of [["opportunity:0007", false, "not_doable"], ["opportunity:0005", true, "not_doable"], ["opportunity:0003", true, "possible"], ["opportunity:0001", false, "doable"], ["opportunity:0009", true, ""], ["opportunity:0011", false, "needs_partner"]] as const)
+  await triager.mutation(api.procurementReview.setTriage, triageOf(key, reviewed, classification));
+assert.deepEqual(await reader.query(api.procurementReview.triage, { societyId: ids.societyId, recordKey: "opportunity:0003" }).then(({ updatedAt, ...rest }: any) => rest), { reviewed: true, classification: "possible", updatedBy: "Triager" });
+const cols = [when, { fieldMetadataId: "source", field: { _id: "source", name: "source" } }, { fieldMetadataId: "classification", field: { _id: "classification", name: "classification" } }, { fieldMetadataId: "reviewed", field: { _id: "reviewed", name: "reviewed" } }];
+const triagePage = (request: Record<string, unknown>, cursor: string | null = null) => reader.query(api.procurementReview.page, { societyId: ids.societyId, generation: ids.generation, kind: "opportunity", request: JSON.stringify({ columns: cols, ...request }), asOf: Date.parse("2026-09-30T00:00:00Z"), paginationOpts: { numItems: 50, cursor } });
+const keys = (page: { page: ListRow[] }) => page.page.map(row => row.recordKey);
+const bySource = [{ fieldMetadataId: "source", direction: "asc" }];
+const plain = await triagePage({ sorts: bySource });
+assert.equal(keys(plain).includes("opportunity:0005"), false, "Reviewed + not doable is archived out of the list");
+assert.deepEqual(plain.page.filter((row: any) => row.classification || row.reviewed).map((row: any) => [row.recordKey, row.reviewed, row.classification]), [["opportunity:0001", false, "doable"], ["opportunity:0003", true, "possible"], ["opportunity:0007", false, "not_doable"], ["opportunity:0009", true, ""], ["opportunity:0011", false, "needs_partner"]], "Not doable but unreviewed stays; every row carries its triage");
+assert.equal(keys(await triagePage({ sorts: bySource, showArchived: true })).includes("opportunity:0005"), true, "Show archived brings it back");
+const best = await triagePage({ sorts: [{ fieldMetadataId: "classification", direction: "asc" }] });
+assert.deepEqual(keys(best), ["opportunity:0001", "opportunity:0003", "opportunity:0011", "opportunity:0007"], "Doable, possible, needs a partner, not doable; the archived one is left out");
+assert.equal(best.isDone, false, "The unclassified follow the classified");
+const rest = await triagePage({ sorts: [{ fieldMetadataId: "classification", direction: "asc" }] }, best.continueCursor);
+assert.equal(rest.page.length > 0 && rest.page.every((row: any) => row.classification === ""), true, "The rest are unclassified, with none repeated");
+assert.equal(rest.restart, undefined);
+assert.deepEqual(keys(await triagePage({ sorts: [{ fieldMetadataId: "classification", direction: "desc" }], showArchived: true })), ["opportunity:0007", "opportunity:0005", "opportunity:0011", "opportunity:0003", "opportunity:0001"], "Worst first, archived included");
+assert.deepEqual(keys(await triagePage({ sorts: bySource, filters: [{ id: "c", fieldMetadataId: "classification", operator: "eq", value: "possible" }] })).slice(0, 1), ["opportunity:0003"], "The classification filters like any column");
+await assert.rejects(reader.query(api.procurementReview.page, { societyId: ids.societyId, generation: ids.generation, kind: "award", request: JSON.stringify({ columns: cols, sorts: [{ fieldMetadataId: "classification", direction: "asc" }] }), asOf: 0, paginationOpts: { numItems: 50, cursor: null } }), /Unsupported sort/);
+await triager.mutation(api.procurementReview.setTriage, triageOf("opportunity:0009", false, ""));
+assert.equal(await t.run(ctx => ctx.db.query("procurementTriage").withIndex("by_record", q => q.eq("societyId", ids.societyId).eq("recordKey", "opportunity:0009")).unique()), null, "Clearing both removes the row");
+assert.equal((await t.run(ctx => ctx.db.query("procurementTriage").collect())).every(row => row.societyId === ids.societyId), true);
 const catalogReviews = (await allPages<{ recordKey: string; source: string }>(api.procurementReview.reviews, { societyId: ids.societyId, generation: ids.generation }, 500)).rows;
 assert.deepEqual(catalogReviews.map((row) => `${row.recordKey} ${row.source}`).sort(), ["opportunity:0000 procurement_decisions", "opportunity:0000 procurement_requirements", "opportunity:0001 procurement_decisions"], "Every review row in the workspace's catalog, with its record, and none of another workspace's");
 const review = await reader.query(api.procurementReview.review, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" });

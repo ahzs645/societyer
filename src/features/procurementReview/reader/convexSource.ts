@@ -5,7 +5,7 @@
  * once (one-shot queries, large bounded pages) and kept for the life of the
  * source rather than held open as subscriptions.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../../lib/convexApi";
 import { readProcurementDocument } from "../lib/documents";
@@ -13,6 +13,7 @@ import type { ReviewRow } from "../lib/review";
 import { useProcurementClock, useProcurementDeadline } from "../lib/clock";
 import { deadlineInstant, procurementDeadlineValue, type DocumentTipNames } from "../lib/notice";
 import { analysisIdentity, normalizeAnalysisRequest, type AnalysisRequest, type AnalysisResult } from "../../../../shared/procurementAnalytics";
+import type { Triage } from "../../../../shared/procurementTriage";
 import { progressive, useProgressive, type CatalogReviewRow, type DocumentPage, type ListRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary } from "./source";
 
 /** procurementReview:list reads at most this many rows a page (fewer when it reaches its bytes bound). */
@@ -69,9 +70,26 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog,
     });
     return { list, reviews };
   }, [client, societyId, generation]);
+  // What this visit saved. It belongs to the workspace, not to a catalog generation.
+  const triage = useMemo(() => {
+    let saved: ReadonlyMap<string, Triage> = new Map();
+    const listeners = new Set<() => void>();
+    const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+    const read = () => saved;
+    return {
+      async set(recordKey: string, next: Triage) {
+        await client.mutation(api.procurementReview.setTriage, { societyId, recordKey, reviewed: next.reviewed, classification: next.classification });
+        saved = new Map(saved).set(recordKey, next);
+        for (const listener of listeners) listener();
+      },
+      useOverrides: () => useSyncExternalStore(subscribe, read),
+      useOne: (recordKey: string) => useQuery(api.procurementReview.triage, { societyId, recordKey }) as ReturnType<NonNullable<ReaderSource["triage"]>["useOne"]>,
+    };
+  }, [client, societyId]);
 
   return useMemo<ReaderSource>(() => ({
     catalog,
+    triage,
     useAnalysis(request: AnalysisRequest) {
       const clock = useProcurementClock();
       let identity = "", serialized = "", invalid = "";
@@ -131,5 +149,5 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog,
     },
     readDocument: (document, signal) => readProcurementDocument(societyId, document, signal),
     previewId: (document) => `procurement:${societyId}:${generation}:${document.documentKey}`,
-  }), [societyId, generation, catalog, loaded, confirmed]);
+  }), [societyId, generation, catalog, loaded, confirmed, triage]);
 }

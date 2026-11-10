@@ -57,6 +57,7 @@ import {
 import { describeReview, type ReviewModel } from "../lib/review";
 import { NoticeDocuments } from "./NoticeDocuments";
 import { NoticeReview } from "./NoticeReview";
+import { NoticeTriage } from "./TriageControls";
 import {
   BUYER_PARAM,
   ISSUED_FOR_PARAM,
@@ -228,6 +229,7 @@ export function NoticePage({
         }
       />
       <NoticeBadges model={model} />
+      {model.kind === "opportunity" && <NoticeTriage recordKey={recordKey} title={model.title} />}
       <div className="procurement-notice__layout">
         <div className="procurement-notice__main">
           <Tabs

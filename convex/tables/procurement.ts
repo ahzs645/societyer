@@ -266,6 +266,21 @@ export const procurementTables = {
   })
     .index("by_document_key", ["societyId", "generation", "documentKey"])
     .index("by_record", ["societyId", "generation", "recordKey"]),
+  // The workspace's own bid triage (shared/procurementTriage.ts). Keyed by record, not by catalog
+  // generation, so it survives every Zoer re-import. `rank` orders the classification (1 best);
+  // `hidden` is reviewed + not doable.
+  procurementTriage: defineTable({
+    societyId: v.id("societies"),
+    recordKey: v.string(),
+    reviewed: v.boolean(),
+    classification: v.string(),
+    rank: v.number(),
+    hidden: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.string()),
+  })
+    .index("by_record", ["societyId", "recordKey"])
+    .index("by_rank", ["societyId", "rank", "recordKey"]),
   procurementEvidence: defineTable({
     ...scope,
     recordKey: v.string(),

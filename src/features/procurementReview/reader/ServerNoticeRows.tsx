@@ -13,11 +13,14 @@ export function ServerNoticeRows({
   kind,
   fixedParty,
   sourceFilters,
+  showArchived = false,
   children,
 }: {
   children: (props: { onEndReached: () => void; loading: boolean; hasMore: boolean; footer: ReactNode }) => ReactNode;
   kind: string;
   sourceFilters: BcBidSourceFilters;
+  /** Include notices the workspace reviewed and classified as not doable. */
+  showArchived?: boolean;
   fixedParty?: { field: "organization" | "issuedFor"; name: string };
 }) {
   const source = useReaderSource(),
@@ -38,6 +41,7 @@ export function ServerNoticeRows({
       JSON.stringify({
         party: fixedParty,
         sourceFilters,
+        ...(showArchived ? { showArchived: true } : {}),
         columns: columns.map((column) => ({ fieldMetadataId: column.fieldMetadataId, field: { _id: column.field._id, name: column.field.name } })),
         filters,
         filterGroups,
@@ -47,6 +51,7 @@ export function ServerNoticeRows({
     [
       columns,
       sourceFilters,
+      showArchived,
       filters,
       filterGroups,
       sorts,
@@ -80,6 +85,8 @@ export function ServerNoticeRows({
   // redraws the loaded rows (relative dates, derived status) in place, rather
   // than dropping everything scrolled past and loading from the top again.
   const now = useProcurementClock();
+  // A triage saved during this visit shows at once on rows of pages no longer subscribed.
+  const overrides = source.triage?.useOverrides();
   const queryKey = `${source.catalog.generation}:${kind}:${debounced}`;
   const [position, setPosition] = useState({ key: queryKey, cursor: null as string | null });
   const cursor = position.key === queryKey ? position.cursor : null;
@@ -107,11 +114,13 @@ export function ServerNoticeRows({
     }
     if (page) loaded.current.pages.set(cursor, page.page);
     // A reactive re-delivery replaces its page, never appends duplicate records.
-    const unique = new Map([...loaded.current.pages.values()].flat().map(row => [row.recordKey, toNoticeRow(row, now)]));
+    const unique = new Map([...loaded.current.pages.values()].flat().map(row => [row.recordKey, toNoticeRow(overrides?.has(row.recordKey) ? { ...row, ...overrides.get(row.recordKey) } : row, now)]));
+    // Archiving a notice takes it out of the list as soon as it is saved.
+    if (!showArchived) for (const [key, row] of unique) if (row.archived) unique.delete(key);
     handle.get().setRecords([...unique.values()]);
     setLoadedCount(unique.size);
     advancing.current = null;
-  }, [page, cursor, queryKey, handle, now]);
+  }, [page, cursor, queryKey, handle, now, overrides, showArchived]);
   const pending = !page || searchTerm !== appliedSearch;
   const loadMore = useCallback(() => {
     if (pending || !page || page.isDone || page.continueCursor === cursor || advancing.current === page.continueCursor) return;

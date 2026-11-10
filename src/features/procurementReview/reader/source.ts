@@ -12,6 +12,7 @@ import type { StoredProcurementDocument } from "../lib/documents";
 import type { ReviewRow } from "../lib/review";
 import type { DocumentTipNames } from "../lib/notice";
 import type { AnalysisRequest, AnalysisState } from "../../../../shared/procurementAnalytics";
+import type { Triage } from "../../../../shared/procurementTriage";
 
 export type RecordSummary = { recordKey: string; kind: string; title: string; organization: string; date: string; status: string; dateText?: string };
 export type DocumentPage = { page: StoredProcurementDocument[]; isDone: boolean; continueCursor: string };
@@ -29,8 +30,21 @@ export type RecordList = { rows: ListRow[]; total: number; done: boolean };
 /** A published review row with the record it belongs to (for the catalog-wide insights). */
 export type CatalogReviewRow = ReviewRow & { recordKey: string };
 
+/**
+ * The workspace's own bid triage (shared/procurementTriage.ts). `set` saves for
+ * everyone; `useOverrides` is what this visit saved, by record key, because
+ * list pages already loaded aren't read again after a save.
+ */
+export type ReaderTriage = {
+  set(recordKey: string, next: Triage): Promise<void>;
+  useOverrides(): ReadonlyMap<string, Triage>;
+  useOne(recordKey: string): { reviewed: boolean; classification: string; updatedBy: string | null; updatedAt: number | null } | undefined;
+};
+
 export type ReaderSource = {
   catalog: ReaderCatalog;
+  /** Absent where a triage can't be saved (the offline snapshot and the demo): the list then has no triage columns. */
+  triage?: ReaderTriage;
   /** Publication metrics prepared once on the server; drill-downs return at most 50 records. */
   useAnalysis?: (request: AnalysisRequest) => AnalysisState & { retry: () => void };
   /** Hosted interactive page; absent for the offline snapshot host. */

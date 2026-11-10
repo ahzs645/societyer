@@ -50,12 +50,15 @@ import { useReaderNavigation } from "./routes";
 import { useReaderSource, type ListRow } from "./source";
 import { useProcurementClock } from "../lib/clock";
 import { ServerNoticeRows } from "./ServerNoticeRows";
+import { TriageClassificationCell, TriageReviewedCell } from "./TriageControls";
+import { TRIAGE_CLASSIFICATIONS, triageLabel } from "../../../../shared/procurementTriage";
 
 export type NoticeKind = "opportunity" | "award";
 
 /** The opportunity list's presets ("upcoming" is the default); awards have one view, latest first. */
 export type NoticeViewId =
   | "upcoming"
+  | "triage"
   | "Open"
   | "all"
   | "Closed"
@@ -68,6 +71,7 @@ export const NOTICE_VIEWS: {
   isSystem: boolean;
 }[] = [
   { _id: "upcoming", name: "Open, closing soonest", isSystem: false },
+  { _id: "triage", name: "Open, best classification first", isSystem: false },
   { _id: "Open", name: "All open, including unverified closing dates", isSystem: false },
   { _id: "all", name: "All, latest closing first", isSystem: false },
   { _id: "Closed", name: "Closed", isSystem: false },
@@ -152,6 +156,20 @@ function tableFor(kind: NoticeKind) {
             size: 340,
           },
           {
+            name: "reviewed",
+            config: { sortable: false, groupable: false },
+            label: "Reviewed",
+            fieldType: FIELD_TYPES.BOOLEAN,
+            size: 96,
+          },
+          {
+            name: "classification",
+            config: { options: TRIAGE_CLASSIFICATIONS.map(({ value, label, color }) => ({ value, label, color })) },
+            label: "Classification",
+            fieldType: FIELD_TYPES.SELECT,
+            size: 170,
+          },
+          {
             name: "organization",
             label: "Buyer",
             fieldType: FIELD_TYPES.TEXT,
@@ -222,7 +240,7 @@ function presetView(
   let filters: ViewFilter[] = [];
   let sorts = latest;
   if (kind === "opportunity") {
-    if (viewId === "upcoming") {
+    if (viewId === "upcoming" || viewId === "triage") {
       // "Open" is the derived status: an open notice whose deadline passed reads Closed (statusOf in lib/notice.ts).
       filters = [
         status("Open"),
@@ -233,8 +251,11 @@ function presetView(
           value: { preset: "custom", start: today },
         },
       ];
+      // The triage view lists Doable first, then Possible, Needs a partner and Not doable; the unclassified follow, closing soonest.
       sorts = [
-        { id: "when", fieldMetadataId: field("when"), direction: "asc" },
+        viewId === "triage"
+          ? { id: "classification", fieldMetadataId: field("classification"), direction: "asc" }
+          : { id: "when", fieldMetadataId: field("when"), direction: "asc" },
       ];
     } else if (viewId === "documents")
       filters = [
@@ -322,6 +343,10 @@ function useCells(
               onOpen={() => openDocuments(row._id)}
             />
           );
+        if (field.name === "reviewed")
+          return <TriageReviewedCell recordKey={row._id} title={row.title} reviewed={row.reviewed} classification={row.classification} />;
+        if (field.name === "classification")
+          return <TriageClassificationCell recordKey={row._id} title={row.title} reviewed={row.reviewed} classification={row.classification} />;
         if (field.name === "value")
           return (
             <span className="procurement-reader__value">
@@ -374,6 +399,9 @@ const renderPhoneCard: RecordTableCardRenderer = (
           </span>
         ),
         award ? money(row.value, row.currency) : "",
+        !award && (row.classification || row.reviewed)
+          ? [triageLabel(row.classification), row.reviewed ? "Reviewed" : ""].filter(Boolean).join(", ")
+          : "",
         award ? row.supplier || row.organization : row.organization,
       ]}
       onOpen={open}
@@ -425,7 +453,12 @@ export function NoticeTable({
 }) {
   const nav = useReaderNavigation();
   const { objectMetadata } = TABLES[kind];
-  const hidden = hiddenFields.join(",");
+  // The triage columns need somewhere to save, and a server that orders by them.
+  const canTriage = !!useReaderSource().triage;
+  const triaged = kind === "opportunity" && serverPaging && canTriage;
+  const showArchived = triaged && nav.params.get("archived") === "1";
+  const hidden = [...hiddenFields, ...(triaged ? [] : ["reviewed", "classification"])].join(",");
+  if (!triaged && view === "triage") view = "upcoming";
   const now = useProcurementClock();
   const today = zoneToday(now);
   // One view object per preset: a new object reloads the table's filters and sorts.
@@ -482,6 +515,13 @@ export function NoticeTable({
   return (
     <div className="procurement-reader">
       {kind === "opportunity" && <BcBidFilters filters={sourceFilters} onChange={nav.update} />}
+      {triaged && (
+        <label className="procurement-triage__archive-toggle">
+          <input type="checkbox" checked={showArchived} onChange={(event) => nav.update({ archived: event.target.checked ? "1" : null })} />
+          <span>Show archived</span>
+          <small className="muted">reviewed and classified “Not doable”</small>
+        </label>
+      )}
       <RecordTableScope
         tableId={tableId}
         objectMetadata={objectMetadata}
@@ -505,7 +545,7 @@ export function NoticeTable({
           onOpenFilter={() => setFiltering((open) => !open)}
           {...(onChangeView && kind === "opportunity"
             ? {
-                views: NOTICE_VIEWS,
+                views: triaged ? NOTICE_VIEWS : NOTICE_VIEWS.filter((entry) => entry._id !== "triage"),
                 currentViewId: view,
                 onChangeView: (viewId: string) => {
                   if (isNoticeView(viewId)) onChangeView(viewId);
@@ -519,7 +559,7 @@ export function NoticeTable({
         />
         <RecordTableFilterChips />
         {serverPaging ? (
-          <ServerNoticeRows kind={kind} fixedParty={fixedParty} sourceFilters={sourceFilters}>
+          <ServerNoticeRows kind={kind} fixedParty={fixedParty} sourceFilters={sourceFilters} showArchived={showArchived}>
             {({ onEndReached, loading: serverLoading, hasMore, footer }) => renderTable(onEndReached, serverLoading, hasMore, footer)}
           </ServerNoticeRows>
         ) : renderTable()}

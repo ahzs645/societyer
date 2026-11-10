@@ -28,6 +28,10 @@ export type NoticeRow = {
   value: number | null;
   currency: string;
   procurementType: string;
+  /** The workspace's own bid triage; `archived` is reviewed + not doable. */
+  reviewed: boolean;
+  classification: string;
+  archived: boolean;
   /** Searched with the columns: the source's reference isn't one. */
   _searchText: string;
 };
@@ -75,6 +79,9 @@ export function toNoticeRow(row: ListRow, now = Date.now()): NoticeRow {
     value: row.value,
     currency: row.currency,
     procurementType: row.procurementType,
+    reviewed: row.reviewed === true,
+    classification: row.classification ?? "",
+    archived: row.reviewed === true && row.classification === "not_doable",
     _searchText: row.reference,
   };
 }

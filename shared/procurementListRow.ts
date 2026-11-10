@@ -21,6 +21,9 @@ export type ListRow = {
   value: number | null;
   currency: string;
   procurementType: string;
+  /** The workspace's own bid triage (shared/procurementTriage.ts); absent where the reader has none. */
+  reviewed?: boolean;
+  classification?: string;
   /** Versioned source provenance, canonical parties and quality inputs, when published. */
   analyticsJson?: string;
 };
