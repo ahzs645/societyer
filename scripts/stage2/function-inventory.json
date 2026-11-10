@@ -18527,6 +18527,186 @@
     ]
   },
   {
+    "key": "convex:microsoftMeetings:access",
+    "surface": "convex",
+    "name": "microsoftMeetings:access",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/microsoftMeetings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "candidateId",
+        "table": "microsoftMeetingCandidates",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetings:assignSpeakerToUser",
+    "surface": "convex",
+    "name": "microsoftMeetings:assignSpeakerToUser",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/microsoftMeetings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "userId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetings:commitImport",
+    "surface": "convex",
+    "name": "microsoftMeetings:commitImport",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/microsoftMeetings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "candidateId",
+        "table": "microsoftMeetingCandidates",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetings:participants",
+    "surface": "convex",
+    "name": "microsoftMeetings:participants",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/microsoftMeetings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetings:settings",
+    "surface": "convex",
+    "name": "microsoftMeetings:settings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/microsoftMeetings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetings:stage",
+    "surface": "convex",
+    "name": "microsoftMeetings:stage",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/microsoftMeetings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetingsActions:discover",
+    "surface": "convex",
+    "name": "microsoftMeetingsActions:discover",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/microsoftMeetingsActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetingsActions:importMeeting",
+    "surface": "convex",
+    "name": "microsoftMeetingsActions:importMeeting",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/microsoftMeetingsActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "candidateId",
+        "table": "microsoftMeetingCandidates",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:microsoftMeetingsActions:operatorHealth",
+    "surface": "convex",
+    "name": "microsoftMeetingsActions:operatorHealth",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/microsoftMeetingsActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:minuteBook:overview",
     "surface": "convex",
     "name": "minuteBook:overview",

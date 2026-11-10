@@ -104,6 +104,9 @@ export function isStaticGenericCrud(name: string): boolean {
 
 /** These hosted capabilities fail explicitly; they must never report a local save. */
 export const STATIC_UNSUPPORTED_WRITES: ReadonlyMap<string, string> = new Map([
+  ["microsoftMeetingsActions:discover", "Teams transcript discovery requires the connected workspace and its Microsoft connector. Import a downloaded transcript locally instead."],
+  ["microsoftMeetingsActions:importMeeting", "Teams transcript import requires the connected workspace and its Microsoft connector. Import a downloaded transcript locally instead."],
+  ["microsoftMeetings:assignSpeakerToUser", "Verified Teams user links require the connected workspace. Review local transcript speakers using the local people directory instead."],
   ["workspaceMfa:setPolicy", "Workspace two-factor authentication policy requires a connected workspace and a verified Owner session. It cannot be changed in local or demo mode."],
   ["accountLinks:begin", "Linking logins needs a connected workspace with hosted sign-in. It isn't available in local or demo mode."],
   ["accountLinks:confirm", "Linking logins needs a connected workspace with hosted sign-in. It isn't available in local or demo mode."],

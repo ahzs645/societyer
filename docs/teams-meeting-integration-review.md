@@ -166,8 +166,8 @@ Still open:
   date range after propagation; if still empty, qualify a newly transcribed call
   and raise a Microsoft support case with sanitized request IDs. No claim is made
   that policy propagation caused the existing empty results.
-- Code is pushed on `codex/teams-meeting-review-20261109` in draft PR #87.
-  Keep the PR draft until live qualification is resolved.
+- Implementation is consolidated in PR #87. The operator requested merging
+  the implementation while the live qualification items below remain open.
 - Portal login awaits the operator’s passkey; a real browser import and real
   speaker-link review have not yet passed. No real transcript, attendance or
   directory profile has been created by this connector during qualification.
