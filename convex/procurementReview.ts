@@ -1,3 +1,4 @@
+import {bcBidSourceFilters, matchesBcBidSourceFilters} from "../shared/bcBidSourceFilters";
 /**
  * Procurement review (hosted only): which SharePoint folder this workspace
  * reads its published Zoer snapshot from. The snapshot files themselves come
@@ -625,6 +626,7 @@ export const page = authorizedQuery(
         relevance: false,
       };
     const request = JSON.parse(a.request);
+    const sourceFilters = bcBidSourceFilters(request.sourceFilters);
     const {
       columns = [],
       filters = [],
@@ -730,7 +732,7 @@ export const page = authorizedQuery(
       .order(sorts[0]?.direction === "asc" ? "asc" : "desc");
     // Opaque cursors carry the query-plan version. A deployed index/range
     // change must not feed an older native cursor into a different query.
-    const cursorPlan = JSON.stringify([3, storage, a.societyId, a.kind, field, sorts[0]?.direction ?? "desc", party ?? null, from, numericFilters.map((f: any) => [f.operator, f.value]), active.searchReady && sorts.length === 0 ? search : ""]);
+    const cursorPlan = JSON.stringify([4, sourceFilters, storage, a.societyId, a.kind, field, sorts[0]?.direction ?? "desc", party ?? null, from, numericFilters.map((f: any) => [f.operator, f.value]), active.searchReady && sorts.length === 0 ? search : ""]);
     let nativeCursor: string | null = null;
     let restart = false;
     if (a.paginationOpts.cursor) {
@@ -802,7 +804,7 @@ export const page = authorizedQuery(
         .filter(
           (r) =>
             (!party || matchesProcurementParty(r.raw, party.field, party.name)) &&
-            matches(r.drawn) &&
+            matchesBcBidSourceFilters(r.raw, sourceFilters) && matches(r.drawn) &&
             (!search ||
               procurementSearchMatches(
                 procurementSearchCorpus(r.drawn),

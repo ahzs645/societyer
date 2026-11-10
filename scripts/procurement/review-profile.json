@@ -90,7 +90,19 @@
     "contractNumberMissing",
     "justificationMissing",
     "timezone",
-    "publicationNormalization"
+    "publicationNormalization",
+    "industryCategories",
+    "industryCategoryCodes",
+    "sourceRegionCodes",
+    "sourceRegionPath",
+    "opportunityTypeGroupCode",
+    "opportunityTypeGroup",
+    "historicalTypeReferenceId",
+    "gsinTermIds",
+    "tabCoverage",
+    "sourceTabs",
+    "detailNeedsRefresh",
+    "detailCaptureVersion"
   ],
   "evidenceTables": [
     "reviews",

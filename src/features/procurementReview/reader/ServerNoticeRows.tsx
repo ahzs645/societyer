@@ -1,3 +1,4 @@
+import type {BcBidSourceFilters} from "../../../../shared/bcBidSourceFilters";
 /** Bridge the platform table controls to bounded, authenticated server pages. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -11,10 +12,12 @@ import { useProcurementClock } from "../lib/clock";
 export function ServerNoticeRows({
   kind,
   fixedParty,
+  sourceFilters,
   children,
 }: {
   children: (props: { onEndReached: () => void; loading: boolean; hasMore: boolean; footer: ReactNode }) => ReactNode;
   kind: string;
+  sourceFilters: BcBidSourceFilters;
   fixedParty?: { field: "organization" | "issuedFor"; name: string };
 }) {
   const source = useReaderSource(),
@@ -34,6 +37,7 @@ export function ServerNoticeRows({
     () =>
       JSON.stringify({
         party: fixedParty,
+        sourceFilters,
         columns: columns.map((column) => ({ fieldMetadataId: column.fieldMetadataId, field: { _id: column.field._id, name: column.field.name } })),
         filters,
         filterGroups,
@@ -42,6 +46,7 @@ export function ServerNoticeRows({
       }),
     [
       columns,
+      sourceFilters,
       filters,
       filterGroups,
       sorts,

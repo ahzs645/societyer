@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 1,
+  "id": "reference-release:BCBID:filters:20261010",
+  "sourceUrl": "https://bcbid.gov.bc.ca/page.aspx/en/rfp/request_browse_public",
+  "capturedAt": "2026-10-10",
+  "coverage": "British Columbia province, eight economic regions, 28 regional districts and the Stikine region in the public Region picker",
+  "regions": [
+    {
+      "code": "CA_STATE_BC",
+      "sourceCode": "areareg;CA_STATE_BC",
+      "title": "British Columbia",
+      "level": "province",
+      "parentId": null,
+      "path": "|CA_STATE_BC|"
+    },
+    {
+      "code": "CA_BC_R1",
+      "sourceCode": "areaecon;CA_BC_R1",
+      "title": "Cariboo",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R1|"
+    },
+    {
+      "code": "CA_BC_5941",
+      "sourceCode": "areadept;CA_BC_5941",
+      "title": "Cariboo",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R1",
+      "path": "|CA_STATE_BC|CA_BC_R1|CA_BC_5941|"
+    },
+    {
+      "code": "CA_BC_5953",
+      "sourceCode": "areadept;CA_BC_5953",
+      "title": "Fraser-Fort George",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R1",
+      "path": "|CA_STATE_BC|CA_BC_R1|CA_BC_5953|"
+    },
+    {
+      "code": "CA_BC_R2",
+      "sourceCode": "areaecon;CA_BC_R2",
+      "title": "Kootenay",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R2|"
+    },
+    {
+      "code": "CA_BC_5903",
+      "sourceCode": "areadept;CA_BC_5903",
+      "title": "Central Kootenay",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R2",
+      "path": "|CA_STATE_BC|CA_BC_R2|CA_BC_5903|"
+    },
+    {
+      "code": "CA_BC_5901",
+      "sourceCode": "areadept;CA_BC_5901",
+      "title": "East Kootenay",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R2",
+      "path": "|CA_STATE_BC|CA_BC_R2|CA_BC_5901|"
+    },
+    {
+      "code": "CA_BC_5905",
+      "sourceCode": "areadept;CA_BC_5905",
+      "title": "Kootenay Boundary",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R2",
+      "path": "|CA_STATE_BC|CA_BC_R2|CA_BC_5905|"
+    },
+    {
+      "code": "CA_BC_R3",
+      "sourceCode": "areaecon;CA_BC_R3",
+      "title": "Lower Mainland/Southwest",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R3|"
+    },
+    {
+      "code": "CA_BC_5909",
+      "sourceCode": "areadept;CA_BC_5909",
+      "title": "Fraser Valley",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R3",
+      "path": "|CA_STATE_BC|CA_BC_R3|CA_BC_5909|"
+    },
+    {
+      "code": "CA_BC_5915",
+      "sourceCode": "areadept;CA_BC_5915",
+      "title": "Greater Vancouver",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R3",
+      "path": "|CA_STATE_BC|CA_BC_R3|CA_BC_5915|"
+    },
+    {
+      "code": "CA_BC_5931",
+      "sourceCode": "areadept;CA_BC_5931",
+      "title": "Squamish-Lillooet",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R3",
+      "path": "|CA_STATE_BC|CA_BC_R3|CA_BC_5931|"
+    },
+    {
+      "code": "CA_BC_5929",
+      "sourceCode": "areadept;CA_BC_5929",
+      "title": "Sunshine Coast",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R3",
+      "path": "|CA_STATE_BC|CA_BC_R3|CA_BC_5929|"
+    },
+    {
+      "code": "CA_BC_R4",
+      "sourceCode": "areaecon;CA_BC_R4",
+      "title": "Nechako",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R4|"
+    },
+    {
+      "code": "CA_BC_5951",
+      "sourceCode": "areadept;CA_BC_5951",
+      "title": "Bulkley-Nechako",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R4",
+      "path": "|CA_STATE_BC|CA_BC_R4|CA_BC_5951|"
+    },
+    {
+      "code": "CA_BC_5957",
+      "sourceCode": "areadept;CA_BC_5957",
+      "title": "Stikine",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R4",
+      "path": "|CA_STATE_BC|CA_BC_R4|CA_BC_5957|"
+    },
+    {
+      "code": "CA_BC_R5",
+      "sourceCode": "areaecon;CA_BC_R5",
+      "title": "North Coast",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R5|"
+    },
+    {
+      "code": "CA_BC_5949",
+      "sourceCode": "areadept;CA_BC_5949",
+      "title": "Kitimat-Stikine",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R5",
+      "path": "|CA_STATE_BC|CA_BC_R5|CA_BC_5949|"
+    },
+    {
+      "code": "CA_BC_5947",
+      "sourceCode": "areadept;CA_BC_5947",
+      "title": "North Coast",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R5",
+      "path": "|CA_STATE_BC|CA_BC_R5|CA_BC_5947|"
+    },
+    {
+      "code": "CA_BC_R6",
+      "sourceCode": "areaecon;CA_BC_R6",
+      "title": "Northeast",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R6|"
+    },
+    {
+      "code": "CA_BC_5959",
+      "sourceCode": "areadept;CA_BC_5959",
+      "title": "Northern Rockies",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R6",
+      "path": "|CA_STATE_BC|CA_BC_R6|CA_BC_5959|"
+    },
+    {
+      "code": "CA_BC_5955",
+      "sourceCode": "areadept;CA_BC_5955",
+      "title": "Peace River",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R6",
+      "path": "|CA_STATE_BC|CA_BC_R6|CA_BC_5955|"
+    },
+    {
+      "code": "CA_BC_R7",
+      "sourceCode": "areaecon;CA_BC_R7",
+      "title": "Thompson/Okanagan",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R7|"
+    },
+    {
+      "code": "CA_BC_5935",
+      "sourceCode": "areadept;CA_BC_5935",
+      "title": "Central Okanagan",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R7",
+      "path": "|CA_STATE_BC|CA_BC_R7|CA_BC_5935|"
+    },
+    {
+      "code": "CA_BC_5939",
+      "sourceCode": "areadept;CA_BC_5939",
+      "title": "Columbia-Shuswap",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R7",
+      "path": "|CA_STATE_BC|CA_BC_R7|CA_BC_5939|"
+    },
+    {
+      "code": "CA_BC_5937",
+      "sourceCode": "areadept;CA_BC_5937",
+      "title": "North Okanagan",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R7",
+      "path": "|CA_STATE_BC|CA_BC_R7|CA_BC_5937|"
+    },
+    {
+      "code": "CA_BC_5907",
+      "sourceCode": "areadept;CA_BC_5907",
+      "title": "Okanagan-Similkameen",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R7",
+      "path": "|CA_STATE_BC|CA_BC_R7|CA_BC_5907|"
+    },
+    {
+      "code": "CA_BC_5933",
+      "sourceCode": "areadept;CA_BC_5933",
+      "title": "Thompson-Nicola",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R7",
+      "path": "|CA_STATE_BC|CA_BC_R7|CA_BC_5933|"
+    },
+    {
+      "code": "CA_BC_R8",
+      "sourceCode": "areaecon;CA_BC_R8",
+      "title": "Vancouver Island and Coast",
+      "level": "economic-region",
+      "parentId": "reference-term:BCBID-region:CA_STATE_BC",
+      "path": "|CA_STATE_BC|CA_BC_R8|"
+    },
+    {
+      "code": "CA_BC_5923",
+      "sourceCode": "areadept;CA_BC_5923",
+      "title": "Alberni-Clayoquot",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5923|"
+    },
+    {
+      "code": "CA_BC_5917",
+      "sourceCode": "areadept;CA_BC_5917",
+      "title": "Capital",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5917|"
+    },
+    {
+      "code": "CA_BC_5945",
+      "sourceCode": "areadept;CA_BC_5945",
+      "title": "Central Coast",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5945|"
+    },
+    {
+      "code": "CA_BC_5926",
+      "sourceCode": "areadept;CA_BC_5926",
+      "title": "Comox Valley",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5926|"
+    },
+    {
+      "code": "CA_BC_5919",
+      "sourceCode": "areadept;CA_BC_5919",
+      "title": "Cowichan Valley",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5919|"
+    },
+    {
+      "code": "CA_BC_5943",
+      "sourceCode": "areadept;CA_BC_5943",
+      "title": "Mount Waddington",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5943|"
+    },
+    {
+      "code": "CA_BC_5921",
+      "sourceCode": "areadept;CA_BC_5921",
+      "title": "Nanaimo",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5921|"
+    },
+    {
+      "code": "CA_BC_5927",
+      "sourceCode": "areadept;CA_BC_5927",
+      "title": "qathet",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5927|"
+    },
+    {
+      "code": "CA_BC_5924",
+      "sourceCode": "areadept;CA_BC_5924",
+      "title": "Strathcona",
+      "level": "regional-district",
+      "parentId": "reference-term:BCBID-region:CA_BC_R8",
+      "path": "|CA_STATE_BC|CA_BC_R8|CA_BC_5924|"
+    }
+  ],
+  "industryCategories": [
+    {
+      "code": "Construction",
+      "title": "Construction"
+    },
+    {
+      "code": "aGoods",
+      "title": "Goods"
+    },
+    {
+      "code": "bServices",
+      "title": "Services"
+    }
+  ]
+}
