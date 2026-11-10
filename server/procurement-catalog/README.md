@@ -48,7 +48,10 @@ publication. Convex fallback retention is a separate 14-day rollout policy.
 
 Install `catalog-ssh-gateway.py` root-owned. Its dedicated key must have
 `restrict,command="... --config ... --workspace WORKSPACE_ID"`, with a root-owned
-authorized-keys file and no publisher-controlled parent directories. The gateway
+authorized-keys file and no publisher-controlled parent directories. The installer
+uses the account’s default key path in a root-owned home and `.ssh` directory,
+keeps its password locked, and does not edit or reload global SSH configuration.
+The gateway
 accepts only probe, checksummed full-copy, the pinned sqlite3_rsync receiver for
 one staging file, status, activate, and qualify. It never evaluates a shell
 command. Do not grant an unrestricted shell, forwarding, sudo, or an operator

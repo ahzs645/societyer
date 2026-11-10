@@ -72,9 +72,11 @@ implicitly, and no project database is created or replaced.
 - During bootstrap an invalid `PermitUserEnvironment` directive was written
   inside an SSH `Match` block. Validation rejected it, but Ubuntu's concurrent
   updater restarted SSH before it could be removed. Remote SSH is unavailable;
-  the owner approved a one-time console recovery, which is in progress. No catalog data had
-  been transferred or activated there. The installer now validates a complete
-  candidate include layout before replacing the live SSH fragment.
+  console recovery could not reach the boot menu. The owner approved a second
+  clean reinstall with the existing SSH key, now in progress. No catalog data
+  had been transferred or activated there. The installer now uses the dedicated
+  account’s default key path in a root-owned home and does not change or reload
+  global SSH configuration.
 - Source selection remains **Convex**. No live parity publication has been
   marked successful. The active collector/publisher is independently maintained;
   coordinate exact tested commits and source hashes before changing its runtime.

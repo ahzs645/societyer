@@ -48,42 +48,22 @@ install -d -m 0755 "/opt/procurement-catalog/releases/$catalog_release"
 install -m 0644 "$catalog_stage"/app/*.mjs "$catalog_stage"/app/*.map "/opt/procurement-catalog/releases/$catalog_release/"
 install -m 0755 "$catalog_stage/catalog-ssh-gateway.py" "/opt/procurement-catalog/releases/$catalog_release/catalog-ssh-gateway.py"
 ln -sfn "releases/$catalog_release" /opt/procurement-catalog/current
-install -d -m 0755 /etc/ssh/authorized_keys
-catalog_authorized_key="restrict,command=\"/usr/bin/python3 /opt/procurement-catalog/current/catalog-ssh-gateway.py --config /etc/procurement-catalog/config.json --workspace $catalog_workspace\" $(cat "$catalog_stage/publisher.pub")"
-if [[ -f /etc/ssh/authorized_keys/catalog-publisher ]] && [[ $(cat /etc/ssh/authorized_keys/catalog-publisher) != "$catalog_authorized_key" ]]; then printf '%s\n' 'A different publisher key is already installed; inspect instead of rotating it.' >&2; exit 1; fi
-printf '%s\n' "$catalog_authorized_key" > /etc/ssh/authorized_keys/catalog-publisher
-chmod 0600 /etc/ssh/authorized_keys/catalog-publisher
-catalog_ssh_stage=$(mktemp -d "$catalog_stage/.ssh-check-XXXXXX")
-trap 'if [[ -n ${catalog_install_tmp:-} ]]; then rm -rf -- "$catalog_install_tmp"; fi; rm -rf -- "$catalog_ssh_stage"' EXIT
-mkdir "$catalog_ssh_stage/snippets"
-cat > "$catalog_ssh_stage/snippets/70-procurement-catalog.conf" <<'SSH'
-Match User catalog-publisher
-  AuthorizedKeysFile /etc/ssh/authorized_keys/catalog-publisher
-  PasswordAuthentication no
-  KbdInteractiveAuthentication no
-  PermitTTY no
-  DisableForwarding yes
-Match all
-SSH
-python3 - "$catalog_ssh_stage" <<'PY'
-from pathlib import Path
-import re,shutil,sys
-stage=Path(sys.argv[1])
-for source in Path('/etc/ssh/sshd_config.d').glob('*.conf'):
-    if source.name!='70-procurement-catalog.conf': shutil.copy2(source,stage/'snippets'/source.name)
-original=Path('/etc/ssh/sshd_config').read_text()
-candidate,count=re.subn(r'(?m)^\s*Include\s+/etc/ssh/sshd_config\.d/\*\.conf\s*$', 'Include '+str(stage/'snippets'/'*.conf'),original)
-if count!=1: raise RuntimeError('Cannot validate the exact SSH include layout; no configuration replaced.')
-(stage/'main').write_text(candidate)
-PY
-# Validate the complete future include layout before changing the live file.
-# A concurrent OS updater must never encounter an unvalidated SSH snippet.
-/usr/sbin/sshd -t -f "$catalog_ssh_stage/main"
-catalog_ssh_install=$(mktemp /etc/ssh/sshd_config.d/.catalog-validated-XXXXXX)
-install -m 0644 "$catalog_ssh_stage/snippets/70-procurement-catalog.conf" "$catalog_ssh_install"
-mv -f -- "$catalog_ssh_install" /etc/ssh/sshd_config.d/70-procurement-catalog.conf
+# Keep the administrator's global SSH configuration unchanged. The dedicated
+# publisher account has a locked password and an immutable default key path.
+[[ ! -e /etc/ssh/sshd_config.d/70-procurement-catalog.conf ]] || { printf '%s\n' 'Legacy SSH fragment found; repair it explicitly before installation.' >&2; exit 1; }
+[[ $(passwd -S catalog-publisher | awk '{print $2}') == L ]]
 /usr/sbin/sshd -t
-systemctl reload ssh
+/usr/sbin/sshd -T -C user=catalog-publisher,host=localhost,addr=127.0.0.1 | python3 -c 'import sys; settings=dict(line.rstrip().split(" ",1) for line in sys.stdin); assert ".ssh/authorized_keys" in settings["authorizedkeysfile"].split(); assert settings["authorizedkeyscommand"]=="none"; assert settings["pubkeyauthentication"]=="yes"'
+install -d -m 0755 -o root -g root /var/lib/procurement-catalog /var/lib/procurement-catalog/.ssh
+catalog_authorized_key="restrict,command=\"/usr/bin/python3 /opt/procurement-catalog/current/catalog-ssh-gateway.py --config /etc/procurement-catalog/config.json --workspace $catalog_workspace\" $(cat "$catalog_stage/publisher.pub")"
+catalog_key_path=/var/lib/procurement-catalog/.ssh/authorized_keys
+if [[ -f $catalog_key_path ]] && [[ $(cat "$catalog_key_path") != "$catalog_authorized_key" ]]; then printf '%s\n' 'A different publisher key is already installed; inspect instead of rotating it.' >&2; exit 1; fi
+catalog_key_install=$(mktemp /var/lib/procurement-catalog/.ssh/.validated-key-XXXXXX)
+printf '%s\n' "$catalog_authorized_key" > "$catalog_key_install"
+# Public key bytes must be readable by sshd when it checks as this user; only
+# root can replace the file or either parent directory.
+chmod 0644 "$catalog_key_install"
+mv -f -- "$catalog_key_install" "$catalog_key_path"
 install -m 0644 "$catalog_stage/procurement-catalog.service" "$catalog_stage/cloudflared-catalog.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable procurement-catalog.service cloudflared-catalog.service
