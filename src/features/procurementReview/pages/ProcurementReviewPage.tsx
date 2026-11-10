@@ -67,7 +67,15 @@ function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string;
   }, [access]);
   useEffect(() => { let active = true; const load = () => void refresh(() => active); load(); window.addEventListener("focus", load); return () => { active = false; window.removeEventListener("focus", load); }; }, [refresh, publication?.lastSuccessful?.generation]);
   const canConfigure = loaded && can("settings:write");
-  const header = <><PageHeader title="Procurement review" subtitle={source ? updatedSummary(source.catalog.publishedAt) : "Bid opportunities and awards published by Zoer."} info={publication ? <PublicationDetails status={publication} /> : undefined} actions={canConfigure && !preview && !settings ? <button type="button" className="btn btn--ghost btn--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />{canConfigure && (preview || settings) && <CatalogSourceControls societyId={societyId} previewReady={Boolean(source) && !error} onClose={preview ? undefined : () => setSettings(false)} />}{error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}</>;
+  const header = <>
+    <PageHeader title="Procurement review"
+      subtitle={<CatalogSummary catalog={source?.catalog} publication={publication} />}
+      info={publication ? <PublicationDetails status={publication} /> : undefined}
+      actions={canConfigure && !preview && !settings ? <button type="button" className="btn btn--ghost btn--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />
+    {canConfigure && (preview || settings) && <CatalogSourceControls societyId={societyId} previewReady={Boolean(source) && !error} onClose={preview ? undefined : () => setSettings(false)} />}
+    {source && <PublicationState status={publication} whileReading />}
+    {error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}
+  </>;
   return <div className="page procurement-review">{source ? <ProcurementReader key={source.catalog.publicationId} source={source} header={header} /> : <>{header}{!error && <p role="status">Loading procurement…</p>}</>}</div>;
 }
 
@@ -88,15 +96,10 @@ function HostedProcurementReview() {
   const catalog = live === undefined ? remembered ?? undefined : live;
   if (!society || !loaded) return <PageLoading variant="detail" />;
   const canConfigure = can("settings:write");
-  // The source said this publication doesn't cover everything (or didn't say): a caveat a reviewer should see, in a few words.
-  const unverified = Boolean(catalog && publication?.source && !publication.source.complete);
   const header = (
     <PageHeader
       title="Procurement review"
-      subtitle={catalog ? <span className="procurement-review__summary">
-        <span>{updatedSummary(catalog.publishedAt)}</span>
-        {unverified && <span className="procurement-review__caveat"><TriangleAlert size={12} aria-hidden="true" /> Some sources unverified</span>}
-      </span> : "Bid opportunities and awards published by Zoer."}
+      subtitle={<CatalogSummary catalog={catalog} publication={publication} />}
       info={catalog && publication ? <PublicationDetails status={publication} /> : undefined}
       actions={canConfigure && !settings && folder && (
         <Tooltip content="Snapshot folder">
@@ -120,6 +123,15 @@ function HostedProcurementReview() {
       </> : <HostedReader key={`${society._id}:${catalog.generation}`} societyId={society._id} catalog={catalog} confirmed={live !== undefined} header={<>{header}<PublicationState status={publication} whileReading /></>} />}
     </div>
   );
+}
+
+/** Source coverage caveats are identical for Convex and the service reader. */
+function CatalogSummary({ catalog, publication }: { catalog: ReaderCatalog | null | undefined; publication: PublicationStatus | undefined }) {
+  if (!catalog) return <>Bid opportunities and awards published by Zoer.</>;
+  return <span className="procurement-review__summary">
+    <span>{updatedSummary(catalog.publishedAt)}</span>
+    {publication?.source && !publication.source.complete && <span className="procurement-review__caveat"><TriangleAlert size={12} aria-hidden="true" /> Some sources unverified</span>}
+  </span>;
 }
 
 /** When the catalog was collected, published and put in service: a short list, not a sentence of timestamps. */

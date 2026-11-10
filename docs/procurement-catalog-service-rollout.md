@@ -124,8 +124,16 @@ implicitly, and no project database is created or replaced.
   both services are active and administrator SSH checksums remain unchanged.
   The installer now preflights service-account readability and checks HTTP
   readiness after restart. No catalog records were lost or source flag changed.
-- Source selection remains **Convex**. Two live parity publications are qualified; one more
-  distinct consecutive real publication is still required before cutover. The active collector/publisher is independently maintained;
+- The third real publication, `20261110T230124Z-71be4fbbef92`, also passed full
+  parity: 4,383 opportunities, 21,877 awards, 26,260 details, 3,163 documents,
+  91 evidence rows and 89,972 taxonomy terms. It transferred 25,491,618 bytes
+  incrementally. Its full parity report hash is
+  `3539f79504e7c55820e90798faa5a4e61da20fbec95e89b425481dd249ea4f19`.
+  Source coverage remains explicitly incomplete; the unavailable attachment was
+  not relabelled as downloaded.
+- Source selection remains **Convex**. All three distinct consecutive real
+  publications are qualified. Automatic catalog publication must be connected
+  before cutover. The active collector/publisher is independently maintained;
   coordinate exact tested commits and source hashes before changing its runtime.
 
 ## Release and publisher evidence
@@ -216,8 +224,9 @@ source choice to Convex and do not inherit deployment-bound service receipts.
    transport, restricted workspace key, existing operator authorization and
    full Node 24 run are verified. Do not restart the independent collector or
    backend for this step.
-2. Qualify the next legitimate real publication through that active publisher;
-   do not replay or invent publication IDs to satisfy the third-match gate.
+2. Three legitimate real publications are qualified. Continue full qualification
+   through the adopted parallel publisher; never replay or invent publication
+   IDs to satisfy the gate.
 3. Signed-in Owner preview, public-origin restrictions, lists, filters, notice
    details, selected notice document metadata, a real broker download, body
    search and live analysis are verified. Exact within-minute deadline refresh
