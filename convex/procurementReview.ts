@@ -15,9 +15,11 @@ import { matchesProcurementParty } from "../shared/procurementAnalytics";
 import { documentTipNames } from "../src/features/procurementReview/lib/notice";
 import { procurementPredicate } from "../shared/procurementBrowseFilters";
 import { toNoticeRow } from "../shared/procurementNoticeRow";
-import { isTriageArchived, isTriageClassification, triageRank, TRIAGE_UNCLASSIFIED_RANK } from "../shared/procurementTriage";
+import { canCreateTriageTask, isTriageArchived, isTriageClassification, triageLabel, triageRank, TRIAGE_UNCLASSIFIED_RANK } from "../shared/procurementTriage";
 import { requireSocietyMembership } from "../shared/functions/access";
-import { toPortableQueryCtx } from "./lib/portable";
+import { requirePermissionPortable } from "../shared/functions/permissions";
+import { taskCreate } from "../shared/functions/tasks";
+import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { v } from "convex/values";
 import {
   paginationOptsValidator,
@@ -609,7 +611,7 @@ export const page = authorizedQuery(
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
-    page: v.array(v.object({ ...listRowFields, reviewed: v.optional(v.boolean()), classification: v.optional(v.string()) })),
+    page: v.array(v.object({ ...listRowFields, reviewed: v.optional(v.boolean()), classification: v.optional(v.string()), taskId: v.optional(v.string()) })),
     isDone: v.boolean(),
     continueCursor: v.string(),
     scanned: v.number(),
@@ -833,13 +835,15 @@ export const page = authorizedQuery(
           ),
         )
       : [];
+    // A task deleted since no longer counts: the action item can be made again.
+    const tasks = await Promise.all(triage.map((entry) => (entry?.taskId ? ctx.db.get(entry.taskId) : null)));
     const visible = result.page
-      .map((r, index) => ({ r, triage: triage[index] ?? null }))
+      .map((r, index) => ({ r, triage: triage[index] ?? null, task: tasks[index] ?? null }))
       // The classified notices were already listed by the first phase.
       .filter(({ r, triage }) => !r.archived && !(triageSort && phase === "rest" && triage?.classification))
-      .map(({ r, triage }) => {
+      .map(({ r, triage, task }) => {
         const raw = triaged
-          ? { ...listRow(r), reviewed: triage?.reviewed ?? false, classification: triage?.classification ?? "" }
+          ? { ...listRow(r), reviewed: triage?.reviewed ?? false, classification: triage?.classification ?? "", ...(task ? { taskId: String(task._id) } : {}) }
           : listRow(r);
         return { raw, drawn: toNoticeRow(raw, a.asOf) };
       })
@@ -911,7 +915,8 @@ export const setTriage = authorizedMutation(
       .query("procurementTriage")
       .withIndex("by_record", (q) => q.eq("societyId", societyId).eq("recordKey", recordKey))
       .unique();
-    if (!reviewed && !classification) {
+    // A row that carries an action item stays, so the item is never made twice.
+    if (!reviewed && !classification && !existing?.taskId) {
       if (existing) await ctx.db.delete(existing._id);
       return null;
     }
@@ -940,6 +945,7 @@ export const triage = authorizedQuery(
     classification: v.string(),
     updatedBy: v.union(v.string(), v.null()),
     updatedAt: v.union(v.number(), v.null()),
+    taskId: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, { societyId, recordKey }) => {
     requireDeploymentSupport();
@@ -953,6 +959,60 @@ export const triage = authorizedQuery(
       classification: row?.classification ?? "",
       updatedBy: row?.updatedBy ?? null,
       updatedAt: row?.updatedAt ?? null,
+      taskId: row?.taskId && (await ctx.db.get(row.taskId)) ? String(row.taskId) : null,
     };
+  },
+});
+
+/**
+ * "Create action item": one Societyer task for an opportunity the workspace
+ * has reviewed and classified (anything but not doable). Only on request,
+ * never as a side effect of classifying, and at most one per opportunity:
+ * asking again returns the task that exists. Needs tasks:write as well.
+ */
+export const createTask = authorizedMutation(
+  "procurementReview:createTask",
+  mutation,
+)({
+  args: { societyId: v.id("societies"), recordKey: v.string() },
+  returns: v.object({ taskId: v.string(), created: v.boolean() }),
+  handler: async (ctx, { societyId, recordKey }) => {
+    const active = await activeCatalog(ctx, societyId);
+    if (!active) throw new Error("Procurement review has no published catalog.");
+    const storage = active.storageGeneration ?? active.generation;
+    const record = await ctx.db
+      .query("procurementRecords")
+      .withIndex("by_key", (q) => q.eq("societyId", societyId).eq("generation", storage).eq("recordKey", recordKey))
+      .unique();
+    if (!record || record.kind !== "opportunity") throw new Error("Opportunity not found.");
+    const portable = await toPortableMutationCtx(ctx);
+    const member = await requirePermissionPortable(portable, societyId, "tasks:write");
+    const row = await ctx.db
+      .query("procurementTriage")
+      .withIndex("by_record", (q) => q.eq("societyId", societyId).eq("recordKey", recordKey))
+      .unique();
+    if (!row || !canCreateTriageTask({ reviewed: row.reviewed, classification: row.classification as "" }))
+      throw new Error("Review and classify the opportunity before creating an action item.");
+    if (row.taskId && (await ctx.db.get(row.taskId))) return { taskId: String(row.taskId), created: false };
+    const closes = /^\d{4}-\d{2}-\d{2}/.exec(record.date)?.[0];
+    const responsible = member && ctx.db.normalizeId("users", String((member as { _id?: unknown })._id ?? ""));
+    const taskId = await taskCreate(portable, {
+      societyId,
+      title: `Prepare bid: ${record.title || "Untitled notice"}`.slice(0, 300),
+      description: [
+        record.organization && `Buyer: ${record.organization}`,
+        (record.dateText || record.date) && `Closes: ${record.dateText || record.date}`,
+        `Classification: ${triageLabel(row.classification)}`,
+        record.reference && `Reference: ${record.reference}`,
+        `Opportunity: /app/procurement-review?notice=${encodeURIComponent(recordKey)}`,
+      ].filter(Boolean).join("\n"),
+      status: "Todo",
+      priority: "Medium",
+      ...(responsible ? { responsibleUserIds: [responsible] } : {}),
+      ...(closes ? { dueDate: closes } : {}),
+      tags: ["procurement"],
+    });
+    await ctx.db.patch(row._id, { taskId: ctx.db.normalizeId("tasks", taskId)! });
+    return { taskId, created: true };
   },
 });

@@ -30,3 +30,9 @@ export const triageLabel = (classification: string): string =>
  */
 export const isTriageArchived = (triage: Triage): boolean =>
   triage.reviewed && triage.classification === "not_doable";
+
+/** An action item (a Societyer task) can be made once the opportunity is reviewed and classified as anything but not doable. */
+export const canCreateTriageTask = (triage: Triage): boolean =>
+  triage.reviewed && triage.classification !== "" && triage.classification !== "not_doable";
+/** A triage with the task made from it, if any. */
+export type TriageState = Triage & { taskId?: string };

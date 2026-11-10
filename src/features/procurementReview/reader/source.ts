@@ -12,7 +12,7 @@ import type { StoredProcurementDocument } from "../lib/documents";
 import type { ReviewRow } from "../lib/review";
 import type { DocumentTipNames } from "../lib/notice";
 import type { AnalysisRequest, AnalysisState } from "../../../../shared/procurementAnalytics";
-import type { Triage } from "../../../../shared/procurementTriage";
+import type { Triage, TriageState } from "../../../../shared/procurementTriage";
 
 export type RecordSummary = { recordKey: string; kind: string; title: string; organization: string; date: string; status: string; dateText?: string };
 export type DocumentPage = { page: StoredProcurementDocument[]; isDone: boolean; continueCursor: string };
@@ -37,8 +37,10 @@ export type CatalogReviewRow = ReviewRow & { recordKey: string };
  */
 export type ReaderTriage = {
   set(recordKey: string, next: Triage): Promise<void>;
-  useOverrides(): ReadonlyMap<string, Triage>;
-  useOne(recordKey: string): { reviewed: boolean; classification: string; updatedBy: string | null; updatedAt: number | null } | undefined;
+  /** Make the opportunity's action item (a task); resolves false when it already had one. */
+  createTask(recordKey: string, current: Triage): Promise<boolean>;
+  useOverrides(): ReadonlyMap<string, TriageState>;
+  useOne(recordKey: string): { reviewed: boolean; classification: string; updatedBy: string | null; updatedAt: number | null; taskId: string | null } | undefined;
 };
 
 export type ReaderSource = {

@@ -7,11 +7,14 @@
  * as one bar.
  */
 import { useState, type SyntheticEvent } from "react";
+import { Link } from "react-router-dom";
+import { ListTodo, Plus } from "lucide-react";
 import { useToast } from "../../../components/Toast";
 import { formatSourceDate } from "../lib/notice";
 import {
   NO_TRIAGE,
   TRIAGE_CLASSIFICATIONS,
+  canCreateTriageTask,
   isTriageArchived,
   isTriageClassification,
   type Triage,
@@ -38,7 +41,28 @@ function useTriageEditor(triage: ReaderTriage, recordKey: string, saved: Triage,
       (error: unknown) => toast.error("Could not save", error instanceof Error ? error.message : "Try again."),
     ).finally(() => setSaving(false));
   };
-  return { current, saving, save };
+  // "Create action item": one task, only when asked for.
+  const createTask = () => {
+    setSaving(true);
+    triage.createTask(recordKey, current).then(
+      (created) => toast.success(created ? "Action item created" : "Action item already exists", `“${title}” is in Tasks.`),
+      (error: unknown) => toast.error("Could not create the action item", error instanceof Error ? error.message : "Try again."),
+    ).finally(() => setSaving(false));
+  };
+  return { current, saving, save, createTask, taskId: overrides.get(recordKey)?.taskId ?? "" };
+}
+
+/** A link to Tasks once the action item exists; before that a button, offered only for a reviewed, classified opportunity. */
+function TaskAction({ current, saving, createTask, taskId, savedTaskId, title }: ReturnType<typeof useTriageEditor> & { savedTaskId: string; title: string }) {
+  if (taskId || savedTaskId)
+    return <Link className="procurement-triage__task-link" to="/app/tasks" onClick={stay} aria-label={`Action item for ${title}: open Tasks`}><ListTodo size={13} aria-hidden="true" /> In Tasks</Link>;
+  if (!canCreateTriageTask(current))
+    return <span className="muted procurement-triage__task-hint" title="Tick Reviewed and choose a classification other than Not doable first">—</span>;
+  return (
+    <button type="button" className="btn btn--secondary btn--sm" disabled={saving} onKeyDown={stay} onClick={(event) => { stay(event); createTask(); }} aria-label={`Create action item: ${title}`}>
+      <Plus size={13} aria-hidden="true" /> Action item
+    </button>
+  );
 }
 
 function ReviewedBox({ current, saving, save, title }: ReturnType<typeof useTriageEditor> & { title: string }) {
@@ -100,6 +124,16 @@ function ClassificationCell({ triage, ...props }: CellProps & { triage: ReaderTr
   return <span className="procurement-triage__cell" onClick={stay}><ClassificationSelect {...editor} title={props.title} /></span>;
 }
 
+/** The list's Action item cell. */
+export function TriageTaskCell(props: CellProps & { taskId: string }) {
+  const { triage } = useReaderSource();
+  return triage ? <TaskCell triage={triage} {...props} /> : null;
+}
+function TaskCell({ triage, taskId, ...props }: CellProps & { taskId: string; triage: ReaderTriage }) {
+  const editor = useTriageEditor(triage, props.recordKey, savedOf(props), props.title);
+  return <span className="procurement-triage__cell" onClick={stay}><TaskAction {...editor} savedTaskId={taskId} title={props.title} /></span>;
+}
+
 /** The notice page's bar: both controls, who last changed them, and whether the notice is archived. */
 export function NoticeTriage({ recordKey, title }: { recordKey: string; title: string }) {
   const { triage } = useReaderSource();
@@ -115,6 +149,7 @@ function NoticeTriageBar({ triage, recordKey, title }: { triage: ReaderTriage; r
       <span className="procurement-triage__title">Our triage</span>
       <label className="procurement-triage__field"><ReviewedBox {...editor} title={title} /><span>Reviewed</span></label>
       <label className="procurement-triage__field"><span>Classification</span><ClassificationSelect {...editor} title={title} /></label>
+      <TaskAction {...editor} savedTaskId={saved.taskId ?? ""} title={title} />
       {isTriageArchived(editor.current) && <span className="procurement-triage__archived">Archived: hidden from the list</span>}
       {by && <small className="muted">{by}</small>}
     </section>

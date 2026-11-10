@@ -13,7 +13,7 @@ import type { ReviewRow } from "../lib/review";
 import { useProcurementClock, useProcurementDeadline } from "../lib/clock";
 import { deadlineInstant, procurementDeadlineValue, type DocumentTipNames } from "../lib/notice";
 import { analysisIdentity, normalizeAnalysisRequest, type AnalysisRequest, type AnalysisResult } from "../../../../shared/procurementAnalytics";
-import type { Triage } from "../../../../shared/procurementTriage";
+import type { Triage, TriageState } from "../../../../shared/procurementTriage";
 import { progressive, useProgressive, type CatalogReviewRow, type DocumentPage, type ListRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary } from "./source";
 
 /** procurementReview:list reads at most this many rows a page (fewer when it reaches its bytes bound). */
@@ -72,15 +72,21 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog,
   }, [client, societyId, generation]);
   // What this visit saved. It belongs to the workspace, not to a catalog generation.
   const triage = useMemo(() => {
-    let saved: ReadonlyMap<string, Triage> = new Map();
+    let saved: ReadonlyMap<string, TriageState> = new Map();
+    const keep = (recordKey: string, next: TriageState) => { saved = new Map(saved).set(recordKey, next); for (const listener of listeners) listener(); };
     const listeners = new Set<() => void>();
     const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
     const read = () => saved;
     return {
       async set(recordKey: string, next: Triage) {
         await client.mutation(api.procurementReview.setTriage, { societyId, recordKey, reviewed: next.reviewed, classification: next.classification });
-        saved = new Map(saved).set(recordKey, next);
-        for (const listener of listeners) listener();
+        const taskId = saved.get(recordKey)?.taskId;
+        keep(recordKey, taskId ? { ...next, taskId } : next);
+      },
+      async createTask(recordKey: string, current: Triage) {
+        const result = await client.mutation(api.procurementReview.createTask, { societyId, recordKey }) as { taskId: string; created: boolean };
+        keep(recordKey, { ...current, ...saved.get(recordKey), taskId: result.taskId });
+        return result.created;
       },
       useOverrides: () => useSyncExternalStore(subscribe, read),
       useOne: (recordKey: string) => useQuery(api.procurementReview.triage, { societyId, recordKey }) as ReturnType<NonNullable<ReaderSource["triage"]>["useOne"]>,

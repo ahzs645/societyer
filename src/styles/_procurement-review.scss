@@ -440,6 +440,8 @@ $zoer-theme: (
     &[data-tone="partner"] { border-color: token("accent"); color: token("accent"); font-weight: token("fw-medium"); }
     &[data-tone="danger"] { border-color: token("danger"); color: token("danger"); font-weight: token("fw-medium"); }
   }
+  &__task-link { display: inline-flex; align-items: center; gap: 4px; color: token("accent"); font-size: token("fs-sm"); }
+  &__task-hint { cursor: help; }
   &__archive-toggle {
     display: inline-flex;
     align-items: center;

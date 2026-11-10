@@ -278,6 +278,8 @@ export const procurementTables = {
     hidden: v.boolean(),
     updatedAt: v.number(),
     updatedBy: v.optional(v.string()),
+    // The action item made from this opportunity (procurementReview:createTask); at most one.
+    taskId: v.optional(v.id("tasks")),
   })
     .index("by_record", ["societyId", "recordKey"])
     .index("by_rank", ["societyId", "rank", "recordKey"]),

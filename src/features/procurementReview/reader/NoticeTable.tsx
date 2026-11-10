@@ -50,7 +50,7 @@ import { useReaderNavigation } from "./routes";
 import { useReaderSource, type ListRow } from "./source";
 import { useProcurementClock } from "../lib/clock";
 import { ServerNoticeRows } from "./ServerNoticeRows";
-import { TriageClassificationCell, TriageReviewedCell } from "./TriageControls";
+import { TriageClassificationCell, TriageReviewedCell, TriageTaskCell } from "./TriageControls";
 import { TRIAGE_CLASSIFICATIONS, triageLabel } from "../../../../shared/procurementTriage";
 
 export type NoticeKind = "opportunity" | "award";
@@ -167,6 +167,13 @@ function tableFor(kind: NoticeKind) {
             config: { options: TRIAGE_CLASSIFICATIONS.map(({ value, label, color }) => ({ value, label, color })) },
             label: "Classification",
             fieldType: FIELD_TYPES.SELECT,
+            size: 170,
+          },
+          {
+            name: "taskId",
+            config: { sortable: false, groupable: false },
+            label: "Action item",
+            fieldType: FIELD_TYPES.TEXT,
             size: 170,
           },
           {
@@ -347,6 +354,8 @@ function useCells(
           return <TriageReviewedCell recordKey={row._id} title={row.title} reviewed={row.reviewed} classification={row.classification} />;
         if (field.name === "classification")
           return <TriageClassificationCell recordKey={row._id} title={row.title} reviewed={row.reviewed} classification={row.classification} />;
+        if (field.name === "taskId")
+          return <TriageTaskCell recordKey={row._id} title={row.title} reviewed={row.reviewed} classification={row.classification} taskId={row.taskId} />;
         if (field.name === "value")
           return (
             <span className="procurement-reader__value">
@@ -457,7 +466,7 @@ export function NoticeTable({
   const canTriage = !!useReaderSource().triage;
   const triaged = kind === "opportunity" && serverPaging && canTriage;
   const showArchived = triaged && nav.params.get("archived") === "1";
-  const hidden = [...hiddenFields, ...(triaged ? [] : ["reviewed", "classification"])].join(",");
+  const hidden = [...hiddenFields, ...(triaged ? [] : ["reviewed", "classification", "taskId"])].join(",");
   if (!triaged && view === "triage") view = "upcoming";
   const now = useProcurementClock();
   const today = zoneToday(now);

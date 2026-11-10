@@ -176,7 +176,7 @@ await assert.rejects(triager.mutation(api.procurementReview.setTriage, triageOf(
 await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).mutation(api.procurementReview.setTriage, triageOf("opportunity:0001", true, "doable")), /membership|access|workspace|bound|Permission/i);
 for (const [key, reviewed, classification] of [["opportunity:0007", false, "not_doable"], ["opportunity:0005", true, "not_doable"], ["opportunity:0003", true, "possible"], ["opportunity:0001", false, "doable"], ["opportunity:0009", true, ""], ["opportunity:0011", false, "needs_partner"]] as const)
   await triager.mutation(api.procurementReview.setTriage, triageOf(key, reviewed, classification));
-assert.deepEqual(await reader.query(api.procurementReview.triage, { societyId: ids.societyId, recordKey: "opportunity:0003" }).then(({ updatedAt, ...rest }: any) => rest), { reviewed: true, classification: "possible", updatedBy: "Triager" });
+assert.deepEqual(await reader.query(api.procurementReview.triage, { societyId: ids.societyId, recordKey: "opportunity:0003" }).then(({ updatedAt, ...rest }: any) => rest), { reviewed: true, classification: "possible", updatedBy: "Triager", taskId: null });
 const cols = [when, { fieldMetadataId: "source", field: { _id: "source", name: "source" } }, { fieldMetadataId: "classification", field: { _id: "classification", name: "classification" } }, { fieldMetadataId: "reviewed", field: { _id: "reviewed", name: "reviewed" } }];
 const triagePage = (request: Record<string, unknown>, cursor: string | null = null) => reader.query(api.procurementReview.page, { societyId: ids.societyId, generation: ids.generation, kind: "opportunity", request: JSON.stringify({ columns: cols, ...request }), asOf: Date.parse("2026-09-30T00:00:00Z"), paginationOpts: { numItems: 50, cursor } });
 const keys = (page: { page: ListRow[] }) => page.page.map(row => row.recordKey);
@@ -197,6 +197,31 @@ await assert.rejects(reader.query(api.procurementReview.page, { societyId: ids.s
 await triager.mutation(api.procurementReview.setTriage, triageOf("opportunity:0009", false, ""));
 assert.equal(await t.run(ctx => ctx.db.query("procurementTriage").withIndex("by_record", q => q.eq("societyId", ids.societyId).eq("recordKey", "opportunity:0009")).unique()), null, "Clearing both removes the row");
 assert.equal((await t.run(ctx => ctx.db.query("procurementTriage").collect())).every(row => row.societyId === ids.societyId), true);
+
+// "Create action item": one task, only on request, only once reviewed and classified as something we could bid on.
+const taskOf = (recordKey: string) => ({ societyId: ids.societyId, recordKey });
+await t.run(async ctx => { await ctx.db.insert("users", { societyId: ids.societyId, email: "admin@example.invalid", displayName: "Admin", role: "Admin", status: "Active", authSubject: "admin", authIssuer: issuer, authProvider: "better-auth", createdAtISO: "2026-11-10" }); });
+const admin = t.withIdentity({ subject: "admin", issuer });
+await assert.rejects(triager.mutation(api.procurementReview.createTask, taskOf("opportunity:0003")), /Permission tasks:write/, "Triage needs documents:write; a task needs tasks:write too");
+await assert.rejects(admin.mutation(api.procurementReview.createTask, taskOf("opportunity:0001")), /Review and classify/, "Classified but not reviewed");
+await assert.rejects(admin.mutation(api.procurementReview.createTask, taskOf("opportunity:0005")), /Review and classify/, "Not doable");
+await assert.rejects(admin.mutation(api.procurementReview.createTask, taskOf("opportunity:0013")), /Review and classify/, "Never triaged");
+await assert.rejects(reader.mutation(api.procurementReview.createTask, taskOf("opportunity:0003")), /Permission/, "A viewer cannot create tasks");
+assert.equal((await t.run(ctx => ctx.db.query("tasks").collect())).length, 0, "Classifying alone never makes a task");
+const made = await admin.mutation(api.procurementReview.createTask, taskOf("opportunity:0003"));
+assert.equal(made.created, true);
+const task = await t.run(ctx => ctx.db.query("tasks").collect());
+assert.deepEqual(task.map(row => [String(row._id), row.title, row.status, row.dueDate, row.tags]), [[made.taskId, "Prepare bid: Bridge 3", "Todo", "2026-10-04", ["procurement"]]]);
+assert.match(task[0].description ?? "", /Buyer: Test City[\s\S]*Classification: Possible[\s\S]*notice=opportunity%3A0003/);
+assert.deepEqual(await admin.mutation(api.procurementReview.createTask, taskOf("opportunity:0003")), { taskId: made.taskId, created: false }, "Asking again returns the same task");
+assert.equal((await triagePage({ sorts: bySource })).page.find((row: any) => row.recordKey === "opportunity:0003").taskId, made.taskId);
+assert.equal((await reader.query(api.procurementReview.triage, taskOf("opportunity:0003"))).taskId, made.taskId);
+await triager.mutation(api.procurementReview.setTriage, triageOf("opportunity:0003", false, ""));
+assert.equal((await reader.query(api.procurementReview.triage, taskOf("opportunity:0003"))).taskId, made.taskId, "Clearing the triage keeps the link to its task");
+await t.run(ctx => ctx.db.delete(task[0]._id));
+assert.equal((await triagePage({ sorts: bySource })).page.find((row: any) => row.recordKey === "opportunity:0003").taskId, undefined, "A deleted task no longer counts");
+await triager.mutation(api.procurementReview.setTriage, triageOf("opportunity:0003", true, "doable"));
+assert.equal((await admin.mutation(api.procurementReview.createTask, taskOf("opportunity:0003"))).created, true, "and the action item can be made again");
 const catalogReviews = (await allPages<{ recordKey: string; source: string }>(api.procurementReview.reviews, { societyId: ids.societyId, generation: ids.generation }, 500)).rows;
 assert.deepEqual(catalogReviews.map((row) => `${row.recordKey} ${row.source}`).sort(), ["opportunity:0000 procurement_decisions", "opportunity:0000 procurement_requirements", "opportunity:0001 procurement_decisions"], "Every review row in the workspace's catalog, with its record, and none of another workspace's");
 const review = await reader.query(api.procurementReview.review, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0000" });

@@ -24,6 +24,8 @@ export type ListRow = {
   /** The workspace's own bid triage (shared/procurementTriage.ts); absent where the reader has none. */
   reviewed?: boolean;
   classification?: string;
+  /** The action item (task) made from this opportunity, when there is one. */
+  taskId?: string;
   /** Versioned source provenance, canonical parties and quality inputs, when published. */
   analyticsJson?: string;
 };

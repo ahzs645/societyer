@@ -44,6 +44,7 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   // The workspace's bid triage annotates hosted catalog records.
   "procurementReview:triage",
   "procurementReview:setTriage",
+  "procurementReview:createTask",
   // Publication status and prepared analytics depend on hosted import jobs,
   // server-side caches and the scheduler; snapshot readers use their own engine.
   "procurementStatus:get",

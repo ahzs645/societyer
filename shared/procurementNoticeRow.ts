@@ -32,6 +32,8 @@ export type NoticeRow = {
   reviewed: boolean;
   classification: string;
   archived: boolean;
+  /** The task made from this opportunity, or "". */
+  taskId: string;
   /** Searched with the columns: the source's reference isn't one. */
   _searchText: string;
 };
@@ -82,6 +84,7 @@ export function toNoticeRow(row: ListRow, now = Date.now()): NoticeRow {
     reviewed: row.reviewed === true,
     classification: row.classification ?? "",
     archived: row.reviewed === true && row.classification === "not_doable",
+    taskId: row.taskId ?? "",
     _searchText: row.reference,
   };
 }
