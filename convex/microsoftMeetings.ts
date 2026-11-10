@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation as nativeInternalMutation } from "./_generated/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authorizedQuery, authorizedMutation } from "./lib/authorizedServer";
@@ -13,6 +13,8 @@ import { teamsSourceValidator, teamsParticipantValidator } from "./tables/micros
 import { transcriptSegmentValidator } from "./tables/transcripts";
 import { createPortable } from "../shared/functions/meetings";
 import { importTimedPortable, assignSpeakerPortable } from "../shared/functions/transcripts";
+
+const internalMutation = meetingInvalidatingMutation(nativeInternalMutation);
 
 async function editor(ctx: QueryCtx | MutationCtx, societyId: Id<"societies">) {
   if (hostedPrincipal(await ctx.auth.getUserIdentity()).kind !== "user") throw new Error("Sign in to import Teams meetings.");
@@ -55,7 +57,7 @@ export const stage = internalMutation({ args: { societyId: v.id("societies"), so
   }
   return result;
 } });
-export const commitImport = meetingInvalidatingMutation(internalMutation)({ args: { societyId: v.id("societies"), candidateId: v.id("microsoftMeetingCandidates"), transcriptId: v.string(), title: v.string(), transcriptHash: v.string(), segments: v.array(transcriptSegmentValidator), participants: v.array(teamsParticipantValidator), contextChatId: v.optional(v.string()), contextChatConfirmed: v.boolean() }, returns: v.id("meetings"), handler: async (ctx, a) => {
+export const commitImport = internalMutation({ args: { societyId: v.id("societies"), candidateId: v.id("microsoftMeetingCandidates"), transcriptId: v.string(), title: v.string(), transcriptHash: v.string(), segments: v.array(transcriptSegmentValidator), participants: v.array(teamsParticipantValidator), contextChatId: v.optional(v.string()), contextChatConfirmed: v.boolean() }, returns: v.id("meetings"), handler: async (ctx, a) => {
   const actor = await editor(ctx, a.societyId);
   const binding = meetingBinding(process.env, a.societyId);
   const candidate = await ctx.db.get(a.candidateId);

@@ -136,6 +136,9 @@ Passed:
 
 - Saved both Teams switches and verified granted app permissions/public certificate.
 - Real application certificate OAuth authentication.
+- Real Teams VTT download and local parser qualification: 206,432 bytes, 1,391
+  timed segments, all three named speakers, 4,556.368 seconds. This did not
+  import content into the portal or qualify Graph retrieval.
 - Real Teamchat roster read: three Entra object IDs/tenant IDs matched the existing
   Microsoft account bindings and active DDC workspace users.
 - Organizer policy creation and independent read-back of all three direct
@@ -161,6 +164,8 @@ Still open:
   date range after propagation; if still empty, qualify a newly transcribed call
   and raise a Microsoft support case with sanitized request IDs. No claim is made
   that policy propagation caused the existing empty results.
+- Code is pushed on `codex/teams-meeting-review-20261109` in draft PR #87.
+  Keep the PR draft until live qualification is resolved.
 - Portal login awaits the operator’s passkey; a real browser import and real
   speaker-link review have not yet passed. No real transcript, attendance or
   directory profile has been created by this connector during qualification.
