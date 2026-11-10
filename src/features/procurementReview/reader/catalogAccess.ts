@@ -4,7 +4,7 @@ export class CatalogAccess {
   private grant: CatalogAccessGrant | null = null;
   private pending: Promise<CatalogAccessGrant> | null = null;
   private controller = new AbortController();
-  constructor(readonly societyId: string, readonly baseUrl: string, private mint: () => Promise<CatalogAccessGrant>, private transport: typeof fetch = fetch) {
+  constructor(readonly societyId: string, readonly baseUrl: string, private mint: () => Promise<CatalogAccessGrant>, private transport: typeof fetch = globalThis.fetch.bind(globalThis)) {
     const url = new URL(baseUrl); if (url.origin !== baseUrl || url.protocol !== "https:") throw new Error("Invalid catalog service origin.");
   }
   private async token(force: boolean) {

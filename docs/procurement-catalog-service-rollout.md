@@ -67,7 +67,13 @@ implicitly, and no project database is created or replaced.
   `serviceOnlyAllowed: false`, `fallbackUntil: null`.
 - DDC-only signing configuration is installed. No other integration secrets,
   memberships or sign-in rules were replaced.
-- The new frontend reader and administrator preview have not been deployed yet.
+- Both Cloudflare Pages frontends have the reader and administrator source
+  controls deployed, alongside the shared backend. Microsoft sign-in succeeds
+  with the actual DDC Owner session. The first live service preview caught a
+  native browser `fetch` receiver error hidden by an arrow-function mock; the
+  client now binds its default transport to the browser global and the browser
+  fixture preserves that receiver requirement. Repeat the signed-in preview
+  after deploying this correction before recording it as verified.
 - The dedicated Cloudflare tunnel is healthy with four connections. DNS for
   `catalog.ddcnorth.com` is proxied to it; HTTPS health succeeds, anonymous
   catalog access returns 401 and public operator routes return 404.
@@ -94,8 +100,21 @@ implicitly, and no project database is created or replaced.
   comparison stopped when Convex activated a newer real generation, preserving
   the original evidence. Retries reuse a retained report's analytical clock and
   compare the full data again before checking its immutable evidence hash.
-- Source selection remains **Convex**. One live parity publication is qualified; two more
-  distinct consecutive real publications are still required before cutover. The active collector/publisher is independently maintained;
+- The second real publication, `20261110T221348Z-b31296725c45`, passed all
+  comparisons with 4,323 opportunities, 21,877 awards, 26,200 details, 3,163
+  documents, 91 evidence rows and 89,972 taxonomy terms. Its incremental
+  transfer sent 25,478,784 bytes. Repeating its full parity comparison while
+  the same generation remained current retained the analytical clock and
+  produced the identical immutable evidence hash. A retry does not add a
+  qualification.
+- A code-only service update exposed a release-directory permission issue
+  from a private staging archive. Explicit `0755` directory / `0644` bundle
+  modes restored public and loopback HTTP health with one active workspace;
+  both services are active and administrator SSH checksums remain unchanged.
+  The installer now preflights service-account readability and checks HTTP
+  readiness after restart. No catalog records were lost or source flag changed.
+- Source selection remains **Convex**. Two live parity publications are qualified; one more
+  distinct consecutive real publication is still required before cutover. The active collector/publisher is independently maintained;
   coordinate exact tested commits and source hashes before changing its runtime.
 
 This state must be updated from observed results after recovery and each rollout
@@ -137,12 +156,15 @@ source choice to Convex and do not inherit deployment-bound service receipts.
 
 ## Remaining rollout gates
 
-1. Complete parity for each current real publication; verify an idempotent retry
-   while the same generation remains serving.
-2. Qualify subsequent real publications through the active publisher.
-3. Foreign-origin rejection is verified (403); verify a real signed-in member
-   through the public hostname.
-4. Use a real member's sign-in for the administrator preview; verify lists,
+1. Adopt and qualify the optional parallel publisher in its agreed private
+   runtime, including its complete source closure, pinned SQLite transport,
+   restricted workspace key, existing operator authorization and a full Node
+   22 run. Do not restart the independent collector or backend for this step.
+2. Qualify the next legitimate real publication through that active publisher;
+   do not replay or invent publication IDs to satisfy the third-match gate.
+3. Foreign-origin rejection is verified (403); verify the real signed-in Owner
+   through the public hostname after the browser transport correction.
+4. Complete the administrator preview; verify lists,
    filters, notice details, all document metadata, a real broker download, body
    search and time-sensitive analysis. Do not fabricate an identity for this.
 5. Run complete parity while each exact generation is still serving in Convex.

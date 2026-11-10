@@ -51,6 +51,11 @@ Install `catalog-ssh-gateway.py` root-owned. Its dedicated key must have
 authorized-keys file and no publisher-controlled parent directories. The installer
 uses the account’s default key path in a root-owned home and `.ssh` directory,
 keeps its password locked, and does not edit or reload global SSH configuration.
+For code updates, stage the bundle and use the installer's explicit directory
+and file modes. Extracting an archive made in a private `0700` directory over a
+release can make its entry point unreadable by the service account. The installer
+checks that account's access before switching and waits for HTTP health after
+restart; `systemctl is-active` alone is not a readiness check.
 The gateway
 accepts only probe, checksummed full-copy, the pinned sqlite3_rsync receiver for
 one staging file, status, activate, and qualify. It never evaluates a shell

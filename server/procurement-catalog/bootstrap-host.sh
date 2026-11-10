@@ -47,6 +47,7 @@ install -d -m 0700 -o catalog-publisher -g catalog-publisher "/srv/procurement-c
 install -d -m 0755 "/opt/procurement-catalog/releases/$catalog_release"
 install -m 0644 "$catalog_stage"/app/*.mjs "$catalog_stage"/app/*.map "/opt/procurement-catalog/releases/$catalog_release/"
 install -m 0755 "$catalog_stage/catalog-ssh-gateway.py" "/opt/procurement-catalog/releases/$catalog_release/catalog-ssh-gateway.py"
+runuser -u catalog-publisher -- test -r "/opt/procurement-catalog/releases/$catalog_release/main.mjs"
 ln -sfn "releases/$catalog_release" /opt/procurement-catalog/current
 # Keep the administrator's global SSH configuration unchanged. The dedicated
 # publisher account has a locked password and an immutable default key path.
@@ -70,3 +71,4 @@ systemctl enable procurement-catalog.service cloudflared-catalog.service
 systemctl restart procurement-catalog.service
 systemctl restart cloudflared-catalog.service
 systemctl is-active procurement-catalog.service cloudflared-catalog.service
+curl --fail --silent --show-error --retry 10 --retry-delay 1 --retry-connrefused --max-time 3 http://127.0.0.1:8788/healthz

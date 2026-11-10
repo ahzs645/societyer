@@ -32,8 +32,11 @@ const catalog = {publicationId:'synthetic',generation:'synthetic-reader-v2',publ
 window.__catalogRequests=[];
 window.__analysisRequests=[];
 const nativeFetch=window.fetch;
-window.fetch=async (url,init)=>{
-  if(!String(url).startsWith('https://catalog.fixture.test/')) return nativeFetch(url,init);
+window.fetch=async function(url,init){
+  // Keep the browser receiver requirement: an arrow mock hid a native fetch
+  // Illegal invocation when the client stored fetch as an instance method.
+  if(this!==window) throw new TypeError('Illegal invocation: fetch requires the browser receiver');
+  if(!String(url).startsWith('https://catalog.fixture.test/')) return nativeFetch.call(window,url,init);
   window.__catalogRequests.push(String(url));
   const path=new URL(String(url)).pathname;
   if(path.endsWith('/list/opportunity.json')) return Response.json([opportunity]);
