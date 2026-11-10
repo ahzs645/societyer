@@ -10,6 +10,7 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 import type { StoredProcurementDocument } from "../lib/documents";
 import type { ReviewRow } from "../lib/review";
+import type { DocumentTipNames } from "../lib/notice";
 import type { AnalysisRequest, AnalysisState } from "../../../../shared/procurementAnalytics";
 
 export type RecordSummary = { recordKey: string; kind: string; title: string; organization: string; date: string; status: string; dateText?: string };
@@ -33,7 +34,8 @@ export type ReaderSource = {
   /** Publication metrics prepared once on the server; drill-downs return at most 50 records. */
   useAnalysis?: (request: AnalysisRequest) => AnalysisState & { retry: () => void };
   /** Hosted interactive page; absent for the offline snapshot host. */
-  usePage?: (kind: string, request: string, cursor: string | null) => { page: ListRow[]; isDone: boolean; continueCursor: string; scanned: number; relevance: boolean; restart?: boolean } | undefined;
+  /** `request` is null until the table has settled; nothing is read until then. */
+  usePage?: (kind: string, request: string | null, cursor: string | null) => { page: ListRow[]; isDone: boolean; continueCursor: string; scanned: number; relevance: boolean; restart?: boolean } | undefined;
   /**
    * Every record of a kind, loaded progressively; `undefined` until the first
    * rows arrive. A kind loads the first time it is asked for and stays loaded
@@ -44,6 +46,12 @@ export type ReaderSource = {
   useReviews(): { rows: CatalogReviewRow[]; truncated: boolean } | undefined;
   useRecord(recordKey: string): { summary: RecordSummary; dataJson: string } | null | undefined;
   useDocuments(recordKey: string, cursor: string | null): DocumentPage | undefined;
+  /**
+   * The list's paperclip tooltip names, prepared on the server (a few names
+   * rather than the notice); `null` once the record is gone. Absent for the
+   * offline snapshot host, which reads its local files instead.
+   */
+  useDocumentTip?: (recordKey: string) => DocumentTipNames | null | undefined;
   /** Every published review row for the record (bounded); `truncated` when there were more. */
   useReview(recordKey: string): { rows: ReviewRow[]; truncated: boolean } | undefined;
   readDocument(document: StoredProcurementDocument, signal?: AbortSignal): Promise<ArrayBuffer>;

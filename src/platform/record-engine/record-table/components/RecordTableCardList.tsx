@@ -72,8 +72,11 @@ export function RecordTableCardList({
   renderRowActions,
   rowMenuSections,
   onEndReached,
+  footer,
 }: {
   onEndReached?: () => void;
+  /** Shown after the last card (an endless list's loading / end-of-results line). */
+  footer?: ReactNode;
   renderCard: RecordTableCardRenderer;
   emptyState?: ReactNode;
   /** Accessible name for the list, e.g. "Assets". */
@@ -101,7 +104,7 @@ export function RecordTableCardList({
     if (virtualize || !onEndReached || !endRef.current) return;
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) onEndReached();
-    }, { root: scrollParentOf(endRef.current), rootMargin: "120px" });
+    }, { root: scrollParentOf(endRef.current), rootMargin: `${CARD_OVERSCAN}px` });
     observer.observe(endRef.current);
     return () => observer.disconnect();
   }, [virtualize, onEndReached, model.items.length]);
@@ -141,8 +144,10 @@ export function RecordTableCardList({
     );
   };
 
+  const after = footer ? <div className="record-cards__footer">{footer}</div> : null;
   if (virtualize) {
     return (
+      <>
       <div ref={anchorRef} className="record-cards record-cards--virtual" role="list" aria-label={label}>
         {/* Wait for the scroll container so the first frame is windowed against it. */}
         {scrollParent !== undefined && (
@@ -157,14 +162,19 @@ export function RecordTableCardList({
           />
         )}
       </div>
+      {after}
+      </>
     );
   }
 
   return (
-    <div ref={anchorRef} className="record-cards" role="list" aria-label={label}>
-      {model.items.map((item) => renderItem(item))}
-      <div ref={endRef} aria-hidden="true" />
-    </div>
+    <>
+      <div ref={anchorRef} className="record-cards" role="list" aria-label={label}>
+        {model.items.map((item) => renderItem(item))}
+        <div ref={endRef} aria-hidden="true" />
+      </div>
+      {after}
+    </>
   );
 }
 

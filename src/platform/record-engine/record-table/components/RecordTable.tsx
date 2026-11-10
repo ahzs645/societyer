@@ -59,9 +59,13 @@ const VirtuosoTable = forwardRef<HTMLTableElement, React.TableHTMLAttributes<HTM
   },
 );
 
+// Virtuoso gives its sticky header an inline `z-index: 2`, below the sticky
+// identifier, selection and row-action cells (z-index 3–6) of rows scrolling
+// under it, so a row's title was drawn over the first column's header. Lift it
+// above them, as the footer below is.
 const VirtuosoTableHead = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   function VirtuosoTableHead(props, ref) {
-    return <thead ref={ref} {...props} className="record-table__thead" />;
+    return <thead ref={ref} {...props} style={{ ...props.style, zIndex: 7 }} className="record-table__thead" />;
   },
 );
 
@@ -83,12 +87,23 @@ const VirtuosoTableBody = forwardRef<HTMLTableSectionElement, React.HTMLAttribut
 type RowContextMenuHandler = (event: React.MouseEvent, record: any) => void;
 
 const VIRTUAL_ACTION_ROW = { __recordTableActionRow: true } as const;
+const VIRTUAL_FOOTER_ROW = { __recordTableFooterRow: true } as const;
 
 function isVirtualActionRow(item: unknown): item is typeof VIRTUAL_ACTION_ROW {
   return !!item && typeof item === "object" && "__recordTableActionRow" in item;
 }
+function isVirtualFooterRow(item: unknown): item is typeof VIRTUAL_FOOTER_ROW {
+  return !!item && typeof item === "object" && "__recordTableFooterRow" in item;
+}
 
-type VirtualItem = RecordTableRowItem | typeof VIRTUAL_ACTION_ROW;
+type VirtualItem = RecordTableRowItem | typeof VIRTUAL_ACTION_ROW | typeof VIRTUAL_FOOTER_ROW;
+
+/**
+ * An endless list renders this far past the bottom of the view, so
+ * `onEndReached` fires while a few screens of rows are still left to scroll
+ * and the next page is usually there before the reader gets to it.
+ */
+const END_REACHED_LOOKAHEAD = { top: 0, bottom: 900 };
 
 const VirtuosoTableRow = forwardRef<
   HTMLTableRowElement,
@@ -98,10 +113,12 @@ const VirtuosoTableRow = forwardRef<
   }
 >(function VirtuosoTableRow({ item, context, ...props }, ref) {
   const isActionRow = isVirtualActionRow(item);
-  const recordItem = !isActionRow && item?.kind === "record" ? item : null;
+  const isFooterRow = isVirtualFooterRow(item);
+  const recordItem = !isActionRow && !isFooterRow && item?.kind === "record" ? item : null;
   const rowClassName = useRecordRowClassName(recordItem ? recordItem.key : null);
   if (isActionRow) return <tr ref={ref} {...props} className="record-table__action-row" />;
-  if (item?.kind === "group") {
+  if (isFooterRow) return <tr ref={ref} {...props} className="record-table__list-footer" />;
+  if (!isActionRow && !isFooterRow && item?.kind === "group") {
     return (
       <tr
         ref={ref}
@@ -280,9 +297,15 @@ export function RecordTable({
   inlineEdit,
   canMoveRecord,
   onEndReached,
+  listFooter,
   fillViewport = true,
 }: {
   onEndReached?: () => void;
+  /**
+   * A full-width row after the last record, inside the scroller (cards: after
+   * the last card), e.g. an endless list's "Loading more…" / "End of results".
+   */
+  listFooter?: ReactNode;
   /** Occupy the remaining viewport rather than a fixed 600px box. */
   fillViewport?: boolean;
   selectable?: boolean;
@@ -515,9 +538,10 @@ export function RecordTable({
     (effectiveSelectable ? 1 : 0) +
     (showDragHandle ? 1 : 0) +
     (hasRowActions ? 1 : 0);
+  const hasListFooter = listFooter !== undefined && listFooter !== null && listFooter !== false;
   const virtualizedRows = useMemo<VirtualItem[]>(
-    () => (onCreate ? [...rowModel.items, VIRTUAL_ACTION_ROW] : rowModel.items),
-    [rowModel.items, onCreate],
+    () => [...rowModel.items, ...(onCreate ? [VIRTUAL_ACTION_ROW] : []), ...(hasListFooter ? [VIRTUAL_FOOTER_ROW] : [])],
+    [rowModel.items, onCreate, hasListFooter],
   );
 
   // New-row flash: ids that appear after the table has loaded (a create, an
@@ -801,6 +825,7 @@ export function RecordTable({
         {mobileSelectionControls}
         <RecordTableCardList
           onEndReached={onEndReached}
+          footer={listFooter}
           renderCard={phoneCard}
           emptyState={emptyState}
           label={objectMetadata.labelPlural}
@@ -1022,6 +1047,11 @@ export function RecordTable({
               {onCreate && (
                 <RecordTableActionRow colSpan={tableColumnCount} />
               )}
+              {hasListFooter && (
+                <tr className="record-table__list-footer">
+                  <td colSpan={tableColumnCount}><div className="record-table__list-footer-content">{listFooter}</div></td>
+                </tr>
+              )}
             </tbody>
             {showAggregateFooter && (
               <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
@@ -1066,6 +1096,7 @@ export function RecordTable({
         className={`record-table__virtuoso ${densityClass}`}
         style={{ height: fillViewport ? viewportHeight : 600 }}
         endReached={onEndReached}
+        increaseViewportBy={onEndReached ? END_REACHED_LOOKAHEAD : undefined}
         components={{
           Table: VirtuosoTable,
           TableHead: VirtuosoTableHead,
@@ -1084,10 +1115,12 @@ export function RecordTable({
           />
         ) : undefined}
         computeItemKey={(index, item) =>
-          isVirtualActionRow(item) ? "__action-row" : item?.key ?? String(index)
+          isVirtualActionRow(item) ? "__action-row" : isVirtualFooterRow(item) ? "__list-footer" : item?.key ?? String(index)
         }
         itemContent={(_index, item: VirtualItem | undefined) =>
-          !item || isVirtualActionRow(item) ? (
+          isVirtualFooterRow(item) ? (
+            <td colSpan={tableColumnCount}><div className="record-table__list-footer-content">{listFooter}</div></td>
+          ) : !item || isVirtualActionRow(item) ? (
             <RecordTableActionRowCells colSpan={tableColumnCount} />
           ) : item.kind === "group" ? (
             <RecordTableGroupRowCells group={item.group} collapsed={item.collapsed} {...groupRowProps} />

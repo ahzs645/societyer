@@ -11,6 +11,7 @@ import {
   procurementSearchMatches,
 } from "../shared/procurementSearchText";
 import { matchesProcurementParty } from "../shared/procurementAnalytics";
+import { documentTipNames } from "../src/features/procurementReview/lib/notice";
 import { procurementPredicate } from "../shared/procurementBrowseFilters";
 import { toNoticeRow } from "../shared/procurementNoticeRow";
 import { v } from "convex/values";
@@ -268,6 +269,23 @@ export function listRow(row: Doc<"procurementRecords">) {
   };
 }
 
+/** The only `analyticsJson` keys the interactive list reads (procurementDeadlineValue in lib/notice.ts). */
+const PAGE_ANALYTICS_KEYS = ["closingAt", "closingDate"] as const;
+/**
+ * A list row for the interactive page: the provenance, parties, aliases and
+ * classifications in `analyticsJson` are for the server's analytics and party
+ * matching, not for drawing a row, so a page carries only the closing fields.
+ */
+function pageRow(row: ReturnType<typeof listRow>) {
+  const { analyticsJson, ...rest } = row;
+  if (!analyticsJson) return rest;
+  let extra: unknown;
+  try { extra = JSON.parse(analyticsJson); } catch { return row; }
+  if (!extra || typeof extra !== "object" || Array.isArray(extra)) return row;
+  const kept = Object.fromEntries(PAGE_ANALYTICS_KEYS.filter((key) => key in extra).map((key) => [key, (extra as Record<string, unknown>)[key]]));
+  return Object.keys(kept).length ? { ...rest, analyticsJson: JSON.stringify(kept) } : rest;
+}
+
 /**
  * Every record of a kind, in large bounded pages: the reader loads the whole
  * list (small rows: no notice bodies, no search corpus) and sorts, filters and
@@ -387,6 +405,53 @@ export const documents = authorizedQuery(
         .filter((row) => !row.archived)
         .map(({ _id, _creationTime, archived, ...row }) => row),
     };
+  },
+});
+
+/** Stored files the paperclip tooltip reads to know every name; past it the "not downloaded" list is left out. */
+const DOCUMENT_TIP_SCAN = 200;
+/**
+ * The list's paperclip tooltip: a few file names, not the notice. The notice's
+ * links are read here, from its detail, so hovering a row sends a few hundred
+ * bytes instead of the whole notice — for every import, including older ones
+ * that didn't record how many linked files a notice has.
+ */
+export const documentTip = authorizedQuery(
+  "procurementReview:documentTip",
+  query,
+)({
+  args: {
+    societyId: v.id("societies"),
+    generation: v.string(),
+    recordKey: v.string(),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({ files: v.array(v.string()), linked: v.array(v.string()), linkedTotal: v.number() }),
+  ),
+  handler: async (ctx, args) => {
+    const active = await activeCatalog(ctx, args.societyId);
+    if (!active || active.generation !== args.generation) return null;
+    const storage = active.storageGeneration ?? active.generation;
+    const scanned = await ctx.db
+      .query("procurementDocuments")
+      .withIndex("by_record", (q) =>
+        q.eq("societyId", args.societyId).eq("generation", storage).eq("recordKey", args.recordKey),
+      )
+      .take(DOCUMENT_TIP_SCAN + 1);
+    const complete = scanned.length <= DOCUMENT_TIP_SCAN;
+    const stored = scanned.slice(0, DOCUMENT_TIP_SCAN).filter((row) => !row.archived);
+    let data: unknown = {};
+    if (complete) {
+      const detail = await ctx.db
+        .query("procurementDetails")
+        .withIndex("by_key", (q) =>
+          q.eq("societyId", args.societyId).eq("generation", storage).eq("recordKey", args.recordKey),
+        )
+        .unique();
+      try { data = detail ? JSON.parse(detail.dataJson) : {}; } catch { data = {}; }
+    }
+    return documentTipNames(stored, data, complete);
   },
 });
 
@@ -744,7 +809,7 @@ export const page = authorizedQuery(
                 search,
               )),
         )
-        .map((r) => r.raw),
+        .map((r) => pageRow(r.raw)),
       isDone: result.isDone,
       continueCursor: result.isDone ? "" : JSON.stringify({ plan: cursorPlan, cursor: result.continueCursor }),
       ...(restart ? { restart: true } : {}),

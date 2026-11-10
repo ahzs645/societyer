@@ -34,6 +34,7 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   "procurementReview:page",
   "procurementReview:record",
   "procurementReview:documents",
+  "procurementReview:documentTip",
   "procurementReview:evidence",
   "procurementReview:review",
   "procurementReview:reviews",

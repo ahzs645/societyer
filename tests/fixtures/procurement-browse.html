@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Procurement browse fixture</title></head><body><div id="root"></div><script type="module">
+// The shared table reads the signed-in user; the no-login demo runtime (chosen by a /demo path) provides one without a server.
+history.replaceState(null, '', `/demo/procurement-browse${location.search}`);
+const React = (await import('react')).default;
+const { createRoot } = await import('react-dom/client');
+const { BrowserRouter } = await import('react-router-dom');
+await import('/src/i18n');
+await import('/src/theme/palette.css');
+await import('/src/theme/tokens.css');
+await import('/src/styles/index.scss');
+const { AuthProvider } = await import('/src/auth/AuthProvider');
+const { ConvexProvider } = await import('convex/react');
+const { localDataClient } = await import('/src/lib/localDataClient');
+const { ToastProvider } = await import('/src/components/Toast');
+const { ConfirmProvider, PromptProvider } = await import('/src/components/Modal');
+const { useSociety } = await import('/src/hooks/useSociety');
+const h = React.createElement;
+// The hosted page renders its reader once the workspace has loaded; so does this one.
+function WorkspaceReady({ children }) { return useSociety() ? children : null; }
+const { CatalogBrowser } = await import('/src/features/procurementReview/reader/CatalogBrowser');
+const { ReaderSourceContext } = await import('/src/features/procurementReview/reader/source');
+// A hosted list's bounded server pages, answered after a delay: 400 awards in pages of 50; a search for "nomatch" reads 100 notices a page and matches none.
+const TOTAL = 400, PAGE = 50, SCAN = 100;
+const rows = Array.from({ length: TOTAL }, (_, i) => ({ recordKey: `award:${String(i).padStart(3, '0')}`, kind: 'award', title: `Synthetic award ${i}`, organization: 'Test City', issuedFor: '', status: 'Awarded', date: `2026-${String(1 + (i % 12)).padStart(2, '0')}-15`, dateText: '', reference: '', documents: 0, listedDocuments: 0, supplier: `Supplier ${i}`, value: 1000 + i, currency: 'CAD', procurementType: 'Goods' }));
+window.__pageRequests = [];
+function pageFor(request, cursor) {
+  const start = cursor ? Number(cursor) : 0;
+  if (JSON.parse(request).searchTerm === 'nomatch') return { page: [], isDone: start + SCAN >= TOTAL * 10, continueCursor: String(start + SCAN), scanned: SCAN, relevance: false };
+  return { page: rows.slice(start, start + PAGE), isDone: start + PAGE >= TOTAL, continueCursor: String(start + PAGE), scanned: PAGE, relevance: false };
+}
+const source = {
+  catalog: { generation: 'synthetic', publishedAt: new Date().toISOString(), counts: { award: TOTAL } },
+  usePage(kind, request, cursor) {
+    const [result, setResult] = React.useState(undefined);
+    React.useEffect(() => {
+      setResult(undefined);
+      if (request === null) return;
+      window.__pageRequests.push(cursor);
+      const timer = setTimeout(() => setResult(pageFor(request, cursor)), 120);
+      return () => clearTimeout(timer);
+    }, [request, cursor]);
+    return result;
+  },
+  useList() { throw Error('A hosted list must not load whole catalogs'); },
+  useReviews() { throw Error('A hosted list must not load review histories'); },
+  useRecord() { return undefined; },
+  useDocuments() { return undefined; },
+  useReview() { return undefined; },
+  readDocument() { throw Error('No documents here'); },
+  previewId: (document) => document.documentKey,
+};
+createRoot(document.getElementById('root')).render(
+  h(ConvexProvider, { client: localDataClient }, h(AuthProvider, null, h(ToastProvider, null, h(ConfirmProvider, null, h(PromptProvider, null, h(BrowserRouter, null,
+    h(WorkspaceReady, null, h(ReaderSourceContext.Provider, { value: source }, h('main', { className: 'page procurement-review' }, h(CatalogBrowser, { kind: 'award' })))))))))),
+);
+</script></body></html>

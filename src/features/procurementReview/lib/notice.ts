@@ -430,6 +430,24 @@ export type NoticeDocumentRow<D> =
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+/** How many names the list's paperclip tooltip shows of each kind before "and N more". */
+export const DOCUMENT_TIP_NAMES = 8;
+/**
+ * What the list's paperclip tooltip names: the published files, and the files
+ * the notice links to that weren't downloaded. The latter are matched against
+ * every stored file, as the notice's Documents tab does, so they are only
+ * named when `complete` (all stored files are known).
+ */
+export function documentTipNames(stored: readonly { name: string; available: boolean }[], rawData: unknown, complete: boolean) {
+  const linked = complete ? attachmentsOf(asData(rawData)).filter((item) => !stored.some((document) => sameName(document.name, item.name))) : [];
+  return {
+    files: stored.filter((document) => document.available).slice(0, DOCUMENT_TIP_NAMES).map((document) => document.name),
+    linked: linked.slice(0, DOCUMENT_TIP_NAMES).map((item) => item.name),
+    linkedTotal: linked.length,
+  };
+}
+export type DocumentTipNames = ReturnType<typeof documentTipNames>;
+
 /**
  * The notice's files as one list: those downloaded first, then the stored
  * ones that weren't published, then the files the source lists that Zoer

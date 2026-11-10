@@ -97,6 +97,10 @@ export function RecordTableScope({
    * as the first rows are in. Leave unset (or null) once everything has loaded.
    */
   loadingProgress?: { loaded: number; total: number } | null;
+  /**
+   * Search, filters and sort run on the server: the rows shown are set on the
+   * store by whatever pages them in (`records` is then ignored).
+   */
   serverProcessed?: boolean;
   children: ReactNode;
 }) {
@@ -110,6 +114,11 @@ export function RecordTableScope({
     () => withHiddenObjectFields(hydratedView, objectMetadata.fields),
     [hydratedView, objectMetadata.fields],
   );
+  // Relative date filters ("Last 30 days", "Fiscal year to date") and export
+  // file names use the organisation's calendar, not UTC.
+  const organization = useSociety() as ({ fiscalYearEnd?: string | null } & Parameters<typeof organizationTodayISO>[0]) | null | undefined;
+  const organizationToday = organizationTodayISO(organization ?? null);
+  const fiscalYearEnd = organization?.fiscalYearEnd ?? null;
   const scopeIdentity = `${tableId}:${objectMetadata._id}:${actorId ?? "unbound"}:${hasAuthorizedView}`;
   const store = useMemo<RecordTableStore>(
     () => {
@@ -123,8 +132,12 @@ export function RecordTableScope({
       // a newly scoped store immediately from the current authorized snapshot.
       if (loadableView) next.getState().loadView(loadableView);
       next.getState().setServerProcessed(serverProcessed);
+      // Start on the organisation's calendar, so the first render's filters (and
+      // a server-processed table's first request) aren't redone a moment later.
+      next.getState().setDateContext({ today: organizationToday, fiscalYearEnd });
       return next;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new calendar day updates the store below; it never replaces it
     [tableId, objectMetadata._id, objectMetadata.labelIdentifierFieldName, actorId, hasAuthorizedView],
   );
   const [sidePanelRecord, setSidePanelRecord] = useState<{
@@ -201,11 +214,6 @@ export function RecordTableScope({
     clearPanelParams();
   }, [resetPanelStack, clearPanelParams]);
 
-  // Relative date filters ("Last 30 days", "Fiscal year to date") and export
-  // file names use the organisation's calendar, not UTC.
-  const organization = useSociety() as ({ fiscalYearEnd?: string | null } & Parameters<typeof organizationTodayISO>[0]) | null | undefined;
-  const organizationToday = organizationTodayISO(organization ?? null);
-  const fiscalYearEnd = organization?.fiscalYearEnd ?? null;
   useEffect(() => {
     store.getState().setDateContext({ today: organizationToday, fiscalYearEnd });
   }, [store, organizationToday, fiscalYearEnd]);
@@ -214,9 +222,11 @@ export function RecordTableScope({
   useEffect(() => {
     if (loadableView) store.getState().loadView(loadableView);
   }, [loadableView, store]);
+  // A server-processed table's rows are set by whatever pages them in (and kept
+  // across a replaced store); a records prop re-rendered here must not wipe them.
   useEffect(() => {
-    store.getState().setRecords(records);
-  }, [records, store]);
+    if (!serverProcessed) store.getState().setRecords(records);
+  }, [records, store, serverProcessed]);
   const loadingLoaded = loadingProgress?.loaded;
   const loadingTotal = loadingProgress?.total;
   useEffect(() => {

@@ -10,6 +10,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PendingInvitations } from "./PendingInvitations";
 import { WorkspaceMfaActions } from "../auth/WorkspaceMfaActions";
+import { AuthShell } from "../auth/AuthShell";
 import { useAccessRequestAvailability } from "../auth/RequestWorkspaceAccess";
 
 const WorkspaceAccessScreen = lazy(() => import("../auth/WorkspaceAccessScreen"));
@@ -32,14 +33,17 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
         title={expired ? "Session expired" : "Authentication unavailable"}
         message={auth.fatalError.message}
       >
+        {expired && (
+          <button className="btn btn--primary auth__submit" type="button" onClick={() => void auth.signOut()}>Sign in again</button>
+        )}
         {auth.fatalError.retryable && (
-          <button className="btn" type="button" onClick={auth.retryAuthentication}>
-            Retry
+          <button className={expired ? "btn auth__submit" : "btn btn--primary auth__submit"} type="button" onClick={auth.retryAuthentication}>
+            Try again
           </button>
         )}
-        <button className="btn" type="button" onClick={() => void auth.signOut()}>
-          {expired ? "Sign in again" : "Sign out"}
-        </button>
+        {!expired && (
+          <button className="btn auth__submit" type="button" onClick={() => void auth.signOut()}>Sign out</button>
+        )}
       </AuthMessage>
     );
   }
@@ -62,8 +66,8 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
         title="Secure sign-in failed"
         message="Societyer could not confirm your workspace token. Retry, or sign in again."
       >
-        <button className="btn" type="button" onClick={auth.retryAuthentication}>Retry</button>
-        <button className="btn" type="button" onClick={() => void auth.signOut()}>Sign out</button>
+        <button className="btn btn--primary auth__submit" type="button" onClick={auth.retryAuthentication}>Try again</button>
+        <button className="btn auth__submit" type="button" onClick={() => void auth.signOut()}>Sign out</button>
       </AuthMessage>
     );
   }
@@ -72,7 +76,7 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
     if (auth.membershipStatus === "unauthenticated") {
       return (
         <AuthMessage title="Sign in again" message="Your sign-in must be refreshed to continue.">
-          <button className="btn btn--primary" type="button" onClick={() => void auth.signOut()}>Sign in again</button>
+          <button className="btn btn--primary auth__submit" type="button" onClick={() => void auth.signOut()}>Sign in again</button>
         </AuthMessage>
       );
     }
@@ -97,8 +101,8 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
           title={creationAccess.allowed ? "Set up your workspace" : "Invitation required"}
           message={creationAccess.allowed ? "Create your own organization workspace, or open an invitation to join an existing organization. A new workspace does not give access to anyone else's records." : creationAccess.reason}
         >
-          {creationAccess.allowed && <Link className="btn btn--accent" to="/app/society/new">Set up an organization</Link>}
-          <button className="btn" type="button" onClick={() => void auth.signOut()}>Sign out</button>
+          {creationAccess.allowed && <Link className="btn btn--primary auth__submit" to="/app/society/new">Set up an organization</Link>}
+          <button className={creationAccess.allowed ? "btn auth__submit" : "btn btn--primary auth__submit"} type="button" onClick={() => void auth.signOut()}>Sign out</button>
         </AuthMessage>
       );
     }
@@ -108,8 +112,8 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
           title="Workspace access revoked"
           message="Your workspace membership is no longer active. Contact a workspace administrator if this is unexpected."
         >
-          <button className="btn" type="button" onClick={auth.retryAuthentication}>Check again</button>
-          <button className="btn" type="button" onClick={() => void auth.signOut()}>Sign out</button>
+          <button className="btn btn--primary auth__submit" type="button" onClick={auth.retryAuthentication}>Check again</button>
+          <button className="btn auth__submit" type="button" onClick={() => void auth.signOut()}>Sign out</button>
         </AuthMessage>
       );
     }
@@ -119,7 +123,7 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
           title="Account disabled"
           message="Your workspace user has been disabled. Contact a workspace administrator for help."
         >
-          <button className="btn" type="button" onClick={() => void auth.signOut()}>Sign out</button>
+          <button className="btn btn--primary auth__submit" type="button" onClick={() => void auth.signOut()}>Sign out</button>
         </AuthMessage>
       );
     }
@@ -196,6 +200,12 @@ function usePreloadWorkspaceShell(signedIn: boolean) {
   }, [signedIn, inApp, toDashboard]);
 }
 
+/**
+ * A signed-in state that stops short of the workspace (expired session,
+ * revoked access, …), drawn in the sign-in pages' frame so it reads as part of
+ * signing in rather than as a broken app page. Pass the actions as buttons
+ * with `auth__submit`, the main one also `btn--primary`.
+ */
 function AuthMessage({
   children,
   message,
@@ -206,10 +216,8 @@ function AuthMessage({
   title: string;
 }) {
   return (
-    <div className="page">
-      <h1>{title}</h1>
-      <p>{message}</p>
-      {children && <div style={{ display: "flex", gap: 8 }}>{children}</div>}
-    </div>
+    <AuthShell title={title} lede={message} help="Trouble signing in?">
+      {children && <div className="auth__actions">{children}</div>}
+    </AuthShell>
   );
 }
