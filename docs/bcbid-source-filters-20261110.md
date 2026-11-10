@@ -40,3 +40,32 @@ transport remains available. No operator guard was weakened.
 Deployment coordination: a November 10 dry-run against industrious-cricket-610
 found uncommitted Teams meeting additions from another active chat already deployed.
 Do not deploy the older backend tree over it: first consolidate that work on main.
+
+## Verified data activation
+
+The source publication `20261110T072046Z-93a8b25f4b47` is now served as
+`20261110T072046Z-93a8b25f4b47-bcbid-filters-20261110` on
+`industrious-cricket-610`. Its inventory hash is
+`a70b5baa346af06486f609c55dabdd1039eb1179043964b43c5400ae2b6bdc16`.
+All 6,418 incremental operations completed, with zero archives/deletes; the
+post-import state is `updating: false` and its independent serving receipt is
+`ready`. Counts are 3,770 opportunities, 21,877 awards, 3,008 document rows,
+91 evidence rows and 89,972 taxonomy terms. Notice 235592 has all six public tabs,
+the full 36,932-character Process Rules and five downloaded files in this export.
+Publication reused 1,806 blobs and uploaded three new content-addressed blobs.
+
+The verified target export at
+`$HOME/societyer-backups/bcbid-five-filters-20261110/export-target` is the next
+incremental baseline; keep it and the encrypted pre-import database backup.
+Operator transport was tested successfully from a private isolated runtime with
+the reviewed Convex 1.42.1 package. The normal application dependency remains
+unchanged. DDC North build and 13 browser checks passed; First Form build is
+prepared separately. Frontend/backend code deployment remains pending the Teams
+coordination described above. Do not confuse the completed data activation with
+that pending code rollout.
+
+The historical continuation is running under
+`workflow_run_938a1331-3b46-4c60-b356-f4a0c0b59848`; it advanced from 616 listings /
+605 details to at least 627 listings / 620 details, with six completed ranges and
+eleven remaining. It uses the existing saved browser and checkpoint. Its newer
+rows are beyond this publication's snapshot and need a subsequent publication.
