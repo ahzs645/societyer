@@ -105,7 +105,16 @@ function day(y: number, m: number, d: number, time?: string): SourceDate | null 
 }
 
 const zoneParts = new Intl.DateTimeFormat("en-CA", { timeZone: DEADLINE_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+// Vancouver stays UTC-7 after its final spring-forward on March 8, 2026.
+// Hosted isolates can have older ICU data than the exporter/browser. Pin this
+// declared source-zone rule so publication validation uses the same midnight.
+// https://news.gov.bc.ca/releases/2026AG0013-000209
+const PERMANENT_PACIFIC_START = Date.UTC(2026, 2, 8, 10);
 function inZone(at: number): SourceDate {
+  if (at >= PERMANENT_PACIFIC_START) {
+    const wall = new Date(at - 7 * 3_600_000);
+    return { date: `${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}`, time: `${pad(wall.getUTCHours())}:${pad(wall.getUTCMinutes())}` };
+  }
   const p = Object.fromEntries(zoneParts.formatToParts(at).map((part) => [part.type, part.value]));
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
 }

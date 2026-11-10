@@ -14,6 +14,8 @@ import { validateExport } from "./procurement/verify-export";
 import { summarySha, writeAnalyticsArtifacts } from "./procurement/analytics-artifacts";
 import type { ListRow } from "../shared/procurementListRow";
 import { zoneToday } from "../src/features/procurementReview/lib/notice";
+const clockCheck = spawnSync(process.execPath, ["--import", "tsx", resolve("scripts/check-procurement-clock.ts")], { encoding: "utf8" });
+assert.equal(clockCheck.status, 0, clockCheck.stderr || clockCheck.stdout);
 const now = Math.floor(Date.now() / 60000) * 60000, asOf = now - 60_000;
 const award: ListRow = { recordKey: "award:one", kind: "award", title: "Award", organization: "City", issuedFor: "", status: "Awarded", date: zoneToday(now), dateText: "", reference: "", documents: 0, listedDocuments: 0, supplier: "Supplier", value: 123.45, currency: "CAD", procurementType: "Goods" };
 const boundary = asOf + 180_000;
