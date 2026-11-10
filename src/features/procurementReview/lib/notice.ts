@@ -31,6 +31,8 @@ export type NoticeModel = {
   facts: NoticeFact[];
   fields: NoticeField[];
   contacts: NoticeContact[];
+  /** The buyer's office address on one line, when the source gives one (BC Bid publishes it as five fields). */
+  contactAddress: string;
   attachments: NoticeAttachment[];
   commodities: string[];
 };
@@ -220,7 +222,7 @@ export function deadlineOf(raw: unknown, now = Date.now()): NoticeDeadline | nul
   if (days < 0) return { text: formatted, relative: days === -1 ? "yesterday" : `${-days} days ago`, state: "closed" };
   if (days === 0) {
     const instant = deadlineInstant(value), passed = instant !== null && instant < now;
-    return { text: formatted, relative: passed ? "earlier today" : instant === null ? "closing date today; time unverified" : "today", state: passed ? "closed" : "today" };
+    return { text: formatted, relative: passed ? "earlier today" : instant === null ? "today, check the time" : "today", state: passed ? "closed" : "today" };
   }
   return { text: formatted, relative: days === 1 ? "tomorrow" : `in ${days} days`, state: days <= 7 ? "soon" : "open" };
 }
@@ -255,27 +257,83 @@ const COVERED_LABEL = /^(opportunity (id|number|type|description|title)|solicita
 /** Values that carry no information on their own. */
 const EMPTY_VALUE = /^(n\/?a|none|-+|\.)$/i;
 
-function sourceFields(data: Data, shown: string[]): NoticeField[] {
+/** Machine values a source page carries along; they tell a reader nothing. */
+const NOISE_LABEL = /^(lat(itude)?|long?(itude)?|lng)$/i;
+/** Fields that only repeat the buyer contact shown beside them. */
+const CONTACT_LABEL = /^contact\b|^(e-?mail|phone|telephone)( address| number)?$/i;
+/** A value that is nothing but a date or a stamp ("2026-11-02 2:30:00 PM"), which reads better as "Nov 2, 2026 · 2:30 PM". */
+const BARE_STAMP = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp]\.?[Mm]\.?)?)?(?:\s*\([A-Za-z ]+\))?$/;
+/** When questions to the buyer close: a date that belongs with the closing date, not in the list of other fields. */
+const ENQUIRIES_LABEL = /^((enquir|inquir)(y|ies)|questions?) (deadline|due|clos(e|ing))( date)?( and time)?$|^deadline for ((enquir|inquir)ies|questions)$/i;
+
+/** The parts of a postal address, which a source page gives as separate fields. */
+const ADDRESS_PARTS: { part: "street" | "city" | "province" | "postal" | "country"; label: RegExp }[] = [
+  { part: "street", label: /^((office|mailing|street) )*address( line ?\d)?$/i },
+  { part: "city", label: /^(city|town|municipality)$/i },
+  { part: "province", label: /^(province|state|province ?\/ ?state|state ?\/ ?province)$/i },
+  { part: "postal", label: /^(postal|zip) ?code$/i },
+  { part: "country", label: /^country$/i },
+];
+const addressPart = (label: string) => ADDRESS_PARTS.find((item) => item.label.test(label))?.part;
+
+/**
+ * "2510 Sparrow Dr, Nisku, Alberta T9E 8N5, Canada" from the fields that make
+ * it up, and the fields without them. Only a street with something more is an
+ * address; a lone "City" or "Country" stays the field it was.
+ */
+function withoutAddress(fields: NoticeField[]): { fields: NoticeField[]; address: string } {
+  const parts = new Map<string, string>();
+  for (const field of fields) {
+    const part = addressPart(field.label);
+    if (part && !field.long && !parts.has(part)) parts.set(part, field.value);
+  }
+  if (!parts.has("street") || parts.size < 2) return { fields, address: "" };
+  const region = [parts.get("province"), parts.get("postal")].filter(Boolean).join(" ");
+  const address = [parts.get("street"), parts.get("city"), region, parts.get("country")].filter(Boolean).join(", ");
+  return { fields: fields.filter((field) => !addressPart(field.label) || field.long), address };
+}
+
+/**
+ * The source page's fields that add something: not the ones the header, facts
+ * or description already show, not a repeat of the buyer contact, and not
+ * coordinates. A bare stamp is written as a date.
+ */
+function sourceFields(data: Data, shown: string[], contacts: NoticeContact[]): NoticeField[] {
   const raw = Array.isArray(data.detailFields) ? data.detailFields : [];
   const covered = new Set(shown.map(squash).filter(Boolean));
   const description = squash(shown[0] ?? "");
+  const contactText = contacts.flatMap((contact) => [contact.name, contact.email, contact.phone]).map(squash).filter(Boolean);
   const seen = new Set<string>();
   const fields: NoticeField[] = [];
   for (const item of raw) {
     const entry = asData(item);
     const label = text(entry.label).replace(/:$/, "");
     const value = text(entry.value);
-    if (!label || !value || EMPTY_VALUE.test(value) || COVERED_LABEL.test(label)) continue;
+    if (!label || !value || EMPTY_VALUE.test(value) || COVERED_LABEL.test(label) || NOISE_LABEL.test(label)) continue;
     const key = squash(value);
     if (covered.has(key) || (description.length > 80 && key.length > 80 && (description.includes(key) || key.includes(description)))) continue;
+    // "Contact First Name: Renee" beside a contact card for Renee Johansson.
+    if (CONTACT_LABEL.test(label) && key && contactText.some((known) => known.includes(key))) continue;
     const id = `${squash(label)}=${key}`;
     if (seen.has(id)) continue;
     seen.add(id);
     // A single lot with no amendments says nothing.
     if (/^lot( #| number)?$/i.test(label) && value === "1") continue;
-    fields.push({ label, value, long: value.length > 60 || value.includes("\n") });
+    const shownValue = BARE_STAMP.test(value) ? formatSourceDate(value) : value;
+    fields.push({ label, value: shownValue, long: value.length > 60 || value.includes("\n") });
   }
   return fields;
+}
+
+/** The enquiries deadline from the page fields, as its own fact ("Nov 2, 2026 · 2:30 PM"); "" when there is none or it isn't a date. */
+function enquiriesOf(data: Data): { raw: string; text: string } {
+  for (const item of Array.isArray(data.detailFields) ? data.detailFields : []) {
+    const entry = asData(item);
+    if (!ENQUIRIES_LABEL.test(text(entry.label).replace(/:$/, ""))) continue;
+    const raw = text(entry.value);
+    if (parseSourceDate(raw)) return { raw, text: formatSourceDate(raw) };
+  }
+  return { raw: "", text: "" };
 }
 
 /** The source's contacts; awards keep a single one in flat fields. */
@@ -360,6 +418,8 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
   const commodities = commoditiesOf(data);
   const issued = first(data, "issueDate", "publishedAt", "postedDate");
   const amendments = Number(data.amendments);
+  const enquiries = award ? { raw: "", text: "" } : enquiriesOf(data);
+  const contacts = contactsOf(data);
 
   const facts: NoticeFact[] = [];
   const push = (label: string, value: string, party?: NoticeParty) => { if (value) facts.push({ label, value, ...(party ? { party } : {}) }); };
@@ -370,6 +430,7 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
     push("Buyer", buyer, "organization");
   } else {
     push("Closes", deadline?.text ?? "");
+    push("Enquiries by", enquiries.text);
     push("Buyer", buyer, "organization");
     if (issuedFor && squash(issuedFor) !== squash(buyer)) push("Issued for", issuedFor, "issuedFor");
   }
@@ -382,7 +443,8 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
   if (squash(location) !== squash(buyer)) push("Location", location);
 
   // The description is compared first, so a field that only restates it is dropped.
-  const shown = [description, title, buyer, issuedFor, type, reference, closing, issued, text(data.status), ...commodities, ...facts.map((f) => f.value)];
+  const shown = [description, title, buyer, issuedFor, type, reference, closing, issued, enquiries.raw, text(data.status), ...commodities, ...facts.map((f) => f.value)];
+  const { fields, address } = withoutAddress(sourceFields(data, shown, contacts));
   return {
     kind: input.kind,
     title,
@@ -395,8 +457,9 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
     description,
     sourceUrl: safeHttpsUrl(data.detailUrl) ?? safeHttpsUrl(data.sourceUrl),
     facts,
-    fields: sourceFields(data, shown),
-    contacts: contactsOf(data),
+    fields,
+    contacts,
+    contactAddress: address,
     attachments: attachmentsOf(data),
     commodities,
   };

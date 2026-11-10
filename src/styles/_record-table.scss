@@ -452,6 +452,26 @@ select.record-table__menu-select,
   overflow: hidden;
 }
 
+// Phones: every pill, in a row that swipes sideways. The end fades out, so a
+// pill cut off there reads as "more this way"; the padding lets the last one
+// ("Clear all") come clear of the fade.
+.record-table__chips--swipe {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding-right: 28px;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  .record-table__chip {
+    max-width: none;
+  }
+}
+
 .record-table__chips-mode {
   flex: none;
   font-size: token('fs-xxs');
@@ -683,6 +703,13 @@ select.record-table__menu-select,
   color: token('text-primary');
   border: 1px solid token('border');
   border-radius: token('r-sm');
+}
+
+// A page's own filters under the conditions (RecordTableFilterPopover `extra`).
+.record-table__filter-extra {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid token('border');
 }
 
 .record-table__filter-popover-actions {

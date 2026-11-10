@@ -89,6 +89,7 @@ export function RecordTableToolbar({
   listView,
   hideViewPickerOnPhone = false,
   collapsibleSearch = false,
+  extraFilterCount = 0,
 }: {
   icon?: ReactNode;
   label: string;
@@ -127,6 +128,11 @@ export function RecordTableToolbar({
    * always says so.
    */
   collapsibleSearch?: boolean;
+  /**
+   * Filters the page applies outside the table's own conditions (and offers
+   * in the filter editor's `extra`), counted on the Filter button with them.
+   */
+  extraFilterCount?: number;
 }) {
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
@@ -366,21 +372,22 @@ export function RecordTableToolbar({
     return () => observer?.disconnect();
   }, [activeViewName, viewCount, viewEdited]);
 
+  const filterCount = filters.length + extraFilterCount;
   const filterButton = (
     <button
       type="button"
       className={
         "record-table__toolbar-button record-table__toolbar-button--collapsible" +
-        (filters.length > 0 ? " record-table__toolbar-button--active" : "")
+        (filterCount > 0 ? " record-table__toolbar-button--active" : "")
       }
       data-record-table-filter-trigger=""
-      aria-label={`${t("common.filter", "Filter")}${filters.length > 0 ? ` · ${filters.length}` : ""}`}
+      aria-label={`${t("common.filter", "Filter")}${filterCount > 0 ? ` · ${filterCount}` : ""}`}
       aria-haspopup="dialog"
       onClick={onOpenFilter}
     >
       <Filter size={12} />
-      <span>{t("common.filter", "Filter")}{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
-      {isPhone && filters.length > 0 && <b className="record-table__toolbar-badge" aria-hidden="true">{filters.length}</b>}
+      <span>{t("common.filter", "Filter")}{filterCount > 0 ? ` · ${filterCount}` : ""}</span>
+      {isPhone && filterCount > 0 && <b className="record-table__toolbar-badge" aria-hidden="true">{filterCount}</b>}
     </button>
   );
 

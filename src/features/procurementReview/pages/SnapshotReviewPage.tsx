@@ -20,6 +20,7 @@ import type { BlobReader } from "../lib/blobs";
 import type { CatalogClient } from "../lib/catalogClient";
 import { ProcurementReader } from "../reader/ProcurementReader";
 import { useSnapshotReaderSource } from "../reader/snapshotSource";
+import { updatedSummary } from "../reader/summary";
 
 const STAGE_LABELS: Record<SnapshotProgress["stage"], string> = {
   manifest: "Reading the snapshot manifest",
@@ -220,7 +221,7 @@ export function SnapshotReviewPage() {
   } else if (readerView && snapshot.status === "ready") {
     return (
       <div className="page procurement-review">
-        <SnapshotReader key={snapshot.manifest.snapshotId} manifest={snapshot.manifest} catalog={snapshot.catalog} read={snapshot.read} header={<PageHeader title="Procurement review" subtitle={subtitle} actions={actions} />} />
+        <SnapshotReader key={snapshot.manifest.snapshotId} manifest={snapshot.manifest} catalog={snapshot.catalog} read={snapshot.read} header={<PageHeader title="Procurement review" subtitle={updatedSummary(snapshot.manifest.publishedAt)} actions={actions} />} />
       </div>
     );
   } else if (mountError) {

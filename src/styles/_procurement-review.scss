@@ -72,6 +72,49 @@ $zoer-theme: (
   max-width: 720px;
 }
 
+// The line under the title ("Updated today, 9:44 AM · read only") is short and says how fresh
+// the catalog is, so phones keep it (page subtitles are otherwise hidden there).
+@media (max-width: 768px) {
+  .procurement-reader__layer > .page__header .page__subtitle {
+    display: block;
+    font-size: token("fs-xs");
+  }
+}
+.procurement-review__summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 10px;
+}
+.procurement-review__caveat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: token("orange-11");
+  font-weight: token("fw-medium");
+  white-space: nowrap;
+}
+// Behind the title's ⓘ: what the catalog is and when it was collected, published and put in service.
+.procurement-review__about {
+  display: grid;
+  gap: token("s-3");
+  max-width: 22rem;
+  p { margin: 0; }
+  &-caveat {
+    color: token("orange-11");
+    > svg { vertical-align: -1px; }
+  }
+}
+.procurement-review__dates {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: token("fs-sm");
+  > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 token("s-4"); }
+  dt { color: token("text-tertiary"); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; }
+}
+
 .procurement-review__progress {
   display: flex;
   flex-direction: column;
@@ -129,6 +172,26 @@ $zoer-theme: (
   .procurement-reader__layer > .tabs .tab {
     padding-inline: 8px;
     > .tab__count { display: none; }
+  }
+}
+// The BC Bid section of the list's filter editor (BcBidFilters.tsx).
+.procurement-source-filters {
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    margin-bottom: token("s-3");
+    font-size: token("fs-sm");
+    > span { color: token("text-tertiary"); font-size: token("fs-xs"); }
+  }
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: token("s-3");
+    align-items: start;
+    > .field { margin-bottom: 0; }
+    .select-trigger, .input { width: 100%; }
   }
 }
 .procurement-reader__when {
@@ -312,6 +375,13 @@ $zoer-theme: (
     &:focus-visible { outline: 2px solid token("accent"); outline-offset: 2px; }
   }
   &__line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  // The office address wraps (it is read, not scanned), with the pin beside its first line.
+  &__address {
+    align-items: flex-start;
+    color: token("text-secondary");
+    overflow-wrap: anywhere;
+    > svg { margin-top: 3px; }
+  }
 
   // Back to the list or buyer page under the notice.
   &__back {

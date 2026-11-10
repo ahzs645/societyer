@@ -7,7 +7,7 @@
  * other notices, and the documents as one list.
  */
 import assert from "node:assert/strict";
-import { backLabel, deadlineOf, describeNotice, noticeDocumentRows, onSource, parseSourceDate, partyCount, sortableDate, sourceLabel, statusOf } from "../src/features/procurementReview/lib/notice";
+import { backLabel, deadlineOf, describeNotice, formatSourceDate, noticeDocumentRows, onSource, parseSourceDate, partyCount, sortableDate, sourceLabel, statusOf } from "../src/features/procurementReview/lib/notice";
 import { describeReview } from "../src/features/procurementReview/lib/review";
 
 // Noon UTC on October 18, 2026 is 5 AM in Vancouver.
@@ -66,6 +66,37 @@ assert.deepEqual(notice.facts.map((fact) => fact.label), ["Closes", "Buyer", "Ty
 assert.equal(notice.facts[0].value.includes("3:00"), true, "The closing time comes from the page fields when the stored date is a bare day");
 assert.equal(notice.status?.label, "Closed");
 assert.equal(notice.source, "BC Bid");
+
+// BC Bid also publishes the contact a second time, an office address in five fields, and map coordinates.
+const tidy = describeNotice({ recordKey: "opportunity:234294", kind: "opportunity", title: "Laboratory Equipment" }, {
+  status: "Open", closingDate: "2026-10-30", issuedBy: "CivicInfoBC",
+  contacts: [{ name: "Renee Johansson", email: "rfp@example.gov" }],
+  detailFields: [
+    { label: "Enquiries Deadline", value: "2026-10-22 2:30:00 PM" },
+    { label: "Delivery of Submissions", value: "Through the buyer's procurement portal only." },
+    { label: "Contact email", value: "rfp@example.gov" },
+    { label: "Office Street Address", value: "2510 Sparrow Dr" },
+    { label: "City", value: "Nisku" },
+    { label: "Postal Code", value: "T9E 8N5" },
+    { label: "Country", value: "Canada" },
+    { label: "Province", value: "Alberta" },
+    { label: "Latitude", value: "53.3537157" },
+    { label: "Longitude", value: "-113.5370052" },
+    { label: "Contact First Name", value: "Renee" },
+    { label: "Contact Last Name", value: "Johansson" },
+    { label: "Pre-bid Meeting", value: "2026-10-20 10:00:00 AM" },
+  ],
+}, now);
+assert.deepEqual(tidy.fields.map((field) => [field.label, field.value]), [
+  ["Delivery of Submissions", "Through the buyer's procurement portal only."],
+  ["Pre-bid Meeting", formatSourceDate("2026-10-20 10:00:00 AM")],
+], "The contact's repeats, the address parts and the coordinates are not fields; a bare stamp reads as a date");
+assert.equal(tidy.contactAddress, "2510 Sparrow Dr, Nisku, Alberta T9E 8N5, Canada");
+assert.deepEqual(tidy.facts.slice(0, 2).map((fact) => fact.label), ["Closes", "Enquiries by"], "The enquiries deadline sits with the closing date");
+assert.equal(tidy.facts[1].value.includes("2:30"), true);
+const loneCity = describeNotice({ recordKey: "opportunity:1", kind: "opportunity", title: "T" }, { detailFields: [{ label: "City", value: "Nisku" }, { label: "Contact Name", value: "Someone Else" }] }, now);
+assert.deepEqual(loneCity.fields.map((field) => field.label), ["City", "Contact Name"], "Without a street there is no address to make, and an unknown contact is kept");
+assert.equal(loneCity.contactAddress, "");
 assert.equal(notice.sourceUrl, "https://bcbid.gov.bc.ca/page.aspx/en/bpm/process_manage_extranet/216117");
 assert.equal(describeNotice({ recordKey: "opportunity:municipal-sites:x:1", kind: "opportunity", title: "T" }, { opportunityId: "municipal-sites:x:1", detailUrl: "javascript:alert(1)" }, now).reference, "", "Synthetic keys and unsafe links are not shown");
 assert.equal(describeNotice({ recordKey: "opportunity:bidsandtenders:s:1", kind: "opportunity", title: "T" }, { opportunityId: "bidsandtenders:surrey:abc", externalId: "1220-030" }, now).reference, "1220-030", "A synthetic key falls through to the source's own number");

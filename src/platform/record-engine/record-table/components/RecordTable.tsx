@@ -1096,7 +1096,8 @@ export function RecordTable({
         className={`record-table__virtuoso ${densityClass}`}
         style={{ height: fillViewport ? viewportHeight : 600 }}
         endReached={onEndReached}
-        increaseViewportBy={onEndReached ? END_REACHED_LOOKAHEAD : undefined}
+        // 0, not undefined: an explicit undefined replaces the list's default and it throws once rows run past the viewport.
+        increaseViewportBy={onEndReached ? END_REACHED_LOOKAHEAD : 0}
         components={{
           Table: VirtuosoTable,
           TableHead: VirtuosoTableHead,

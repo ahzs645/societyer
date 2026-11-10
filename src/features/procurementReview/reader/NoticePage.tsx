@@ -28,6 +28,7 @@ import {
   FileSearch,
   Gavel,
   Mail,
+  MapPin,
   Phone,
   Sparkles,
 } from "lucide-react";
@@ -372,7 +373,7 @@ function NoticeFacts({ model }: { model: NoticeModel }) {
 }
 
 function NoticeContacts({ model }: { model: NoticeModel }) {
-  if (!model.contacts.length) return null;
+  if (!model.contacts.length && !model.contactAddress) return null;
   return (
     <section
       className="procurement-notice__contact card"
@@ -380,7 +381,7 @@ function NoticeContacts({ model }: { model: NoticeModel }) {
     >
       <div className="card__head">
         <h2 className="card__title" id="procurement-notice-contact">
-          {model.contacts.length === 1 ? "Buyer contact" : "Buyer contacts"}
+          {model.contacts.length > 1 ? "Buyer contacts" : "Buyer contact"}
         </h2>
       </div>
       <div className="card__body col">
@@ -390,6 +391,14 @@ function NoticeContacts({ model }: { model: NoticeModel }) {
             contact={contact}
           />
         ))}
+        {model.contactAddress && (
+          <div className="procurement-notice__person">
+            <span className="procurement-notice__line procurement-notice__address">
+              <MapPin size={13} aria-hidden="true" />
+              <span>{model.contactAddress}</span>
+            </span>
+          </div>
+        )}
       </div>
     </section>
   );

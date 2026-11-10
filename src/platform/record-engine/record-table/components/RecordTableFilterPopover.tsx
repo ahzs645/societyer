@@ -134,9 +134,19 @@ function hasOptions(column: RecordField | undefined) {
 export function RecordTableFilterPopover({
   open,
   onClose,
+  extra,
+  onApply,
 }: {
   open: boolean;
   onClose: () => void;
+  /**
+   * A section of the page's own filters (ones that aren't table conditions),
+   * shown under the conditions so there is one place to filter. The page keeps
+   * their draft and commits it in `onApply`.
+   */
+  extra?: ReactNode;
+  /** Runs when Apply is pressed with every condition complete; return false to keep the editor open. */
+  onApply?: () => boolean | void;
 }) {
   const request = useRecordTableState((s) => s.filterEditorRequest);
   const toolbarElement = useRecordTableState((s) => s.toolbarElement);
@@ -153,6 +163,8 @@ export function RecordTableFilterPopover({
       onClose={close}
       floating={Boolean(toolbarElement)}
       toolbarElement={toolbarElement}
+      extra={extra}
+      onApply={onApply}
     />
   );
   return toolbarElement ? createPortal(editor, toolbarElement) : editor;
@@ -163,11 +175,15 @@ function FilterEditor({
   onClose,
   floating,
   toolbarElement,
+  extra,
+  onApply,
 }: {
   focusIndex?: number;
   onClose: () => void;
   floating: boolean;
   toolbarElement: HTMLElement | null;
+  extra?: ReactNode;
+  onApply?: () => boolean | void;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const dateContext = useRecordTableState((s) => s.dateContext);
@@ -292,6 +308,7 @@ function FilterEditor({
       setShowErrors(true);
       return;
     }
+    if (onApply?.() === false) return;
     const complete = evaluated.filter(({ result }) => result.ok);
     const usedGroups = new Set(complete.map(({ condition }) => condition.groupId));
     // Keep parents of used groups.
@@ -363,6 +380,17 @@ function FilterEditor({
   const nestedGroups = draft.groups.filter((group) => group.parentId === draft.root.id);
   const conditionCount = draft.conditions.filter((condition) => condition.fieldMetadataId).length;
 
+  const addRow = (
+    <div className="record-table__filter-add-row">
+      <button type="button" className="record-table__filter-add" onClick={() => addCondition(draft.root.id)}>
+        <Plus size={12} /> Add filter
+      </button>
+      <button type="button" className="record-table__filter-add" onClick={addGroup}>
+        <ListPlus size={12} /> Add filter group
+      </button>
+    </div>
+  );
+
   return (
     <div
       ref={popoverRef}
@@ -404,15 +432,11 @@ function FilterEditor({
           </div>
         ))}
       </div>
+      {/* With a section of the page's own filters, the add buttons stay with the conditions above it. */}
+      {extra && addRow}
+      {extra && <div className="record-table__filter-extra">{extra}</div>}
       <div className="record-table__filter-popover-actions">
-        <div className="record-table__filter-add-row">
-          <button type="button" className="record-table__filter-add" onClick={() => addCondition(draft.root.id)}>
-            <Plus size={12} /> Add filter
-          </button>
-          <button type="button" className="record-table__filter-add" onClick={addGroup}>
-            <ListPlus size={12} /> Add filter group
-          </button>
-        </div>
+        {!extra && addRow}
         {showErrors && incomplete.length > 0 && (
           <span className="record-table__filter-error" role="alert">
             Finish or remove the highlighted {incomplete.length === 1 ? "condition" : "conditions"}.

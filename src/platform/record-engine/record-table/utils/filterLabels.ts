@@ -70,10 +70,10 @@ export function describeFilter(filter: ViewFilter, column: RecordField | undefin
     const listed = values.length > 3 ? `${values.slice(0, 2).join(", ")} or ${values.length - 2} more` : values.join(" or ");
     return `${field} ${filter.operator === "in" ? "is" : "is not"} ${listed}`;
   }
-  // An open-ended custom range reads as a bound: "Closes is on or after Oct 18, 2026", not "is within From Oct 18, 2026".
+  // An open-ended custom range reads as a bound: "Closes from Oct 18, 2026", not "is within From Oct 18, 2026".
   if (filter.operator === "between" && isOpenEndedRange(filter.value)) {
     const { start, end } = filter.value;
-    return start ? `${field} is on or after ${formatCalendarDate(start)}` : `${field} is on or before ${formatCalendarDate(end ?? "")}`;
+    return start ? `${field} from ${formatCalendarDate(start)}` : `${field} up to ${formatCalendarDate(end ?? "")}`;
   }
   return `${field} ${operatorLabel(filter.operator, fieldType)} ${describeFilterValue(column?.field, filter.value)}`;
 }

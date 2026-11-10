@@ -1,5 +1,5 @@
 import { format, isThisYear, isToday, isYesterday } from "date-fns";
-import type { ReaderCatalog } from "./source";
+import { DEADLINE_ZONE } from "../lib/notice";
 
 /** "today, 10:02 AM", "yesterday, 10:02 AM", "Oct 18, 10:02 AM", or "Oct 18, 2025" in another year. */
 function publishedWhen(published: Date): string {
@@ -8,12 +8,20 @@ function publishedWhen(published: Date): string {
   return format(published, isThisYear(published) ? "MMM d, h:mm a" : "MMM d, yyyy");
 }
 
-/** "3,752 opportunities · 21,877 awards · published today, 10:02 AM · read only" */
-export function publishedSummary(catalog: ReaderCatalog): string {
-  const parts = [["opportunity", "opportunity", "opportunities"], ["award", "award", "awards"]]
-    .filter(([kind]) => (catalog.counts[kind] ?? 0) > 0)
-    .map(([kind, one, many]) => `${catalog.counts[kind].toLocaleString()} ${catalog.counts[kind] === 1 ? one : many}`);
-  const published = new Date(catalog.publishedAt);
-  if (!Number.isNaN(published.getTime())) parts.push(`published ${publishedWhen(published)}`);
-  return [...parts, "read only"].join(" · ");
+/**
+ * The line under the page title: "Updated today, 10:02 AM · read only". The
+ * tabs under it count the opportunities and awards, so it doesn't repeat them.
+ */
+export function updatedSummary(publishedAt: string): string {
+  const published = new Date(publishedAt);
+  return Number.isNaN(published.getTime()) ? "Read only" : `Updated ${publishedWhen(published)} · read only`;
+}
+
+const exact = new Intl.DateTimeFormat("en-US", { timeZone: DEADLINE_ZONE, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+
+/** "Nov 10, 2026, 9:44 AM" in the source zone, or "Not recorded". */
+export function exactWhen(value: string | number | null | undefined): string {
+  if (!value) return "Not recorded";
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? "Not recorded" : exact.format(at);
 }

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
-import { Settings2 } from "lucide-react";
+import { Settings2, TriangleAlert } from "lucide-react";
 import { api } from "../../../lib/convexApi";
 import { PageHeader, PageLoading } from "../../../pages/_helpers";
 import { Tooltip } from "../../../components/Tooltip";
@@ -11,7 +11,7 @@ import { FolderSetupCard } from "../components/FolderSetupCard";
 import { ProcurementReader } from "../reader/ProcurementReader";
 import { useConvexReaderSource } from "../reader/convexSource";
 import type { ReaderCatalog } from "../reader/source";
-import { publishedSummary } from "../reader/summary";
+import { exactWhen, updatedSummary } from "../reader/summary";
 import { useProcurementClock } from "../lib/clock";
 import { readLastCatalog, rememberCatalog } from "../lib/lastCatalog";
 
@@ -49,10 +49,16 @@ function HostedProcurementReview() {
   const catalog = live === undefined ? remembered ?? undefined : live;
   if (!society || !loaded) return <PageLoading variant="detail" />;
   const canConfigure = can("settings:write");
+  // The source said this publication doesn't cover everything (or didn't say): a caveat a reviewer should see, in a few words.
+  const unverified = Boolean(catalog && publication?.source && !publication.source.complete);
   const header = (
     <PageHeader
       title="Procurement review"
-      subtitle={catalog ? publishedSummary(catalog) : "Bid opportunities and awards published by Zoer."}
+      subtitle={catalog ? <span className="procurement-review__summary">
+        <span>{updatedSummary(catalog.publishedAt)}</span>
+        {unverified && <span className="procurement-review__caveat"><TriangleAlert size={12} aria-hidden="true" /> Some sources unverified</span>}
+      </span> : "Bid opportunities and awards published by Zoer."}
+      info={catalog && publication ? <PublicationDetails status={publication} /> : undefined}
       actions={canConfigure && !settings && folder && (
         <Tooltip content="Snapshot folder">
           <button type="button" className="btn btn--ghost btn--icon" aria-label="Snapshot folder settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button>
@@ -71,28 +77,58 @@ function HostedProcurementReview() {
       </> : catalog === null ? <>
         {header}
         <PublicationState status={publication} />
-      </> : <HostedReader key={`${society._id}:${catalog.generation}`} societyId={society._id} catalog={catalog} confirmed={live !== undefined} header={<>{header}<PublicationState status={publication} compact /></>} />}
+      </> : <HostedReader key={`${society._id}:${catalog.generation}`} societyId={society._id} catalog={catalog} confirmed={live !== undefined} header={<>{header}<PublicationState status={publication} whileReading /></>} />}
     </div>
   );
 }
 
-function PublicationState({ status, compact = false }: { status: PublicationStatus | undefined; compact?: boolean }) {
+/** When the catalog was collected, published and put in service: a short list, not a sentence of timestamps. */
+function PublicationDates({ status }: { status: PublicationStatus }) {
+  return (
+    <dl className="procurement-review__dates">
+      <div><dt>Collected</dt><dd>{exactWhen(status.source?.collectedAt ?? status.lastSuccessful?.collectedAt)}</dd></div>
+      <div><dt>Published</dt><dd>{exactWhen(status.source?.publishedAt)}</dd></div>
+      <div><dt>Imported here</dt><dd>{exactWhen(status.lastSuccessful?.activatedAt)}</dd></div>
+    </dl>
+  );
+}
+
+/** Behind the title's ⓘ: what this catalog is and how fresh, for whoever wants more than "Updated today". */
+function PublicationDetails({ status }: { status: PublicationStatus }) {
+  return (
+    <div className="procurement-review__about">
+      <p>Bid opportunities and awards that Zoer collects and publishes for this workspace. They can be read here, not changed.</p>
+      <PublicationDates status={status} />
+      {status.source && !status.source.complete && (
+        <p className="procurement-review__about-caveat">
+          <TriangleAlert size={12} aria-hidden="true" /> Zoer didn't confirm that every source was collected in full for this update, so some notices may be missing.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The publication's state as a card: nothing published yet, an import under
+ * way, or one that failed. `whileReading` is the card above a catalog that is
+ * being read; a healthy one shows nothing there (its dates are behind the ⓘ).
+ */
+function PublicationState({ status, whileReading = false }: { status: PublicationStatus | undefined; whileReading?: boolean }) {
   const now = useProcurementClock();
-  if (!status) return <p className="muted" role="status">Reading publication status…</p>;
+  if (!status) return whileReading ? null : <p className="muted" role="status">Reading publication status…</p>;
   const stalled = status.state === "importing" && status.run && now - status.run.heartbeatAt > 5 * 60_000;
   const state = stalled ? "stalled" : status.state;
+  if (whileReading && state === "ready") return null;
   const title = { ready: "Publication ready", available: "New source publication available", empty: "No catalog has been activated", unconfigured: "Choose a publication folder", importing: "Import in progress", failed: "Publication import failed — recovery available", stalled: "Import stopped reporting progress" }[state];
-  const when = (value: string | number | null | undefined) => value ? new Date(value).toLocaleString(undefined, { timeZone: "America/Vancouver" }) : "Not recorded";
-  const dates = <p className="muted">Collected: {when(status.source?.collectedAt ?? status.lastSuccessful?.collectedAt)} · Published to SharePoint: {when(status.source?.publishedAt)} · Serving activated: {when(status.lastSuccessful?.activatedAt)}{status.source && !status.source.complete ? " · Source coverage incomplete or unverified" : ""}</p>;
-  if (compact && state === "ready") return dates;
   return <section className="card procurement-review__state" aria-live="polite">
     <div className="card__head"><h2 className="card__title">{title}</h2></div>
     <div className="card__body">
-      {dates}
-      {status.run && <p>{status.run.operations ? `${status.run.applied.toLocaleString()} of ${status.run.operations.toLocaleString()} operations applied. Next batch ${status.run.nextBatch}. ` : "Validating and importing publication tables. "}Last heartbeat: {when(status.run.heartbeatAt)}.</p>}
+      <PublicationDates status={status} />
+      {status.source && !status.source.complete && <p className="muted">Source coverage is incomplete or unverified.</p>}
+      {status.run && <p>{status.run.operations ? `${status.run.applied.toLocaleString()} of ${status.run.operations.toLocaleString()} operations applied. Next batch ${status.run.nextBatch}. ` : "Validating and importing publication tables. "}Last heartbeat: {exactWhen(status.run.heartbeatAt)}.</p>}
       {status.run?.error && <p role="alert">{status.run.error}</p>}
       {status.source?.error && status.source.error !== status.run?.error && <p role="alert">{status.source.error}</p>}
-      {!status.run && status.source && state !== "ready" && <p className="muted">Source workflow: {status.source.phase}. Last reported: {when(status.source.heartbeatAt)}.</p>}
+      {!status.run && status.source && state !== "ready" && <p className="muted">Source workflow: {status.source.phase}. Last reported: {exactWhen(status.source.heartbeatAt)}.</p>}
       {status.lastSuccessful && <p className="muted">Last successful publication: {status.lastSuccessful.generation} ({Object.entries(status.lastSuccessful.counts).map(([kind, n]) => `${n.toLocaleString()} ${kind}`).join(", ")}).</p>}
       {status.recovery && <p>{status.recovery}</p>}
       {state === "empty" && <p className="muted">Publish and validate a Zoer catalog, then activate it using the procurement import workflow.</p>}

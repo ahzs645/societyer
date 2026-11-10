@@ -76,7 +76,7 @@ export function Tabs<T extends string>({
         >
           {it.icon}
           <span className="tab__label">{it.label}</span>
-          {it.count != null && <Pill size="sm" className="tab__count">{it.count}</Pill>}
+          {it.count != null && <Pill size="sm" className="tab__count">{it.count.toLocaleString()}</Pill>}
         </button>
       ))}
       {trailing != null && <div className="tabs__trailing">{trailing}</div>}

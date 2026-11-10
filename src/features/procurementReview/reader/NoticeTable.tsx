@@ -1,5 +1,3 @@
-import {BcBidFilters} from "./BcBidFilters";
-import {BC_FILTER_KEYS, bcBidSourceFilters, matchesBcBidSourceFilters} from "../../../../shared/bcBidSourceFilters";
 /**
  * Opportunities or awards on the shared record table, in memory: the rows a
  * source's `useList` loaded (the whole kind, or a buyer's share of it), so
@@ -7,6 +5,10 @@ import {BC_FILTER_KEYS, bcBidSourceFilters, matchesBcBidSourceFilters} from "../
  * presets are ordinary engine filters and sorts, so they show as chips and can
  * be changed. Cells and phone cards are drawn here once for the catalog list
  * and the buyer pages alike.
+ *
+ * Opportunities can also be narrowed by BC Bid's own facts (BcBidFilters.tsx).
+ * Those live in the URL rather than the table, but share its Filter button,
+ * filter editor and pills, so a reviewer has one place to filter.
  */
 import {
   useCallback,
@@ -45,6 +47,18 @@ import {
   zoneToday,
   type NoticeDeadline,
 } from "../lib/notice";
+import {
+  BC_FILTER_KEYS,
+  bcBidSourceFilters,
+  matchesBcBidSourceFilters,
+  type BcBidSourceFilters,
+} from "../../../../shared/bcBidSourceFilters";
+import {
+  BcBidFilterFields,
+  bcBidFilterChips,
+  bcBidFilterPatch,
+  isCommodityCode,
+} from "./BcBidFilters";
 import { DocumentsCell, DocumentsCount } from "./DocumentsCell";
 import { useReaderNavigation } from "./routes";
 import { useReaderSource, type ListRow } from "./source";
@@ -433,9 +447,32 @@ export function NoticeTable({
     () => presetView(kind, view, hidden ? hidden.split(",") : [], today),
     [kind, view, hidden, today],
   );
-  const sourceFilterKey = JSON.stringify(Object.fromEntries(BC_FILTER_KEYS.map(k=>[k,nav.params.get(k)]).filter(([,v])=>v)));
-  const sourceFilters = useMemo(()=>bcBidSourceFilters(JSON.parse(sourceFilterKey)),[sourceFilterKey]);
-  const records = useMemo(() => rows.filter(row=>matchesBcBidSourceFilters(row,sourceFilters)).map(row => drawnRow(row, now)), [rows, now, sourceFilters]);
+  // Only opportunities carry BC Bid's facts, and only their list offers the filters.
+  const offersSourceFilters = kind === "opportunity";
+  const sourceFilterKey = offersSourceFilters
+    ? JSON.stringify(
+        Object.fromEntries(
+          BC_FILTER_KEYS.map((key) => [key, nav.params.get(key)]).filter(
+            ([, value]) => value,
+          ),
+        ),
+      )
+    : "{}";
+  const sourceFilters = useMemo<BcBidSourceFilters>(() => {
+    // A hand-edited link with a malformed filter shows the unfiltered list rather than an error page.
+    try {
+      return bcBidSourceFilters(JSON.parse(sourceFilterKey));
+    } catch {
+      return {};
+    }
+  }, [sourceFilterKey]);
+  const records = useMemo(
+    () =>
+      rows
+        .filter((row) => matchesBcBidSourceFilters(row, sourceFilters))
+        .map((row) => drawnRow(row, now)),
+    [rows, now, sourceFilters],
+  );
   const { openNotice } = nav;
   const renderCell = useCells(
     useCallback(
@@ -445,6 +482,43 @@ export function NoticeTable({
   );
   const loading = progress ? !progress.done && records.length === 0 : false;
   const [filtering, setFiltering] = useState(false);
+
+  // The BC Bid filters as the filter editor is changing them; null while they are as applied.
+  const [sourceDraft, setSourceDraft] = useState<BcBidSourceFilters | null>(null);
+  const [codeInvalid, setCodeInvalid] = useState(false);
+  const closeFilters = () => {
+    setFiltering(false);
+    setSourceDraft(null);
+    setCodeInvalid(false);
+  };
+  const applySourceDraft = () => {
+    if (!sourceDraft) return true;
+    if (sourceDraft.commodityCode && !isCommodityCode(sourceDraft.commodityCode)) {
+      setCodeInvalid(true);
+      return false;
+    }
+    const pickedHistorical =
+      sourceDraft.historicalType &&
+      sourceDraft.historicalType !== sourceFilters.historicalType;
+    nav.update({
+      ...bcBidFilterPatch(sourceDraft),
+      // Pre-2023 notices closed long ago; the default "open" view would hide them all.
+      ...(pickedHistorical ? { status: "all" } : {}),
+    });
+    return true;
+  };
+  const { update } = nav;
+  const sourceChips = useMemo(
+    () =>
+      offersSourceFilters
+        ? bcBidFilterChips(sourceFilters).map((chip) => ({
+            ...chip,
+            onRemove: () => update({ [chip.key]: null }),
+          }))
+        : [],
+    [offersSourceFilters, sourceFilters, update],
+  );
+  const clearSourceFilters = useCallback(() => update(bcBidFilterPatch()), [update]);
 
   const renderTable = (onEndReached?: () => void, serverLoading = false, hasMore = false, footer?: ReactNode) => (
         <RecordTable
@@ -481,7 +555,6 @@ export function NoticeTable({
 
   return (
     <div className="procurement-reader">
-      {kind === "opportunity" && <BcBidFilters filters={sourceFilters} onChange={nav.update} />}
       <RecordTableScope
         tableId={tableId}
         objectMetadata={objectMetadata}
@@ -502,7 +575,8 @@ export function NoticeTable({
           label={label ?? objectMetadata.labelPlural}
           icon={<FileSearch size={14} />}
           collapsibleSearch
-          onOpenFilter={() => setFiltering((open) => !open)}
+          onOpenFilter={() => (filtering ? closeFilters() : setFiltering(true))}
+          extraFilterCount={sourceChips.length}
           {...(onChangeView && kind === "opportunity"
             ? {
                 views: NOTICE_VIEWS,
@@ -515,9 +589,27 @@ export function NoticeTable({
         />
         <RecordTableFilterPopover
           open={filtering}
-          onClose={() => setFiltering(false)}
+          onClose={closeFilters}
+          {...(offersSourceFilters
+            ? {
+                extra: (
+                  <BcBidFilterFields
+                    value={sourceDraft ?? sourceFilters}
+                    onChange={(next) => {
+                      setSourceDraft(next);
+                      setCodeInvalid(false);
+                    }}
+                    codeInvalid={codeInvalid}
+                  />
+                ),
+                onApply: applySourceDraft,
+              }
+            : {})}
         />
-        <RecordTableFilterChips />
+        <RecordTableFilterChips
+          extraChips={sourceChips}
+          onClearExtra={offersSourceFilters ? clearSourceFilters : undefined}
+        />
         {serverPaging ? (
           <ServerNoticeRows kind={kind} fixedParty={fixedParty} sourceFilters={sourceFilters}>
             {({ onEndReached, loading: serverLoading, hasMore, footer }) => renderTable(onEndReached, serverLoading, hasMore, footer)}

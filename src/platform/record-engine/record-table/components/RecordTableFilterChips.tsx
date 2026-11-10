@@ -11,10 +11,15 @@ type Chip = {
   label: string;
   /** Phones: the view's sort, which reopens the "View options" sheet. */
   sort?: boolean;
+  /** A page-level filter (`extraChips`): always applies, whatever the conditions' "Any of". */
+  extra?: boolean;
   /** Index in `filters` of the condition the editor should focus. */
   focusIndex: number;
   remove: () => void;
 };
+
+export type RecordTableExtraChip = { key: string; label: string; onRemove: () => void };
+const NO_EXTRA_CHIPS: readonly RecordTableExtraChip[] = [];
 
 const MORE_BUTTON_RESERVE = 84;
 const CHIP_GAP = 6;
@@ -31,12 +36,26 @@ function groupChipLabel(group: ViewFilterGroup, filters: ViewFilter[], filterGro
 /**
  * Active filters as pills above the table body. A pill reopens the filter
  * editor on its condition; pills that do not fit on one line fold into
- * "+N more" (which opens the editor with everything).
+ * "+N more" (which opens the editor with everything). Phones show every pill
+ * in a row that swipes sideways instead: a narrow screen fits one or two, and
+ * "+3 more" would hide what the list is filtered by.
  *
  * Phones also lead with the view's sort ("Sort: Last name ↑"), since the
  * toolbar folds Sort into its "View options" sheet; the pill opens that sheet.
  */
-export function RecordTableFilterChips() {
+export function RecordTableFilterChips({
+  extraChips = NO_EXTRA_CHIPS,
+  onClearExtra,
+}: {
+  /**
+   * Filters the page applies outside the table's own conditions (a source
+   * facet kept in the URL, say), shown as pills in the same row. A pill opens
+   * the filter editor, where the page offers them (the editor's `extra`).
+   */
+  extraChips?: readonly RecordTableExtraChip[];
+  /** "Clear all" clears these with the table's conditions. */
+  onClearExtra?: () => void;
+} = {}) {
   const filters = useRecordTableState((s) => s.filters);
   const filterGroups = useRecordTableState((s) => s.filterGroups);
   const columns = useRecordTableState((s) => s.columns);
@@ -80,6 +99,9 @@ export function RecordTableFilterChips() {
         });
       }
     }
+    for (const extra of extraChips) {
+      result.push({ key: `extra:${extra.key}`, label: extra.label, extra: true, focusIndex: -1, remove: extra.onRemove });
+    }
     // A view's own sort needs no row of its own on a phone.
     if (isPhone && sortEdited && sorts.length > 0) {
       const names = sorts.map((sort) => {
@@ -95,12 +117,14 @@ export function RecordTableFilterChips() {
       });
     }
     return result;
-  }, [columns, filterGroups, filters, handle, isPhone, sortEdited, sorts]);
+  }, [columns, extraChips, filterGroups, filters, handle, isPhone, sortEdited, sorts]);
   const filterChipCount = chips.filter((chip) => !chip.sort).length;
+  // "Any of" describes the table's own conditions only.
+  const conditionChipCount = chips.filter((chip) => !chip.sort && !chip.extra).length;
 
   const rootOperator = rootFilterGroup(filterGroups)?.logicalOperator;
   // Room kept for "Clear all" (and the "Any of" prefix when shown).
-  const tailWidth = (filterChipCount > 0 ? 76 : 0) + (rootOperator === "or" && filterChipCount > 1 ? 56 : 0);
+  const tailWidth = (filterChipCount > 0 ? 76 : 0) + (rootOperator === "or" && conditionChipCount > 1 ? 56 : 0);
   const signature = `${tailWidth}\u0000${chips.map((chip) => chip.label).join("\u0000")}`;
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -130,22 +154,22 @@ export function RecordTableFilterChips() {
 
   if (chips.length === 0) return null;
 
-  const shown = chips.slice(0, Math.max(1, visibleCount));
-  const firstFilterChip = chips.find((chip) => !chip.sort);
+  const shown = isPhone ? chips : chips.slice(0, Math.max(1, visibleCount));
+  const firstFilterChip = chips.find((chip) => !chip.sort && !chip.extra);
   const hiddenCount = chips.length - shown.length;
 
   return (
-    <div className="record-table__chips" ref={containerRef} role="group" aria-label={filterChipCount > 0 ? "Active filters" : "Active sort"}>
+    <div className={`record-table__chips${isPhone ? " record-table__chips--swipe" : ""}`} ref={containerRef} role="group" aria-label={filterChipCount > 0 ? "Active filters" : "Active sort"}>
       {shown.map((chip) => (
         <Fragment key={chip.key}>
           {/* "Any of" leads the filter pills (after a phone's sort pill). */}
-          {chip === firstFilterChip && rootOperator === "or" && filterChipCount > 1 && <span className="record-table__chips-mode">Any of</span>}
+          {chip === firstFilterChip && rootOperator === "or" && conditionChipCount > 1 && <span className="record-table__chips-mode">Any of</span>}
           <span className={`record-table__chip${chip.sort ? " record-table__chip--sort" : ""}`}>
             <button
               type="button"
               className="record-table__chip-label"
               title={chip.sort ? `Change sort: ${chip.label}` : `Edit filter: ${chip.label}`}
-              onClick={() => (chip.sort ? handle.get().requestViewOptions() : handle.get().requestFilterEditor(chip.focusIndex))}
+              onClick={() => (chip.sort ? handle.get().requestViewOptions() : handle.get().requestFilterEditor(chip.focusIndex < 0 ? undefined : chip.focusIndex))}
             >
               {chip.sort && <ArrowDownUp size={11} aria-hidden="true" />}
               {chip.label}
@@ -176,7 +200,10 @@ export function RecordTableFilterChips() {
         <button
           type="button"
           className="record-table__chip-clear"
-          onClick={() => handle.set({ filters: [], filterGroups: [] })}
+          onClick={() => {
+            handle.set({ filters: [], filterGroups: [] });
+            onClearExtra?.();
+          }}
         >
           Clear all
         </button>
