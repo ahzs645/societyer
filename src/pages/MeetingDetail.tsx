@@ -2,6 +2,7 @@ import { ScheduleNextMeetingModal } from "../features/meetings/components/Schedu
 import { transcriptText } from "../../shared/transcriptModel";
 import { meetingAgendaSnapshot, meetingExpectedFields, type MeetingExpectedFields } from "../../shared/meetingConcurrency";
 import { TranscriptWorkspace } from "../features/meetings/transcript/TranscriptWorkspace";
+import { TeamsSpeakerLinks } from "../features/meetings/TeamsMeetings";
 import { motionTranscriptChip } from "../features/meetings/transcript/TranscriptTimeChip";
 import { motionDisplayName, motionNumbers, motionTallySummary } from "../lib/motionDisplay";
 import { speakerCandidates } from "../features/meetings/transcript/speakerCandidates";
@@ -2552,6 +2553,7 @@ function MeetingDetailWorkspace() {
       />
 
       <div className="meeting-detail-tabpanel">
+        {activeTab === "transcript" && !transcriptAccess && <TeamsSpeakerLinks societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} />}
         {activeTab === "transcript" && transcriptAccess && (
           <TranscriptAccessNotice
             reason={transcriptAccess}

@@ -147,6 +147,7 @@
     "test:record-table-inline-edit": "tsx scripts/check-record-table-inline-edit.ts",
     "test:mobile-table-layout": "tsx scripts/check-mobile-table-layout.ts",
     "test:timed-transcript": "tsx scripts/check-timed-transcript.ts",
+    "test:teams-meetings": "tsx scripts/check-teams-meetings.ts",
     "test:transcript-export": "tsx scripts/check-transcript-export.ts",
     "test:meeting-governance": "tsx scripts/check-meeting-governance.ts",
     "test:meeting-record-kind": "node --import tsx scripts/check-meeting-record-kind.ts",

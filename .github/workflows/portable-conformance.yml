@@ -66,6 +66,9 @@ jobs:
           npm run test:meeting-collaboration
           npm run test:convex-multi-user
 
+      - name: Teams transcript import authorization and source integrity
+        run: npm run test:teams-meetings
+
       - name: Scheduled workflow authority and durable draft recovery
         run: |
           npm run test:workflow-schedule

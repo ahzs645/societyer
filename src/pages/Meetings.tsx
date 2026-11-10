@@ -1,4 +1,5 @@
 import { noticeWindowLabel } from "../features/meetings/lib/noticeWindow";
+import { TeamsMeetingImport } from "../features/meetings/TeamsMeetings";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MEETING_STATUS_LABELS, MEETING_STATUS_OPTIONS, meetingStatusTone as sharedMeetingStatusTone } from "../../shared/meetingStatus";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -355,6 +356,7 @@ export function MeetingsPage() {
           : "Board meetings, committee meetings, and general meetings (AGM/SGM)."}
         actions={
           <>
+          {!isLocalDataRuntime() && canManage && can("settings:write") && can("minutes:write") && <TeamsMeetingImport societyId={society._id} />}
           {meetingPreparationEnabled() && getAuthMode() !== "none" && !isLocalDataRuntime() && <Link className="btn" to="/app/meetings/offline">Offline preparation</Link>}
           <button
             className="btn-action btn-action--primary meetings-page__new"

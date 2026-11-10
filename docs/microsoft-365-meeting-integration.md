@@ -3,6 +3,10 @@
 Researched October 17, 2026. These are design references; Societyer has not been
 granted calendar or Teams transcript permissions by this research.
 
+For the November 2026 dedicated Teams connector, applied tenant configuration,
+operator instructions and live qualification limits, see
+[Teams meeting integration review](teams-meeting-integration-review.md).
+
 | Project | Status checked | Useful pattern |
 | --- | --- | --- |
 | [Microsoft Meeting Capture](https://github.com/microsoftgraph/meetings-capture-sample) | Archived April 2023 | Meeting preparation, notes and follow-up tasks across Teams, Outlook and SharePoint. Reuse the workflow, not its old deployment or broad permission bundle. |
