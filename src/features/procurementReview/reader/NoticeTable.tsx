@@ -1,3 +1,5 @@
+import {BcBidFilters} from "./BcBidFilters";
+import {BC_FILTER_KEYS, bcBidSourceFilters, matchesBcBidSourceFilters} from "../../../../shared/bcBidSourceFilters";
 /**
  * Opportunities or awards on the shared record table, in memory: the rows a
  * source's `useList` loaded (the whole kind, or a buyer's share of it), so
@@ -431,7 +433,9 @@ export function NoticeTable({
     () => presetView(kind, view, hidden ? hidden.split(",") : [], today),
     [kind, view, hidden, today],
   );
-  const records = useMemo(() => rows.map(row => drawnRow(row, now)), [rows, now]);
+  const sourceFilterKey = JSON.stringify(Object.fromEntries(BC_FILTER_KEYS.map(k=>[k,nav.params.get(k)]).filter(([,v])=>v)));
+  const sourceFilters = useMemo(()=>bcBidSourceFilters(JSON.parse(sourceFilterKey)),[sourceFilterKey]);
+  const records = useMemo(() => rows.filter(row=>matchesBcBidSourceFilters(row,sourceFilters)).map(row => drawnRow(row, now)), [rows, now, sourceFilters]);
   const { openNotice } = nav;
   const renderCell = useCells(
     useCallback(
@@ -477,6 +481,7 @@ export function NoticeTable({
 
   return (
     <div className="procurement-reader">
+      {kind === "opportunity" && <BcBidFilters filters={sourceFilters} onChange={nav.update} />}
       <RecordTableScope
         tableId={tableId}
         objectMetadata={objectMetadata}
@@ -514,7 +519,7 @@ export function NoticeTable({
         />
         <RecordTableFilterChips />
         {serverPaging ? (
-          <ServerNoticeRows kind={kind} fixedParty={fixedParty}>
+          <ServerNoticeRows kind={kind} fixedParty={fixedParty} sourceFilters={sourceFilters}>
             {({ onEndReached, loading: serverLoading, hasMore, footer }) => renderTable(onEndReached, serverLoading, hasMore, footer)}
           </ServerNoticeRows>
         ) : renderTable()}

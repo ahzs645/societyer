@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "id": "reference-release:BCBID:historical-types:20261010",
+  "sourceUrl": "https://bcbid.gov.bc.ca/page.aspx/en/rfp/request_browse_public",
+  "capturedAt": "2026-10-10",
+  "from": "2015-04-01",
+  "to": "2022-12-15",
+  "commodityScheme": "GSIN",
+  "types": [
+    {
+      "code": "AFS",
+      "title": "Application for Sponsorship"
+    },
+    {
+      "code": "Climate",
+      "title": "Applications for Climate Action Contest Sponsorship"
+    },
+    {
+      "code": "DirectAward",
+      "title": "Direct Award"
+    },
+    {
+      "code": "ITB",
+      "title": "Invitation to Bid"
+    },
+    {
+      "code": "ITO",
+      "title": "Invitation to Offer"
+    },
+    {
+      "code": "SUR",
+      "title": "Invitation to Quote"
+    },
+    {
+      "code": "ITT",
+      "title": "Invitation to Tender"
+    },
+    {
+      "code": "JSP",
+      "title": "Joint Solutions Request for Proposal"
+    },
+    {
+      "code": "LT",
+      "title": "Limited Tendering"
+    },
+    {
+      "code": "NRFP",
+      "title": "Negotiated Request for Proposal"
+    },
+    {
+      "code": "NOI",
+      "title": "Notice of Intent"
+    },
+    {
+      "code": "NTV",
+      "title": "Notice to Vendors"
+    },
+    {
+      "code": "Onboarding",
+      "title": "Onboarding"
+    },
+    {
+      "code": "OSNRFP",
+      "title": "Opportunity Statement NRFP"
+    },
+    {
+      "code": "ROI",
+      "title": "Registration of Interest"
+    },
+    {
+      "code": "MSO",
+      "title": "Request for Corporate Supply Arrangement"
+    },
+    {
+      "code": "REI",
+      "title": "Request for Expressions of Interest"
+    },
+    {
+      "code": "RFA",
+      "title": "Request for Framework Agreement"
+    },
+    {
+      "code": "RFI",
+      "title": "Request for Information"
+    },
+    {
+      "code": "RFIQ",
+      "title": "Request for Information and Qualification"
+    },
+    {
+      "code": "RMSA",
+      "title": "Request for Master Standing Agreement"
+    },
+    {
+      "code": "RFP",
+      "title": "Request for Proposal"
+    },
+    {
+      "code": "RFPS",
+      "title": "Request for Proposal (Short)"
+    },
+    {
+      "code": "RQU",
+      "title": "Request for Qualifications"
+    },
+    {
+      "code": "RFQ",
+      "title": "Request for Quotation"
+    },
+    {
+      "code": "RSO",
+      "title": "Request for Standing Offer"
+    },
+    {
+      "code": "RFS",
+      "title": "Request for Submissions"
+    },
+    {
+      "code": "RFSQ",
+      "title": "Request for Supplier Qualifications"
+    },
+    {
+      "code": "RSA",
+      "title": "Request for Supply Arrangement"
+    },
+    {
+      "code": "RFT",
+      "title": "Request for Tenders"
+    },
+    {
+      "code": "SRFP",
+      "title": "Short-form Request for Proposal"
+    },
+    {
+      "code": "SofW",
+      "title": "Statement of Work"
+    },
+    {
+      "code": "SFS",
+      "title": "Surplus for Sale"
+    }
+  ]
+}

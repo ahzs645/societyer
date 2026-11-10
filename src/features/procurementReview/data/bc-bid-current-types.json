@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "id": "reference-release:BCBID:current-types:20261109",
+  "sourceUrl": "https://bcbid.gov.bc.ca/page.aspx/en/rfp/request_browse_public",
+  "capturedAt": "2026-11-09",
+  "types": [
+    {
+      "code": "can",
+      "title": "Contract Award Notice"
+    },
+    {
+      "code": "itb",
+      "title": "Invitation to Bid"
+    },
+    {
+      "code": "io",
+      "title": "Invitation to Offer"
+    },
+    {
+      "code": "itq",
+      "title": "Invitation to Quote"
+    },
+    {
+      "code": "itt",
+      "title": "Invitation to Tender"
+    },
+    {
+      "code": "jsrfp",
+      "title": "Joint Solutions Request for Proposal"
+    },
+    {
+      "code": "lt",
+      "title": "Limited Tendering"
+    },
+    {
+      "code": "np",
+      "title": "Negotiated Procurement"
+    },
+    {
+      "code": "noi",
+      "title": "Notice of Intent"
+    },
+    {
+      "code": "sale",
+      "title": "Notice of Sale"
+    },
+    {
+      "code": "ntv",
+      "title": "Notice to Vendors"
+    },
+    {
+      "code": "other",
+      "title": "Other"
+    },
+    {
+      "code": "rfi",
+      "title": "Request for Information"
+    },
+    {
+      "code": "rfiq",
+      "title": "Request for Information and Qualifications"
+    },
+    {
+      "code": "rfp",
+      "title": "Request for Proposal"
+    },
+    {
+      "code": "rfq",
+      "title": "Request for Qualifications"
+    },
+    {
+      "code": "rso",
+      "title": "Request for Standing Arrangement"
+    },
+    {
+      "code": "rfs",
+      "title": "Request for Submissions"
+    },
+    {
+      "code": "rfsq",
+      "title": "Request for Supplier Qualifications"
+    },
+    {
+      "code": "rfsa",
+      "title": "Request for Supply Arrangement"
+    },
+    {
+      "code": "Rft",
+      "title": "Request for Tenders"
+    },
+    {
+      "code": "sow",
+      "title": "Statement of Work"
+    },
+    {
+      "code": "ta",
+      "title": "Timber Auction"
+    }
+  ]
+}

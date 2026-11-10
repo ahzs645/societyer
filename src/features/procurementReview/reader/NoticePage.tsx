@@ -254,6 +254,7 @@ export function NoticePage({
                 {model.description && <Description text={model.description} />}
                 {stacked && <NoticeContacts model={model} />}
                 <NoticeFields model={model} />
+                <SourceCapture data={parse(record.dataJson)} />
                 {!model.description &&
                   model.fields.length === 0 &&
                   !stacked && (
@@ -736,4 +737,16 @@ function Description({ text }: { text: string }) {
       </div>
     </section>
   );
+}
+
+/** Preserve unlabelled source-tab content alongside structured notice fields. */
+function SourceCapture({data}:{data:unknown}) {
+ if(!data || typeof data !== 'object') return null;
+ const source=data as {tabCoverage?:{complete:boolean;visited?:string[];failures?:{label:string;message:string}[]};sourceTabs?:{label:string;text:string;truncated?:boolean}[];detailNeedsRefresh?:boolean};
+ if(!source.tabCoverage && !source.detailNeedsRefresh) return null;
+ return <section className="card"><div className="card__body"><details><summary>Source capture: {source.tabCoverage?.complete ? 'all public tabs visited' : 'incomplete / refresh needed'}</summary>
+ <p className="small muted">{source.tabCoverage?.visited?.length ? `Visited: ${source.tabCoverage.visited.join(', ')}.` : 'No tab coverage receipt was published.'} Attachment links and downloaded files are tracked separately.</p>
+ {source.tabCoverage?.failures?.map((failure,i)=><p key={i}>{failure.label}: {failure.message}</p>)}
+ {source.sourceTabs?.map((tab,i)=><details key={i}><summary>{tab.label}{tab.truncated ? ' (partial)' : ''}</summary><p style={{whiteSpace:'pre-wrap'}}>{tab.text}</p></details>)}
+ </details></div></section>;
 }

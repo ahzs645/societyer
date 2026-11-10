@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {bcBidSourceFilters,matchesBcBidSourceFilters} from '../shared/bcBidSourceFilters';
+const facts={sourceId:'bc-bid',taxonomyReleaseId:'taxonomy-release:UNSPSC:UNv260801',opportunityTypeGroupCode:'itq',industryCategories:['Goods'],sourceRegionPath:'|CA_STATE_BC|CA_BC_R1|',classificationCodes:['25101507']};
+const row={analyticsJson:JSON.stringify(facts)};
+const filters=bcBidSourceFilters({currentType:'itq',industryCategory:'Goods',officialRegion:'CA_STATE_BC',commodityCode:'25000000'});
+assert(matchesBcBidSourceFilters(row,filters));
+for (const key of Object.keys(filters)) assert(!matchesBcBidSourceFilters(row,{...filters,[key]:key==='commodityCode'?'10000000':'different'}));
+assert(!matchesBcBidSourceFilters({},filters));
+const historic={analyticsJson:JSON.stringify({...facts,historicalTypeReferenceId:'old'})};
+assert(matchesBcBidSourceFilters(historic,{historicalType:'old'}));
+assert(!matchesBcBidSourceFilters(historic,{historicalType:'different'}));
+assert(!matchesBcBidSourceFilters(historic,{historicalType:'old',commodityCode:'25000000'}));
+assert.throws(()=>bcBidSourceFilters({commodityCode:'25'}));
+console.log('BC Bid filters: AND, hierarchy, historical separation, unknown facts and validation passed');
