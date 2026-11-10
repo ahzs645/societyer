@@ -71,6 +71,8 @@
 .workspace-brand-settings__details { display: flex; align-items: center; flex-wrap: wrap; gap: token('s-2'); }
 .workspace-brand-settings__details { overflow-wrap: anywhere; }
 .workspace-brand-settings__details a { display: inline-flex; align-items: center; gap: token('s-1'); }
+.workspace-brand-settings__version { display: flex; align-items: center; flex-wrap: wrap; gap: token('s-2'); }
+.workspace-brand-settings__version label { font-weight: 600; }
 .workspace-brand-settings__upload { position: relative; overflow: hidden; }
 .workspace-brand-settings__upload input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .workspace-brand-settings__upload:focus-within { outline: token('focus-ring-width') solid token('focus-ring-color'); outline-offset: token('focus-ring-offset'); }

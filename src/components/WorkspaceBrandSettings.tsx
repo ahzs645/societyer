@@ -8,14 +8,17 @@ import { useUndoableAction } from "../hooks/useUndoableAction";
 import { useToast } from "./Toast";
 import { Toggle } from "./Controls";
 import { WorkspaceLogo } from "./WorkspaceLogo";
-import { importBrandkitFile } from "../features/invoicing/importBrandkit";
+import { readBrandkitFile, type BrandkitImport } from "../features/invoicing/importBrandkit";
+import { Select } from "./Select";
 import { triggerBlobDownload } from "../lib/zip";
 import { cleanWorkspaceBrand } from "../../shared/workspaceBrandValidation";
 import { workspaceAccentPalette, type WorkspaceBrandSource } from "../../shared/workspaceBranding";
 import type { InvoiceBrand } from "../../shared/invoiceBranding";
 
 type Props = { organization: WorkspaceBrandSource & { _id: string }; canEdit: boolean; canReadTemplates: boolean };
-type Draft = { brand: InvoiceBrand; useAccent: boolean };
+/** A multi-version Brandkit ZIP keeps its file so another version can be previewed. */
+type VersionChoice = { file: File; versions: BrandkitImport["versions"]; selected: string };
+type Draft = { brand: InvoiceBrand; useAccent: boolean; choice?: VersionChoice };
 const message = (error: unknown) => error instanceof Error ? error.message : "The workspace brand could not be updated.";
 
 /** Remount the editor when switching workspaces so an unfinished import cannot
@@ -38,13 +41,15 @@ function WorkspaceBrandEditor({ organization, canEdit, canReadTemplates }: Props
   const useAccent = draft?.useAccent ?? Boolean(organization.workspaceBrandUseAccent);
   const previewOrganization = { ...organization, workspaceBrand: brand };
 
-  const preview = async (read: () => Promise<InvoiceBrand>) => {
+  const preview = async (read: () => Promise<{ brand: InvoiceBrand; choice?: VersionChoice }>) => {
     if (!canEdit || busy) return;
     const current = ++request.current;
     setBusy(true); setError("");
     try {
-      const imported = cleanWorkspaceBrand(await read());
-      if (request.current === current) setDraft({ brand: imported, useAccent: organization.workspaceBrand ? Boolean(organization.workspaceBrandUseAccent) : true });
+      const result = await read();
+      const imported = cleanWorkspaceBrand(result.brand);
+      if (request.current === current) setDraft(previous => ({ brand: imported, choice: result.choice,
+        useAccent: previous?.useAccent ?? (organization.workspaceBrand ? Boolean(organization.workspaceBrandUseAccent) : true) }));
     } catch (error) { if (request.current === current) setError(message(error)); }
     finally { if (request.current === current) setBusy(false); }
   };
@@ -53,7 +58,11 @@ function WorkspaceBrandEditor({ organization, canEdit, canReadTemplates }: Props
     const result = await client.query(api.invoices.documentTemplates, { societyId: organization._id });
     const template = result?.templates?.find((item: any) => item.active && item._id === result.defaultTemplateId);
     if (!template?.config?.brand) throw new Error("Your default document template has no Brandkit. Import a Brandkit file here, or choose a branded default in Document templates.");
-    return template.config.brand;
+    return { brand: template.config.brand };
+  });
+  const importFile = (file: File, packPath?: string) => preview(async () => {
+    const result = await readBrandkitFile(file, packPath);
+    return { brand: result.brand, choice: result.selected && result.versions.length > 1 ? { file, versions: result.versions, selected: result.selected } : undefined };
   });
 
   const apply = async () => {
@@ -91,7 +100,7 @@ function WorkspaceBrandEditor({ organization, canEdit, canReadTemplates }: Props
         <label className={`btn btn--accent workspace-brand-settings__upload${!canEdit || busy ? " is-disabled" : ""}`}>
           <Upload size={14} aria-hidden="true" /> {busy ? "Working…" : "Import Brandkit"}
           <input type="file" aria-label="Import workspace Brandkit" accept=".json,.zip,application/json,application/zip" disabled={!canEdit || busy}
-            onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void preview(() => importBrandkitFile(file)); }} />
+            onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void importFile(file); }} />
         </label>
         {canReadTemplates && <button type="button" className="btn" disabled={!canEdit || busy} onClick={() => void useTemplateBrand()}>Use document template brand</button>}
         <a className="btn btn--ghost" href="https://projects.ahmadjalil.com/brandkit/" target="_blank" rel="noreferrer">Open Brandkit <ExternalLink size={13} aria-hidden="true" /></a>
@@ -99,6 +108,13 @@ function WorkspaceBrandEditor({ organization, canEdit, canReadTemplates }: Props
       {!canEdit && <p className="muted">An owner or administrator can change the workspace brand.</p>}
       {error && <p className="workspace-brand-settings__error" role="alert">{error}</p>}
       {draft && <p className="workspace-brand-settings__notice" role="status">Preview only — apply this brand to update the workspace.</p>}
+      {draft?.choice && <div className="workspace-brand-settings__version">
+        <label htmlFor="workspace-brand-version">Brand version</label>
+        <Select id="workspace-brand-version" value={draft.choice.selected} disabled={!canEdit || busy}
+          options={draft.choice.versions.map(version => ({ value: version.path, label: version.label }))}
+          onChange={path => { if (draft.choice && path !== draft.choice.selected) void importFile(draft.choice.file, path); }} />
+        <span className="muted">This ZIP includes {draft.choice.versions.length} Brandkit versions. The newest opens first.</span>
+      </div>}
       <div className="workspace-brand-settings__previews">
         {(["light", "dark"] as const).map(theme => {
           const palette = workspaceAccentPalette(brand && useAccent ? brand.primary : "#3B82F6", theme === "dark");
@@ -116,7 +132,7 @@ function WorkspaceBrandEditor({ organization, canEdit, canReadTemplates }: Props
           {brand.sourceUrl && <a href={brand.sourceUrl} target="_blank" rel="noreferrer">View brand source <ExternalLink size={12} aria-hidden="true" /></a>}</div>
         <Toggle checked={useAccent} disabled={!canEdit || busy} label="Use brand accent in the interface"
           hint="Apply the brand color to actions, links and focus indicators. Light and dark shades adjust for readable contrast."
-          onChange={checked => setDraft({ brand, useAccent: checked })} />
+          onChange={checked => setDraft({ ...draft, brand, useAccent: checked })} />
         <p className="muted">Logo lettering stays as designed. Workspace names come from organization records, and interface text keeps the app’s readable font.</p>
       </> : <p className="muted">Import a Brandkit ZIP or JSON profile to preview its logo and colors. Until then, the workspace uses the uploaded logo below or its initial.</p>}
       <div className="workspace-brand-settings__footer">
