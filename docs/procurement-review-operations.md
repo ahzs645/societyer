@@ -6,12 +6,22 @@ Use this guide for new operators and future releases. The dated
 [setup and verification record](procurement-review-setup.md) contains the DDC
 North resource IDs, credential expiry dates, deployed versions and test results.
 
+The [November 9 release and BC Bid coverage receipt](https://github.com/ahzs645/files/blob/main/docs/reviews/procurement-live-rollout-2026-11-09.md)
+records Societyer `a5897480` on shared Convex and both Cloudflare portals,
+Zoer's complete Procurement plugin 0.35.5, the browser-runtime recovery and a
+successful live sample (15 listings and one detail). Signed-in DDC search,
+notice documents and a real 28-page PDF preview were checked. The receipt also
+distinguishes complete source dictionaries from incomplete notice coverage and
+the 23 modern opportunity-type groups that still need runtime wiring. These
+code releases did not activate a new data publication; the hosted catalog still
+serves the October 23 publication. Schedules remain stopped.
+
 ## What lives in each repository
 
 | Repository | Responsibility | When it needs an update |
 | --- | --- | --- |
-| [files](https://github.com/ahzs645/files) | BC Bid Monitor interface, Societyer controls, capabilities, self-contained plugin build and shared contract | Plugin UI or behavior changes |
-| [zoer](https://github.com/ahzs645/zoer) | Collector and `packages/plugin-site` SharePoint snapshot publisher | Collection or publisher changes |
+| [files](https://github.com/ahzs645/files) | Procurement plugin interface and scraper worker, Societyer controls, self-contained plugin build and shared contract | Plugin UI, collection logic or behavior changes |
+| [zoer](https://github.com/ahzs645/zoer) | Plugin host, browsers, crawl policy, catalog services and `packages/plugin-site` SharePoint snapshot publisher | Host capability or publisher changes |
 | [societyer](https://github.com/ahzs645/societyer) | Workspace permissions, SharePoint reader, browser catalog host and pinned plugin artifact | Host changes, or installing a new plugin build |
 
 There are two independent release flows:
