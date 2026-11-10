@@ -135,7 +135,8 @@ Access to that site does not authorize Ahmad’s personal OneDrive recordings.
 Passed:
 
 - Saved both Teams switches and verified granted app permissions/public certificate.
-- Real application certificate OAuth authentication.
+- Real application certificate OAuth authentication, including the deployed
+  Convex operator check using its stored environment credentials.
 - Real Teams VTT download and local parser qualification: 206,432 bytes, 1,391
   timed segments, all three named speakers, 4,556.368 seconds. This did not
   import content into the portal or qualify Graph retrieval.
@@ -144,7 +145,8 @@ Passed:
 - Organizer policy creation and independent read-back of all three direct
   assignments; inherited Global policy remains empty.
 - Backend deploy to `industrious-cricket-610` and DDC Pages deployment
-  `https://d8fa9e9a.societyer-ddcnorth.pages.dev`.
+  `https://042f6a17.societyer-ddcnorth.pages.dev` (later deployments are visible in
+  the Cloudflare project history).
 - Application and Convex typechecks, DDC production build, targeted lint,
   `test:teams-meetings`, existing meeting-kind/timed-transcript/speaker tests,
   workspace-transfer policy checks and portable-manifest checks.
@@ -190,6 +192,21 @@ parameter. [Ad hoc discovery reference](https://learn.microsoft.com/en-us/graph/
 Deploy Convex before the frontend. Use the existing production selector; never
 run this setup against the retired First Form deployment `elated-bee-460`.
 `npm run test:teams-meetings` is part of CI and requires no tenant credentials.
+Deployment administrators can test the actual stored certificate and scoped
+Graph reads without impersonating a user:
+
+```sh
+npx convex run microsoftMeetingsActions:operatorHealth \
+  '{"societyId":"<configured workspace ID>","start":"2026-11-03T00:00:00.000Z","end":"2026-11-10T23:59:59.000Z"}' \
+  --deployment industrious-cricket-610
+```
+
+This internal action returns authentication status, counts and sanitized errors;
+it does not stage sources or import content. A non-configured workspace is
+rejected before Microsoft authentication. It is not callable by browser clients.
+The temporary local plaintext private key was removed after this server-side
+qualification; the configured production key remains only in Convex.
+
 Microsoft tenant administration uses the official MicrosoftTeams module; device
 code authentication was denied by Microsoft, so the successful management login
 used interactive `Connect-MicrosoftTeams -DisableWAM` after the normal WAM flow

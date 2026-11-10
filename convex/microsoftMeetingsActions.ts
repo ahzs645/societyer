@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { importPKCS8, SignJWT } from "jose";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { authorizedAction } from "./lib/authorizedServer";
 import { TeamsGraphClient, boundedGraphBody, TeamsGraphError } from "../shared/teamsGraphClient";
-import { validateDateWindow, uuidPattern, type TeamsSource } from "../shared/microsoftMeetings";
+import { meetingBinding, validateDateWindow, uuidPattern, type TeamsSource } from "../shared/microsoftMeetings";
 import { parseTimedTranscript } from "../src/features/meetings/transcript/timedTranscript";
 import { createAuth } from "./hostedAuth";
 
@@ -47,3 +47,29 @@ export const importMeeting = authorizedAction("microsoftMeetingsActions:importMe
   // Reauthorize in the same transaction as every write, after all external reads.
   return ctx.runMutation(internal.microsoftMeetings.commitImport, { ...a, transcriptId: access.candidate.source.transcriptId, transcriptHash, segments: parsed.segments, participants: resolved });
 } });
+
+/** Deployment administrators can qualify stored credentials without impersonating a user.
+ * Returns counts only and never stages candidates or imports meeting content.
+ */
+export const operatorHealth = internalAction({
+  args: { societyId: v.id("societies"), start: v.string(), end: v.string() },
+  returns: v.any(),
+  handler: async (_ctx, args) => {
+    const binding = meetingBinding(process.env, args.societyId);
+    if (!binding) throw new Error("Teams import is not enabled for this workspace.");
+    const window = validateDateWindow(args.start, args.end);
+    const client = await graph();
+    const checks: { organizerId: string; kind: string; count?: number; truncated?: boolean; error?: string }[] = [];
+    for (const organizerId of binding.organizerIds) {
+      for (const kind of ["adhoc", "scheduled"] as const) {
+        try {
+          const result = await client.discover(kind, organizerId, window.start, window.end);
+          checks.push({ organizerId, kind, count: result.sources.length, truncated: result.truncated });
+        } catch (error) {
+          checks.push({ organizerId, kind, error: error instanceof TeamsGraphError ? error.message : "Microsoft discovery could not finish." });
+        }
+      }
+    }
+    return { certificateAuthentication: "passed", checks };
+  },
+});
