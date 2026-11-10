@@ -1,8 +1,9 @@
 # Procurement catalog service: implementation plan
 
-Status: implementation in progress, 2026-11-10. The service, publisher tools,
-workspace authority and reader are built locally. See `procurement-catalog-service-rollout.md`
-for live state and remaining qualification; the proposal below records the original design.
+Status: deployed for DDC North, 2026-11-10. Three real publications passed full
+qualification and the Owner selected the service. See `procurement-catalog-service-rollout.md`
+for observed releases, local publisher operations and the 14-day Convex fallback;
+the proposal below records the original design.
 Audience: the engineer or agent who will implement it. It is written to be read cold.
 
 ## 1. The idea in one paragraph

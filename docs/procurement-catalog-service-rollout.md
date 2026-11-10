@@ -1,7 +1,10 @@
 # Procurement catalog service rollout
 
-Status: **in progress**, 2026-11-10. The workspace still reads Convex. This is
-not a completed service cutover or an instruction to delete the fallback.
+Status: **live for DDC North**, 2026-11-10. The Owner selected the catalog
+service at **23:32:06.992 UTC** after three real matching publications and the
+live publisher-hook test. Convex remains the parallel fallback until at least
+**2026-11-24 23:32:06.992 UTC** (4:32 PM Vancouver time). No fallback deletion
+is automatic.
 
 ## Confirmed choices
 
@@ -12,7 +15,7 @@ not a completed service cutover or an instruction to delete the fallback.
 - Include this workspace's published review evidence in its own protected file.
 - Require three distinct consecutive real publications to match before cutover.
 - Keep publishing to Convex in parallel for at least **14 days after cutover**.
-  The 14-day clock has not started. No cleanup/deletion is automatic.
+  The clock started at the cutover recorded above. No cleanup/deletion is automatic.
 
 The implementation/run commands are in
 [`server/procurement-catalog/README.md`](../server/procurement-catalog/README.md).
@@ -63,8 +66,9 @@ implicitly, and no project database is created or replaced.
 ## Live state and limits
 
 - The shared Convex deployment has the additive grant, receipt and rollout
-  functions/indexes. A real operator policy query returned
-  `serviceOnlyAllowed: false`, `fallbackUntil: null`.
+  functions/indexes. After cutover a real policy query returned
+  `serviceOnlyAllowed: false`, `fallbackUntil: 1795563126992`, enforcing the
+  full 14-day minimum before service-only publication can be considered.
 - DDC-only signing configuration is installed. No other integration secrets,
   memberships or sign-in rules were replaced.
 - Both Cloudflare Pages frontends have the reader and administrator source
@@ -77,6 +81,11 @@ implicitly, and no project database is created or replaced.
   description-search results for `tariffs`, a complete real notice and all five
   of its document entries, plus award Overview and Opportunities analytics.
   The service switch remained disabled at two of three qualifications.
+- The subsequent three-of-three preview and normal service reader show the same
+  visible `Some sources unverified` caveat and publication-state notices as
+  Convex. Source selection persisted through fresh reloads without a preview
+  query parameter. Settings shows `This workspace reads the catalog service`
+  and the `Use Convex fallback` control.
 - The actual browser download of `Requirements & Specifications - Requirements
   and Specifications.pdf` succeeded through the existing SharePoint broker.
   The downloaded file is 205,384 bytes with SHA-256
@@ -85,6 +94,8 @@ implicitly, and no project database is created or replaced.
   `opportunity:235592`. The browser automation download-event wait timed out;
   the downloaded file's timestamp, size, PDF header and hash supplied the
   completion evidence instead. No download failure was inferred from that wait.
+  Repeating the download after actual cutover produced another matching file,
+  with a modification timestamp after the source change.
 - The dedicated Cloudflare tunnel is healthy with four connections. DNS for
   `catalog.ddcnorth.com` is proxied to it; HTTPS health succeeds, anonymous
   catalog access returns 401 and public operator routes return 404.
@@ -131,25 +142,29 @@ implicitly, and no project database is created or replaced.
   `3539f79504e7c55820e90798faa5a4e61da20fbec95e89b425481dd249ea4f19`.
   Source coverage remains explicitly incomplete; the unavailable attachment was
   not relabelled as downloaded.
-- Source selection remains **Convex**. All three distinct consecutive real
-  publications are qualified. Automatic catalog publication must be connected
-  before cutover. The active collector/publisher is independently maintained;
+- Source selection is **service** for DDC North. All three distinct consecutive
+  real publications qualified before the Owner changed it. The existing local
+  publication watcher now requires the catalog stages. The collector/publisher
+  is independently maintained;
   coordinate exact tested commits and source hashes before changing its runtime.
 
 ## Release and publisher evidence
 
 The implementation merged through [Societyer #89](https://github.com/ahzs645/societyer/pull/89)
 as `6d8339b56547277794ebc0d1ce7018d9d95a10f3`. All nine CI checks passed
-for the tested implementation head `2f13a0ecfccdc925a817f3c4f9f7d85a40e5e45b`.
-This evidence update is documentation only; it does not claim those checks
-were rerun for prose changes.
+for implementation head `2f13a0ecfccdc925a817f3c4f9f7d85a40e5e45b`.
+The shared coverage-summary correction and recovery guide then merged through
+[Societyer #90](https://github.com/ahzs645/societyer/pull/90) as `8639205a`,
+with all seven applicable CI checks passing at tested head `55e8ddd3`.
+This final state update is documentation only; these checks were not rerun for
+prose changes.
 
 The live Pages deployments contain that tested implementation:
 
 | Frontend | Custom domain | Deployment |
 | --- | --- | --- |
-| `societyer-ddcnorth` | `portal.ddcnorth.com` | `a0f8a817` |
-| `societyer-firstform` | `portal.1stform.ca` | `15ae6732` |
+| `societyer-ddcnorth` | `portal.ddcnorth.com` | `cdb8c094` |
+| `societyer-firstform` | `portal.1stform.ca` | `878c06ef` |
 
 Both are direct uploads to their existing projects. Their public configuration
 still targets the same shared Convex deployment, `industrious-cricket-610`.
@@ -173,12 +188,38 @@ transport, strict known-hosts, restricted-key fingerprint and configuration
 hashes. Its location was handed to the existing publisher operator for review;
 private keys and configuration values are not committed here.
 
-Automatic adoption is **not enabled**. The reviewed proposed hook is local to
-the finite conductor, after exact Convex serving readback and before baseline
-advancement: publish the service, then complete full parity. A failure retains
-that same wave for inspection/retry. It does not fabricate a new publication,
-restart the collector/backend, or move administrator credentials to OTE. The
-conductor's stopped/partial-source resume mode must be reviewed before adoption.
+Automatic mirroring is **enabled in the existing local finite watcher**. After
+exact Convex serving readback and before baseline advancement, it publishes the
+service and completes full parity. It records a durable intent and owned child
+PID/process group before a GO handshake permits execution. A failure retains
+that wave in a catalog-only recovery phase. Twenty initial process/ACK/recovery
+tests passed, followed by 22 targeted cases for capacity guards and permanent
+child terminal receipts.
+
+The actual catch-up hook completed at `2026-11-10T23:30:07.282676Z` for the third
+publication, retaining its identical receipt and parity hashes. Both owned
+children exited, the baseline and wave counter stayed unchanged, the pending
+phase cleared, and the watcher returned to `watching_partial_source` with
+`catalogRequired: true` and the current `catalogAck`. This verifies the hook;
+it does not count as a fourth distinct publication.
+
+A subsequent **new collected-data publication** exercised the entire watcher
+path after cutover: source snapshot, Convex ready, catalog activation, full
+parity, then baseline ACK. Publication `20261110T233730Z-a41c904c3706` completed
+at `2026-11-10T23:45:42.492095Z`, with 4,443 opportunities and 21,877 awards.
+All five tables, both lists and ten analytical views matched; the retained
+report hash is
+`1dc460d81c10936f596c4be1b150ca5462fb087174e5378c8a0791239ac4e442`.
+The wave counter advanced once, from five to six, only after catalog ACK. The
+Owner's open portal updated from 4,383 to 4,443 opportunities without a reload
+or sign-in, preserving the coverage warning and service source setting.
+
+This is a Mac-side publisher, not an always-on publisher installed on the VPS
+or OTE backend. Keep the Mac and reviewed watcher running for automatic updates.
+The watcher uses explicit local/source storage headroom checks, preserves all
+originals/backups, and stops for inspection on unknown outcomes. Moving it to a
+server requires its own complete runtime/credential qualification; the Node 22
+FTS smoke alone does not establish that readiness.
 
 This state must be updated from observed results after recovery and each rollout
 gate. Never infer serving readiness from an export, upload, directory or test.
@@ -217,24 +258,20 @@ the two new service tables are explicitly non-exportable operator state and have
 reviewed workspace-transfer skip policies. Transferred workspaces reset their
 source choice to Convex and do not inherit deployment-bound service receipts.
 
-## Remaining rollout gates
+## Continuing operations
 
-1. Review and adopt the qualified isolated Mac parallel publisher and the
-   stopped conductor's exact resume mode. Its complete source closure, pinned
-   transport, restricted workspace key, existing operator authorization and
-   full Node 24 run are verified. Do not restart the independent collector or
-   backend for this step.
-2. Three legitimate real publications are qualified. Continue full qualification
-   through the adopted parallel publisher; never replay or invent publication
-   IDs to satisfy the gate.
-3. Signed-in Owner preview, public-origin restrictions, lists, filters, notice
-   details, selected notice document metadata, a real broker download, body
-   search and live analysis are verified. Exact within-minute deadline refresh
-   is additionally covered by the browser fixture; it was not observed by
-   changing the production clock.
-4. Run complete parity while each exact generation is still serving in Convex.
-   Retain the checksummed reports and qualify three distinct consecutive real
-   publications. Coordinate adoption of the new Zoer source closure first.
-5. Explicitly select the service, retain parallel publishing for 14 days, and
-   monitor. Roll back by selecting Convex if needed. Backups and a separate
-   bounded retirement review are prerequisites to any later cleanup.
+1. Keep the reviewed local watcher running and publish to Convex in parallel
+   through at least the fallback deadline. Complete parity while each exact
+   generation is current and retain its checksummed evidence before baseline ACK.
+2. Source collection is still partial. Preserve the visible coverage caveat
+   and unavailable attachment evidence; finishing notice collection is not proof
+   that the attachment audit or other retained sources are complete.
+3. Roll back from Catalog source settings using `Use Convex fallback` if needed.
+   Re-enabling the service after rollback starts a new 14-day minimum.
+4. No cleanup is scheduled. Backups and a separate bounded retirement review are
+   required before deleting fallback records or older derived releases.
+
+Signed-in Owner reads, complete lists, filters, notice metadata, real broker
+downloads, body search and live analytics are verified. Exact within-minute
+deadline refresh is additionally covered by the browser fixture; the production
+clock was not changed to test it.
