@@ -45,10 +45,16 @@ def dispatch(config, workspace, original):
         return
     with open(directory / ".publisher.lock", "a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if len(words) == 5 and words[:3] == [PREFIX, BINARY, "--replica"]:
-            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,180}\.sqlite", words[3]) or words[4] != str(target):
+        # SQLite 3.54.1 first sends BINARY --replica SOURCE TARGET 2>/dev/null,
+        # then may retry with its fixed PATH assignment. Normalize only those
+        # exact literals; never evaluate a shell assignment or redirection.
+        replica = words[1:] if words and words[0] == PREFIX else words[:]
+        if replica and replica[-1] == "2>/dev/null":
+            replica.pop()
+        if len(replica) == 4 and replica[:2] == [BINARY, "--replica"]:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,180}\.sqlite", replica[2]) or replica[3] != str(target):
                 raise ValueError("Replica is outside this workspace's staging file.")
-            subprocess.run([BINARY, "--replica", words[3], str(target)], check=True)
+            subprocess.run([BINARY, "--replica", replica[2], str(target)], check=True)
             return
         if len(words) == 3 and words[0] == "put":
             digest, length = words[1], int(words[2])
@@ -103,7 +109,10 @@ if __name__ == "__main__":
         with open(args.config, encoding="utf8") as stream:
             config = json.load(stream)
         dispatch(config, args.workspace, os.environ.get("SSH_ORIGINAL_COMMAND", ""))
-    except Exception:
+    except Exception as error:
         # Never echo SSH input, configuration, credentials, or request bodies.
-        print("Catalog publishing command failed validation or execution.", file=sys.stderr)
+        trace = error.__traceback__
+        while trace and trace.tb_next:
+            trace = trace.tb_next
+        print("Catalog publishing command failed validation or execution [" + type(error).__name__ + ":" + str(trace.tb_lineno if trace else 0) + "].", file=sys.stderr)
         sys.exit(1)

@@ -90,8 +90,10 @@ file; it cannot be silently rebound to a different publication/workspace.
 `qualify-catalog-service.ts` compares every active row in all five tables, both
 thin lists and all ten default analytics views at one clock. Convex reads are
 bounded and must still refer to the current serving generation. It saves a
-checksummed report and marks only that real publication qualified. Three distinct
-consecutive publications are required before `procurementCatalog:setSource` can
+checksummed report and marks only that real publication qualified.
+Retries rerun the comparisons with the retained report's analytical clock and
+verify its immutable evidence hash rather than replacing successful evidence.
+Three distinct consecutive publications are required before `procurementCatalog:setSource` can
 select the service. Keep Zoer in `parallel` mode for **at least 14 days after
 cutover**. `--service-only` is refused until that period has elapsed. No catalog
 deletion is automatic. Backups and a separate bounded cleanup review remain

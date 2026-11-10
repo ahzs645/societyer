@@ -9,6 +9,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("gateway", Path(__file__).resolve().parents[2] / "server/procurement-catalog/catalog-ssh-gateway.py")
 gateway = importlib.util.module_from_spec(spec)
@@ -33,7 +34,7 @@ class Boundary(unittest.TestCase):
             sys.stdin = types.SimpleNamespace(buffer=io.BytesIO(data))
             with contextlib.redirect_stdout(output):
                 gateway.dispatch(self.config, self.workspace, command)
-            return json.loads(output.getvalue())
+            return json.loads(output.getvalue()) if output.getvalue() else None
         finally:
             sys.stdin = previous
 
@@ -65,6 +66,18 @@ class Boundary(unittest.TestCase):
             self.dispatch("activate", b'{"societyId":"foreign-workspace"}')
         with self.assertRaises(ValueError):
             self.dispatch("qualify", b"x" * 2001)
+
+    def test_real_sqlite_initial_and_path_retry_commands_stay_scoped(self):
+        for prefix in ["", gateway.PREFIX + " "]:
+            for suffix in ["", " 2>/dev/null"]:
+                with patch.object(gateway.subprocess, "run") as receiver:
+                    self.dispatch(prefix + gateway.BINARY + " --replica origin.sqlite " + str(self.target) + suffix)
+                    receiver.assert_called_once_with([gateway.BINARY, "--replica", "origin.sqlite", str(self.target)], check=True)
+        for command in [gateway.BINARY + " --replica origin.sqlite " + str(self.target) + " 2>/etc/passwd", gateway.BINARY + " --replica 'origin.sqlite;id' " + str(self.target), gateway.BINARY + " --origin origin.sqlite " + str(self.target)]:
+            with patch.object(gateway.subprocess, "run") as receiver:
+                with self.assertRaises(ValueError):
+                    self.dispatch(command)
+                receiver.assert_not_called()
 
 
 if __name__ == "__main__":

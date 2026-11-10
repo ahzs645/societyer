@@ -53,6 +53,7 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   // Procurement review reads SharePoint through a hosted route; the local runtimes report it unavailable.
   "procurementReview:setFolder",
   "procurementCatalogActions:grant",
+  "procurementCatalog:setSource",
   // Hosted publication-summary scheduling; snapshot readers compute their own analytics.
   "procurementAnalytics:request",
   "financialHub:sync",

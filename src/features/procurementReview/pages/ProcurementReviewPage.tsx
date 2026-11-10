@@ -9,6 +9,7 @@ import { useSociety } from "../../../hooks/useSociety";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { isStaticDemoRuntime } from "../../../lib/staticRuntime";
 import { FolderSetupCard } from "../components/FolderSetupCard";
+import { CatalogSourceControls } from "../components/CatalogSourceControls";
 import { ProcurementReader } from "../reader/ProcurementReader";
 import { useConvexReaderSource } from "../reader/convexSource";
 import type { ReaderCatalog, ReaderSource } from "../reader/source";
@@ -45,6 +46,7 @@ function ServiceHost({ societyId, preview }: { societyId: string; preview: boole
   return configuration?.baseUrl ? <ServiceReaderHost societyId={societyId} baseUrl={configuration.baseUrl} preview={preview && configuration.source !== "service"} /> : <PageLoading variant="detail" />;
 }
 function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string; baseUrl: string; preview: boolean }) {
+  const { can, loaded } = usePermissions(), [settings, setSettings] = useState(false);
   const access = useCatalogAccess(societyId, baseUrl);
   const publication = useQuery(api.procurementStatus.get, { societyId }) as PublicationStatus | undefined;
   const [source, setSource] = useState<ReaderSource | null>(null), [error, setError] = useState<string | null>(null);
@@ -64,7 +66,8 @@ function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string;
     } catch (failure) { if (attempt === sequence.current && live()) setError(failure instanceof Error ? failure.message : "The catalog is temporarily unavailable."); }
   }, [access]);
   useEffect(() => { let active = true; const load = () => void refresh(() => active); load(); window.addEventListener("focus", load); return () => { active = false; window.removeEventListener("focus", load); }; }, [refresh, publication?.lastSuccessful?.generation]);
-  const header = <><PageHeader title="Procurement review" subtitle={source ? updatedSummary(source.catalog.publishedAt) : "Bid opportunities and awards published by Zoer."} info={publication ? <PublicationDetails status={publication} /> : undefined} />{preview && <p className="card card__body" role="status">Catalog service preview. Other workspace readers continue using the current catalog source.</p>}{error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}</>;
+  const canConfigure = loaded && can("settings:write");
+  const header = <><PageHeader title="Procurement review" subtitle={source ? updatedSummary(source.catalog.publishedAt) : "Bid opportunities and awards published by Zoer."} info={publication ? <PublicationDetails status={publication} /> : undefined} actions={canConfigure && !preview && !settings ? <button type="button" className="btn btn--ghost btn--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />{canConfigure && (preview || settings) && <CatalogSourceControls societyId={societyId} previewReady={Boolean(source) && !error} onClose={preview ? undefined : () => setSettings(false)} />}{error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}</>;
   return <div className="page procurement-review">{source ? <ProcurementReader key={source.catalog.publicationId} source={source} header={header} /> : <>{header}{!error && <p role="status">Loading procurement…</p>}</>}</div>;
 }
 
@@ -107,6 +110,7 @@ function HostedProcurementReview() {
       {!folder || settings ? <>
         {header}
         <FolderSetupCard societyId={society._id} folder={folder} canConfigure={canConfigure} onSaved={() => setSettings(false)} onCancel={folder ? () => setSettings(false) : undefined} />
+        {canConfigure && folder && <CatalogSourceControls societyId={society._id} />}
       </> : catalog === undefined ? <>
         {header}
         <p className="muted" role="status">Loading procurement…</p>

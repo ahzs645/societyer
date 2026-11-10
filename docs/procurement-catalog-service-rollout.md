@@ -47,7 +47,11 @@ requests, and prepares a replacement list before swapping readers. Body search
 is explicit and bounded. Deadline-sensitive analytics refresh at boundaries
 inside the same minute, as well as at minute/day changes.
 
-An administrator can test `?catalogPreview=service` before the source flag changes.
+Settings editors can open the catalog service preview from the snapshot-folder
+settings. The preview shows the consecutive qualification count, enables switching
+only after three matches and a loaded preview, and provides a Convex fallback
+control after switching. The server independently enforces the same gates.
+An administrator can also test `?catalogPreview=service` before the source flag changes.
 The server requires settings-write permission for this preview; it does not
 change the workspace source. Normal readers remain on Convex during qualification.
 
@@ -64,21 +68,34 @@ implicitly, and no project database is created or replaced.
 - DDC-only signing configuration is installed. No other integration secrets,
   memberships or sign-in rules were replaced.
 - The new frontend reader and administrator preview have not been deployed yet.
-- A dedicated Cloudflare tunnel is configured, but the hostname's DNS and live
-  service activation are pending. The tunnel is not evidence of a working origin.
-- The owner explicitly approved and performed an Ubuntu 24.04 reinstall on the
-  separate SSD Nodes VPS. New operator SSH access was verified. Zoer's server,
-  catalog and collector were not reinstalled or moved.
-- During bootstrap an invalid `PermitUserEnvironment` directive was written
-  inside an SSH `Match` block. Validation rejected it, but Ubuntu's concurrent
-  updater restarted SSH before it could be removed. Remote SSH is unavailable;
-  console recovery could not reach the boot menu. The owner approved a second
-  clean reinstall with the existing SSH key, now in progress. No catalog data
-  had been transferred or activated there. The installer now uses the dedicated
-  account’s default key path in a root-owned home and does not change or reload
-  global SSH configuration.
-- Source selection remains **Convex**. No live parity publication has been
-  marked successful. The active collector/publisher is independently maintained;
+- The dedicated Cloudflare tunnel is healthy with four connections. DNS for
+  `catalog.ddcnorth.com` is proxied to it; HTTPS health succeeds, anonymous
+  catalog access returns 401 and public operator routes return 404.
+- The separate SSD Nodes VPS runs Ubuntu 24.04. Administrator SSH is restored
+  with the existing key, and the temporary recovery console is disabled. The
+  catalog and tunnel run under separate unprivileged accounts; catalog HTTP,
+  operator HTTP and tunnel metrics bind only to loopback.
+- The initial bootstrap wrote an invalid SSH Match directive and Ubuntu's
+  concurrent updater restarted SSH. Console recovery could not reach the boot
+  menu, so the owner approved a second clean reinstall. No catalog data was on
+  that VPS. The installer now uses a restricted key in a root-owned account
+  home, does not edit or reload global SSH, and its successful live installation
+  preserved the pre-install SSH checksums. The publisher key also rejects an
+  unrestricted shell command.
+- The first real serving receipt and full parity report passed for publication
+  `20261110T205755Z-ace12a8a0a72`: 4,209 opportunities, 21,877 awards,
+  26,086 details, 3,149 documents, 91 evidence rows and 89,972 taxonomy terms.
+  All five tables, both lists and ten analytical views matched Convex while
+  that exact generation was serving. This counts as **one** real publication.
+- The first full snapshot transferred 447,397,888 bytes. A real SQLite protocol
+  retry transferred 4,114 bytes and read back the same immutable serving receipt.
+  The handler was corrected to accept SQLite 3.54.1's normal and PATH-fallback
+  launch forms, without evaluating their shell syntax. The repeated parity
+  comparison stopped when Convex activated a newer real generation, preserving
+  the original evidence. Retries reuse a retained report's analytical clock and
+  compare the full data again before checking its immutable evidence hash.
+- Source selection remains **Convex**. One live parity publication is qualified; two more
+  distinct consecutive real publications are still required before cutover. The active collector/publisher is independently maintained;
   coordinate exact tested commits and source hashes before changing its runtime.
 
 This state must be updated from observed results after recovery and each rollout
@@ -120,12 +137,11 @@ source choice to Convex and do not inherit deployment-bound service receipts.
 
 ## Remaining rollout gates
 
-1. Recover SSH, run the corrected installer and verify both unprivileged units,
-   the restricted publisher key and loopback-only ports.
-2. Publish the exact currently serving verified export. Check the first full
-   snapshot transfer, subsequent SQLite replication and failure recovery.
-3. Connect DNS, verify TLS/health, unauthorized/foreign-origin rejection and
-   operator-route isolation through the public hostname.
+1. Complete parity for each current real publication; verify an idempotent retry
+   while the same generation remains serving.
+2. Qualify subsequent real publications through the active publisher.
+3. Foreign-origin rejection is verified (403); verify a real signed-in member
+   through the public hostname.
 4. Use a real member's sign-in for the administrator preview; verify lists,
    filters, notice details, all document metadata, a real broker download, body
    search and time-sensitive analysis. Do not fabricate an identity for this.

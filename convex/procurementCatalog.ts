@@ -18,13 +18,21 @@ export function catalogServiceConfiguration(societyId: string) {
   return { baseUrl };
 }
 export const configuration = authorizedQuery("procurementCatalog:configuration", query)({
-  args: { societyId: v.id("societies"), preview: v.optional(v.boolean()) },
-  returns: v.object({ source: v.union(v.literal("convex"), v.literal("service")), baseUrl: v.union(v.string(), v.null()) }),
-  handler: async (ctx, { societyId, preview }) => {
+  args: { societyId: v.id("societies"), preview: v.optional(v.boolean()), controls: v.optional(v.boolean()) },
+  returns: v.object({ source: v.union(v.literal("convex"), v.literal("service")), baseUrl: v.union(v.string(), v.null()), serviceAvailable: v.optional(v.boolean()), qualifiedPublications: v.optional(v.number()) }),
+  handler: async (ctx, { societyId, preview, controls }) => {
     const society = await requireEnabledModule(ctx, societyId, "procurementReview");
     const source = society.integrationSettings?.procurementCatalogSource ?? "convex";
-    if (preview) await requirePermissionPortable(await toPortableQueryCtx(ctx), societyId, "settings:write");
-    return { source, baseUrl: source === "service" || preview ? catalogServiceConfiguration(societyId).baseUrl : null };
+    if (preview || controls) await requirePermissionPortable(await toPortableQueryCtx(ctx), societyId, "settings:write");
+    const baseUrl = source === "service" || preview ? catalogServiceConfiguration(societyId).baseUrl : null;
+    if (!controls) return { source, baseUrl };
+    let serviceAvailable = false;
+    try { catalogServiceConfiguration(societyId); serviceAvailable = true; } catch { /* Other workspaces have no service provisioned. */ }
+    const folder = society.integrationSettings?.procurementReviewFolder;
+    const publications = serviceAvailable && folder ? await ctx.db.query("procurementServicePublications").withIndex("by_latest", q => q.eq("societyId", societyId).eq("folder", folder)).order("desc").take(3) : [];
+    let qualifiedPublications = 0;
+    for (const publication of publications) { if (!publication.parityVerifiedAt || !publication.parityReportHash) break; qualifiedPublications++; }
+    return { source, baseUrl, serviceAvailable, qualifiedPublications };
   },
 });
 /** Internal because only the Node signer should consume this identity assertion. */

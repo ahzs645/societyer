@@ -30,6 +30,8 @@ process.env.PROCUREMENT_CATALOG_ALLOWED_WORKSPACES = fixture.societyId;
 const reader = t.withIdentity({ subject: "reader", issuer }), owner = t.withIdentity({ subject: "owner", issuer }), args = { societyId: fixture.societyId };
 assert.deepEqual(await reader.query(api.procurementCatalog.configuration, args), { source: "convex", baseUrl: null });
 await assert.rejects(reader.query(api.procurementCatalog.configuration, { ...args, preview: true }), /permission|settings|access/i);
+await assert.rejects(reader.query(api.procurementCatalog.configuration, { ...args, controls: true }), /permission|settings|access/i);
+assert.equal((await owner.query(api.procurementCatalog.configuration, { ...args, controls: true })).qualifiedPublications, 0);
 assert.equal((await owner.query(api.procurementCatalog.configuration, { ...args, preview: true })).baseUrl, "https://catalog.fixture.test");
 await assert.rejects(t.action(api.procurementCatalogActions.grant, args), /auth|sign|identity/i);
 await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).action(api.procurementCatalogActions.grant, args), /auth|access|bound|membership/i);
@@ -43,12 +45,14 @@ for (let n = 1; n <= 3; n++) {
   const publicationId = "publication-" + n, generation = publicationId + "-reader-v2", inventoryHash = String(n).repeat(64), publishedAt = new Date(now - 10_000 + n * 1000).toISOString();
   const receiptJson = JSON.stringify({ schemaVersion: 1, societyId: fixture.societyId, folder: fixture.folder, publicationId, generation, inventoryHash, contentHash: "a".repeat(64), sourceSnapshotId: publicationId, publishedAt, activatedAt: new Date(now).toISOString(), counts: { opportunity: 1, award: 0 } });
   await t.mutation(api.procurementCatalog.recordPublication, { ...args, receiptJson });
+  assert.equal((await owner.query(api.procurementCatalog.configuration, { ...args, controls: true })).qualifiedPublications, 0, "A new unverified publication breaks the consecutive qualification count");
   await t.mutation(api.procurementCatalog.recordPublication, { ...args, receiptJson });
   await assert.rejects(t.mutation(api.procurementCatalog.recordPublication, { ...args, receiptJson: receiptJson.replace('"opportunity":1', '"opportunity":2') }), /immutable/);
   const parity = { ...args, folder: fixture.folder, publicationId, inventoryHash, reportHash: "f".repeat(64) };
   await assert.rejects(t.mutation(api.procurementCatalogOperator.verifyParity, parity), /currently serving/);
   await t.run(ctx => ctx.db.patch(fixture.catalogId, { generation, publicationId, publishedAt, inventoryHash }));
   await t.mutation(api.procurementCatalogOperator.verifyParity, parity);
+  assert.equal((await owner.query(api.procurementCatalog.configuration, { ...args, controls: true })).qualifiedPublications, n);
 }
 await owner.mutation(api.procurementCatalog.setSource, { ...args, source: "service" });
 assert.equal((await reader.query(api.procurementCatalog.configuration, args)).source, "service");
