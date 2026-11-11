@@ -41,6 +41,10 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   "procurementReview:reviews",
 
   "procurementReview:setFolder",
+  // The workspace's bid triage of hosted catalog records, joined in the hosted reader.
+  "procurementTriage:list",
+  "procurementTriage:set",
+  "procurementTriage:createTask",
   // Publication status and prepared analytics depend on hosted import jobs,
   // server-side caches and the scheduler; snapshot readers use their own engine.
   "procurementStatus:get",

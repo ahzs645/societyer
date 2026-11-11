@@ -90,6 +90,7 @@ export function RecordTableToolbar({
   hideViewPickerOnPhone = false,
   collapsibleSearch = false,
   extraFilterCount = 0,
+  searchPlaceholder,
 }: {
   icon?: ReactNode;
   label: string;
@@ -128,6 +129,8 @@ export function RecordTableToolbar({
    * always says so.
    */
   collapsibleSearch?: boolean;
+  /** What the search box looks in, when it is more than the columns ("Search titles and notice text…"). */
+  searchPlaceholder?: string;
   /**
    * Filters the page applies outside the table's own conditions (and offers
    * in the filter editor's `extra`), counted on the Filter button with them.
@@ -491,7 +494,7 @@ export function RecordTableToolbar({
           <input
             ref={searchInputRef}
             className="record-table__search-input"
-            placeholder={`Search ${lowerLabel(objectMetadata.labelPlural)}…`}
+            placeholder={searchPlaceholder ?? `Search ${lowerLabel(objectMetadata.labelPlural)}…`}
             aria-label={`Search ${lowerLabel(objectMetadata.labelPlural)}`}
             value={searchDraft}
             // Names and reference numbers: no autocorrect or capitals.

@@ -14,6 +14,7 @@ import { ProcurementReader } from "../reader/ProcurementReader";
 import { useConvexReaderSource } from "../reader/convexSource";
 import type { ReaderCatalog, ReaderSource } from "../reader/source";
 import { createHttpReaderSource, useCatalogAccess, type ServiceCatalog } from "../reader/httpSource";
+import { useWorkspaceTriage } from "../reader/triage";
 import { exactWhen, updatedSummary } from "../reader/summary";
 import { useProcurementClock } from "../lib/clock";
 import { readLastCatalog, rememberCatalog } from "../lib/lastCatalog";
@@ -48,6 +49,7 @@ function ServiceHost({ societyId, preview }: { societyId: string; preview: boole
 function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string; baseUrl: string; preview: boolean }) {
   const { can, loaded } = usePermissions(), [settings, setSettings] = useState(false);
   const access = useCatalogAccess(societyId, baseUrl);
+  const triage = useWorkspaceTriage(societyId);
   const publication = useQuery(api.procurementStatus.get, { societyId }) as PublicationStatus | undefined;
   const [source, setSource] = useState<ReaderSource | null>(null), [error, setError] = useState<string | null>(null);
   const current = useRef<ReaderSource | null>(null), sequence = useRef(0);
@@ -76,7 +78,7 @@ function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string;
     {source && <PublicationState status={publication} whileReading />}
     {error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}
   </>;
-  return <div className="page procurement-review">{source ? <ProcurementReader key={source.catalog.publicationId} source={source} header={header} /> : <>{header}{!error && <p role="status">Loading procurement…</p>}</>}</div>;
+  return <div className="page procurement-review">{source ? <ProcurementReader key={source.catalog.publicationId} source={source} header={header} triage={triage} /> : <>{header}{!error && <p role="status">Loading procurement…</p>}</>}</div>;
 }
 
 function HostedProcurementReview() {
@@ -190,5 +192,6 @@ function PublicationState({ status, whileReading = false }: { status: Publicatio
 
 function HostedReader({ societyId, catalog, confirmed, header }: { societyId: string; catalog: ReaderCatalog; confirmed: boolean; header: ReactNode }) {
   const source = useConvexReaderSource(societyId, catalog, confirmed);
-  return <ProcurementReader source={source} header={header} />;
+  const triage = useWorkspaceTriage(societyId);
+  return <ProcurementReader source={source} header={header} triage={triage} />;
 }

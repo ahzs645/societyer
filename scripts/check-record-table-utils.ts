@@ -197,6 +197,10 @@ assert.equal(
   assert.deepEqual(order("t-when", "asc"), ["d", "b", "a", "c"], "timestamps sort by instant");
   assert.deepEqual(order("t-status", "asc"), ["d", "b", "a", "c"], "options sort by the label shown, not the stored key");
   assert.deepEqual(order("t-buyer", "asc"), ["b", "d", "a", "c"], "relations sort by display name, not id");
+  const scale = { ...field("t-scale", "status", FIELD_TYPES.SELECT), field: { ...field("t-scale", "status", FIELD_TYPES.SELECT).field, config: { ...statusOptions, sortByOptionOrder: true } } };
+  const byPosition = (direction: "asc" | "desc") =>
+    sortRecords({ records: rows, columns: [scale], sorts: [{ fieldMetadataId: "t-scale", direction }] }).map((row) => row._id);
+  assert.deepEqual([byPosition("asc"), byPosition("desc")], [["a", "b", "d", "c"], ["d", "b", "a", "c"]], "an option scale opts into option order, empty still last");
   assert.deepEqual(order("t-flag", "asc"), ["b", "a", "d", "c"], "booleans sort no before yes, ties stable, empty last");
   const accented = ["Zoë", "zeta", "Émile", "eagle", "Item 10", "item 9"].map((name, index) => ({ _id: String(index), name }));
   assert.deepEqual(

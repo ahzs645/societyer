@@ -96,6 +96,12 @@ export function sortKey(field: FieldMetadata, record: object): SortKey {
   if (isEmptyValue(value)) return null;
   if (isNumericFieldType(field.fieldType)) return numericKey(value);
   if (isDateFieldType(field.fieldType)) return dateKey(value);
+  // A SELECT whose options are a scale (best to worst, say) can ask to sort in option order instead of by label.
+  if (field.fieldType === FIELD_TYPES.SELECT && field.config?.sortByOptionOrder === true) {
+    const options = Array.isArray(field.config.options) ? (field.config.options as { value?: unknown }[]) : [];
+    const position = options.findIndex((option) => option.value === value);
+    return position < 0 ? null : position;
+  }
   if (field.fieldType === FIELD_TYPES.BOOLEAN) {
     if (value === true || value === "true" || value === 1 || value === "1") return 1;
     if (value === false || value === "false" || value === 0 || value === "0") return 0;

@@ -280,6 +280,19 @@ export const procurementTables = {
   })
     .index("by_document_key", ["societyId", "generation", "documentKey"])
     .index("by_record", ["societyId", "generation", "recordKey"]),
+  // The workspace's own bid triage of an opportunity (shared/procurementTriage.ts; convex/procurementTriage.ts).
+  // Keyed by record only, not by catalog or generation: it outlasts every re-import and works
+  // whichever catalog the workspace reads (the Convex copy or the catalog service).
+  procurementTriage: defineTable({
+    societyId: v.id("societies"),
+    recordKey: v.string(),
+    reviewed: v.boolean(),
+    classification: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.string()),
+    // The action item made from this opportunity (procurementTriage:createTask); at most one.
+    taskId: v.optional(v.id("tasks")),
+  }).index("by_record", ["societyId", "recordKey"]),
   procurementEvidence: defineTable({
     ...scope,
     recordKey: v.string(),

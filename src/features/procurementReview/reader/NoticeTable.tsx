@@ -65,6 +65,8 @@ import { useReaderSource, type ListRow } from "./source";
 import { useProcurementClock } from "../lib/clock";
 import { ServerNoticeRows } from "./ServerNoticeRows";
 import { useNoticeTextMatches } from "./noticeTextMatches";
+import { useReaderTriage } from "./triage";
+import { TRIAGE_FIELDS, joinTriage, useTriageEditing, type TriagedRow } from "./triageList";
 
 export type NoticeKind = "opportunity" | "award";
 
@@ -76,19 +78,25 @@ export type NoticeViewId =
   | "Closed"
   | "Awarded"
   | "Cancelled"
-  | "documents";
+  | "documents"
+  | "triage"
+  | "archived";
 export const NOTICE_VIEWS: {
   _id: NoticeViewId;
   name: string;
   isSystem: boolean;
+  /** Offered only where the workspace's triage is (triageList.tsx). */
+  triage?: true;
 }[] = [
   { _id: "upcoming", name: "Open, closing soonest", isSystem: false },
+  { _id: "triage", name: "Open, best classification first", isSystem: false, triage: true },
   { _id: "Open", name: "All open, including unverified closing dates", isSystem: false },
   { _id: "all", name: "All, latest closing first", isSystem: false },
   { _id: "Closed", name: "Closed", isSystem: false },
   { _id: "Awarded", name: "Awarded", isSystem: false },
   { _id: "Cancelled", name: "Cancelled", isSystem: false },
   { _id: "documents", name: "With documents", isSystem: false },
+  { _id: "archived", name: "Archived: reviewed, not doable", isSystem: false, triage: true },
 ];
 export const isNoticeView = (value: string | null): value is NoticeViewId =>
   NOTICE_VIEWS.some((view) => view._id === value);
@@ -100,7 +108,7 @@ const STATUS_OPTIONS = [
   { value: "Cancelled", label: "Cancelled", color: "red" },
 ];
 
-function tableFor(kind: NoticeKind) {
+function tableFor(kind: NoticeKind, triage = false) {
   const award = kind === "award";
   return staticRecordTable({
     id: `procurement-review:${kind}`,
@@ -178,6 +186,7 @@ function tableFor(kind: NoticeKind) {
             fieldType: FIELD_TYPES.DATE_TIME,
             size: 200,
           },
+          ...(triage ? TRIAGE_FIELDS : []),
           {
             name: "issuedFor",
             label: "Issued for",
@@ -213,6 +222,8 @@ const TABLES: Record<NoticeKind, ReturnType<typeof tableFor>> = {
   opportunity: tableFor("opportunity"),
   award: tableFor("award"),
 };
+/** Opportunities with the workspace's triage columns. */
+const TRIAGED_OPPORTUNITIES = tableFor("opportunity", true);
 const fieldId = (kind: NoticeKind, name: string) =>
   `procurement-review:${kind}:field:${name}`;
 
@@ -222,8 +233,9 @@ function presetView(
   viewId: NoticeViewId,
   hiddenFields: readonly string[],
   today = zoneToday(),
+  triaged = false,
 ): HydratedView {
-  const { hydratedView } = TABLES[kind];
+  const { hydratedView } = triaged ? TRIAGED_OPPORTUNITIES : TABLES[kind];
   const field = (name: string) => fieldId(kind, name);
   const status = (value: string): ViewFilter => ({
     id: "status",
@@ -237,7 +249,7 @@ function presetView(
   let filters: ViewFilter[] = [];
   let sorts = latest;
   if (kind === "opportunity") {
-    if (viewId === "upcoming") {
+    if (viewId === "upcoming" || viewId === "triage") {
       // "Open" is the derived status: an open notice whose deadline passed reads Closed (statusOf in lib/notice.ts).
       filters = [
         status("Open"),
@@ -249,6 +261,10 @@ function presetView(
         },
       ];
       sorts = [
+        // Best classification first (unclassified last), each closing soonest first.
+        ...(viewId === "triage"
+          ? [{ id: "classification", fieldMetadataId: field("classification"), direction: "asc" as const }]
+          : []),
         { id: "when", fieldMetadataId: field("when"), direction: "asc" },
       ];
     } else if (viewId === "documents")
@@ -260,7 +276,8 @@ function presetView(
           value: 0,
         },
       ];
-    else if (viewId !== "all") filters = [status(viewId)];
+    // The archived rows are chosen before the table (triageList.tsx joinTriage); the view only orders them.
+    else if (viewId !== "all" && viewId !== "archived") filters = [status(viewId)];
   }
   const name =
     kind === "award"
@@ -358,7 +375,7 @@ const renderPhoneCard: RecordTableCardRenderer = (
   record,
   { open, field, selecting },
 ) => {
-  const row = record as unknown as NoticeRow;
+  const row = record as unknown as NoticeRow & Partial<TriagedRow>;
   const award = row.kind === "award";
   const prefix =
     row.state === "unknown" || !row.whenText
@@ -371,7 +388,8 @@ const renderPhoneCard: RecordTableCardRenderer = (
   return (
     <RecordTablePhoneCard
       title={row.title}
-      badge={!award && row.status ? field("status") : undefined}
+      // The workspace's classification, once there is one, says more than "Open" in the open views.
+      badge={award ? undefined : row.classification ? field("classification") : row.status ? field("status") : undefined}
       meta={[
         !award && row.documents ? (
           <DocumentsCount documents={row.documents} />
@@ -389,6 +407,7 @@ const renderPhoneCard: RecordTableCardRenderer = (
           </span>
         ),
         award ? money(row.value, row.currency) : "",
+        row.reviewed ? "Reviewed" : "",
         award ? row.supplier || row.organization : row.organization,
       ]}
       onOpen={open}
@@ -440,14 +459,21 @@ export function NoticeTable({
 }) {
   const nav = useReaderNavigation();
   const source = useReaderSource();
-  const { objectMetadata } = TABLES[kind];
+  // The workspace's triage joins onto a list held in memory (the catalog service's); a list paged
+  // by the server is ordered and filtered there, without it.
+  const readerTriage = useReaderTriage();
+  const triage = kind === "opportunity" && !serverPaging ? readerTriage : null;
+  if (!triage && NOTICE_VIEWS.find((entry) => entry._id === view)?.triage) view = "upcoming";
+  const triaged = !!triage;
+  const { objectMetadata } = triaged ? TRIAGED_OPPORTUNITIES : TABLES[kind];
   const hidden = hiddenFields.join(",");
   const now = useProcurementClock();
   const today = zoneToday(now);
-  // One view object per preset: a new object reloads the table's filters and sorts.
+  // One view object per preset: a new object reloads the table's filters and sorts, so this
+  // follows whether there is a triage, not each change to it.
   const hydratedView = useMemo(
-    () => presetView(kind, view, hidden ? hidden.split(",") : [], today),
-    [kind, view, hidden, today],
+    () => presetView(kind, view, hidden ? hidden.split(",") : [], today, triaged),
+    [kind, view, hidden, today, triaged],
   );
   // Only opportunities carry BC Bid's facts, and only their list offers the filters.
   const offersSourceFilters = kind === "opportunity";
@@ -478,17 +504,23 @@ export function NoticeTable({
   // The search box also finds notices by their text (where the source can search it): those
   // notices carry the words in their search text, so the table's own search keeps them.
   const textMatches = useNoticeTextMatches(kind, serverPaging ? "" : search ?? "");
+  const entries = triage?.entries;
+  const triagedRows = useMemo<(NoticeRow | TriagedRow)[]>(
+    () => (entries ? joinTriage(drawnRows, entries, view === "archived") : drawnRows),
+    [drawnRows, entries, view],
+  );
   const records = useMemo(
     () =>
       textMatches.keys.size
-        ? drawnRows.map((row) =>
+        ? triagedRows.map((row) =>
             textMatches.keys.has(row._id)
               ? { ...row, _searchText: `${row._searchText}\n${textMatches.query}` }
               : row,
           )
-        : drawnRows,
-    [drawnRows, textMatches],
+        : triagedRows,
+    [triagedRows, textMatches],
   );
+  const { onUpdate, rowMenuSections } = useTriageEditing(triage, rows);
   const { openNotice } = nav;
   const renderCell = useCells(
     useCallback(
@@ -496,7 +528,8 @@ export function NoticeTable({
       [openNotice],
     ),
   );
-  const loading = progress ? !progress.done && records.length === 0 : false;
+  // Until the triage arrives a triaged list would show archived rows, so it waits for it.
+  const loading = (progress ? !progress.done && records.length === 0 : false) || (!!triage && !entries);
   const [filtering, setFiltering] = useState(false);
 
   // The BC Bid filters as the filter editor is changing them; null while they are as applied.
@@ -545,6 +578,7 @@ export function NoticeTable({
           showAggregateFooter={false}
           renderCell={renderCell}
           renderPhoneCard={renderPhoneCard}
+          rowMenuSections={rowMenuSections}
           emptyState={
             emptyState ?? (
               <div className="record-table__empty">
@@ -586,17 +620,19 @@ export function NoticeTable({
         }
         onRecordClick={(recordId) => openNotice(recordId)}
         onRecordIntent={source.prefetchRecord}
+        onUpdate={onUpdate}
       >
         {onSearch && <SearchSync search={search ?? ""} onSearch={onSearch} />}
         <RecordTableToolbar
           label={label ?? objectMetadata.labelPlural}
           icon={<FileSearch size={14} />}
           collapsibleSearch
+          searchPlaceholder={source.searchText && !serverPaging ? `Search ${objectMetadata.labelPlural.toLowerCase()} and notice text…` : undefined}
           onOpenFilter={() => (filtering ? closeFilters() : setFiltering(true))}
           extraFilterCount={sourceChips.length}
           {...(onChangeView && kind === "opportunity"
             ? {
-                views: NOTICE_VIEWS,
+                views: triage ? NOTICE_VIEWS : NOTICE_VIEWS.filter((entry) => !entry.triage),
                 currentViewId: view,
                 onChangeView: (viewId: string) => {
                   if (isNoticeView(viewId)) onChangeView(viewId);
