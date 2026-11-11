@@ -1,8 +1,9 @@
 /**
  * The workspace's bid triage (convex/procurementTriage.ts): who may read and
  * save it, what it accepts, workspace isolation, clearing, and the action
- * item (one task per opportunity, only on request). No catalog is loaded: the
- * triage must work whichever catalog the workspace reads.
+ * item (a task holding the opportunity as an attachment, only on request; a
+ * second one only when asked for). No catalog is loaded: the triage must work
+ * whichever catalog the workspace reads.
  */
 import assert from "node:assert/strict";
 import { convexTest } from "convex-test";
@@ -31,8 +32,8 @@ const as = (subject: string) => t.withIdentity({ subject, issuer });
 const viewer = as("viewer"), director = as("director"), admin = as("admin");
 const triage = (recordKey: string, reviewed: boolean, classification: string, societyId = ids.societyId) => ({ societyId, recordKey, reviewed, classification });
 const listed = async (who = viewer, societyId = ids.societyId) =>
-  ((await who.query(api.procurementTriage.list, { societyId })) as { recordKey: string; reviewed: boolean; classification: string; updatedBy: string | null; taskId: string | null }[])
-    .map(({ recordKey, reviewed, classification, updatedBy, taskId }) => ({ recordKey, reviewed, classification, updatedBy, taskId }))
+  ((await who.query(api.procurementTriage.list, { societyId })) as { recordKey: string; reviewed: boolean; classification: string; updatedBy: string | null }[])
+    .map(({ recordKey, reviewed, classification, updatedBy }) => ({ recordKey, reviewed, classification, updatedBy }))
     .sort((a, b) => a.recordKey.localeCompare(b.recordKey));
 
 // Saving: documents:write (Director and up), a known classification, opportunities only, in one's own workspace.
@@ -47,17 +48,20 @@ for (const [key, reviewed, classification] of [["opportunity:1", false, "doable"
   await director.mutation(api.procurementTriage.set, triage(key, reviewed, classification));
 await as("foreign").mutation(api.procurementTriage.set, triage("opportunity:1", true, "not_doable", ids.foreign));
 assert.deepEqual(await listed(), [
-  { recordKey: "opportunity:1", reviewed: false, classification: "doable", updatedBy: "Director", taskId: null },
-  { recordKey: "opportunity:2", reviewed: true, classification: "possible", updatedBy: "Director", taskId: null },
-  { recordKey: "opportunity:3", reviewed: true, classification: "not_doable", updatedBy: "Director", taskId: null },
-  { recordKey: "opportunity:4", reviewed: true, classification: "", updatedBy: "Director", taskId: null },
+  { recordKey: "opportunity:1", reviewed: false, classification: "doable", updatedBy: "Director" },
+  { recordKey: "opportunity:2", reviewed: true, classification: "possible", updatedBy: "Director" },
+  { recordKey: "opportunity:3", reviewed: true, classification: "not_doable", updatedBy: "Director" },
+  { recordKey: "opportunity:4", reviewed: true, classification: "", updatedBy: "Director" },
 ], "A viewer reads the whole workspace's triage, and none of another workspace's");
 await director.mutation(api.procurementTriage.set, triage("opportunity:4", false, ""));
 assert.equal((await listed()).some((row) => row.recordKey === "opportunity:4"), false, "Clearing both removes the row");
 
 // "Create action item": tasks:write (Admin and up), only once reviewed and classified as something to bid on.
 const notice = { title: "Bridge 2", buyer: "Test City", closes: "2026-12-04", closesText: "Dec 4, 2026 2:00 PM (PST)", reference: "REF-2" };
-const taskOf = (recordKey: string, facts = notice) => ({ societyId: ids.societyId, recordKey, notice: facts });
+const taskOf = (recordKey: string, facts = notice, another?: boolean) => ({ societyId: ids.societyId, recordKey, notice: facts, ...(another ? { another } : {}) });
+const holders = async (recordKey: string) =>
+  (await t.run((ctx) => ctx.db.query("taskAttachments").withIndex("by_society", (q) => q.eq("societyId", ids.societyId).eq("kind", "opportunity").eq("refKey", recordKey)).collect()))
+    .map((row) => String(row.taskId)).sort();
 await assert.rejects(director.mutation(api.procurementTriage.createTask, taskOf("opportunity:2")), /Permission tasks:write/, "Triage needs documents:write; a task needs tasks:write too");
 await assert.rejects(admin.mutation(api.procurementTriage.createTask, taskOf("opportunity:1")), /Review and classify/, "Classified but not reviewed");
 await assert.rejects(admin.mutation(api.procurementTriage.createTask, taskOf("opportunity:3")), /Review and classify/, "Not doable");
@@ -68,14 +72,24 @@ const made = await admin.mutation(api.procurementTriage.createTask, taskOf("oppo
 assert.equal(made.created, true);
 const tasks = await t.run((ctx) => ctx.db.query("tasks").collect());
 assert.deepEqual(tasks.map((row) => [String(row._id), row.title, row.status, row.dueDate, row.tags]), [[made.taskId, "Prepare bid: Bridge 2", "Todo", "2026-12-04", ["procurement"]]]);
-assert.match(tasks[0].description ?? "", /Buyer: Test City[\s\S]*Closes: Dec 4, 2026 2:00 PM \(PST\)[\s\S]*Classification: Possible[\s\S]*notice=opportunity%3A2/);
+assert.match(tasks[0].description ?? "", /Buyer: Test City[\s\S]*Closes: Dec 4, 2026 2:00 PM \(PST\)[\s\S]*Classification: Possible[\s\S]*Reference: REF-2/);
+const [attachment] = await t.run((ctx) => ctx.db.query("taskAttachments").collect());
+assert.deepEqual(
+  { taskId: String(attachment.taskId), kind: attachment.kind, refKey: attachment.refKey, title: attachment.title, subtitle: attachment.subtitle, dueDate: attachment.dueDate, dueText: attachment.dueText, attachedByName: attachment.attachedByName },
+  { taskId: made.taskId, kind: "opportunity", refKey: "opportunity:2", title: "Bridge 2", subtitle: "Test City", dueDate: "2026-12-04", dueText: "Dec 4, 2026 2:00 PM (PST)", attachedByName: "Admin" },
+  "The action item holds the opportunity, with the notice's facts",
+);
 assert.deepEqual(await admin.mutation(api.procurementTriage.createTask, taskOf("opportunity:2")), { taskId: made.taskId, created: false }, "Asking again returns the same task");
-assert.equal((await listed()).find((row) => row.recordKey === "opportunity:2")?.taskId, made.taskId);
+const second = await admin.mutation(api.procurementTriage.createTask, taskOf("opportunity:2", notice, true));
+assert.equal(second.created, true, "A second action item only when asked for");
+assert.deepEqual(await holders("opportunity:2"), [made.taskId, second.taskId].sort(), "One opportunity, two action items");
+assert.equal((await listed()).some((row) => "taskId" in row), false, "The triage no longer carries a task");
 await director.mutation(api.procurementTriage.set, triage("opportunity:2", false, ""));
-assert.equal((await listed()).find((row) => row.recordKey === "opportunity:2")?.taskId, made.taskId, "Clearing the triage keeps the link to its task");
-await t.run((ctx) => ctx.db.delete(tasks[0]._id));
-assert.equal((await listed()).find((row) => row.recordKey === "opportunity:2")?.taskId, null, "A deleted task no longer counts");
+assert.equal((await listed()).some((row) => row.recordKey === "opportunity:2"), false, "Clearing the triage removes its row");
+assert.equal((await holders("opportunity:2")).length, 2, "and keeps its action items");
 await director.mutation(api.procurementTriage.set, triage("opportunity:2", true, "doable"));
-assert.equal((await admin.mutation(api.procurementTriage.createTask, taskOf("opportunity:2"))).created, true, "and the action item can be made again");
+await t.run(async (ctx) => { for (const task of await ctx.db.query("tasks").collect()) await ctx.db.delete(task._id); });
+const again = await admin.mutation(api.procurementTriage.createTask, taskOf("opportunity:2"));
+assert.equal(again.created, true, "A deleted task no longer counts: the action item can be made again");
 
 console.log("procurement triage: ok");

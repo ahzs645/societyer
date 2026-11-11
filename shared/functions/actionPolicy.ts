@@ -152,6 +152,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (domain === "microsoftMeetings" || domain === "microsoftMeetingsActions") return "settings:write";
   if (name === "procurementCatalog:setSource") return "settings:write";
   if (domain === "procurementCatalog" || domain === "procurementCatalogActions") return "documents:read";
+  // Things attached to a task read and change with the task.
+  if (domain === "taskAttachments") return kind === "query" ? "tasks:read" : "tasks:write";
   const resource = RESOURCES[domain];
   if (!resource) throw new Error(`Unclassified application action: ${name}.`);
   // Raw meeting sources are working material for meeting editors, including reads.

@@ -290,8 +290,7 @@ export const procurementTables = {
     classification: v.string(),
     updatedAt: v.number(),
     updatedBy: v.optional(v.string()),
-    // The action item made from this opportunity (procurementTriage:createTask); at most one.
-    taskId: v.optional(v.id("tasks")),
+    // Its action items are tasks holding it as an attachment (taskAttachments, kind "opportunity").
   }).index("by_record", ["societyId", "recordKey"]),
   procurementEvidence: defineTable({
     ...scope,

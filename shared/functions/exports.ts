@@ -221,6 +221,7 @@ export const EXPORTABLE_TABLES = [
   "bylawRuleSets",
   "goals",
   "tasks",
+  "taskAttachments",
   "assets",
   "assetEvents",
   "assetMaintenance",
@@ -604,6 +605,12 @@ async function paginateForSociety(
     visibleRows = visibleRows.filter((_, index) => allows(parents[index]));
   }
   if (["generatedLegalDocuments", "legalPrecedentRuns", "legalSigners", "sourceEvidence", "minuteBookItems"].includes(table)) visibleRows = await filterDocumentLinkedRows(ctx, societyId, visibleRows, table);
+  if (table === "taskAttachments") {
+    // A document attachment carries the document's title: only documents the reader may open.
+    const allows = await documentAccessPredicate(ctx, societyId);
+    const documents = await Promise.all(visibleRows.map((row) => row.kind === "document" ? ctx.db.get(String(row.refKey), "documents") : null));
+    visibleRows = visibleRows.filter((row, index) => row.kind !== "document" || allows(documents[index]));
+  }
   visibleRows = await exportRowsForReader(ctx, societyId, table, visibleRows);
   return { ...page, page: visibleRows.map((row: Record<string, any>) => sanitizeRow(row, options)) };
 }

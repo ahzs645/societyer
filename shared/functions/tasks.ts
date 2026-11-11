@@ -16,6 +16,7 @@ import { tasksForReader } from "./minutesPrivacy";
 import { assertTaskEditBaseline, normalizedTaskPatch, type TaskClearableField, type TaskEditBaseline } from "../taskEditing";
 import { requirePermissionPortable } from "./permissions";
 import { exactDay, partialDate, requireEvidence } from "../evidenceReview";
+import { deleteTaskAttachments } from "./taskAttachments";
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -280,6 +281,7 @@ export async function taskRemove(ctx: PortableMutationCtx, { id }: { id: string 
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("tasks not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "tasks", id, candidate.societyId);
+  await deleteTaskAttachments(ctx, id);
   await ctx.db.delete(id);
 }
 

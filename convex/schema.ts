@@ -72,6 +72,7 @@ import { mcpOAuthTables } from "./tables/mcpOAuth";
 
 import { procurementTables } from "./tables/procurement";
 import { procurementAnalyticsTables } from "./tables/procurementAnalytics";
+import { taskAttachmentTables } from "./tables/taskAttachments";
 
 export default defineSchema({
   workspaceMfaPolicies: defineTable({
@@ -96,6 +97,7 @@ export default defineSchema({
   ...workspaceTransferTables,
   ...procurementTables,
   ...procurementAnalyticsTables,
+  ...taskAttachmentTables,
   developmentAuthEmails: defineTable({
     to: v.string(), subject: v.string(), text: v.string(),
     tag: v.union(v.literal("auth-verify-email"), v.literal("auth-reset-password")),
