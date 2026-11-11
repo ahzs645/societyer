@@ -82,12 +82,19 @@ export const setFolder = authorizedMutation(
     const procurementReviewFolder = folder.trim()
       ? validateWorkspaceProcurementReviewFolder(societyId, folder)
       : "";
+    const rollout = procurementReviewFolder
+      ? await ctx.db.query("procurementServiceRollouts").withIndex("by_society", q => q.eq("societyId", societyId)).unique()
+      : null;
+    const restoredServiceFolder = rollout?.convexRetirement && rollout.folder === procurementReviewFolder;
     await ctx.db.patch(societyId, {
       integrationSettings: {
         ...defaultIntegrationSettings(),
         ...society.integrationSettings,
         procurementReviewFolder,
-        procurementCatalogSource: society.integrationSettings?.procurementReviewFolder === procurementReviewFolder ? society.integrationSettings?.procurementCatalogSource ?? "convex" : "convex",
+        procurementCatalogSource: restoredServiceFolder || (
+          society.integrationSettings?.procurementReviewFolder === procurementReviewFolder &&
+          society.integrationSettings?.procurementCatalogSource === "service"
+        ) ? "service" : "convex",
       },
       updatedAt: Date.now(),
     });

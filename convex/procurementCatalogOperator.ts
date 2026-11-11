@@ -100,6 +100,7 @@ export const retirePage = internalMutation({
     const rollout = await retirementRollout(ctx, args.societyId);
     if (!rollout.convexRetirement?.detachedAt || rollout.convexRetirement.backupSha256 !== args.backupSha256 || !Object.hasOwn(retirementIndexes, args.table))
       throw new Error("Retirement requires a detached catalog, matching backup and a mirrored data table.");
+    if (rollout.convexRetirement.verification) throw new Error("Retirement has already been verified.");
     const page = await retirementRows(ctx, args.societyId, args.table as RetirementTable).paginate({
       cursor: args.cursor, numItems: 200, maximumRowsRead: 200, maximumBytesRead: 1_000_000,
     });
@@ -110,12 +111,29 @@ export const retirePage = internalMutation({
 
 export const retirementStatus = internalQuery({
   args: { societyId: v.id("societies") },
-  returns: v.object({ approved: v.boolean(), detached: v.boolean(), remainingTables: v.array(v.string()) }),
+  returns: v.object({ approved: v.boolean(), detached: v.boolean(), verified: v.boolean(), tables: v.array(v.string()) }),
   handler: async (ctx, { societyId }) => {
-    const rollout = await retirementRollout(ctx, societyId);
-    const remainingTables: RetirementTable[] = [];
-    for (const table of retirementTables) if (await retirementRows(ctx, societyId, table).first()) remainingTables.push(table);
-    return { approved: !!rollout.convexRetirement, detached: !!rollout.convexRetirement?.detachedAt, remainingTables };
+    const { convexRetirement } = await retirementRollout(ctx, societyId);
+    return { approved: !!convexRetirement, detached: !!convexRetirement?.detachedAt, verified: !!convexRetirement?.verification, tables: retirementTables };
+  },
+});
+
+/** Large deleted index ranges can time out. Record the verified post-purge export instead of scanning them again. */
+export const confirmRetirement = internalMutation({
+  args: { ...retirementScope, snapshotSha256: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const rollout = await retirementRollout(ctx, args.societyId);
+    const retirement = rollout.convexRetirement;
+    if (!retirement?.detachedAt || retirement.backupSha256 !== args.backupSha256 ||
+      args.backupSha256 === args.snapshotSha256 || !/^[a-f0-9]{64}$/.test(args.snapshotSha256))
+      throw new Error("Use a verified post-retirement snapshot and the original backup.");
+    if (retirement.verification) {
+      if (retirement.verification.snapshotSha256 !== args.snapshotSha256) throw new Error("Retirement was verified with a different snapshot.");
+      return null;
+    }
+    await ctx.db.patch(rollout._id, { convexRetirement: { ...retirement, verification: { snapshotSha256: args.snapshotSha256, verifiedAt: Date.now() } } });
+    return null;
   },
 });
 export const page = internalQuery({

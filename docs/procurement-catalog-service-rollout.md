@@ -2,9 +2,9 @@
 
 Status: **live for DDC North**, 2026-11-10. The Owner selected the catalog
 service at **23:32:06.992 UTC** after three real matching publications and the
-live publisher-hook test. Convex remains the parallel fallback until at least
-**2026-11-24 23:32:06.992 UTC** (4:32 PM Vancouver time). No fallback deletion
-is automatic.
+live publisher-hook test. The original fallback deadline was
+**2026-11-24 23:32:06.992 UTC** (4:32 PM Vancouver time). DDC North subsequently
+authorized early retirement of its Convex copy to reduce database usage.
 
 ## Confirmed choices
 
@@ -14,8 +14,9 @@ is automatic.
 - Use `catalog.ddcnorth.com`, reached through a dedicated Cloudflare Tunnel.
 - Include this workspace's published review evidence in its own protected file.
 - Require three distinct consecutive real publications to match before cutover.
-- Keep publishing to Convex in parallel for at least **14 days after cutover**.
-  The clock started at the cutover recorded above. No cleanup/deletion is automatic.
+- The default rollout keeps a **14-day parallel fallback** after cutover.
+  A workspace-specific retirement requires an explicit operator decision and a
+  verified backup. No cleanup is automatic.
 
 The implementation/run commands are in
 [`server/procurement-catalog/README.md`](../server/procurement-catalog/README.md).
@@ -53,22 +54,25 @@ inside the same minute, as well as at minute/day changes.
 Settings editors can open the catalog service preview from the snapshot-folder
 settings. The preview shows the consecutive qualification count, enables switching
 only after three matches and a loaded preview, and provides a Convex fallback
-control after switching. The server independently enforces the same gates.
+control while that fallback is available. The server independently enforces
+the same gates.
 An administrator can also test `?catalogPreview=service` before the source flag changes.
 The server requires settings-write permission for this preview; it does not
 change the workspace source. Normal readers remain on Convex during qualification.
 
 Zoer's default remains `convex`. `parallel` additionally publishes/qualifies the
-service before ready/journal ACK. `service` is refused until the qualified
-workspace completes its fallback period. Other workspaces are not provisioned
-implicitly, and no project database is created or replaced.
+service before ready/journal ACK. `service` is allowed after the qualified
+workspace completes its fallback period or explicitly retires its Convex copy.
+Other workspaces are not provisioned implicitly, and no project database is
+created or replaced.
 
 ## Live state and limits
 
 - The shared Convex deployment has the additive grant, receipt and rollout
-  functions/indexes. After cutover a real policy query returned
+  functions/indexes. Before early retirement, a real policy query returned
   `serviceOnlyAllowed: false`, `fallbackUntil: 1795563126992`, enforcing the
-  full 14-day minimum before service-only publication can be considered.
+  default parallel fallback. The DDC North retirement record now allows
+  service-only publication.
 - DDC-only signing configuration is installed. No other integration secrets,
   memberships or sign-in rules were replaced.
 - Both Cloudflare Pages frontends have the reader and administrator source
@@ -85,7 +89,7 @@ implicitly, and no project database is created or replaced.
   visible `Some sources unverified` caveat and publication-state notices as
   Convex. Source selection persisted through fresh reloads without a preview
   query parameter. Settings shows `This workspace reads the catalog service`
-  and the `Use Convex fallback` control.
+  and offered the `Use Convex fallback` control during parallel publication.
 - The actual browser download of `Requirements & Specifications - Requirements
   and Specifications.pdf` succeeded through the existing SharePoint broker.
   The downloaded file is 205,384 bytes with SHA-256
@@ -260,25 +264,56 @@ source choice to Convex and do not inherit deployment-bound service receipts.
 
 ## Continuing operations
 
-1. Keep the reviewed local watcher running and publish to Convex in parallel
-   through at least the fallback deadline. Complete parity while each exact
-   generation is current and retain its checksummed evidence before baseline ACK.
+1. Keep the reviewed local watcher running. While a workspace uses parallel
+   publishing, complete parity while each exact generation is current and retain
+   its checksummed evidence before baseline ACK. In service-only mode, verify
+   the exact live service receipt and record source coverage before ACK.
 2. Source collection is still partial. Preserve the visible coverage caveat
    and unavailable attachment evidence; finishing notice collection is not proof
    that the attachment audit or other retained sources are complete.
-3. Roll back from Catalog source settings using `Use Convex fallback` if needed.
-   Re-enabling the service after rollback starts a new 14-day minimum.
-4. No cleanup is scheduled. Backups and a separate bounded retirement review are
-   required before deleting fallback records or older derived releases.
+3. Before retirement, `Use Convex fallback` in Catalog source settings rolls
+   back to Convex. Re-enabling the service after rollback starts a new fallback
+   period. After retirement, restoring a Convex catalog requires an operator
+   to reopen the import path and verify a scoped restore before switching sources.
 
 On November 10, a read-only Convex inventory found only one physical procurement
 generation for DDC North. It was the active fallback, so there were no inactive
 generations to retire. Incremental publishing advances the logical publication
 without creating another physical generation: use `procurementImport:generations`
-and its `active` value when inventorying stored rows. Recheck after the fallback
-deadline, verify service-only publication and a scoped restore from backup, and
-review the exact deletion scope before retiring the fallback. The existing
-inactive-generation retirement tool does not retire the active fallback.
+and its `active` value when inventorying stored rows.
+
+### Retire a workspace's Convex mirror
+
+1. Park its parallel publisher between waves. Export a private Convex snapshot,
+   validate the ZIP and workspace inventory, and test preparing a scoped restore
+   with `scripts/procurement/restore-export.py`.
+2. Run `procurementCatalogOperator:approveRetirement` with the workspace ID,
+   backup SHA-256, and exact Convex generation and inventory hash. It checks
+   the last qualified serving service publication and freezes new Convex imports.
+3. Verify the service-only publisher against the live service receipt and
+   resume automatic service publication. Run
+   `procurementCatalogOperator:detachRetiredCatalog` with the workspace ID,
+   backup SHA-256, and serving service publication ID.
+4. Run `npx tsx scripts/procurement/purge-retired-catalog.ts --deployment NAME
+   --workspace ID --backup PRIVATE_ZIP --checkpoint PRIVATE_JSON` and retain
+   the checkpoint for retries. Verify a fresh export has no mirrored rows for
+   the workspace and record its SHA-256 with
+   `procurementCatalogOperator:confirmRetirement`. Check
+   `procurementCatalogOperator:retirementStatus` for `verified: true`.
+   Source/service receipts, permissions, audit history and SharePoint originals
+   remain available.
+
+### DDC North retirement result
+
+On November 10, 2026 Vancouver time, the watcher replayed the existing
+publication through the service-only path and verified its live receipt before
+starting the next collection interval. The pre-retirement export passed ZIP
+validation and prepared a complete local restore package. The production
+cleanup removed 172,295 DDC North rows, including the serving pointer and all
+mirrored search, taxonomy and analytics rows. The post-retirement export
+confirmed zero remaining mirrored rows, about 296 MB of exported JSONL removed
+before indexes, and a ready service publication of 4,443 opportunities and
+21,877 awards. The DDC portal hides the fallback control after retirement.
 
 Signed-in Owner reads, complete lists, filters, notice metadata, real broker
 downloads, body search and live analytics are verified. Exact within-minute

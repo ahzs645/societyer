@@ -80,6 +80,7 @@ export const procurementTables = {
     convexRetirement: v.optional(v.object({
       backupSha256: v.string(), generation: v.string(), inventoryHash: v.string(),
       approvedAt: v.number(), detachedAt: v.optional(v.number()),
+      verification: v.optional(v.object({ snapshotSha256: v.string(), verifiedAt: v.number() })),
     })),
   }).index("by_society", ["societyId"]),
   procurementSourcePublications: defineTable({

@@ -84,14 +84,27 @@ await assert.rejects(t.mutation(api.procurementCatalogOperator.detachRetiredCata
 await t.mutation(api.procurementCatalogOperator.detachRetiredCatalog, detach);
 const otherTerm = await t.run(async ctx => {
   const term = { releaseId: "fixture", key: "fixture:1", scheme: "fixture", version: "1", code: "1", title: "Fixture term", parentKey: null };
-  await ctx.db.insert("procurementTaxonomyTerms", { societyId: fixture.societyId, ...term });
+  for (let i = 0; i < 202; i++) {
+    await ctx.db.insert("procurementTaxonomyTerms", { societyId: fixture.societyId, ...term, key: `fixture:${i}` });
+  }
   return ctx.db.insert("procurementTaxonomyTerms", { societyId: fixture.other, ...term });
 });
 await assert.rejects(t.mutation(api.procurementCatalogOperator.retirePage, { ...retirePage, table: "procurementServicePublications" }), /mirrored data table/);
-assert.equal((await t.mutation(api.procurementCatalogOperator.retirePage, retirePage)).removed, 1);
-assert.deepEqual(await t.query(api.procurementCatalogOperator.retirementStatus, args), { approved: true, detached: true, remainingTables: [] });
+const first = await t.mutation(api.procurementCatalogOperator.retirePage, retirePage);
+assert.equal(first.removed, 200);
+assert.equal(first.done, false);
+const second = await t.mutation(api.procurementCatalogOperator.retirePage, { ...retirePage, cursor: first.cursor });
+assert.equal(second.removed, 2);
+assert.equal(second.done, true);
+assert.equal((await t.query(api.procurementCatalogOperator.retirementStatus, args)).verified, false);
+await t.mutation(api.procurementCatalogOperator.confirmRetirement, { ...args, backupSha256: retirement.backupSha256, snapshotSha256: "c".repeat(64) });
+assert.equal((await t.query(api.procurementCatalogOperator.retirementStatus, args)).verified, true);
+await assert.rejects(t.mutation(api.procurementCatalogOperator.retirePage, retirePage), /already been verified/);
 assert(await t.run(ctx => ctx.db.get(otherTerm)));
 assert.equal((await reader.query(api.procurementStatus.get, args)).lastSuccessful.generation, "publication-3-reader-v2");
+await owner.mutation(api.procurementReview.setFolder, { ...args, folder: "" });
+await owner.mutation(api.procurementReview.setFolder, { ...args, folder: fixture.folder });
+assert.equal((await reader.query(api.procurementCatalog.configuration, args)).source, "service");
 await t.run(ctx => ctx.db.patch(fixture.societyId, { disabledModules: [] }));
 await assert.rejects(reader.action(api.procurementCatalogActions.grant, args), /disabled/);
 console.log("Catalog authority checks passed: scoped grants, settings permissions, immutable receipts, parity qualification, fallback and workspace-scoped retirement.");

@@ -25,9 +25,9 @@ try {
     if (state.deployment !== deployment || state.societyId !== societyId || state.backupSha256 !== backupSha256)
       throw new Error("The checkpoint belongs to another deployment, workspace or backup.");
   } else {
-    const status = await operator.run("procurementCatalogOperator:retirementStatus", JSON.stringify({ societyId })) as { detached: boolean; remainingTables: string[] };
+    const status = await operator.run("procurementCatalogOperator:retirementStatus", JSON.stringify({ societyId })) as { detached: boolean; verified: boolean; tables: string[] };
     if (!status.detached) throw new Error("Detach the backed-up catalog before purging its rows.");
-    state = { ...identity, tables: status.remainingTables, index: 0, cursor: null, removed: 0 };
+    state = { ...identity, tables: status.verified ? [] : status.tables, index: 0, cursor: null, removed: 0 };
   }
   while (state.index < state.tables.length) {
     const table = state.tables[state.index];
