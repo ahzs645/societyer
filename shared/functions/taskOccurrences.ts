@@ -52,10 +52,11 @@ export async function createNextTaskOccurrence(ctx: PortableMutationCtx, task: P
   if (!rule || !isIsoDay(task.dueDate)) return null;
   const society = await ctx.db.get(String(task.societyId), "societies");
   const today = organizationTodayForTasks(society, nowISO);
-  // Integration hook (start dates): once tasks have `startDate`, pass
-  // `{ dueDate: task.dueDate, startDate: task.startDate }` and store `next.startDate`.
-  const next = nextTaskOccurrence({ dueDate: task.dueDate }, rule, { today });
+  // A start date moves with the due date, keeping the same distance before it.
+  const next = nextTaskOccurrence({ dueDate: task.dueDate, ...(isIsoDay(task.startDate) ? { startDate: task.startDate } : {}) }, rule, { today });
   if (!next) return null;
+  // A repeating sub-task stays under its parent while the parent exists.
+  const parent = typeof task.parentTaskId === "string" ? await ctx.db.get(task.parentTaskId, "tasks") : null;
   const copied: Record<string, unknown> = {};
   for (const field of COPIED_FIELDS) if (task[field] !== undefined) copied[field] = task[field];
   const checklist = uncheckedChecklist(task.checklist);
@@ -65,6 +66,8 @@ export async function createNextTaskOccurrence(ctx: PortableMutationCtx, task: P
     tags: Array.isArray(task.tags) ? task.tags : [],
     status: "Todo",
     dueDate: next.dueDate,
+    ...(next.startDate ? { startDate: next.startDate } : {}),
+    ...(parent && parent.societyId === task.societyId ? { parentTaskId: parent._id } : {}),
     ...(checklist ? { checklist } : {}),
     recurrence: rule,
     recurrencePreviousTaskId: task._id,
