@@ -33,3 +33,33 @@ test("service analytics refresh at a deadline inside the same minute", async ({ 
   const after = await page.evaluate(() => (window as any).__analysisRequests.at(-1).asOf);
   expect(Math.floor(after / 60_000)).toBe(Math.floor(before / 60_000));
 });
+
+test("buyer and issued-for pages render both lists on the catalog service", async ({ page }) => {
+  const failures: string[] = [];
+  page.on("pageerror", error => failures.push(error.message));
+  for (const [field, name] of [["buyer", "Example municipality"], ["issuedFor", "Example public agency"]]) {
+    await page.goto(`/tests/fixtures/procurement-service.html?${new URLSearchParams({ [field]: name })}`);
+    await expect(page.getByRole("heading", { name, exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("region", { name: /^Opportunities/ }).getByText("Fictional road project", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: /^Awards/ }).getByText("Synthetic award 0", { exact: true })).toBeVisible();
+  }
+  expect(failures).toEqual([]);
+});
+
+test("opportunity triage follows the notice layout and page overscroll is contained", async ({ page, isMobile }) => {
+  await page.goto("/tests/fixtures/procurement-service.html?notice=opportunity%3Aroads&fixtureTriage=1");
+  const triage = page.getByRole("region", { name: "Our bid triage" });
+  await expect(triage).toBeVisible();
+  const details = page.getByRole("complementary", { name: "Notice details" });
+  if (isMobile) {
+    await expect(details).toHaveCount(0);
+    const card = await triage.boundingBox();
+    const tabs = await page.getByRole("tablist").first().boundingBox();
+    expect(card!.y + card!.height).toBeLessThanOrEqual(tabs!.y);
+  } else {
+    await expect(details.getByRole("region", { name: "Our bid triage" })).toBeVisible();
+    await expect(triage).toHaveCSS("flex-direction", "column");
+  }
+  await expect(page.locator("html")).toHaveCSS("overscroll-behavior-y", "none");
+  await expect(page.locator("main.page")).toHaveCSS("overscroll-behavior-y", "none");
+});

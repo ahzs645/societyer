@@ -25,7 +25,7 @@ const { ProcurementReader } = await import('/src/features/procurementReview/read
 const { getFunctionName } = await import('convex/server');
 const { buildAnalysis } = await import('/shared/procurementAnalytics');
 const TOTAL = 21877;
-const awards = Array.from({length:TOTAL},(_,i)=>({recordKey:`award:${String(i).padStart(5,'0')}`,kind:'award',title:`Synthetic award ${i}`,organization:'Example municipality',issuedFor:'',status:'Awarded',date:'2026-11-01',dateText:'',reference:'',documents:i===0?12:0,listedDocuments:i===0?12:0,supplier:`Supplier ${i%50}`,value:1000+i,currency:'CAD',procurementType:'Services'}));
+const awards = Array.from({length:TOTAL},(_,i)=>({recordKey:`award:${String(i).padStart(5,'0')}`,kind:'award',title:`Synthetic award ${i}`,organization:'Example municipality',issuedFor:i===0?'Example public agency':'',status:'Awarded',date:'2026-11-01',dateText:'',reference:'',documents:i===0?12:0,listedDocuments:i===0?12:0,supplier:`Supplier ${i%50}`,value:1000+i,currency:'CAD',procurementType:'Services'}));
 const closingAt = new URLSearchParams(location.search).has('deadlineSoon') ? new Date(Date.now()+5000).toISOString() : '2027-01-01T20:00:00Z';
 const opportunity = {...awards[0],recordKey:'opportunity:roads',kind:'opportunity',title:'Fictional road project',status:'Open',date:'2027-01-01',analyticsJson:JSON.stringify({closingAt,sourceId:'bcbid'})};
 const catalog = {publicationId:'synthetic',generation:'synthetic-reader-v2',publishedAt:new Date().toISOString(),counts:{opportunity:1,award:TOTAL}};
@@ -49,7 +49,13 @@ window.fetch=async function(url,init){
 };
 const originalAction=localDataClient.action.bind(localDataClient);
 localDataClient.action=(reference,args)=>getFunctionName(reference)==='procurementCatalogActions:grant'?Promise.resolve({token:'synthetic-only',expiresAt:Date.now()+600000,baseUrl:'https://catalog.fixture.test'}):originalAction(reference,args);
-function ServiceFixture(){const access=useCatalogAccess('synthetic-workspace','https://catalog.fixture.test');const source=React.useMemo(()=>createHttpReaderSource(access,catalog),[access]);return h(ProcurementReader,{source,header:h('h1',null,'Synthetic service catalog')});}
+const rejectWrite = async () => { throw new Error('The catalog fixture has no write backend'); };
+const triage = new URLSearchParams(location.search).has('fixtureTriage') ? {
+  societyId: 'synthetic-workspace', entries: new Map(), canEdit: true,
+  canCreateTask: true, actionItems: new Map(),
+  set: rejectWrite, createTask: rejectWrite, addToTask: rejectWrite,
+} : null;
+function ServiceFixture(){const access=useCatalogAccess('synthetic-workspace','https://catalog.fixture.test');const source=React.useMemo(()=>createHttpReaderSource(access,catalog),[access]);return h(ProcurementReader,{source,triage,header:h('h1',null,'Synthetic service catalog')});}
 createRoot(document.getElementById('root')).render(
   h(React.StrictMode,null,h(ConvexProvider, { client: localDataClient }, h(AuthProvider, null, h(ToastProvider, null, h(ConfirmProvider, null, h(PromptProvider, null, h(BrowserRouter, null,
     h(WorkspaceReady, null, h('main', {className:'page procurement-review',style:{height:'100dvh',overflowY:'auto'}}, h(ServiceFixture))))))))),
