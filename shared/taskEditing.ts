@@ -2,16 +2,23 @@
 import { meetingFieldValuesMatch } from "./meetingConcurrency";
 
 export const TASK_CLEARABLE_FIELDS = [
-  "description", "assignee", "assigneePersonId", "dueDate", "committeeId", "goalId",
+  "description", "assignee", "assigneePersonId", "dueDate", "startDate", "committeeId", "goalId",
   "meetingId", "agendaItemId", "filingId", "workflowId", "documentId", "commitmentId",
   "eventId", "completionNote",
 ] as const;
 export type TaskClearableField = (typeof TASK_CLEARABLE_FIELDS)[number];
+/**
+ * Clearable fields the task form never sends: the parent of a sub-task
+ * ("Make this a separate task") and the manual board position.
+ */
+export const TASK_STRUCTURE_CLEARABLE_FIELDS = ["parentTaskId", "position"] as const;
+export type TaskStructureClearableField = (typeof TASK_STRUCTURE_CLEARABLE_FIELDS)[number];
+export type TaskClearField = TaskClearableField | TaskStructureClearableField;
 export const TASK_EDITABLE_FIELDS = [
   "title", "status", "priority", "responsibleUserIds", "tags", "checklist", ...TASK_CLEARABLE_FIELDS,
 ] as const;
 export type TaskEditBaseline = Partial<Record<(typeof TASK_EDITABLE_FIELDS)[number], unknown>>;
-const clearable = new Set<string>(TASK_CLEARABLE_FIELDS);
+const clearable = new Set<string>([...TASK_CLEARABLE_FIELDS, ...TASK_STRUCTURE_CLEARABLE_FIELDS]);
 const editable = new Set<string>(TASK_EDITABLE_FIELDS);
 
 /** Validate even in the portable runtime, where Convex argument validators do not run. */

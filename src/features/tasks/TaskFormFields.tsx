@@ -21,6 +21,7 @@ import { DatePicker } from "../../components/DatePicker";
 import { formatDate } from "../../lib/format";
 import { PersonPicker, useDirectoryPeople, type DirectoryPersonOption } from "../../components/PersonPicker";
 import { TASK_CREATE_STATUSES, TASK_STATUSES as ALL_TASK_STATUSES, taskStatusLabel } from "../../../shared/taskStatus";
+import { taskScheduleProblem } from "../../../shared/taskSchedule";
 
 /** Every status a task can hold (B6: Unknown and Cancelled come from imported history). */
 export const TASK_STATUSES = ALL_TASK_STATUSES;
@@ -33,6 +34,7 @@ export type TaskFormValue = {
   priority: string;
   assignee: string;
   dueDate: string;
+  startDate: string;
   responsibleUserIds: string[];
   committeeId: string;
   goalId: string;
@@ -59,6 +61,7 @@ export function makeTaskFormDefaults(initial?: TaskFormInitialValues): TaskFormV
     priority: initial?.priority ?? "Medium",
     assignee: initial?.assignee ?? "",
     dueDate: initial?.dueDate ?? "",
+    startDate: initial?.startDate ?? "",
     responsibleUserIds: [...new Set(initial?.responsibleUserIds ?? (initial?.responsibleUserId ? [initial.responsibleUserId] : []))],
     committeeId: initial?.committeeId ?? "",
     goalId: initial?.goalId ?? "",
@@ -165,6 +168,12 @@ export function TaskFormFields({
           <DatePicker
             value={value.dueDate}
             onChange={(v) => onChange({ dueDate: v })}
+          />
+        </Field>
+        <Field label="Start date" error={taskScheduleProblem(value.startDate, value.dueDate) ?? undefined}>
+          <DatePicker
+            value={value.startDate}
+            onChange={(v) => onChange({ startDate: v })}
           />
         </Field>
       </div>

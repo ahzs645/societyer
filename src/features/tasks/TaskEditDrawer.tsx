@@ -18,6 +18,7 @@ import { TaskFormFields, makeTaskFormDefaults, type TaskFormData, type TaskFormI
 import { TaskChecklist } from "./TaskChecklist";
 import { TaskDiscussion, TaskStateBanner } from "./TaskDetailExtras";
 import { HistoricalActionSource } from "./HistoricalActionSource";
+import { TaskSubtasksSection, useTaskFamily } from "./TaskSubtasks";
 import { isoDay, startOfToday, type TaskRecord } from "./taskModel";
 
 type Draft = TaskFormValue & { tags: string[]; checklist: TaskChecklistItem[]; checklistDraft: string };
@@ -31,6 +32,8 @@ type Props = {
   onClose: () => void;
   onCreated?: (id: Id<"tasks">) => void;
   onPromote?: (task: TaskRecord) => Promise<void>;
+  /** Open another task (a sub-task or its parent) in place of this one. */
+  onOpenTask?: (id: string) => void;
 };
 
 export function TaskEditDrawer(props: Props) {
@@ -53,7 +56,7 @@ function isDraft(value: unknown): value is Draft {
     && Array.isArray(row.tags) && row.tags.every((tag) => typeof tag === "string")
     && Array.isArray(row.checklist) && row.checklist.every((item) => item && typeof item.id === "string" && typeof item.title === "string" && typeof item.done === "boolean");
 }
-function TaskEditor({ task, societyId, data, canManage, initialValues, presentation = "drawer", onClose, onCreated, onPromote }: Props) {
+function TaskEditor({ task, societyId, data, canManage, initialValues, presentation = "drawer", onClose, onCreated, onPromote, onOpenTask }: Props) {
   const update = usePermissionedMutation(api.tasks.update, canManage);
   const create = usePermissionedMutation(api.tasks.create, canManage);
   const remove = usePermissionedMutation(api.tasks.remove, canManage);
@@ -79,6 +82,11 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
   const dirty = controller.dirty();
   const close = useDirtyCloseGuard(dirty, () => { controller.discard(); onClose(); }, "task edits");
   const guardedClose = () => { if (!inFlight.current) void close(); };
+  const family = useTaskFamily(societyId, task ? String(task._id) : undefined);
+  // Opening a sub-task or the parent leaves this task, so unsaved edits ask first.
+  const openTarget = useRef<string | null>(null);
+  const leaveForTask = useDirtyCloseGuard(dirty, () => { controller.discard(); if (openTarget.current) onOpenTask?.(openTarget.current); }, "task edits");
+  const openOtherTask = onOpenTask ? (id: string) => { if (inFlight.current) return; openTarget.current = id; void leaveForTask(); } : undefined;
   const patch = (value: Partial<Draft>) => controller.change((current) => ({ ...current, ...value }));
 
   const save = async () => {
@@ -120,7 +128,10 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
 
   const deleteTask = async () => {
     if (!task || !canManage || inFlight.current) return;
-    if (!await confirm({ title: "Delete task?", message: `"${task.title}" will be permanently removed.`, confirmLabel: "Delete", tone: "danger" })) return;
+    const subtasks = family.children.length;
+    if (!await confirm({ title: "Delete task?", message: subtasks
+      ? `"${task.title}" and its ${subtasks} sub-task${subtasks === 1 ? "" : "s"} will be permanently removed.`
+      : `"${task.title}" will be permanently removed.`, confirmLabel: "Delete", tone: "danger" })) return;
     if (!state.recovery.journal?.isActive()) return;
     inFlight.current = true; setSaving(true);
     try {
@@ -152,6 +163,7 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
       <TaskFormFields readOnly={!canManage || saving} value={form} onChange={patch} data={data} mode={task ? "edit" : "create"} />
       <TaskChecklist draft={form.checklistDraft} onDraftChange={(checklistDraft) => patch({ checklistDraft })} items={form.checklist} onChange={(checklist) => patch({ checklist })} readOnly={!canManage || saving} />
     </fieldset>
+    {task && <TaskSubtasksSection societyId={societyId} task={task} family={family} canManage={canManage && !saving} onOpenTask={openOtherTask} />}
     {task && <TaskDiscussion taskId={String(task._id)} />}
   </>;
   return presentation === "modal"
