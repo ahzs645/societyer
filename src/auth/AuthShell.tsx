@@ -38,6 +38,8 @@ export function AuthShell({ title, lede, children, after, help, variant = "card"
   const capabilities = useAuthCapabilities();
   // A domain mapped to one workspace signs in as that workspace.
   const domain = useAuth().domainWorkspace;
+  const signInSymbolBrandId = domain?.origin === import.meta.env.VITE_WORKSPACE_SYMBOL_SIGN_IN_ORIGIN
+    ? import.meta.env.VITE_WORKSPACE_SYMBOL_BRAND_ID : undefined;
   const instance = domain === null ? authInstanceLabel(capabilities) : null;
   // On a mapped domain only that workspace's own contact is shown: the
   // deployment-wide address may belong to another organization sharing it.
@@ -73,7 +75,10 @@ export function AuthShell({ title, lede, children, after, help, variant = "card"
           </span>
           {domain && (
             <span className="auth__workspace">
-              <WorkspaceLogo organization={{ name: domain.workspaceName, logoUrl: domain.logoUrl, logoDarkUrl: domain.logoDarkUrl }} />
+              <WorkspaceLogo
+                organization={{ name: domain.workspaceName, logoUrl: domain.logoUrl, logoDarkUrl: domain.logoDarkUrl }}
+                instanceSymbolBrandId={signInSymbolBrandId}
+              />
               <span>{domain.workspaceName}</span>
             </span>
           )}

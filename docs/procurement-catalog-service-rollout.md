@@ -271,6 +271,15 @@ source choice to Convex and do not inherit deployment-bound service receipts.
 4. No cleanup is scheduled. Backups and a separate bounded retirement review are
    required before deleting fallback records or older derived releases.
 
+On November 10, a read-only Convex inventory found only one physical procurement
+generation for DDC North. It was the active fallback, so there were no inactive
+generations to retire. Incremental publishing advances the logical publication
+without creating another physical generation: use `procurementImport:generations`
+and its `active` value when inventorying stored rows. Recheck after the fallback
+deadline, verify service-only publication and a scoped restore from backup, and
+review the exact deletion scope before retiring the fallback. The existing
+inactive-generation retirement tool does not retire the active fallback.
+
 Signed-in Owner reads, complete lists, filters, notice metadata, real broker
 downloads, body search and live analytics are verified. Exact within-minute
 deadline refresh is additionally covered by the browser fixture; the production

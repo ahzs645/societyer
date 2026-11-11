@@ -13,16 +13,18 @@ function LogoImage({ sources, initial, className }: { sources: string[]; initial
 
 /** Inert image rendering, shared by the shell, switcher, settings and portfolio.
  * Full wordmarks are contained in their viewport, never cropped into a symbol. */
-export function WorkspaceLogo({ organization, presentation = "compact", theme = "auto", className = "", label }: {
+export function WorkspaceLogo({ organization, presentation = "compact", theme = "auto", className = "", label, instanceSymbolBrandId }: {
   organization?: WorkspaceBrandSource | null;
   presentation?: "compact" | "full";
   theme?: "auto" | "light" | "dark";
   className?: string;
   label?: string;
+  /** Public instance artwork for sign-in, where the saved Brandkit is not loaded. */
+  instanceSymbolBrandId?: string;
 }) {
   const brand = organization?.workspaceBrand;
   const sources = useMemo(() => {
-    const symbol = presentation === "compact" ? instanceWorkspaceSymbol(brand?.id, {
+    const symbol = presentation === "compact" ? instanceWorkspaceSymbol(brand?.id ?? instanceSymbolBrandId, {
       VITE_WORKSPACE_SYMBOL_BRAND_ID: import.meta.env?.VITE_WORKSPACE_SYMBOL_BRAND_ID,
       VITE_WORKSPACE_SYMBOL_LIGHT: import.meta.env?.VITE_WORKSPACE_SYMBOL_LIGHT,
       VITE_WORKSPACE_SYMBOL_DARK: import.meta.env?.VITE_WORKSPACE_SYMBOL_DARK,
@@ -33,7 +35,7 @@ export function WorkspaceLogo({ organization, presentation = "compact", theme = 
       light: [symbol?.light, dataUrl("primary"), organization?.logoUrl].filter((value): value is string => Boolean(value)),
       dark: [symbol?.dark, dataUrl("reverse"), organization?.logoDarkUrl || organization?.logoUrl].filter((value): value is string => Boolean(value)),
     };
-  }, [brand, presentation, organization?.logoUrl, organization?.logoDarkUrl]);
+  }, [brand, instanceSymbolBrandId, presentation, organization?.logoUrl, organization?.logoDarkUrl]);
   const invert = !brand && !organization?.logoDarkUrl && organization?.logoInvertInDarkMode;
   return <span className={`workspace-logo workspace-logo--${presentation} workspace-logo--${theme} ${className}`.trim()}
     data-brand-id={brand?.id} role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
