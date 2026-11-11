@@ -8,11 +8,9 @@
 import { NoticeTable, isNoticeView, type NoticeKind } from "./NoticeTable";
 import { useReaderNavigation } from "./routes";
 import { useReaderSource } from "./source";
-import { NoticeTextSearch } from "./NoticeTextSearch";
 
 export function CatalogBrowser({ kind }: { kind: NoticeKind }) {
   const source = useReaderSource();
-  const { params, update } = useReaderNavigation();
   return source.usePage ? (
     <PagedCatalog kind={kind} />
   ) : (
@@ -29,7 +27,7 @@ function SnapshotCatalog({ kind }: { kind: NoticeKind }) {
     kind === "opportunity" && isNoticeView(requested) ? requested : "upcoming";
   const search = params.get("q") ?? "";
   return (
-    <><NoticeTextSearch kind={kind} /><NoticeTable
+    <NoticeTable
       key={kind}
       kind={kind}
       rows={list?.rows ?? EMPTY}
@@ -45,7 +43,7 @@ function SnapshotCatalog({ kind }: { kind: NoticeKind }) {
         total: list?.total ?? source.catalog.counts[kind] ?? 0,
         done: list?.done ?? false,
       }}
-    /></>
+    />
   );
 }
 

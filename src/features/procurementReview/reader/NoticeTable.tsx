@@ -64,6 +64,7 @@ import { useReaderNavigation } from "./routes";
 import { useReaderSource, type ListRow } from "./source";
 import { useProcurementClock } from "../lib/clock";
 import { ServerNoticeRows } from "./ServerNoticeRows";
+import { useNoticeTextMatches } from "./noticeTextMatches";
 
 export type NoticeKind = "opportunity" | "award";
 
@@ -172,6 +173,12 @@ function tableFor(kind: NoticeKind) {
             size: 210,
           },
           {
+            name: "when",
+            label: "Closes",
+            fieldType: FIELD_TYPES.DATE_TIME,
+            size: 200,
+          },
+          {
             name: "issuedFor",
             label: "Issued for",
             fieldType: FIELD_TYPES.TEXT,
@@ -191,12 +198,6 @@ function tableFor(kind: NoticeKind) {
             fieldType: FIELD_TYPES.SELECT,
             size: 110,
             config: { options: STATUS_OPTIONS },
-          },
-          {
-            name: "when",
-            label: "Closes",
-            fieldType: FIELD_TYPES.DATE_TIME,
-            size: 200,
           },
           {
             name: "documents",
@@ -467,12 +468,26 @@ export function NoticeTable({
       return {};
     }
   }, [sourceFilterKey]);
-  const records = useMemo(
+  const drawnRows = useMemo(
     () =>
       rows
         .filter((row) => matchesBcBidSourceFilters(row, sourceFilters))
         .map((row) => drawnRow(row, now)),
     [rows, now, sourceFilters],
+  );
+  // The search box also finds notices by their text (where the source can search it): those
+  // notices carry the words in their search text, so the table's own search keeps them.
+  const textMatches = useNoticeTextMatches(kind, serverPaging ? "" : search ?? "");
+  const records = useMemo(
+    () =>
+      textMatches.keys.size
+        ? drawnRows.map((row) =>
+            textMatches.keys.has(row._id)
+              ? { ...row, _searchText: `${row._searchText}\n${textMatches.query}` }
+              : row,
+          )
+        : drawnRows,
+    [drawnRows, textMatches],
   );
   const { openNotice } = nav;
   const renderCell = useCells(
@@ -612,6 +627,13 @@ export function NoticeTable({
           extraChips={sourceChips}
           onClearExtra={offersSourceFilters ? clearSourceFilters : undefined}
         />
+        {(textMatches.truncated || textMatches.error) && (
+          <p className="procurement-reader__search-note small muted" role="status">
+            {textMatches.error
+              ? "Notice text can't be searched right now, so only the columns are searched."
+              : "More notices mention these words than the list can show. Add words to narrow the search."}
+          </p>
+        )}
         {serverPaging ? (
           <ServerNoticeRows kind={kind} fixedParty={fixedParty} sourceFilters={sourceFilters}>
             {({ onEndReached, loading: serverLoading, hasMore, footer }) => renderTable(onEndReached, serverLoading, hasMore, footer)}

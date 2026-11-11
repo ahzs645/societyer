@@ -11,10 +11,11 @@ test("service reader loads awards lazily, renders the complete list and reuses n
   await expect(page.locator(".record-table__view-count").first()).toHaveText("21877");
   console.log(`Synthetic 21,877-row list ready in ${Date.now() - start} ms (${test.info().project.name}); this is a local UI check, not a live network timing.`);
   if (!isMobile) await page.getByRole("button", { name: "Synthetic award 0", exact: true }).focus();
-  await page.getByText("Search inside notice text", { exact: true }).click();
-  await page.getByRole("searchbox", { name: /Words in award notices/ }).fill("zebra");
-  await expect(page.getByText("Underground zebra conduits", { exact: true })).toBeVisible();
-  await page.locator("details").filter({ has: page.getByRole("searchbox", { name: /Words in award notices/ }) }).getByRole("button", { name: "Synthetic award 0", exact: true }).click();
+  // The list's own search also finds notices by their text: "zebra" is only in award 0's description.
+  await page.getByRole("button", { name: /^Search awards/ }).click();
+  await page.getByRole("textbox", { name: "Search awards" }).fill("zebra");
+  await expect(page.getByText("Synthetic award 1", { exact: true })).toHaveCount(0);
+  await page.getByText("Synthetic award 0", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Synthetic award 0", exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as any).__catalogRequests.filter((path: string) => { const url = new URL(path); return url.pathname.endsWith("/notice") && url.searchParams.get("key") === "award:00000"; }).length)).toBe(1);
   await page.getByRole("tab", { name: /Documents/ }).click();

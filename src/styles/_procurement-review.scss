@@ -153,6 +153,7 @@ $zoer-theme: (
 .procurement-reader {
   margin-top: token("s-3");
 }
+.procurement-reader__search-note { margin: token("s-2") 0; }
 // A reader place under another (ProcurementReader.tsx `Layer`): mounted and laid out, so its
 // table keeps its rows and scroll offsets, but taking no room and out of sight.
 .procurement-review { position: relative; }

@@ -389,16 +389,27 @@ export function RecordTable({
   const [viewportHeight, setViewportHeight] = useState(600);
   useLayoutEffect(() => {
     if (!fillViewport) return;
+    // The page that scrolls the table (`.page`): the list runs down to its bottom padding, so
+    // the table ends where the page's content does rather than a fixed gap above the window's edge.
+    const scroller = tableRootRef.current?.closest<HTMLElement>(".page") ?? null;
     const update = () => {
       const node = tableRootRef.current;
       if (!node) return;
-      const bottomInset = window.matchMedia("(max-width: 767px)").matches ? 100 : 64;
-      const next = Math.max(240, window.innerHeight - node.getBoundingClientRect().top - bottomInset);
+      const limit = scroller
+        ? scroller.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(scroller).paddingBottom) || 0)
+        : window.innerHeight - (window.matchMedia("(max-width: 767px)").matches ? 100 : 64);
+      // The table's frame around the list (borders, phone selection controls) fits inside the limit too.
+      const list = node.querySelector<HTMLElement>(".record-table__virtuoso");
+      const frame = list ? node.offsetHeight - list.offsetHeight : 0;
+      const next = Math.max(240, Math.floor(limit - node.getBoundingClientRect().top - frame));
       setViewportHeight(current => Math.abs(current - next) < 2 ? current : next);
     };
     update();
     const observer = new ResizeObserver(update);
-    if (tableRootRef.current?.parentElement) observer.observe(tableRootRef.current.parentElement);
+    // Anything above the table growing or shrinking (a header line loading, a panel opening)
+    // resizes one of these, and moves the table's top.
+    for (let node = tableRootRef.current?.parentElement; node && node !== scroller; node = node.parentElement) observer.observe(node);
+    if (scroller) observer.observe(scroller);
     window.addEventListener("resize", update);
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
   }, [fillViewport, records.length > virtualizeAbove, loading]);
