@@ -55,6 +55,8 @@ import { useIsBottomSheet } from "../lib/useSheetDrag";
 import { TaskViewSummaryButton } from "../features/tasks/TaskViewSheet";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Tooltip } from "../components/Tooltip";
+import { nextOccurrenceMessage } from "../features/tasks/TaskRepeat";
+import { organizationTodayISO } from "../lib/dateRanges";
 
 type TaskLayout = "list" | "engine";
 const LAYOUT_KEY = "societyer:tasks:layout";
@@ -433,9 +435,11 @@ export function TasksPage() {
     if (!canManage) return;
     if (!(await confirmHistoricalCompletion(task))) return;
     const previous = task.status;
+    // A repeating task says when its next one is due.
+    const next = nextOccurrenceMessage(task, organizationTodayISO(society));
     await undoable({
       message: "Task completed",
-      description: task.title,
+      description: next ? `${task.title}. ${next}` : task.title,
       errorMessage: "Could not complete task",
       dedupeKey: `task-complete-${task._id}`,
       run: () => update({

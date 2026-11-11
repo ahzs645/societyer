@@ -21,6 +21,8 @@ import { DatePicker } from "../../components/DatePicker";
 import { formatDate } from "../../lib/format";
 import { PersonPicker, useDirectoryPeople, type DirectoryPersonOption } from "../../components/PersonPicker";
 import { TASK_CREATE_STATUSES, TASK_STATUSES as ALL_TASK_STATUSES, taskStatusLabel } from "../../../shared/taskStatus";
+import type { TaskRecurrence } from "../../../shared/taskRecurrence";
+import { TaskRepeatField, repeatFormDefaults, type TaskRepeatFormValue } from "./TaskRepeat";
 
 /** Every status a task can hold (B6: Unknown and Cancelled come from imported history). */
 export const TASK_STATUSES = ALL_TASK_STATUSES;
@@ -47,9 +49,13 @@ export type TaskFormValue = {
   commitmentId: string;
   eventId: string;
   completionNote: string;
-};
+} & TaskRepeatFormValue;
 
-export type TaskFormInitialValues = Partial<TaskFormValue> & { /** Legacy create callers. */ responsibleUserId?: string };
+export type TaskFormInitialValues = Partial<TaskFormValue> & {
+  /** Legacy create callers. */ responsibleUserId?: string;
+  /** A stored task's repeat rule; filled into the Repeats fields. */
+  recurrence?: TaskRecurrence | null;
+};
 
 export function makeTaskFormDefaults(initial?: TaskFormInitialValues): TaskFormValue {
   return {
@@ -72,6 +78,11 @@ export function makeTaskFormDefaults(initial?: TaskFormInitialValues): TaskFormV
     commitmentId: initial?.commitmentId ?? "",
     eventId: initial?.eventId ?? "",
     completionNote: initial?.completionNote ?? "",
+    ...repeatFormDefaults(initial?.recurrence),
+    ...(initial?.repeat !== undefined ? { repeat: initial.repeat } : {}),
+    ...(initial?.repeatInterval !== undefined ? { repeatInterval: initial.repeatInterval } : {}),
+    ...(initial?.repeatUnit !== undefined ? { repeatUnit: initial.repeatUnit } : {}),
+    ...(initial?.repeatUntil !== undefined ? { repeatUntil: initial.repeatUntil } : {}),
   };
 }
 
@@ -168,6 +179,7 @@ export function TaskFormFields({
           />
         </Field>
       </div>
+      <TaskRepeatField value={value} dueDate={value.dueDate} onChange={onChange} readOnly={readOnly} />
       <Field label="Assignee (person)">
         <PersonPicker
           people={people}

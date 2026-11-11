@@ -9,6 +9,7 @@ import { useFilteredRecords } from "@/platform/record-engine";
 import { TaskQuickAdd } from "./TaskQuickAdd";
 import { TaskAvatar, TaskChecklistBadge, TaskLinkChip, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
 import { TaskDueMenu, TaskMoreMenu, TaskPriorityMenu, type TaskViewActions } from "./TaskMenus";
+import { TaskRepeatBadge } from "./TaskRepeat";
 import { groupTasks, isClosedStatus, taskOwnerName, taskPrimaryLink, type TaskGroup, type TaskRecord } from "./taskModel";
 import { Tooltip } from "../../components/Tooltip";
 
@@ -159,6 +160,7 @@ function TaskCard({
       <div className="task-card__title">
         {task.status === "Done" && <TaskStatusIcon status="Done" />}
         <span>{task.title}</span>
+        <TaskRepeatBadge recurrence={task.recurrence} />
       </div>
       <TaskChecklistBadge checklist={task.checklist} />
       <div className="task-card__meta">
