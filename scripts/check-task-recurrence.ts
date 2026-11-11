@@ -18,6 +18,7 @@ import {
   type TaskRecurrence,
 } from "../shared/taskRecurrence";
 import { organizationTodayForTasks } from "../shared/functions/taskNotifications";
+import type { Id } from "../convex/_generated/dataModel";
 
 const rule = (frequency: TaskRecurrence["frequency"], interval = 1, extra: Partial<TaskRecurrence> = {}): TaskRecurrence => ({ frequency, interval, ...extra });
 const next = (dueDate: string, r: TaskRecurrence, today?: string, startDate?: string) => nextTaskOccurrence({ dueDate, ...(startDate ? { startDate } : {}) }, r, today ? { today } : {});
@@ -192,3 +193,51 @@ assert.equal((await get(String(lateNext._id))).recurrence.anchorDay, 15, "moving
 console.log("✓ rule edits: stop repeating, keep a due date while repeating, re-anchor on a new due date");
 
 console.log("\nTask recurrence checks passed.");
+
+// --- Hosted Convex: argument validators and the stored shape ---------------------------
+// The MemoryDb runs above don't check the Convex schema; these run the same
+// flows through the real Convex functions, including the scheduled scan that
+// stores `dueAlertsSent`.
+const { convexTest } = await import("convex-test");
+const { default: schema } = await import("../convex/schema");
+const { api, internal } = await import("../convex/_generated/api");
+const { betterAuthIssuer } = await import("../convex/lib/authIdentity");
+const issuer = betterAuthIssuer();
+const hosted = convexTest(schema, {
+  "./_generated/api.js": () => import("../convex/_generated/api.js"),
+  "./_generated/server.js": () => import("../convex/_generated/server.js"),
+  "./tasks.js": () => import("../convex/tasks"),
+  "./notifications.js": () => import("../convex/notifications"),
+});
+const hostedIds = await hosted.run(async (ctx) => {
+  const hostedSociety = await ctx.db.insert("societies", { name: "Hosted choir", isCharity: false, isMemberFunded: false, updatedAt: 0 });
+  const users = [];
+  for (const subject of ["olive", "ari"]) {
+    users.push(await ctx.db.insert("users", { societyId: hostedSociety, role: "Owner", status: "Active", displayName: subject, email: `${subject}@example.invalid`, authSubject: subject, authIssuer: issuer, authProvider: "better-auth", createdAtISO: "2026-01-01" }));
+  }
+  return { societyId: hostedSociety, olive: users[0], ari: users[1] };
+});
+const olive = hosted.withIdentity({ subject: "olive", issuer });
+const hostedToday = organizationTodayForTasks(null, new Date().toISOString());
+const hostedTaskId: Id<"tasks"> = await olive.mutation(api.tasks.create, {
+  societyId: hostedIds.societyId, title: "Hosted repeat", status: "Todo", priority: "Low", tags: [], dueDate: addIsoDays(hostedToday, 1),
+  responsibleUserIds: [hostedIds.ari], recurrence: { frequency: "monthly", interval: 1 },
+});
+await hosted.mutation(internal.notifications.scanUpcoming, { societyId: hostedIds.societyId });
+await olive.mutation(api.tasks.update, { id: hostedTaskId, patch: { status: "Done" } });
+await hosted.run(async (ctx) => {
+  const done = await ctx.db.get(hostedTaskId);
+  assert.ok(done?.recurrenceNextTaskId, "the next occurrence is stored under the schema");
+  assert.equal(done?.dueAlertsSent?.dueSoonFor, addIsoDays(hostedToday, 1), "the scan's marker is stored under the schema");
+  const nextHosted = await ctx.db.get(done!.recurrenceNextTaskId!);
+  assert.equal(nextHosted?.recurrence?.anchorDay, Number(addIsoDays(hostedToday, 1).slice(8)));
+  const kinds = (await ctx.db.query("notifications").collect()).filter((row) => row.userId === hostedIds.ari).map((row) => row.kind).sort();
+  assert.deepEqual(kinds, ["task_assigned", "task_due_soon"]);
+});
+await olive.mutation(api.tasks.update, { id: hostedTaskId, patch: { recurrence: null } });
+assert.equal((await hosted.run((ctx) => ctx.db.get(hostedTaskId)))?.recurrence, undefined, "null clears the rule through the Convex validator");
+// "hourly" is deliberately not a frequency the validator accepts.
+await assert.rejects(olive.mutation(api.tasks.update, { id: hostedTaskId, patch: { recurrence: { frequency: "hourly", interval: 1 } } }), /Validator|hourly/);
+console.log("✓ hosted Convex: validators accept the rule and null, the schema stores the new fields, the cron scan alerts");
+
+console.log("\nTask recurrence hosted checks passed.");
