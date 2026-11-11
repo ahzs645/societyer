@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowUpRight, Check, History, ListTodo, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2, Wand2 } from "lucide-react";
+import { GanttChart } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { isHistoricalSourceAction, taskStatusLabel as sharedTaskStatusLabel } from "../../shared/taskStatus";
@@ -35,6 +36,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { TaskListView, usePhoneTaskSelection } from "../features/tasks/TaskListView";
 import { useLongPress } from "../platform/record-engine/record-table/hooks/useLongPress";
 import { TaskBoardView } from "../features/tasks/TaskBoardView";
+import { TaskTimelineView } from "../features/tasks/timeline/TaskTimelineView";
 import { TaskScopeBar } from "../features/tasks/TaskScopeBar";
 import type { TaskViewActions } from "../features/tasks/TaskMenus";
 import {
@@ -61,7 +63,7 @@ import { patchInList } from "../lib/optimistic";
 import { nextOccurrenceMessage } from "../features/tasks/TaskRepeat";
 import { organizationTodayISO } from "../lib/dateRanges";
 
-type TaskLayout = "list" | "engine";
+type TaskLayout = "list" | "engine" | "timeline";
 const LAYOUT_KEY = "societyer:tasks:layout";
 const GROUP_KEY = "societyer:tasks:group-by";
 
@@ -124,7 +126,7 @@ export function TasksPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   // Current tasks open as a grouped list; the record views (table, board,
   // calendar) stay one click away in the toolbar's view switch.
-  const [layout, setLayoutState] = useState<TaskLayout>(() => readStored(LAYOUT_KEY, ["list", "engine"] as const, "list"));
+  const [layout, setLayoutState] = useState<TaskLayout>(() => readStored(LAYOUT_KEY, ["list", "engine", "timeline"] as const, "list"));
   const [groupBy, setGroupByState] = useState<TaskGroupBy>(() => readStored(GROUP_KEY, ["status", "priority", "due", "owner", "none"] as const, "status"));
   const [scope, setScope] = useState<TaskScope>("all");
   const setLayout = useCallback((next: TaskLayout) => { setLayoutState(next); writeStored(LAYOUT_KEY, next); }, []);
@@ -702,7 +704,7 @@ export function TasksPage() {
                 counts={scopeCounts}
                 groupBy={groupBy}
                 onGroupBy={setGroupBy}
-                showGrouping={layout === "list"}
+                showGrouping={layout === "list" || layout === "timeline"}
                 savedViews={objectMetadata ? {
                   views: tableData.views.map((view) => ({ id: String(view._id), name: view.name })),
                   currentId: String(currentViewId ?? tableData.views[0]?._id ?? "") || null,
@@ -733,7 +735,7 @@ export function TasksPage() {
           counts={scopeCounts}
           groupBy={groupBy}
           onGroupBy={setGroupBy}
-          showGrouping={layout === "list"}
+          showGrouping={layout === "list" || layout === "timeline"}
         />
       )}
       </div>
@@ -781,6 +783,7 @@ export function TasksPage() {
             onViewPicked={() => setLayout("engine")}
             onOpenFilter={() => setFilterOpen((value) => !value)}
             listView={register === "current" ? { active: layout === "list", onSelect: () => setLayout("list"), onLeave: () => setLayout("engine") } : undefined}
+            pageViews={register === "current" ? [{ id: "timeline", Icon: GanttChart, label: "Timeline view", short: "Timeline", active: layout === "timeline", onSelect: () => setLayout("timeline"), onLeave: () => setLayout("engine") }] : undefined}
             // Phones pick the saved view in the task view sheet (TaskViewSummaryButton).
             hideViewPickerOnPhone
           />
@@ -800,6 +803,16 @@ export function TasksPage() {
               </div>
             ) : (
               <TaskListView groupBy={groupBy} actions={viewActions} hasTasks={registerRecords.length > 0} />
+            )
+          ) : register === "current" && layout === "timeline" ? (
+            tableData.loading || tasks === undefined ? (
+              <div className="record-table__loading">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="record-table__loading-row" />
+                ))}
+              </div>
+            ) : (
+              <TaskTimelineView groupBy={groupBy} actions={viewActions} hasTasks={registerRecords.length > 0} />
             )
           ) : (
           <TaskBoardSwitch enabled={register === "current"} actions={viewActions}>

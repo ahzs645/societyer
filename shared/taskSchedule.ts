@@ -18,6 +18,14 @@ export function isCalendarDay(value: unknown): value is string {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
+/** The same test under the name the timeline and repeat rules use. */
+export const isIsoDay = isCalendarDay;
+
+/** Both dates are calendar days and the start falls after the due date. */
+export function isStartAfterDue(startDate: unknown, dueDate: unknown): boolean {
+  return isCalendarDay(startDate) && isCalendarDay(dueDate) && startDate > dueDate;
+}
+
 /** The message for a start/due pair that can't be saved, or null when it can. */
 export function taskScheduleProblem(startDate: string | undefined | null, dueDate: string | undefined | null): string | null {
   if (startDate === undefined || startDate === null || startDate === "") return null;

@@ -180,4 +180,5 @@
 @use "task-structure"; // Tasks: sub-tasks, nested list rows and the board drop marker
 @use "task-repeat"; // repeating tasks: the Repeats form control and the repeat mark on rows and cards
 @use "task-attachments"; // task drawer: documents and opportunities attached to a task
+@use "task-timeline"; // Tasks timeline: sticky date header and task grid, bars, milestones
 @use "foundations";

@@ -1,0 +1,456 @@
+@use "tokens" as *;
+
+// ============================================================
+// Tasks timeline (src/features/tasks/timeline): controls, key, the
+// scroll area with its sticky date header and sticky task grid, rows,
+// bars, milestones and the hover card. Status shows as colour plus shape,
+// icon and pattern (overdue stripes, done struck through), never colour
+// alone.
+// ============================================================
+
+/* ------------------------------------------------ controls and key */
+
+.task-timeline { min-width: 0; max-width: 100%; }
+.task-timeline__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.task-timeline__range {
+  flex: 1 1 160px;
+  min-width: 0;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+  overflow-wrap: anywhere;
+}
+.task-timeline__nav { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; white-space: nowrap; }
+.task-timeline__scales { flex-shrink: 0; white-space: nowrap; }
+/* The shared segmented control sizes icon buttons; these are words. */
+.task-timeline__scales button { width: auto; padding: 0 8px; font-size: token('fs-sm'); }
+
+.task-timeline__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+.task-timeline__legend li { display: inline-flex; align-items: center; gap: 6px; }
+.task-timeline__key {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border: 1px solid token('blue-9');
+  border-radius: token('r-xs');
+  background: token('blue-4');
+}
+.task-timeline__key--milestone { width: 9px; height: 9px; margin: 0 4px; border-radius: 1px; transform: rotate(45deg); }
+.task-timeline__key--open { border-right-style: dashed; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.task-timeline__key--overdue {
+  border-color: token('danger');
+  background: repeating-linear-gradient(135deg, transparent 0 3px, token('danger-soft') 3px 6px), token('bg-panel');
+}
+.task-timeline__key--done { border-color: token('success'); background: token('success-soft'); }
+.task-timeline__note { margin: 0 0 8px; color: token('text-secondary'); font-size: token('fs-sm'); }
+
+/* ------------------------------------------------ scroll area */
+
+// The one scroll container: dates scroll sideways, the task grid and the
+// date header stay put (sticky), so the page itself never scrolls sideways.
+.task-timeline__scroll {
+  position: relative;
+  max-width: 100%;
+  max-height: calc(100dvh - 240px);
+  min-height: 160px;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+}
+.task-timeline__scroll.is-dragging { cursor: grabbing; user-select: none; }
+.task-timeline__canvas { position: relative; }
+
+.task-timeline__header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  background: token('bg-panel');
+  border-bottom: 1px solid token('border');
+}
+.task-timeline__corner {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 8px 6px;
+  background: token('bg-panel');
+  border-right: 1px solid token('border');
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+}
+.task-timeline__col-title { flex: 1; min-width: 0; }
+.task-timeline__col-owner { width: 40px; flex: none; text-align: center; }
+.task-timeline__col-status { width: 104px; flex: none; }
+.task-timeline__resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.task-timeline__resizer::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 3px;
+  width: 2px;
+  border-radius: token('r-pill');
+  background: transparent;
+  transition: background token('motion-fade-fast') token('ease-fade');
+}
+.task-timeline__resizer:hover::after,
+.task-timeline__resizer:focus-visible::after { background: token('accent'); }
+.task-timeline__resizer:focus-visible { outline: none; }
+
+.task-timeline__scale { position: relative; flex: none; }
+.task-timeline__ticks { position: absolute; left: 0; right: 0; }
+.task-timeline__ticks--major { top: 0; height: 22px; }
+.task-timeline__ticks--minor { top: 22px; bottom: 0; }
+.task-timeline__tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid token('border');
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  white-space: nowrap;
+  // clip, not hidden: a hidden overflow would trap the sticky month name.
+  overflow: clip;
+}
+.task-timeline__ticks--major .task-timeline__tick { padding-top: 4px; color: token('text-secondary'); font-weight: token('fw-medium'); }
+.task-timeline__tick-label { position: sticky; padding: 0 6px; }
+.task-timeline__ticks--minor .task-timeline__tick {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.task-timeline__tick-sub { font-size: token('fs-xxs'); }
+.task-timeline__tick.is-weekend { background: token('bg-subtle'); }
+.task-timeline__tick.is-today { color: token('accent'); font-weight: token('fw-semibold'); }
+.task-timeline__today-flag {
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: token('r-pill');
+  background: token('accent');
+  transform: translate(-50%, 50%);
+}
+
+/* ------------------------------------------------ body and gridlines */
+
+.task-timeline__body { position: relative; }
+.task-timeline__grid-lines { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.task-timeline__line { position: absolute; top: 0; bottom: 0; width: 1px; background: token('border-alpha'); }
+.task-timeline__line--major { background: token('border'); }
+.task-timeline__weekend { position: absolute; top: 0; bottom: 0; background: token('bg-subtle'); }
+.task-timeline__today { position: absolute; top: 0; bottom: 0; z-index: 1; width: 2px; margin-left: -1px; background: token('accent'); }
+
+/* ------------------------------------------------ rows */
+
+.task-timeline__row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  border-bottom: 1px solid token('border-alpha');
+}
+.task-timeline__row:hover { background: token('bg-hover-alpha'); }
+.task-timeline__cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding-right: 8px;
+  background: token('bg-panel');
+  border-right: 1px solid token('border');
+}
+.task-timeline__row:hover .task-timeline__cell {
+  background: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha')), token('bg-panel');
+}
+.task-timeline__title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: token('text-primary');
+  font: inherit;
+  font-size: token('fs-sm');
+  text-align: left;
+  cursor: pointer;
+}
+.task-timeline__title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-timeline__title.is-done .task-timeline__title-text { color: token('text-tertiary'); text-decoration: line-through; }
+.task-timeline__title:focus-visible { outline: 2px solid token('border-focus'); outline-offset: -2px; border-radius: token('r-xs'); }
+.task-timeline__owner { display: inline-flex; justify-content: center; width: 40px; flex: none; }
+.task-timeline__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 104px;
+  flex: none;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+}
+.task-timeline__status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-timeline__lane { position: relative; flex: none; height: 100%; }
+
+.task-timeline__row--group .task-timeline__cell,
+.task-timeline__row--group { background: token('bg-subtle'); }
+.task-timeline__group-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: token('text-primary');
+  font: inherit;
+  font-size: token('fs-sm');
+  font-weight: token('fw-semibold');
+  text-align: left;
+  cursor: pointer;
+}
+.task-timeline__group-toggle:focus-visible { outline: 2px solid token('border-focus'); outline-offset: -2px; border-radius: token('r-xs'); }
+.task-timeline__group-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-timeline__group-count { color: token('text-tertiary'); font-weight: token('fw-medium'); font-variant-numeric: tabular-nums; }
+.task-timeline__chevron { flex-shrink: 0; color: token('text-tertiary'); transition: transform token('motion-fade-fast') token('ease-fade'); }
+.task-timeline__group-toggle[aria-expanded="true"] .task-timeline__chevron { transform: rotate(90deg); }
+.task-timeline__lane-note {
+  position: sticky;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------ bars */
+
+// Status colours for a bar, or (with $part "::before") a milestone's diamond.
+@mixin timeline-status-colours($part: "") {
+  &#{$part} {
+    border-color: token('border-strong');
+    background-color: token('bg-tertiary');
+    color: token('text-secondary');
+  }
+  &.is-InProgress#{$part} { border-color: token('blue-9'); background-color: token('blue-4'); color: token('blue-11'); }
+  &.is-Blocked#{$part} { border-color: token('danger'); background-color: token('danger-soft'); color: token('danger-text'); }
+  &.is-Done#{$part} { border-color: token('success'); background-color: token('success-soft'); color: token('success-text'); }
+  &.is-Unknown#{$part} { border-style: dashed; border-color: token('amber-10'); background-color: token('amber-4'); color: token('amber-11'); }
+  &.is-Cancelled#{$part} { border-style: dashed; opacity: 0.6; }
+  &.is-overdue#{$part} {
+    border-color: token('danger');
+    background-image: repeating-linear-gradient(135deg, transparent 0 4px, token('danger-soft') 4px 8px);
+  }
+}
+
+.task-timeline__bar {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: token('r-sm');
+  font: inherit;
+  cursor: pointer;
+  transform: translateY(-50%);
+  user-select: none;
+  @include timeline-status-colours;
+}
+.task-timeline__bar:focus-visible { outline: 2px solid token('border-focus'); outline-offset: 2px; }
+.task-timeline__bar.is-preview { z-index: 2; box-shadow: token('elevation-2'); }
+.task-timeline__scroll.is-editable .task-timeline__bar { cursor: grab; }
+.task-timeline__scroll.is-dragging .task-timeline__bar { cursor: grabbing; }
+.task-timeline__bar.is-Done { opacity: 0.8; }
+.task-timeline__bar .task-status-icon { color: currentColor; }
+.task-timeline__bar-alert { flex-shrink: 0; color: token('danger'); }
+
+// Start date only: an open, fading right end.
+.task-timeline__bar--open {
+  border-right-style: dashed;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.task-timeline__bar--open::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 40%;
+  background: linear-gradient(to right, transparent, token('bg-panel'));
+  pointer-events: none;
+}
+
+// Due date only: a diamond on the day (two classes, to win over the bar's status colours).
+.task-timeline__bar.task-timeline__bar--milestone {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: none;
+}
+.task-timeline__bar--milestone::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px solid;
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+.task-timeline__bar--milestone { @include timeline-status-colours("::before"); }
+.task-timeline__bar--milestone.is-overdue::before { border-width: 2px; }
+
+.task-timeline__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 8px;
+  cursor: ew-resize;
+}
+.task-timeline__handle--start { left: 0; }
+.task-timeline__handle--end { right: 0; }
+.task-timeline__handle::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 2px;
+  border-radius: token('r-pill');
+  background: currentColor;
+  opacity: 0;
+  transition: opacity token('motion-fade-fast') token('ease-fade');
+}
+.task-timeline__bar:hover .task-timeline__handle::after,
+.task-timeline__bar:focus-visible .task-timeline__handle::after { opacity: 0.6; }
+
+.task-timeline__bar-label {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 320px;
+  overflow: hidden;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.task-timeline__bar-label.is-done { color: token('text-tertiary'); text-decoration: line-through; }
+.task-timeline__bar-label.is-overdue { color: token('danger-text'); }
+.task-timeline__bar-label svg { flex-shrink: 0; }
+
+/* ------------------------------------------------ scheduling an unscheduled task */
+
+.task-timeline__schedule-lane { position: absolute; inset: 0; cursor: pointer; }
+.task-timeline__ghost {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.task-timeline__ghost::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px dashed token('accent');
+  border-radius: 2px;
+  background: token('accent-soft');
+  transform: rotate(45deg);
+}
+.task-timeline__ghost-label {
+  position: absolute;
+  top: 50%;
+  left: 22px;
+  color: token('accent');
+  font-size: token('fs-xs');
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+/* ------------------------------------------------ hover card */
+
+.task-timeline__hint {
+  position: fixed;
+  z-index: token('z-tooltip');
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: min(288px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border-radius: token('r-md');
+  background: token('bg-floating');
+  color: token('text-floating');
+  box-shadow: token('elevation-2');
+  font-size: token('fs-xs');
+  line-height: 1.4;
+  pointer-events: none;
+}
+.task-timeline__hint.is-above { transform: translateY(-100%); }
+.task-timeline__hint strong { overflow-wrap: anywhere; }
+.task-timeline__hint-status { display: inline-flex; align-items: center; gap: 4px; }
+.task-timeline__hint-overdue { font-weight: token('fw-semibold'); }
+.task-timeline__hint .muted { opacity: 0.8; color: inherit; }
+
+/* ------------------------------------------------ phones */
+
+@media (max-width: 760px) {
+  .task-timeline__scroll { max-height: calc(100dvh - 200px); }
+  .task-timeline__bar { height: 26px; }
+  .task-timeline__legend { gap: 4px 10px; }
+}

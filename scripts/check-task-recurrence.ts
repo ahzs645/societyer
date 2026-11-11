@@ -192,6 +192,26 @@ await owner.runMutation("tasks:update", { id: String(lateNext._id), patch: { due
 assert.equal((await get(String(lateNext._id))).recurrence.anchorDay, 15, "moving the due date re-anchors the rule");
 console.log("✓ rule edits: stop repeating, keep a due date while repeating, re-anchor on a new due date");
 
+// A repeating sub-task with a start date and attachments.
+const parentId = await owner.runMutation<string>("tasks:create", { societyId, title: "Spring concert", status: "Todo", priority: "Medium", tags: [] });
+const stepDue = addIsoDays(today, 3);
+const stepId = await owner.runMutation<string>("tasks:create", {
+  societyId, title: "Print the programmes", status: "Todo", priority: "Medium", tags: [], parentTaskId: parentId,
+  startDate: addIsoDays(stepDue, -2), dueDate: stepDue, recurrence: rule("weekly"),
+});
+const attachment = (kind: string, refKey: string, title: string) => ({ societyId, taskId: stepId, kind, refKey, title, attachedAtISO: new Date().toISOString() });
+await db.insert("taskAttachments", attachment("document", "doc-programme", "Programme template"));
+await db.insert("taskAttachments", attachment("opportunity", "bcbid:opp-1", "Printing services"));
+await owner.runMutation("tasks:update", { id: stepId, patch: { status: "Done" } });
+const stepNext = (await tasksOf()).find((task) => task.recurrencePreviousTaskId === stepId)!;
+assert.equal(stepNext.dueDate, addIsoDays(stepDue, 7));
+assert.equal(stepNext.startDate, addIsoDays(stepDue, 5), "the start date moves with the due date");
+assert.equal(stepNext.parentTaskId, parentId, "a repeating sub-task stays under its parent");
+assert.equal(stepNext.position, undefined, "the board position is not carried over");
+const carried = ((await db.query("taskAttachments").collect()) as PortableDoc[]).filter((row) => row.taskId === stepNext._id);
+assert.deepEqual(carried.map((row) => [row.kind, row.refKey, row.title]), [["document", "doc-programme", "Programme template"]], "documents come along; opportunities stay with their occurrence");
+console.log("✓ the next occurrence keeps its start date, its parent and its documents");
+
 console.log("\nTask recurrence checks passed.");
 
 // --- Hosted Convex: argument validators and the stored shape ---------------------------

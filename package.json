@@ -332,6 +332,7 @@
     "test:task-recurrence": "tsx scripts/check-task-recurrence.ts",
     "test:task-notifications": "tsx scripts/check-task-notifications.ts",
     "test:task-attachments": "tsx scripts/check-task-attachments.ts",
+    "test:task-timeline": "tsx scripts/check-task-timeline.ts",
     "test:guided-setup-browser": "playwright test --config playwright.guided-setup.config.ts",
     "test:live-guided-setup": "playwright test --config playwright.live-interface.config.ts tests/live-interface-guided-setup.spec.ts --workers=1",
     "test:structured-address": "tsx scripts/check-structured-address.ts",
