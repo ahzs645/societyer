@@ -10,7 +10,7 @@ import type { SnapshotManifest } from "../../../../shared/procurementReview/mani
 import type { BlobReader } from "../lib/blobs";
 import type { CatalogClient } from "../lib/catalogClient";
 import { readVerifiedDocument, type StoredProcurementDocument } from "../lib/documents";
-import { describeNotice, sortableDate } from "../lib/notice";
+import { describeNotice, documentTipNames, sortableDate } from "../lib/notice";
 import type { ReviewRow } from "../lib/review";
 import { progressive, useProgressive, type CatalogReviewRow, type DocumentPage, type ListRow, type Progressive, type ReaderSource, type RecordList, type RecordSummary } from "./source";
 
@@ -80,8 +80,7 @@ function projectedMoney(data: Record<string, unknown>) {
   return raw ? moneyValue(raw) : moneyValue(data.contractValue);
 }
 
-type StoredFile = { name: string; available: boolean };
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+type StoredFile = Pick<StoredProcurementDocument, "name" | "available" | "sourceUrl">;
 
 /** `project_record` in scripts/procurement/export-convex.py; keep the two in step. */
 function listRow(row: SqlRow, files: StoredFile[]): ListRow {
@@ -96,7 +95,7 @@ function listRow(row: SqlRow, files: StoredFile[]): ListRow {
     issuedFor: issuedFor && squash(issuedFor) !== squash(summary.organization) ? issuedFor : "",
     reference: model.reference,
     documents: files.filter((file) => file.available).length,
-    listedDocuments: model.attachments.filter((item) => !files.some((file) => sameName(file.name, item.name))).length,
+    listedDocuments: documentTipNames(files, data, true).linkedTotal,
     supplier: award ? text("successfulSupplier", "supplier") : "",
     value: award ? projectedMoney(data) : null,
     currency: award ? text("currency").toUpperCase() : "",
@@ -114,10 +113,10 @@ export function useSnapshotReaderSource(manifest: SnapshotManifest, catalog: Cat
     const storedFiles = () => files ??= (async () => {
       const byRecord = new Map<string, StoredFile[]>();
       for (let after = ""; ;) {
-        const batch = await rows("SELECT id, record_id, name, sha256 FROM documents WHERE id > ? ORDER BY id LIMIT 200", [after]);
+        const batch = await rows("SELECT id, record_id, name, sha256, url FROM documents WHERE id > ? ORDER BY id LIMIT 200", [after]);
         for (const row of batch) {
           const list = byRecord.get(str(row.record_id)) ?? [];
-          list.push({ name: str(row.name), available: Boolean(manifest.files[str(row.sha256)]) });
+          list.push({ name: str(row.name), available: Boolean(manifest.files[str(row.sha256)]), sourceUrl: str(row.url) });
           byRecord.set(str(row.record_id), list);
         }
         if (batch.length < BATCH) return byRecord;
@@ -180,10 +179,10 @@ export function useSnapshotReaderSource(manifest: SnapshotManifest, catalog: Cat
       useDocuments(recordKey: string, cursor: string | null) {
         return useAsync<DocumentPage>(`documents:${recordKey}:${cursor}`, async () => {
           const start = Number(cursor ?? 0);
-          const list = await rows("SELECT id, name, media_type, sha256, status FROM documents WHERE record_id = ? ORDER BY name LIMIT 11 OFFSET ?", [recordKey, start]);
+          const list = await rows("SELECT id, name, media_type, sha256, status, url FROM documents WHERE record_id = ? ORDER BY name LIMIT 11 OFFSET ?", [recordKey, start]);
           const page: StoredProcurementDocument[] = list.slice(0, 10).map((row) => {
             const file = manifest.files[str(row.sha256)];
-            return { documentKey: str(row.id), name: str(row.name), mediaType: str(row.media_type) || "application/octet-stream", sha256: str(row.sha256), bytes: file?.bytes ?? 0, parts: file?.parts ?? 0, available: Boolean(file) };
+            return { documentKey: str(row.id), name: str(row.name), mediaType: str(row.media_type) || "application/octet-stream", sha256: str(row.sha256), bytes: file?.bytes ?? 0, parts: file?.parts ?? 0, available: Boolean(file), sourceUrl: str(row.url) };
           });
           return { page, isDone: list.length <= 10, continueCursor: String(start + 10) };
         });

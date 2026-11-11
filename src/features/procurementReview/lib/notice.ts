@@ -486,6 +486,12 @@ export function onSource(source: string): string {
   return `on ${source === "Buyer's website" ? "the buyer's site" : source}`;
 }
 
+export function onDocumentSource(url: string, noticeSource: string): string {
+  const link = safeHttpsUrl(url);
+  if (link && new URL(link).hostname === "canadabuys.canada.ca") return onSource("CanadaBuys");
+  return onSource(noticeSource);
+}
+
 /** How many of a kind's notices name the organisation in that role, or null when there's nothing to add (only this one). */
 export function partyCount(rows: readonly { organization: string; issuedFor: string }[], party: NoticeParty, name: string): number | null {
   const key = squash(name);
@@ -500,7 +506,44 @@ export type NoticeDocumentRow<D> =
   /** Only on the source: stored without its file, or listed and never downloaded. `url` opens it there. */
   | { state: "elsewhere"; key: string; name: string; url?: string; document?: D };
 
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+type DocumentListing = { name: string; available: boolean; sourceUrl?: string };
+const documentNameKey = (name: string) => name.trim().toLowerCase();
+
+function attachmentLinksByName(attachments: readonly NoticeAttachment[]) {
+  const links = new Map<string, Set<string>>();
+  for (const attachment of attachments) {
+    const url = safeHttpsUrl(attachment.url);
+    if (!url) continue;
+    const name = documentNameKey(attachment.name);
+    const urls = links.get(name) ?? new Set<string>();
+    urls.add(url);
+    links.set(name, urls);
+  }
+  return links;
+}
+
+function documentSourceUrl(document: DocumentListing, links: ReadonlyMap<string, Set<string>>): string | undefined {
+  const exact = safeHttpsUrl(document.sourceUrl);
+  if (exact) return exact;
+  const candidates = links.get(documentNameKey(document.name));
+  return candidates?.size === 1 ? candidates.values().next().value : undefined;
+}
+
+/** A shared filename identifies a file only when it points to one unambiguous URL. */
+function listedAttachments(stored: readonly DocumentListing[], attachments: readonly NoticeAttachment[], links: ReadonlyMap<string, Set<string>>) {
+  const seenUrls = new Set(stored.map(document => documentSourceUrl(document, links)));
+  const seenNames = new Set(stored.map(document => documentNameKey(document.name)));
+  const listed: NoticeAttachment[] = [];
+  for (const item of attachments) {
+    const url = safeHttpsUrl(item.url);
+    const name = documentNameKey(item.name);
+    if (url ? seenUrls.has(url) : seenNames.has(name) || links.has(name)) continue;
+    seenNames.add(name);
+    if (url) seenUrls.add(url);
+    listed.push({ name: item.name, url });
+  }
+  return listed;
+}
 
 /** How many names the list's paperclip tooltip shows of each kind before "and N more". */
 export const DOCUMENT_TIP_NAMES = 8;
@@ -510,8 +553,9 @@ export const DOCUMENT_TIP_NAMES = 8;
  * every stored file, as the notice's Documents tab does, so they are only
  * named when `complete` (all stored files are known).
  */
-export function documentTipNames(stored: readonly { name: string; available: boolean }[], rawData: unknown, complete: boolean) {
-  const linked = complete ? attachmentsOf(asData(rawData)).filter((item) => !stored.some((document) => sameName(document.name, item.name))) : [];
+export function documentTipNames(stored: readonly DocumentListing[], rawData: unknown, complete: boolean) {
+  const attachments = complete ? attachmentsOf(asData(rawData)) : [];
+  const linked = listedAttachments(stored, attachments, attachmentLinksByName(attachments));
   return {
     files: stored.filter((document) => document.available).slice(0, DOCUMENT_TIP_NAMES).map((document) => document.name),
     linked: linked.slice(0, DOCUMENT_TIP_NAMES).map((item) => item.name),
@@ -527,19 +571,17 @@ export type DocumentTipNames = ReturnType<typeof documentTipNames>;
  * `withListed` adds the source's list; pass it only when every stored file is
  * in hand, so a later page can't hold one of them.
  */
-export function noticeDocumentRows<D extends { documentKey: string; name: string; available: boolean }>(stored: readonly D[], attachments: readonly NoticeAttachment[], withListed: boolean): NoticeDocumentRow<D>[] {
-  const linkFor = (name: string) => safeHttpsUrl(attachments.find((item) => sameName(item.name, name))?.url);
+export function noticeDocumentRows<D extends DocumentListing & { documentKey: string }>(stored: readonly D[], attachments: readonly NoticeAttachment[], withListed: boolean): NoticeDocumentRow<D>[] {
+  const links = attachmentLinksByName(attachments);
   const rows: NoticeDocumentRow<D>[] = stored.filter((document) => document.available)
     .map((document) => ({ state: "downloaded", key: document.documentKey, name: document.name, document }));
   for (const document of stored) {
-    if (!document.available) rows.push({ state: "elsewhere", key: document.documentKey, name: document.name, url: linkFor(document.name), document });
+    if (!document.available) rows.push({ state: "elsewhere", key: document.documentKey, name: document.name, url: documentSourceUrl(document, links), document });
   }
   if (!withListed) return rows;
-  const named = stored.map((document) => document.name);
-  for (const item of attachments) {
-    if (named.some((name) => sameName(name, item.name))) continue;
-    named.push(item.name);
-    rows.push({ state: "elsewhere", key: `listed:${item.name}`, name: item.name, url: safeHttpsUrl(item.url) });
+  for (const item of listedAttachments(stored, attachments, links)) {
+    const key = item.url ? `listed-url:${item.url}` : `listed-name:${documentNameKey(item.name)}`;
+    rows.push({ state: "elsewhere", key, name: item.name, url: item.url });
   }
   return rows;
 }

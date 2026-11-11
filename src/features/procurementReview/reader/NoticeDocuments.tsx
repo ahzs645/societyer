@@ -7,7 +7,7 @@ import { useCallback, useState } from "react";
 import { Download, ExternalLink, Eye, FileText } from "lucide-react";
 import { FilePreviewDialog, MAX_FILE_PREVIEW_BYTES } from "../../../components/FilePreviewDialog";
 import type { StoredProcurementDocument } from "../lib/documents";
-import { noticeDocumentRows, onSource, type NoticeModel } from "../lib/notice";
+import { noticeDocumentRows, onDocumentSource, onSource, type NoticeModel } from "../lib/notice";
 import { useReaderSource } from "./source";
 
 function size(bytes: number) {
@@ -66,6 +66,7 @@ export function NoticeDocuments({ recordKey, model }: { recordKey: string; model
             <ul className="procurement-notice__docs">
               {rows.map((row) => {
                 if (row.state === "elsewhere") {
+                  const destination = row.url ? onDocumentSource(row.url, model.source) : where;
                   return (
                     <li key={row.key} className="procurement-notice__doc" data-state="elsewhere">
                       <FileText size={16} aria-hidden="true" className="procurement-notice__doc-icon" />
@@ -75,8 +76,8 @@ export function NoticeDocuments({ recordKey, model }: { recordKey: string; model
                       </span>
                       {row.url && (
                         <span className="procurement-notice__doc-actions">
-                          <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${row.name} ${where} (opens in a new tab)`}>
-                            <ExternalLink size={14} aria-hidden="true" /> Open {where}
+                          <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${row.name} ${destination} (opens in a new tab)`}>
+                            <ExternalLink size={14} aria-hidden="true" /> Open {destination}
                           </a>
                         </span>
                       )}

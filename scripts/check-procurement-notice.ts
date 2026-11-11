@@ -7,7 +7,7 @@
  * other notices, and the documents as one list.
  */
 import assert from "node:assert/strict";
-import { backLabel, deadlineOf, describeNotice, formatSourceDate, noticeDocumentRows, onSource, parseSourceDate, partyCount, sortableDate, sourceLabel, statusOf } from "../src/features/procurementReview/lib/notice";
+import { backLabel, deadlineOf, describeNotice, documentTipNames, formatSourceDate, noticeDocumentRows, onDocumentSource, onSource, parseSourceDate, partyCount, sortableDate, sourceLabel, statusOf } from "../src/features/procurementReview/lib/notice";
 import { describeReview } from "../src/features/procurementReview/lib/review";
 
 // Noon UTC on October 18, 2026 is 5 AM in Vancouver.
@@ -155,6 +155,25 @@ assert.deepEqual(rows.map((item) => [item.state, item.name, item.state === "else
 assert.equal(new Set(rows.map((item) => item.key)).size, rows.length, "Row keys are unique");
 assert.deepEqual(noticeDocumentRows([doc("Tender Documents.pdf", true)], attachments, false).map((item) => item.name), ["Tender Documents.pdf"], "Without the whole stored list, the source's list waits");
 assert.equal(noticeDocumentRows([], [], true).length, 0);
+const firstForm = "https://bcbid.gov.bc.ca/doc/first";
+const secondForm = "https://bcbid.gov.bc.ca/doc/second";
+const duplicateNames = [
+  { name: "Tender Form.pdf", url: firstForm },
+  { name: "Tender Form.pdf", url: secondForm },
+  { name: "Tender Form.pdf", url: firstForm },
+  { name: "Tender Form.pdf" },
+];
+const listedForms = noticeDocumentRows([], duplicateNames, true);
+assert.deepEqual(listedForms.map(item => item.state === "elsewhere" && item.url), [firstForm, secondForm]);
+assert.equal(new Set(listedForms.map(item => item.key)).size, 2);
+const storedForm = { ...doc("Tender Form.pdf", true), sourceUrl: firstForm };
+assert.deepEqual(noticeDocumentRows([storedForm], duplicateNames, true).map(item => item.state === "elsewhere" && item.url), [false, secondForm]);
+assert.equal(documentTipNames([storedForm], { attachments: duplicateNames }, true).linkedTotal, 1);
+const ambiguous = noticeDocumentRows([doc("Tender Form.pdf", false)], duplicateNames, true);
+assert.deepEqual(ambiguous.map(item => item.state === "elsewhere" && item.url), [undefined, firstForm, secondForm]);
+assert.equal(onDocumentSource("https://canadabuys.canada.ca/documents/example.pdf", "BC Bid"), "on CanadaBuys");
+assert.equal(onDocumentSource(firstForm, "BC Bid"), "on BC Bid");
+
 
 const row = (source: string, value: Record<string, unknown>) => ({ source, dataJson: JSON.stringify(value) });
 const review = describeReview([

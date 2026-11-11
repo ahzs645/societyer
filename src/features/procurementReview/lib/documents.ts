@@ -4,7 +4,7 @@ import { concatBytes, sha256Hex } from "./digest";
 
 export type StoredProcurementDocument = {
   documentKey: string; name: string; mediaType: string; sha256: string;
-  bytes: number; parts: number; available: boolean;
+  bytes: number; parts: number; available: boolean; sourceUrl?: string;
 };
 
 /**
