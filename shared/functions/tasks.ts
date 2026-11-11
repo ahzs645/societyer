@@ -21,6 +21,7 @@ import { assertTaskPosition } from "../taskPosition";
 import { isIsoDay, normalizeTaskRecurrence, type TaskRecurrence } from "../taskRecurrence";
 import { notifyTaskAssignees } from "./taskNotifications";
 import { createNextTaskOccurrence } from "./taskOccurrences";
+import { deleteTaskAttachments } from "./taskAttachments";
 
 /** The sub-tasks of a task (one level: sub-tasks have none of their own). */
 async function subtasksOf(ctx: PortableQueryCtx, taskId: string) {
@@ -346,8 +347,11 @@ export async function taskRemove(ctx: PortableMutationCtx, { id }: { id: string 
   await getOwned(ctx, "tasks", id, candidate.societyId);
   // A parent's sub-tasks go with it (the person confirmed the count first).
   for (const child of await subtasksOf(ctx, id)) {
-    if (child.societyId === candidate.societyId) await ctx.db.delete(String(child._id));
+    if (child.societyId !== candidate.societyId) continue;
+    await deleteTaskAttachments(ctx, String(child._id));
+    await ctx.db.delete(String(child._id));
   }
+  await deleteTaskAttachments(ctx, id);
   await ctx.db.delete(id);
 }
 

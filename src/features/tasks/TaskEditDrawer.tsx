@@ -16,6 +16,7 @@ import { meetingDraftIdentityKey } from "../meetings/lib/meetingDraftStore";
 import { useDirtyCloseGuard } from "../meetings/lib/useDirtyCloseGuard";
 import { TaskFormFields, makeTaskFormDefaults, type TaskFormData, type TaskFormInitialValues, type TaskFormValue } from "./TaskFormFields";
 import { TaskChecklist } from "./TaskChecklist";
+import { TaskAttachments } from "./TaskAttachments";
 import { TaskDiscussion, TaskStateBanner } from "./TaskDetailExtras";
 import { HistoricalActionSource } from "./HistoricalActionSource";
 import { TaskSubtasksSection, useTaskFamily } from "./TaskSubtasks";
@@ -174,6 +175,7 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
       <TaskChecklist draft={form.checklistDraft} onDraftChange={(checklistDraft) => patch({ checklistDraft })} items={form.checklist} onChange={(checklist) => patch({ checklist })} readOnly={!canManage || saving} />
     </fieldset>
     {task && <TaskSubtasksSection societyId={societyId} task={task} family={family} canManage={canManage && !saving} onOpenTask={openOtherTask} />}
+    {task && <TaskAttachments taskId={String(task._id)} documents={data.documents} canManage={canManage} />}
     {task && <TaskDiscussion taskId={String(task._id)} />}
   </>;
   return presentation === "modal"

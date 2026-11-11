@@ -92,6 +92,28 @@ rule; `recurrencePreviousTaskId` and `recurrenceNextTaskId` link occurrences; `d
 the due date each alert last went out for. Historical actions imported
 from minutes can be promoted to current tasks with "Make current".
 
+## Attachments
+
+A task can hold any number of things it is about, in the `taskAttachments` table
+(`convex/tables/taskAttachments.ts`, `shared/taskAttachments.ts`,
+`shared/functions/taskAttachments.ts`): one row per thing, with its kind (`document` or
+`opportunity`), its key as text and a display snapshot (title, buyer, closing date). The single
+"Linked to" slots above still say where a task came from; attachments say what the work is about.
+
+- **Drawer.** `src/features/tasks/TaskAttachments.tsx` lists them under the checklist. Documents are
+  added from the workspace's documents; opportunities come from procurement review. Each opens and
+  can be removed, and every change saves at once and is logged to the task's activity.
+- **Rules.** Reading needs `tasks:read` and changing needs `tasks:write`. A document must belong to
+  the workspace and be one the person may open; documents a reader may not open are left out of
+  every list. Opportunities need the procurement review module. Attaching the same thing twice
+  changes nothing. Deleting a task or a document removes its attachments.
+- **Procurement.** An opportunity's action items are the tasks holding it. The notice page and the
+  list's row menu offer "Create action item", "Add to an existing action item…" and an "Open" entry
+  per task; once it is on a task, a new one is the separate "Create another action item".
+- **Linked to.** The Tasks table's read-only column adds "Document" and "Opportunity" for attached
+  things.
+- **Test.** `npm run test:task-attachments`.
+
 ## Tests
 
 `npm run test:task-structure` checks start dates, the sub-task rules (on hosted Convex and the local

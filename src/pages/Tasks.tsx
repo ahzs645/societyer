@@ -29,6 +29,7 @@ import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 import { TaskEditDrawer } from "../features/tasks/TaskEditDrawer";
+import { useTaskAttachmentKinds, withAttachmentKinds } from "../features/tasks/TaskAttachments";
 import { TASK_STATUSES, useTaskFormData } from "../features/tasks/TaskFormFields";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { TaskListView, usePhoneTaskSelection } from "../features/tasks/TaskListView";
@@ -88,6 +89,7 @@ export function TasksPage() {
   const { loaded, can } = usePermissions();
   const canManage = loaded && can("tasks:write");
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
+  const attachmentKinds = useTaskAttachmentKinds(society?._id);
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const formData = useTaskFormData(canManage ? society?._id : undefined);
   const { committees, goals, users, filings, workflows, documents, commitments } = formData;
@@ -141,7 +143,10 @@ export function TasksPage() {
   useEffect(() => {
     const metadata = tableData.objectMetadata;
     if (!society?._id || !metadata || !loaded || !can("settings:write")) return;
-    if (["linkedTo", "startDate"].every((name) => metadata.fields.some((field) => field.name === name))) return;
+    // Also once more when the column predates its "Opportunity" value (task attachments).
+    const hasField = (name: string) => metadata.fields.some((field) => field.name === name);
+    const linkedToHasOpportunity = metadata.fields.some((field) => field.name === "linkedTo" && JSON.stringify(field.config ?? {}).includes('"opportunity"'));
+    if (hasField("startDate") && linkedToHasOpportunity) return;
     if (metadataHealRef.current === String(society._id)) return;
     metadataHealRef.current = String(society._id);
     void ensureMetadata({ societyId: society._id }).catch(() => undefined);
@@ -251,7 +256,7 @@ export function TasksPage() {
           ]
             .filter((value): value is string => typeof value === "string" && value.length > 0)
             .join(" "),
-          linkedTo: linkedKinds(task),
+          linkedTo: withAttachmentKinds(linkedKinds(task), attachmentKinds.get(String(task._id))),
           responsibleUserIdsLabel,
           committeeIdLabel,
           meetingIdLabel,
@@ -273,6 +278,7 @@ export function TasksPage() {
       meetingById,
       userById,
       workflowById,
+      attachmentKinds,
     ],
   );
 
@@ -1172,7 +1178,7 @@ const TASK_LINK_KINDS: readonly TaskLinkKind[] = ["meeting", "goal", "filing", "
 
 /** What a task is linked to, as values of the read-only "Linked to" column. */
 function linkedKinds(task: Doc<"tasks">): TaskLinkKind[] {
-  const present: Record<TaskLinkKind, unknown> = {
+  const present: Partial<Record<TaskLinkKind, unknown>> = {
     meeting: task.meetingId,
     goal: task.goalId,
     filing: task.filingId,

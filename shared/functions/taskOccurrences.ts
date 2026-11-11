@@ -10,6 +10,7 @@ import type { PortableDoc, PortableMutationCtx } from "../portable/ctx";
 import { normalizeTaskChecklist, type TaskChecklistItem } from "../taskChecklist";
 import { isIsoDay, isTaskRecurrenceFrequency, nextTaskOccurrence, type TaskRecurrence } from "../taskRecurrence";
 import { organizationTodayForTasks } from "./taskNotifications";
+import { copyDocumentAttachments } from "./taskAttachments";
 
 /**
  * What the next occurrence carries over: wording, priority, owners, committee,
@@ -73,7 +74,7 @@ export async function createNextTaskOccurrence(ctx: PortableMutationCtx, task: P
     recurrencePreviousTaskId: task._id,
     createdAtISO: nowISO,
   });
-  // Integration hook (attachments): copy the completed task's `taskAttachments` rows to `id` here.
+  await copyDocumentAttachments(ctx, String(task._id), id);
   await ctx.db.patch(String(task._id), { recurrenceNextTaskId: id });
   await ctx.db.insert("activity", {
     societyId: task.societyId,

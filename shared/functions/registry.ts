@@ -63,6 +63,7 @@ import * as writtenResolutionsFns from "./writtenResolutions";
 import * as retentionFns from "./retention";
 import * as serviceProvidersFns from "./serviceProviders";
 import * as tasksFns from "./tasks";
+import * as taskAttachmentsFns from "./taskAttachments";
 import * as agmFns from "./agm";
 import * as financialsFns from "./financials";
 const firmFns = lazyHandlers(() => import("./firm"), "firm");
@@ -291,6 +292,15 @@ const BILLING_COMMERCE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "billingDocuments:removeRepairTime", handler: billingDocumentsFns.removeRepairTimePortable }),
   definePortableMutation({ name: "billingDocuments:setRepairStatus", handler: billingDocumentsFns.setRepairStatusGuardedPortable }),
   definePortableMutation({ name: "billingDocuments:invoiceRepair", handler: billingDocumentsFns.invoiceRepairGuardedPortable }),
+];
+
+// Things attached to a task (kept apart: one more entry in the list below is past what the checker can type).
+const TASK_ATTACHMENT_FUNCTIONS: PortableFunctionDef[] = [
+  // taskAttachments
+  definePortableQuery({ name: "taskAttachments:listForTask", handler: taskAttachmentsFns.listForTask }),
+  definePortableQuery({ name: "taskAttachments:listByKind", handler: taskAttachmentsFns.listByKind }),
+  definePortableMutation({ name: "taskAttachments:attach", handler: taskAttachmentsFns.attachToTask }),
+  definePortableMutation({ name: "taskAttachments:detach", handler: taskAttachmentsFns.detachFromTask }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
@@ -786,6 +796,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "spendBudgets:setArchived", handler: spendBudgetsFns.setArchivedPortable }),
   definePortableMutation({ name: "spendBudgets:remove", handler: spendBudgetsFns.removePortable }),
   ...BILLING_COMMERCE_FUNCTIONS,
+  ...TASK_ATTACHMENT_FUNCTIONS,
   // invoices
   definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
   definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),

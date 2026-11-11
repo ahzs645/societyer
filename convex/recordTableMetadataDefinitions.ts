@@ -3540,6 +3540,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
             { value: "document", label: "Document", color: "gray" },
             { value: "commitment", label: "Commitment", color: "yellow" },
             { value: "event", label: "Event", color: "red" },
+            { value: "opportunity", label: "Opportunity", color: "teal" },
           ],
         },
       },

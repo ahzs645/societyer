@@ -26940,6 +26940,70 @@
     ]
   },
   {
+    "key": "convex:taskAttachments:attach",
+    "surface": "convex",
+    "name": "taskAttachments:attach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:taskAttachments:detach",
+    "surface": "convex",
+    "name": "taskAttachments:detach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "taskAttachments",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:taskAttachments:listByKind",
+    "surface": "convex",
+    "name": "taskAttachments:listByKind",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:taskAttachments:listForTask",
+    "surface": "convex",
+    "name": "taskAttachments:listForTask",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:tasks:byCommittee",
     "surface": "convex",
     "name": "tasks:byCommittee",
@@ -52244,6 +52308,70 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:attach",
+    "surface": "portable",
+    "name": "taskAttachments:attach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:detach",
+    "surface": "portable",
+    "name": "taskAttachments:detach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "taskAttachments",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:listByKind",
+    "surface": "portable",
+    "name": "taskAttachments:listByKind",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:listForTask",
+    "surface": "portable",
+    "name": "taskAttachments:listForTask",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
       }
     ]
   },

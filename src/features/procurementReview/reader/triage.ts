@@ -5,6 +5,10 @@
  * readers (the Convex copy and the catalog service) provide it from one live
  * query, and the list and the notice page join it by record key. The offline
  * snapshot and the demo provide none, and show no triage.
+ *
+ * Action items are tasks holding the opportunity as an attachment
+ * (taskAttachments): read from their own query, so the triage still works
+ * when they can't be read, and the action-item choices then stay hidden.
  */
 import { createContext, useContext, useMemo } from "react";
 import { useMutation, useQueries, type RequestForQueries } from "convex/react";
@@ -16,26 +20,38 @@ import {
   type Triage,
   type TriageTaskNotice,
 } from "../../../../shared/procurementTriage";
+import type { TaskAttachmentOnTask } from "../../../../shared/taskAttachments";
 
 /** One opportunity's saved triage, as procurementTriage:list returns it. */
 export type TriageEntry = Triage & {
   recordKey: string;
   updatedBy: string | null;
   updatedAt: number;
-  /** The action item made from it, while that task exists. */
-  taskId: string | null;
 };
 
+/** A task an opportunity is on. */
+export type ActionItem = { taskId: string; title: string; status: string };
+
 export type ReaderTriage = {
+  /** The workspace the triage belongs to. */
+  societyId: string;
   /** Saved triage by record key; undefined while it loads. */
   entries: ReadonlyMap<string, TriageEntry> | undefined;
   /** documents:write: may change the triage. */
   canEdit: boolean;
-  /** tasks:write as well: may make an action item. */
+  /** tasks:write as well: may make an action item or add to one. */
   canCreateTask: boolean;
+  /**
+   * The tasks each opportunity is on, by record key (opportunities on none
+   * are absent); undefined while they load or when they can't be read.
+   */
+  actionItems: ReadonlyMap<string, readonly ActionItem[]> | undefined;
   /** Saves for the whole workspace; shows at once, and rolls back if the save fails. */
   set(recordKey: string, next: Triage): Promise<void>;
-  createTask(recordKey: string, notice: TriageTaskNotice): Promise<{ taskId: string; created: boolean }>;
+  /** A new task holding the opportunity; while it is on one, only with `another`. */
+  createTask(recordKey: string, notice: TriageTaskNotice, another?: boolean): Promise<{ taskId: string; created: boolean }>;
+  /** Put the opportunity on a task that exists. */
+  addToTask(taskId: string, recordKey: string, notice: TriageTaskNotice): Promise<{ created: boolean }>;
 };
 
 export const ReaderTriageContext = createContext<ReaderTriage | null>(null);
@@ -53,14 +69,13 @@ function applyOptimistically(store: OptimisticLocalStore, args: SetArgs) {
   if (!current) return;
   const existing = current.find((entry) => entry.recordKey === args.recordKey);
   const others = current.filter((entry) => entry.recordKey !== args.recordKey);
-  const cleared = !args.reviewed && !args.classification && !existing?.taskId;
+  const cleared = !args.reviewed && !args.classification;
   const next: TriageEntry = {
     recordKey: args.recordKey,
     reviewed: args.reviewed,
     classification: args.classification,
     updatedBy: existing?.updatedBy ?? null,
     updatedAt: Date.now(),
-    taskId: existing?.taskId ?? null,
   };
   store.setQuery(api.procurementTriage.list, query, cleared ? others : [...others, next]);
 }
@@ -71,14 +86,35 @@ function applyOptimistically(store: OptimisticLocalStore, args: SetArgs) {
  * rather than failing.
  */
 export function useWorkspaceTriage(societyId: string): ReaderTriage | null {
+  const { can } = usePermissions();
+  const canReadTasks = can("tasks:read");
   // useQueries hands a server error back as a value; useQuery would throw it into the page.
-  const queries = useMemo<RequestForQueries>(() => ({ list: { query: api.procurementTriage.list, args: { societyId } } }), [societyId]);
-  const result = useQueries(queries).list as TriageEntry[] | Error | undefined;
+  const queries = useMemo<RequestForQueries>(
+    () => ({
+      list: { query: api.procurementTriage.list, args: { societyId } },
+      ...(canReadTasks ? { attachments: { query: api.taskAttachments.listByKind, args: { societyId, kind: "opportunity" } } } : {}),
+    }),
+    [societyId, canReadTasks],
+  );
+  const results = useQueries(queries);
+  const result = results.list as TriageEntry[] | Error | undefined;
   const rows = result instanceof Error ? undefined : result;
+  const attachments = results.attachments as TaskAttachmentOnTask[] | Error | undefined;
+  const actionItems = useMemo(() => {
+    if (!attachments || attachments instanceof Error) return undefined;
+    const byRecord = new Map<string, ActionItem[]>();
+    for (const row of attachments) {
+      const items = byRecord.get(row.refKey) ?? [];
+      items.push({ taskId: row.taskId, title: row.task.title, status: row.task.status });
+      byRecord.set(row.refKey, items);
+    }
+    for (const items of byRecord.values()) items.sort((a, b) => a.title.localeCompare(b.title));
+    return byRecord;
+  }, [attachments]);
   const setTriage = useMutation(api.procurementTriage.set);
   const save = useMemo(() => setTriage.withOptimisticUpdate(applyOptimistically), [setTriage]);
   const create = useMutation(api.procurementTriage.createTask);
-  const { can } = usePermissions();
+  const attach = useMutation(api.taskAttachments.attach);
   const canEdit = can("documents:write");
   const canCreateTask = canEdit && can("tasks:write");
   const entries = useMemo(
@@ -89,16 +125,20 @@ export function useWorkspaceTriage(societyId: string): ReaderTriage | null {
   );
   const triage = useMemo<ReaderTriage>(
     () => ({
+      societyId,
       entries,
       canEdit,
       canCreateTask,
+      actionItems,
       set: async (recordKey, next) => {
         await save({ societyId, recordKey, reviewed: next.reviewed, classification: next.classification });
       },
-      createTask: async (recordKey, notice) =>
-        (await create({ societyId, recordKey, notice })) as { taskId: string; created: boolean },
+      createTask: async (recordKey, notice, another) =>
+        (await create({ societyId, recordKey, notice, ...(another ? { another: true } : {}) })) as { taskId: string; created: boolean },
+      addToTask: async (taskId, recordKey, notice) =>
+        (await attach({ taskId, kind: "opportunity", refKey: recordKey, snapshot: attachmentSnapshot(notice) })) as { created: boolean },
     }),
-    [entries, canEdit, canCreateTask, save, create, societyId],
+    [entries, canEdit, canCreateTask, actionItems, save, create, attach, societyId],
   );
   return result instanceof Error ? null : triage;
 }
@@ -111,6 +151,16 @@ export function triageTaskNotice(notice: { title: string; buyer: string; date?: 
     closes: /^\d{4}-\d{2}-\d{2}/.exec(notice.date ?? "")?.[0] ?? "",
     closesText: notice.dateText ?? "",
     reference: notice.reference ?? "",
+  };
+}
+
+/** What a task's attachment shows of the notice. */
+function attachmentSnapshot(notice: TriageTaskNotice) {
+  return {
+    title: notice.title.trim() || "Untitled notice",
+    ...(notice.buyer.trim() ? { subtitle: notice.buyer.trim() } : {}),
+    ...(notice.closes ? { dueDate: notice.closes } : {}),
+    ...(notice.closesText.trim() ? { dueText: notice.closesText.trim() } : {}),
   };
 }
 

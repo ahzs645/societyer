@@ -1,8 +1,9 @@
 /**
  * The workspace's own bid triage of opportunities (shared/procurementTriage.ts):
- * a "reviewed" tick, a classification, and at most one action item (a task)
- * per opportunity. Saved here, shared by the workspace's members, never
- * written back to Zoer.
+ * a "reviewed" tick and a classification. Saved here, shared by the
+ * workspace's members, never written back to Zoer. Its action items are tasks
+ * holding the opportunity as an attachment (taskAttachments): an opportunity
+ * may be on several tasks, and a task may hold several opportunities.
  *
  * Nothing here reads the catalog: a workspace may read it from the Convex copy
  * or from the catalog service, and the triage is keyed by record key alone. The
@@ -18,6 +19,7 @@ import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { requireSocietyMembership } from "../shared/functions/access";
 import { requirePermissionPortable } from "../shared/functions/permissions";
 import { taskCreate } from "../shared/functions/tasks";
+import { attachToTask } from "../shared/functions/taskAttachments";
 import { deploymentCapabilities, PROCUREMENT_REVIEW_UNAVAILABLE_MESSAGE } from "../shared/deploymentCapabilities";
 import {
   canCreateTriageTask,
@@ -50,7 +52,6 @@ const entry = v.object({
   classification: v.string(),
   updatedBy: v.union(v.string(), v.null()),
   updatedAt: v.number(),
-  taskId: v.union(v.string(), v.null()),
 });
 
 /** Every triaged opportunity of the workspace, for the reader to join onto its list and notice pages. */
@@ -66,21 +67,17 @@ export const list = authorizedQuery(
       .query("procurementTriage")
       .withIndex("by_record", (q) => q.eq("societyId", societyId))
       .take(LIST_LIMIT);
-    return Promise.all(
-      rows.map(async (row) => ({
-        recordKey: row.recordKey,
-        reviewed: row.reviewed,
-        classification: triageClassification(row.classification),
-        updatedBy: row.updatedBy ?? null,
-        updatedAt: row.updatedAt,
-        // A task deleted since no longer counts: the action item can be made again.
-        taskId: row.taskId && (await ctx.db.get(row.taskId)) ? String(row.taskId) : null,
-      })),
-    );
+    return rows.map((row) => ({
+      recordKey: row.recordKey,
+      reviewed: row.reviewed,
+      classification: triageClassification(row.classification),
+      updatedBy: row.updatedBy ?? null,
+      updatedAt: row.updatedAt,
+    }));
   },
 });
 
-/** Save one opportunity's triage. Clearing both removes the row, unless it carries an action item. */
+/** Save one opportunity's triage. Clearing both removes the row; its action items stay. */
 export const set = authorizedMutation(
   "procurementTriage:set",
   mutation,
@@ -101,8 +98,7 @@ export const set = authorizedMutation(
       (value): value is string => typeof value === "string" && !!value.trim(),
     );
     const existing = await rowFor(ctx, societyId, recordKey);
-    // A row that links an action item stays, so the item is never made twice.
-    if (!reviewed && !classification && !existing?.taskId) {
+    if (!reviewed && !classification) {
       if (existing) await ctx.db.delete(existing._id);
       return null;
     }
@@ -119,12 +115,13 @@ export const set = authorizedMutation(
 });
 
 /**
- * "Create action item": one task for an opportunity the workspace has
- * reviewed and classified (anything but not doable). Only on request, never as
- * a side effect of classifying, and at most one per opportunity: asking again
- * returns the task that exists. Needs tasks:write as well as the triage's
- * documents:write. The browser sends the notice's facts, since the catalog
- * may not be in Convex.
+ * "Create action item": a task holding the opportunity as an attachment, for
+ * an opportunity the workspace has reviewed and classified (anything but not
+ * doable). Only on request, never as a side effect of classifying. While the
+ * opportunity is already on a task, asking again returns that task unless
+ * `another` says a second one is meant, so nobody duplicates one by accident.
+ * Needs tasks:write as well as the triage's documents:write. The browser sends
+ * the notice's facts, since the catalog may not be in Convex.
  */
 export const createTask = authorizedMutation(
   "procurementTriage:createTask",
@@ -140,9 +137,11 @@ export const createTask = authorizedMutation(
       closesText: v.string(),
       reference: v.string(),
     }),
+    /** Make another action item although the opportunity is already on one. */
+    another: v.optional(v.boolean()),
   },
   returns: v.object({ taskId: v.string(), created: v.boolean() }),
-  handler: async (ctx, { societyId, recordKey, notice }) => {
+  handler: async (ctx, { societyId, recordKey, notice, another }) => {
     if (!isOpportunityRecordKey(recordKey)) throw new Error("Invalid opportunity.");
     if (notice.title.length > 1000 || notice.buyer.length > 500 || notice.closesText.length > 200 || notice.reference.length > 200)
       throw new Error("Invalid opportunity.");
@@ -153,7 +152,14 @@ export const createTask = authorizedMutation(
     const row = await rowFor(ctx, societyId, recordKey);
     if (!row || !canCreateTriageTask({ reviewed: row.reviewed, classification: triageClassification(row.classification) }))
       throw new Error("Review and classify the opportunity before creating an action item.");
-    if (row.taskId && (await ctx.db.get(row.taskId))) return { taskId: String(row.taskId), created: false };
+    if (!another) {
+      const holding = await ctx.db
+        .query("taskAttachments")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId).eq("kind", "opportunity").eq("refKey", recordKey))
+        .collect();
+      for (const attachment of holding)
+        if (await ctx.db.get(attachment.taskId)) return { taskId: String(attachment.taskId), created: false };
+    }
     const responsible = ctx.db.normalizeId("users", String(member._id));
     const title = notice.title.trim() || "Untitled notice";
     const taskId = await taskCreate(portable, {
@@ -164,7 +170,6 @@ export const createTask = authorizedMutation(
         (notice.closesText.trim() || notice.closes) && `Closes: ${notice.closesText.trim() || notice.closes}`,
         `Classification: ${triageLabel(row.classification)}`,
         notice.reference.trim() && `Reference: ${notice.reference.trim()}`,
-        `Opportunity: /app/procurement-review?notice=${encodeURIComponent(recordKey)}`,
       ].filter(Boolean).join("\n"),
       status: "Todo",
       priority: "Medium",
@@ -172,9 +177,17 @@ export const createTask = authorizedMutation(
       ...(notice.closes ? { dueDate: notice.closes } : {}),
       tags: ["procurement"],
     });
-    const stored = ctx.db.normalizeId("tasks", taskId);
-    if (!stored) throw new Error("The action item could not be linked.");
-    await ctx.db.patch(row._id, { taskId: stored });
+    await attachToTask(portable, {
+      taskId,
+      kind: "opportunity",
+      refKey: recordKey,
+      snapshot: {
+        title,
+        ...(notice.buyer.trim() ? { subtitle: notice.buyer.trim() } : {}),
+        ...(notice.closes ? { dueDate: notice.closes } : {}),
+        ...(notice.closesText.trim() ? { dueText: notice.closesText.trim() } : {}),
+      },
+    });
     return { taskId, created: true };
   },
 });

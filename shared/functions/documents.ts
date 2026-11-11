@@ -1258,6 +1258,10 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
     }
     if (reference) await ctx.db.delete(reference._id);
   }
+  // A deleted document comes off every task it was attached to (taskAttachments).
+  const attachments = await ctx.db.query("taskAttachments")
+    .withIndex("by_society", (q) => q.eq("societyId", String(document.societyId)).eq("kind", "document").eq("refKey", id)).collect();
+  for (const attachment of attachments) await ctx.db.delete(attachment._id);
   await ctx.db.delete(id);
 }
 

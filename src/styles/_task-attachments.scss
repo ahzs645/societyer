@@ -1,0 +1,38 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Task drawer: Attachments (src/features/tasks/TaskAttachments.tsx).
+// Laid out like the checklist above it.
+// ============================================================
+
+.task-attachments { margin-top: 16px; @include flex-column; gap: 6px; }
+.task-attachments__head { @include flex-center; gap: 8px; }
+.task-attachments__title { font-weight: 600; font-size: token('fs-md'); color: token('text-primary'); }
+.task-attachments__count { color: token('text-tertiary'); font-size: token('fs-sm'); font-variant-numeric: tabular-nums; }
+.task-attachments__items { list-style: none; margin: 0; padding: 0; @include flex-column; }
+.task-attachments__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px;
+  border-radius: token('r-sm');
+}
+.task-attachments__item:hover { background: token('bg-hover-alpha'); }
+.task-attachments__icon { flex-shrink: 0; padding-top: 2px; color: token('text-tertiary'); }
+.task-attachments__body { flex: 1; min-width: 0; @include flex-column; gap: 2px; }
+.task-attachments__link {
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.task-attachments__link:hover { text-decoration: underline; }
+.task-attachments__meta { color: token('text-tertiary'); font-size: token('fs-xs'); overflow-wrap: anywhere; }
+.task-attachments__remove { flex-shrink: 0; }
+
+@media (pointer: coarse) {
+  .task-attachments__item { min-height: 40px; align-items: center; }
+  .task-attachments__remove { min-width: 40px; min-height: 40px; }
+}

@@ -215,6 +215,7 @@ export const EXPORTABLE_TABLES = [
   "bylawRuleSets",
   "goals",
   "tasks",
+  "taskAttachments",
   "assets",
   "assetEvents",
   "assetMaintenance",
