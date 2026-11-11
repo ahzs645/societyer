@@ -20,6 +20,9 @@ import { TaskDiscussion, TaskStateBanner } from "./TaskDetailExtras";
 import { HistoricalActionSource } from "./HistoricalActionSource";
 import { TaskSubtasksSection, useTaskFamily } from "./TaskSubtasks";
 import { isoDay, startOfToday, type TaskRecord } from "./taskModel";
+import { nextOccurrenceMessage, recurrenceFromForm } from "./TaskRepeat";
+import { useSociety } from "../../hooks/useSociety";
+import { organizationTodayISO } from "../../lib/dateRanges";
 
 type Draft = TaskFormValue & { tags: string[]; checklist: TaskChecklistItem[]; checklistDraft: string };
 type Props = {
@@ -64,6 +67,7 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
   const confirm = useConfirm();
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
+  const society = useSociety();
   const state = useMeetingFormDraft<Draft, TaskEditBaseline>("task-form", isDraft,
     (value): value is TaskEditBaseline => !!value && typeof value === "object" && !Array.isArray(value));
   const { controller } = state;
@@ -107,18 +111,24 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
         responsibleUserIds: form.responsibleUserIds as Id<"users">[],
         tags: form.tags, checklist,
       };
+      const recurrence = recurrenceFromForm(form);
       if (task) {
-        await update({ id: task._id, expected: submitted.payload.baseline, patch: { ...fields, clearFields } });
+        await update({ id: task._id, expected: submitted.payload.baseline, patch: { ...fields, clearFields, recurrence } });
       } else {
         // completionNote is edit-only. All other optional values share the same clear/set contract.
         const { completionNote: _completion, ...createFields } = fields;
-        const id = await create({ societyId, ...createFields });
+        const id = await create({ societyId, ...createFields, ...(recurrence ? { recurrence } : {}) });
         if (controller.isCurrent(submitted)) onCreated?.(id as Id<"tasks">);
       }
       const active = controller.isCurrent(submitted);
       const closed = controller.complete(submitted, taskEditBaseline({ ...fields }));
       if (active) {
-        toast.success(task ? "Task updated" : "Task created", form.title);
+        // Completing a repeating task here says when the next one is due.
+        const keepsAnchor = task?.recurrence && recurrence && task.recurrence.frequency === recurrence.frequency && task.dueDate === form.dueDate;
+        const next = task && form.status === "Done" && task.status !== "Done"
+          ? nextOccurrenceMessage({ dueDate: form.dueDate, recurrence: recurrence && keepsAnchor ? { ...recurrence, anchorDay: task.recurrence?.anchorDay } : recurrence }, organizationTodayISO(society))
+          : null;
+        toast.success(next ? "Task completed" : task ? "Task updated" : "Task created", next ? `${form.title}. ${next}` : form.title);
         if (closed) onClose();
       }
     } catch (error) {

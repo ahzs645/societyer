@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { bodyQuorumRuleValidator } from "../validators/meetingModel";
+import { taskRecurrenceValidator } from "../validators/taskRecurrence";
 
 export const policyTables = {
   policies: defineTable({
@@ -227,6 +228,15 @@ export const policyTables = {
     parentTaskId: v.optional(v.id("tasks")),
     // Manual order within a board column (shared/taskPosition.ts).
     position: v.optional(v.number()),
+    // Repeating tasks (shared/taskRecurrence.ts): the rule, and the links
+    // between one occurrence and the next. Completing a repeating task creates
+    // the next one once and records it in `recurrenceNextTaskId`.
+    recurrence: v.optional(taskRecurrenceValidator),
+    recurrencePreviousTaskId: v.optional(v.id("tasks")),
+    recurrenceNextTaskId: v.optional(v.id("tasks")),
+    // The due date the due-soon and overdue alerts last went out for
+    // (shared/functions/taskNotifications.ts); a new due date re-arms them.
+    dueAlertsSent: v.optional(v.object({ dueSoonFor: v.optional(v.string()), overdueFor: v.optional(v.string()) })),
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"])

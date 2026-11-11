@@ -1,0 +1,17 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Repeating tasks: the "Repeats" control in the task form and the repeat
+// mark on list rows and board cards (src/features/tasks/TaskRepeat.tsx).
+// ============================================================
+
+.task-repeat__every { gap: token('s-2'); }
+.task-repeat__every > .task-repeat__interval { flex: 0 0 72px; width: 72px; }
+.task-repeat__every > :not(.task-repeat__interval) { flex: 1 1 auto; }
+
+.task-repeat-badge {
+  @include inline-flex-center;
+  flex-shrink: 0;
+  color: token('text-tertiary');
+}

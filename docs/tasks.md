@@ -18,6 +18,9 @@ grouped list, a board and the shared record table, all over the same filtered re
 | `src/features/tasks/TaskChecklist.tsx`, `shared/taskChecklist.ts` | Checklist steps inside a task and their validation |
 | `src/features/tasks/TaskDetailExtras.tsx` | Drawer banner (overdue, blocked or done), notes and activity |
 | `src/features/tasks/TaskVisuals.tsx` | Status and priority icons, due label, avatar, link chip, checklist badge |
+| `src/features/tasks/TaskRepeat.tsx`, `shared/taskRecurrence.ts` | The Repeats control, the repeat mark, and the date rules for the next occurrence |
+| `shared/functions/taskOccurrences.ts` | Creates the next occurrence when a repeating task is done |
+| `shared/functions/taskNotifications.ts` | "Assigned to you", "due soon" and "overdue" notifications |
 | `tests/interface-tasks.spec.ts` | Browser test for the list, board, checklist, undo and saved grouping |
 
 ## Behaviour
@@ -42,6 +45,19 @@ grouped list, a board and the shared record table, all over the same filtered re
 - **Keyboard.** The arrow keys move between list rows, Enter opens a task, and Space selects it.
 - **Primary link.** A row shows the record the task belongs to: a meeting, filing, goal, commitment,
   document, workflow or committee.
+- **Repeating tasks.** A task with a due date can repeat daily, weekly, monthly, yearly or every N of
+  those, with an optional end date. Marking it Done creates the next one once (reopening and completing
+  again does not make another): same wording, priority, owners, committee, tags and links, checklist
+  unticked, status To do. The next due date counts from the previous due date and skips forward so it
+  is not in the past; monthly and yearly rules keep the original day (31 Jan, 28 Feb, 31 Mar).
+  Cancelling creates nothing, and nothing is created past the end date. The next occurrence does not
+  send "assigned to you": its owners already had the task.
+- **Notifications.** Responsible users are told when they are added to a task (never the person who
+  added them), when it is due within the workspace's deadline lead time and when it becomes overdue.
+  Each alert goes out once per due date; a new due date re-arms it. Only open current tasks alert.
+  People without in-camera access see an in-camera task as "In-camera action". Each kind has its own
+  switches in notification settings and is included in the daily digest; the weekly summary counts
+  your own tasks that are due or overdue.
 
 ## Start dates, sub-tasks and board order
 
@@ -71,7 +87,9 @@ grouped list, a board and the shared record table, all over the same filtered re
 
 Tasks live in the `tasks` table (`convex/tables/policies.ts`); `checklist` is an optional array of
 `{ id, title, done }`, `startDate` a calendar day, `parentTaskId` the parent of a sub-task
-(index `by_parent`) and `position` the manual board order. Status values come from `shared/taskStatus.ts`. Historical actions imported
+(index `by_parent`) and `position` the manual board order. Status values come from `shared/taskStatus.ts`. `recurrence` holds the repeat
+rule; `recurrencePreviousTaskId` and `recurrenceNextTaskId` link occurrences; `dueAlertsSent` records
+the due date each alert last went out for. Historical actions imported
 from minutes can be promoted to current tasks with "Make current".
 
 ## Tests
@@ -80,6 +98,8 @@ from minutes can be promoted to current tasks with "Make current".
 runtime) and the position arithmetic.
 
 ```bash
+npm run test:task-recurrence       # repeat date rules and the next occurrence
+npm run test:task-notifications    # assigned, due soon, overdue, privacy and digests
 npx playwright test -c playwright.interface.config.ts tests/interface-tasks.spec.ts --project=desktop
 ```
 

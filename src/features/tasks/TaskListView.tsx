@@ -12,6 +12,7 @@ import { useIsMobile } from "../../lib/useIsMobile";
 import { TaskQuickAdd } from "./TaskQuickAdd";
 import { TaskAvatar, TaskChecklistBadge, TaskLinkChip, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
 import { TaskDueMenu, TaskMoreMenu, TaskPriorityMenu, TaskStatusMenu, type TaskViewActions } from "./TaskMenus";
+import { TaskRepeatBadge } from "./TaskRepeat";
 import { groupTasks, isClosedStatus, taskOwnerName, taskPrimaryLink, type TaskGroup, type TaskGroupBy, type TaskRecord } from "./taskModel";
 import { nestTasks } from "./taskSubtaskModel";
 import { TaskParentHint, TaskSubtaskBadge } from "./TaskSubtasks";
@@ -286,6 +287,7 @@ function TaskRow({
         <TaskParentHint title={parentHint} />
         <TaskChecklistBadge checklist={task.checklist} />
         <TaskSubtaskBadge progress={task.subtaskProgress} />
+        <TaskRepeatBadge recurrence={task.recurrence} />
       </span>
       {/* One grid cell each on wide screens; a wrapped second line on phones. */}
       <span className="task-row__meta">

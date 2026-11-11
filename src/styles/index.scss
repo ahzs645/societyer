@@ -178,4 +178,5 @@
 @use "workspace-branding"; // shared Brandkit identity, previews and mobile workspace switcher
 @use "account"; // My workspaces, sign-in methods, account linking, workspace lock screens
 @use "task-structure"; // Tasks: sub-tasks, nested list rows and the board drop marker
+@use "task-repeat"; // repeating tasks: the Repeats form control and the repeat mark on rows and cards
 @use "foundations";

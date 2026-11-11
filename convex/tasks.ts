@@ -12,6 +12,7 @@ import {
 } from "../shared/functions/tasks";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import * as tasksModule from "../shared/functions/tasks";
+import { taskRecurrenceValidator } from "./validators/taskRecurrence";
 
 export const list = authorizedQuery("tasks:list", query)({
   args: { societyId: v.id("societies") },
@@ -65,6 +66,7 @@ export const create = authorizedMutation("tasks:create", mutation)({
     checklist: v.optional(v.array(v.object({ id: v.string(), title: v.string(), done: v.boolean() }))),
     /** "Create task from action": the minutes section the action item is in (absent for the minutes' general actions). */
     minutesSectionIndex: v.optional(v.number()),
+    recurrence: v.optional(taskRecurrenceValidator),
   },
   returns: v.any(),
   handler: async (ctx, args) => taskCreate(await toPortableMutationCtx(ctx), args),
@@ -106,6 +108,8 @@ export const update = authorizedMutation("tasks:update", mutation)({
       // Convex strips `undefined` patch fields from the wire, so unlinking a
       // task from its meeting needs an explicit flag.
       clearMeetingId: v.optional(v.boolean()),
+      // A repeat rule, or null to stop repeating.
+      recurrence: v.optional(v.union(v.null(), taskRecurrenceValidator)),
       clearFields: v.optional(v.array(v.union(v.literal("description"), v.literal("assignee"), v.literal("assigneePersonId"), v.literal("dueDate"), v.literal("startDate"), v.literal("committeeId"), v.literal("goalId"), v.literal("meetingId"), v.literal("agendaItemId"), v.literal("filingId"), v.literal("workflowId"), v.literal("documentId"), v.literal("commitmentId"), v.literal("eventId"), v.literal("completionNote"), v.literal("parentTaskId"), v.literal("position")))),
     }),
   },
