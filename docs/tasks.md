@@ -19,6 +19,9 @@ grouped list, a board and the shared record table, all over the same filtered re
 | `src/features/tasks/TaskDetailExtras.tsx` | Drawer banner (overdue, blocked or done), notes and activity |
 | `src/features/tasks/TaskVisuals.tsx` | Status and priority icons, due label, avatar, link chip, checklist badge |
 | `tests/interface-tasks.spec.ts` | Browser test for the list, board, checklist, undo and saved grouping |
+| `src/features/tasks/timeline/` | Timeline view: `timelineMath.ts` (pure date maths), `timelineRows.ts` (tasks in, rows out), `TaskTimelineView.tsx` and its parts |
+| `shared/taskSchedule.ts` | Start-date rules shared by the server and the timeline |
+| `scripts/check-task-timeline.ts` | Timeline date maths, rows and the start-date rule (`npm run test:task-timeline`) |
 
 ## Behaviour
 
@@ -40,13 +43,20 @@ grouped list, a board and the shared record table, all over the same filtered re
   needs one should become its own task. A task holds at most 100 steps of up to 300 characters
   each. Steps save straight away on an existing task, and rows and cards show progress as `done/total`.
 - **Keyboard.** The arrow keys move between list rows, Enter opens a task, and Space selects it.
+- **Timeline.** The view switch offers a timeline of current tasks with the same scope, filters, search and
+  grouping as the list. A task with a start and a due date is a bar, a due date alone is a diamond, a start
+  date alone is a short bar with an open end; tasks with neither sit in "Not scheduled" at the bottom, where
+  clicking a day sets the due date. Day, week and month scales, Today, Fit and Earlier / Later; the scale and
+  the task-list width are saved per browser. With `tasks:write` on a desktop, drag a bar to move it, drag an
+  edge to change its start or due date, or focus a bar and use ← / → (Shift changes its length); each change
+  saves with Undo. Phones are read-only: a tap opens the task. A start date can never fall after the due date.
 - **Primary link.** A row shows the record the task belongs to: a meeting, filing, goal, commitment,
   document, workflow or committee.
 
 ## Data
 
 Tasks live in the `tasks` table (`convex/tables/policies.ts`); `checklist` is an optional array of
-`{ id, title, done }`. Status values come from `shared/taskStatus.ts`. Historical actions imported
+`{ id, title, done }`. `startDate` is an optional `YYYY-MM-DD` day; the server refuses one after the due date. Status values come from `shared/taskStatus.ts`. Historical actions imported
 from minutes can be promoted to current tasks with "Make current".
 
 ## Tests

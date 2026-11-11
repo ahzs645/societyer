@@ -15,6 +15,8 @@ export type RecordTableViewTypeOption<Id extends string = string> = {
   label: string;
   short: string;
   active: boolean;
+  /** A page-owned view (a page's list or timeline): while active, no built-in type options show. */
+  page?: boolean;
 };
 
 /**
@@ -126,7 +128,7 @@ function LayoutSection<Id extends string>({
   const kanbanFieldMetadataId = useRecordTableState((s) => s.kanbanFieldMetadataId);
   const calendarFieldMetadataId = useRecordTableState((s) => s.calendarFieldMetadataId);
   const handle = useRecordTableStoreHandle();
-  const listActive = viewTypeOptions.some((option) => option.id === "list" && option.active);
+  const listActive = viewTypeOptions.some((option) => (option.id === "list" || option.page) && option.active);
   const isKanban = !listActive && (viewType === "kanban" || viewType === "board");
   const isCalendar = !listActive && viewType === "calendar";
   return (

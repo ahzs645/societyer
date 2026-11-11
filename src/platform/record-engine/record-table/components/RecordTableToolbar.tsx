@@ -20,6 +20,7 @@ import {
   ListChecks,
   List,
   Rows3,
+  type LucideIcon,
 } from "lucide-react";
 import {
   useRecordTableIsDirty,
@@ -67,6 +68,20 @@ function resetScrollForViewSwitch() {
 }
 
 export type TableListViewOption = { active: boolean; onSelect: () => void; onLeave: () => void };
+/**
+ * A further page-owned view (the Tasks timeline) offered after the built-in
+ * view types. While it is active the page owns the body; choosing any other
+ * view calls `onLeave`.
+ */
+export type TablePageViewOption = {
+  id: string;
+  Icon: LucideIcon;
+  label: string;
+  short: string;
+  active: boolean;
+  onSelect: () => void;
+  onLeave: () => void;
+};
 
 /**
  * Tables at least this long filter a pause after typing rather than on every
@@ -87,6 +102,7 @@ export function RecordTableToolbar({
   onSaveAsView,
   actions,
   listView,
+  pageViews,
   hideViewPickerOnPhone = false,
   collapsibleSearch = false,
   extraFilterCount = 0,
@@ -115,6 +131,8 @@ export function RecordTableToolbar({
    * owns the body; choosing any other type calls `onLeave`.
    */
   listView?: TableListViewOption;
+  /** Page-owned views after the built-in ones (see TablePageViewOption). */
+  pageViews?: TablePageViewOption[];
   /**
    * Phones: leave out the saved-view picker because the page offers the
    * views elsewhere (Tasks' view sheet), so there is one place to choose a
@@ -313,13 +331,19 @@ export function RecordTableToolbar({
     if (mobileSelectionMode) handle.get().clearSelection();
     handle.get().setMobileSelectionMode(!mobileSelectionMode);
   };
-  const listActive = Boolean(listView?.active);
+  // A page-owned view (the list or a page view) owns the body; no built-in type shows as active.
+  const listActive = Boolean(listView?.active) || Boolean(pageViews?.some((view) => view.active));
   const isKanban = viewType === "kanban" || viewType === "board";
-  const chooseViewType = (next: "list" | "table" | "kanban" | "calendar") => {
-    if (next === "list") {
+  const leavePageViews = () => pageViews?.forEach((view) => view.onLeave());
+  const chooseViewType = (next: string) => {
+    const pageView = pageViews?.find((view) => view.id === next);
+    if (pageView) {
+      pageView.onSelect();
+    } else if (next === "list") {
       listView?.onSelect();
-    } else {
+    } else if (next === "table" || next === "kanban" || next === "calendar") {
       listView?.onLeave();
+      leavePageViews();
       handle.get().setType(next);
       const firstField = next === "kanban"
         ? kanbanFieldMetadataId ?? selectableKanbanFields[0]?.fieldMetadataId
@@ -332,10 +356,11 @@ export function RecordTableToolbar({
     resetScrollForViewSwitch();
   };
   const viewTypeOptions = [
-    ...(listView ? [{ id: "list" as const, Icon: List, label: t("recordTable.listView", "List view"), short: t("recordTable.listShort", "List"), active: listActive }] : []),
+    ...(listView ? [{ id: "list" as const, Icon: List, label: t("recordTable.listView", "List view"), short: t("recordTable.listShort", "List"), active: listView.active, page: true }] : []),
     { id: "table" as const, Icon: Table2, label: t("recordTable.tableView", "Table view"), short: t("recordTable.tableShort", "Table"), active: !listActive && viewType === "table" },
     { id: "kanban" as const, Icon: Kanban, label: t("recordTable.kanbanView", "Kanban view"), short: t("recordTable.kanbanShort", "Board"), active: !listActive && isKanban },
     { id: "calendar" as const, Icon: CalendarDays, label: t("recordTable.calendarView", "Calendar view"), short: t("recordTable.calendarShort", "Calendar"), active: !listActive && viewType === "calendar" },
+    ...(pageViews ?? []).map(({ id, Icon, label, short, active }) => ({ id, Icon, label, short, active, page: true })),
   ];
   // Records still arriving in batches count toward the total straight away
   // (a search or filter counts the matches loaded so far).
@@ -642,9 +667,10 @@ export function RecordTableToolbar({
           )}
           <button
             type="button"
-            className={!listView?.active && viewType === "table" ? "is-active" : ""}
+            className={!listActive && viewType === "table" ? "is-active" : ""}
             onClick={() => {
               listView?.onLeave();
+              leavePageViews();
               handle.get().setType("table");
               resetScrollForViewSwitch();
             }}
@@ -654,9 +680,10 @@ export function RecordTableToolbar({
           </button>
           <button
             type="button"
-            className={!listView?.active && (viewType === "kanban" || viewType === "board") ? "is-active" : ""}
+            className={!listActive && (viewType === "kanban" || viewType === "board") ? "is-active" : ""}
             onClick={() => {
               listView?.onLeave();
+              leavePageViews();
               const firstField = kanbanFieldMetadataId ?? selectableKanbanFields[0]?.fieldMetadataId;
               handle.get().setType("kanban");
               if (firstField) handle.get().setKanbanFieldMetadataId(firstField);
@@ -668,9 +695,10 @@ export function RecordTableToolbar({
           </button>
           <button
             type="button"
-            className={!listView?.active && viewType === "calendar" ? "is-active" : ""}
+            className={!listActive && viewType === "calendar" ? "is-active" : ""}
             onClick={() => {
               listView?.onLeave();
+              leavePageViews();
               const firstField = calendarFieldMetadataId ?? selectableCalendarFields[0]?.fieldMetadataId;
               handle.get().setType("calendar");
               if (firstField) handle.get().setCalendarFieldMetadataId(firstField);
@@ -680,6 +708,21 @@ export function RecordTableToolbar({
           >
             <CalendarDays size={12} />
           </button>
+          {pageViews?.map((view) => (
+            <button
+              key={view.id}
+              type="button"
+              className={view.active ? "is-active" : ""}
+              aria-pressed={view.active}
+              onClick={() => {
+                view.onSelect();
+                resetScrollForViewSwitch();
+              }}
+              title={view.label}
+            >
+              <view.Icon size={12} />
+            </button>
+          ))}
         </div>
         )}
 
@@ -758,7 +801,7 @@ export function RecordTableToolbar({
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 
-        {!listView?.active && viewType === "table" && (
+        {!listActive && viewType === "table" && (
           <>
             <button
               type="button"

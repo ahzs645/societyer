@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { usePersistView } from "../hooks/usePersistView";
-import { RecordTableToolbar, type TableListViewOption } from "./RecordTableToolbar";
+import { RecordTableToolbar, type TableListViewOption, type TablePageViewOption } from "./RecordTableToolbar";
 
 /**
  * Toolbar wrapper that wires up `usePersistView` so Save / Discard
@@ -23,6 +23,7 @@ export function RecordTableViewToolbar({
   onOpenFilter,
   actions,
   listView,
+  pageViews,
   onViewPicked,
   hideViewPickerOnPhone,
 }: {
@@ -37,6 +38,8 @@ export function RecordTableViewToolbar({
   actions?: ReactNode;
   /** See RecordTableToolbar: a page-owned grouped list ahead of the view types. */
   listView?: TableListViewOption;
+  /** See RecordTableToolbar: page-owned views after the built-in ones (the Tasks timeline). */
+  pageViews?: TablePageViewOption[];
   /** Called when the user picks or saves a view (not when one is restored on load). */
   onViewPicked?: (viewId: string) => void;
   /** See RecordTableToolbar: the page offers the saved views itself on phones. */
@@ -79,6 +82,7 @@ export function RecordTableViewToolbar({
       }}
       actions={actions}
       listView={listView}
+      pageViews={pageViews}
       hideViewPickerOnPhone={hideViewPickerOnPhone}
     />
   );
