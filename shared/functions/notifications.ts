@@ -15,6 +15,7 @@ import { hasPermission, requirePermissionPortable, type Permission } from "./per
 import { fiscalWindow } from "./treasury";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import { isInternalTransfer } from "../transferCategories";
+import { scanTaskDueAlerts, weeklyTaskLine } from "./taskNotifications";
 import {
   NOTIFICATION_KINDS,
   NOTIFICATION_RULES,
@@ -728,8 +729,10 @@ async function collectAlerts(ctx: PortableQueryCtx, societyId: string, nowMs: nu
  * the earlier copy is that old.
  */
 export async function scanSocietyAlerts(ctx: PortableMutationCtx, societyId: string, nowMs = Date.now()) {
-  const { alerts } = await collectAlerts(ctx, societyId, nowMs);
-  if (!alerts.length) return { created: 0 };
+  const { alerts, rules } = await collectAlerts(ctx, societyId, nowMs);
+  // Tasks use the deadline lead time; with it switched off only overdue tasks alert.
+  const tasks = await scanTaskDueAlerts(ctx, societyId, nowMs, rules.deadline_lead.enabled ? rules.deadline_lead.value : 0);
+  if (!alerts.length) return { created: tasks.created };
   const recent = await ctx.db
     .query("notifications")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -762,7 +765,7 @@ export async function scanSocietyAlerts(ctx: PortableMutationCtx, societyId: str
     lastRaised.set(key, nowISO);
     created++;
   }
-  return { created };
+  return { created: created + tasks.created };
 }
 
 /**
@@ -831,6 +834,11 @@ async function weeklySummaryLines(
     if (due || overdue) {
       lines.push(`${plural(due, "deadline")} due in the next ${plural(leadDays, "day")}${overdue ? `, ${overdue} overdue` : ""}.`);
     }
+  }
+
+  if (can("tasks:read")) {
+    const taskLine = await weeklyTaskLine(ctx, societyId, user._id, organizationToday(society, new Date(nowMs).toISOString()), leadDays);
+    if (taskLine) lines.push(taskLine);
   }
 
   if (can("financials:read")) {

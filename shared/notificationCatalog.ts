@@ -32,7 +32,7 @@ export const NOTIFICATION_GROUPS: ReadonlyArray<{ id: NotificationGroupId; label
 export type NotificationKindId =
   | "deadline" | "filing" | "commitment" | "grant"
   | "minutes" | "transcript" | "notice"
-  | "bot"
+  | "bot" | "task_assigned" | "task_due_soon" | "task_overdue"
   | "budget" | "balance" | "approval" | "finance_sync"
   | "signature" | "retention"
   | "governance" | "billing" | "volunteer"
@@ -62,6 +62,9 @@ export const NOTIFICATION_KINDS: readonly NotificationKindDef[] = [
   { id: "notice", group: "meetings", label: "Notices sent to you", description: "A meeting notice or message is delivered to you in the app.", permission: "society:read" },
 
   { id: "bot", group: "tasks", label: "Workflows and assistants", description: "A workflow or the filing assistant starts, needs your input, finishes or fails.", permission: "tasks:read" },
+  { id: "task_assigned", group: "tasks", label: "Tasks assigned to you", description: "Someone else makes you responsible for a task.", permission: "tasks:read" },
+  { id: "task_due_soon", group: "tasks", label: "Your tasks due soon", description: "A task you're responsible for is coming due, using the workspace's deadline lead time.", permission: "tasks:read" },
+  { id: "task_overdue", group: "tasks", label: "Your overdue tasks", description: "A task you're responsible for is past its due date.", permission: "tasks:read" },
 
   { id: "budget", group: "finance", label: "Budget alerts", description: "Spending on a budget line passes the threshold set under Alert thresholds.", permission: "financials:read", rule: "budget_line" },
   { id: "balance", group: "finance", label: "Low balance", description: "A bank account balance falls below the amount set under Alert thresholds.", permission: "financials:read", rule: "low_balance" },

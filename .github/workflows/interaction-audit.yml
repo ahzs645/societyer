@@ -28,6 +28,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: npm run test:static-parity && npm run test:meeting-draft-recovery
       - run: npm run test:motions-carryforward && npm run test:task-source-links
+      - name: Repeating tasks and task notifications
+        run: npm run test:task-recurrence && npm run test:task-notifications
       - name: Meeting collaboration for a standalone manual run
         if: github.event_name == 'workflow_dispatch'
         run: npm run test:meeting-collaboration

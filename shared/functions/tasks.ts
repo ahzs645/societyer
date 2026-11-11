@@ -16,6 +16,9 @@ import { tasksForReader } from "./minutesPrivacy";
 import { assertTaskEditBaseline, normalizedTaskPatch, type TaskClearableField, type TaskEditBaseline } from "../taskEditing";
 import { requirePermissionPortable } from "./permissions";
 import { exactDay, partialDate, requireEvidence } from "../evidenceReview";
+import { isIsoDay, normalizeTaskRecurrence, type TaskRecurrence } from "../taskRecurrence";
+import { notifyTaskAssignees } from "./taskNotifications";
+import { createNextTaskOccurrence } from "./taskOccurrences";
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -144,6 +147,8 @@ export async function taskCreate(
     checklist?: TaskChecklistItem[];
     /** "Create task from action": the minutes section the action item is in (absent for general actions). */
     minutesSectionIndex?: number;
+    /** Repeat rule (shared/taskRecurrence.ts); needs a due date. */
+    recurrence?: TaskRecurrence | null;
   },
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
@@ -167,6 +172,7 @@ export async function taskCreate(
     ...fields,
     ...(args.checklist ? { checklist: normalizeTaskChecklist(args.checklist) } : {}),
     ...(await minutesActionProvenance(ctx, args, minutesSectionIndex)),
+    ...(args.recurrence !== undefined ? { recurrence: args.recurrence ? normalizeTaskRecurrence(args.recurrence, args.dueDate) : undefined } : {}),
     createdAtISO: new Date().toISOString(),
   });
   await ctx.db.insert("activity", {
@@ -180,6 +186,10 @@ export async function taskCreate(
     summary: `Created task "${args.title}"`,
     createdAtISO: new Date().toISOString(),
   });
+  if (args.responsibleUserIds?.length) {
+    const created = await ctx.db.get(id, "tasks");
+    if (created) await notifyTaskAssignees(ctx, created, [], await principalUserId(ctx, args.societyId));
+  }
   return id;
 }
 
@@ -216,6 +226,8 @@ export async function taskUpdate(
       checklist?: TaskChecklistItem[];
       clearMeetingId?: boolean;
       clearFields?: TaskClearableField[];
+      /** A repeat rule, or null to stop repeating. */
+      recurrence?: TaskRecurrence | null;
     };
   },
 ): Promise<void> {
@@ -240,6 +252,13 @@ export async function taskUpdate(
     await getOwned(ctx, "users", userId, candidate.societyId);
   }
   if (patch.checklist) next.checklist = normalizeTaskChecklist(patch.checklist);
+  // A repeat rule follows the due date; a repeating task can't lose its due date.
+  if (patch.recurrence !== undefined || (task.recurrence && Object.hasOwn(next, "dueDate"))) {
+    const rule = patch.recurrence === undefined ? task.recurrence : patch.recurrence;
+    const dueAfter = Object.hasOwn(next, "dueDate") ? next.dueDate : task.dueDate;
+    if (rule && patch.recurrence === undefined && !isIsoDay(dueAfter)) throw new Error("A repeating task needs a due date. Set it to not repeat before removing the date.");
+    next.recurrence = rule ? normalizeTaskRecurrence(rule, dueAfter, { recurrence: task.recurrence, dueDate: task.dueDate }) : undefined;
+  }
   // Changing a meeting cannot retain an agenda item from the previous meeting.
   if (patch.meetingId && task.agendaItemId && !Object.hasOwn(next, "agendaItemId")) {
     await assertAgendaItem(ctx, task.agendaItemId, candidate.societyId, patch.meetingId);
@@ -260,6 +279,11 @@ export async function taskUpdate(
     next.completionNote = undefined;
   }
   await ctx.db.patch(id, next);
+  if (patch.responsibleUserIds) {
+    await notifyTaskAssignees(ctx, { ...task, ...next }, task.responsibleUserIds ?? [], await principalUserId(ctx, candidate.societyId));
+  }
+  // Marking a repeating task Done creates its next occurrence, once.
+  if (patch.status === "Done" && task.status !== "Done") await createNextTaskOccurrence(ctx, { ...task, ...next });
   if (patch.status) {
     await ctx.db.insert("activity", {
       societyId: task.societyId,
@@ -439,6 +463,10 @@ export async function promoteHistoricalAction(ctx: PortableMutationCtx, args: { 
     ...(args.responsibleUserIds ? { responsibleUserIds: args.responsibleUserIds } : {}),
     statusHistory: [...(task.statusHistory ?? []), { from: task.status, to: "Todo", recordedAtISO: new Date().toISOString(), actorUserId: await principalUserId(ctx, candidate.societyId), note: `Converted from a historical source action to a current task${args.note ? `: ${args.note}` : ""}.` }],
   });
+  if (args.responsibleUserIds) {
+    const promoted = await ctx.db.get(args.id, "tasks");
+    if (promoted) await notifyTaskAssignees(ctx, promoted, task.responsibleUserIds ?? [], await principalUserId(ctx, candidate.societyId));
+  }
   await ctx.db.insert("activity", { societyId: task.societyId, actor: "You", entityType: "task", subjectId: args.id, entityId: args.id, action: "promoted", summary: `Converted historical action "${task.title}" to a current task`, createdAtISO: new Date().toISOString() });
   return args.id;
 }
