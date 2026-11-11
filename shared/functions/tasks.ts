@@ -16,6 +16,7 @@ import { tasksForReader } from "./minutesPrivacy";
 import { assertTaskEditBaseline, normalizedTaskPatch, type TaskClearableField, type TaskEditBaseline } from "../taskEditing";
 import { requirePermissionPortable } from "./permissions";
 import { exactDay, partialDate, requireEvidence } from "../evidenceReview";
+import { assertTaskSchedule } from "../taskSchedule";
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -131,6 +132,7 @@ export async function taskCreate(
     sourceAssignee?: string;
     responsibleUserIds?: string[];
     dueDate?: string;
+    startDate?: string;
     committeeId?: string;
     meetingId?: string;
     agendaItemId?: string;
@@ -148,6 +150,7 @@ export async function taskCreate(
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
   if (!(TASK_STATUSES as readonly string[]).includes(args.status)) throw new Error(`Unknown task status "${args.status}".`);
+  assertTaskSchedule(args.startDate, args.dueDate);
   if (args.agendaItemId) await assertAgendaItem(ctx, args.agendaItemId, args.societyId, args.meetingId);
   if (args.assigneePersonId) await getOwned(ctx, "peopleDirectory", args.assigneePersonId, args.societyId);
   if (args.committeeId) await getOwned(ctx, "committees", args.committeeId, args.societyId);
@@ -199,6 +202,7 @@ export async function taskUpdate(
       sourceAssignee?: string;
       responsibleUserIds?: string[];
       dueDate?: string;
+      startDate?: string;
       committeeId?: string;
       meetingId?: string;
       agendaItemId?: string;
@@ -225,6 +229,13 @@ export async function taskUpdate(
   const task = await getOwned(ctx, "tasks", id, candidate.societyId);
   assertTaskEditBaseline(task, expected);
   const next = normalizedTaskPatch(patch);
+  // A start date can't fall after the due date, whichever of the two changes.
+  if (Object.hasOwn(next, "startDate") || Object.hasOwn(next, "dueDate")) {
+    assertTaskSchedule(
+      Object.hasOwn(next, "startDate") ? next.startDate : task.startDate,
+      Object.hasOwn(next, "dueDate") ? next.dueDate : task.dueDate,
+    );
+  }
   if (patch.committeeId) await getOwned(ctx, "committees", patch.committeeId, candidate.societyId);
   if (patch.assigneePersonId) await getOwned(ctx, "peopleDirectory", patch.assigneePersonId, candidate.societyId);
   if (patch.meetingId) await getOwned(ctx, "meetings", patch.meetingId, candidate.societyId);

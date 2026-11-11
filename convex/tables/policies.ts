@@ -193,6 +193,7 @@ export const policyTables = {
     sourceAssignee: v.optional(v.string()),
     responsibleUserIds: v.optional(v.array(v.id("users"))),
     dueDate: v.optional(v.string()),
+    startDate: v.optional(v.string()),
     committeeId: v.optional(v.id("committees")),
     meetingId: v.optional(v.id("meetings")),
     // B6: the agenda item the action came from.
