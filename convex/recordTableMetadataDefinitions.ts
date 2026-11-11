@@ -3500,6 +3500,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       },
       { name: "assignee", label: "Assignee", fieldType: FIELD_TYPES.TEXT, icon: "User" },
       { name: "dueDate", label: "Due", fieldType: FIELD_TYPES.DATE, icon: "CalendarClock" },
+      { name: "startDate", label: "Start date", fieldType: FIELD_TYPES.DATE, icon: "CalendarClock" },
       {
         name: "responsibleUserIds",
         label: "Responsible",

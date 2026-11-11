@@ -4,12 +4,13 @@
  * place without opening the task.
  */
 import type { ReactElement, ReactNode } from "react";
-import { ArrowUpRight, Check, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpRight, ArrowUpToLine, Check, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Menu, type MenuSection } from "../../components/Menu";
 import { isHistoricalSourceAction, taskStatusLabel } from "../../../shared/taskStatus";
 import { TaskDue, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
 import { formatDueDate } from "../../lib/format";
 import { TASK_PRIORITY_ORDER, addDays, isClosedStatus, isoDay, startOfToday, type TaskRecord } from "./taskModel";
+import type { TaskPositionWrite } from "../../../shared/taskPosition";
 
 export type TaskViewActions = {
   canManage: boolean;
@@ -21,7 +22,15 @@ export type TaskViewActions = {
   promote?: (task: TaskRecord) => Promise<void>;
   /** Create a task from a title typed inline; resolves true when it was saved. */
   quickAdd: (title: string, defaults: Partial<{ status: string; priority: string; dueDate: string }>) => Promise<boolean>;
+  /**
+   * Manual board order: write these positions (see shared/taskPosition.ts)
+   * and, for a move to another column, the moved task's new status or priority.
+   */
+  reorder?: (task: TaskRecord, writes: TaskPositionWrite[], changes: Partial<{ status: string; priority: string }>) => Promise<void>;
 };
+
+/** "Move to top" / "Move to bottom" on a board card; an absent handler disables the item. */
+export type TaskOrderMenu = { toTop?: () => void; toBottom?: () => void };
 
 /** Menus render in a portal, but React still bubbles their clicks to the row. */
 function Isolated({ children }: { children: ReactNode }) {
@@ -143,7 +152,7 @@ export function TaskDueMenu({ task, actions, emptyLabel = "", tabIndex }: { task
   );
 }
 
-export function TaskMoreMenu({ task, actions, tabIndex }: { task: TaskRecord; actions: TaskViewActions } & TriggerFocus) {
+export function TaskMoreMenu({ task, actions, tabIndex, order }: { task: TaskRecord; actions: TaskViewActions; order?: TaskOrderMenu } & TriggerFocus) {
   const closed = isClosedStatus(task.status);
   return (
     <Isolated>
@@ -167,6 +176,16 @@ export function TaskMoreMenu({ task, actions, tabIndex }: { task: TaskRecord; ac
                 : []),
             ],
           },
+          ...(order && actions.canManage
+            ? [{
+                id: "order",
+                label: "Order",
+                items: [
+                  { id: "top", label: "Move to top", icon: <ArrowUpToLine size={14} />, disabled: !order.toTop, onSelect: () => order.toTop?.() },
+                  { id: "bottom", label: "Move to bottom", icon: <ArrowDownToLine size={14} />, disabled: !order.toBottom, onSelect: () => order.toBottom?.() },
+                ],
+              }]
+            : []),
           ...statusMenuSections(task, actions),
           {
             id: "danger",

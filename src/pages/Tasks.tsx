@@ -55,6 +55,8 @@ import { useIsBottomSheet } from "../lib/useSheetDrag";
 import { TaskViewSummaryButton } from "../features/tasks/TaskViewSheet";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Tooltip } from "../components/Tooltip";
+import { withSubtaskInfo } from "../features/tasks/taskSubtaskModel";
+import { patchInList } from "../lib/optimistic";
 
 type TaskLayout = "list" | "engine";
 const LAYOUT_KEY = "societyer:tasks:layout";
@@ -89,6 +91,12 @@ export function TasksPage() {
   const { committees, goals, users, filings, workflows, documents, commitments } = formData;
   const create = useMutation(api.tasks.create);
   const update = useMutation(api.tasks.update);
+  // Board order shows at once: position and the column value are patched into the list locally.
+  const updateOrder = useMutation(api.tasks.update).withOptimisticUpdate((store, { id, patch }) => {
+    patchInList(store, api.tasks.list, String(id), Object.fromEntries(
+      Object.entries({ position: patch.position, status: patch.status, priority: patch.priority }).filter(([, value]) => value !== undefined),
+    ));
+  });
   const remove = useMutation(api.tasks.remove);
   const consolidate = useMutation(api.tasks.consolidateHistoricalActions);
   const promote = useMutation(api.tasks.promoteHistoricalAction);
@@ -131,7 +139,7 @@ export function TasksPage() {
   useEffect(() => {
     const metadata = tableData.objectMetadata;
     if (!society?._id || !metadata || !loaded || !can("settings:write")) return;
-    if (metadata.fields.some((field) => field.name === "linkedTo")) return;
+    if (["linkedTo", "startDate"].every((name) => metadata.fields.some((field) => field.name === name))) return;
     if (metadataHealRef.current === String(society._id)) return;
     metadataHealRef.current = String(society._id);
     void ensureMetadata({ societyId: society._id }).catch(() => undefined);
@@ -194,7 +202,7 @@ export function TasksPage() {
 
   const records = useMemo<TaskRecord[]>(
     () =>
-      ((tasks ?? []) as Doc<"tasks">[]).map((task) => {
+      withSubtaskInfo(((tasks ?? []) as Doc<"tasks">[]).map((task) => {
         const filing = task.filingId ? filingById.get(String(task.filingId)) : undefined;
         const responsibleUserIdsLabel = userNames(task.responsibleUserIds, userById);
         const committeeIdLabel = task.committeeId
@@ -252,7 +260,7 @@ export function TasksPage() {
           commitmentIdLabel,
           completedByUserIdLabel,
         };
-      }),
+      })),
     [
       tasks,
       committeeById,
@@ -350,9 +358,12 @@ export function TasksPage() {
 
   const confirmDelete = async (id: Id<"tasks">, title: string) => {
     if (!canManage) return;
+    const subtasks = records.filter((task) => task.parentTaskId === id).length;
     const approved = await confirm({
       title: "Delete task?",
-      message: `"${title}" will be permanently removed.`,
+      message: subtasks
+        ? `"${title}" and its ${subtasks} sub-task${subtasks === 1 ? "" : "s"} will be permanently removed.`
+        : `"${title}" will be permanently removed.`,
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -481,10 +492,21 @@ export function TasksPage() {
     if (fieldName === "dueDate" && (typeof value === "string" || value === null)) {
       await update({ id, patch: { dueDate: value ?? "" } });
     }
+    if (fieldName === "startDate" && (typeof value === "string" || value === null)) {
+      await update({ id, patch: value ? { startDate: value } : { clearFields: ["startDate"] } });
+    }
   };
 
-  const bulkDelete = async (ids: string[], selectedRecords: TaskRecord[]) => {
-    if (!canManage || ids.length === 0) return;
+  const bulkDelete = async (selectedIds: string[], selectedRecords: TaskRecord[]) => {
+    if (!canManage || selectedIds.length === 0) return;
+    // A selected parent takes its sub-tasks with it, so they are not deleted twice.
+    const selected = new Set(selectedIds);
+    const ids = selectedIds.filter((id) => {
+      const parentId = records.find((task) => String(task._id) === id)?.parentTaskId;
+      return !parentId || !selected.has(String(parentId));
+    });
+    const kept = new Set(ids);
+    const subtasksWith = records.filter((task) => task.parentTaskId && kept.has(String(task.parentTaskId))).length;
     const previewTitles = selectedRecords.slice(0, 5).map((task) => task.title);
     const overflow = selectedRecords.length - previewTitles.length;
     const approved = await confirm({
@@ -492,7 +514,8 @@ export function TasksPage() {
       message: (
         <>
           <p style={{ margin: "0 0 8px" }}>
-            This permanently removes the selected task{ids.length === 1 ? "" : "s"}.
+            This permanently removes the selected task{ids.length === 1 ? "" : "s"}
+            {subtasksWith > 0 ? ` and ${subtasksWith} sub-task${subtasksWith === 1 ? "" : "s"} that go with ${ids.length === 1 ? "it" : "them"}` : ""}.
             This action cannot be undone.
           </p>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
@@ -558,6 +581,41 @@ export function TasksPage() {
     },
     remove: (task) => confirmDelete(task._id, task.title),
     promote: canManage ? promoteToCurrent : undefined,
+    reorder: canManage ? async (task, writes, changes) => {
+      const own = writes.find((write) => write.id === String(task._id));
+      const others = writes.filter((write) => write.id !== String(task._id));
+      const moveTask = () => updateOrder({
+        id: task._id,
+        patch: {
+          ...(own ? { position: own.position } : {}),
+          ...changes,
+          ...(changes.status === "Done" && currentUserId ? { completedByUserId: currentUserId } : {}),
+        },
+      });
+      try {
+        await Promise.all(others.flatMap((write) => {
+          const other = records.find((record) => String(record._id) === write.id);
+          return other ? [updateOrder({ id: other._id, patch: { position: write.position } })] : [];
+        }));
+        if (changes.status === "Done" && task.status !== "Done") {
+          const previous = task.status;
+          await undoable({
+            message: "Task completed",
+            description: task.title,
+            errorMessage: "Could not complete task",
+            dedupeKey: `task-complete-${task._id}`,
+            run: moveTask,
+            undo: () => updateOrder({ id: task._id, patch: { status: previous, ...(task.position !== undefined ? { position: task.position } : {}) } }),
+            undoneMessage: "Task reopened",
+          });
+          return;
+        }
+        if (own || Object.keys(changes).length) await moveTask();
+        if (changes.status && isClosedStatus(task.status) && !isClosedStatus(changes.status)) toast.success("Task reopened", task.title);
+      } catch (error) {
+        toast.error("Could not move the task", error instanceof Error ? error.message : "Please try again.");
+      }
+    } : undefined,
     quickAdd: async (title, defaults) => {
       if (!canManage) return false;
       try {
@@ -857,6 +915,10 @@ export function TasksPage() {
         initialValues={{ committeeId: requestedCommitteeId || undefined, goalId: requestedGoalId || undefined }}
         onClose={() => setOpen(false)}
         onPromote={promoteToCurrent}
+        onOpenTask={(id) => {
+          const next = records.find((record) => String(record._id) === id);
+          if (next) openEdit(next);
+        }}
       />}
     </div>
   );

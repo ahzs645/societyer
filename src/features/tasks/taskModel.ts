@@ -21,6 +21,10 @@ export type TaskRecord = Doc<"tasks"> & {
   completedByUserIdLabel?: string;
   linkedTo: TaskLinkKind[];
   checklist?: TaskChecklistItem[];
+  /** Sub-tasks: filled in by `withSubtaskInfo` (taskSubtaskModel.ts). */
+  parentTaskTitle?: string;
+  subtaskProgress?: { done: number; total: number };
+  subtaskCount?: number;
 };
 
 /** Statuses in board/list order. Unknown and Cancelled only come from imported history. */

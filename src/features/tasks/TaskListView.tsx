@@ -13,6 +13,8 @@ import { TaskQuickAdd } from "./TaskQuickAdd";
 import { TaskAvatar, TaskChecklistBadge, TaskLinkChip, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
 import { TaskDueMenu, TaskMoreMenu, TaskPriorityMenu, TaskStatusMenu, type TaskViewActions } from "./TaskMenus";
 import { groupTasks, isClosedStatus, taskOwnerName, taskPrimaryLink, type TaskGroup, type TaskGroupBy, type TaskRecord } from "./taskModel";
+import { nestTasks } from "./taskSubtaskModel";
+import { TaskParentHint, TaskSubtaskBadge } from "./TaskSubtasks";
 import { Tooltip } from "../../components/Tooltip";
 
 export function TaskListView({
@@ -33,6 +35,8 @@ export function TaskListView({
   // used, else the first shown); ↑ / ↓ / Home / End move between rows.
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  // Parents whose sub-tasks are folded away, per group (a parent can sit in several groups over time).
+  const [foldedParents, setFoldedParents] = useState<ReadonlySet<string>>(() => new Set());
   usePhoneTaskSelection(actions.canManage);
 
   if (records.length === 0 && !actions.canManage) {
@@ -41,7 +45,19 @@ export function TaskListView({
 
   const isCollapsed = (group: TaskGroup) => toggled[`${groupBy}:${group.key}`] ?? Boolean(group.collapsedByDefault);
   const toggle = (group: TaskGroup) => setToggled((current) => ({ ...current, [`${groupBy}:${group.key}`]: !isCollapsed(group) }));
-  const shownRowIds = groups.flatMap((group) => (isCollapsed(group) ? [] : group.tasks.map((task) => String(task._id))));
+  const foldKey = (group: TaskGroup, taskId: string) => `${groupBy}:${group.key}:${taskId}`;
+  const rowsOf = (group: TaskGroup) => {
+    const folded = new Set(group.tasks.map((task) => String(task._id)).filter((id) => foldedParents.has(foldKey(group, id))));
+    return nestTasks(group.tasks, folded);
+  };
+  const toggleFold = (group: TaskGroup, taskId: string) => setFoldedParents((current) => {
+    const next = new Set(current);
+    const key = foldKey(group, taskId);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+  const shownRowIds = groups.flatMap((group) => (isCollapsed(group) ? [] : rowsOf(group).map((entry) => String(entry.task._id))));
   const tabStopRowId = activeRowId && shownRowIds.includes(activeRowId) ? activeRowId : shownRowIds[0] ?? null;
 
   const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -98,13 +114,16 @@ export function TaskListView({
             )}
             {!collapsed && (
               <div className="task-group__rows">
-                {group.tasks.map((task) => (
+                {rowsOf(group).map(({ task, depth, nested, parentHint }) => (
                   <TaskRow
                     key={task._id}
                     task={task}
                     actions={actions}
                     tabStop={String(task._id) === tabStopRowId}
                     onActivate={() => setActiveRowId(String(task._id))}
+                    depth={depth}
+                    parentHint={parentHint}
+                    subtasks={nested > 0 ? { count: nested, folded: foldedParents.has(foldKey(group, String(task._id))), onToggle: () => toggleFold(group, String(task._id)) } : undefined}
                   />
                 ))}
                 {canAdd && (
@@ -145,6 +164,9 @@ function TaskRow({
   actions,
   tabStop,
   onActivate,
+  depth = 0,
+  parentHint,
+  subtasks,
 }: {
   task: TaskRecord;
   actions: TaskViewActions;
@@ -152,6 +174,12 @@ function TaskRow({
   tabStop: boolean;
   /** Focus landed on the row or one of its controls. */
   onActivate: () => void;
+  /** 1 for a sub-task shown under its parent. */
+  depth?: 0 | 1;
+  /** The parent's title, for a sub-task shown away from its parent. */
+  parentHint?: string;
+  /** This parent's sub-tasks nested below it, and the control that folds them. */
+  subtasks?: { count: number; folded: boolean; onToggle: () => void };
 }) {
   const selected = useRecordTableState((s) => s.selectedRecordIds.has(String(task._id)));
   const anySelected = useRecordTableState((s) => s.selectedRecordIds.size > 0);
@@ -177,7 +205,7 @@ function TaskRow({
 
   return (
     <div
-      className={`task-row${selected ? " is-selected" : ""}${closed ? " is-closed" : ""}${anySelected || selecting ? " has-selection" : ""}`}
+      className={`task-row${selected ? " is-selected" : ""}${closed ? " is-closed" : ""}${anySelected || selecting ? " has-selection" : ""}${depth === 1 ? " task-row--subtask" : ""}`}
       role="button"
       tabIndex={tabStop ? 0 : -1}
       aria-label={task.title}
@@ -242,8 +270,22 @@ function TaskRow({
         <TaskStatusMenu task={task} actions={actions} tabIndex={-1} />
       )}
       <span className="task-row__title">
+        {subtasks && (
+          <button
+            type="button"
+            className="task-icon-button task-row__fold"
+            aria-expanded={!subtasks.folded}
+            aria-label={`${subtasks.folded ? "Show" : "Hide"} ${subtasks.count} sub-task${subtasks.count === 1 ? "" : "s"} of ${task.title}`}
+            tabIndex={-1}
+            onClick={(event) => { event.stopPropagation(); subtasks.onToggle(); }}
+          >
+            <ChevronRight size={13} aria-hidden="true" />
+          </button>
+        )}
         <span className="task-row__title-text">{task.title}</span>
+        <TaskParentHint title={parentHint} />
         <TaskChecklistBadge checklist={task.checklist} />
+        <TaskSubtaskBadge progress={task.subtaskProgress} />
       </span>
       {/* One grid cell each on wide screens; a wrapped second line on phones. */}
       <span className="task-row__meta">
