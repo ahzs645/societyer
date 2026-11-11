@@ -294,6 +294,15 @@ const BILLING_COMMERCE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "billingDocuments:invoiceRepair", handler: billingDocumentsFns.invoiceRepairGuardedPortable }),
 ];
 
+// Things attached to a task (kept apart: one more entry in the list below is past what the checker can type).
+const TASK_ATTACHMENT_FUNCTIONS: PortableFunctionDef[] = [
+  // taskAttachments
+  definePortableQuery({ name: "taskAttachments:listForTask", handler: taskAttachmentsFns.listForTask }),
+  definePortableQuery({ name: "taskAttachments:listByKind", handler: taskAttachmentsFns.listByKind }),
+  definePortableMutation({ name: "taskAttachments:attach", handler: taskAttachmentsFns.attachToTask }),
+  definePortableMutation({ name: "taskAttachments:detach", handler: taskAttachmentsFns.detachFromTask }),
+];
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
   definePortableQuery({ name: "personHistory:profile", handler: personHistoryFns.profile }),
@@ -600,11 +609,6 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "tasks:create", handler: tasksFns.taskCreate }),
   definePortableMutation({ name: "tasks:update", handler: tasksFns.taskUpdate }),
   definePortableMutation({ name: "tasks:remove", handler: tasksFns.taskRemove }),
-  // taskAttachments
-  definePortableQuery({ name: "taskAttachments:listForTask", handler: taskAttachmentsFns.listForTask }),
-  definePortableQuery({ name: "taskAttachments:listByKind", handler: taskAttachmentsFns.listByKind }),
-  definePortableMutation({ name: "taskAttachments:attach", handler: taskAttachmentsFns.attachToTask }),
-  definePortableMutation({ name: "taskAttachments:detach", handler: taskAttachmentsFns.detachFromTask }),
 
   // agm
   definePortableQuery({ name: "agm:runForMeeting", handler: agmFns.runForMeeting }),
@@ -792,6 +796,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "spendBudgets:setArchived", handler: spendBudgetsFns.setArchivedPortable }),
   definePortableMutation({ name: "spendBudgets:remove", handler: spendBudgetsFns.removePortable }),
   ...BILLING_COMMERCE_FUNCTIONS,
+  ...TASK_ATTACHMENT_FUNCTIONS,
   // invoices
   definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
   definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),

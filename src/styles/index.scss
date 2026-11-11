@@ -177,4 +177,5 @@
 @use "procurement-analytics"; // procurement reader: Analytics tab and buyer / issued-for pages
 @use "workspace-branding"; // shared Brandkit identity, previews and mobile workspace switcher
 @use "account"; // My workspaces, sign-in methods, account linking, workspace lock screens
+@use "task-attachments"; // task drawer: documents and opportunities attached to a task
 @use "foundations";

@@ -3,11 +3,11 @@
  * editable columns the shared table edits in place (Classification, Reviewed),
  * the triage joined onto the rows, the archive (reviewed + not doable leaves
  * every view but "Archived"), and the row menu that offers the same choices
- * on phones, where cards replace cells, plus the action item.
+ * on phones, where cards replace cells, plus the action items (actionItems.tsx).
  */
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ListTodo, Plus } from "lucide-react";
+import { Check } from "lucide-react";
 import type { MenuSection } from "../../../components/Menu";
 import { useToast } from "../../../components/Toast";
 import { useUndoableAction } from "../../../hooks/useUndoableAction";
@@ -17,12 +17,12 @@ import type { NoticeRow } from "../../../../shared/procurementNoticeRow";
 import {
   NO_TRIAGE,
   TRIAGE_CLASSIFICATIONS,
-  canCreateTriageTask,
   isTriageArchived,
   triageClassification,
   type Triage,
 } from "../../../../shared/procurementTriage";
 import { taskHref, triageTaskNotice, type ReaderTriage, type TriageEntry } from "./triage";
+import { actionItemMenuItems, useActionItemCommands } from "./actionItems";
 import type { ListRow } from "./source";
 
 /** Editable columns; Classification sorts best first (option order), unclassified last. */
@@ -48,7 +48,7 @@ export const TRIAGE_FIELDS: StaticFieldDefinition[] = [
   },
 ];
 
-export type TriagedRow = NoticeRow & Triage & { archived: boolean; taskId: string };
+export type TriagedRow = NoticeRow & Triage & { archived: boolean };
 
 /** Untriaged copies keep their identity between triage changes, so the table's search text stays cached. */
 const untriaged = new WeakMap<NoticeRow, TriagedRow>();
@@ -61,7 +61,7 @@ export function joinTriage(rows: NoticeRow[], entries: ReadonlyMap<string, Triag
     let next = entry ? null : untriaged.get(row);
     if (!next) {
       const triage: Triage = entry ? { reviewed: entry.reviewed, classification: entry.classification } : NO_TRIAGE;
-      next = { ...row, ...triage, archived: isTriageArchived(triage), taskId: entry?.taskId ?? "" };
+      next = { ...row, ...triage, archived: isTriageArchived(triage) };
       if (!entry) untriaged.set(row, next);
     }
     if (next.archived === archivedView) joined.push(next);
@@ -78,12 +78,14 @@ const triageOf = (entries: ReadonlyMap<string, TriageEntry> | undefined, recordK
  * Saving from the list: the table's inline edits (`onUpdate`) and the row
  * menu. Archiving takes the row out of the view, so it says where it went and
  * offers Undo. Without a triage (or the right to change it) there is neither.
+ * Render the returned `dialog` beside the table (the action-item picker).
  */
 export function useTriageEditing(triage: ReaderTriage | null, rows: readonly ListRow[]) {
   const entries = triage?.entries;
   const toast = useToast();
   const undoable = useUndoableAction();
   const navigate = useNavigate();
+  const commands = useActionItemCommands(triage);
 
   const save = useCallback(
     async (recordKey: string, title: string, next: Triage) => {
@@ -111,26 +113,6 @@ export function useTriageEditing(triage: ReaderTriage | null, rows: readonly Lis
       else if (fieldName === "classification") await save(recordId, title, { ...current, classification: triageClassification(value) });
     },
     [entries, rows, save],
-  );
-
-  const createTask = useCallback(
-    async (recordKey: string) => {
-      const row = rows.find((candidate) => candidate.recordKey === recordKey);
-      if (!row || !triage) return;
-      try {
-        const result = await triage.createTask(
-          recordKey,
-          triageTaskNotice({ title: row.title, buyer: row.organization, date: row.date, dateText: row.dateText, reference: row.reference }),
-        );
-        toast.success(result.created ? "Action item created" : "Action item already exists", {
-          description: `“${row.title}” is in Tasks.`,
-          action: { label: "Open", onClick: () => navigate(taskHref(result.taskId)) },
-        });
-      } catch (error) {
-        toast.error("Couldn't create the action item", error instanceof Error ? error.message : "Try again in a moment.");
-      }
-    },
-    [rows, triage, toast, navigate],
   );
 
   /** The row's menu (desktop "…" and right-click, and the phone card's menu). */
@@ -171,20 +153,31 @@ export function useTriageEditing(triage: ReaderTriage | null, rows: readonly Lis
             ],
           },
         );
-      if (row.taskId)
-        sections.push({ id: "task", items: [{ id: "open-task", label: "Open action item", icon: <ListTodo size={14} />, onSelect: () => navigate(taskHref(row.taskId)) }] });
-      else if (triage?.canCreateTask && canCreateTriageTask(current))
-        sections.push({ id: "task", items: [{ id: "create-task", label: "Create action item", icon: <Plus size={14} />, onSelect: () => void createTask(row._id) }] });
+      const source = rows.find((candidate) => candidate.recordKey === row._id);
+      const notice = triageTaskNotice(
+        source
+          ? { title: source.title, buyer: source.organization, date: source.date, dateText: source.dateText, reference: source.reference }
+          : { title: row.title, buyer: "" },
+      );
+      const actionItems = actionItemMenuItems({
+        triage,
+        target: { recordKey: row._id, notice },
+        current,
+        open: (taskId) => navigate(taskHref(taskId)),
+        commands,
+      });
+      if (actionItems.length) sections.push({ id: "task", label: "Action items", items: actionItems });
       return sections;
     },
-    [triage?.canEdit, triage?.canCreateTask, save, toast, navigate, createTask],
+    [triage, rows, save, toast, navigate, commands],
   );
 
   return useMemo(
     () => ({
       onUpdate: triage?.canEdit ? onUpdate : undefined,
       rowMenuSections: triage ? rowMenuSections : undefined,
+      dialog: commands.dialog,
     }),
-    [triage, onUpdate, rowMenuSections],
+    [triage, onUpdate, rowMenuSections, commands.dialog],
   );
 }

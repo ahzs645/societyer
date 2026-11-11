@@ -520,7 +520,7 @@ export function NoticeTable({
         : triagedRows,
     [triagedRows, textMatches],
   );
-  const { onUpdate, rowMenuSections } = useTriageEditing(triage, rows);
+  const { onUpdate, rowMenuSections, dialog: actionItemDialog } = useTriageEditing(triage, rows);
   const { openNotice } = nav;
   const renderCell = useCells(
     useCallback(
@@ -677,6 +677,7 @@ export function NoticeTable({
         ) : renderTable()}
 
       </RecordTableScope>
+      {actionItemDialog}
     </div>
   );
 }

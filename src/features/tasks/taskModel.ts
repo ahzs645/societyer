@@ -6,7 +6,9 @@ import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { OPEN_TASK_STATUSES, taskStatusLabel } from "../../../shared/taskStatus";
 import type { TaskChecklistItem } from "../../../shared/taskChecklist";
 
-export type TaskLinkKind = "meeting" | "goal" | "filing" | "workflow" | "document" | "commitment" | "event";
+export type TaskLinkKind = "meeting" | "goal" | "filing" | "workflow" | "document" | "commitment" | "event"
+  // From the task's attachments (TaskAttachments.tsx), not a slot of its own.
+  | "opportunity";
 
 export type TaskRecord = Doc<"tasks"> & {
   _searchText: string;

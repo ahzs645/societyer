@@ -23474,6 +23474,33 @@
     ]
   },
   {
+    "key": "convex:procurementCatalogOperator:approveRetirement",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:approveRetirement",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementCatalogOperator:confirmRetirement",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:confirmRetirement",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementCatalogOperator:detachRetiredCatalog",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:detachRetiredCatalog",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:procurementCatalogOperator:page",
     "surface": "convex",
     "name": "procurementCatalogOperator:page",
@@ -23504,6 +23531,31 @@
         "optional": false
       }
     ]
+  },
+  {
+    "key": "convex:procurementCatalogOperator:retirementStatus",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:retirementStatus",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalogOperator:retirePage",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:retirePage",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
   },
   {
     "key": "convex:procurementCatalogOperator:verifyParity",
@@ -24100,6 +24152,54 @@
     "kind": "action",
     "access": "service",
     "source": "convex/procurementTaxonomy.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementTriage:createTask",
+    "surface": "convex",
+    "name": "procurementTriage:createTask",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/procurementTriage.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementTriage:list",
+    "surface": "convex",
+    "name": "procurementTriage:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/procurementTriage.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementTriage:set",
+    "surface": "convex",
+    "name": "procurementTriage:set",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/procurementTriage.ts",
     "idArguments": [
       {
         "path": "societyId",
@@ -26836,6 +26936,70 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:taskAttachments:attach",
+    "surface": "convex",
+    "name": "taskAttachments:attach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:taskAttachments:detach",
+    "surface": "convex",
+    "name": "taskAttachments:detach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "taskAttachments",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:taskAttachments:listByKind",
+    "surface": "convex",
+    "name": "taskAttachments:listByKind",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:taskAttachments:listForTask",
+    "surface": "convex",
+    "name": "taskAttachments:listForTask",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/taskAttachments.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -52132,6 +52296,70 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:attach",
+    "surface": "portable",
+    "name": "taskAttachments:attach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:detach",
+    "surface": "portable",
+    "name": "taskAttachments:detach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "taskAttachments",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:listByKind",
+    "surface": "portable",
+    "name": "taskAttachments:listByKind",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:taskAttachments:listForTask",
+    "surface": "portable",
+    "name": "taskAttachments:listForTask",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "taskId",
+        "table": "tasks",
+        "array": false,
+        "optional": false
       }
     ]
   },

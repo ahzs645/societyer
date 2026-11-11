@@ -1,16 +1,18 @@
 /**
  * The notice page's bar for the workspace's bid triage (triage.ts): the same
- * Reviewed and Classification the list edits, the action item, and who last
- * changed them. Built from the shared Checkbox, Select (a bottom sheet on
- * phones) and Button. It keeps its place while the triage loads.
+ * Reviewed and Classification the list edits, the action items
+ * (actionItems.tsx), and who last changed them. Built from the shared
+ * Checkbox, Select (a bottom sheet on phones), Button and Menu. It keeps its
+ * place while the triage loads.
  */
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { ListTodo, Plus } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ChevronDown, ListPlus, ListTodo, Plus } from "lucide-react";
 import { Checkbox } from "../../../components/Controls";
 import { Select } from "../../../components/Select";
 import { Button } from "../../../components/ui";
 import { useToast } from "../../../components/Toast";
+import { Menu } from "../../../components/Menu";
 import { useUndoableAction } from "../../../hooks/useUndoableAction";
 import { formatSourceDate } from "../lib/notice";
 import {
@@ -23,6 +25,7 @@ import {
   type TriageTaskNotice,
 } from "../../../../shared/procurementTriage";
 import { taskHref, useReaderTriage, type ReaderTriage } from "./triage";
+import { actionItemMenuItems, actionItemsOf, useActionItemCommands } from "./actionItems";
 
 const OPTIONS = TRIAGE_CLASSIFICATIONS.map(({ value, label, color }) => ({ value, label, color }));
 
@@ -35,6 +38,8 @@ export function NoticeTriage({ recordKey, notice }: { recordKey: string; notice:
 function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; recordKey: string; notice: TriageTaskNotice }) {
   const toast = useToast();
   const undoable = useUndoableAction();
+  const navigate = useNavigate();
+  const commands = useActionItemCommands(triage);
   const [creating, setCreating] = useState(false);
   const entry = triage.entries?.get(recordKey);
   const current: Triage = entry ? { reviewed: entry.reviewed, classification: entry.classification } : NO_TRIAGE;
@@ -59,14 +64,14 @@ function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; 
   const createTask = async () => {
     setCreating(true);
     try {
-      const result = await triage.createTask(recordKey, notice);
-      toast.success(result.created ? "Action item created" : "Action item already exists", `“${title}” is in Tasks.`);
-    } catch (error) {
-      toast.error("Couldn't create the action item", error instanceof Error ? error.message : "Try again in a moment.");
+      await commands.create({ recordKey, notice });
     } finally {
       setCreating(false);
     }
   };
+  const target = { recordKey, notice };
+  const items = actionItemsOf(triage, recordKey);
+  const mayAct = triage.canCreateTask && canCreateTriageTask(current);
   const by = entry && [entry.updatedBy, formatSourceDate(new Date(entry.updatedAt).toISOString())].filter(Boolean).join(" · ");
 
   return (
@@ -85,18 +90,35 @@ function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; 
         sheetTitle="Classification"
         disabled={disabled}
       />
-      {entry?.taskId ? (
-        <Link className="btn btn--sm" to={taskHref(entry.taskId)}>
+      {items?.length === 1 && !mayAct && (
+        <Link className="btn btn--sm" to={taskHref(items[0].taskId)}>
           <ListTodo size={14} aria-hidden="true" /> Open action item
         </Link>
-      ) : (
-        triage.canCreateTask &&
-        canCreateTriageTask(current) && (
+      )}
+      {items && items.length > 0 && (items.length > 1 || mayAct) && (
+        <Menu
+          label="Action items"
+          sheetTitle="Action items"
+          trigger={
+            <button type="button" className="btn btn--sm">
+              <ListTodo size={14} aria-hidden="true" /> {items.length === 1 ? "Action item" : `${items.length} action items`}{" "}
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+          }
+          sections={[{ id: "task", items: actionItemMenuItems({ triage, target, current, open: (taskId) => navigate(taskHref(taskId)), commands }) }]}
+        />
+      )}
+      {items && items.length === 0 && mayAct && (
+        <>
           <Button size="sm" icon={<Plus size={14} />} disabled={creating} onClick={() => void createTask()}>
             Create action item
           </Button>
-        )
+          <Button size="sm" variant="ghost" icon={<ListPlus size={14} />} onClick={() => commands.pick(target)}>
+            Add to an existing action item…
+          </Button>
+        </>
       )}
+      {commands.dialog}
       {isTriageArchived(current) && <span className="procurement-triage__archived">Archived: only in the list's Archived view</span>}
       {by && <small className="muted procurement-triage__by">{by}</small>}
     </section>
