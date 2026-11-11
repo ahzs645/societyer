@@ -193,6 +193,7 @@ export const policyTables = {
     sourceAssignee: v.optional(v.string()),
     responsibleUserIds: v.optional(v.array(v.id("users"))),
     dueDate: v.optional(v.string()),
+    startDate: v.optional(v.string()),
     committeeId: v.optional(v.id("committees")),
     meetingId: v.optional(v.id("meetings")),
     // B6: the agenda item the action came from.
@@ -221,6 +222,11 @@ export const policyTables = {
     minutesSectionIndex: v.optional(v.number()),
     minutesSectionTitle: v.optional(v.string()),
     inCamera: v.optional(v.boolean()),
+    // Sub-tasks are one level deep: the parent task in the same workspace
+    // (shared/taskSchedule.ts `subtaskParentProblem`).
+    parentTaskId: v.optional(v.id("tasks")),
+    // Manual order within a board column (shared/taskPosition.ts).
+    position: v.optional(v.number()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"])
@@ -230,5 +236,6 @@ export const policyTables = {
     .index("by_filing", ["filingId"])
     .index("by_workflow", ["workflowId"])
     .index("by_document", ["documentId"])
-    .index("by_commitment", ["commitmentId"]),
+    .index("by_commitment", ["commitmentId"])
+    .index("by_parent", ["parentTaskId"]),
 };

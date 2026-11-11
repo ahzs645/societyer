@@ -13,9 +13,29 @@ import { HISTORICAL_ACTION_TAG, PROMOTED_ACTION_TAG, TASK_STATUSES, actionTitleK
 import { normalizeTaskChecklist, type TaskChecklistItem } from "../taskChecklist";
 import { isInCameraSection, sectionTitleAt } from "../minutesPrivacy";
 import { tasksForReader } from "./minutesPrivacy";
-import { assertTaskEditBaseline, normalizedTaskPatch, type TaskClearableField, type TaskEditBaseline } from "../taskEditing";
+import { assertTaskEditBaseline, normalizedTaskPatch, type TaskClearField, type TaskEditBaseline } from "../taskEditing";
 import { requirePermissionPortable } from "./permissions";
 import { exactDay, partialDate, requireEvidence } from "../evidenceReview";
+import { assertTaskSchedule, subtaskParentProblem } from "../taskSchedule";
+import { assertTaskPosition } from "../taskPosition";
+
+/** The sub-tasks of a task (one level: sub-tasks have none of their own). */
+async function subtasksOf(ctx: PortableQueryCtx, taskId: string) {
+  return ctx.db.query("tasks").withIndex("by_parent", (q) => q.eq("parentTaskId", taskId)).collect();
+}
+
+/**
+ * Sub-task rules: the parent is in the same workspace, is not itself a
+ * sub-task, and is not the task; a task that has sub-tasks can't become one.
+ */
+async function assertTaskParent(ctx: PortableMutationCtx, societyId: string, parentTaskId: string, task: { _id?: string; tags?: readonly string[] }) {
+  const parent = await getOwned(ctx, "tasks", parentTaskId, societyId);
+  const problem = subtaskParentProblem(
+    { id: task._id, hasChildren: task._id ? (await subtasksOf(ctx, task._id)).length > 0 : false, historical: isHistoricalSourceAction(task) },
+    { _id: String(parent._id), parentTaskId: typeof parent.parentTaskId === "string" ? parent.parentTaskId : undefined, historical: isHistoricalSourceAction(parent) },
+  );
+  if (problem) throw new Error(problem);
+}
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -131,6 +151,11 @@ export async function taskCreate(
     sourceAssignee?: string;
     responsibleUserIds?: string[];
     dueDate?: string;
+    startDate?: string;
+    /** Makes the new task a sub-task of this one (same workspace, one level). */
+    parentTaskId?: string;
+    /** Manual order within a board column. */
+    position?: number;
     committeeId?: string;
     meetingId?: string;
     agendaItemId?: string;
@@ -161,6 +186,9 @@ export async function taskCreate(
   for (const userId of args.responsibleUserIds ?? []) {
     await getOwned(ctx, "users", userId, args.societyId);
   }
+  assertTaskSchedule(args.startDate, args.dueDate);
+  if (args.position !== undefined) assertTaskPosition(args.position);
+  if (args.parentTaskId) await assertTaskParent(ctx, args.societyId, args.parentTaskId, { tags: args.tags });
   // Provenance comes only from the minutes: a caller can't send its own in-camera hint or section title.
   const { minutesSectionIndex, inCamera: _hint, minutesSectionTitle: _title, ...fields } = args as typeof args & { inCamera?: unknown; minutesSectionTitle?: unknown };
   const id = await ctx.db.insert("tasks", {
@@ -199,6 +227,9 @@ export async function taskUpdate(
       sourceAssignee?: string;
       responsibleUserIds?: string[];
       dueDate?: string;
+      startDate?: string;
+      parentTaskId?: string;
+      position?: number;
       committeeId?: string;
       meetingId?: string;
       agendaItemId?: string;
@@ -215,7 +246,7 @@ export async function taskUpdate(
       completionNote?: string;
       checklist?: TaskChecklistItem[];
       clearMeetingId?: boolean;
-      clearFields?: TaskClearableField[];
+      clearFields?: TaskClearField[];
     };
   },
 ): Promise<void> {
@@ -240,6 +271,15 @@ export async function taskUpdate(
     await getOwned(ctx, "users", userId, candidate.societyId);
   }
   if (patch.checklist) next.checklist = normalizeTaskChecklist(patch.checklist);
+  if (Object.hasOwn(next, "startDate") || Object.hasOwn(next, "dueDate")) {
+    const startDate = Object.hasOwn(next, "startDate") ? next.startDate as string | undefined : task.startDate;
+    const dueDate = Object.hasOwn(next, "dueDate") ? next.dueDate as string | undefined : task.dueDate;
+    assertTaskSchedule(startDate, dueDate);
+  }
+  if (next.position !== undefined) assertTaskPosition(next.position);
+  if (typeof next.parentTaskId === "string" && next.parentTaskId !== task.parentTaskId) {
+    await assertTaskParent(ctx, candidate.societyId, next.parentTaskId, { _id: id, tags: task.tags });
+  }
   // Changing a meeting cannot retain an agenda item from the previous meeting.
   if (patch.meetingId && task.agendaItemId && !Object.hasOwn(next, "agendaItemId")) {
     await assertAgendaItem(ctx, task.agendaItemId, candidate.societyId, patch.meetingId);
@@ -280,6 +320,10 @@ export async function taskRemove(ctx: PortableMutationCtx, { id }: { id: string 
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("tasks not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "tasks", id, candidate.societyId);
+  // A parent's sub-tasks go with it (the person confirmed the count first).
+  for (const child of await subtasksOf(ctx, id)) {
+    if (child.societyId === candidate.societyId) await ctx.db.delete(String(child._id));
+  }
   await ctx.db.delete(id);
 }
 

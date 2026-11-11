@@ -49,6 +49,9 @@ export const create = authorizedMutation("tasks:create", mutation)({
     sourceAssignee: v.optional(v.string()),
     responsibleUserIds: v.optional(v.array(v.id("users"))),
     dueDate: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    parentTaskId: v.optional(v.id("tasks")),
+    position: v.optional(v.number()),
     committeeId: v.optional(v.id("committees")),
     meetingId: v.optional(v.id("meetings")),
     agendaItemId: v.optional(v.id("agendaItems")),
@@ -82,6 +85,9 @@ export const update = authorizedMutation("tasks:update", mutation)({
       sourceAssignee: v.optional(v.string()),
       responsibleUserIds: v.optional(v.array(v.id("users"))),
       dueDate: v.optional(v.string()),
+      startDate: v.optional(v.string()),
+      parentTaskId: v.optional(v.id("tasks")),
+      position: v.optional(v.number()),
       committeeId: v.optional(v.id("committees")),
       meetingId: v.optional(v.id("meetings")),
       agendaItemId: v.optional(v.id("agendaItems")),
@@ -100,7 +106,7 @@ export const update = authorizedMutation("tasks:update", mutation)({
       // Convex strips `undefined` patch fields from the wire, so unlinking a
       // task from its meeting needs an explicit flag.
       clearMeetingId: v.optional(v.boolean()),
-      clearFields: v.optional(v.array(v.union(v.literal("description"), v.literal("assignee"), v.literal("assigneePersonId"), v.literal("dueDate"), v.literal("committeeId"), v.literal("goalId"), v.literal("meetingId"), v.literal("agendaItemId"), v.literal("filingId"), v.literal("workflowId"), v.literal("documentId"), v.literal("commitmentId"), v.literal("eventId"), v.literal("completionNote")))),
+      clearFields: v.optional(v.array(v.union(v.literal("description"), v.literal("assignee"), v.literal("assigneePersonId"), v.literal("dueDate"), v.literal("startDate"), v.literal("committeeId"), v.literal("goalId"), v.literal("meetingId"), v.literal("agendaItemId"), v.literal("filingId"), v.literal("workflowId"), v.literal("documentId"), v.literal("commitmentId"), v.literal("eventId"), v.literal("completionNote"), v.literal("parentTaskId"), v.literal("position")))),
     }),
   },
   returns: v.any(),

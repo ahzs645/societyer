@@ -23474,6 +23474,33 @@
     ]
   },
   {
+    "key": "convex:procurementCatalogOperator:approveRetirement",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:approveRetirement",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementCatalogOperator:confirmRetirement",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:confirmRetirement",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:procurementCatalogOperator:detachRetiredCatalog",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:detachRetiredCatalog",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:procurementCatalogOperator:page",
     "surface": "convex",
     "name": "procurementCatalogOperator:page",
@@ -23504,6 +23531,31 @@
         "optional": false
       }
     ]
+  },
+  {
+    "key": "convex:procurementCatalogOperator:retirementStatus",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:retirementStatus",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementCatalogOperator:retirePage",
+    "surface": "convex",
+    "name": "procurementCatalogOperator:retirePage",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/procurementCatalogOperator.ts",
+    "idArguments": []
   },
   {
     "key": "convex:procurementCatalogOperator:verifyParity",
@@ -24100,6 +24152,54 @@
     "kind": "action",
     "access": "service",
     "source": "convex/procurementTaxonomy.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementTriage:createTask",
+    "surface": "convex",
+    "name": "procurementTriage:createTask",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/procurementTriage.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementTriage:list",
+    "surface": "convex",
+    "name": "procurementTriage:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/procurementTriage.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:procurementTriage:set",
+    "surface": "convex",
+    "name": "procurementTriage:set",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/procurementTriage.ts",
     "idArguments": [
       {
         "path": "societyId",
@@ -26930,6 +27030,12 @@
         "optional": true
       },
       {
+        "path": "parentTaskId",
+        "table": "tasks",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "committeeId",
         "table": "committees",
         "array": false,
@@ -27073,6 +27179,12 @@
         "path": "patch.responsibleUserIds",
         "table": "users",
         "array": true,
+        "optional": true
+      },
+      {
+        "path": "patch.parentTaskId",
+        "table": "tasks",
+        "array": false,
         "optional": true
       },
       {
@@ -52226,6 +52338,12 @@
         "optional": true
       },
       {
+        "path": "parentTaskId",
+        "table": "tasks",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "committeeId",
         "table": "committees",
         "array": false,
@@ -52369,6 +52487,12 @@
         "path": "patch.responsibleUserIds",
         "table": "users",
         "array": true,
+        "optional": true
+      },
+      {
+        "path": "patch.parentTaskId",
+        "table": "tasks",
+        "array": false,
         "optional": true
       },
       {
