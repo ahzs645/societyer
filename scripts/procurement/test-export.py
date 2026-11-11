@@ -158,7 +158,9 @@ class ExportTests(unittest.TestCase):
         # Matches describeNotice in src/features/procurementReview/lib/notice.ts and NoticeDocuments.tsx.
         data = dict(issuedBy='BC Housing', issuedFor='Ministry of Housing', opportunityId='BCH-2026-0588',
                     attachments=[dict(name='RFP.pdf', url='https://example.invalid/1'), dict(name='Drawings.pdf', url='https://example.invalid/2'), 'Form A.docx', dict(title='')],
-                    addenda=[dict(title='Addendum 1', link='https://example.invalid/3')])
+                    addenda=[dict(title='Amendment History', date='2015-06-15', link=None),
+                             dict(title='Amendment 3', date='2015-06-15'),
+                             dict(title='Addendum 1', link='https://example.invalid/3')])
         row = dict(id='opportunity:1', kind='opportunity', title='Tenant support', updated_at='', data=json.dumps(data))
         item, _ = exporter.project_record(row, 'workspace', 'g', [(' rfp.PDF ', True), ('Drawings.pdf', False), ('Extra.pdf', True)])
         self.assertEqual((item['issuedFor'], item['reference'], item['documents'], item['listedDocuments']), ('Ministry of Housing', 'BCH-2026-0588', 2, 2),

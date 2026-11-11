@@ -346,10 +346,17 @@ function contactsOf(data: Data): NoticeContact[] {
 }
 
 function attachmentsOf(data: Data): NoticeAttachment[] {
-  const raw = [...(Array.isArray(data.attachments) ? data.attachments : []), ...(Array.isArray(data.addenda) ? data.addenda : [])];
-  return raw.map((item) => (typeof item === "string" ? { name: item } : asData(item)))
-    .map((item) => ({ name: text(item.name) || text(item.title) || text(item.fileName), url: safeHttpsUrl(item.url) }))
-    .filter((item) => item.name);
+  const files = (items: unknown, addenda = false): NoticeAttachment[] => {
+    if (!Array.isArray(items)) return [];
+    return items.flatMap((raw) => {
+      const item = typeof raw === "string" ? { name: raw } : asData(raw);
+      const name = text(item.name) || text(item.title) || text(item.fileName);
+      const url = safeHttpsUrl(item.url) ?? (addenda ? safeHttpsUrl(item.link) : undefined);
+      if (!name || (addenda && !url && !text(item.name) && !text(item.fileName))) return [];
+      return [{ name, url }];
+    });
+  };
+  return [...files(data.attachments), ...files(data.addenda, true)];
 }
 
 function commoditiesOf(data: Data): string[] {

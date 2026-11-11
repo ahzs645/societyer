@@ -78,9 +78,28 @@ def reference_of(data):
 
 def attachment_names(data):
     """Files the source lists on the notice: `attachmentsOf` in lib/notice.ts."""
-    raw = [*(data.get('attachments') if isinstance(data.get('attachments'), list) else []), *(data.get('addenda') if isinstance(data.get('addenda'), list) else [])]
-    items = [dict(name=item) if isinstance(item, str) else item if isinstance(item, dict) else {} for item in raw]
-    return [name for name in (_text(item.get('name')) or _text(item.get('title')) or _text(item.get('fileName')) for item in items) if name]
+    def has_https_link(value):
+        try:
+            url = urllib.parse.urlsplit(_text(value))
+            return url.scheme == 'https' and url.hostname and not (url.username or url.password)
+        except ValueError:
+            return False
+
+    names = []
+    for field in ('attachments', 'addenda'):
+        items = data.get(field)
+        if not isinstance(items, list):
+            continue
+        for raw in items:
+            item = dict(name=raw) if isinstance(raw, str) else raw if isinstance(raw, dict) else {}
+            if field == 'addenda' and not _first(item, 'name', 'fileName') and not any(
+                has_https_link(item.get(key)) for key in ('url', 'link')
+            ):
+                continue
+            name = _first(item, 'name', 'title', 'fileName')
+            if name:
+                names.append(name)
+    return names
 
 def listed_only(names, documents):
     """Listed names no stored file answers to, compared as NoticeDocuments.tsx does (trimmed, case-insensitive)."""

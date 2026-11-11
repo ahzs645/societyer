@@ -155,6 +155,22 @@ assert.deepEqual(rows.map((item) => [item.state, item.name, item.state === "else
 assert.equal(new Set(rows.map((item) => item.key)).size, rows.length, "Row keys are unique");
 assert.deepEqual(noticeDocumentRows([doc("Tender Documents.pdf", true)], attachments, false).map((item) => item.name), ["Tender Documents.pdf"], "Without the whole stored list, the source's list waits");
 assert.equal(noticeDocumentRows([], [], true).length, 0);
+const amendmentData = {
+  attachments: ["Tender.pdf"],
+  addenda: [
+    { title: "Amendment History", date: "2015-06-15", link: null },
+    { title: "Amendment 3", date: "2015-06-15" },
+    { title: "Addendum 2", link: "https://bcbid.gov.bc.ca/doc/addendum" },
+    "Drawings.zip",
+  ],
+};
+const amendmentNotice = describeNotice({ recordKey: "opportunity:56151", kind: "opportunity", title: "Strathcona" }, amendmentData);
+assert.deepEqual(amendmentNotice.attachments, [
+  { name: "Tender.pdf", url: undefined },
+  { name: "Addendum 2", url: "https://bcbid.gov.bc.ca/doc/addendum" },
+  { name: "Drawings.zip", url: undefined },
+]);
+assert.equal(documentTipNames([], amendmentData, true).linkedTotal, 3);
 const firstForm = "https://bcbid.gov.bc.ca/doc/first";
 const secondForm = "https://bcbid.gov.bc.ca/doc/second";
 const duplicateNames = [
