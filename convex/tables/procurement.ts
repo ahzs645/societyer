@@ -75,7 +75,13 @@ export const procurementTables = {
     receiptJson: v.string(), publishedAtMs: v.number(), activatedAt: v.number(),
     parityVerifiedAt: v.optional(v.number()), parityReportHash: v.optional(v.string()),
   }).index("by_identity", ["societyId", "folder", "publicationId"]).index("by_latest", ["societyId", "folder", "publishedAtMs", "publicationId"]),
-  procurementServiceRollouts: defineTable({ societyId: v.id("societies"), folder: v.string(), cutoverAt: v.number(), fallbackUntil: v.number(), qualificationPublications: v.array(v.string()) }).index("by_society", ["societyId"]),
+  procurementServiceRollouts: defineTable({
+    societyId: v.id("societies"), folder: v.string(), cutoverAt: v.number(), fallbackUntil: v.number(), qualificationPublications: v.array(v.string()),
+    convexRetirement: v.optional(v.object({
+      backupSha256: v.string(), generation: v.string(), inventoryHash: v.string(),
+      approvedAt: v.number(), detachedAt: v.optional(v.number()),
+    })),
+  }).index("by_society", ["societyId"]),
   procurementSourcePublications: defineTable({
     societyId: v.id("societies"), folder: v.string(), publicationId: v.string(), sourceSnapshotId: v.string(), generation: v.string(),
     publishedAt: v.string(), publishedAtMs: v.number(), collectedAt: v.optional(v.string()), complete: v.boolean(), coverageJson: v.optional(v.string()),

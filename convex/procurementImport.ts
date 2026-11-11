@@ -6,6 +6,7 @@ import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementR
 import { procurementPublicationFields, procurementTaxonomyIndexFields, procurementTermFields } from "./tables/procurement";
 import { requireMaintenanceLease, withMaintenanceLease } from "./procurementMaintenance";
 import { requirePreparedAnalytics } from "./lib/procurementAnalyticsArtifacts";
+import { requireConvexCatalogWritable } from "./procurementCatalog";
 
 const tables = ["procurementRecords", "procurementDetails", "procurementDocuments", "procurementEvidence"] as const;
 const tableValidator = v.union(v.literal("procurementRecords"), v.literal("procurementDetails"), v.literal("procurementDocuments"), v.literal("procurementEvidence"));
@@ -21,6 +22,7 @@ export const beginJob = internalMutation({
   args: { societyId: v.id("societies"), folder: v.string(), generation: v.string(), inventoryHash: v.string(), contentHash: v.string(), publishedAt: v.string(), collectedAt: v.optional(v.string()), complete: v.boolean(), planHash: v.optional(v.string()) },
   returns: v.id("procurementImportJobs"),
   handler: async (ctx, args) => {
+    await requireConvexCatalogWritable(ctx, args.societyId);
     validateWorkspaceProcurementReviewFolder(args.societyId, args.folder);
     const society = await ctx.db.get(args.societyId);
     if (society?.integrationSettings?.procurementReviewFolder !== args.folder || ![args.inventoryHash,args.contentHash].every(hash => /^[a-f0-9]{64}$/.test(hash))) throw new Error("Invalid verified publication job.");
@@ -67,6 +69,7 @@ export const importTerms = internalMutation({
   args: { societyId: v.id("societies"), folder: v.string(), terms: v.array(v.object(procurementTermFields)) },
   returns: v.object({ inserted: v.number(), reused: v.number() }),
   handler: async (ctx, { societyId, folder, terms }) => {
+    await requireConvexCatalogWritable(ctx, societyId);
     validateWorkspaceProcurementReviewFolder(societyId, folder);
     const society = await ctx.db.get(societyId);
     if (!society || society.integrationSettings?.procurementReviewFolder !== folder) throw new Error("Workspace folder changed; taxonomy import refused.");
@@ -93,6 +96,7 @@ const taxonomyScope = { societyId: v.id("societies"), ...procurementTaxonomyInde
 export const beginTaxonomy = internalMutation({
   args: { ...taxonomyScope, folder: v.string() }, returns: v.union(v.literal("import"), v.literal("resume"), v.literal("reuse")),
   handler: async (ctx, args) => {
+    await requireConvexCatalogWritable(ctx, args.societyId);
     validateWorkspaceProcurementReviewFolder(args.societyId, args.folder);
     const society = await ctx.db.get(args.societyId);
     if (!society || society.integrationSettings?.procurementReviewFolder !== args.folder) throw new Error("Workspace folder changed; taxonomy import refused.");
@@ -171,6 +175,7 @@ export const countPage = internalQuery({
 export const commit = internalMutation({
   args: { ...activation, reuseActive: v.optional(v.boolean()), restoreFromBackup: v.optional(v.string()) }, returns: v.null(),
   handler: async (ctx, args) => {
+    await requireConvexCatalogWritable(ctx, args.societyId);
     validateWorkspaceProcurementReviewFolder(args.societyId, args.folder);
     const society = await ctx.db.get(args.societyId);
     if (!society || society.integrationSettings?.procurementReviewFolder !== args.folder) throw new Error("Workspace folder changed; activation refused.");

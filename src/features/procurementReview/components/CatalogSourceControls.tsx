@@ -11,7 +11,7 @@ export function CatalogSourceControls({ societyId, previewReady = false, onClose
   onClose?: () => void;
 }) {
   const configuration = useQuery(api.procurementCatalog.configuration, { societyId, controls: true }) as {
-    source: "convex" | "service"; serviceAvailable?: boolean; qualifiedPublications?: number;
+    source: "convex" | "service"; serviceAvailable?: boolean; qualifiedPublications?: number; convexFallbackAvailable?: boolean;
   } | undefined;
   const changeSource = useMutation(api.procurementCatalog.setSource);
   const [params, setParams] = useSearchParams(), [saving, setSaving] = useState(false);
@@ -44,7 +44,7 @@ export function CatalogSourceControls({ societyId, previewReady = false, onClose
           <button type="button" className="btn" disabled={saving} onClick={() => showPreview(!preview)}>{preview ? "Return to current catalog" : "Preview catalog service"}</button>
           {preview && <button type="button" className="btn btn--accent" disabled={saving || verified < 3 || !previewReady} onClick={() => void save("service")}>{saving ? "Switching…" : "Use catalog service"}</button>}
         </>}
-        {configuration.source === "service" && <button type="button" className="btn" disabled={saving} onClick={() => void save("convex")}>{saving ? "Switching…" : "Use Convex fallback"}</button>}
+        {configuration.source === "service" && configuration.convexFallbackAvailable !== false && <button type="button" className="btn" disabled={saving} onClick={() => void save("convex")}>{saving ? "Switching…" : "Use Convex fallback"}</button>}
         {onClose && <button type="button" className="btn btn--ghost" disabled={saving} onClick={onClose}>Close</button>}
       </div>
     </div>

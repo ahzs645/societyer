@@ -14,6 +14,7 @@ import { procurementPublicationFields } from "./tables/procurement";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
 import { requireMaintenanceLease, withMaintenanceLease } from "./procurementMaintenance";
 import { requirePreparedAnalytics } from "./lib/procurementAnalyticsArtifacts";
+import { requireConvexCatalogWritable } from "./procurementCatalog";
 const table = v.union(
   v.literal("procurementRecords"),
   v.literal("procurementDetails"),
@@ -39,6 +40,7 @@ export const begin = internalMutation({
     completed: v.boolean(),
   }),
   handler: async (ctx, a) => {
+    await requireConvexCatalogWritable(ctx, a.societyId);
     validateWorkspaceProcurementReviewFolder(a.societyId, a.folder);
     if (
       ![a.baseHash, a.targetHash, a.planHash, a.baseInventoryHash, a.targetInventoryHash].every((h) =>
@@ -433,6 +435,7 @@ export const indexSearchPage = internalMutation({
     rows: v.number(),
   }),
   handler: async (ctx, a) => {
+    await requireConvexCatalogWritable(ctx, a.societyId);
     await requireMaintenanceLease(ctx, a.societyId, a.maintenanceOwner);
     const c = await ctx.db
       .query("procurementCatalogs")

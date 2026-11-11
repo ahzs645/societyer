@@ -10,6 +10,7 @@ import { analysisIdentity, normalizeAnalysisRequest, PROCUREMENT_MAPPING_VERSION
 import { PROCUREMENT_REVIEW_UNAVAILABLE_MESSAGE } from "../shared/deploymentCapabilities";
 import { ANALYTICS_BUNDLE_LIMIT, DEFAULT_ANALYTICS_VIEWS, assertSummariesFresh, canonicalSummary, defaultAnalyticsRequest, summaryVersions, validateSummaryEntries, type SummaryEntry, type SummaryManifest } from "../shared/procurementAnalyticsArtifacts";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
+import { requireConvexCatalogWritable } from "./procurementCatalog";
 
 const scope = { societyId: v.id("societies"), generation: v.string() };
 const args = { ...scope, request: v.string(), asOf: v.number() };
@@ -146,6 +147,7 @@ export const seed = internalMutation({
   args: { societyId: v.id("societies"), generation: v.string(), folder: v.string(), contentHash: v.string(), inventoryHash: v.string(), bundleSha256: v.string(), manifestJson: v.string(), rowsJson: v.string() },
   returns: v.object({ written: v.number(), state: v.union(v.literal("seeded"), v.literal("reused"), v.literal("stale")) }),
   handler: async (ctx, a) => {
+    await requireConvexCatalogWritable(ctx, a.societyId);
     validateWorkspaceProcurementReviewFolder(a.societyId, a.folder);
     const society = await ctx.db.get(a.societyId);
     if (society?.integrationSettings?.procurementReviewFolder !== a.folder || ![a.contentHash, a.inventoryHash, a.bundleSha256].every(value => /^[a-f0-9]{64}$/.test(value)) || new TextEncoder().encode(a.manifestJson).byteLength > 16000 || new TextEncoder().encode(a.rowsJson).byteLength > ANALYTICS_BUNDLE_LIMIT) throw new Error("Invalid analytical artifact scope or size.");

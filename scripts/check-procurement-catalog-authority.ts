@@ -13,6 +13,7 @@ const t = convexTest(schema, {
   "./authorization.js": () => import("../convex/authorization"), "./procurementCatalog.js": () => import("../convex/procurementCatalog"),
   "./procurementCatalogActions.js": () => import("../convex/procurementCatalogActions"), "./procurementCatalogOperator.js": () => import("../convex/procurementCatalogOperator"),
   "./procurementStatus.js": () => import("../convex/procurementStatus"), "./procurementReview.js": () => import("../convex/procurementReview"),
+  "./procurementImport.js": () => import("../convex/procurementImport"),
 } as any), api: any = anyApi;
 const issuer = betterAuthIssuer(), pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" }), now = Date.now();
 process.env.PROCUREMENT_CATALOG_SIGNING_KEY = pair.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -64,6 +65,33 @@ assert.equal((await t.query(api.procurementCatalogOperator.publicationPolicy, ar
 assert.equal((await reader.query(api.procurementStatus.get, args)).lastSuccessful.generation, "publication-3-reader-v2");
 await owner.mutation(api.procurementCatalog.setSource, { ...args, source: "convex" });
 assert.equal((await reader.query(api.procurementCatalog.configuration, args)).source, "convex");
+await owner.mutation(api.procurementCatalog.setSource, { ...args, source: "service" });
+const retirement = { ...args, backupSha256: "b".repeat(64), generation: "publication-3-reader-v2", inventoryHash: "3".repeat(64) };
+const detach = { ...args, backupSha256: retirement.backupSha256, servicePublicationId: "publication-3" };
+const retirePage = { ...args, backupSha256: retirement.backupSha256, table: "procurementTaxonomyTerms", cursor: null };
+await assert.rejects(t.mutation(api.procurementCatalogOperator.approveRetirement, { ...retirement, inventoryHash: "4".repeat(64) }), /must match exactly/);
+await assert.rejects(t.mutation(api.procurementCatalogOperator.retirePage, retirePage), /detached catalog/);
+await t.mutation(api.procurementCatalogOperator.approveRetirement, retirement);
+await t.mutation(api.procurementCatalogOperator.approveRetirement, retirement);
+assert.equal((await t.query(api.procurementCatalogOperator.publicationPolicy, args)).serviceOnlyAllowed, true);
+assert.equal((await owner.query(api.procurementCatalog.configuration, { ...args, controls: true })).convexFallbackAvailable, false);
+await assert.rejects(owner.mutation(api.procurementCatalog.setSource, { ...args, source: "convex" }), /fallback was retired/);
+await assert.rejects(t.mutation(api.procurementImport.beginJob, {
+  ...args, folder: fixture.folder, generation: "publication-4-reader-v2", inventoryHash: "4".repeat(64), contentHash: "a".repeat(64),
+  publishedAt: new Date(now).toISOString(), complete: true,
+}), /publishes to the catalog service only/);
+await assert.rejects(t.mutation(api.procurementCatalogOperator.detachRetiredCatalog, { ...detach, servicePublicationId: "stale" }), /live service receipt/);
+await t.mutation(api.procurementCatalogOperator.detachRetiredCatalog, detach);
+const otherTerm = await t.run(async ctx => {
+  const term = { releaseId: "fixture", key: "fixture:1", scheme: "fixture", version: "1", code: "1", title: "Fixture term", parentKey: null };
+  await ctx.db.insert("procurementTaxonomyTerms", { societyId: fixture.societyId, ...term });
+  return ctx.db.insert("procurementTaxonomyTerms", { societyId: fixture.other, ...term });
+});
+await assert.rejects(t.mutation(api.procurementCatalogOperator.retirePage, { ...retirePage, table: "procurementServicePublications" }), /mirrored data table/);
+assert.equal((await t.mutation(api.procurementCatalogOperator.retirePage, retirePage)).removed, 1);
+assert.deepEqual(await t.query(api.procurementCatalogOperator.retirementStatus, args), { approved: true, detached: true, remainingTables: [] });
+assert(await t.run(ctx => ctx.db.get(otherTerm)));
+assert.equal((await reader.query(api.procurementStatus.get, args)).lastSuccessful.generation, "publication-3-reader-v2");
 await t.run(ctx => ctx.db.patch(fixture.societyId, { disabledModules: [] }));
 await assert.rejects(reader.action(api.procurementCatalogActions.grant, args), /disabled/);
-console.log("Catalog authority checks passed: real Convex grant action, human membership, documents/settings permissions, workspace opt-in, immutable receipts, three distinct parity publications, 14-day fallback and rollback.");
+console.log("Catalog authority checks passed: scoped grants, settings permissions, immutable receipts, parity qualification, fallback and workspace-scoped retirement.");
