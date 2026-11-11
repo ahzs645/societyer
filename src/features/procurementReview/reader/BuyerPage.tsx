@@ -71,7 +71,9 @@ export function BuyerPage({
   const navigation = useReaderNavigation();
   const [analysis, setAnalysis] = useState(false),
     [kind, setKind] = useState<"opportunity" | "award">("opportunity");
-  if (source.useAnalysis) return <ServerBuyerPage field={field} name={name} />;
+  // The summary needs the server's analysis and its table the server's pages; the
+  // service reader offers analysis but only whole lists, so it reads the full page.
+  if (source.useAnalysis && source.usePage) return <ServerBuyerPage field={field} name={name} />;
   if (!source.usePage || analysis)
     return <FullBuyerPage field={field} name={name} />;
   return (

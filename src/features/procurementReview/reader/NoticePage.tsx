@@ -197,6 +197,13 @@ export function NoticePage({
     { id: "documents", label: "Documents", count: documentCount || null },
     ...(hasReview ? [{ id: "review" as const, label: "Review" }] : []),
   ];
+  // Our triage heads the side column; when the layout stacks, it sits above the tabs.
+  const triage = model.kind === "opportunity" && (
+    <NoticeTriage
+      recordKey={recordKey}
+      notice={triageTaskNotice({ title: model.title, buyer: model.buyer, date: record.summary.date, dateText: record.summary.dateText, reference: model.reference })}
+    />
+  );
 
   return (
     <div ref={top} className="procurement-notice">
@@ -232,12 +239,7 @@ export function NoticePage({
         }
       />
       <NoticeBadges model={model} />
-      {model.kind === "opportunity" && (
-        <NoticeTriage
-          recordKey={recordKey}
-          notice={triageTaskNotice({ title: model.title, buyer: model.buyer, date: record.summary.date, dateText: record.summary.dateText, reference: model.reference })}
-        />
-      )}
+      {stacked && triage}
       <div className="procurement-notice__layout">
         <div className="procurement-notice__main">
           <Tabs
@@ -287,6 +289,7 @@ export function NoticePage({
             className="procurement-notice__side"
             aria-label="Notice details"
           >
+            {triage}
             <NoticeFacts model={model} />
             <NoticeContacts model={model} />
           </aside>

@@ -123,6 +123,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: none;
   overflow-x: hidden;
   /* Hairline scrollbar so it doesn't distract — uses the existing global
    * scrollbar rules plus a narrower width just here. */

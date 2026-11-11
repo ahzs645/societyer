@@ -25,6 +25,13 @@ body {
   font-size: token('fs-md');
 }
 
+/* No rubber-band bounce or pull-to-refresh past the ends of the document. The
+ * app's own scroll areas (.page, the sidebar nav) set the same in their rules. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 a {
   color: inherit;
   text-decoration: none;

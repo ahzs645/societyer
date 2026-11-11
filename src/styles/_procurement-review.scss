@@ -499,4 +499,16 @@ $zoer-theme: (
     &__title, &__select { flex: 1 1 100%; }
     &__by { margin-left: 0; }
   }
+
+  // In the notice's side column: a stacked card above the details, controls full width.
+  .procurement-notice__side & {
+    flex-direction: column;
+    align-items: stretch;
+    gap: token("s-2");
+    margin: 0;
+    padding: token("s-3");
+    > .btn, &__select { width: 100%; min-width: 0; }
+    > .btn { justify-content: center; }
+    &__by { margin-left: 0; }
+  }
 }
