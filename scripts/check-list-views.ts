@@ -115,14 +115,20 @@ await preferences.saveViewPortable(viewerCtx, { societyId, name: "Overdue follow
 await assert.rejects(() => listViews.importInvoiceViewsPortable(viewerCtx, { societyId }), /settings:write/);
 assert.deepEqual(await listViews.importInvoiceViewsPortable(ctx, { societyId }), { imported: 2, skipped: 0 });
 assert.deepEqual(await listViews.importInvoiceViewsPortable(ctx, { societyId }), { imported: 0, skipped: 0 }, "a second run changes nothing");
+// Each person's old views stay theirs: private, under their own names.
 const invoiceViews = await listViews.listPortable(ctx, { societyId, tableId: "invoices" });
-assert.deepEqual(invoiceViews.map((view) => view.name), ["Overdue follow up", "Overdue follow up (2)"]);
+assert.deepEqual(invoiceViews.map((view) => [view.name, view.private]), [["Overdue follow up", true]]);
 assert.deepEqual(parseListViewStateJson(invoiceViews[0].stateJson), parseListViewStateJson(JSON.stringify(conversion.state)));
+const viewerInvoiceViews = await listViews.listPortable(viewerCtx, { societyId, tableId: "invoices" });
+assert.deepEqual(viewerInvoiceViews.map((view) => [view.name, view.private]), [["Overdue follow up", true]]);
+assert.notEqual(viewerInvoiceViews[0]._id, invoiceViews[0]._id, "nobody sees another person's private view");
+await assert.rejects(() => listViews.removePortable(ctx, { societyId, id: viewerInvoiceViews[0]._id }), /no longer exists/);
 // Deleting a converted view doesn't bring it back.
-await listViews.removePortable(ctx, { societyId, id: invoiceViews[1]._id });
+await listViews.removePortable(ctx, { societyId, id: invoiceViews[0]._id });
 assert.deepEqual(await listViews.importInvoiceViewsPortable(ctx, { societyId }), { imported: 0, skipped: 0 });
-assert.equal((await listViews.listPortable(ctx, { societyId, tableId: "invoices" })).length, 1);
+assert.equal((await listViews.listPortable(ctx, { societyId, tableId: "invoices" })).length, 0);
+assert.equal((await listViews.listPortable(viewerCtx, { societyId, tableId: "invoices" })).length, 1);
 // The old functions still answer until nothing reads them.
 assert.equal((await preferences.workspacePortable(ctx, { societyId })).views.length, 1);
 
-console.log("List view checks passed: shape and size validation, workspace sharing and settings:write, per-list scope, and the one-time invoice view import.");
+console.log("List view checks passed: shape and size validation, workspace sharing and settings:write, per-list scope, private views, and the one-time invoice view import.");

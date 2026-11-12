@@ -16,8 +16,8 @@ import { RecordTableToolbar } from "./RecordTableToolbar";
  */
 export const LIST_VIEW_PARAM = "view";
 
-type ListViewRow = { _id: string; name: string; stateJson: string };
-type SavedListView = { _id: string; name: string; state: ListViewState };
+type ListViewRow = { _id: string; name: string; stateJson: string; private?: boolean };
+type SavedListView = { _id: string; name: string; state: ListViewState; private: boolean };
 
 type ToolbarProps = Omit<
   ComponentProps<typeof RecordTableToolbar>,
@@ -61,7 +61,7 @@ export function RecordListTableViews({
     () =>
       rows?.flatMap((row) => {
         try {
-          return [{ _id: String(row._id), name: row.name, state: parseListViewStateJson(row.stateJson) }];
+          return [{ _id: String(row._id), name: row.name, state: parseListViewStateJson(row.stateJson), private: Boolean(row.private) }];
         } catch {
           return [];
         }
@@ -143,7 +143,8 @@ export function RecordListTableViews({
   const views = useMemo(
     () => [
       { _id: defaultId, name: toolbar.label, isSystem: true },
-      ...(savedViews ?? []).map((view) => ({ _id: view._id, name: view.name, isSystem: false })),
+      // A private view (moved from someone's own saved invoice views) says so.
+      ...(savedViews ?? []).map((view) => ({ _id: view._id, name: view.private ? `${view.name} (only you)` : view.name, isSystem: false })),
     ],
     [defaultId, toolbar.label, savedViews],
   );
@@ -187,7 +188,8 @@ export function RecordListTableViews({
       }}
       saveAsViewMessage="Saves the current columns, filters, sort and grouping as a view everyone in the workspace can choose."
       onRenameView={async (id, name) => {
-        await updateView({ societyId, id, name });
+        // The menu shows private views as "Name (only you)"; that is not part of the name.
+        await updateView({ societyId, id, name: name.replace(/ \(only you\)$/, "") });
       }}
       onDeleteView={async (id) => {
         await removeView({ societyId, id });

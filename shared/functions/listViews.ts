@@ -3,7 +3,10 @@
  * shared with the whole workspace.
  *
  * A view is a name and a `stateJson` (shared/listViewState.ts) for one list,
- * keyed by the list's `tableId`. The action policy lets every member read a
+ * keyed by the list's `tableId`. A view with an `ownerUserId` is private to
+ * that person (the old invoice views were each person's own); the rest are
+ * shared with the workspace. Others' private views are never listed,
+ * changed or counted against a name. The action policy lets every member read a
  * list's views (society:read) and settings writers (settings:write, as for
  * the object tables' saved views) create, update, rename and delete them.
  * `stateJson` is never trusted: it is size-capped, parsed, rebuilt from known
@@ -32,9 +35,13 @@ type ListViewRow = {
   name: string;
   stateJson: string;
   createdByUserId?: string;
+  ownerUserId?: string;
   createdAtISO: string;
   updatedAtISO: string;
 };
+
+/** Shared views, and the caller's own private ones. */
+const visibleTo = (userId: string) => (view: ListViewRow) => !view.ownerUserId || view.ownerUserId === userId;
 
 async function viewsOf(ctx: PortableQueryCtx, societyId: string, tableId: string): Promise<ListViewRow[]> {
   return ctx.db
@@ -50,10 +57,18 @@ function assertUniqueName(views: ListViewRow[], name: string, exceptId?: string)
   }
 }
 
+/** A view the caller may see; someone else's private view reads as missing. */
+async function visibleView(ctx: PortableMutationCtx, societyId: string, id: string): Promise<ListViewRow> {
+  const view = await getOwned<ListViewRow>(ctx, "listViews", id, societyId);
+  if (!visibleTo(await principalUserId(ctx, societyId))(view)) throw new Error("That view no longer exists.");
+  return view;
+}
+
 export async function listPortable(ctx: PortableQueryCtx, args: { societyId: string; tableId: string }) {
   await requireFunctionAction(ctx, "listViews:list", "query", args);
   const tableId = cleanListViewTableId(args.tableId);
-  const views = await viewsOf(ctx, args.societyId, tableId);
+  const userId = await principalUserId(ctx, args.societyId);
+  const views = (await viewsOf(ctx, args.societyId, tableId)).filter(visibleTo(userId));
   return views
     .sort((a, b) => a.name.localeCompare(b.name) || String(a._id).localeCompare(String(b._id)))
     .map((view) => ({
@@ -61,6 +76,7 @@ export async function listPortable(ctx: PortableQueryCtx, args: { societyId: str
       name: view.name,
       stateJson: view.stateJson,
       createdByUserId: view.createdByUserId ?? null,
+      private: Boolean(view.ownerUserId),
       createdAtISO: view.createdAtISO,
       updatedAtISO: view.updatedAtISO,
     }));
@@ -74,18 +90,19 @@ export async function createPortable(ctx: PortableMutationCtx, args: { societyId
   const userId = await principalUserId(ctx, args.societyId);
   const views = await viewsOf(ctx, args.societyId, tableId);
   if (views.length >= LIST_VIEWS_PER_TABLE_MAX) throw new Error(`A list holds at most ${LIST_VIEWS_PER_TABLE_MAX} saved views.`);
-  assertUniqueName(views, name);
+  assertUniqueName(views.filter(visibleTo(userId)), name);
   const now = new Date().toISOString();
   return ctx.db.insert("listViews", { societyId: args.societyId, tableId, name, stateJson, createdByUserId: userId, createdAtISO: now, updatedAtISO: now });
 }
 
 export async function updatePortable(ctx: PortableMutationCtx, args: { societyId: string; id: string; name?: string; stateJson?: string }) {
   await requireFunctionAction(ctx, "listViews:update", "mutation", args);
-  const view = await getOwned<ListViewRow>(ctx, "listViews", args.id, args.societyId);
+  const view = await visibleView(ctx, args.societyId, args.id);
   const patch: { name?: string; stateJson?: string; updatedAtISO: string } = { updatedAtISO: new Date().toISOString() };
   if (args.name !== undefined) {
     patch.name = cleanListViewName(args.name);
-    assertUniqueName(await viewsOf(ctx, args.societyId, view.tableId), patch.name, view._id);
+    const userId = await principalUserId(ctx, args.societyId);
+    assertUniqueName((await viewsOf(ctx, args.societyId, view.tableId)).filter(visibleTo(userId)), patch.name, view._id);
   }
   if (args.stateJson !== undefined) patch.stateJson = canonicalListViewStateJson(args.stateJson);
   await ctx.db.patch(view._id, patch);
@@ -94,7 +111,7 @@ export async function updatePortable(ctx: PortableMutationCtx, args: { societyId
 
 export async function removePortable(ctx: PortableMutationCtx, args: { societyId: string; id: string }) {
   await requireFunctionAction(ctx, "listViews:remove", "mutation", args);
-  const view = await getOwned<ListViewRow>(ctx, "listViews", args.id, args.societyId);
+  const view = await visibleView(ctx, args.societyId, args.id);
   await ctx.db.delete(view._id);
   return null;
 }
@@ -103,9 +120,10 @@ type LegacyInvoiceViewRow = { _id: string; societyId: string; userId: string; na
 
 /**
  * Moves the workspace's old saved invoice views (every member's) into the
- * invoice list's views. Idempotent: converted rows are marked, never touched
- * again, and kept so nothing is lost; a name already taken gets " (2)" and so
- * on. Rows that no longer validate are marked and skipped.
+ * invoice list's views, each private to the person who saved it, as before.
+ * Idempotent: converted rows are marked, never touched again, and kept so
+ * nothing is lost; a name that person already sees gets " (2)" and so on.
+ * Rows that no longer validate are marked and skipped.
  */
 export async function importInvoiceViewsPortable(ctx: PortableMutationCtx, args: { societyId: string }) {
   await requireFunctionAction(ctx, "listViews:importInvoiceViews", "mutation", args);
@@ -117,7 +135,16 @@ export async function importInvoiceViewsPortable(ctx: PortableMutationCtx, args:
     .sort((a, b) => String(a.updatedAtISO).localeCompare(String(b.updatedAtISO)) || String(a._id).localeCompare(String(b._id)));
   if (!legacy.length) return { imported: 0, skipped: 0 };
   const existing = await viewsOf(ctx, args.societyId, INVOICE_LIST_TABLE_ID);
-  const taken = new Set(existing.map((view) => view.name.toLocaleLowerCase()));
+  // Names each person sees: the shared views plus their own private ones.
+  const takenBy = new Map<string, Set<string>>();
+  const takenFor = (userId: string) => {
+    let names = takenBy.get(userId);
+    if (!names) {
+      names = new Set(existing.filter(visibleTo(userId)).map((view) => view.name.toLocaleLowerCase()));
+      takenBy.set(userId, names);
+    }
+    return names;
+  };
   const now = new Date().toISOString();
   let imported = 0;
   let skipped = 0;
@@ -138,6 +165,7 @@ export async function importInvoiceViewsPortable(ctx: PortableMutationCtx, args:
       await ctx.db.patch(row._id, { migratedAtISO: now });
       continue;
     }
+    const taken = takenFor(row.userId);
     let unique = name;
     for (let copy = 2; taken.has(unique.toLocaleLowerCase()); copy++) unique = `${name.slice(0, 90)} (${copy})`;
     taken.add(unique.toLocaleLowerCase());
@@ -147,6 +175,7 @@ export async function importInvoiceViewsPortable(ctx: PortableMutationCtx, args:
       name: unique,
       stateJson,
       createdByUserId: row.userId,
+      ownerUserId: row.userId,
       createdAtISO: row.updatedAtISO || now,
       updatedAtISO: now,
     });
