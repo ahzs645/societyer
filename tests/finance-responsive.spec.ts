@@ -295,14 +295,18 @@ test("semester recurrence and staff edits propagate through live totals, exports
   const insurance = recordRows(page).filter({ hasText: "Annual insurance" });
   await expect(insurance).toContainText("$394.52");
   await expect(insurance).toContainText("$0.00");
-  const costViewport = page
-    .getByRole("region", { name: "Reusable planning costs table", exact: true })
-    .locator(".record-table__scroll, .record-table__virtuoso")
-    .first();
-  await panToLastColumn(page, costViewport, testInfo, "planner-costs");
-  await costViewport.screenshot({
-    path: testInfo.outputPath("planner-costs.png"),
-  });
+  const costRegion = page.getByRole("region", { name: "Reusable planning costs table", exact: true });
+  const costCards = costRegion.locator(".record-cards");
+  if (await costCards.isVisible()) {
+    // Phones list costs as cards, which carry the period amounts: nothing to pan.
+    await costCards.screenshot({ path: testInfo.outputPath("planner-costs.png") });
+  } else {
+    const costViewport = costRegion.locator(".record-table__scroll, .record-table__virtuoso").first();
+    await panToLastColumn(page, costViewport, testInfo, "planner-costs");
+    await costViewport.screenshot({
+      path: testInfo.outputPath("planner-costs.png"),
+    });
+  }
   await expect(
     page
       .getByRole("region", { name: "Monthly forecast", exact: true })
