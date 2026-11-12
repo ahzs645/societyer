@@ -28,7 +28,11 @@ type RecordListTableProps<T extends { _id: string }> = {
    * already names it; it keeps its natural height, shows no title or totals.
    */
   variant?: "page" | "card";
-  /** Opens a row (its name cell, or the whole card on phones). */
+  /**
+   * Opens a row (its name cell, or the whole card on phones), and a
+   * `?record=<id>` deep link to one of these rows. Without it a deep link
+   * shows the row in the generic preview panel.
+   */
   onOpen?: (record: T) => void;
   renderCell?: (cell: { record: T; field: FieldMetadata }) => ReactNode | undefined;
   /** Buttons beside each row (Approve, Resend…). */

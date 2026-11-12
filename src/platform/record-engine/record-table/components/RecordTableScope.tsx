@@ -22,7 +22,11 @@ import { useRecordPanelStack } from "./RecordTableSidePanelStack";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
 import { cellPreviewRef, decodeEntityStack, encodeEntityStack } from "@/components/HoverCard/entityRefs";
 
-/** Query parameter that opens a record's side panel, e.g. `/app/tasks?record=<id>`. */
+/**
+ * Query parameter that opens a record the way clicking its row does, e.g.
+ * `/app/tasks?record=<id>`: the preview side panel, or, where the view opens
+ * rows elsewhere (`openRecordIn` other than "drawer"), the page's `onRecordClick`.
+ */
 export const RECORD_DEEP_LINK_PARAM = "record";
 /**
  * Query parameter for related records stacked on top of the panel, up to
@@ -79,7 +83,8 @@ export function RecordTableScope({
   /**
    * A record-specific preview panel in place of the generic field list. It
    * keeps the shared behaviour: ↑/↓ from the panel steps through the table,
-   * the open row is marked, and `?record=<id>` deep links open it. Give the
+   * the open row is marked, and `?record=<id>` deep links that reach the
+   * panel (see `RECORD_DEEP_LINK_PARAM`) open it. Give the
    * panel's drawer the `record-side-panel` class so its arrow keys count.
    */
   renderSidePanel?: (panel: { record: any; onClose: () => void; onNavigate: (record: any) => void }) => ReactNode;
@@ -167,6 +172,14 @@ export function RecordTableScope({
     handledRequestRef.current = null;
   }, [scopeIdentity]);
 
+  // A row click opens the record where the view says: "drawer" (the default)
+  // is the preview panel; anything else is the page's own `onRecordClick`
+  // (its record page, its edit drawer…).
+  const rowOpenRecordIn = hydratedView?.view.openRecordIn ?? "drawer";
+  // Deep links open a record the way clicking its row does, so where rows go
+  // to the page's own view, deep links are handed to it too (further down).
+  const deepLinkOpensOwnView = !!onRecordClick && rowOpenRecordIn !== "drawer";
+
   // Deep link: `?record=<id>` (used by global search hits) opens that record's
   // side panel once it is among this table's records, and `&stack=` reopens
   // the related cards stacked on it. While the panel is open the URL follows
@@ -176,6 +189,7 @@ export function RecordTableScope({
   const requestedRecordId = searchParams.get(RECORD_DEEP_LINK_PARAM);
   const requestedStack = searchParams.get(RECORD_STACK_PARAM);
   useEffect(() => {
+    if (deepLinkOpensOwnView) return;
     if (!requestedRecordId || handledRequestRef.current === `${scopeIdentity}:${requestedRecordId}`) return;
     const match = records.find((record) => String(record?._id) === requestedRecordId);
     if (!match) return;
@@ -183,7 +197,7 @@ export function RecordTableScope({
     setSidePanelRecord({ scopeIdentity, recordId: requestedRecordId, record: match });
     const stacked = decodeEntityStack(requestedStack);
     if (stacked.length) restorePanelStack(requestedRecordId, stacked);
-  }, [records, requestedRecordId, requestedStack, scopeIdentity, restorePanelStack]);
+  }, [deepLinkOpensOwnView, records, requestedRecordId, requestedStack, scopeIdentity, restorePanelStack]);
 
   const visibleStackParam = panelRecordId
     ? encodeEntityStack(panelStack.stack.slice(0, panelStack.active))
@@ -242,10 +256,7 @@ export function RecordTableScope({
 
   const handleRecordClick = useCallback<NonNullable<RecordTableContextValue["onRecordClick"]>>(
     (recordId, record, options) => {
-      const openRecordIn =
-        options.source === "row"
-          ? hydratedView?.view.openRecordIn ?? "drawer"
-          : options.openRecordIn;
+      const openRecordIn = options.source === "row" ? rowOpenRecordIn : options.openRecordIn;
       if (openRecordIn === "drawer") {
         setSidePanelRecord({ scopeIdentity, recordId, record });
         // Clicking the minimised record's row brings its panel back.
@@ -258,8 +269,35 @@ export function RecordTableScope({
       if (panelRecordId) clearPanelParams();
       onRecordClick?.(recordId, record, { ...options, openRecordIn });
     },
-    [hydratedView?.view.openRecordIn, onRecordClick, scopeIdentity, panelRecordId, setPanelMinimised, resetPanelStack, clearPanelParams],
+    [rowOpenRecordIn, onRecordClick, scopeIdentity, panelRecordId, setPanelMinimised, resetPanelStack, clearPanelParams],
   );
+
+  // Deep link where rows open the page's own view: once the record is among
+  // this table's records, open it exactly as clicking its row does, once per
+  // id. `record`/`stack` are dropped first, as closing the panel does, so Back
+  // or a reload doesn't open it again; a handler that navigates elsewhere
+  // still wins, since it navigates after.
+  const handedOffRef = useRef<{ key: string; params: URLSearchParams } | null>(null);
+  useEffect(() => {
+    if (!deepLinkOpensOwnView || !requestedRecordId) return;
+    const key = `${scopeIdentity}:${requestedRecordId}`;
+    const handedOff = handedOffRef.current;
+    if (handedOff?.key === key) {
+      // A handler that wrote the URL from the params it rendered with (adding
+      // `?claim=`, say) put `record` back: drop it again. The same params
+      // object means nothing has navigated since (a StrictMode replay).
+      if (handedOff.params !== searchParams) {
+        handedOffRef.current = { key, params: searchParams };
+        clearPanelParams();
+      }
+      return;
+    }
+    const match = records.find((record) => String(record?._id) === requestedRecordId);
+    if (!match) return;
+    handedOffRef.current = { key, params: searchParams };
+    clearPanelParams();
+    handleRecordClick(requestedRecordId, match, { source: "row" });
+  }, [deepLinkOpensOwnView, requestedRecordId, scopeIdentity, searchParams, records, clearPanelParams, handleRecordClick]);
 
   const objectNameSingular = objectMetadata.nameSingular;
   const cellPreview = useCallback<NonNullable<RecordTableContextValue["cellPreview"]>>(
