@@ -11,10 +11,6 @@
   gap: 10px;
   min-width: 0;
 }
-// The user whose module access the viewer below the roster shows.
-.users-table .record-table__row:has(.users-table__who[data-current]) > td {
-  background: token('bg-subtle');
-}
 
 @media (max-width: 760px) {
   .users-invitations__head .card__title { flex: 1 1 0; }

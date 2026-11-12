@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openPageRowMenu, recordRows, runRowAction } from "./helpers/rowActions";
+import { openRowMenu, recordRows, runRowAction } from "./helpers/rowActions";
 
 declare global {
   interface Window {
@@ -96,10 +96,9 @@ test("corporation MVP flow renders obligations, share register, registration, an
 
   // The obligations are a record table: row actions sit inline, or behind the pinned "Row actions" menu.
   const annualReturnRow = recordRows(page).filter({ hasText: "Annual return filing window" }).first();
-  const annualReturnTitle = (await annualReturnRow.locator("[data-field-name=title] strong").first().textContent())?.trim() ?? "";
   await runRowAction(annualReturnRow, "Track");
   await expect(page.getByText("Filing created")).toBeVisible();
-  await openPageRowMenu(annualReturnRow, `More actions for ${annualReturnTitle}`);
+  await openRowMenu(annualReturnRow, "Actions for this obligation");
   await page.getByRole("menuitem", { name: "Stage document packet" }).click();
   await expect(page.getByText("Packet staged").last()).toBeVisible();
 

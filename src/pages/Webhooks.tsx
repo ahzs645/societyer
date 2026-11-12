@@ -14,17 +14,13 @@ import { Webhook, Plus, Power } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { Tooltip } from "../components/Tooltip";
 import {
-  RecordTable,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
+  RecordListTable,
+  RecordTableEmpty,
   RecordTablePhoneCard,
-  RecordTableScope,
-  RecordTableToolbar,
   staticRecordTable,
-  type RecordTableCardRenderer,
-  type RecordTableCellRenderer,
+  type RecordTableCardHelpers,
 } from "../platform/record-engine/record-table";
-import { FIELD_TYPES } from "../platform/record-engine/types";
+import { FIELD_TYPES, type FieldMetadata } from "../platform/record-engine/types";
 
 type Draft = {
   id?: string;
@@ -130,8 +126,6 @@ export function WebhooksPage() {
   const [saving, setSaving] = useState(false);
   const [signingSecret, setSigningSecret] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
-  const [deliveryFilterOpen, setDeliveryFilterOpen] = useState(false);
   const endpointRecords = useMemo<EndpointRecord[]>(
     () => ((subscriptions ?? []) as WebhookEndpoint[]).map((sub) => ({ ...sub, events: (sub.eventTypes ?? []).join(", ") })),
     [subscriptions],
@@ -185,8 +179,7 @@ export function WebhooksPage() {
     } catch (error) { toast.error("Could not update endpoint", error instanceof Error ? error.message : "Please try again."); }
   };
 
-  const renderEndpointCell: RecordTableCellRenderer = ({ record, field }) => {
-    const sub = record as EndpointRecord;
+  const renderEndpointCell = ({ record: sub, field }: { record: EndpointRecord; field: FieldMetadata }) => {
     switch (field.name) {
       case "name":
         return <strong>{sub.name}</strong>;
@@ -214,8 +207,7 @@ export function WebhooksPage() {
     </>
   );
 
-  const renderEndpointCard: RecordTableCardRenderer = (record, { selecting }) => {
-    const sub = record as unknown as EndpointRecord;
+  const renderEndpointCard = (sub: EndpointRecord, { selecting }: RecordTableCardHelpers) => {
     return (
       <RecordTablePhoneCard
         title={sub.name}
@@ -229,8 +221,7 @@ export function WebhooksPage() {
 
   const deliveryTone = (status: string) => status === "delivered" ? "success" : status === "failed" ? "danger" : "warn";
 
-  const renderDeliveryCell: RecordTableCellRenderer = ({ record, field }) => {
-    const delivery = record as DeliveryRecord;
+  const renderDeliveryCell = ({ record: delivery, field }: { record: DeliveryRecord; field: FieldMetadata }) => {
     switch (field.name) {
       case "eventType":
         return <span className="mono">{delivery.eventType}</span>;
@@ -247,8 +238,7 @@ export function WebhooksPage() {
     }
   };
 
-  const renderDeliveryCard: RecordTableCardRenderer = (record, { selecting }) => {
-    const delivery = record as unknown as DeliveryRecord;
+  const renderDeliveryCard = (delivery: DeliveryRecord, { selecting }: RecordTableCardHelpers) => {
     return (
       <RecordTablePhoneCard
         title={<span className="mono">{delivery.eventType}</span>}
@@ -296,65 +286,35 @@ export function WebhooksPage() {
       {signingSecret && <Banner tone="warn" title="Copy this signing secret now — it will not be shown again" onDismiss={() => setSigningSecret(null)}><code className="mono" style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>{signingSecret}</code><Button size="sm" onClick={async () => { try { await navigator.clipboard.writeText(signingSecret); toast.success("Signing secret copied"); } catch { toast.error("Clipboard unavailable"); } }}>Copy signing secret</Button></Banner>}
       <div className="card">
         <div className="card__head"><h2 className="card__title">Endpoints</h2><Badge>{subscriptions?.length ?? 0}</Badge></div>
-        {(subscriptions ?? []).length === 0 ? (
-          <div className="card__body muted">{subscriptions === undefined ? "Loading endpoints…" : "No webhook endpoints yet."}</div>
-        ) : (
-        <div className="card-register">
-          <RecordTableScope
-            tableId="webhook-endpoints"
-            objectMetadata={ENDPOINTS_TABLE.objectMetadata}
-            hydratedView={ENDPOINTS_TABLE.hydratedView}
-            records={endpointRecords}
-            cellPreviews={false}
-          >
-            <RecordTableToolbar
-              icon={<Webhook size={14} />}
-              label="All endpoints"
-              onOpenFilter={() => setEndpointFilterOpen((open) => !open)}
-            />
-            <RecordTableFilterPopover open={endpointFilterOpen} onClose={() => setEndpointFilterOpen(false)} />
-            <RecordTableFilterChips />
-            <RecordTable
-              fillViewport={false}
-              showAggregateFooter={false}
-              renderCell={renderEndpointCell}
-              renderRowActions={canConfigure ? renderEndpointActions : undefined}
-              renderPhoneCard={renderEndpointCard}
-            />
-          </RecordTableScope>
-        </div>
-        )}
+        <RecordListTable<EndpointRecord>
+          variant="card"
+          table={ENDPOINTS_TABLE}
+          tableId="webhook-endpoints"
+          label="All endpoints"
+          icon={<Webhook size={14} />}
+          records={endpointRecords}
+          loading={subscriptions === undefined}
+          renderCell={renderEndpointCell}
+          renderRowActions={canConfigure ? renderEndpointActions : undefined}
+          renderPhoneCard={renderEndpointCard}
+          emptyState={<RecordTableEmpty title="No webhook endpoints yet." />}
+        />
       </div>
 
       <div className="card">
         <div className="card__head"><h2 className="card__title">Recent deliveries</h2><Badge>{deliveries?.length ?? 0}</Badge></div>
-        {(deliveries ?? []).length === 0 ? (
-          <div className="card__body muted">{deliveries === undefined ? "Loading deliveries…" : "No deliveries yet."}</div>
-        ) : (
-        <div className="card-register">
-          <RecordTableScope
-            tableId="webhook-deliveries"
-            objectMetadata={DELIVERIES_TABLE.objectMetadata}
-            hydratedView={DELIVERIES_TABLE.hydratedView}
-            records={deliveryRecords}
-            cellPreviews={false}
-          >
-            <RecordTableToolbar
-              icon={<Webhook size={14} />}
-              label="Latest deliveries"
-              onOpenFilter={() => setDeliveryFilterOpen((open) => !open)}
-            />
-            <RecordTableFilterPopover open={deliveryFilterOpen} onClose={() => setDeliveryFilterOpen(false)} />
-            <RecordTableFilterChips />
-            <RecordTable
-              fillViewport={false}
-              showAggregateFooter={false}
-              renderCell={renderDeliveryCell}
-              renderPhoneCard={renderDeliveryCard}
-            />
-          </RecordTableScope>
-        </div>
-        )}
+        <RecordListTable<DeliveryRecord>
+          variant="card"
+          table={DELIVERIES_TABLE}
+          tableId="webhook-deliveries"
+          label="Latest deliveries"
+          icon={<Webhook size={14} />}
+          records={deliveryRecords}
+          loading={deliveries === undefined}
+          renderCell={renderDeliveryCell}
+          renderPhoneCard={renderDeliveryCard}
+          emptyState={<RecordTableEmpty title="No deliveries yet." />}
+        />
       </div>
 
       <Drawer

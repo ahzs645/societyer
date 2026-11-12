@@ -1,4 +1,5 @@
-import type { FieldMetadata, HydratedView, ObjectMetadata, ViewOpenRecordIn } from "../../types";
+import type { FieldMetadata, HydratedView, ObjectMetadata, ViewGroupBy, ViewOpenRecordIn, ViewSortDirection } from "../../types";
+import { withViewGroupBy } from "./groupRecords";
 
 /** One column of a table whose shape is fixed in code. */
 export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fieldType"> & {
@@ -10,6 +11,9 @@ export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fiel
   /** Cells are read-only unless a column says otherwise. */
   isReadOnly?: boolean;
 };
+
+/** The default view's group-by, naming its field by `name` (the reader can still change it). */
+export type StaticGroupByDefinition = Omit<ViewGroupBy, "fieldMetadataId" | "sumFieldMetadataId"> & { field: string };
 
 /**
  * Object metadata and a default view for a table defined in code rather than
@@ -31,6 +35,8 @@ export function staticRecordTable({
   viewName = `All ${labelPlural.toLowerCase()}`,
   openRecordIn = "page",
   density = "compact",
+  sorts = [],
+  groupBy,
 }: {
   id: string;
   nameSingular: string;
@@ -44,6 +50,10 @@ export function staticRecordTable({
   viewName?: string;
   openRecordIn?: ViewOpenRecordIn;
   density?: "compact" | "comfortable";
+  /** The default view's sort, by field `name`, first key first. */
+  sorts?: { field: string; direction: ViewSortDirection }[];
+  /** The default view's grouping, e.g. `{ field: "jurisdiction", sort: "label", direction: "asc" }`. */
+  groupBy?: StaticGroupByDefinition;
 }): { objectMetadata: ObjectMetadata; hydratedView: HydratedView } {
   const metadata: FieldMetadata[] = fields.map((definition, position) => ({
     _id: `${id}:field:${definition.name}`,
@@ -59,6 +69,10 @@ export function staticRecordTable({
     isReadOnly: definition.isReadOnly ?? true,
     position,
   }));
+  const fieldId = (name: string) => {
+    if (!fields.some((field) => field.name === name)) throw new Error(`staticRecordTable "${id}": no field "${name}"`);
+    return `${id}:field:${name}`;
+  };
   return {
     objectMetadata: {
       _id: id,
@@ -81,9 +95,9 @@ export function staticRecordTable({
         type: "table",
         filters: [],
         filterGroups: [],
-        sorts: [],
+        sorts: sorts.map((sort) => ({ id: sort.field, fieldMetadataId: fieldId(sort.field), direction: sort.direction })),
         fieldGroups: [],
-        groups: [],
+        groups: groupBy ? withViewGroupBy([], viewGroupBy(groupBy, fieldId(groupBy.field))) : [],
         density,
         visibility: "system",
         openRecordIn,
@@ -103,4 +117,8 @@ export function staticRecordTable({
       })),
     },
   };
+}
+
+function viewGroupBy({ field: _field, ...options }: StaticGroupByDefinition, fieldMetadataId: string): ViewGroupBy {
+  return { ...options, fieldMetadataId };
 }

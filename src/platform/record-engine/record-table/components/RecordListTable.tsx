@@ -46,6 +46,11 @@ type RecordListTableProps<T extends { _id: string }> = {
   showTotals?: boolean;
   /** The toolbar's title and count (default: on for `page`, off for `card`). */
   showTitle?: boolean;
+  /**
+   * Rendered inside the table's scope, before the toolbar: small pieces that
+   * read its state with `useRecordTableState` (whether it is searched, say).
+   */
+  children?: ReactNode;
 };
 
 /**
@@ -77,6 +82,7 @@ export function RecordListTable<T extends { _id: string }>({
   selectable = false,
   showTotals,
   showTitle,
+  children,
 }: RecordListTableProps<T>) {
   const [filterOpen, setFilterOpen] = useState(false);
   const card = variant === "card";
@@ -91,6 +97,7 @@ export function RecordListTable<T extends { _id: string }>({
         highlightedRecordId={highlightedRecordId}
         onRecordClick={onOpen ? (_recordId, record) => onOpen(record as T) : undefined}
       >
+        {children}
         <RecordTableToolbar
           label={label}
           icon={icon}

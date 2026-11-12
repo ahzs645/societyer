@@ -1,7 +1,7 @@
 import { calendarDateKey } from "../lib/calendarDates";
-import { useMemo, useState } from "react";
-import { BookTemplate, CheckCircle2, ClipboardList, ExternalLink, MoreHorizontal, Plus, RotateCcw, X } from "lucide-react";
-import { Menu, type MenuItem } from "../components/Menu";
+import { useMemo } from "react";
+import { BookTemplate, CheckCircle2, ClipboardList, ExternalLink, Plus, RotateCcw, X } from "lucide-react";
+import type { MenuItem } from "../components/Menu";
 import { loadComplianceRulePacks } from "../lib/compliance/registry";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -32,12 +32,9 @@ import { StatTile } from "../components/StatTile";
 import { ORG_HUB_OPTION_SETS } from "../lib/orgHubOptions";
 import {
   FIELD_TYPES,
-  RecordTable,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
+  RecordListTable,
+  RecordTableEmpty,
   RecordTablePhoneCard,
-  RecordTableScope,
-  RecordTableToolbar,
   staticRecordTable,
 } from "@/platform/record-engine";
 
@@ -166,7 +163,6 @@ export function ComplianceObligationsPage() {
   const canReview = permissions.loaded && permissions.can("deadlines:write");
   const canTrack = canReview && permissions.can("filings:write");
   const canStage = canReview && permissions.can("documents:write");
-  const [filterOpen, setFilterOpen] = useState(false);
 
   const factsList = useMemo(
     () => (organization ? complianceFactsForOrganization(organization, { registrations: detail?.registrations ?? [], meetings: meetings ?? [] }) : []),
@@ -389,6 +385,32 @@ export function ComplianceObligationsPage() {
     };
   });
 
+  /** What a row offers: its one main action inline, the rest in its "…" menu. */
+  const obligationActions = ({ obligation, filingMatch, decision }: ObligationRecord) => {
+    const filingKind = obligation.creates?.filingKind;
+    const existingFiling = filingMatch?.filing ?? null;
+    // Corporation packets do not apply to societies (staging one
+    // throws), so only offer Packet where the catalog applies.
+    const packet = corporate ? corporationPacketForComplianceObligation({
+      filingKind,
+      obligationKey: obligation.obligationKey,
+      ruleId: obligation.ruleId,
+      organization,
+    }) : undefined;
+    const isDismissed = decision?.status === "dismissed";
+    const isReviewed = decision?.status === "resolved" || Boolean(existingFiling);
+    const hasStagedPacket = decision?.targetTable === "legalPrecedentRuns";
+    const secondaryActions: MenuItem[] = isDismissed ? [] : [
+      ...(hasStagedPacket
+        ? [{ id: "packet", label: "Open document packet", icon: <BookTemplate size={14} />, onSelect: () => navigate("/app/template-engine") }]
+        : packet
+          ? [{ id: "packet", label: "Stage document packet", icon: <BookTemplate size={14} />, disabled: !canStage, onSelect: () => void stageDocumentPacket(obligation, existingFiling?._id) }]
+          : []),
+      ...(!isReviewed ? [{ id: "dismiss", label: "Dismiss", icon: <X size={14} />, disabled: !canReview, onSelect: () => void dismissObligation(obligation) }] : []),
+    ];
+    return { filingKind, existingFiling, isDismissed, isReviewed, secondaryActions };
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -476,151 +498,104 @@ export function ComplianceObligationsPage() {
           </div>
           {sharedRuleStatus && <Badge tone={ruleStatusTone(sharedRuleStatus)}>{sharedRuleStatus === "draft" ? "Draft rules" : ruleStatusLabel(sharedRuleStatus)}</Badge>}
         </div>
-        {obligations.length ? (
-          <RecordTableScope
-            tableId="compliance-obligations"
-            objectMetadata={OBLIGATIONS.objectMetadata}
-            hydratedView={OBLIGATIONS.hydratedView}
-            records={obligationRecords}
-            cellPreviews={false}
-          >
-            <RecordTableToolbar
-              label="Obligations"
-              icon={<ClipboardList size={14} />}
-              onOpenFilter={() => setFilterOpen((value) => !value)}
+        <RecordListTable<ObligationRecord>
+          variant="card"
+          table={OBLIGATIONS}
+          tableId="compliance-obligations"
+          label="Obligations"
+          icon={<ClipboardList size={14} />}
+          records={obligationRecords}
+          renderCell={({ record: row, field }) => {
+            const { obligation } = row;
+            if (field.name === "title") return (
+              <div className="record-table__identifier-lines" title={row.details}>
+                <strong className="record-table__identifier-primary">{obligation.title}</strong>
+                {row.contextSummary && <div className="record-table__identifier-secondary muted">{row.contextSummary}</div>}
+              </div>
+            );
+            if (field.name === "dueDate") return (
+              <div className="record-table__identifier-lines">
+                <span className="record-table__identifier-primary">{formatDate(obligation.dueDate)}</span>
+                <div className="record-table__identifier-secondary muted">Nominal · {relative(obligation.dueDate)}</div>
+              </div>
+            );
+            if (field.name === "status") {
+              const notes = [
+                row.filingMatch?.timingReviewRequired && row.filingMatch.nominalDaysPastDue > 0
+                  ? `${row.filingMatch.nominalDaysPastDue} days after the nominal date; legal calendar review required.`
+                  : "",
+                row.decision?.updatedAtISO ? relative(row.decision.updatedAtISO) : "",
+              ].filter(Boolean).join(" · ");
+              const badge = <Badge tone={OBLIGATION_STATUS_TONE[row.status]}>{OBLIGATION_STATUS_LABEL[row.status]}</Badge>;
+              if (!notes) return badge;
+              return (
+                <div className="record-table__identifier-lines" title={notes}>
+                  <span className="record-table__identifier-primary">{badge}</span>
+                  <div className="record-table__identifier-secondary muted">{notes}</div>
+                </div>
+              );
+            }
+            if (field.name === "source") return (
+              <div className="record-table__identifier-lines" title={obligation.authority.displayCitation}>
+                <span className="record-table__identifier-primary row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                  <span>{obligation.authority.displayCitation}</span>
+                  {!sharedRuleStatus && <Badge tone={ruleStatusTone(obligation.ruleStatus)}>{ruleStatusLabel(obligation.ruleStatus)}</Badge>}
+                </span>
+                {obligation.sources.length ? (
+                  <div className="record-table__identifier-secondary muted">
+                    {obligation.sources.slice(0, 2).map((source, index) => (
+                      <span key={source.sourceId}>
+                        {index > 0 ? " · " : ""}
+                        <a href={source.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{source.title}</a>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+            return undefined;
+          }}
+          renderPhoneCard={(row, { field, selecting }) => {
+            return (
+              <RecordTablePhoneCard
+                title={row.obligation.title}
+                wrapTitle
+                badge={field("status")}
+                meta={[formatDate(row.obligation.dueDate), `Nominal · ${relative(row.obligation.dueDate)}`]}
+                detail={[row.contextSummary ?? "", row.obligation.authority.displayCitation]}
+                selecting={selecting}
+              />
+            );
+          }}
+          renderRowActions={(record) => {
+            const { obligation } = record;
+            const { filingKind, existingFiling, isDismissed, isReviewed } = obligationActions(record);
+            if (isDismissed) return (
+              <button className="btn btn--sm" disabled={!canReview} onClick={() => reopenObligation(obligation)}>
+                <RotateCcw size={12} /> Reopen
+              </button>
+            );
+            if (existingFiling) return <Link className="btn btn--sm" to="/app/filings">Tracked</Link>;
+            if (filingKind) return (
+              <button className="btn btn--sm" disabled={!canTrack} onClick={() => trackFiling(obligation)}>
+                <Plus size={12} /> Track
+              </button>
+            );
+            if (isReviewed) return null;
+            return (
+              <button className="btn btn--sm" disabled={!canReview} onClick={() => acknowledgeWorkflow(obligation)}>
+                <CheckCircle2 size={12} /> Review
+              </button>
+            );
+          }}
+          rowMenuSections={(record) => [{ id: "actions", items: obligationActions(record).secondaryActions }]}
+          emptyState={
+            <RecordTableEmpty
+              title="No computed obligations yet"
+              description="This jurisdiction/entity pair does not have a matching executable pack yet, or the workspace is missing the date facts needed by the draft rules."
             />
-            <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-            <RecordTableFilterChips />
-            <RecordTable
-              showAggregateFooter={false}
-              renderCell={({ record, field }) => {
-                const row = record as ObligationRecord;
-                const { obligation } = row;
-                if (field.name === "title") return (
-                  <div className="record-table__identifier-lines" title={row.details}>
-                    <strong className="record-table__identifier-primary">{obligation.title}</strong>
-                    {row.contextSummary && <div className="record-table__identifier-secondary muted">{row.contextSummary}</div>}
-                  </div>
-                );
-                if (field.name === "dueDate") return (
-                  <div className="record-table__identifier-lines">
-                    <span className="record-table__identifier-primary">{formatDate(obligation.dueDate)}</span>
-                    <div className="record-table__identifier-secondary muted">Nominal · {relative(obligation.dueDate)}</div>
-                  </div>
-                );
-                if (field.name === "status") {
-                  const notes = [
-                    row.filingMatch?.timingReviewRequired && row.filingMatch.nominalDaysPastDue > 0
-                      ? `${row.filingMatch.nominalDaysPastDue} days after the nominal date; legal calendar review required.`
-                      : "",
-                    row.decision?.updatedAtISO ? relative(row.decision.updatedAtISO) : "",
-                  ].filter(Boolean).join(" · ");
-                  const badge = <Badge tone={OBLIGATION_STATUS_TONE[row.status]}>{OBLIGATION_STATUS_LABEL[row.status]}</Badge>;
-                  if (!notes) return badge;
-                  return (
-                    <div className="record-table__identifier-lines" title={notes}>
-                      <span className="record-table__identifier-primary">{badge}</span>
-                      <div className="record-table__identifier-secondary muted">{notes}</div>
-                    </div>
-                  );
-                }
-                if (field.name === "source") return (
-                  <div className="record-table__identifier-lines" title={obligation.authority.displayCitation}>
-                    <span className="record-table__identifier-primary row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                      <span>{obligation.authority.displayCitation}</span>
-                      {!sharedRuleStatus && <Badge tone={ruleStatusTone(obligation.ruleStatus)}>{ruleStatusLabel(obligation.ruleStatus)}</Badge>}
-                    </span>
-                    {obligation.sources.length ? (
-                      <div className="record-table__identifier-secondary muted">
-                        {obligation.sources.slice(0, 2).map((source, index) => (
-                          <span key={source.sourceId}>
-                            {index > 0 ? " · " : ""}
-                            <a href={source.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{source.title}</a>
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-                return undefined;
-              }}
-              renderPhoneCard={(record, { field, selecting }) => {
-                const row = record as unknown as ObligationRecord;
-                return (
-                  <RecordTablePhoneCard
-                    title={row.obligation.title}
-                    wrapTitle
-                    badge={field("status")}
-                    meta={[formatDate(row.obligation.dueDate), `Nominal · ${relative(row.obligation.dueDate)}`]}
-                    detail={[row.contextSummary ?? "", row.obligation.authority.displayCitation]}
-                    selecting={selecting}
-                  />
-                );
-              }}
-              renderRowActions={(record) => {
-                const { obligation, filingMatch, decision } = record as ObligationRecord;
-                const filingKind = obligation.creates?.filingKind;
-                const existingFiling = filingMatch?.filing ?? null;
-                // Corporation packets do not apply to societies (staging one
-                // throws), so only offer Packet where the catalog applies.
-                const packet = corporate ? corporationPacketForComplianceObligation({
-                  filingKind,
-                  obligationKey: obligation.obligationKey,
-                  ruleId: obligation.ruleId,
-                  organization,
-                }) : undefined;
-                const isDismissed = decision?.status === "dismissed";
-                const isReviewed = decision?.status === "resolved" || Boolean(existingFiling);
-                const hasStagedPacket = decision?.targetTable === "legalPrecedentRuns";
-                const secondaryActions: MenuItem[] = isDismissed ? [] : [
-                  ...(hasStagedPacket
-                    ? [{ id: "packet", label: "Open document packet", icon: <BookTemplate size={14} />, onSelect: () => navigate("/app/template-engine") }]
-                    : packet
-                      ? [{ id: "packet", label: "Stage document packet", icon: <BookTemplate size={14} />, disabled: !canStage, onSelect: () => void stageDocumentPacket(obligation, existingFiling?._id) }]
-                      : []),
-                  ...(!isReviewed ? [{ id: "dismiss", label: "Dismiss", icon: <X size={14} />, disabled: !canReview, onSelect: () => void dismissObligation(obligation) }] : []),
-                ];
-                if (isDismissed) return (
-                  <button className="btn btn--sm" disabled={!canReview} onClick={() => reopenObligation(obligation)}>
-                    <RotateCcw size={12} /> Reopen
-                  </button>
-                );
-                return (
-                  <>
-                    {existingFiling ? (
-                      <Link className="btn btn--sm" to="/app/filings">Tracked</Link>
-                    ) : filingKind ? (
-                      <button className="btn btn--sm" disabled={!canTrack} onClick={() => trackFiling(obligation)}>
-                        <Plus size={12} /> Track
-                      </button>
-                    ) : isReviewed ? (
-                      null
-                    ) : (
-                      <button className="btn btn--sm" disabled={!canReview} onClick={() => acknowledgeWorkflow(obligation)}>
-                        <CheckCircle2 size={12} /> Review
-                      </button>
-                    )}
-                    {secondaryActions.length > 0 && (
-                      <Menu
-                        align="right"
-                        trigger={<button className="btn btn--sm btn--icon" aria-label={`More actions for ${obligation.title}`}><MoreHorizontal size={14} /></button>}
-                        sections={[{ id: "actions", items: secondaryActions }]}
-                      />
-                    )}
-                  </>
-                );
-              }}
-            />
-          </RecordTableScope>
-        ) : (
-          <div className="empty-state">
-            <h3>No computed obligations yet</h3>
-            <p>
-              This jurisdiction/entity pair does not have a matching executable pack yet, or the
-              workspace is missing the date facts needed by the draft rules.
-            </p>
-          </div>
-        )}
+          }
+        />
       </section>
     </div>
   );

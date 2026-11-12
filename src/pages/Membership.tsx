@@ -14,7 +14,7 @@ import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { centsToDollarInput, dollarInputToCents, money, formatDate } from "../lib/format";
-import { Menu } from "../components/Menu";
+import { Menu, type MenuSection } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { StatTile } from "../components/StatTile";
 import { Money } from "../components/Money";
@@ -32,19 +32,14 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  RecordTable,
+  RecordListTable,
   RecordTableEmpty,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
   RecordTablePhoneCard,
-  RecordTableScope,
-  RecordTableToolbar,
   staticRecordTable,
   useRecordTableState,
-  type RecordTableCardRenderer,
-  type RecordTableCellRenderer,
+  type RecordTableCardHelpers,
 } from "../platform/record-engine/record-table";
-import { FIELD_TYPES } from "../platform/record-engine/types";
+import { FIELD_TYPES, type FieldMetadata } from "../platform/record-engine/types";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { MembersTrendCardLazy } from "../features/people/insights/lazy";
@@ -275,8 +270,6 @@ export function MembershipPage() {
   const [levyImportOpen, setLevyImportOpen] = useState(false);
   const isMobile = useIsMobile();
   const [showAllSubs, setShowAllSubs] = useState(false);
-  const [feeFilterOpen, setFeeFilterOpen] = useState(false);
-  const [subsFilterOpen, setSubsFilterOpen] = useState(false);
   const [subsNarrowed, setSubsNarrowed] = useState(false);
   const feeRecords = useMemo<FeePeriodRecord[]>(
     () => ((feeTimeline ?? []) as FeePeriod[]).map((period) => ({
@@ -303,8 +296,7 @@ export function MembershipPage() {
   const activeFeePeriods = (feeTimeline ?? []).filter((p: any) => p.status === "active");
   const allSubs = subs ?? [];
 
-  const renderFeeCell: RecordTableCellRenderer = ({ record, field }) => {
-    const period = record as FeePeriodRecord;
+  const renderFeeCell = ({ record: period, field }: { record: FeePeriodRecord; field: FieldMetadata }) => {
     switch (field.name) {
       case "label":
         return (
@@ -339,40 +331,31 @@ export function MembershipPage() {
     }
   };
 
+  // The current plan price (no dated period yet) is added, not edited.
   const renderFeeActions = (period: FeePeriodRecord) => period.synthetic ? (
     <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => setFeeDraft(feeDraftFromPeriod(period))}>
       Add
     </button>
-  ) : (
-    <Menu
-      align="right"
-      trigger={
-        <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for fee period ${period.label}`}>
-          <MoreHorizontal size={14} />
-        </button>
-      }
-      sections={[{
-        id: "period",
-        items: [
-          { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canManage, onSelect: () => setFeeDraft(feeDraftFromPeriod(period)) },
-          {
-            id: "delete",
-            label: "Delete fee period",
-            icon: <Trash2 size={14} />,
-            destructive: true,
-            disabled: !canManage,
-            onSelect: async () => {
-              await removeFeePeriod({ id: period._id });
-              toast.success("Fee period removed");
-            },
-          },
-        ],
-      }]}
-    />
-  );
+  ) : null;
+  const feeMenuSections = (period: FeePeriodRecord): MenuSection[] => period.synthetic ? [] : [{
+    id: "period",
+    items: [
+      { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canManage, onSelect: () => setFeeDraft(feeDraftFromPeriod(period)) },
+      {
+        id: "delete",
+        label: "Delete fee period",
+        icon: <Trash2 size={14} />,
+        destructive: true,
+        disabled: !canManage,
+        onSelect: async () => {
+          await removeFeePeriod({ id: period._id });
+          toast.success("Fee period removed");
+        },
+      },
+    ],
+  }];
 
-  const renderFeeCard: RecordTableCardRenderer = (record, { selecting }) => {
-    const period = record as unknown as FeePeriodRecord;
+  const renderFeeCard = (period: FeePeriodRecord, { selecting }: RecordTableCardHelpers) => {
     return (
       <RecordTablePhoneCard
         title={period.label}
@@ -394,8 +377,7 @@ export function MembershipPage() {
     </>
   );
 
-  const renderSubscriberCell: RecordTableCellRenderer = ({ record, field }) => {
-    const sub = record as SubscriberRecord;
+  const renderSubscriberCell = ({ record: sub, field }: { record: SubscriberRecord; field: FieldMetadata }) => {
     switch (field.name) {
       case "fullName":
         return (
@@ -463,8 +445,7 @@ export function MembershipPage() {
     </>
   );
 
-  const renderSubscriberCard: RecordTableCardRenderer = (record, { selecting }) => {
-    const sub = record as unknown as SubscriberRecord;
+  const renderSubscriberCard = (sub: SubscriberRecord, { selecting }: RecordTableCardHelpers) => {
     return (
       <RecordTablePhoneCard
         title={sub.fullName}
@@ -644,32 +625,20 @@ export function MembershipPage() {
             <CalendarClock size={12} /> Add period
           </button>
         </div>
-        <div className="card-register">
-          <RecordTableScope
-            tableId="membership-fee-timeline"
-            objectMetadata={FEE_TIMELINE_TABLE.objectMetadata}
-            hydratedView={FEE_TIMELINE_TABLE.hydratedView}
-            records={feeRecords}
-            cellPreviews={false}
-          >
-            <RecordTableToolbar
-              icon={<CalendarClock size={14} />}
-              label="All fee periods"
-              onOpenFilter={() => setFeeFilterOpen((open) => !open)}
-            />
-            <RecordTableFilterPopover open={feeFilterOpen} onClose={() => setFeeFilterOpen(false)} />
-            <RecordTableFilterChips />
-            <RecordTable
-              fillViewport={false}
-              showAggregateFooter={false}
-              loading={feeTimeline === undefined}
-              renderCell={renderFeeCell}
-              renderRowActions={renderFeeActions}
-              renderPhoneCard={renderFeeCard}
-              emptyState={<RecordTableEmpty title="No fee periods yet." description="Add one to record the timeline." />}
-            />
-          </RecordTableScope>
-        </div>
+        <RecordListTable<FeePeriodRecord>
+          variant="card"
+          table={FEE_TIMELINE_TABLE}
+          tableId="membership-fee-timeline"
+          label="All fee periods"
+          icon={<CalendarClock size={14} />}
+          records={feeRecords}
+          loading={feeTimeline === undefined}
+          renderCell={renderFeeCell}
+          renderRowActions={renderFeeActions}
+          rowMenuSections={feeMenuSections}
+          renderPhoneCard={renderFeeCard}
+          emptyState={<RecordTableEmpty title="No fee periods yet." description="Add one to record the timeline." />}
+        />
       </div>
       </MobileFold>
 
@@ -679,33 +648,21 @@ export function MembershipPage() {
           <h2 className="card__title">Subscribers</h2>
           <span className="card__subtitle">{allSubs.length} total</span>
         </div>
-        <div className="card-register">
-          <RecordTableScope
-            tableId="membership-subscribers"
-            objectMetadata={SUBSCRIBERS_TABLE.objectMetadata}
-            hydratedView={SUBSCRIBERS_TABLE.hydratedView}
-            records={visibleSubs}
-            cellPreviews={false}
-          >
-            <ReportNarrowed onChange={setSubsNarrowed} />
-            <RecordTableToolbar
-              icon={<CreditCard size={14} />}
-              label="All subscribers"
-              onOpenFilter={() => setSubsFilterOpen((open) => !open)}
-            />
-            <RecordTableFilterPopover open={subsFilterOpen} onClose={() => setSubsFilterOpen(false)} />
-            <RecordTableFilterChips />
-            <RecordTable
-              fillViewport={false}
-              showAggregateFooter={false}
-              loading={subs === undefined}
-              renderCell={renderSubscriberCell}
-              renderRowActions={renderSubscriberActions}
-              renderPhoneCard={renderSubscriberCard}
-              emptyState={<RecordTableEmpty title="No subscriptions yet." description="Sign up from one of the plan cards above." />}
-            />
-          </RecordTableScope>
-        </div>
+        <RecordListTable<SubscriberRecord>
+          variant="card"
+          table={SUBSCRIBERS_TABLE}
+          tableId="membership-subscribers"
+          label="All subscribers"
+          icon={<CreditCard size={14} />}
+          records={visibleSubs}
+          loading={subs === undefined}
+          renderCell={renderSubscriberCell}
+          renderRowActions={renderSubscriberActions}
+          renderPhoneCard={renderSubscriberCard}
+          emptyState={<RecordTableEmpty title="No subscriptions yet." description="Sign up from one of the plan cards above." />}
+        >
+          <ReportNarrowed onChange={setSubsNarrowed} />
+        </RecordListTable>
         {visibleSubs.length < allSubs.length && (
           <div className="card__body">
             <button type="button" className="btn" style={{ width: "100%" }} onClick={() => setShowAllSubs(true)}>

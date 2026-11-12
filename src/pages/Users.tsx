@@ -13,18 +13,13 @@ import { InfoPopover } from "../components/InfoPopover";
 import { formatDate } from "../lib/format";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  RecordTable,
+  RecordListTable,
   RecordTableEmpty,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
   RecordTablePhoneCard,
-  RecordTableScope,
-  RecordTableToolbar,
   staticRecordTable,
-  type RecordTableCardRenderer,
-  type RecordTableCellRenderer,
+  type RecordTableCardHelpers,
 } from "../platform/record-engine/record-table";
-import { FIELD_TYPES, type SelectOption } from "../platform/record-engine/types";
+import { FIELD_TYPES, type FieldMetadata, type SelectOption } from "../platform/record-engine/types";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
@@ -401,7 +396,6 @@ function UsersRoster({
   const remove = useMutation(api.users.remove);
   const toast = useToast();
   const confirm = useConfirm();
-  const [filterOpen, setFilterOpen] = useState(false);
   const records = useMemo<RosterRecord[]>(
     () => (users ?? []).map((user) => {
       const statusLabel = membershipStatusLabel(user, hostedSignIn);
@@ -438,12 +432,11 @@ function UsersRoster({
     <UserRoleSelect user={user} lastOwner={isLastOwner(user)} disabled={!mayManage(user)} assignableRoles={assignableRoles} />
   );
 
-  const renderCell: RecordTableCellRenderer = ({ record, field }) => {
-    const user = record as RosterRecord;
+  const renderCell = ({ record: user, field }: { record: RosterRecord; field: FieldMetadata }) => {
     switch (field.name) {
       case "displayName":
         return (
-          <div className="users-table__who" data-current={user._id === selectedUserId || undefined}>
+          <div className="users-table__who">
             <Avatar label={user.displayName || user.email || "?"} />
             <span className="record-table__identifier-lines">
               <strong className="record-table__identifier-primary">{user.displayName}</strong>
@@ -505,8 +498,7 @@ function UsersRoster({
   );
 
   // Phones: who on the card with the role still changed in place; the actions sit behind its "…".
-  const renderPhoneCard: RecordTableCardRenderer = (record, { selecting }) => {
-    const user = record as unknown as RosterRecord;
+  const renderPhoneCard = (user: RosterRecord, { selecting }: RecordTableCardHelpers) => {
     const status = user.status ?? "Active";
     return (
       <RecordTablePhoneCard
@@ -524,33 +516,22 @@ function UsersRoster({
   };
 
   return (
-    <div className="card-register users-table">
-      <RecordTableScope
-        tableId="users-roster"
-        objectMetadata={ROSTER_TABLE.objectMetadata}
-        hydratedView={ROSTER_TABLE.hydratedView}
-        records={records}
-        cellPreviews={false}
-      >
-        <RecordTableToolbar
-          icon={<UserCog size={14} />}
-          label="All users"
-          onOpenFilter={() => setFilterOpen((open) => !open)}
-        />
-        <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-        <RecordTableFilterChips />
-        <RecordTable
-          fillViewport={false}
-          showAggregateFooter={false}
-          loading={users === undefined}
-          renderCell={renderCell}
-          renderRowActions={renderRowActions}
-          rowMenuSections={rowMenuSections}
-          renderPhoneCard={renderPhoneCard}
-          emptyState={<RecordTableEmpty title="No users yet." description="Add one to start testing role-based access." />}
-        />
-      </RecordTableScope>
-    </div>
+    <RecordListTable<RosterRecord>
+      variant="card"
+      table={ROSTER_TABLE}
+      tableId="users-roster"
+      label="All users"
+      icon={<UserCog size={14} />}
+      records={records}
+      loading={users === undefined}
+      // The user whose module access the viewer below the roster shows.
+      highlightedRecordId={selectedUserId}
+      renderCell={renderCell}
+      renderRowActions={renderRowActions}
+      rowMenuSections={rowMenuSections}
+      renderPhoneCard={renderPhoneCard}
+      emptyState={<RecordTableEmpty title="No users yet." description="Add one to start testing role-based access." />}
+    />
   );
 }
 
@@ -711,7 +692,7 @@ const INVITATIONS_TABLE = staticRecordTable({
 function InvitationsPanel({
   societyId, assignableRoles,
 }: {
-  societyId: any;
+  societyId: Id<"societies">;
   assignableRoles: string[];
 }) {
   const hosted = useAuth().mode !== "none";
@@ -766,7 +747,6 @@ function InvitationsPanel({
     finally { setSending(null); }
   };
 
-  const [filterOpen, setFilterOpen] = useState(false);
   const records = useMemo<InvitationRecord[]>(
     () => ((invitations ?? []) as Invitation[]).map((inv) => ({
       ...inv,
@@ -790,8 +770,7 @@ function InvitationsPanel({
     }
   };
 
-  const renderCell: RecordTableCellRenderer = ({ record, field }) => {
-    const inv = record as InvitationRecord;
+  const renderCell = ({ record: inv, field }: { record: InvitationRecord; field: FieldMetadata }) => {
     switch (field.name) {
       case "invitee":
         return (
@@ -867,8 +846,7 @@ function InvitationsPanel({
   );
 
   // Phones: who and the status, then role and dates, then how it went out; the actions sit behind its "…".
-  const renderPhoneCard: RecordTableCardRenderer = (record, { selecting }) => {
-    const inv = record as unknown as InvitationRecord;
+  const renderPhoneCard = (inv: InvitationRecord, { selecting }: RecordTableCardHelpers) => {
     return (
       <RecordTablePhoneCard
         title={inv.kind === "link" ? `Share link · ${inv.invitee}` : inv.invitee}
@@ -896,32 +874,19 @@ function InvitationsPanel({
           <PlusCircle size={12} /> Invite
         </button>
       </div>
-      <div className="card-register">
-        <RecordTableScope
-          tableId="users-invitations"
-          objectMetadata={INVITATIONS_TABLE.objectMetadata}
-          hydratedView={INVITATIONS_TABLE.hydratedView}
-          records={records}
-          cellPreviews={false}
-        >
-          <RecordTableToolbar
-            icon={<UserCog size={14} />}
-            label="All invitations"
-            onOpenFilter={() => setFilterOpen((open) => !open)}
-          />
-          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-          <RecordTableFilterChips />
-          <RecordTable
-            fillViewport={false}
-            showAggregateFooter={false}
-            loading={invitations === undefined}
-            renderCell={renderCell}
-            renderRowActions={renderRowActions}
-            renderPhoneCard={renderPhoneCard}
-            emptyState={<RecordTableEmpty title="No invitations yet." />}
-          />
-        </RecordTableScope>
-      </div>
+      <RecordListTable<InvitationRecord>
+        variant="card"
+        table={INVITATIONS_TABLE}
+        tableId="users-invitations"
+        label="All invitations"
+        icon={<UserCog size={14} />}
+        records={records}
+        loading={invitations === undefined}
+        renderCell={renderCell}
+        renderRowActions={renderRowActions}
+        renderPhoneCard={renderPhoneCard}
+        emptyState={<RecordTableEmpty title="No invitations yet." />}
+      />
 
       <Drawer
         open={!!form}

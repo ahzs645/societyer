@@ -21,13 +21,9 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { INCORPORATION_JURISDICTION_CODES } from "../../shared/incorporationActs";
 import {
   FIELD_TYPES,
-  RecordTable,
+  RecordListTable,
   RecordTableEmpty,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
   RecordTablePhoneCard,
-  RecordTableScope,
-  RecordTableToolbar,
   staticRecordTable,
 } from "@/platform/record-engine";
 import type { TagColor } from "../components/Tag";
@@ -210,7 +206,6 @@ export function PoliciesPage() {
     }),
     [adoptionOptions],
   );
-  const [filterOpen, setFilterOpen] = useState(false);
   const policyRecords = useMemo(
     () => ((policies ?? []) as PolicyRow[]).map((policy) => toPolicyRecord(policy, docById, adoptionMaps)),
     [policies, docById, adoptionMaps],
@@ -313,105 +308,95 @@ export function PoliciesPage() {
       />
       <ImportCandidatesNotice noun="policy" targets={["policies"]} kinds={["policy"]} documentCategory="Policy" emptyRegister={!(policies ?? []).length} />
 
-      <RecordTableScope
+      <RecordListTable<PolicyRecord>
+        table={POLICIES}
         tableId="policies"
-        objectMetadata={POLICIES.objectMetadata}
-        hydratedView={POLICIES.hydratedView}
+        label="Policies"
+        icon={<FileText size={14} />}
         records={policyRecords}
-        cellPreviews={false}
-      >
-        <RecordTableToolbar
-          label="Policies"
-          icon={<FileText size={14} />}
-          onOpenFilter={() => setFilterOpen((value) => !value)}
-        />
-        <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-        <RecordTableFilterChips />
-        <RecordTable
-          loading={policies === undefined}
-          showAggregateFooter={false}
-          renderCell={({ record, field }) => {
-            const { policy: row } = record as PolicyRecord;
-            if (field.name === "policyName") return (
-              <div className="record-table__identifier-lines">
-                <span className="record-table__identifier-primary row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                  <strong>{row.policyName}</strong>
-                  <SourceProvenanceButton table="policies" id={row._id} />
-                </span>
-                {row.policyNumber && <div className="record-table__identifier-secondary mono muted">{row.policyNumber}</div>}
-              </div>
-            );
-            if (field.name === "owner") return <span>{row.owner || "-"}</span>;
-            if (field.name === "effectiveDate") {
-              const overdue = row.lifecycle?.reviewState === "overdue";
-              return (
-                <div className="record-table__identifier-lines">
-                  <span className="record-table__identifier-primary">{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</span>
-                  <div className={overdue ? "record-table__identifier-secondary" : "record-table__identifier-secondary muted"} style={overdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
-                    {reviewText(row)}
-                  </div>
-                </div>
-              );
-            }
-            if (field.name === "documents") {
-              const { docxLabel, pdfLabel } = record as PolicyRecord;
-              return (
-                <div className="record-table__identifier-lines">
-                  <span className="record-table__identifier-primary">{docxLabel}</span>
-                  <div className="record-table__identifier-secondary muted">{pdfLabel}</div>
-                </div>
-              );
-            }
-            if (field.name === "adoption") return <AdoptionCell row={row} maps={adoptionMaps} />;
-            if (field.name === "signatureRequired") return row.signatureRequired ? (
-              <div className="row policies-table__badges" style={ONE_LINE_BADGES}>
-                {(row.requiredSigners ?? []).length
-                  ? (row.requiredSigners ?? []).map((value) => <Badge key={value} tone="warn">{optionLabel("requiredSigners", value)}</Badge>)
-                  : <Badge tone="warn">Needs review</Badge>}
-              </div>
-            ) : (
-              <span className="muted">Not required</span>
-            );
-            if (field.name === "status") return (
-              <div className="row policies-table__badges" style={ONE_LINE_BADGES}>
-                <Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status ?? "") || row.status}</Badge>
-                <LifecycleBadges lifecycle={row.lifecycle} />
-              </div>
-            );
-            return undefined;
-          }}
-          renderPhoneCard={(record, { field, selecting }) => {
-            const { policy: row } = record as unknown as PolicyRecord;
+        loading={policies === undefined}
+        showTotals={false}
+        renderCell={({ record, field }) => {
+          const { policy: row } = record;
+          if (field.name === "policyName") return (
+            <div className="record-table__identifier-lines">
+              <span className="record-table__identifier-primary row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                <strong>{row.policyName}</strong>
+                <SourceProvenanceButton table="policies" id={row._id} />
+              </span>
+              {row.policyNumber && <div className="record-table__identifier-secondary mono muted">{row.policyNumber}</div>}
+            </div>
+          );
+          if (field.name === "owner") return <span>{row.owner || "-"}</span>;
+          if (field.name === "effectiveDate") {
+            const overdue = row.lifecycle?.reviewState === "overdue";
             return (
-              <RecordTablePhoneCard
-                title={row.policyName}
-                badge={field("status")}
-                meta={[row.owner ?? "", reviewText(row)]}
-                detail={[row.policyNumber ?? ""]}
-                selecting={selecting}
-              />
+              <div className="record-table__identifier-lines">
+                <span className="record-table__identifier-primary">{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</span>
+                <div className={overdue ? "record-table__identifier-secondary" : "record-table__identifier-secondary muted"} style={overdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
+                  {reviewText(row)}
+                </div>
+              </div>
             );
-          }}
-          rowMenuSections={(record) => {
-            const { policy: row } = record as PolicyRecord;
-            return [
-              {
-                id: "policy-actions",
-                items: [
-                  { id: "review", label: "Review task", disabled: !canWrite, onSelect: () => createLifecycleTask(row, "review") },
-                  ...(row.signatureRequired
-                    ? [{ id: "signers", label: "Signer task", disabled: !canWrite, onSelect: () => createLifecycleTask(row, "signers") }]
-                    : []),
-                  { id: "publish", label: "Publish draft", disabled: !canWrite, onSelect: () => createPublication(row) },
-                  { id: "edit", label: "Edit", disabled: !canWrite, onSelect: () => { if (!canWrite) return; setDraft({ ...row }); setOpen(true); } },
-                  { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => confirmDelete(row) },
-                ],
-              },
-            ];
-          }}
-          emptyState={<RecordTableEmpty title="No policies yet." />}
-        />
-      </RecordTableScope>
+          }
+          if (field.name === "documents") {
+            const { docxLabel, pdfLabel } = record;
+            return (
+              <div className="record-table__identifier-lines">
+                <span className="record-table__identifier-primary">{docxLabel}</span>
+                <div className="record-table__identifier-secondary muted">{pdfLabel}</div>
+              </div>
+            );
+          }
+          if (field.name === "adoption") return <AdoptionCell row={row} maps={adoptionMaps} />;
+          if (field.name === "signatureRequired") return row.signatureRequired ? (
+            <div className="row policies-table__badges" style={ONE_LINE_BADGES}>
+              {(row.requiredSigners ?? []).length
+                ? (row.requiredSigners ?? []).map((value) => <Badge key={value} tone="warn">{optionLabel("requiredSigners", value)}</Badge>)
+                : <Badge tone="warn">Needs review</Badge>}
+            </div>
+          ) : (
+            <span className="muted">Not required</span>
+          );
+          if (field.name === "status") return (
+            <div className="row policies-table__badges" style={ONE_LINE_BADGES}>
+              <Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status ?? "") || row.status}</Badge>
+              <LifecycleBadges lifecycle={row.lifecycle} />
+            </div>
+          );
+          return undefined;
+        }}
+        renderPhoneCard={(record, { field, selecting }) => {
+          const { policy: row } = record;
+          return (
+            <RecordTablePhoneCard
+              title={row.policyName}
+              badge={field("status")}
+              meta={[row.owner ?? "", reviewText(row)]}
+              detail={[row.policyNumber ?? ""]}
+              selecting={selecting}
+            />
+          );
+        }}
+        rowMenuSections={(record) => {
+          const { policy: row } = record;
+          return [
+            {
+              id: "policy-actions",
+              items: [
+                { id: "review", label: "Review task", disabled: !canWrite, onSelect: () => createLifecycleTask(row, "review") },
+                ...(row.signatureRequired
+                  ? [{ id: "signers", label: "Signer task", disabled: !canWrite, onSelect: () => createLifecycleTask(row, "signers") }]
+                  : []),
+                { id: "publish", label: "Publish draft", disabled: !canWrite, onSelect: () => createPublication(row) },
+                { id: "edit", label: "Edit", disabled: !canWrite, onSelect: () => { if (!canWrite) return; setDraft({ ...row }); setOpen(true); } },
+                { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => confirmDelete(row) },
+              ],
+            },
+          ];
+        }}
+        emptyState={<RecordTableEmpty title="No policies yet." />}
+      />
 
       <Drawer
         open={open && canWrite}

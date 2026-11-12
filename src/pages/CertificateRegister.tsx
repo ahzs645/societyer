@@ -14,16 +14,12 @@ import { useToast } from "../components/Toast";
 import { todayDateOnly } from "../../shared/dateOnly";
 import {
   FIELD_TYPES,
-  RecordTable,
+  RecordListTable,
   RecordTableEmpty,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
   RecordTablePhoneCard,
-  RecordTableScope,
-  RecordTableToolbar,
   staticRecordTable,
-  type RecordTableCardRenderer,
-  type RecordTableCellRenderer,
+  type FieldMetadata,
+  type RecordTableCardHelpers,
 } from "@/platform/record-engine";
 
 type Certificate = {
@@ -71,8 +67,6 @@ export function CertificateRegisterPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [reconciliationFilterOpen, setReconciliationFilterOpen] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
   const certificateRecords = useMemo(() => (list ?? []).map(toCertificateRecord), [list]);
@@ -181,62 +175,48 @@ export function CertificateRegisterPage() {
         </div>
       )}
 
-      <RecordTableScope
+      <RecordListTable<CertificateRecord>
+        table={CERTIFICATES}
         tableId="certificate-register"
-        objectMetadata={CERTIFICATES.objectMetadata}
-        hydratedView={CERTIFICATES.hydratedView}
+        label="Share certificates"
+        icon={<ScrollText size={14} />}
         records={certificateRecords}
-        cellPreviews={false}
-      >
-        <RecordTableToolbar
-          label="Share certificates"
-          icon={<ScrollText size={14} />}
-          onOpenFilter={() => setFilterOpen((value) => !value)}
-        />
-        <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-        <RecordTableFilterChips />
-        <RecordTable
-          fillViewport={false}
-          loading={list === undefined}
-          showAggregateFooter={false}
-          renderCell={renderCertificateCell}
-          renderPhoneCard={renderCertificateCard}
-          emptyState={<RecordTableEmpty title="No certificates issued yet." />}
-          renderRowActions={(record) => {
-            const c = (record as CertificateRecord).certificate;
-            return (
-              <>
-                {!c.cancelledOn && (
-                  <button
-                    className="btn btn--sm"
-                    disabled={!canEdit}
-                    onClick={() => cancel(c._id).catch((error: unknown) => toast.error("Could not cancel certificate", errorMessage(error)))}
-                  >
-                    Cancel
-                  </button>
-                )}
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Delete certificate ${c.certificateNumber}`}
-                  disabled={!canEdit}
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: `Delete certificate ${c.certificateNumber}?`,
-                      message: `The register entry for ${c.holderName} (${c.shares.toLocaleString()} ${c.shareClass}) will be removed and outstanding share totals recalculated. To record a returned certificate, use Cancel instead.`,
-                      confirmLabel: "Delete certificate",
-                      tone: "danger",
-                    });
-                    if (!ok) return;
-                    remove({ id: c._id }).catch((error: unknown) => toast.error("Could not delete certificate", errorMessage(error)));
-                  }}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </>
-            );
-          }}
-        />
-      </RecordTableScope>
+        loading={list === undefined}
+        showTotals={false}
+        renderCell={renderCertificateCell}
+        renderPhoneCard={renderCertificateCard}
+        emptyState={<RecordTableEmpty title="No certificates issued yet." />}
+        renderRowActions={({ certificate: c }) => (
+          <>
+            {!c.cancelledOn && (
+              <button
+                className="btn btn--sm"
+                disabled={!canEdit}
+                onClick={() => cancel(c._id).catch((error: unknown) => toast.error("Could not cancel certificate", errorMessage(error)))}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete certificate ${c.certificateNumber}`}
+              disabled={!canEdit}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Delete certificate ${c.certificateNumber}?`,
+                  message: `The register entry for ${c.holderName} (${c.shares.toLocaleString()} ${c.shareClass}) will be removed and outstanding share totals recalculated. To record a returned certificate, use Cancel instead.`,
+                  confirmLabel: "Delete certificate",
+                  tone: "danger",
+                });
+                if (!ok) return;
+                remove({ id: c._id }).catch((error: unknown) => toast.error("Could not delete certificate", errorMessage(error)));
+              }}
+            >
+              <Trash2 size={12} />
+            </button>
+          </>
+        )}
+      />
 
       {isCorporation(society) && list !== undefined && list.length > 0 && reconciliation && (
         <div className="card">
@@ -250,30 +230,19 @@ export function CertificateRegisterPage() {
               ? <p style={{ margin: 0 }}><strong>Certificates match the ledger.</strong></p>
               : reconciliation.issues.map((issue) => <p key={issue} style={{ margin: 0, color: "var(--danger)" }}>{issue}</p>)}
             {reconciliation.notes.map((note) => <p key={note} className="muted" style={{ margin: 0 }}>{note}</p>)}
-            {reconciliationRecords.length > 0 && (
-              <RecordTableScope
-                tableId="certificate-reconciliation"
-                objectMetadata={RECONCILIATION.objectMetadata}
-                hydratedView={RECONCILIATION.hydratedView}
-                records={reconciliationRecords}
-                cellPreviews={false}
-              >
-                <RecordTableToolbar
-                  label="Certificate reconciliation"
-                  icon={<ScrollText size={14} />}
-                  onOpenFilter={() => setReconciliationFilterOpen((value) => !value)}
-                />
-                <RecordTableFilterPopover open={reconciliationFilterOpen} onClose={() => setReconciliationFilterOpen(false)} />
-                <RecordTableFilterChips />
-                <RecordTable
-                  fillViewport={false}
-                  showAggregateFooter={false}
-                  renderCell={renderReconciliationCell}
-                  renderPhoneCard={renderReconciliationCard}
-                />
-              </RecordTableScope>
-            )}
           </div>
+          {reconciliationRecords.length > 0 && (
+            <RecordListTable<ReconciliationRecord>
+              variant="card"
+              table={RECONCILIATION}
+              tableId="certificate-reconciliation"
+              label="Certificate reconciliation"
+              icon={<ScrollText size={14} />}
+              records={reconciliationRecords}
+              renderCell={renderReconciliationCell}
+              renderPhoneCard={renderReconciliationCard}
+            />
+          )}
         </div>
       )}
 
@@ -424,16 +393,14 @@ function toCertificateRecord(c: Certificate): CertificateRecord {
   };
 }
 
-const renderCertificateCell: RecordTableCellRenderer = ({ record, field }) => {
-  const { certificate } = record as CertificateRecord;
+function renderCertificateCell({ record: { certificate }, field }: { record: CertificateRecord; field: FieldMetadata }) {
   // The register shows its stored date and its own status wording, as before.
   if (field.name === "issuedOn") return <span>{certificate.issuedOn}</span>;
   if (field.name === "status") return <span>{certificateStatusText(certificate)}</span>;
   return undefined;
-};
+}
 
-const renderCertificateCard: RecordTableCardRenderer = (record, { selecting }) => {
-  const { certificate } = record as unknown as CertificateRecord;
+function renderCertificateCard({ certificate }: CertificateRecord, { selecting }: RecordTableCardHelpers) {
   return (
     <RecordTablePhoneCard
       title={`${certificate.certificateNumber} · ${certificate.holderName}`}
@@ -443,7 +410,7 @@ const renderCertificateCard: RecordTableCardRenderer = (record, { selecting }) =
       selecting={selecting}
     />
   );
-};
+}
 
 type ReconciliationRow = {
   rightsClassId?: string;
@@ -489,14 +456,12 @@ function toReconciliationRecord(row: ReconciliationRow): ReconciliationRecord {
   return { ...row, _id: `${row.rightsClassId}:${row.holderKey}` };
 }
 
-const renderReconciliationCell: RecordTableCellRenderer = ({ record, field }) => {
-  const row = record as ReconciliationRecord;
+function renderReconciliationCell({ record: row, field }: { record: ReconciliationRecord; field: FieldMetadata }) {
   if (field.name === "status") return <span>{RECONCILIATION_STATUS[row.status] ?? row.status}</span>;
   return undefined;
-};
+}
 
-const renderReconciliationCard: RecordTableCardRenderer = (record, { field, selecting }) => {
-  const row = record as unknown as ReconciliationRecord;
+function renderReconciliationCard(row: ReconciliationRecord, { field, selecting }: RecordTableCardHelpers) {
   return (
     <RecordTablePhoneCard
       title={row.holderName}
@@ -505,6 +470,6 @@ const renderReconciliationCard: RecordTableCardRenderer = (record, { field, sele
       selecting={selecting}
     />
   );
-};
+}
 
 export default CertificateRegisterPage;

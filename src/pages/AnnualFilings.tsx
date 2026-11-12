@@ -16,17 +16,12 @@ import { formatDate } from "../lib/format";
 import { kindLabel } from "./Dashboard";
 import {
   FIELD_TYPES,
-  RecordTable,
+  RecordListTable,
   RecordTableEmpty,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
   RecordTablePhoneCard,
-  RecordTableScope,
-  RecordTableToolbar,
   staticRecordTable,
-  type HydratedView,
-  type RecordTableCardRenderer,
-  type RecordTableCellRenderer,
+  type FieldMetadata,
+  type RecordTableCardHelpers,
 } from "@/platform/record-engine";
 
 /**
@@ -68,6 +63,9 @@ const ANNUAL_FILINGS = staticRecordTable({
   labelSingular: "Annual filing",
   labelPlural: "Annual filings",
   labelIdentifierFieldName: "year",
+  // Latest year first, one group per jurisdiction (as the ledger's per-jurisdiction cards were).
+  sorts: [{ field: "year", direction: "desc" }],
+  groupBy: { field: "jurisdiction", sort: "label", direction: "asc" },
   fields: [
     { name: "year", label: "Year", fieldType: FIELD_TYPES.NUMBER, size: 120, config: { decimals: 0, groupable: false } },
     { name: "jurisdiction", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 160, isVisible: false },
@@ -77,22 +75,6 @@ const ANNUAL_FILINGS = staticRecordTable({
     { name: "regnLegislation", label: "Registration legislation", fieldType: FIELD_TYPES.TEXT, size: 180, isVisible: false },
   ],
 });
-const annualFilingField = (name: string) => `annual-filings:field:${name}`;
-/** Latest year first, one group per jurisdiction (as the ledger's per-jurisdiction cards were). */
-const ANNUAL_FILINGS_VIEW: HydratedView = {
-  ...ANNUAL_FILINGS.hydratedView,
-  view: {
-    ...ANNUAL_FILINGS.hydratedView.view,
-    sorts: [{ id: "year", fieldMetadataId: annualFilingField("year"), direction: "desc" }],
-    groups: [{
-      id: "group-by",
-      fieldValue: "",
-      position: -1,
-      isVisible: true,
-      groupBy: { fieldMetadataId: annualFilingField("jurisdiction"), sort: "label", direction: "asc" },
-    }],
-  },
-};
 
 function toAnnualFilingRecord(filing: Filing): AnnualFilingRecord {
   const year = Number(filing.year);
@@ -113,8 +95,7 @@ function linkedNote(filing: Filing) {
   return filing.sourceMissing ? "Linked record unavailable" : "Linked record";
 }
 
-const renderAnnualFilingCell: RecordTableCellRenderer = ({ record, field }) => {
-  const { filing } = record as AnnualFilingRecord;
+function renderAnnualFilingCell({ record: { filing }, field }: { record: AnnualFilingRecord; field: FieldMetadata }) {
   if (field.name === "year") return <span>{filing.year}</span>;
   if (field.name === "filed") {
     const note = linkedNote(filing);
@@ -128,10 +109,9 @@ const renderAnnualFilingCell: RecordTableCellRenderer = ({ record, field }) => {
   }
   if (field.name === "filedOn") return <span>{filing.filedOn ? formatDate(filing.filedOn) : "—"}</span>;
   return undefined;
-};
+}
 
-const renderAnnualFilingCard: RecordTableCardRenderer = (record, { open, selecting }) => {
-  const { filing } = record as unknown as AnnualFilingRecord;
+function renderAnnualFilingCard({ filing }: AnnualFilingRecord, { open, selecting }: RecordTableCardHelpers) {
   return (
     <RecordTablePhoneCard
       title={`${filing.jurisdiction} ${filing.year}`}
@@ -141,7 +121,7 @@ const renderAnnualFilingCard: RecordTableCardRenderer = (record, { open, selecti
       selecting={selecting}
     />
   );
-};
+}
 
 export function AnnualFilingsPage() {
   const society = useSociety();
@@ -161,7 +141,6 @@ export function AnnualFilingsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
   const records = useMemo(() => (items ?? []).map(toAnnualFilingRecord), [items]);
@@ -294,58 +273,45 @@ export function AnnualFilingsPage() {
         </div>
       )}
 
-      <RecordTableScope
+      <RecordListTable<AnnualFilingRecord>
+        table={ANNUAL_FILINGS}
         tableId="annual-filings"
-        objectMetadata={ANNUAL_FILINGS.objectMetadata}
-        hydratedView={ANNUAL_FILINGS_VIEW}
+        label="Annual filings"
+        icon={<CalendarCheck size={14} />}
         records={records}
-        cellPreviews={false}
-        onRecordClick={canEdit ? (_recordId, record) => openEdit((record as AnnualFilingRecord).filing) : undefined}
-      >
-        <RecordTableToolbar
-          label="Annual filings"
-          icon={<CalendarCheck size={14} />}
-          onOpenFilter={() => setFilterOpen((value) => !value)}
-        />
-        <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-        <RecordTableFilterChips />
-        <RecordTable
-          loading={rows === undefined || juris === undefined}
-          showAggregateFooter={false}
-          renderCell={renderAnnualFilingCell}
-          renderPhoneCard={renderAnnualFilingCard}
-          emptyState={<RecordTableEmpty title="No annual filings yet." />}
-          renderRowActions={(record) => {
-            const r = (record as AnnualFilingRecord).filing;
-            return (
-              <button
-                className="btn btn--ghost btn--sm btn--icon"
-                aria-label={`Delete ${r.jurisdiction} ${r.year} filing`}
-                disabled={!canEdit}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (!canEdit || !r._id) return;
-                  const ok = await confirm({
-                    title: `Delete the ${r.jurisdiction} ${r.year} ledger entry?`,
-                    message: `The ${r.year} row will be removed from this ledger and the year will show as outstanding again.${r.sourceFilingId ? " The linked filing in Filings is not changed." : ""}`,
-                    confirmLabel: "Delete entry",
-                    tone: "danger",
-                  });
-                  if (!ok) return;
-                  try {
-                    await remove({ id: r._id });
-                    toast.success("Ledger entry deleted");
-                  } catch (error: unknown) {
-                    toast.error("Could not delete annual filing", error instanceof Error ? error.message : String(error));
-                  }
-                }}
-              >
-                <Trash2 size={12} />
-              </button>
-            );
-          }}
-        />
-      </RecordTableScope>
+        loading={rows === undefined || juris === undefined}
+        showTotals={false}
+        onOpen={canEdit ? (record) => openEdit(record.filing) : undefined}
+        renderCell={renderAnnualFilingCell}
+        renderPhoneCard={renderAnnualFilingCard}
+        emptyState={<RecordTableEmpty title="No annual filings yet." />}
+        renderRowActions={({ filing: r }) => (
+          <button
+            className="btn btn--ghost btn--sm btn--icon"
+            aria-label={`Delete ${r.jurisdiction} ${r.year} filing`}
+            disabled={!canEdit}
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (!canEdit || !r._id) return;
+              const ok = await confirm({
+                title: `Delete the ${r.jurisdiction} ${r.year} ledger entry?`,
+                message: `The ${r.year} row will be removed from this ledger and the year will show as outstanding again.${r.sourceFilingId ? " The linked filing in Filings is not changed." : ""}`,
+                confirmLabel: "Delete entry",
+                tone: "danger",
+              });
+              if (!ok) return;
+              try {
+                await remove({ id: r._id });
+                toast.success("Ledger entry deleted");
+              } catch (error: unknown) {
+                toast.error("Could not delete annual filing", error instanceof Error ? error.message : String(error));
+              }
+            }}
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      />
 
       <Drawer
         open={open}

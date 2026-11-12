@@ -807,17 +807,17 @@
 // Phones: the toolbar folds into one row of icon buttons — see the "Phone
 // toolbars" section of _control-density.scss.
 
-// A record table set under a card's heading (RecordListTable variant="card";
-// older pages wrap it in .card-register): its rows run edge to edge like any card table, while the
-// toolbar and filter chips take the heading's inset. Phones, where cards go
-// flush, give the whole register the page gutter (as .role-holders-register).
+// A record table set under a card's heading (RecordListTable variant="card"):
+// its rows run edge to edge like any card table, while the toolbar and filter
+// chips take the heading's inset. Phones, where cards go flush, give the whole
+// register the page gutter (as .role-holders-register).
 @media (max-width: 760px) {
-  :is(.card-register, .record-list-table--card) {
+  .record-list-table--card {
     padding-inline: token('s-3');
   }
 }
 @media (min-width: 761px) {
-  :is(.card-register, .record-list-table--card) > :is(.record-table__toolbar, .record-table__chips) {
+  .record-list-table--card > :is(.record-table__toolbar, .record-table__chips) {
     padding-inline: token('s-4');
   }
 }

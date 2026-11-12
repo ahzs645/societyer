@@ -541,6 +541,8 @@ export function RecordTable({
   }, [rowModel.items, visibleColumns, renderRowActions]);
   const onRowContextMenu: RowContextMenuHandler | undefined = rowMenuSections
     ? (event, record) => {
+        // A row with nothing in its menu keeps the browser's own.
+        if (!rowMenuSections(record).some((section) => section.items.length > 0)) return;
         event.preventDefault();
         setRowContextMenu({ x: event.clientX, y: event.clientY, record });
       }
