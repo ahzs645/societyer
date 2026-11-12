@@ -22,6 +22,7 @@ import { useToast } from "../components/Toast";
 import { Archive, ChevronRight, Plus, Trash2, UserCog } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { entityHref } from "../components/HoverCard/entityRefs";
 import {
   RecordTable,
   RecordTableScope,
@@ -30,6 +31,9 @@ import {
   RecordTableFilterPopover,
   RecordTableBulkBar,
   RecordTablePhoneCard,
+  RecordListTable,
+  staticRecordTable,
+  FIELD_TYPES,
   recordPersonName,
   recordText,
   useObjectRecordTableData,
@@ -143,7 +147,8 @@ export function DirectorsPage() {
   );
   const archivedRoleTerms = roleTerms.filter((term: any) => term.status === "Archived");
   const unresolvedRoleTerms = roleTerms.filter((term: any) => !["Archived", "Verified"].includes(term.status));
-  const currentDirectorKeys = new Set<string>(active.map((director: any) => personNameKey(`${director.firstName} ${director.lastName}`)));
+  // Current directors by name, so a historical role naming one links to them.
+  const currentDirectorIds = new Map<string, string>(active.map((director: { _id: string; firstName?: string; lastName?: string }) => [personNameKey(`${director.firstName} ${director.lastName}`), String(director._id)]));
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -338,7 +343,7 @@ export function DirectorsPage() {
           legalDirectorTerms={legalDirectorTerms}
           archivedRoleTerms={archivedRoleTerms}
           unresolvedRoleTerms={unresolvedRoleTerms}
-          currentDirectorKeys={currentDirectorKeys}
+          currentDirectorIds={currentDirectorIds}
         />
       )}
 
@@ -486,25 +491,114 @@ export function DirectorsPage() {
   );
 }
 
+/** A board, masthead or editorial role from org history (`organizationHistory.list` boardTerms). */
+type HistoricalRoleTerm = {
+  _id: string;
+  personName?: string;
+  position?: string;
+  committeeName?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+};
+
+type RoleTermRecord = {
+  _id: string;
+  personName: string;
+  position: string;
+  committeeName: string;
+  observed: string | null;
+  register: "current" | "historical";
+  status: string;
+  /** The current director with this name, if any. */
+  directorId: string | null;
+};
+
+const ROLE_TERMS_TABLE = staticRecordTable({
+  id: "directors-role-history",
+  nameSingular: "historicalRole",
+  namePlural: "historicalRoles",
+  labelSingular: "Historical role",
+  labelPlural: "Historical roles",
+  labelIdentifierFieldName: "personName",
+  fields: [
+    { name: "personName", label: "Person", fieldType: FIELD_TYPES.TEXT, size: 200, config: { groupable: false } },
+    { name: "position", label: "Position", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "committeeName", label: "Board/group", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "observed", label: "Observed", fieldType: FIELD_TYPES.DATE, size: 120 },
+    {
+      name: "register",
+      label: "Register",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 150,
+      config: {
+        options: [
+          { value: "current", label: "Current register", color: "blue" },
+          { value: "historical", label: "Historical only", color: "gray" },
+        ],
+      },
+    },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 130,
+      config: {
+        options: [
+          { value: "Verified", label: "Verified", color: "green" },
+          { value: "NeedsReview", label: "Needs Review", color: "amber" },
+          { value: "Draft", label: "Draft", color: "gray" },
+          { value: "Archived", label: "Archived", color: "gray" },
+        ],
+      },
+    },
+  ],
+});
+
 function ArchivedRoleEvidenceView({
   roleTerms,
   legalDirectorTerms,
   archivedRoleTerms,
   unresolvedRoleTerms,
-  currentDirectorKeys,
+  currentDirectorIds,
 }: {
-  roleTerms: any[];
-  legalDirectorTerms: any[];
-  archivedRoleTerms: any[];
-  unresolvedRoleTerms: any[];
-  currentDirectorKeys: Set<string>;
+  roleTerms: HistoricalRoleTerm[];
+  legalDirectorTerms: HistoricalRoleTerm[];
+  archivedRoleTerms: HistoricalRoleTerm[];
+  unresolvedRoleTerms: HistoricalRoleTerm[];
+  currentDirectorIds: Map<string, string>;
 }) {
   const currentOverlap = new Set(
     legalDirectorTerms
-      .filter((term: any) => currentDirectorKeys.has(personNameKey(term.personName)))
-      .map((term: any) => personNameKey(term.personName)),
+      .filter((term) => currentDirectorIds.has(personNameKey(term.personName)))
+      .map((term) => personNameKey(term.personName)),
   ).size;
-  const legalEvidencePeople = new Set(legalDirectorTerms.map((term: any) => personNameKey(term.personName)).filter(Boolean)).size;
+  const legalEvidencePeople = new Set(legalDirectorTerms.map((term) => personNameKey(term.personName)).filter(Boolean)).size;
+  const records = roleTerms.map((term): RoleTermRecord => {
+    const directorId = currentDirectorIds.get(personNameKey(term.personName)) ?? null;
+    return {
+      _id: term._id,
+      personName: term.personName ?? "",
+      position: term.position ?? "",
+      committeeName: term.committeeName ?? "",
+      observed: term.startDate ?? term.endDate ?? null,
+      register: directorId ? "current" : "historical",
+      status: term.status ?? "NeedsReview",
+      directorId,
+    };
+  });
+  const registerBadge = (record: RoleTermRecord) => {
+    const badge = (
+      <Badge tone={record.directorId ? "info" : "neutral"}>
+        {record.directorId ? "Current register" : "Historical only"}
+      </Badge>
+    );
+    const href = record.directorId ? entityHref({ kind: "director", id: record.directorId }) : null;
+    return href ? <Link to={href} aria-label={`Open ${record.personName} in the director register`}>{badge}</Link> : badge;
+  };
+  const statusBadge = (record: RoleTermRecord) => (
+    <Badge tone={roleStatusTone(record.status)}>{record.status === "NeedsReview" ? "Needs Review" : record.status}</Badge>
+  );
 
   return (
     <details className="card directors-history">
@@ -517,44 +611,42 @@ function ArchivedRoleEvidenceView({
             {roleTerms.length} historical role{roleTerms.length === 1 ? "" : "s"} · {archivedRoleTerms.length} archived · {unresolvedRoleTerms.length} unresolved
           </p>
         </div>
-        <Link className="btn-action" to="/app/org-history" onClick={(event) => event.stopPropagation()}>
+        <Link className="btn-action" to="/app/org-history?section=people" onClick={(event) => event.stopPropagation()}>
           Open history
         </Link>
       </summary>
-      <div className="card__body">
-        <p className="muted" style={{ margin: "0 0 12px", fontSize: "var(--fs-sm)" }}>
+      <div className="card__body" style={{ paddingBottom: 0 }}>
+        <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
           Board, masthead and editorial observations for comparison only.{" "}
           {currentOverlap} match a current director; {Math.max(legalEvidencePeople - currentOverlap, 0)} appear only historically.
         </p>
-        <div className="table-wrap">
-          {roleTerms.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr><th>Person</th><th>Position</th><th>Board/group</th><th>Observed</th><th>Register</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {roleTerms.map((term: any) => {
-                  const inCurrentRegister = currentDirectorKeys.has(personNameKey(term.personName));
-                  return (
-                    <tr key={term._id}>
-                      <td><strong>{term.personName}</strong></td>
-                      <td>{term.position}</td>
-                      <td className="muted">{term.committeeName ?? "—"}</td>
-                      <td>{formatDate(term.startDate ?? term.endDate)}</td>
-                      <td>
-                        <Badge tone={inCurrentRegister ? "info" : "neutral"}>
-                          {inCurrentRegister ? "Current register" : "Historical only"}
-                        </Badge>
-                      </td>
-                      <td><Badge tone={roleStatusTone(term.status)}>{term.status ?? "Needs Review"}</Badge></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : null}
-        </div>
       </div>
+      {roleTerms.length > 0 ? (
+        <RecordListTable<RoleTermRecord>
+          variant="card"
+          table={ROLE_TERMS_TABLE}
+          tableId="directors-role-history"
+          label="Role history"
+          icon={<Archive size={14} />}
+          records={records}
+          renderCell={({ record, field }) => {
+            if (field.name === "personName") return <strong>{record.personName}</strong>;
+            if (field.name === "committeeName") return <span className="muted">{record.committeeName || "—"}</span>;
+            if (field.name === "register") return registerBadge(record);
+            if (field.name === "status") return statusBadge(record);
+            return undefined;
+          }}
+          renderPhoneCard={(record, { selecting }) => (
+            <RecordTablePhoneCard
+              title={record.personName}
+              badge={statusBadge(record)}
+              meta={[record.position, record.committeeName, record.observed ? formatDate(record.observed) : ""]}
+              detail={[registerBadge(record)]}
+              selecting={selecting}
+            />
+          )}
+        />
+      ) : null}
     </details>
   );
 }

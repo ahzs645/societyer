@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { useRecordQuery } from "../hooks/useRecordQuery";
 import { api } from "@/lib/convexApi";
-import { Id } from "../../convex/_generated/dataModel";
+import { Doc, Id } from "../../convex/_generated/dataModel";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
@@ -22,6 +22,8 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { ArrowLeft, Users, ListTodo, Target, Calendar, Plus, FileText, Trash2, Pencil, Activity, MessageSquare } from "lucide-react";
 import { formatDateTime, formatDate, initials } from "../lib/format";
+import { FIELD_TYPES, ObjectRecordTable, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable, type HydratedView } from "@/platform/record-engine";
+import { entityHref } from "../components/HoverCard/entityRefs";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { CommitteeStructureCard } from "../features/committees/CommitteeStructureCard";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
@@ -37,6 +39,102 @@ const isPartialDate = (value?: string) => !value || /^\d{4}(-\d{2}(-\d{2})?)?$/.
 const displayDate = (value?: string) => !value ? "—" : /^\d{4}(-\d{2})?$/.test(value) ? value : formatDate(value);
 const committeeStatusLabel = (status: string) => status === "NeedsReview" ? "Needs review" : status;
 const cadenceLabel = (cadence?: string) => !cadence || cadence === "Unknown" ? "Cadence not set" : cadence;
+
+/** A row of `committees.detail` members. */
+type CommitteeMember = {
+  _id: Id<"committeeMembers">;
+  name: string;
+  email?: string;
+  role: string;
+  directorId?: string;
+  personId?: string;
+  representedOrganization?: string;
+  joinedAt?: string;
+  leftAt?: string;
+  reviewStatus?: string;
+  sourceReference?: string;
+};
+
+type CommitteeMemberRecord = {
+  _id: string;
+  name: string;
+  role: string;
+  representedOrganization: string;
+  joinedAt: string;
+  leftAt: string;
+  reviewStatus: string;
+  member: CommitteeMember;
+};
+
+const MEMBERS_TABLE = staticRecordTable({
+  id: "committee-members",
+  nameSingular: "committeeMember",
+  namePlural: "committeeMembers",
+  labelSingular: "Committee member",
+  labelPlural: "Committee members",
+  labelIdentifierFieldName: "name",
+  fields: [
+    { name: "name", label: "Name", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "role", label: "Role", fieldType: FIELD_TYPES.TEXT, size: 130 },
+    { name: "representedOrganization", label: "Organization", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    // Roster dates can be partial ("2019", "2019-05"), so they sort as text.
+    { name: "joinedAt", label: "Joined", fieldType: FIELD_TYPES.TEXT, size: 120 },
+    { name: "leftAt", label: "Left", fieldType: FIELD_TYPES.TEXT, size: 120 },
+    {
+      name: "reviewStatus",
+      label: "Review",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 170,
+      config: {
+        options: [
+          { value: "pending", label: "From roster · pending", color: "amber" },
+          { value: "verified", label: "Confirmed", color: "green" },
+        ],
+      },
+    },
+  ],
+});
+
+function committeeMemberRecord(m: CommitteeMember): CommitteeMemberRecord {
+  return {
+    _id: String(m._id),
+    name: m.name,
+    role: m.role,
+    representedOrganization: m.representedOrganization ?? "",
+    joinedAt: m.joinedAt ?? "",
+    leftAt: m.leftAt ?? "",
+    reviewStatus: m.reviewStatus === "pending" ? "pending" : "verified",
+    member: m,
+  };
+}
+
+/** The member's person page, else their director entry, else just the name. Former members read muted. */
+function memberName(m: CommitteeMember) {
+  const name = <strong className={m.leftAt ? "muted" : undefined}>{m.name}</strong>;
+  const href = m.personId ? entityHref({ kind: "person", id: m.personId }) : m.directorId ? entityHref({ kind: "director", id: m.directorId }) : null;
+  return (
+    <span className="row">
+      <span className="avatar">{initials(m.name.split(" ")[0], m.name.split(" ")[1])}</span>
+      {href ? <Link to={href}>{name}</Link> : name}
+    </span>
+  );
+}
+
+function reviewBadge(m: CommitteeMember) {
+  return m.reviewStatus === "pending" ? <Badge tone="warn">From roster · pending</Badge> : <Badge tone="success">Confirmed</Badge>;
+}
+
+/** Saved meeting views that rely on counts only the Meetings page loads. */
+const MEETINGS_PAGE_ONLY_VIEWS = new Set(["Held, no minutes", "Same-day duplicates"]);
+const committeeMeetingViews = <T extends { name: string }>(views: T[]) => views.filter((view) => !MEETINGS_PAGE_ONLY_VIEWS.has(view.name));
+
+/** Hides columns that are always this committee, or counts this page doesn't load. */
+function hideColumns(names: readonly string[]) {
+  return (view: HydratedView | null): HydratedView | null =>
+    view && { ...view, columns: view.columns.map((column) => (names.includes(column.field?.name ?? "") ? { ...column, isVisible: false } : column)) };
+}
+const hideMeetingColumns = hideColumns(["body", "motionCount", "presentCount", "duplicateCount", "minutesMissing"]);
+const hideTaskColumns = hideColumns(["committeeId", "responsibleUserIds"]);
 
 export function CommitteeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -99,6 +197,44 @@ export function CommitteeDetailPage() {
   const pendingMembers = members.filter((m: any) => m.reviewStatus === "pending").length;
   const sortedMembers = [...members].sort((a: any, b: any) => Number(!!a.leftAt) - Number(!!b.leftAt) || String(a.name).localeCompare(String(b.name)));
   const memberDatesValid = memberForm ? isPartialDate(memberForm.joinedAt) && isPartialDate(memberForm.leftAt) && (!memberForm.leftAt || !memberForm.joinedAt || memberForm.leftAt >= memberForm.joinedAt) : false;
+
+  const editMember = (m: CommitteeMember) => {
+    setMemberForm({ _id: m._id, name: m.name, email: m.email ?? "", role: m.role, directorId: m.directorId ?? "", personId: m.personId ?? "", representedOrganization: m.representedOrganization ?? "", joinedAt: m.joinedAt ?? "", leftAt: m.leftAt ?? "", reviewStatus: m.reviewStatus ?? "verified", sourceReference: m.sourceReference });
+    setMemberDrawer(true);
+  };
+  const deleteMember = async (m: CommitteeMember) => {
+    if (!canWrite) return;
+    const ok = await confirm({
+      title: "Remove member?",
+      message: `${m.name} will be deleted from this committee's roster, including the joined and left dates. To record that they stepped down, edit the member and set a "Left" date instead.`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await removeMember({ id: m._id });
+    toast.success("Member removed");
+  };
+  // Meetings and tasks are the same records as on their own pages, narrowed
+  // to this committee; their columns come from the shared object metadata.
+  const meetingRecords = (meetings as Doc<"meetings">[])
+    .slice()
+    .sort((a, b) => String(b.scheduledAt ?? "").localeCompare(String(a.scheduledAt ?? "")))
+    .map((m) => ({
+      ...m,
+      body: committee.name,
+      minutes: m.status === "Held" ? "Recorded" : "",
+      sourceReviewStatus: m.sourceReviewStatus ?? "not_applicable",
+      _searchText: [m.title, m.location, formatMeetingDate(m)].filter(Boolean).join(" "),
+    }));
+  const meetingTitleById = new Map<string, string>((meetings as Doc<"meetings">[]).map((m) => [String(m._id), m.title]));
+  const goalTitleById = new Map<string, string>((goals as Doc<"goals">[]).map((g) => [String(g._id), g.title]));
+  const taskRecords = (operationalTasks as Doc<"tasks">[]).map((t) => ({
+    ...t,
+    committeeIdLabel: committee.name,
+    meetingIdLabel: t.meetingId ? meetingTitleById.get(String(t.meetingId)) : undefined,
+    goalIdLabel: t.goalId ? goalTitleById.get(String(t.goalId)) : undefined,
+    _searchText: [t.title, t.assignee, t.description, ...(t.tags ?? [])].filter(Boolean).join(" "),
+  }));
 
   const saveMember = async () => {
     if (!canWrite || !memberForm) return;
@@ -234,95 +370,86 @@ export function CommitteeDetailPage() {
           </div>
           {pendingMembers > 0 && (
             <p className="card__body muted" style={{ margin: 0 }}>
-              {pendingMembers} member{pendingMembers === 1 ? " was" : "s were"} added from a source roster and {pendingMembers === 1 ? "is" : "are"} pending review. Open a row to confirm the person, role and dates.
+              {pendingMembers} member{pendingMembers === 1 ? " was" : "s were"} added from a source roster and {pendingMembers === 1 ? "is" : "are"} pending review. Edit a row to confirm the person, role and dates.
             </p>
           )}
-          <div className="table-wrap">
-          <table className="table table--stack-mobile committee-table">
-            <thead><tr><th>Name</th><th>Role</th><th>Organization</th><th>Joined</th><th>Left</th><th>Review</th><th /></tr></thead>
-            <tbody>
-              {sortedMembers.map((m: any) => (
-                <tr key={m._id} style={{ opacity: m.leftAt ? 0.7 : 1 }}>
-                  <td className="committee-table__lead">
-                    <div className="row">
-                      <span className="avatar">{initials(m.name.split(" ")[0], m.name.split(" ")[1])}</span>
-                      {m.personId ? (
-                        <Link to={`/app/people-directory/${m.personId}`}><strong>{m.name}</strong></Link>
-                      ) : m.directorId ? (
-                        <Link to="/app/directors"><strong>{m.name}</strong></Link>
-                      ) : (
-                        <strong>{m.name}</strong>
-                      )}
-                    </div>
-                  </td>
-                  <td><Badge tone={m.role === "Chair" ? "accent" : "neutral"}>{m.role}</Badge></td>
-                  <td className={`muted${m.representedOrganization ? "" : " committee-table__blank"}`}>{m.representedOrganization ?? "—"}</td>
-                  <td data-label="Joined">{displayDate(m.joinedAt)}</td>
-                  <td data-label="Left" className={m.leftAt ? undefined : "committee-table__blank"}>{m.leftAt ? displayDate(m.leftAt) : "—"}</td>
-                  <td>{m.reviewStatus === "pending" ? <Badge tone="warn" >From roster · pending</Badge> : <Badge tone="success">Confirmed</Badge>}</td>
-                  <td className="table__actions committee-table__actions">
-                    <button
-                      className="btn btn--ghost btn--sm btn--icon"
-                      disabled={!canWrite}
-                      aria-label={`Edit ${m.name}`}
-                      onClick={() => {
-                        setMemberForm({ _id: m._id, name: m.name, email: m.email ?? "", role: m.role, directorId: m.directorId ?? "", personId: m.personId ?? "", representedOrganization: m.representedOrganization ?? "", joinedAt: m.joinedAt ?? "", leftAt: m.leftAt ?? "", reviewStatus: m.reviewStatus ?? "verified", sourceReference: m.sourceReference });
-                        setMemberDrawer(true);
-                      }}
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      className="btn btn--ghost btn--sm btn--icon"
-                      disabled={!canWrite}
-                      aria-label={`Remove ${m.name} from committee`}
-                      onClick={async () => {
-                        if (!canWrite) return;
-                        const ok = await confirm({
-                          title: "Remove member?",
-                          message: `${m.name} will be deleted from this committee's roster, including the joined and left dates. To record that they stepped down, edit the member and set a "Left" date instead.`,
-                          confirmLabel: "Remove",
-                          tone: "danger",
-                        });
-                        if (!ok) return;
-                        await removeMember({ id: m._id });
-                        toast.success("Member removed");
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {members.length === 0 && <tr><td colSpan={7} className="muted" style={{ textAlign: "center", padding: 24 }}>No members yet. Add people, or add them from imported roster sheets.</td></tr>}
-            </tbody>
-          </table>
-          </div>
+          <RecordListTable<CommitteeMemberRecord>
+            variant="card"
+            table={MEMBERS_TABLE}
+            tableId="committee-members"
+            label="Members"
+            icon={<Users size={14} />}
+            records={sortedMembers.map(committeeMemberRecord)}
+            renderCell={({ record, field }) => {
+              const m = record.member;
+              if (field.name === "name") return memberName(m);
+              if (field.name === "role") return <Badge tone={m.role === "Chair" ? "accent" : "neutral"}>{m.role}</Badge>;
+              if (field.name === "representedOrganization") return <span className="muted">{m.representedOrganization ?? "—"}</span>;
+              if (field.name === "joinedAt") return <span>{displayDate(m.joinedAt)}</span>;
+              if (field.name === "leftAt") return <span className={m.leftAt ? undefined : "muted"}>{m.leftAt ? displayDate(m.leftAt) : "—"}</span>;
+              if (field.name === "reviewStatus") return reviewBadge(m);
+              return undefined;
+            }}
+            renderRowActions={(record) => {
+              const m = record.member;
+              return (
+                <>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    disabled={!canWrite}
+                    aria-label={`Edit ${m.name}`}
+                    onClick={() => editMember(m)}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    disabled={!canWrite}
+                    aria-label={`Remove ${m.name} from committee`}
+                    onClick={() => void deleteMember(m)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </>
+              );
+            }}
+            renderPhoneCard={(record, { selecting }) => (
+              <RecordTablePhoneCard
+                title={memberName(record.member)}
+                recordName={record.name}
+                badge={reviewBadge(record.member)}
+                meta={[record.role, record.representedOrganization]}
+                detail={[`Joined ${displayDate(record.member.joinedAt)}`, record.member.leftAt ? `Left ${displayDate(record.member.leftAt)}` : ""]}
+                selecting={selecting}
+              />
+            )}
+            emptyState={<RecordTableEmpty title="No members yet." description="Add people, or add them from imported roster sheets." />}
+          />
         </div>
   );
   const meetingsContent = (
         <div className="card">
           <div className="card__head"><h2 className="card__title">Meetings</h2></div>
-          <div className="table-wrap">
-          <table className="table table--stack-mobile committee-table">
-            {meetings.length > 0 && <thead><tr><th>Title</th><th>When</th><th>Location</th><th>Status</th><th>Minutes</th></tr></thead>}
-            <tbody>
-              {meetings
-                .slice()
-                .sort((a: any, b: any) => b.scheduledAt.localeCompare(a.scheduledAt))
-                .map((m: any) => (
-                  <tr key={m._id}>
-                    <td className="committee-table__lead"><Link to={`/app/meetings/${m._id}`}><strong>{m.title}</strong></Link></td>
-                    <td>{formatMeetingDate(m)}</td>
-                    <td className={m.location || m.electronic ? undefined : "committee-table__blank"}>{m.location ?? "—"} {m.electronic && <Badge tone="info">Electronic</Badge>}</td>
-                    <td><Badge tone={m.status === "Held" ? "success" : "warn"}>{m.status}</Badge></td>
-                    <td className={m.status === "Held" ? undefined : "committee-table__blank"}>{m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>}</td>
-                  </tr>
-                ))}
-              {meetings.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No meetings yet.</td></tr>}
-            </tbody>
-          </table>
-          </div>
+          <ObjectRecordTable
+            societyId={society._id}
+            nameSingular="meeting"
+            tableId="committee-meetings"
+            label="Meetings"
+            objectLabel="meeting"
+            icon={<Calendar size={14} />}
+            records={meetingRecords}
+            onRecordClick={(recordId) => navigate(`/app/meetings/${recordId}`)}
+            filterViews={committeeMeetingViews}
+            transformView={hideMeetingColumns}
+            renderCell={({ record: m, field }) => {
+              if (field.name === "scheduledAt") return <span>{formatMeetingDate(m)}</span>;
+              if (field.name === "location") return <span>{m.location ?? "—"} {m.electronic && <Badge tone="info">Electronic</Badge>}</span>;
+              if (field.name === "status") return <Badge tone={m.status === "Held" ? "success" : "warn"}>{m.status}</Badge>;
+              if (field.name === "minutes") return m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>;
+              return undefined;
+            }}
+            emptyState={<RecordTableEmpty title="No meetings yet." />}
+          />
         </div>
   );
   const tasksContent = (
@@ -339,32 +466,40 @@ export function CommitteeDetailPage() {
               </button>
             </div>
           </div>
-          <div className="table-wrap">
-          <table className="table table--stack-mobile committee-table">
-            <thead><tr><th /><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
-            <tbody>
-              {operationalTasks.map((t: any) => (
-                <tr key={t._id}>
-                  <td className="committee-table__dot"><span className={`priority-dot priority-${t.priority}`} /></td>
-                  <td className="committee-table__lead committee-table__lead--task"><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</td>
-                  <td className={t.assignee ? undefined : "committee-table__blank"}>{t.assignee ?? "—"}</td>
-                  <td data-label="Due" className={t.dueDate ? undefined : "committee-table__blank"}>{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
-                  <td className="committee-table__status">
-                    <Select
-                      size="sm"
-                      disabled={!canWriteTasks}
-                      value={t.status}
-                      onChange={(v) => { if (canWriteTasks) void updateTask({ id: t._id, patch: { status: v } }); }}
-                      style={{ width: 120, maxWidth: "100%" }}
-                      options={TASK_STATUSES.map((s) => ({ value: s, label: taskStatusLabel(s) }))}
-                    />
-                  </td>
-                </tr>
-              ))}
-              {operationalTasks.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks yet.{historicalTaskCount > 0 && <> <Link to={`/app/tasks?register=historical&committeeId=${committee._id}`}>See {historicalTaskCount} historical source actions</Link>.</>}</td></tr>}
-            </tbody>
-          </table>
-          </div>
+          <ObjectRecordTable
+            societyId={society._id}
+            nameSingular="task"
+            tableId="committee-tasks"
+            label="Tasks"
+            objectLabel="task"
+            icon={<ListTodo size={14} />}
+            records={taskRecords}
+            onRecordClick={(recordId) => navigate(`/app/tasks?record=${encodeURIComponent(recordId)}`)}
+            transformView={hideTaskColumns}
+            renderCell={({ record: t, field }) => {
+              if (field.name === "title")
+                return <span><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</span>;
+              if (field.name === "status")
+                return (
+                  <Select
+                    size="sm"
+                    disabled={!canWriteTasks}
+                    value={t.status}
+                    onChange={(v) => { if (canWriteTasks) void updateTask({ id: t._id, patch: { status: v } }); }}
+                    style={{ width: 120, maxWidth: "100%" }}
+                    aria-label={`Status of ${t.title}`}
+                    options={TASK_STATUSES.map((s) => ({ value: s, label: taskStatusLabel(s) }))}
+                  />
+                );
+              return undefined;
+            }}
+            emptyState={
+              <RecordTableEmpty
+                title="No tasks yet."
+                description={historicalTaskCount > 0 ? <Link to={`/app/tasks?register=historical&committeeId=${committee._id}`}>See {historicalTaskCount} historical source actions</Link> : undefined}
+              />
+            }
+          />
         </div>
   );
   const goalsContent = (

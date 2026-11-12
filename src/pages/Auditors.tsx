@@ -21,6 +21,10 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordListTable,
+  RecordTablePhoneCard,
+  staticRecordTable,
+  FIELD_TYPES,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -205,6 +209,68 @@ const PORTAL_SCOPES: Array<{ key: string; label: string }> = [
   { key: "documents", label: "Documents" },
 ];
 
+/** A row of `partyPortals.list`. */
+type PartyPortal = {
+  _id: ConvexId<"partyPortals">;
+  token: string;
+  label: string;
+  partyEmail?: string;
+  scopes?: string[];
+  allowDownload?: boolean;
+  revokedAtISO?: string;
+  expiresAtISO?: string;
+};
+
+type PortalRecord = {
+  _id: ConvexId<"partyPortals">;
+  token: string;
+  label: string;
+  partyEmail: string;
+  shares: string;
+  allowDownload: boolean;
+  status: "Active" | "Expired" | "Revoked";
+};
+
+const PORTALS_TABLE = staticRecordTable({
+  id: "stakeholder-portals",
+  nameSingular: "partyPortal",
+  namePlural: "partyPortals",
+  labelSingular: "Portal",
+  labelPlural: "Portals",
+  labelIdentifierFieldName: "label",
+  fields: [
+    { name: "label", label: "Party", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "partyEmail", label: "Email", fieldType: FIELD_TYPES.EMAIL, size: 200, isVisible: false },
+    { name: "shares", label: "Shares", fieldType: FIELD_TYPES.TEXT, size: 240 },
+    { name: "allowDownload", label: "Downloads", fieldType: FIELD_TYPES.BOOLEAN, size: 120 },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 110,
+      config: {
+        options: [
+          { value: "Active", label: "Active", color: "green" },
+          { value: "Expired", label: "Expired", color: "amber" },
+          { value: "Revoked", label: "Revoked", color: "gray" },
+        ],
+      },
+    },
+  ],
+});
+
+function portalRecord(p: PartyPortal, nowISO: string): PortalRecord {
+  return {
+    _id: p._id,
+    token: p.token,
+    label: p.label,
+    partyEmail: p.partyEmail ?? "",
+    shares: (p.scopes ?? []).map((s) => PORTAL_SCOPES.find((x) => x.key === s)?.label ?? s).join(", "),
+    allowDownload: !!p.allowDownload,
+    status: p.revokedAtISO ? "Revoked" : p.expiresAtISO && p.expiresAtISO < nowISO ? "Expired" : "Active",
+  };
+}
+
 /**
  * Token-scoped read-only portals for external parties (auditors, lawyers). The
  * grantor picks which sections the party can read and whether files download;
@@ -262,9 +328,6 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
     }
   };
 
-  const statusOf = (p: any): string =>
-    p.revokedAtISO ? "Revoked" : p.expiresAtISO && p.expiresAtISO < nowISO ? "Expired" : "Active";
-
   return (
     <div className="card">
       <div className="card__head">
@@ -279,7 +342,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
           </button>
         )}
       </div>
-      <div className="card__body col" style={{ gap: 14 }}>
+      {(showForm || (portals ?? []).length === 0) && <div className="card__body col" style={{ gap: 14 }}>
         {showForm && <>
         <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <Field label="Party name"><input className="input" disabled={!canWrite} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Smith & Co. (auditor)" /></Field>
@@ -302,34 +365,42 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
 
         {(portals ?? []).length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>No portals yet.</p>
-        ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead><tr><th>Party</th><th>Shares</th><th>Downloads</th><th>Status</th><th /></tr></thead>
-            <tbody>
-              {(portals ?? []).map((p: any) => (
-                <tr key={p._id}>
-                  <td><strong>{p.label}</strong>{p.partyEmail && <div className="muted">{p.partyEmail}</div>}</td>
-                  <td>{(p.scopes ?? []).map((s: string) => PORTAL_SCOPES.find((x) => x.key === s)?.label ?? s).join(", ") || "—"}</td>
-                  <td>{p.allowDownload ? "Yes" : "View-only"}</td>
-                  <td>{statusOf(p)}</td>
-                  <td>
-                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                      {statusOf(p) === "Active" && (
-                        <>
-                          <button className="btn btn--ghost btn--sm" onClick={() => copyLink(p.token)}><Copy size={12} /> Link</button>
-                          <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => canWrite && revoke({ id: p._id })}><Trash2 size={12} /> Revoke</button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        )}
-      </div>
+        ) : null}
+      </div>}
+      {(portals ?? []).length > 0 && (
+        <RecordListTable<PortalRecord>
+          variant="card"
+          table={PORTALS_TABLE}
+          tableId="stakeholder-portals"
+          label="Stakeholder portals"
+          icon={<Share2 size={14} />}
+          records={(portals ?? []).map((p: PartyPortal) => portalRecord(p, nowISO))}
+          renderCell={({ record, field }) => {
+            if (field.name === "label") return <span><strong>{record.label}</strong>{record.partyEmail && <div className="muted">{record.partyEmail}</div>}</span>;
+            if (field.name === "shares") return <span>{record.shares || "—"}</span>;
+            if (field.name === "allowDownload") return <span>{record.allowDownload ? "Yes" : "View-only"}</span>;
+            if (field.name === "status") return <span>{record.status}</span>;
+            return undefined;
+          }}
+          renderRowActions={(record) =>
+            record.status === "Active" ? (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={() => copyLink(record.token)}><Copy size={12} /> Link</button>
+                <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => canWrite && revoke({ id: record._id })}><Trash2 size={12} /> Revoke</button>
+              </>
+            ) : null
+          }
+          renderPhoneCard={(record, { field, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.label}
+              badge={field("status")}
+              meta={[record.shares || "—", record.allowDownload ? "Downloads allowed" : "View-only"]}
+              detail={[record.partyEmail]}
+              selecting={selecting}
+            />
+          )}
+        />
+      )}
     </div>
   );
 }

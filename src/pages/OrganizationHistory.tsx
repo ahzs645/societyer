@@ -3,7 +3,7 @@ import { CreateMenu } from "../components/CreateMenu";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -25,7 +25,10 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableEmpty,
+  RecordListTable,
   ObjectRecordTable,
+  FIELD_TYPES,
+  staticRecordTable,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -38,7 +41,6 @@ import {
   ChevronRight,
   Download,
   ExternalLink,
-  Eye,
   FileText,
   FolderOpen,
   Landmark,
@@ -86,6 +88,216 @@ const CONFIDENCE_OPTIONS: Confidence[] = ["High", "Medium", "Review"];
 const STATUS_OPTIONS: Status[] = ["Draft", "Verified", "NeedsReview", "Archived"];
 const CHANGE_TYPE_OPTIONS = ["appointed", "elected", "removed", "resigned", "ended", "unknown"];
 const LINE_SECTION_OPTIONS = ["income", "expense", "balance", "note"];
+
+/* The shapes these lists read from `organizationHistory.list` (untyped on the wire). */
+type HistorySourceRow = {
+  _id: string;
+  externalSystem?: string;
+  externalId?: string;
+  title: string;
+  notes?: string;
+  sourceDate?: string;
+  category?: string;
+  confidence: Confidence;
+  url?: string;
+  paperlessDocumentUrl?: string;
+};
+type HistoryBoardTermRow = {
+  _id: string;
+  personName: string;
+  position: string;
+  committeeName?: string;
+  startDate?: string;
+  endDate?: string;
+  changeType?: string;
+  sourceIds?: string[];
+};
+type HistoryBudgetRow = {
+  _id: string;
+  fiscalYear?: string;
+  periodLabel?: string;
+  sourceDate?: string;
+  title: string;
+  currency?: string;
+  totalIncomeCents?: number;
+  totalExpenseCents?: number;
+  endingBalanceCents?: number;
+  lines: unknown[];
+  sourceIds?: string[];
+};
+type RegisterTransactionRow = {
+  transactionDate?: string;
+  monthLabel?: string;
+  description?: string;
+  debitCredit?: string;
+  amountCents?: number;
+  checkNumber?: string;
+  balanceCents?: number;
+  category?: string;
+};
+
+type PersonConnectionRecord = { _id: string; name: string; positions: string; termCount: number; motionCount: number };
+type BoardTermRecord = {
+  _id: string;
+  personName: string;
+  position: string;
+  committeeName: string;
+  startDate: string | null;
+  endDate: string | null;
+  changeType: string;
+  sources: string;
+  term: HistoryBoardTermRow;
+};
+type BudgetSnapshotRecord = {
+  _id: string;
+  fiscalYear: string;
+  title: string;
+  lineCount: number;
+  totalIncomeCents: number | null;
+  totalExpenseCents: number | null;
+  endingBalanceCents: number | null;
+  sources: string;
+  budget: HistoryBudgetRow;
+};
+type SourceRecordRow = {
+  _id: string;
+  externalId: string;
+  title: string;
+  notes: string;
+  sourceDate: string | null;
+  category: string;
+  confidence: Confidence;
+  document: string;
+  source: HistorySourceRow;
+};
+type RegisterTransactionRecord = {
+  _id: string;
+  transactionDate: string | null;
+  description: string;
+  debitCredit: string;
+  amountCents: number | null;
+  checkNumber: string;
+  balanceCents: number | null;
+  category: string;
+  row: RegisterTransactionRow;
+};
+
+const CONFIDENCE_SELECT_OPTIONS = [
+  { value: "High", label: "High", color: "green" },
+  { value: "Medium", label: "Medium", color: "blue" },
+  { value: "Review", label: "Review", color: "amber" },
+] as const;
+
+const PEOPLE_TABLE = staticRecordTable({
+  id: "org-history-people",
+  nameSingular: "historyPerson",
+  namePlural: "historyPeople",
+  labelSingular: "Person",
+  labelPlural: "People",
+  labelIdentifierFieldName: "name",
+  fields: [
+    { name: "name", label: "Person", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "positions", label: "Positions", fieldType: FIELD_TYPES.TEXT, size: 320 },
+    { name: "termCount", label: "Terms", fieldType: FIELD_TYPES.NUMBER, size: 100 },
+    { name: "motionCount", label: "Motions", fieldType: FIELD_TYPES.NUMBER, size: 100 },
+  ],
+});
+
+const BOARD_TERMS_TABLE = staticRecordTable({
+  id: "org-history-board-terms",
+  nameSingular: "historyBoardTerm",
+  namePlural: "historyBoardTerms",
+  labelSingular: "Board term",
+  labelPlural: "Board service terms",
+  labelIdentifierFieldName: "personName",
+  fields: [
+    { name: "personName", label: "Person", fieldType: FIELD_TYPES.TEXT, size: 200, config: { groupable: false } },
+    { name: "position", label: "Position", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "committeeName", label: "Board/group", fieldType: FIELD_TYPES.TEXT, size: 180, isVisible: false },
+    { name: "startDate", label: "Started", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "endDate", label: "Ended", fieldType: FIELD_TYPES.DATE, size: 150 },
+    {
+      name: "changeType",
+      label: "Change",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: { options: CHANGE_TYPE_OPTIONS.map((value) => ({ value, label: value, color: "gray" })) },
+    },
+    { name: "sources", label: "Source documents", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+  ],
+});
+
+const BUDGET_SNAPSHOTS_TABLE = staticRecordTable({
+  id: "org-history-budgets",
+  nameSingular: "historyBudget",
+  namePlural: "historyBudgets",
+  labelSingular: "Budget snapshot",
+  labelPlural: "Budget snapshots",
+  labelIdentifierFieldName: "title",
+  fields: [
+    { name: "fiscalYear", label: "Fiscal year", fieldType: FIELD_TYPES.TEXT, size: 120 },
+    { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    { name: "lineCount", label: "Line items", fieldType: FIELD_TYPES.NUMBER, size: 100 },
+    { name: "totalIncomeCents", label: "Income", fieldType: FIELD_TYPES.CURRENCY, size: 140, config: { isCents: true } },
+    { name: "totalExpenseCents", label: "Expenses", fieldType: FIELD_TYPES.CURRENCY, size: 140, config: { isCents: true } },
+    { name: "endingBalanceCents", label: "Ending balance", fieldType: FIELD_TYPES.CURRENCY, size: 150, config: { isCents: true } },
+    { name: "sources", label: "Source documents", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+  ],
+});
+
+const SOURCES_TABLE = staticRecordTable({
+  id: "org-history-sources",
+  nameSingular: "historySource",
+  namePlural: "historySources",
+  labelSingular: "Source record",
+  labelPlural: "Source records",
+  labelIdentifierFieldName: "title",
+  fields: [
+    { name: "externalId", label: "External ID", fieldType: FIELD_TYPES.TEXT, size: 150 },
+    { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+    { name: "notes", label: "Notes", fieldType: FIELD_TYPES.TEXT, size: 280 },
+    { name: "sourceDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120 },
+    {
+      name: "category",
+      label: "Category",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 130,
+      config: { options: CATEGORY_OPTIONS.map((value) => ({ value, label: value, color: "gray" })) },
+    },
+    { name: "confidence", label: "Confidence", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: CONFIDENCE_SELECT_OPTIONS } },
+    { name: "document", label: "Document", fieldType: FIELD_TYPES.TEXT, size: 180 },
+  ],
+});
+
+const SOURCE_REGISTER_TABLE = staticRecordTable({
+  id: "org-history-source-register",
+  nameSingular: "historyRegisterRow",
+  namePlural: "historyRegisterRows",
+  labelSingular: "Register row",
+  labelPlural: "Register rows",
+  labelIdentifierFieldName: "description",
+  fields: [
+    { name: "transactionDate", label: "Period", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, size: 280, config: { groupable: false } },
+    {
+      name: "debitCredit",
+      label: "Debit/Credit",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "credit", label: "credit", color: "green" },
+          { value: "debit", label: "debit", color: "amber" },
+          { value: "review", label: "review", color: "gray" },
+        ],
+      },
+    },
+    { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+    { name: "checkNumber", label: "Cheque/ref", fieldType: FIELD_TYPES.TEXT, size: 120 },
+    { name: "balanceCents", label: "Balance", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+    { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, size: 160 },
+  ],
+});
 
 function newSourceForm() {
   return {
@@ -190,6 +402,7 @@ export function OrganizationHistoryPage() {
   const confirm = useConfirm();
   const bulkImport = usePermissionedMutation(api.organizationHistory.bulkImport, canWrite);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [sourceForm, setSourceForm] = useState<any | null>(null);
   const [factForm, setFactForm] = useState<any | null>(null);
@@ -212,12 +425,15 @@ export function OrganizationHistoryPage() {
     viewId: factsViewId,
   });
 
-  const sources = data?.sources ?? [];
-  const facts = data?.facts ?? [];
-  const events = data?.events ?? [];
-  const boardTerms = data?.boardTerms ?? [];
-  const motions = data?.motions ?? [];
-  const budgets = data?.budgets ?? [];
+  // One memo so the lists below keep their identity between renders.
+  const { sources, facts, events, boardTerms, motions, budgets } = useMemo(() => ({
+    sources: data?.sources ?? [],
+    facts: data?.facts ?? [],
+    events: data?.events ?? [],
+    boardTerms: data?.boardTerms ?? [],
+    motions: data?.motions ?? [],
+    budgets: data?.budgets ?? [],
+  }), [data]);
   const reviewCount = facts.filter((item: any) => item.status !== "Verified").length
     + events.filter((item: any) => item.status !== "Verified").length
     + sources.filter((item: any) => item.confidence === "Review").length
@@ -264,6 +480,58 @@ export function OrganizationHistoryPage() {
   const peopleConnections = useMemo(
     () => buildPeopleConnections(boardTerms, motions),
     [boardTerms, motions],
+  );
+  const personRecords = useMemo<PersonConnectionRecord[]>(
+    () => peopleConnections.map((person) => ({
+      _id: person.name,
+      name: person.name,
+      positions: person.positions.join(", "),
+      termCount: person.termCount,
+      motionCount: person.motionCount,
+    })),
+    [peopleConnections],
+  );
+  const boardTermRecords = useMemo<BoardTermRecord[]>(
+    () => boardTerms.map((term: HistoryBoardTermRow) => ({
+      _id: term._id,
+      personName: term.personName,
+      position: term.position,
+      committeeName: term.committeeName ?? "",
+      startDate: term.startDate || null,
+      endDate: term.endDate || null,
+      changeType: term.changeType ?? "unknown",
+      sources: sourceSearchText(term.sourceIds, sourceById),
+      term,
+    })),
+    [boardTerms, sourceById],
+  );
+  const budgetRecords = useMemo<BudgetSnapshotRecord[]>(
+    () => budgets.map((budget: HistoryBudgetRow) => ({
+      _id: budget._id,
+      fiscalYear: budgetFiscalYearLabel(budget),
+      title: budget.title,
+      lineCount: budget.lines.length,
+      totalIncomeCents: budget.totalIncomeCents ?? null,
+      totalExpenseCents: budget.totalExpenseCents ?? null,
+      endingBalanceCents: budget.endingBalanceCents ?? null,
+      sources: sourceSearchText(budget.sourceIds, sourceById),
+      budget,
+    })),
+    [budgets, sourceById],
+  );
+  const sourceRecords = useMemo<SourceRecordRow[]>(
+    () => sources.map((source: HistorySourceRow) => ({
+      _id: source._id,
+      externalId: source.externalId || "manual",
+      title: source.title,
+      notes: source.notes ?? "",
+      sourceDate: source.sourceDate || null,
+      category: source.category ?? "Other",
+      confidence: source.confidence,
+      document: sourceLabel(source),
+      source,
+    })),
+    [sources],
   );
 
   if (society === undefined) return <PageLoading />;
@@ -576,70 +844,49 @@ export function OrganizationHistoryPage() {
             </div>
           </div>
           {peopleSection === "summary" ? (
-            <TableScroll>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Person</th>
-                    <th>Positions</th>
-                    <th>Terms</th>
-                    <th>Motions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {peopleConnections.map((person) => (
-                    <tr key={person.name}>
-                      <td><strong>{person.name}</strong></td>
-                      <td>{person.positions.join(", ") || "-"}</td>
-                      <td className="table__cell--mono">{person.termCount}</td>
-                      <td className="table__cell--mono">{person.motionCount}</td>
-                    </tr>
-                  ))}
-                  {peopleConnections.length === 0 && (
-                    <tr><td colSpan={4} className="muted" style={{ textAlign: "center", padding: 18 }}>No board or motion connections yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </TableScroll>
+            <RecordListTable<PersonConnectionRecord>
+              variant="card"
+              table={PEOPLE_TABLE}
+              tableId="org-history-people"
+              label="People and service"
+              icon={<Users size={14} />}
+              records={personRecords}
+              renderCell={({ record, field }) => {
+                if (field.name === "name") return <strong>{record.name}</strong>;
+                if (field.name === "positions") return <span>{record.positions || "-"}</span>;
+                return undefined;
+              }}
+              emptyState={<RecordTableEmpty title="No board or motion connections yet." />}
+            />
           ) : (
-            <TableScroll>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Person</th>
-                    <th>Position</th>
-                    <th>Dates</th>
-                    <th>Change</th>
-                    <th>Source documents</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {boardTerms.map((term: any) => (
-                    <tr key={term._id}>
-                      <td><strong>{term.personName}</strong></td>
-                      <td>{term.position}</td>
-                      <td className="muted">{formatDueDate(term.startDate) || "?"} – {formatDueDate(term.endDate) || "present/unknown"}</td>
-                      <td><Badge>{term.changeType}</Badge></td>
-                      <td><SourceBadges ids={term.sourceIds} sourceById={sourceById} /></td>
-                      <td>
-                        <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                          <IconButton label={`Edit ${term.personName}`} onClick={() => setBoardTermForm({ ...term, sourceIds: term.sourceIds ?? [] })}>
-                            <Pencil size={12} />
-                          </IconButton>
-                          <IconButton label={`Delete ${term.personName}`} onClick={() => removeItem({ id: term._id, kind: "boardTerm" })}>
-                            <Trash2 size={12} />
-                          </IconButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {boardTerms.length === 0 && (
-                    <tr><td colSpan={6} className="muted" style={{ textAlign: "center", padding: 18 }}>No historical board terms yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </TableScroll>
+            <RecordListTable<BoardTermRecord>
+              variant="card"
+              table={BOARD_TERMS_TABLE}
+              tableId="org-history-board-terms"
+              label="Board service terms"
+              icon={<Landmark size={14} />}
+              records={boardTermRecords}
+              onOpen={(record) => setBoardTermForm({ ...record.term, sourceIds: record.term.sourceIds ?? [] })}
+              renderCell={({ record, field }) => {
+                if (field.name === "personName") return <strong>{record.personName}</strong>;
+                if (field.name === "startDate") return <span className="muted">{formatDueDate(record.term.startDate) || "?"}</span>;
+                if (field.name === "endDate") return <span className="muted">{formatDueDate(record.term.endDate) || "present/unknown"}</span>;
+                if (field.name === "changeType") return <Badge>{record.term.changeType}</Badge>;
+                if (field.name === "sources") return <SourceBadges ids={record.term.sourceIds} sourceById={sourceById} />;
+                return undefined;
+              }}
+              renderRowActions={(record) => (
+                <>
+                  <IconButton label={`Edit ${record.personName}`} onClick={() => setBoardTermForm({ ...record.term, sourceIds: record.term.sourceIds ?? [] })}>
+                    <Pencil size={12} />
+                  </IconButton>
+                  <IconButton label={`Delete ${record.personName}`} onClick={() => removeItem({ id: record._id, kind: "boardTerm" })}>
+                    <Trash2 size={12} />
+                  </IconButton>
+                </>
+              )}
+              emptyState={<RecordTableEmpty title="No historical board terms yet." />}
+            />
           )}
         </div>
       )}
@@ -692,67 +939,36 @@ export function OrganizationHistoryPage() {
           <div className="card__head">
             <h2 className="card__title">Budget snapshots</h2>
           </div>
-          <TableScroll>
-            <table className="table table--stack-mobile org-history__budgets">
-              <thead>
-                <tr>
-                  <th>Fiscal year</th>
-                  <th>Title</th>
-                  <th>Income</th>
-                  <th>Expenses</th>
-                  <th>Ending balance</th>
-                  <th>Source documents</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {budgets.map((budget: any) => (
-                  <tr key={budget._id}>
-                    <td data-label="Fiscal year" className="table__cell--mono">{budgetFiscalYearLabel(budget)}</td>
-                    <td>
-                      <Link
-                        to={`/app/org-history/budgets/${budget._id}`}
-                        className="table__cell-button org-history__budget-open"
-                      >
-                        <span>
-                          <strong>{budget.title}</strong>
-                          <span className="muted" style={{ display: "block", fontSize: "var(--fs-sm)" }}>
-                            {budget.lines.length} line item{budget.lines.length === 1 ? "" : "s"}
-                          </span>
-                        </span>
-                      </Link>
-                    </td>
-                    <td data-label="Income" className="table__cell--mono">{formatCents(budget.totalIncomeCents, budget.currency)}</td>
-                    <td data-label="Expenses" className="table__cell--mono">{formatCents(budget.totalExpenseCents, budget.currency)}</td>
-                    <td data-label="Ending balance" className="table__cell--mono">{formatCents(budget.endingBalanceCents, budget.currency)}</td>
-                    <td><SourceBadges ids={budget.sourceIds} sourceById={sourceById} /></td>
-                    <td>
-                      <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                        <Tooltip content={`Open ${budget.title}`}>
-                          <Link
-                            className="btn btn--ghost btn--sm btn--icon"
-                            aria-label={`Open ${budget.title}`}
-                            to={`/app/org-history/budgets/${budget._id}`}
-                          >
-                            <Eye size={12} />
-                          </Link>
-                        </Tooltip>
-                        <IconButton label={`Edit ${budget.title}`} onClick={() => setBudgetForm({ ...budget, sourceIds: budget.sourceIds ?? [] })}>
-                          <Pencil size={12} />
-                        </IconButton>
-                        <IconButton label={`Delete ${budget.title}`} onClick={() => removeItem({ id: budget._id, kind: "budget" })}>
-                          <Trash2 size={12} />
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {budgets.length === 0 && (
-                  <tr><td colSpan={7} className="muted" style={{ textAlign: "center", padding: 18 }}>No budget snapshots yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </TableScroll>
+          <RecordListTable<BudgetSnapshotRecord>
+            variant="card"
+            table={BUDGET_SNAPSHOTS_TABLE}
+            tableId="org-history-budgets"
+            label="Budget snapshots"
+            icon={<Archive size={14} />}
+            records={budgetRecords}
+            onOpen={(record) => navigate(`/app/org-history/budgets/${record._id}`)}
+            renderCell={({ record, field }) => {
+              const { budget } = record;
+              if (field.name === "fiscalYear") return <span className="table__cell--mono">{record.fiscalYear}</span>;
+              if (field.name === "title") return <strong>{record.title}</strong>;
+              if (field.name === "totalIncomeCents") return <span className="table__cell--mono">{formatCents(budget.totalIncomeCents, budget.currency)}</span>;
+              if (field.name === "totalExpenseCents") return <span className="table__cell--mono">{formatCents(budget.totalExpenseCents, budget.currency)}</span>;
+              if (field.name === "endingBalanceCents") return <span className="table__cell--mono">{formatCents(budget.endingBalanceCents, budget.currency)}</span>;
+              if (field.name === "sources") return <SourceBadges ids={budget.sourceIds} sourceById={sourceById} />;
+              return undefined;
+            }}
+            renderRowActions={(record) => (
+              <>
+                <IconButton label={`Edit ${record.title}`} onClick={() => setBudgetForm({ ...record.budget, sourceIds: record.budget.sourceIds ?? [] })}>
+                  <Pencil size={12} />
+                </IconButton>
+                <IconButton label={`Delete ${record.title}`} onClick={() => removeItem({ id: record._id, kind: "budget" })}>
+                  <Trash2 size={12} />
+                </IconButton>
+              </>
+            )}
+            emptyState={<RecordTableEmpty title="No budget snapshots yet." />}
+          />
         </div>
       )}
 
@@ -805,46 +1021,35 @@ export function OrganizationHistoryPage() {
             <h2 className="card__title">Source records</h2>
           </div>
           {sources.length > 0 ? (
-            <TableScroll>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>External ID</th>
-                    <th>Title</th>
-                    <th>Date</th>
-                    <th>Category</th>
-                    <th>Confidence</th>
-                    <th>Document</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {sources.map((source: any) => (
-                    <tr key={source._id}>
-                      <td className="table__cell--mono">{source.externalId || "manual"}</td>
-                      <td style={{ minWidth: 320, maxWidth: 640, whiteSpace: "normal" }}>
-                        <strong>{source.title}</strong>
-                        {source.notes && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{source.notes}</div>}
-                      </td>
-                      <td className="muted">{formatDueDate(source.sourceDate) || "-"}</td>
-                      <td><Badge>{source.category}</Badge></td>
-                      <td><ConfidenceBadge confidence={source.confidence} /></td>
-                      <td><SourceRecordLink source={source} /></td>
-                      <td>
-                        <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                          <IconButton label={`Edit ${source.title}`} onClick={() => setSourceForm(source)}>
-                            <Pencil size={12} />
-                          </IconButton>
-                          <IconButton label={`Delete ${source.title}`} onClick={() => removeSource({ id: source._id })}>
-                            <Trash2 size={12} />
-                          </IconButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableScroll>
+            <RecordListTable<SourceRecordRow>
+              variant="card"
+              table={SOURCES_TABLE}
+              tableId="org-history-sources"
+              label="Source records"
+              icon={<FolderOpen size={14} />}
+              records={sourceRecords}
+              onOpen={(record) => setSourceForm(record.source)}
+              renderCell={({ record, field }) => {
+                if (field.name === "externalId") return <span className="table__cell--mono">{record.externalId}</span>;
+                if (field.name === "title") return <strong>{record.title}</strong>;
+                if (field.name === "notes") return <span className="muted">{record.notes || "-"}</span>;
+                if (field.name === "sourceDate") return <span className="muted">{formatDueDate(record.source.sourceDate) || "-"}</span>;
+                if (field.name === "category") return <Badge>{record.category}</Badge>;
+                if (field.name === "confidence") return <ConfidenceBadge confidence={record.confidence} />;
+                if (field.name === "document") return <SourceRecordLink source={record.source} />;
+                return undefined;
+              }}
+              renderRowActions={(record) => (
+                <>
+                  <IconButton label={`Edit ${record.title}`} onClick={() => setSourceForm(record.source)}>
+                    <Pencil size={12} />
+                  </IconButton>
+                  <IconButton label={`Delete ${record.title}`} onClick={() => removeSource({ id: record._id })}>
+                    <Trash2 size={12} />
+                  </IconButton>
+                </>
+              )}
+            />
           ) : (
             <div className="card__body">
               <EmptyCallout
@@ -1166,6 +1371,21 @@ export function OrganizationHistoryBudgetPage() {
   const budgetLineGroups = useMemo(() => groupBudgetLines(budgetLines), [budgetLines]);
   const budgetTotalMismatches = useMemo(() => budgetHeaderMismatches(budget, budgetLineGroups), [budget, budgetLineGroups]);
   const registerTransactions = Array.isArray(budget?.registerTransactions) ? budget.registerTransactions : [];
+  // Register rows have no ids of their own; their position in the source keeps them apart.
+  const registerRecords = useMemo<RegisterTransactionRecord[]>(() => {
+    const rows: RegisterTransactionRow[] = Array.isArray(budget?.registerTransactions) ? budget.registerTransactions : [];
+    return rows.map((row, index) => ({
+      _id: `register-${index}`,
+      transactionDate: row.transactionDate || null,
+      description: row.description ?? "",
+      debitCredit: row.debitCredit ?? "review",
+      amountCents: row.amountCents ?? null,
+      checkNumber: row.checkNumber ?? "",
+      balanceCents: row.balanceCents ?? null,
+      category: row.category ?? "",
+      row,
+    }));
+  }, [budget]);
   const sourceObservations = Array.isArray(budget?.sourceObservations) ? budget.sourceObservations : [];
   const sourceSummary = budget?.sourceSummary;
   const fiscalYearLabel = budgetFiscalYearLabel(budget);
@@ -1364,34 +1584,26 @@ export function OrganizationHistoryBudgetPage() {
             <h2 className="card__title">Source register</h2>
             <span className="card__subtitle">Debit, credit, cheque/reference, and running-balance candidates from the linked PDF</span>
           </div>
-          <TableScroll>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Period</th>
-                  <th>Description</th>
-                  <th>Debit/Credit</th>
-                  <th>Amount</th>
-                  <th>Cheque/ref</th>
-                  <th>Balance</th>
-                  <th>Category</th>
-                </tr>
-              </thead>
-              <tbody>
-                {registerTransactions.map((row: any, index: number) => (
-                  <tr key={`${row.transactionDate}-${row.description}-${index}`}>
-                    <td>{row.monthLabel ?? formatDueDate(row.transactionDate)}</td>
-                    <td><strong>{row.description}</strong></td>
-                    <td><Badge tone={row.debitCredit === "credit" ? "success" : row.debitCredit === "debit" ? "warn" : "neutral"}>{row.debitCredit ?? "review"}</Badge></td>
-                    <td className="table__cell--mono">{formatCents(row.amountCents, budget.currency)}</td>
-                    <td className="table__cell--mono">{row.checkNumber ?? "-"}</td>
-                    <td className="table__cell--mono">{formatCents(row.balanceCents, budget.currency)}</td>
-                    <td>{row.category ?? "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
+          <RecordListTable<RegisterTransactionRecord>
+            variant="card"
+            table={SOURCE_REGISTER_TABLE}
+            tableId="org-history-source-register"
+            label="Source register"
+            icon={<FileText size={14} />}
+            records={registerRecords}
+            renderCell={({ record, field }) => {
+              const { row } = record;
+              if (field.name === "transactionDate") return <span>{row.monthLabel ?? formatDueDate(row.transactionDate)}</span>;
+              if (field.name === "description") return <strong>{row.description}</strong>;
+              if (field.name === "debitCredit")
+                return <Badge tone={row.debitCredit === "credit" ? "success" : row.debitCredit === "debit" ? "warn" : "neutral"}>{row.debitCredit ?? "review"}</Badge>;
+              if (field.name === "amountCents") return <span className="table__cell--mono">{formatCents(row.amountCents, budget.currency)}</span>;
+              if (field.name === "balanceCents") return <span className="table__cell--mono">{formatCents(row.balanceCents, budget.currency)}</span>;
+              if (field.name === "checkNumber") return <span className="table__cell--mono">{row.checkNumber ?? "-"}</span>;
+              if (field.name === "category") return <span>{row.category ?? "-"}</span>;
+              return undefined;
+            }}
+          />
         </div>
       )}
 
