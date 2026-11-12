@@ -1,15 +1,14 @@
 import { useCreateIntent } from "@/hooks/useCreateIntent";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { CreateMenu } from "../components/CreateMenu";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { PiggyBank, TrendingUp, TrendingDown, DollarSign, Trash2, Upload, Receipt, MoreHorizontal, Pencil, CalendarPlus } from "lucide-react";
-import { Menu } from "../components/Menu";
+import { PiggyBank, TrendingUp, TrendingDown, DollarSign, Upload, Receipt } from "lucide-react";
 import { Badge, Drawer, EmptyState, Field, Skeleton, SkeletonRows } from "../components/ui";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -26,12 +25,19 @@ import { InfoPopover } from "../components/InfoPopover";
 import { budgetVariance, formatMoney } from "../lib/money";
 import { TreasurerPnlReport } from "../features/financials/components/TreasurerPnlReport";
 import { ClaimEditorDrawer } from "../features/financials/approvals/ClaimEditorDrawer";
-import { mileageSummary } from "../../shared/expensePolicy";
 import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/VarianceCell";
 import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { useSortableRows } from "../hooks/useSortableRows";
 import { SortableTh } from "../components/SortableTh";
 import { isSociety } from "../../shared/organizationDomain";
+import { errorMessage } from "../features/financials/banking/types";
+import {
+  ExpenseClaimsTable,
+  FundingEventsTable,
+  FundingSourcesTable,
+  type ExpenseClaim,
+  type FundingSource,
+} from "../features/financials/components/TreasurerRegisters";
 
 
 function getFiscalYearBounds(fyEnd: string | undefined) {
@@ -404,16 +410,6 @@ export function TreasurerPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  const fundingEvents = (fundingSources ?? [])
-    .flatMap((source: any) =>
-      (source.events ?? []).map((event: any) => ({
-        ...event,
-        sourceName: source.name,
-        sourceType: source.sourceType,
-        source,
-      })),
-    )
-    .sort((a: any, b: any) => b.eventDate.localeCompare(a.eventDate));
   const expenseTotals = (expenseReports ?? []).reduce(
     (acc: any, report: any) => {
       acc.total += report.amountCents ?? 0;
@@ -572,87 +568,33 @@ export function TreasurerPage() {
             <StatTile label="Approved" value={<Money variant="hero" cents={expenseTotals.approved} />} sub="ready for payment" />
             <StatTile label="Paid" value={<Money variant="hero" cents={expenseTotals.paid} />} sub="closed reimbursements" />
           </div>
-          <div className="table-wrap">
-          <table className="table treasurer-claims-table">
-            <thead>
-              <tr>
-                <th>Claim</th>
-                <th>Claimant</th>
-                <th>Status</th>
-                <th className="num">Amount</th>
-                <th>Receipt</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {(expenseReports ?? []).map((report: any) => (
-                <tr key={report._id}>
-                  <td>
-                    <strong>{report.title}</strong>
-                    <div className="muted" style={{ fontSize: 11 }}>
-                      {report.claimType === "mileage" ? mileageSummary(report.mileage) : report.category} · incurred {formatDate(report.incurredAtISO)}
-                    </div>
-                  </td>
-                  <td>{report.claimantName}</td>
-                  <td><Badge tone={expenseStatusTone(report.status)}>{report.status}</Badge></td>
-                  <td className="num"><Money cents={report.amountCents} currency={report.currency} /></td>
-                  <td>
-                    {report.receiptDocument ? (
-                      <Link to={`/app/documents/${report.receiptDocument._id}`}>{report.receiptDocument.title}</Link>
-                    ) : (
-                      <span className="muted">{report.claimType === "mileage" ? "Not needed" : "No receipt"}</span>
-                    )}
-                  </td>
-                  <td>
-                    <div className="row treasurer-row-actions">
-                      {report.status === "Draft" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted" })} disabled={!canWrite}>Submit</button>
-                      )}
-                      {report.status === "Submitted" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved" }).catch((error: any) => toast.error("Could not approve", error?.message))} disabled={!canWrite}>Approve</button>
-                      )}
-                      {report.status === "Approved" && (
-                        (financialAccounts ?? []).length > 0 ? (
-                          <button className="btn btn--ghost btn--sm" onClick={() => setPayingReport({ report, expenseAccountId: "", bankAccountId: "" })} disabled={!canWrite}>Mark paid</button>
-                        ) : (
-                          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid" })} disabled={!canWrite}>Mark paid</button>
-                        )
-                      )}
-                      <RowActionsMenu
-                        label={`Actions for ${report.title}`}
-                        disabled={!canWrite}
-                        onEdit={() => setExpenseDraft(expenseDraftFromRow(report))}
-                        deleteLabel="Delete report"
-                        onDelete={async () => {
-                          const approved = await confirm({
-                            title: "Delete expense report?",
-                            message: `"${report.title}" (${report.status}) will be permanently removed with its line items and receipt links. Journal entries already posted for it are not removed.`,
-                            confirmLabel: "Delete report",
-                            tone: "danger",
-                          });
-                          if (!approved) return;
-                          try {
-                            await removeExpenseReport({ id: report._id });
-                            toast.success("Expense report removed");
-                          } catch (error: any) {
-                            toast.error("Could not delete expense report", error?.message);
-                          }
-                        }}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(expenseReports ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                    No reimbursement claims yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          </div>
+          <ExpenseClaimsTable
+            claims={expenseReports as ExpenseClaim[] | undefined}
+            canWrite={canWrite}
+            onSubmit={(report) => setExpenseStatus({ id: report._id, status: "Submitted" })}
+            onApprove={(report) => setExpenseStatus({ id: report._id, status: "Approved" }).catch((error: unknown) => toast.error("Could not approve", errorMessage(error)))}
+            onMarkPaid={(report) =>
+              (financialAccounts ?? []).length > 0
+                ? setPayingReport({ report, expenseAccountId: "", bankAccountId: "" })
+                : setExpenseStatus({ id: report._id, status: "Paid" })
+            }
+            onEdit={(report) => setExpenseDraft(expenseDraftFromRow(report))}
+            onDelete={async (report) => {
+              const approved = await confirm({
+                title: "Delete expense report?",
+                message: `"${report.title}" (${report.status}) will be permanently removed with its line items and receipt links. Journal entries already posted for it are not removed.`,
+                confirmLabel: "Delete report",
+                tone: "danger",
+              });
+              if (!approved) return;
+              try {
+                await removeExpenseReport({ id: report._id });
+                toast.success("Expense report removed");
+              } catch (error: unknown) {
+                toast.error("Could not delete expense report", errorMessage(error));
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -725,72 +667,29 @@ export function TreasurerPage() {
             </div>
           </div>
           <div className="card__body">
-            <div className="table-wrap">
-            <table className="table finance-table treasurer-source-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Status</th>
-                  <th className="num">Committed</th>
-                  <th className="num">Received</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {(fundingSources ?? []).map((source: any) => (
-                  <tr key={source._id}>
-                    <td>
-                      <strong>{source.name}</strong>
-                      <div className="finance-table__sub">
-                        {source.sourceType}
-                        {source.collectionAgentName ? ` · collected by ${source.collectionAgentName}` : ""}
-                        {source.collectionFrequency ? ` · ${source.collectionFrequency}` : ""}
-                        {source.nextExpectedCollectionDate ? ` · next ${formatDate(source.nextExpectedCollectionDate)}` : ""}
-                        {source.memberDisclosureLevel ? ` · ${source.memberDisclosureLevel.replace(/_/g, " ")}` : ""}
-                      </div>
-                    </td>
-                    <td><Badge tone={source.status === "Active" ? "success" : source.status === "Prospect" ? "warn" : "neutral"}>{source.status}</Badge></td>
-                    <td className="num"><Money cents={source.committedTotalCents || null} currency={source.currency} /></td>
-                    <td className="num"><Money cents={source.receivedTotalCents || null} currency={source.currency} /></td>
-                    <td>
-                      <div className="row treasurer-row-actions">
-                        <RowActionsMenu
-                          label={`Actions for ${source.name}`}
-                          disabled={!canWrite}
-                          extraItems={[{ id: "event", label: "Add funding event", icon: <CalendarPlus size={14} />, onSelect: () => setEventDraft(newEventDraft(source)) }]}
-                          onEdit={() => setSourceDraft(sourceDraftFromRow(source))}
-                          deleteLabel="Delete source"
-                          onDelete={async () => {
-                            const eventCount = (source.events ?? []).length;
-                            const approved = await confirm({
-                              title: "Delete funding source?",
-                              message: `"${source.name}" will be permanently removed${eventCount ? `, together with its ${eventCount} funding event${eventCount === 1 ? "" : "s"}` : ""}. To keep the history, set its status to Ended instead.`,
-                              confirmLabel: "Delete funding source",
-                              tone: "danger",
-                            });
-                            if (!approved) return;
-                            try {
-                              await removeFundingSource({ id: source._id });
-                              toast.success("Funding source removed");
-                            } catch (error: any) {
-                              toast.error("Could not delete funding source", error?.message);
-                            }
-                          }}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {(fundingSources ?? []).length === 0 && (
-                  <tr className="finance-empty-row">
-                    <td colSpan={5} className="muted">
-                      {fundingSources === undefined ? "Loading sources…" : isSociety(society as any) ? "No funding sources yet. Add donors, funders and dues collectors from New → Funding source." : "No funding sources yet. Add funders and other income sources from New → Funding source."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
+            <FundingSourcesTable
+              sources={fundingSources as FundingSource[] | undefined}
+              canWrite={canWrite}
+              emptyDescription={isSociety(society) ? "Add donors, funders and dues collectors from New → Funding source." : "Add funders and other income sources from New → Funding source."}
+              onAddEvent={(source) => setEventDraft(newEventDraft(source))}
+              onEdit={(source) => setSourceDraft(sourceDraftFromRow(source))}
+              onDelete={async (source) => {
+                const eventCount = (source.events ?? []).length;
+                const approved = await confirm({
+                  title: "Delete funding source?",
+                  message: `"${source.name}" will be permanently removed${eventCount ? `, together with its ${eventCount} funding event${eventCount === 1 ? "" : "s"}` : ""}. To keep the history, set its status to Ended instead.`,
+                  confirmLabel: "Delete funding source",
+                  tone: "danger",
+                });
+                if (!approved) return;
+                try {
+                  await removeFundingSource({ id: source._id });
+                  toast.success("Funding source removed");
+                } catch (error: unknown) {
+                  toast.error("Could not delete funding source", errorMessage(error));
+                }
+              }}
+            />
           </div>
         </div>
       </div>
@@ -800,72 +699,27 @@ export function TreasurerPage() {
           <h2 className="card__title">Funding source timeline</h2>
           <span className="card__subtitle">Manual funding events, including aggregate third-party remittances.</span>
         </div>
-        <div className="table-wrap">
-        <table className="table finance-table treasurer-timeline-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Source</th>
-              <th>Event</th>
-              <th className="num">Amount</th>
-              <th>Attribution</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {fundingEvents.map((event: any) => (
-              <tr key={event._id}>
-                <td>{formatDate(event.eventDate)}</td>
-                <td>
-                  <strong>{event.sourceName}</strong>
-                  <div className="finance-table__sub">{event.sourceType}</div>
-                </td>
-                <td>
-                  {event.label}
-                  <div className="finance-table__sub">
-                    {event.kind}
-                    {event.periodStart || event.periodEnd ? ` · ${event.periodStart || "?"} to ${event.periodEnd || "?"}` : ""}
-                    {event.memberCount ? ` · ${event.memberCount} members` : ""}
-                  </div>
-                </td>
-                <td className="num"><Money cents={event.amountCents} currency={event.source?.currency} /></td>
-                <td>{event.attributionStatus ? <Badge tone="info">{event.attributionStatus}</Badge> : <span className="muted">—</span>}</td>
-                <td>
-                  <div className="row treasurer-row-actions">
-                    <RowActionsMenu
-                      label={`Actions for ${event.label}`}
-                      disabled={!canWrite}
-                      onEdit={() => setEventDraft(eventDraftFromRow(event, event.source))}
-                      deleteLabel="Delete event"
-                      onDelete={async () => {
-                        const approved = await confirm({
-                          title: "Delete funding event?",
-                          message: `"${event.label}"${event.amountCents != null ? ` (${formatMoney(event.amountCents)})` : ""} will be permanently removed from this funding source's history.`,
-                          confirmLabel: "Delete event",
-                          tone: "danger",
-                        });
-                        if (!approved) return;
-                        try {
-                          await removeFundingEvent({ id: event._id });
-                          toast.success("Funding event removed");
-                        } catch (error: any) {
-                          toast.error("Could not delete funding event", error?.message);
-                        }
-                      }}
-                    />
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {fundingEvents.length === 0 && (
-              <tr className="finance-empty-row">
-                <td colSpan={6} className="muted">
-                  {fundingSources === undefined ? "Loading funding events…" : "No funding events yet. Record receipts, pledges and remittances from a source's ⋯ menu."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="card__body">
+          <FundingEventsTable
+            sources={fundingSources as FundingSource[] | undefined}
+            canWrite={canWrite}
+            onEdit={(event, source) => setEventDraft(eventDraftFromRow(event, source))}
+            onDelete={async (event) => {
+              const approved = await confirm({
+                title: "Delete funding event?",
+                message: `"${event.label}"${event.amountCents != null ? ` (${formatMoney(event.amountCents)})` : ""} will be permanently removed from this funding source's history.`,
+                confirmLabel: "Delete event",
+                tone: "danger",
+              });
+              if (!approved) return;
+              try {
+                await removeFundingEvent({ id: event._id });
+                toast.success("Funding event removed");
+              } catch (error: unknown) {
+                toast.error("Could not delete funding event", errorMessage(error));
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -1423,53 +1277,5 @@ function SummaryCard({
           : <Money cents={value} variant="hero" tone={tone === "favourable" || tone === "unfavourable" ? tone : "auto"} />}
       </div>
     </div>
-  );
-}
-
-function expenseStatusTone(status: string) {
-  switch (status) {
-    case "Paid": return "success" as const;
-    case "Approved": return "info" as const;
-    case "Submitted": return "warn" as const;
-    case "Rejected": return "danger" as const;
-    default: return "neutral" as const;
-  }
-}
-
-/** Row "⋯" for the treasurer registers: edit + delete (plus any extras). */
-function RowActionsMenu({
-  label,
-  disabled,
-  onEdit,
-  onDelete,
-  deleteLabel,
-  extraItems = [],
-}: {
-  label: string;
-  disabled?: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  deleteLabel: string;
-  extraItems?: { id: string; label: string; icon?: ReactNode; onSelect: () => void }[];
-}) {
-  return (
-    <Menu
-      align="right"
-      trigger={
-        <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={label} title="More actions" disabled={disabled}>
-          <MoreHorizontal size={14} />
-        </button>
-      }
-      sections={[
-        {
-          id: "row-actions",
-          items: [
-            ...extraItems,
-            { id: "edit", label: "Edit", icon: <Pencil size={14} />, onSelect: onEdit },
-            { id: "delete", label: deleteLabel, icon: <Trash2 size={14} />, destructive: true, onSelect: () => void onDelete() },
-          ],
-        },
-      ]}
-    />
   );
 }

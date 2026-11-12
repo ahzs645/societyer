@@ -139,10 +139,9 @@
   width: auto;
   min-width: 168px;
 }
-// The register sits in a half-width card: let its columns size to content
-// so Status / Committed / Received stay visible instead of scrolling away.
+// The funding mix sits in a half-width card: let its columns size to content
+// so Received / Expected stay visible instead of scrolling away.
 @media (min-width: 761px) {
-  .treasurer-source-table,
   .treasurer-funding-table {
     width: 100%;
   }
@@ -151,25 +150,10 @@
   .treasurer-funding-table th:nth-child(4) { width: 112px; }
   .treasurer-funding-table td.mono { white-space: nowrap; }
 }
-.treasurer-source-table th:nth-child(1) { width: auto; }
-.treasurer-source-table th:nth-child(3),
-.treasurer-source-table th:nth-child(4) { width: 112px; }
-.treasurer-source-table td.mono,
-.treasurer-timeline-table td:first-child { white-space: nowrap; }
-.treasurer-timeline-table th:nth-child(1) { width: 120px; }
-.treasurer-row-actions {
-  justify-content: flex-end;
-  gap: token('s-1');
-  flex-wrap: nowrap;
-}
 .treasurer-card-head-action {
   margin-left: auto;
   flex-shrink: 0;
 }
-.treasurer-claims-table th:nth-child(6) { width: 140px; }
-.treasurer-source-table th:nth-child(2) { width: 96px; }
-.treasurer-source-table th:nth-child(5) { width: 48px; }
-.treasurer-timeline-table th:nth-child(6) { width: 56px; }
 
 @media (max-width: 760px) {
   // "New claim" stays on the title row, right-aligned.

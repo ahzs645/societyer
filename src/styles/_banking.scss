@@ -368,56 +368,11 @@
 
 /* ------------------------------------------------------------ spend budgets */
 
-.spend-budgets-card { margin-top: token(s-3); container: spend-budgets / inline-size; }
-.spend-budgets-table {
-  td { vertical-align: top; }
-  tbody tr { cursor: pointer; }
-}
-.spend-budgets-table__meta { display: block; margin-top: 2px; font-size: token(fs-xs); }
-.spend-budgets-table__spend { min-width: 220px; }
-.spend-budgets-table__spend .progress { margin: 4px 0 2px; }
-.spend-budgets-table__figures { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 token(s-1); font-size: token(fs-sm); strong { margin-left: auto; } }
-.spend-budgets-table__actions { width: 1%; text-align: right; white-space: nowrap; }
-
-// Seven columns don't fit a phone or the list beside the budget drawer: the
-// name broke letter by letter and Status clipped. Each budget becomes a card.
-@container spend-budgets (max-width: 760px) {
-  .spend-budgets-table thead { display: none; }
-  .spend-budgets-table,
-  .spend-budgets-table tbody { display: block; width: 100%; }
-  .spend-budgets-table tbody tr {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: token(s-1) token(s-2);
-    padding: token(s-3) token(s-4);
-    border-bottom: 1px solid token(border);
-  }
-  .spend-budgets-table tbody tr:last-child { border-bottom: 0; }
-  .spend-budgets-table tbody tr:hover { background: token(bg-hover); }
-  .spend-budgets-table tbody tr td,
-  .table.spend-budgets-table tbody tr:hover td {
-    display: block;
-    height: auto;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-  .spend-budgets-table td[data-label="Budget"] { flex: 1 1 0; order: 1; }
-  .spend-budgets-table td[data-label="Status"] { order: 2; }
-  .spend-budgets-table td.spend-budgets-table__actions { order: 3; width: auto; }
-  .spend-budgets-table td[data-label="Spent this cycle"] { flex: 0 0 100%; order: 4; }
-  .spend-budgets-table td[data-label="Assigned to"],
-  .spend-budgets-table td[data-label="Resets"] { order: 5; color: token(text-secondary); font-size: token(fs-xs); }
-  .spend-budgets-table td[data-label="Resets"]::before { content: "· "; }
-  .spend-budgets-table td[data-label="Remaining"] {
-    order: 6;
-    margin-left: auto;
-    white-space: nowrap;
-    &::before { content: "Remaining "; color: token(text-secondary); font-size: token(fs-xs); }
-  }
-}
+.spend-budgets-card { margin-top: token(s-3); }
+// "Spent this cycle" in the shared record table: the figures over a progress bar.
+.spend-budgets-table__spend { min-width: 0; }
+.spend-budgets-table__spend .progress { margin: 4px 0 0; }
+.spend-budgets-table__figures { display: flex; align-items: baseline; gap: 0 token(s-1); font-size: token(fs-sm); white-space: nowrap; strong { margin-left: auto; } }
 
 .spend-budget-drawer__people { display: flex; flex-wrap: wrap; align-items: center; gap: token(s-1); }
 .spend-budget-drawer__person {
