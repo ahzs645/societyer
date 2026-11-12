@@ -65,10 +65,12 @@ export function entityHref(ref: EntityRef): string | null {
       return id ? `/app/documents/${id}` : null;
     case "meeting":
       return id ? `/app/meetings/${id}` : null;
+    // Open the record itself where the page takes it from the URL, as the
+    // rest of the app links to them; the list when only a name is known.
     case "invoice":
-      return "/app/invoices";
+      return id ? `/app/invoices?invoice=${id}` : "/app/invoices";
     case "claim":
-      return "/app/approvals";
+      return id ? `/app/approvals?claim=${id}` : "/app/approvals";
     case "counterparty":
       return "/app/financials";
     default:

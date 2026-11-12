@@ -67,6 +67,14 @@ export async function inspectRemittance(
           left: el.getBoundingClientRect().left,
           right: el.getBoundingClientRect().right,
         }));
+      // The touch target: the box itself, or the invisible ::after hit area
+      // that compact controls get on touch screens (_control-density.scss
+      // tap-area), whichever is taller.
+      const hitHeight = (el: HTMLElement) => {
+        const after = getComputedStyle(el, "::after");
+        const pseudo = after.content !== "none" && after.position === "absolute" ? parseFloat(after.height) || 0 : 0;
+        return Math.max(el.offsetHeight, pseudo);
+      };
       const smallTargets = touch
         ? [
             ...panel.querySelectorAll<HTMLElement>(
@@ -77,16 +85,13 @@ export async function inspectRemittance(
             // pressed state (scale 0.96), which shrinks its rect but not
             // its touch target.
             .filter((el) => {
-              // Record list controls reach 44px through an invisible hit
-              // area (_control-density.scss), not a taller box.
-              if (el.closest(".record-list-table")) return false;
               const rect = el.getBoundingClientRect();
-              return rect.width > 0 && rect.height > 0 && el.offsetHeight < 44;
+              return rect.width > 0 && rect.height > 0 && hitHeight(el) < 44;
             })
             .map((el) => ({
               tag: el.tagName,
               text: el.textContent?.slice(0, 100),
-              height: el.offsetHeight,
+              height: hitHeight(el),
             }))
         : [];
       return {
