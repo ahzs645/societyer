@@ -1,6 +1,6 @@
 import { useNavigate, Link } from "react-router-dom";
 import { Archive, ArchiveRestore, CircleDot, FileDown, Landmark, Pencil, Receipt, Users } from "lucide-react";
-import { FIELD_TYPES, RecordListTable, RecordTableEmpty, staticRecordTable } from "@/platform/record-engine";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import type { MenuSection } from "../../../components/Menu";
 import { Money } from "../../../components/Money";
 import { formatDate } from "../../../lib/format";
@@ -322,6 +322,20 @@ export function PlanningCostsTable({
       label="Reusable costs"
       icon={<Receipt size={14} />}
       records={records}
+      // Phones show three columns; the card carries the period's amounts too.
+      renderPhoneCard={(record, { field, selecting }) => (
+        <RecordTablePhoneCard
+          title={record.name}
+          badge={field("status")}
+          meta={[field("amountCents"), record.category]}
+          detail={[
+            coverage(record.cost.startDate, record.cost.endDate),
+            <span key="cash">Period cash {field("cashCents")}</span>,
+            <span key="allocated">Period allocated {field("allocatedCents")}</span>,
+          ]}
+          selecting={selecting}
+        />
+      )}
       renderCell={({ record, field }) => {
         const { cost } = record;
         if (field.name === "name")
@@ -426,6 +440,19 @@ export function PlanningStaffTable({
       label="Staff assumptions"
       icon={<Users size={14} />}
       records={records}
+      renderPhoneCard={(record, { field, selecting }) => (
+        <RecordTablePhoneCard
+          title={record.name}
+          badge={field("status")}
+          meta={[field("rateCents"), record.member.assumptionsConfirmed ? "" : "assumptions unconfirmed"]}
+          detail={[
+            coverage(record.member.startDate, record.member.endDate),
+            <span key="cash">Period cash {field("cashCents")}</span>,
+            <span key="allocated">Period allocated {field("allocatedCents")}</span>,
+          ]}
+          selecting={selecting}
+        />
+      )}
       renderCell={({ record, field }) => {
         const { member } = record;
         if (field.name === "name")

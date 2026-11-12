@@ -122,7 +122,8 @@ test("Viewer can change the presentation and inspect a deadline while save and e
   const picker = page.getByTitle("Switch acting user", { exact: true });
   if (!await picker.isVisible()) await page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
-  await page.locator("span").filter({ hasText: /^Calendar Viewer$/ }).click();
+  // Inside the acting-user list: a phone card in the Users list can carry the same name.
+  await page.getByRole("listbox", { name: "Acting user" }).getByText("Calendar Viewer", { exact: true }).click();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const palette = page.getByRole("dialog", { name: "Command palette", exact: true });

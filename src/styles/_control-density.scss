@@ -1034,7 +1034,9 @@ $tap-block: (
 .record-phone-card__actions {
   position: absolute;
   top: 50%;
-  right: 2px;
+  // Far enough in that the button's 44px tap area (::after) stays inside the
+  // card: at 2px it stuck out and gave card lists a sideways scroll.
+  right: 8px;
   transform: translateY(-50%);
   > .record-phone-card__actions-button {
     width: token('tap-target');

@@ -466,7 +466,8 @@ test("workflow preparation is readable for Viewer while workflow and package wri
   const picker = page.getByTitle("Switch acting user", { exact: true });
   if (!await picker.isVisible()) await page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
-  await page.locator("span").filter({ hasText: /^Workflow Interface Viewer$/ }).click();
+  // Inside the acting-user list: a phone card in the Users list can carry the same name.
+  await page.getByRole("listbox", { name: "Acting user" }).getByText("Workflow Interface Viewer", { exact: true }).click();
   await expect(picker).toContainText("Viewer");
   if (page.viewportSize()!.width < 980) await page.keyboard.press("Escape");
   const navigate = async (name: string) => {

@@ -7,6 +7,7 @@ import {
 } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
+import { recordRows, runRowAction } from "./helpers/rowActions";
 
 async function freshWorkspace(page: Page, name: string) {
   return page.evaluate(async (name) => {
@@ -286,13 +287,12 @@ test("semester recurrence and staff edits propagate through live totals, exports
   await expect(summary).toContainText("$4,535.36");
   await expect(summary).toContainText("$4,570.12");
   await page.getByRole("button", { name: "Staff", exact: true }).click();
+  // A table row, or on phones the record's card (which carries the period's amounts).
   await expect(
-    page.getByRole("row").filter({ hasText: "Semester assistant" }),
+    recordRows(page).filter({ hasText: "Semester assistant" }),
   ).toContainText("$4,135.36");
   await page.getByRole("button", { name: "Costs", exact: true }).click();
-  const insurance = page
-    .getByRole("row")
-    .filter({ hasText: "Annual insurance" });
+  const insurance = recordRows(page).filter({ hasText: "Annual insurance" });
   await expect(insurance).toContainText("$394.52");
   await expect(insurance).toContainText("$0.00");
   const costViewport = page
@@ -321,9 +321,12 @@ test("semester recurrence and staff edits propagate through live totals, exports
   const csv = (await readFile((await (await downloading).path())!)).toString();
   expect(csv).toContain("4135.36");
   expect(csv).toContain("394.52");
-  await page
-    .getByRole("button", { name: "Edit cost Monthly software", exact: true })
-    .click();
+  // The cost table is wider than its card, so its row actions may sit behind "Row actions for …".
+  await runRowAction(
+    recordRows(page).filter({ hasText: "Monthly software" }),
+    "Edit cost Monthly software",
+    "Edit",
+  );
   dialog = page.getByRole("dialog");
   await dialog.getByLabel("Cost amount", { exact: true }).fill("125.00");
   await dialog.getByRole("button", { name: "Save cost", exact: true }).click();

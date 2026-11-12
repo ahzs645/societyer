@@ -286,7 +286,7 @@ test("annual filing ledger validates required facts and saves a pending record",
   await dialog.getByRole("checkbox").uncheck();
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Annual filing saved", { exact: true })).toBeVisible();
-  await expect(page.locator("tr", { hasText: "2027" })).toContainText("✗");
+  await expect(recordRows(page).filter({ hasText: "2027" })).toContainText("✗");
   expect(errors).toEqual([]);
 });
 
@@ -301,6 +301,7 @@ test("an existing entity initializes its catalog and prepares an editable draft"
   await expect(template.getByRole("link", { name: "Open Template Engine", exact: true })).toBeVisible();
   await template.getByRole("link", { name: "Open Template Engine", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Template engine", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "BC society constitution — preparation draft", exact: true })).toBeVisible();
+  // A grid row on wider screens, a card on phones.
+  await expect(recordRows(page).filter({ hasText: "BC society constitution — preparation draft" }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });

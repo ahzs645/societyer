@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { recordRows } from "./helpers/rowActions";
 
 /**
  * Final re-test fixes exercised in the demo runtime (synthetic data only).
@@ -6,18 +7,17 @@ import { expect, test } from "@playwright/test";
 
 test("the policies register fits the window with its status visible (X-02)", async ({ page }) => {
   await page.goto("/demo/app/policies");
-  // The register is the shared record table; Status is its first column after the policy name,
-  // so it stays in view even when the wider columns scroll inside the table.
+  // The register is the shared record table (cards on phones); Status is its first column after
+  // the policy name, so it stays in view even when the wider columns scroll inside the table.
   const table = page.locator("table.record-table");
-  const firstRow = table.locator(".record-table__row").first();
-  await expect(firstRow).toBeVisible();
+  await expect(recordRows(page).first()).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow, "no page-level horizontal scroll").toBeLessThanOrEqual(1);
   const viewport = page.viewportSize()!;
   if (viewport.width >= 1280) {
     const status = table.locator("thead th", { hasText: /^Status$/ });
     await expect(status).toBeInViewport();
-    await expect(firstRow.locator("td[data-field-name='status'] .badge").first()).toBeInViewport();
+    await expect(table.locator(".record-table__row").first().locator("td[data-field-name='status'] .badge").first()).toBeInViewport();
   }
 });
 
