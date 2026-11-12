@@ -1,6 +1,6 @@
-import { useMemo, type RefObject } from "react";
+import { useMemo } from "react";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
-import { ViewportPopover } from "@/components/ViewportPopover";
+import { Select } from "@/components/Select";
 import { FIELD_TYPES, type RecordField, type ViewGroupBy, type ViewGroupDateGranularity } from "../../types";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
@@ -49,31 +49,10 @@ function orderOptions(column: RecordField | undefined, columns: RecordField[]): 
 }
 
 /**
- * "Group by" settings: the field, date bucket size, group order, and fold
- * all / unfold all. The choice is part of the view (Save / Discard apply);
- * folding is per person and never marks the view as changed.
- */
-export function RecordTableGroupByPopover({
-  open,
-  onClose,
-  anchorRef,
-}: {
-  open: boolean;
-  onClose: () => void;
-  anchorRef: RefObject<HTMLElement | null>;
-}) {
-  if (!open) return null;
-
-  return (
-    <ViewportPopover open onClose={onClose} anchorRef={anchorRef} label="Group records" className="record-table__menu record-table__menu--right record-table__group-popover">
-      <RecordTableGroupByEditor />
-    </ViewportPopover>
-  );
-}
-
-/**
- * The group-by sections: the body of the Group popover, and of the Group
- * section in the phone "View options" sheet.
+ * The group-by settings (field, date bucket size, group order, fold all /
+ * unfold all): the first section of the toolbar's Options popover and of
+ * the phone "View options" sheet. The choice is part of the view (Save /
+ * Discard apply); folding is per person and never marks the view as changed.
  */
 export function RecordTableGroupByEditor() {
   const columns = useRecordTableState((s) => s.columns);
@@ -93,26 +72,22 @@ export function RecordTableGroupByEditor() {
   return (
     <>
       <div className="record-table__menu-section">
-        <label className="record-table__menu-label" htmlFor="record-table-group-field">
-          Group by
-        </label>
-        <select
-          id="record-table-group-field"
-          className="record-table__menu-select"
+        <span className="record-table__menu-label">Group by</span>
+        <Select
+          size="sm"
+          aria-label="Group by"
           value={groupBy?.fieldMetadataId ?? ""}
-          onChange={(event) => {
-            const next = columns.find((entry) => entry.fieldMetadataId === event.target.value);
+          onChange={(fieldMetadataId) => {
+            const next = columns.find((entry) => entry.fieldMetadataId === fieldMetadataId);
             handle.get().setCollapsedGroupKeys(new Set());
             setGroupBy(next ? defaultGroupBy(next) : null);
           }}
-        >
-          <option value="">No grouping</option>
-          {groupable.map((entry) => (
-            <option key={entry.fieldMetadataId} value={entry.fieldMetadataId}>
-              {entry.field.label}
-            </option>
-          ))}
-        </select>
+          searchable={groupable.length > 8}
+          options={[
+            { value: "", label: "No grouping" },
+            ...groupable.map((entry) => ({ value: entry.fieldMetadataId, label: entry.field.label })),
+          ]}
+        />
       </div>
 
       {groupBy && column && isDateGroupField(column) && (
@@ -137,15 +112,13 @@ export function RecordTableGroupByEditor() {
 
       {groupBy && column && (
         <div className="record-table__menu-section">
-          <label className="record-table__menu-label" htmlFor="record-table-group-order">
-            Order groups
-          </label>
-          <select
-            id="record-table-group-order"
-            className="record-table__menu-select"
+          <span className="record-table__menu-label">Order groups</span>
+          <Select
+            size="sm"
+            aria-label="Order groups"
             value={orderValue(groupBy)}
-            onChange={(event) => {
-              const [sort, direction, sumFieldMetadataId] = event.target.value.split(":");
+            onChange={(value) => {
+              const [sort, direction, sumFieldMetadataId] = value.split(":");
               setGroupBy({
                 ...groupBy,
                 sort: sort as ViewGroupBy["sort"],
@@ -153,13 +126,8 @@ export function RecordTableGroupByEditor() {
                 sumFieldMetadataId: sumFieldMetadataId || undefined,
               });
             }}
-          >
-            {orders.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            options={orders}
+          />
           <p className="record-table__menu-hint">“No value” is always listed last.</p>
         </div>
       )}

@@ -19,7 +19,6 @@ import {
   X,
   ListChecks,
   List,
-  Rows3,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -41,7 +40,8 @@ import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { useIsBottomSheet } from "../../../../lib/useSheetDrag";
 import { useRegisterCommand } from "../../../../lib/commands";
-import { RecordTableGroupByPopover } from "./RecordTableGroupByPopover";
+import { RecordTableGroupByEditor } from "./RecordTableGroupByPopover";
+import { Select } from "@/components/Select";
 import { RecordTableExportDialog } from "./RecordTableExportDialog";
 import { getViewGroupBy } from "../utils/groupRecords";
 import { RecordTableAskFilterButton } from "./RecordTableAskFilterButton";
@@ -273,10 +273,8 @@ export function RecordTableToolbar({
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const groupButtonRef = useRef<HTMLButtonElement>(null);
   const groupByFieldId = useRecordTableState((s) => getViewGroupBy(s.viewGroups)?.fieldMetadataId ?? null);
   const groupByLabel = groupByFieldId
     ? columns.find((column) => column.fieldMetadataId === groupByFieldId)?.field.label ?? null
@@ -419,6 +417,8 @@ export function RecordTableToolbar({
     </button>
   );
 
+  const setChipsSlot = useCallback((node: HTMLDivElement | null) => handle.get().setChipsSlot(node), [handle]);
+
   return (
     <div className="record-table__toolbar" ref={toolbarRef}>
       <div className="record-table__toolbar-left">
@@ -549,6 +549,10 @@ export function RecordTableToolbar({
         </div>
       </div>
       )}
+
+      {/* Filter chips sit in the toolbar's own row (RecordTableFilterChips
+          portals into this slot); phones keep them on a swipeable row below. */}
+      {!isPhone && <div className="record-table__toolbar-chips" ref={setChipsSlot} />}
 
       <div className="record-table__toolbar-right">
         {/* Phones keep the button beside the open field (it shows the search is on); wider screens swap it for the field. */}
@@ -801,34 +805,18 @@ export function RecordTableToolbar({
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 
-        {!listActive && viewType === "table" && (
-          <>
-            <button
-              type="button"
-              className={
-                "record-table__toolbar-button record-table__toolbar-button--group" +
-                (groupByLabel ? " record-table__toolbar-button--active" : "")
-              }
-              ref={groupButtonRef}
-              data-record-table-action="group"
-              aria-label={groupByLabel ? `Group · ${groupByLabel}` : "Group"}
-              aria-haspopup="dialog"
-              aria-expanded={groupMenuOpen}
-              title={groupByLabel ? `Grouped by ${groupByLabel}` : "Group records"}
-              onClick={() => setGroupMenuOpen((x) => !x)}
-            >
-              <Rows3 size={12} />
-              <span>{groupByLabel ? `Group · ${groupByLabel}` : "Group"}</span>
-            </button>
-            <RecordTableGroupByPopover open={groupMenuOpen} onClose={() => setGroupMenuOpen(false)} anchorRef={groupButtonRef} />
-          </>
-        )}
-
         <div className="record-table__view-switcher" ref={columnMenuRef}>
+          {/* Grouping, density, columns and export live here; a column's
+              header menu still offers "Group by this field". */}
           <button
             type="button"
-            className="record-table__toolbar-button record-table__toolbar-button--options"
-            aria-label={t("common.options", "Options")}
+            className={
+              "record-table__toolbar-button record-table__toolbar-button--options" +
+              (groupByLabel && !listActive && viewType === "table" ? " record-table__toolbar-button--active" : "")
+            }
+            data-record-table-action="group"
+            aria-label={`${t("common.options", "Options")}${groupByLabel && !listActive && viewType === "table" ? ` · grouped by ${groupByLabel}` : ""}`}
+            title={groupByLabel && !listActive && viewType === "table" ? `Grouped by ${groupByLabel}` : "Group, density, columns and export"}
             aria-haspopup="dialog"
             aria-expanded={columnMenuOpen}
             onClick={() => setColumnMenuOpen((x) => !x)}
@@ -838,49 +826,32 @@ export function RecordTableToolbar({
           </button>
           {columnMenuOpen && (
             <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
+              {!listActive && viewType === "table" && <RecordTableGroupByEditor />}
               {(viewType === "kanban" || viewType === "board") && (
                 <div className="record-table__menu-section">
-                  <label className="record-table__menu-label" htmlFor="record-table-kanban-field">
-                    Kanban field
-                  </label>
-                  <select
-                    id="record-table-kanban-field"
-                    className="record-table__menu-select"
+                  <span className="record-table__menu-label">Kanban field</span>
+                  <Select
+                    size="sm"
+                    aria-label="Kanban field"
                     value={kanbanFieldMetadataId ?? ""}
-                    onChange={(event) =>
-                      handle.get().setKanbanFieldMetadataId(event.target.value || undefined)
-                    }
-                  >
-                    <option value="">Choose field...</option>
-                    {selectableKanbanFields.map((column) => (
-                      <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
-                        {column.field.label}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Choose field…"
+                    onChange={(value) => handle.get().setKanbanFieldMetadataId(value || undefined)}
+                    options={selectableKanbanFields.map((column) => ({ value: column.fieldMetadataId, label: column.field.label }))}
+                  />
                 </div>
               )}
 
               {viewType === "calendar" && (
                 <div className="record-table__menu-section">
-                  <label className="record-table__menu-label" htmlFor="record-table-calendar-field">
-                    Calendar field
-                  </label>
-                  <select
-                    id="record-table-calendar-field"
-                    className="record-table__menu-select"
+                  <span className="record-table__menu-label">Calendar field</span>
+                  <Select
+                    size="sm"
+                    aria-label="Calendar field"
                     value={calendarFieldMetadataId ?? ""}
-                    onChange={(event) =>
-                      handle.get().setCalendarFieldMetadataId(event.target.value || undefined)
-                    }
-                  >
-                    <option value="">Choose date field...</option>
-                    {selectableCalendarFields.map((column) => (
-                      <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
-                        {column.field.label}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Choose date field…"
+                    onChange={(value) => handle.get().setCalendarFieldMetadataId(value || undefined)}
+                    options={selectableCalendarFields.map((column) => ({ value: column.fieldMetadataId, label: column.field.label }))}
+                  />
                 </div>
               )}
               <div className="record-table__menu-section">

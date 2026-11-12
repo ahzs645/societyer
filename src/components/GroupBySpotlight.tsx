@@ -2,7 +2,8 @@ import { useLocation } from "react-router-dom";
 import { Spotlight } from "./Spotlight";
 
 /**
- * One-time tip pointing at a record table's "Group" toolbar button. Mounted
+ * One-time tip pointing at a record table's "Options" toolbar button, where
+ * grouping lives (data-record-table-action="group"). Mounted
  * once in the app shell and re-keyed per page, so it waits for a table
  * toolbar on whichever page the user opens next. Anchored tips never show on
  * phones, and only one tip is on screen at a time.
@@ -17,7 +18,7 @@ export function GroupBySpotlight() {
       placement="bottom"
       title="Group rows by any field — totals per group"
     >
-      Select Group to fold this table into sections by status, date, owner or any other field. Each group shows its row count and the total of every amount column.
+      Open Options to fold this table into sections by status, date, owner or any other field. Each group shows its row count and the total of every amount column.
     </Spotlight>
   );
 }

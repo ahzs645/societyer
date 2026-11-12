@@ -92,3 +92,26 @@ export function searchDistinctValues(
   }
   return { shown, matched };
 }
+
+/**
+ * A select field's options in their own order, each with how many records
+ * carry it (multi-selects count each record once per option). The value is
+ * the option key, which is what "is any of" stores for options.
+ */
+export function optionFieldValues(
+  records: readonly object[],
+  field: FieldMetadata,
+  options: readonly { value: unknown; label?: unknown }[],
+): DistinctFieldValue[] {
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    const value = (record as Record<string, unknown>)[field.name];
+    if (isEmptyValue(value)) continue;
+    const keys = Array.isArray(value) ? new Set(value.map(String)) : [String(value)];
+    keys.forEach((key) => counts.set(key, (counts.get(key) ?? 0) + 1));
+  }
+  return options.map((option) => {
+    const label = String(option.label ?? option.value);
+    return { value: String(option.value), label, count: counts.get(String(option.value)) ?? 0, search: label.toLowerCase() };
+  });
+}

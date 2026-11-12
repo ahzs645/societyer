@@ -1,3 +1,4 @@
+import { Select } from "@/components/Select";
 import type { ReactNode } from "react";
 import { Columns, Download, ListChecks, Search, type LucideIcon } from "lucide-react";
 import { Modal } from "../../../../components/Modal";
@@ -157,42 +158,28 @@ function LayoutSection<Id extends string>({
       </div>
       {isKanban && (
         <div className="record-view-sheet__field">
-          <label className="record-table__menu-label" htmlFor="record-view-sheet-kanban-field">
-            Kanban field
-          </label>
-          <select
-            id="record-view-sheet-kanban-field"
-            className="record-table__menu-select"
+          <span className="record-table__menu-label">Kanban field</span>
+          <Select
+            size="sm"
+            aria-label="Kanban field"
             value={kanbanFieldMetadataId ?? ""}
-            onChange={(event) => handle.get().setKanbanFieldMetadataId(event.target.value || undefined)}
-          >
-            <option value="">Choose field...</option>
-            {kanbanFields.map((column) => (
-              <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
-                {column.field.label}
-              </option>
-            ))}
-          </select>
+            placeholder="Choose field…"
+            onChange={(value) => handle.get().setKanbanFieldMetadataId(value || undefined)}
+            options={kanbanFields.map((column) => ({ value: column.fieldMetadataId, label: column.field.label }))}
+          />
         </div>
       )}
       {isCalendar && (
         <div className="record-view-sheet__field">
-          <label className="record-table__menu-label" htmlFor="record-view-sheet-calendar-field">
-            Calendar field
-          </label>
-          <select
-            id="record-view-sheet-calendar-field"
-            className="record-table__menu-select"
+          <span className="record-table__menu-label">Calendar field</span>
+          <Select
+            size="sm"
+            aria-label="Calendar field"
             value={calendarFieldMetadataId ?? ""}
-            onChange={(event) => handle.get().setCalendarFieldMetadataId(event.target.value || undefined)}
-          >
-            <option value="">Choose date field...</option>
-            {calendarFields.map((column) => (
-              <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
-                {column.field.label}
-              </option>
-            ))}
-          </select>
+            placeholder="Choose date field…"
+            onChange={(value) => handle.get().setCalendarFieldMetadataId(value || undefined)}
+            options={calendarFields.map((column) => ({ value: column.fieldMetadataId, label: column.field.label }))}
+          />
         </div>
       )}
     </section>

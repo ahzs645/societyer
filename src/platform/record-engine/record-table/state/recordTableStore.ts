@@ -156,6 +156,14 @@ export type RecordTableState = {
   setMobileSelectionMode: (on: boolean) => void;
   mobileSelectable: boolean;
   setMobileSelectable: (on: boolean) => void;
+  /** The column whose header menu is open (its viewFieldId). While one is,
+   *  the table keeps its current layout so the menu isn't remounted. */
+  openColumnMenu: string | null;
+  setOpenColumnMenu: (viewFieldId: string | null) => void;
+  /** Where the toolbar shows the filter chips, in its own row (wider screens);
+   *  null puts them under the toolbar. */
+  chipsSlot: HTMLElement | null;
+  setChipsSlot: (slot: HTMLElement | null) => void;
   toolbarMounted: boolean;
   setToolbarMounted: (on: boolean) => void;
   /** The mounted toolbar's root: the filter editor floats from it. */
@@ -299,6 +307,8 @@ export function createRecordTableStore(opts: {
     openRecordIn: "drawer",
     mobileSelectionMode: false,
     mobileSelectable: false,
+    openColumnMenu: null,
+    chipsSlot: null,
     toolbarMounted: false,
     toolbarElement: null,
     selectedRecordIds: new Set(),
@@ -397,6 +407,8 @@ export function createRecordTableStore(opts: {
     clearSelection: () => set({ selectedRecordIds: new Set(), selectionAnchorRowIndex: null }),
     setMobileSelectionMode: (mobileSelectionMode) => set({ mobileSelectionMode }),
     setMobileSelectable: (mobileSelectable) => set({ mobileSelectable }),
+    setOpenColumnMenu: (openColumnMenu) => set({ openColumnMenu }),
+    setChipsSlot: (chipsSlot) => set({ chipsSlot }),
     setToolbarMounted: (toolbarMounted) => set({ toolbarMounted }),
     setToolbarElement: (toolbarElement) => set({ toolbarElement }),
     setSelectionAnchorRowIndex: (selectionAnchorRowIndex) => set({ selectionAnchorRowIndex }),

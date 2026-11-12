@@ -379,6 +379,16 @@ export function RecordTable({
   const progressiveLoading = useRecordTableState((s) => s.loadingProgress !== null);
   const showLoading = progressiveLoading ? records.length === 0 : loading;
   const page = rowModel.page;
+  // Plain rows up to `virtualizeAbove`, a windowed list beyond. While a column
+  // menu is open (filtering as you type) the layout holds, so the header the
+  // menu belongs to isn't remounted under it.
+  const wantsPlainLayout = (rowModel.items.length <= virtualizeAbove && !onEndReached) || Boolean(page);
+  const columnMenuOpen = useRecordTableState((s) => s.openColumnMenu !== null);
+  const [heldLayout, setHeldLayout] = useState<boolean | null>(null);
+  useEffect(() => {
+    setHeldLayout((held) => (columnMenuOpen ? held ?? wantsPlainLayout : null));
+  }, [columnMenuOpen, wantsPlainLayout]);
+  const plainLayout = columnMenuOpen ? heldLayout ?? wantsPlainLayout : wantsPlainLayout;
   const handle = useRecordTableStoreHandle();
   const saveRecord = useRecordTableUpdate();
   const getTableState = handle.get;
@@ -1006,7 +1016,7 @@ export function RecordTable({
     hasRowActions,
   };
 
-  if ((rowModel.items.length <= virtualizeAbove && !onEndReached) || page) {
+  if (plainLayout) {
     return withGridMode(
       <>
       <div

@@ -469,16 +469,18 @@ function LogicalOperatorSelect({
   "aria-label": string;
 }) {
   return (
-    <select
-      className="record-table__menu-select record-table__logic-select"
+    <Select
+      size="sm"
+      className="record-table__logic-select"
       value={value}
       disabled={disabled}
       aria-label={ariaLabel}
-      onChange={(event) => onChange(event.target.value === "or" ? "or" : "and")}
-    >
-      <option value="and">{labels.and}</option>
-      <option value="or">{labels.or}</option>
-    </select>
+      onChange={(next) => onChange(next === "or" ? "or" : "and")}
+      options={[
+        { value: "and", label: labels.and },
+        { value: "or", label: labels.or },
+      ]}
+    />
   );
 }
 

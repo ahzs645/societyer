@@ -1,25 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { Select } from "../../../../components/Select";
 import { columnWidthStyle } from "../utils/columnWidth";
 import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ArrowUpDown,
   ChevronDown,
   EyeOff,
   Filter,
   Rows3,
 } from "lucide-react";
-import { FIELD_TYPES, type RecordField, type SelectOption, type ViewFilterOperator } from "../../types";
+import { FIELD_TYPES, type RecordField } from "../../types";
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { floatingLayerProps, isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { ViewportPopover } from "../../../../components/ViewportPopover";
-import { isNumericFieldType, parseNumericFilterInput } from "../utils/filterValues";
+import { sortDirectionLabels } from "../utils/sortLabels";
 import { defaultGroupBy, getViewGroupBy, isGroupableField, withViewGroupBy } from "../utils/groupRecords";
+import { RecordTableHeaderFilter } from "./RecordTableHeaderFilter";
 
 /**
  * One header cell. Click = cycle sort (asc → desc → off). Drag the right
@@ -41,8 +42,9 @@ export function RecordTableHeaderCell({
   collapsed?: boolean;
 }) {
   const columns = useRecordTableState((s) => s.columns);
-  const filters = useRecordTableState((s) => s.filters);
-  const filterGroups = useRecordTableState((s) => s.filterGroups);
+  const isFiltered = useRecordTableState((s) =>
+    s.filters.some((filter) => filter.fieldMetadataId === recordField.fieldMetadataId),
+  );
   const sorts = useRecordTableState((s) => s.sorts);
   const viewType = useRecordTableState((s) => s.type);
   const isGroupedByThis = useRecordTableState(
@@ -54,13 +56,8 @@ export function RecordTableHeaderCell({
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
-  const [filterValue, setFilterValue] = useState("");
-  const [numericOperator, setNumericOperator] = useState<ViewFilterOperator>("eq");
-  const numeric = isNumericFieldType(recordField.field.fieldType);
-  const boolean = recordField.field.fieldType === FIELD_TYPES.BOOLEAN;
   const sortable = recordField.field.config?.sortable !== false;
-  const noValue = boolean || ["isEmpty", "isNotEmpty"].includes(numericOperator);
-  const canApply = noValue || canApplyHeaderFilter(recordField, filterValue);
+  const directionLabels = sortDirectionLabels(recordField.field);
 
   const sort = sorts.find((s) => s.fieldMetadataId === recordField.fieldMetadataId);
   const FieldIcon = resolveFieldIcon(recordField.field);
@@ -73,6 +70,18 @@ export function RecordTableHeaderCell({
     !lockIdentifier &&
     visibleIndex >= 1 &&
     visibleIndex < visibleColumns.length - 1;
+
+  // Tell the table a column menu is open: filtering from it must not switch
+  // the table between its plain and windowed layouts, which would remount
+  // this header and close the menu mid-typing.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const id = recordField.viewFieldId;
+    handle.get().setOpenColumnMenu(id);
+    return () => {
+      if (handle.get().openColumnMenu === id) handle.get().setOpenColumnMenu(null);
+    };
+  }, [menuOpen, handle, recordField.viewFieldId]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -104,7 +113,10 @@ export function RecordTableHeaderCell({
       { fieldMetadataId: recordField.fieldMetadataId, direction },
       ...handle.get().sorts.filter((s) => s.fieldMetadataId !== recordField.fieldMetadataId),
     ]);
-    setMenuOpen(false);
+  };
+
+  const clearSort = () => {
+    handle.get().setSorts(handle.get().sorts.filter((s) => s.fieldMetadataId !== recordField.fieldMetadataId));
   };
 
   const moveColumn = (direction: -1 | 1) => {
@@ -131,44 +143,6 @@ export function RecordTableHeaderCell({
       .map((column) => column.viewFieldId);
 
     handle.get().reorderColumns([...visibleIds, ...hiddenIds]);
-    setMenuOpen(false);
-  };
-
-  const applyHeaderFilter = () => {
-    const condition = headerFilterCondition(recordField, filterValue);
-    const operator = numeric || boolean ? numericOperator === "eq" && boolean ? "isTrue" : numericOperator : condition.operator;
-    const value = noValue ? null : condition.value;
-    const existingRoot = filterGroups.find((group) => !group.parentViewFilterGroupId);
-    const rootGroup = existingRoot ?? {
-      id: `fg_${Date.now()}`,
-      logicalOperator: "and" as const,
-      parentViewFilterGroupId: null,
-      positionInViewFilterGroup: 0,
-    };
-
-    handle.set({
-      filterGroups: existingRoot ? filterGroups : [rootGroup, ...filterGroups],
-      filters: [
-        ...filters.map((entry, index) =>
-          entry.viewFilterGroupId
-            ? entry
-            : {
-                ...entry,
-                viewFilterGroupId: rootGroup.id,
-                positionInViewFilterGroup: index,
-              },
-        ),
-        {
-          id: `f_${Date.now()}`,
-          fieldMetadataId: recordField.fieldMetadataId,
-          operator,
-          value,
-          viewFilterGroupId: rootGroup.id,
-          positionInViewFilterGroup: filters.length,
-        },
-      ],
-    });
-    setFilterValue("");
     setMenuOpen(false);
   };
 
@@ -205,6 +179,13 @@ export function RecordTableHeaderCell({
     window.addEventListener("pointercancel", onUp);
   };
 
+  // Alt+↓ on a focused header opens its menu, as in spreadsheets and data grids.
+  const openMenuWithKeyboard = (event: KeyboardEvent) => {
+    if (event.key !== "ArrowDown" || !event.altKey) return;
+    event.preventDefault();
+    setMenuOpen(true);
+  };
+
   const resizeWithKeyboard = (event: React.KeyboardEvent) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -220,7 +201,8 @@ export function RecordTableHeaderCell({
         (recordField.field.fieldType === FIELD_TYPES.CURRENCY || recordField.field.fieldType === FIELD_TYPES.NUMBER
           ? " record-table__header-cell--numeric"
           : "") +
-        (collapsed ? " record-table__header-cell--collapsed" : "")
+        (collapsed ? " record-table__header-cell--collapsed" : "") +
+        (isFiltered ? " record-table__header-cell--filtered" : "")
       }
       style={columnWidthStyle(collapsed ? 0 : recordField.size)}
       aria-hidden={collapsed || undefined}
@@ -229,14 +211,16 @@ export function RecordTableHeaderCell({
       <button
         className="record-table__header-cell-button"
         onClick={cycleSort}
+        onKeyDown={openMenuWithKeyboard}
         type="button"
         title={sortable ? recordField.field.label : `${recordField.field.label} is available for filtering and grouping`}
         aria-disabled={!sortable || undefined}
       >
         <FieldIcon size={13} className="record-table__header-cell-icon" aria-hidden="true" />
         <span className="record-table__header-cell-label">{recordField.field.label}</span>
-        {sort?.direction === "asc" && <ArrowUp size={11} />}
-        {sort?.direction === "desc" && <ArrowDown size={11} />}
+        {sort?.direction === "asc" && <ArrowUp size={11} aria-label="Sorted ascending" />}
+        {sort?.direction === "desc" && <ArrowDown size={11} aria-label="Sorted descending" />}
+        {isFiltered && <Filter size={11} className="record-table__header-cell-filtered" aria-label="Filtered" />}
       </button>
       <div className="record-table__header-menu-wrap" ref={menuRef}>
         <button
@@ -263,55 +247,30 @@ export function RecordTableHeaderCell({
             label={`${recordField.field.label} column`}
             className="record-table__header-menu"
           >
-            {sortable && <><button type="button" onClick={() => setSort("asc")}>
-              <ArrowUp size={13} />
-              <span>Sort ascending</span>
-            </button>
-            <button type="button" onClick={() => setSort("desc")}>
-              <ArrowDown size={13} />
-              <span>Sort descending</span>
-            </button></>}
-            <div className="record-table__header-menu-section">
-              <div className="record-table__header-filter">
-                <span>
-                  <Filter size={13} />
-                  Filter
+            {/* Sort is a switch: pick a direction, pick it again to stop sorting. */}
+            {sortable && (
+              <div className="record-table__header-menu-line" role="group" aria-label={`Sort by ${recordField.field.label}`}>
+                <span className="record-table__header-menu-line-label">
+                  <ArrowUpDown size={13} aria-hidden="true" />
+                  Sort
                 </span>
-                {(numeric || boolean) && <Select
-                  size="sm"
-                  aria-label={`${recordField.field.label} filter condition`}
-                  value={boolean && numericOperator === "eq" ? "isTrue" : numericOperator}
-                  onChange={setNumericOperator}
-                  options={boolean ? [{ value: "isTrue", label: "Yes" }, { value: "isFalse", label: "No" }] : [
-                    { value: "eq", label: "Equals" }, { value: "neq", label: "Does not equal" },
-                    { value: "gt", label: "Greater than" }, { value: "gte", label: "At least" },
-                    { value: "lt", label: "Less than" }, { value: "lte", label: "At most" },
-                    { value: "isEmpty", label: "Has no value" }, { value: "isNotEmpty", label: "Has a value" },
-                  ]}
-                />}
-                {!noValue && <input
-                  aria-label={`${recordField.field.label} filter value`}
-                  value={filterValue}
-                  onChange={(event) => setFilterValue(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && canApply) {
-                      event.preventDefault();
-                      applyHeaderFilter();
-                    }
-                  }}
-                  placeholder={headerFilterPlaceholder(recordField)}
-                  type={headerFilterInputType(recordField)}
-                  inputMode={isNumericFieldType(recordField.field.fieldType) ? "decimal" : undefined}
-                />}
+                <div className="record-table__menu-segmented">
+                  {(["asc", "desc"] as const).map((direction) => (
+                    <button
+                      key={direction}
+                      type="button"
+                      aria-pressed={sort?.direction === direction}
+                      title={sort?.direction === direction ? "Select again to stop sorting" : undefined}
+                      onClick={() => (sort?.direction === direction ? clearSort() : setSort(direction))}
+                    >
+                      {direction === "asc" ? <ArrowUp size={11} aria-hidden="true" /> : <ArrowDown size={11} aria-hidden="true" />}
+                      {directionLabels[direction]}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <button
-                type="button"
-                disabled={!canApply}
-                onClick={applyHeaderFilter}
-              >
-                Apply filter
-              </button>
-            </div>
+            )}
+            <RecordTableHeaderFilter recordField={recordField} onDone={closeMenu} />
             {viewType === "table" && isGroupableField(recordField) && (
               <button
                 type="button"
@@ -326,14 +285,16 @@ export function RecordTableHeaderCell({
                 <span>{isGroupedByThis ? "Remove grouping" : "Group by this field"}</span>
               </button>
             )}
-            <button type="button" disabled={!canMoveLeft} onClick={() => moveColumn(-1)}>
-              <ArrowLeft size={13} />
-              <span>Move left</span>
-            </button>
-            <button type="button" disabled={!canMoveRight} onClick={() => moveColumn(1)}>
-              <ArrowRight size={13} />
-              <span>Move right</span>
-            </button>
+            <div className="record-table__header-menu-row">
+              <button type="button" disabled={!canMoveLeft} onClick={() => moveColumn(-1)}>
+                <ArrowLeft size={13} />
+                <span>Move left</span>
+              </button>
+              <button type="button" disabled={!canMoveRight} onClick={() => moveColumn(1)}>
+                <ArrowRight size={13} />
+                <span>Move right</span>
+              </button>
+            </div>
             <button
               type="button"
               disabled={lockIdentifier}
@@ -367,75 +328,4 @@ export function RecordTableHeaderCell({
       )}
     </th>
   );
-}
-
-/**
- * What the column menu's one text box filters by. Options: an exact label or
- * key is "is <option>", anything else "contains" (labels as well as keys).
- * Relations match their display names.
- */
-function headerFilterCondition(recordField: RecordField, raw: string): { operator: ViewFilterOperator; value: unknown } {
-  const options = Array.isArray(recordField.field.config?.options) ? (recordField.field.config.options as SelectOption[]) : [];
-  if (options.length > 0) {
-    const typed = raw.trim().toLowerCase();
-    const option = options.find((entry) => String(entry.label ?? entry.value).toLowerCase() === typed || String(entry.value).toLowerCase() === typed);
-    if (option && recordField.field.fieldType !== FIELD_TYPES.MULTI_SELECT) return { operator: "eq", value: String(option.value) };
-    return { operator: "contains", value: raw.trim() };
-  }
-  if (recordField.field.fieldType === FIELD_TYPES.RELATION) return { operator: "contains", value: raw.trim() };
-  const operator = defaultHeaderOperator(recordField);
-  return { operator, value: normalizedHeaderFilterValue(recordField, raw, operator) };
-}
-
-function defaultHeaderOperator(recordField: RecordField): ViewFilterOperator {
-  if (recordField.field.fieldType === FIELD_TYPES.BOOLEAN) return "isTrue";
-  if (
-    recordField.field.fieldType === FIELD_TYPES.TEXT ||
-    recordField.field.fieldType === FIELD_TYPES.EMAIL ||
-    recordField.field.fieldType === FIELD_TYPES.PHONE ||
-    recordField.field.fieldType === FIELD_TYPES.LINK ||
-    recordField.field.fieldType === FIELD_TYPES.ARRAY ||
-    recordField.field.fieldType === FIELD_TYPES.MULTI_SELECT
-  ) {
-    return "contains";
-  }
-  return "eq";
-}
-
-function canApplyHeaderFilter(recordField: RecordField, value: string) {
-  if (recordField.field.fieldType === FIELD_TYPES.BOOLEAN) return true;
-  if (isNumericFieldType(recordField.field.fieldType)) {
-    return parseNumericFilterInput(recordField.field, value) !== undefined;
-  }
-  return value.trim().length > 0;
-}
-
-function normalizedHeaderFilterValue(
-  recordField: RecordField,
-  value: string,
-  operator: ViewFilterOperator,
-) {
-  if (operator === "isTrue" || operator === "isFalse") return null;
-  if (isNumericFieldType(recordField.field.fieldType)) {
-    // "1.5k", "$2,000", "(300)" — in the field's stored unit.
-    return parseNumericFilterInput(recordField.field, value) ?? null;
-  }
-  return value.trim();
-}
-
-function headerFilterInputType(recordField: RecordField) {
-  if (
-    recordField.field.fieldType === FIELD_TYPES.DATE ||
-    recordField.field.fieldType === FIELD_TYPES.DATE_TIME
-  ) {
-    return "date";
-  }
-  return "text";
-}
-
-function headerFilterPlaceholder(recordField: RecordField) {
-  if (recordField.field.fieldType === FIELD_TYPES.BOOLEAN) return "true";
-  if (recordField.field.fieldType === FIELD_TYPES.CURRENCY) return "e.g. 1.5k or $2,000";
-  if (isNumericFieldType(recordField.field.fieldType)) return "Enter a number";
-  return "Contains…";
 }

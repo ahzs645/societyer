@@ -122,17 +122,19 @@ test.describe("record table controls", () => {
     // First name is the members identifier: it stays pinned and visible.
     const triggers = page.locator(".record-table__header-menu-trigger");
     await triggers.first().click();
-    await expect(page.getByRole("button", { name: "Sort ascending" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sort descending" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Apply filter" })).toBeVisible();
+    const menu = page.locator(".record-table__header-menu");
+    // Sort is a switch worded by type (text: A → Z / Z → A); filtering applies as you go.
+    await expect(menu.getByRole("button", { name: /A → Z/ })).toBeVisible();
+    await expect(menu.getByRole("button", { name: /Z → A/ })).toBeVisible();
+    await expect(menu.getByLabel(/filter value/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Move right" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Identifier field" })).toBeDisabled();
     await page.keyboard.press("Escape");
 
     // Any other column moves and hides.
     await triggers.nth(1).click();
-    await expect(page.getByRole("button", { name: "Sort ascending" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Apply filter" })).toBeVisible();
+    await expect(menu.getByRole("group", { name: /^Sort by / })).toBeVisible();
+    await expect(menu.getByRole("group", { name: /^Filter / })).toBeVisible();
     await expect(page.getByRole("button", { name: "Move right" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Hide field" })).toBeEnabled();
   });
@@ -147,7 +149,8 @@ test.describe("record table controls", () => {
 
     // Make the view dirty by sorting a column from its header menu.
     await page.locator(".record-table__header-menu-trigger").first().click();
-    await page.getByRole("button", { name: "Sort ascending" }).click();
+    await page.locator(".record-table__header-menu").getByRole("button", { name: /A → Z/ }).click();
+    await page.keyboard.press("Escape");
 
     // Both save affordances surface together once the view diverges.
     await expect(saveAs).toBeVisible();
