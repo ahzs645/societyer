@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Calculator, CalendarClock, ClipboardCheck, FileText, FileUp, Landmark, Plus, Settings2, Users, Wallet } from "lucide-react";
@@ -23,6 +23,7 @@ import { PayrollImportDrawer, PayRunDrawer, PayrollSettingsDrawer, RemittanceDra
 import { useOnceWhen } from "../features/businessRegisters/formHelpers";
 import type { PayrollWorkspace } from "../features/businessRegisters/types";
 import { PayrollSetupPanel } from "../features/financials/planning/PayrollSetupPanel";
+import { PAY_RUN_PARAM, REMITTANCE_PARAM } from "../features/businessRegisters/payrollLinks";
 
 const TABS = ["runs", "remittances", "slips", "roes"] as const;
 type PayrollTab = (typeof TABS)[number];
@@ -57,6 +58,39 @@ export function PayrollPage() {
   const [tab, setTab] = useUrlTab(TABS, "runs");
   const [searchParams, setSearchParams] = useSearchParams();
   const [drawer, setDrawer] = useState<DrawerState>(() => searchParams.get("setup") === "1" ? { kind: "settings" } : null);
+  // A pay run or remittance opened from its row, or linked from elsewhere,
+  // lives in the URL (?run=<id>, ?remittance=<id>); new records stay local.
+  const runParam = searchParams.get(PAY_RUN_PARAM);
+  const remittanceParam = searchParams.get(REMITTANCE_PARAM);
+  const linkedDrawer: DrawerState = runParam ? { kind: "run", id: runParam } : remittanceParam ? { kind: "remittance", id: remittanceParam } : null;
+  const openDrawer = drawer ?? linkedDrawer;
+  const openLinked = (param: typeof PAY_RUN_PARAM | typeof REMITTANCE_PARAM, id: string) => {
+    setDrawer(null);
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete(PAY_RUN_PARAM);
+      next.delete(REMITTANCE_PARAM);
+      next.set(param, id);
+      return next;
+    });
+  };
+  const missingLinked = Boolean(
+    workspace &&
+      ((runParam && !workspace.runs.some((row) => row._id === runParam)) ||
+        (remittanceParam && !workspace.remittances.some((row) => row._id === remittanceParam))),
+  );
+  useEffect(() => {
+    if (!missingLinked) return;
+    toast.info(runParam ? "That pay run isn't available" : "That remittance isn't available", "It may have been removed, or it belongs to another workspace.");
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete(PAY_RUN_PARAM);
+      next.delete(REMITTANCE_PARAM);
+      return next;
+    }, { replace: true });
+    // Only when a linked record turns out to be missing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingLinked]);
 
   const runSync = useCallback(() => {
     if (society) void syncDeadlines({ societyId: society._id }).catch(() => undefined);
@@ -87,7 +121,13 @@ export function PayrollPage() {
   const prepYear = workspace && Number(workspace.today.slice(5, 7)) <= 2 ? currentYear - 1 : currentYear;
   const close = () => {
     setDrawer(null);
-    if (searchParams.has("setup")) { const nextParams = new URLSearchParams(searchParams); nextParams.delete("setup"); setSearchParams(nextParams, { replace: true }); }
+    if (searchParams.has("setup") || searchParams.has(PAY_RUN_PARAM) || searchParams.has(REMITTANCE_PARAM)) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("setup");
+      nextParams.delete(PAY_RUN_PARAM);
+      nextParams.delete(REMITTANCE_PARAM);
+      setSearchParams(nextParams, { replace: true });
+    }
   };
 
   const generate = async (year: number) => {
@@ -106,10 +146,10 @@ export function PayrollPage() {
     : { label: "New pay run", open: () => setDrawer({ kind: "run", id: null }) };
 
   const next = summary?.nextRemittance;
-  const activeRun = drawer?.kind === "run" && drawer.id ? workspace?.runs.find((row) => row._id === drawer.id) ?? null : null;
-  const activeRemittance = drawer?.kind === "remittance" ? workspace?.remittances.find((row) => row._id === drawer.id) ?? null : null;
-  const activeSlip = drawer?.kind === "slip" && drawer.id ? workspace?.slips.find((row) => row._id === drawer.id) ?? null : null;
-  const activeRoe = drawer?.kind === "roe" && drawer.id ? workspace?.roes.find((row) => row._id === drawer.id) ?? null : null;
+  const activeRun = openDrawer?.kind === "run" && openDrawer.id ? workspace?.runs.find((row) => row._id === openDrawer.id) ?? null : null;
+  const activeRemittance = openDrawer?.kind === "remittance" ? workspace?.remittances.find((row) => row._id === openDrawer.id) ?? null : null;
+  const activeSlip = openDrawer?.kind === "slip" && openDrawer.id ? workspace?.slips.find((row) => row._id === openDrawer.id) ?? null : null;
+  const activeRoe = openDrawer?.kind === "roe" && openDrawer.id ? workspace?.roes.find((row) => row._id === openDrawer.id) ?? null : null;
 
   return (
     <div className="page business-register-page">
@@ -237,7 +277,7 @@ export function PayrollPage() {
           icon={<Wallet size={14} />}
           records={runRecords}
           loading={workspace === undefined}
-          onRecordClick={(id) => setDrawer({ kind: "run", id })}
+          onRecordClick={(id) => openLinked(PAY_RUN_PARAM, id)}
           renderCell={({ record, field }) => {
             if (field.name === "payDate") return <span className="num">{formatDate(record.payDate)}</span>;
             if (field.name === "balanced") return record.balanced ? <Badge tone="success">Adds up</Badge> : <Badge tone="warn">Check amounts</Badge>;
@@ -269,7 +309,7 @@ export function PayrollPage() {
             icon={<Landmark size={14} />}
             records={workspace?.remittances ?? []}
             loading={workspace === undefined}
-            onRecordClick={(id) => setDrawer({ kind: "remittance", id })}
+            onRecordClick={(id) => openLinked(REMITTANCE_PARAM, id)}
             renderCell={({ record, field }) => {
               if (field.name === "status") return <Badge tone={REMITTANCE_TONE[record.status as keyof typeof REMITTANCE_TONE] ?? "neutral"}>{REMITTANCE_STATUS_LABEL[record.status as keyof typeof REMITTANCE_STATUS_LABEL] ?? record.status}</Badge>;
               if (field.name === "dueDate") return record.dueDate ? <span className="num">{formatDate(record.dueDate)}</span> : <span className="muted">—</span>;
@@ -323,12 +363,12 @@ export function PayrollPage() {
         />
       )}
 
-      <PayRunDrawer open={drawer?.kind === "run"} onClose={close} societyId={society._id} run={activeRun} employees={employees} canWrite={canWrite} today={workspace?.today ?? ""} />
-      <RemittanceDrawer open={drawer?.kind === "remittance"} onClose={close} remittance={activeRemittance} canWrite={canWrite} today={workspace?.today ?? ""} />
-      <SlipDrawer open={drawer?.kind === "slip"} onClose={close} societyId={society._id} slip={activeSlip} employees={employees} canWrite={canWrite} defaultYear={slipYear} />
-      <RoeDrawer open={drawer?.kind === "roe"} onClose={close} societyId={society._id} roe={activeRoe} employees={employees} canWrite={canWrite} />
-      {workspace && <PayrollSettingsDrawer open={drawer?.kind === "settings"} onClose={close} societyId={society._id} settings={workspace.settings} canWrite={canWrite} />}
-      <PayrollImportDrawer open={drawer?.kind === "import"} onClose={close} societyId={society._id} canWrite={canWrite} defaultProvider={workspace?.settings.providerName} />
+      <PayRunDrawer open={openDrawer?.kind === "run" && (!openDrawer.id || Boolean(activeRun))} onClose={close} societyId={society._id} run={activeRun} employees={employees} canWrite={canWrite} today={workspace?.today ?? ""} />
+      <RemittanceDrawer open={openDrawer?.kind === "remittance"} onClose={close} remittance={activeRemittance} canWrite={canWrite} today={workspace?.today ?? ""} />
+      <SlipDrawer open={openDrawer?.kind === "slip"} onClose={close} societyId={society._id} slip={activeSlip} employees={employees} canWrite={canWrite} defaultYear={slipYear} />
+      <RoeDrawer open={openDrawer?.kind === "roe"} onClose={close} societyId={society._id} roe={activeRoe} employees={employees} canWrite={canWrite} />
+      {workspace && <PayrollSettingsDrawer open={openDrawer?.kind === "settings"} onClose={close} societyId={society._id} settings={workspace.settings} canWrite={canWrite} />}
+      <PayrollImportDrawer open={openDrawer?.kind === "import"} onClose={close} societyId={society._id} canWrite={canWrite} defaultProvider={workspace?.settings.providerName} />
     </div>
   );
 }

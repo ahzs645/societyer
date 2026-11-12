@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { FileText, Landmark } from "lucide-react";
 import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { useMutation, useQuery } from "convex/react";
@@ -14,6 +15,7 @@ import {
 } from "../../../shared/payrollRemittance";
 import { REMITTANCE_STATUS_LABEL, remittanceStatus, type RemittanceStatus } from "../../../shared/businessRegisters";
 import { payrollFailure, PayrollQueryBoundary } from "./payrollUi";
+import { payrollRemittanceHref } from "../businessRegisters/payrollLinks";
 import {
   LegacyRemittanceAccountForm,
   RemittancePlanForm,
@@ -38,6 +40,8 @@ type ObligationRow = {
 };
 type PlanRow = {
   _id: string;
+  /** The payroll register remittance (CRA obligation) the plan pays. */
+  obligationId: string;
   status: RemittancePlanStatus;
   amountCents: number;
   scheduledDate?: string;
@@ -132,6 +136,7 @@ type ObligationRecord = {
 /** A saved remittance plan as the list shows it. */
 type PlanRecord = {
   _id: string;
+  obligationId: string;
   period: string;
   scheduledDate: string | null;
   amountCents: number;
@@ -154,6 +159,7 @@ function obligationRecord(row: ObligationRow, today: string): ObligationRecord {
 function planRecord(row: PlanRow): PlanRecord {
   return {
     _id: row._id,
+    obligationId: row.obligationId,
     period: `${row.periodStart}–${row.periodEnd}`,
     scheduledDate: row.scheduledDate ?? null,
     amountCents: row.amountCents,
@@ -269,6 +275,8 @@ function ObligationsTable({
       records={records}
       onOpen={step}
       renderCell={({ record, field }) => {
+        if (field.name === "period")
+          return <Link to={payrollRemittanceHref(record._id)} title="Open this remittance in the payroll register">{record.period}</Link>;
         if (field.name === "dueDate" && !record.dueDate) return <span className="muted">Schedule unconfirmed</span>;
         if (field.name === "amountDueCents") return money(record.amountDueCents);
         if (field.name === "paidCents") return money(record.paidCents);
@@ -324,6 +332,8 @@ function PlansTable({ rows, onSelect }: { rows: PlanRow[]; onSelect: (id: string
       records={records}
       onOpen={(record) => onSelect(record._id)}
       renderCell={({ record, field }) => {
+        if (field.name === "period" && record.obligationId)
+          return <Link to={payrollRemittanceHref(record.obligationId)} title="Open the remittance this plan pays in the payroll register">{record.period}</Link>;
         if (field.name === "scheduledDate" && !record.scheduledDate) return <span className="muted">Schedule unconfirmed</span>;
         if (field.name === "amountCents") return money(record.amountCents);
         return undefined;

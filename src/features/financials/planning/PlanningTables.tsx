@@ -16,6 +16,8 @@ import {
   type StaffCostPlan,
 } from "../../../../shared/costPlanning";
 import type { Archived, PlanningActual } from "./planningFormUtils";
+import { usePermissions } from "../../../hooks/usePermissions";
+import { employeeHref } from "../../businessRegisters/payrollLinks";
 
 /*
  * The cost planner's lists on the shared record table. Rows are planning
@@ -401,6 +403,8 @@ export function PlanningStaffTable({
   onEdit: (member: StaffCostPlan) => void;
   onArchive: (id: string, archived: boolean) => void;
 }) {
+  const permissions = usePermissions();
+  const canReadEmployees = permissions.loaded && permissions.can("employees:read");
   const records = staff.map((member): StaffRecord => {
     const item = included.get(`staff:${member._id}`);
     return {
@@ -427,7 +431,7 @@ export function PlanningStaffTable({
         if (field.name === "name")
           return (
             <>
-              {member.name}
+              {member.employeeId && canReadEmployees ? <Link to={employeeHref(member.employeeId)} title="Open the employee record">{member.name}</Link> : member.name}
               <small className="muted"> · {coverage(member.startDate, member.endDate)}{!member.assumptionsConfirmed ? " · assumptions unconfirmed" : ""}</small>
             </>
           );

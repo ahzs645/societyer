@@ -49,6 +49,7 @@ import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { appliesBcSocietyRules } from "../../shared/entityRuleScope";
+import { fiscalWindow } from "../../shared/functions/treasury";
 import { useConfirm } from "../components/Modal";
 import { hasErrors, validateBudgetLineInput, type FieldErrors } from "../../shared/recordValidation";
 import {
@@ -194,6 +195,8 @@ export function FinancialsPage() {
   const fiscalYear = latest?.fiscalYear ?? new Date().getFullYear().toString();
   // Budget lines follow the fiscal year the hub reports on (the current one).
   const budgetFiscalYear: string = hub?.budgetFiscalYear ?? fiscalYear;
+  // The window the budget actuals are summed over, for the links into them.
+  const budgetRange = hub?.budgetFiscalYear ? fiscalWindow(hub.budgetFiscalYear, society?.fiscalYearEnd) : null;
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
   const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const importedBudgetReviewCount = (orgHistory?.budgets ?? []).filter((budget: any) => budget.status === "NeedsReview").length;
@@ -773,6 +776,7 @@ export function FinancialsPage() {
             <BudgetLinesTable
               rows={budgetRows as BudgetLine[]}
               evidence={budgetEvidence}
+              range={budgetRange}
               canWrite={canWrite}
               onEdit={(line) => { setBudgetErrors({}); setBudgetForm({ id: line._id, category: line.category, planned: String((line.plannedCents ?? 0) / 100) }); }}
               onDelete={async (line) => {

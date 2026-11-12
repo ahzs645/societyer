@@ -58,16 +58,20 @@ type BudgetLineRecord = {
 /**
  * Financials → Overview's "Budget vs actuals": planned and actual per
  * category with the variance and the column totals. A line opens its
- * planned-amount editor; its actual opens the category's transactions.
+ * planned-amount editor; its actual opens the category's transactions for
+ * the budget's fiscal year.
  */
 export function BudgetLinesTable({
   rows,
   evidence,
+  range,
   canWrite,
   onEdit,
   onDelete,
 }: {
   rows: BudgetLine[];
+  /** The fiscal year the actuals cover, so each actual opens that year's transactions. */
+  range?: { start: string; end: string } | null;
   /** Accounts and transactions that tell a revenue line from an expense line. */
   evidence: BudgetEvidence;
   canWrite: boolean;
@@ -110,7 +114,7 @@ export function BudgetLinesTable({
           );
         if (field.name === "actualCents")
           return (
-            <Link to={transactionFilterHref({ field: "category", value: record.category })} title={`Transactions in ${record.category}`}>
+            <Link to={transactionFilterHref({ field: "category", value: record.category, from: range?.start, to: range?.end })} title={`Transactions in ${record.category}`}>
               <Money cents={record.actualCents} />
             </Link>
           );
