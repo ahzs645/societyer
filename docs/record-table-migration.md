@@ -8,7 +8,9 @@ This playbook describes how a table is wired. Most registers can use the
 `ObjectRecordTable` wrapper (metadata load, view toolbar, filter chips and the
 preview sidebar around one `RecordTable`); see `src/pages/inventory/tabs.tsx`.
 Objects whose rows the page assembles (joins, roll-ups) are defined in
-`convex/recordTableDomainObjects.ts`.
+`convex/recordTableDomainObjects.ts`. Lists whose columns are fixed in code
+and whose rows are already in memory skip the metadata and use
+`RecordListTable` with a `staticRecordTable(...)` definition instead.
 
 Reference migrations that exercise every feature:
 

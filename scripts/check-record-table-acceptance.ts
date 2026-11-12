@@ -75,11 +75,14 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/Workflows.tsx": 1,
   "src/pages/WrittenResolutions.tsx": 1,
   "src/platform/record-engine/record-table/components/ObjectRecordTable.tsx": 1,
+  // Code-defined lists (staticRecordTable) render their one RecordTable here.
+  "src/platform/record-engine/record-table/components/RecordListTable.tsx": 1,
 };
 
 // Metadata-driven registers rendered through the shared ObjectRecordTable
 // (toolbar, saved views, filters, preview sidebar around one RecordTable).
 const REVIEWED_OBJECT_RECORD_TABLE_FILES: Record<string, number> = {
+  "src/features/financials/components/WaveCacheExplorer.tsx": 1,
   "src/features/financials/pages/ChartOfAccountsPage.tsx": 1,
   "src/features/financials/pages/JournalEntriesPage.tsx": 1,
   "src/features/financials/pages/WavePages.tsx": 1,
@@ -87,6 +90,7 @@ const REVIEWED_OBJECT_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/Assets.tsx": 4,
   "src/pages/BillVendors.tsx": 1,
   "src/pages/Bills.tsx": 1,
+  "src/pages/CommitteeDetail.tsx": 2,
   "src/pages/Communications.tsx": 2,
   "src/pages/CorporateCards.tsx": 2,
   "src/pages/Investments.tsx": 1,
