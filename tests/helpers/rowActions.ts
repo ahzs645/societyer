@@ -45,12 +45,23 @@ export async function openRowMenu(row: Locator, kebabName: string) {
  * pins them.
  */
 export async function runRowAction(row: Locator, name: string, menuName = name) {
-  if (await rowActionsArePinned(row)) {
-    await pinnedRowActions(row).click();
-    await row.page().getByRole("menuitem", { name: menuName, exact: true }).click();
-  } else {
-    await row.getByRole("button", { name, exact: true }).or(row.getByRole("link", { name, exact: true })).first().click();
-  }
+  const page = row.page();
+  // The layout can change under the click: a drawer closing widens the table
+  // and its actions move from the pinned menu back inline (or the reverse).
+  // Retry with the layout as it is then; a half-opened menu is closed first.
+  await expect(async () => {
+    try {
+      if (await rowActionsArePinned(row)) {
+        await pinnedRowActions(row).click({ timeout: 3_000 });
+        await page.getByRole("menuitem", { name: menuName, exact: true }).click({ timeout: 3_000 });
+      } else {
+        await row.getByRole("button", { name, exact: true }).or(row.getByRole("link", { name, exact: true })).first().click({ timeout: 3_000 });
+      }
+    } catch (error) {
+      await page.keyboard.press("Escape");
+      throw error;
+    }
+  }).toPass({ timeout: 30_000 });
 }
 
 /**
