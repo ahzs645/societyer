@@ -6,12 +6,6 @@
 // Uses design tokens from theme/tokens.css (var(--...)).
 // ============================================================
 
-.record-table-container {
-  @include flex-column;
-  gap: 8px;
-  width: 100%;
-}
-
 /* ------------------------- Toolbar ------------------------- */
 
 .record-table__toolbar {
@@ -375,44 +369,6 @@
       background: token('bg-panel');
     }
   }
-}
-
-.record-table__menu-radio {
-  @include flex-center;
-  gap: 8px;
-  padding: 5px 4px;
-  font-size: 12px;
-  color: token('text-primary');
-  cursor: pointer;
-
-  input {
-    accent-color: token('accent');
-  }
-}
-
-.record-table__menu-select {
-  width: 100%;
-  height: 28px;
-  border: 1px solid token('border-color-medium');
-  border-radius: token('r-sm');
-  background: token('bg-panel');
-  color: token('text-primary');
-  font-size: 12px;
-  padding: 0 8px;
-}
-select.record-table__menu-select,
-.record-table__filter-popover-row select {
-  appearance: none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, token('text-tertiary') 50%),
-    linear-gradient(135deg, token('text-tertiary') 50%, transparent 50%);
-  background-position:
-    calc(100% - 15px) 50%,
-    calc(100% - 10px) 50%;
-  background-repeat: no-repeat;
-  background-size: 5px 5px, 5px 5px;
-  cursor: pointer;
-  padding-right: 30px;
 }
 
 .record-table__menu-item {
@@ -3020,7 +2976,6 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     right: 2px;
   }
   .record-table__header-menu > button,
-  .record-table__header-menu-group > button,
   .record-table__header-menu-row > button,
   .record-table__aggregate-menu button {
     min-height: 40px;
@@ -3105,7 +3060,6 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   justify-content: space-between;
   gap: token('s-2');
   margin-top: token('s-2');
-  .record-table__menu-select { width: auto; min-width: 72px; }
 }
 
 /* Records arriving in batches (RecordTableScope loadingProgress). */

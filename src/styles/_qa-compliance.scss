@@ -9,13 +9,6 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-// Compliance obligations: the edge-to-edge results table follows the card's
-// rounded bottom corners instead of painting over them.
-.card > .table-wrap:last-child:has(> .obligations-table) {
-  border-bottom-left-radius: inherit;
-  border-bottom-right-radius: inherit;
-}
-
 // Compliance settings: a deadline's citations sit under its title, not
 // squeezed into the narrow date column.
 .settings-deadlines__sources {
@@ -61,46 +54,5 @@
   }
   .page:has(> a.row.muted:first-child) .settings-shell__main {
     padding-left: 30px;
-  }
-}
-
-// Policy registry on wide screens: the policy name and owner were squeezed to
-// three lines while badge columns kept their room.
-@media (min-width: 761px) {
-  .table.policies-table td:first-child {
-    min-width: 176px;
-  }
-  .table.policies-table td[data-label="Owner"] {
-    white-space: nowrap;
-  }
-  // Tablet widths scroll the table sideways rather than crushing the dates
-  // to one word per line.
-  .table.policies-table td[data-label="Dates"] {
-    min-width: 150px;
-  }
-  .table.policies-table td[data-label="Documents"] {
-    min-width: 124px;
-  }
-}
-
-// Policy registry on phones: each policy is a stacked card; its actions menu
-// sits in the card's top-right corner beside the name instead of alone on a
-// trailing row.
-@media (max-width: 760px) {
-  .table.policies-table tbody tr {
-    position: relative;
-  }
-  .table.policies-table tbody td:first-child {
-    padding-right: 52px;
-    font-size: token('fs-md');
-  }
-  .table.policies-table tbody td:last-child:not([data-label]) {
-    position: absolute;
-    top: token('s-2');
-    right: 0;
-    width: auto;
-    min-width: 0;
-    padding: 0 token('s-2');
-    background: transparent;
   }
 }

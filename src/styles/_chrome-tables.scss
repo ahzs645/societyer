@@ -236,8 +236,8 @@
     border-right: 0;
     border-radius: 0;
   }
-  /* Catch-all: any bare <table> not already wrapped in .table-wrap /
-   * .table-scroll becomes horizontally scrollable on phones. Previously this
+  /* Catch-all: any bare <table> not already wrapped in .table-wrap
+   * becomes horizontally scrollable on phones. Previously this
    * only covered `.card > .table` and `.card__body > table`; tables rendered
    * directly on the page or inside generic divs would overflow the viewport. */
   .page table,
@@ -335,35 +335,10 @@
   border-right: none;
 }
 
-/* Comfortable density — taller rows with roomier cell padding */
-.table--comfortable tbody td {
-  height: 44px;
-  padding: token('s-2') token('s-3');
-}
-.table--comfortable thead th {
-  height: 40px;
-}
-
-.table__cell-button {
-  display: inline-flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  justify-content: flex-start;
-  color: inherit;
-  text-align: left;
-}
-.table__cell-button:focus-visible {
-  outline: 2px solid token('border-focus');
-  outline-offset: 2px;
-  border-radius: token('r-sm');
-}
-
 /* Twenty-style record chip used for the first cell in record tables.
  * Transparent background so it stays legible against both the default td
  * (bg-panel) and the selected row (accent-quaternary). */
-.record-chip,
-.cell-chip {
+.record-chip {
   @include inline-flex-center;
   gap: 8px;
   min-width: 0;
@@ -376,25 +351,21 @@
   font-weight: token('fw-medium');
   transition: background 0.08s ease, border-color 0.08s ease;
 }
-.record-chip--interactive,
-.cell-chip {
+.record-chip--interactive {
   cursor: pointer;
 }
-.record-chip--interactive:hover,
-.cell-chip:hover {
+.record-chip--interactive:hover {
   background: token('bg-tertiary');
   border-color: token('border-color-medium');
 }
-.record-chip__avatar,
-.cell-chip__avatar {
+.record-chip__avatar {
   flex-shrink: 0;
 }
 .record-chip__content {
   @include flex-column;
   min-width: 0;
 }
-.record-chip__label,
-.cell-chip__name {
+.record-chip__label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -472,17 +443,6 @@
   padding-inline: 4px;
   text-align: center;
 }
-/* Action cell: keep the <td> as a regular table-cell so it inherits row
- * height and vertical centering. The flex layout belongs on an inner div —
- * applying `display: flex` directly to a <td> overrides `display: table-cell`
- * and makes the cell shrink to content, which visibly detaches the buttons
- * from the row. */
-.table__actions,
-.table__actions-col {
-  text-align: right;
-  white-space: nowrap;
-  width: 1px; /* shrink to content — the flex-wrapper sets the real width */
-}
 
 .table tbody tr.is-selected td {
   background: token('accent-soft');
@@ -491,27 +451,6 @@
   background: token('accent-soft-strong');
 }
 
-.table__actions-inner {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  justify-content: flex-end;
-  opacity: 0.34;
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  transform: translateX(2px);
-}
-.table tbody tr:hover .table__actions-inner,
-.table tbody tr:focus-within .table__actions-inner,
-.table tbody tr[role="button"]:focus-visible .table__actions-inner {
-  opacity: 1;
-  transform: translateX(0);
-}
-@media (hover: none), (pointer: coarse) {
-  .table__actions-inner {
-    opacity: 1;
-    transform: none;
-  }
-}
 .table tbody td.table__empty {
   text-align: center;
   padding: 32px 24px;

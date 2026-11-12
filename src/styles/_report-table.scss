@@ -347,7 +347,7 @@
 //   .table__sub             muted secondary text under or after a cell's main text
 //   tr.table__empty-row     "nothing here" line spanning the columns
 //
-// Phones: inside `.table-wrap` / `.table-scroll` the wrapper scrolls and the
+// Phones: inside `.table-wrap` the wrapper scrolls and the
 // first column stays pinned and wraps, so labels stay readable. Tables with
 // their own phone card layout keep it.
 // ============================================================
@@ -416,7 +416,7 @@
   // name). A report's first column is its row label: keep it pinned, but let
   // it wrap so "Accounts payable and accrued liabilities" stays readable.
   // (Kept at this specificity so a table's own phone card layout still wins.)
-  :is(.table-wrap, .table-scroll) > .table.table--report {
+  .table-wrap > .table.table--report {
     > thead > tr > th:first-child,
     > tbody > tr > :first-child,
     > tfoot > tr > :first-child {

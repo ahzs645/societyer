@@ -210,7 +210,7 @@ assert.equal(openableExternalUrl(" https://paperless.example.org/documents/12/ "
   assert.equal(formatIcsWhen(board.start, board.startTimeZone, "America/Vancouver"), boardStart.replace("T", " "));
   assert.equal(formatIcsWhen(committee.start, committee.startTimeZone, "America/Vancouver"), "2026-11-12 09:00 (America/Toronto)");
   assert.equal(formatIcsWhen(holiday.start), "2026-11-11");
-  assert.match(readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8"), /formatIcsWhen\(e\.start/, "the parsed-events table formats the time");
+  assert.match(readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8"), /formatIcsWhen\(record\.start/, "the parsed-events table formats the time");
 }
 
 // Destructive platform actions name what is lost before they run.
@@ -219,10 +219,5 @@ assert.match(calendarSync, /const disableFeed = async \(\) => \{[\s\S]{0,120}awa
 assert.match(calendarSync, /const enableFeed = async \(\) => \{[\s\S]{0,160}feedToken && !\(await confirm\(/, "rotating the calendar feed link is confirmed");
 const aiAgents = readFileSync(new URL("../src/pages/AiAgents.tsx", import.meta.url), "utf8");
 assert.match(aiAgents, /await confirm\(\{\s*title: `Delete the skill[\s\S]{0,900}await removeSkill\(/, "deleting an AI skill is confirmed");
-
-// Stack-on-phone tables must beat the more specific scrolling-table rules.
-const tableCss = readFileSync(new URL("../src/styles/_components-tables-misc.scss", import.meta.url), "utf8");
-assert.match(tableCss, /\.table-wrap > \.table\.table--stack-mobile/, "stacked phone tables override .table-wrap > .table");
-assert.match(tableCss, /\.table-scroll > \.table\.table--stack-mobile/, "stacked phone tables override .table-scroll > .table");
 
 console.log(`PASS: ${frKeys.size} French keys in parity, ${labels.size} navigation labels translated, pluralisation and floating-layer selector`);

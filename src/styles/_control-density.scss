@@ -123,12 +123,8 @@ $tap-block: (
   .record-table__row-actions-cell {
     padding-inline: 6px;
   }
-  .record-table__row-actions .btn--icon,
-  .table__actions-inner .btn--icon {
+  .record-table__row-actions .btn--icon {
     min-width: token('control-h-touch-icon');
-  }
-  .table__actions-inner {
-    gap: token('s-2');
   }
 
   // ------------------------------------------------------ form controls
@@ -255,7 +251,6 @@ $tap-block: (
     min-height: token('control-h-touch-icon');
   }
   .record-table__filter-input,
-  .record-table__filter-popover-row select,
   .record-table__filter-add,
   .record-table__primary-btn,
   .record-table__secondary-btn {
@@ -662,10 +657,6 @@ $tap-block: (
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.record-view-sheet .record-table__menu-select {
-  height: token('control-h-touch');
-  font-size: token('fs-sm');
 }
 // Sort: one rule per line; the field picker takes the room left of the
 // direction toggle and the remove button.
