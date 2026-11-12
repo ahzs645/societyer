@@ -610,7 +610,7 @@ export function TreasurerPage() {
           </div>
           <div className="card__body">
             <div className="table-wrap">
-            <table className="table finance-table treasurer-funding-table">
+            <table className="table table--report treasurer-funding-table">
               <thead>
                 <tr>
                   <SortableTh column="name" sort={fundingSort.sort} onSort={fundingSort.toggle}>Source</SortableTh>
@@ -624,7 +624,7 @@ export function TreasurerPage() {
                   <tr key={row.key}>
                     <td>
                       <strong>{row.name}</strong>
-                      <div className="finance-table__sub">
+                      <div className="table__sub">
                         {row.observedFrom?.join(", ") || "register"}
                         {row.collectionAgents?.length ? ` · via ${row.collectionAgents.join(", ")}` : ""}
                         {row.collectionFrequencies?.length ? ` · ${row.collectionFrequencies.join(", ")}` : ""}
@@ -638,7 +638,7 @@ export function TreasurerPage() {
                   </tr>
                 ))}
                 {(!fundingRollup || fundingRollup.rows.length === 0) && (
-                  <tr className="finance-empty-row">
+                  <tr className="table__empty-row">
                     <td colSpan={4} className="muted">
                       {fundingRollup === undefined ? "Loading funding sources…" : "No funding sources recorded for this period. Add one from New → Funding source."}
                     </td>
@@ -741,8 +741,8 @@ export function TreasurerPage() {
             />
           )}
           {variance && variance.length > 0 && (
-            <div className="finance-table-wrap">
-            <table className="table finance-table treasurer-variance-table">
+            <div className="table-wrap">
+            <table className="table table--report">
               <thead>
                 <tr>
                   <SortableTh column="category" sort={varianceSort.sort} onSort={varianceSort.toggle}>Category</SortableTh>
@@ -768,7 +768,7 @@ export function TreasurerPage() {
                     <tr key={row.category}>
                       <td>
                         {row.category}
-                        {kind === "revenue" && <span className="finance-table__sub"> · revenue</span>}
+                        {kind === "revenue" && <span className="table__sub"> · revenue</span>}
                       </td>
                       <td className="num"><Money cents={row.plannedCents} /></td>
                       <td className="num"><Money cents={row.actualCents} /></td>
@@ -821,8 +821,8 @@ export function TreasurerPage() {
             />
           )}
           {restricted && restricted.length > 0 && (
-            <div className="finance-table-wrap">
-              <table className="table finance-table">
+            <div className="table-wrap">
+              <table className="table table--report">
                 <thead>
                   <tr>
                     <SortableTh column="fund" sort={restrictedSort.sort} onSort={restrictedSort.toggle}>Fund</SortableTh>
@@ -836,7 +836,7 @@ export function TreasurerPage() {
                     <tr key={r.grantId}>
                       <td>
                         <strong>{r.title}</strong>
-                        <div className="finance-table__sub">{[r.funder, r.purpose].filter(Boolean).join(" · ")}</div>
+                        <div className="table__sub">{[r.funder, r.purpose].filter(Boolean).join(" · ")}</div>
                       </td>
                       <td className="num"><Money cents={r.inflowCents} /></td>
                       <td className="num"><Money cents={r.outflowCents} /></td>

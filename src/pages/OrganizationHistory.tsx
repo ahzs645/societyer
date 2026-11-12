@@ -1482,12 +1482,12 @@ export function OrganizationHistoryBudgetPage() {
             <span className="card__subtitle">{budgetLines.length} item{budgetLines.length === 1 ? "" : "s"}</span>
           </div>
           <TableScroll>
-            <table className="table org-history__budget-lines">
+            <table className="table table--report org-history__budget-lines">
               <thead>
                 <tr>
                   <th>Line item</th>
                   <th>Type</th>
-                  <th>Amount</th>
+                  <th className="num">Amount</th>
                   <th>Notes</th>
                 </tr>
               </thead>
@@ -1511,7 +1511,7 @@ export function OrganizationHistoryBudgetPage() {
                           </button>
                         </td>
                         <td className="org-history__budget-cell--repeat"><Badge>{formatBudgetSection(group.section)}</Badge></td>
-                        <td className="table__cell--mono">{formatCents(group.totalCents, budget.currency)}</td>
+                        <td className="table__cell--mono num">{formatCents(group.totalCents, budget.currency)}</td>
                         <td className="muted">{group.hasExplicitTotal ? "Source total" : "Calculated from visible lines"}</td>
                       </tr>
                       {!collapsed && group.lines.map((line: any, index: number) => (
@@ -1523,7 +1523,7 @@ export function OrganizationHistoryBudgetPage() {
                             </div>
                           </td>
                           <td className={formatBudgetLineType(line.lineType ?? line.section) === group.label ? "org-history__budget-cell--repeat" : undefined}>{formatBudgetLineType(line.lineType ?? line.section)}</td>
-                          <td className="table__cell--mono">{formatCents(line.amountCents, budget.currency)}</td>
+                          <td className="table__cell--mono num">{formatCents(line.amountCents, budget.currency)}</td>
                           <td className={line.notes ? "muted" : "muted org-history__budget-cell--repeat"}>{line.notes || "-"}</td>
                         </tr>
                       ))}
@@ -1614,11 +1614,11 @@ export function OrganizationHistoryBudgetPage() {
             <span className="card__subtitle">OCR amounts that need reviewer labelling before use</span>
           </div>
           <TableScroll>
-            <table className="table">
+            <table className="table table--report">
               <thead>
                 <tr>
                   <th>Label</th>
-                  <th>Amount</th>
+                  <th className="num">Amount</th>
                   <th>Notes</th>
                 </tr>
               </thead>
@@ -1626,7 +1626,7 @@ export function OrganizationHistoryBudgetPage() {
                 {sourceObservations.map((row: any, index: number) => (
                   <tr key={`${row.label}-${index}`}>
                     <td><strong>{row.label}</strong></td>
-                    <td className="table__cell--mono">{formatCents(row.amountCents, budget.currency)}</td>
+                    <td className="table__cell--mono num">{formatCents(row.amountCents, budget.currency)}</td>
                     <td className="muted">{row.notes ?? "-"}</td>
                   </tr>
                 ))}

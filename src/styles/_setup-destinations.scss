@@ -36,14 +36,6 @@
   gap: token('s-2');
 }
 
-// ---------------------------------------------------------- share register
-// Quantities in the shareholder drawer's holdings and history tables.
-.rights-ledger-table__qty {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 // ------------------------------------------------------------ guided setup
 .society-create__step-count {
   display: block;

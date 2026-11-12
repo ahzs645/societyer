@@ -328,6 +328,119 @@
   }
 }
 
+// ============================================================
+// Plain report tables: `<table class="table table--report">`
+//
+// Hand-written tables that are reports, statements, ledgers, documents,
+// forms or computed previews rather than record lists (those use the record
+// table). They keep `.table`'s 32px rows, header type and hairlines, so a
+// report and a list on the same page read as one family, and add what a
+// report needs. Write the structure; don't restyle it per page:
+//
+//   .num on <th>/<td>       amounts and counts: right-aligned tabular figures
+//                           that never wrap (global, see _foundations)
+//   <tbody> <th scope=row>  row labels, styled like cells at label weight
+//   tr.table__group-row     section heading (from .table)
+//   tr.table__subtotal-row  subtotal: rule above, semibold
+//   tr.table__total-row     grand total inside the body: rule above, double rule below
+//   <tfoot>                 totals: rule above, semibold; stacked rows split by a hairline
+//   .table__sub             muted secondary text under or after a cell's main text
+//   tr.table__empty-row     "nothing here" line spanning the columns
+//
+// Phones: inside `.table-wrap` / `.table-scroll` the wrapper scrolls and the
+// first column stays pinned and wraps, so labels stay readable. Tables with
+// their own phone card layout keep it.
+// ============================================================
+
+// Secondary text under a cell's main text. Unscoped: record-table cells
+// (budget lines, variance) use it too.
+.table__sub {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-regular');
+}
+
+.table.table--report {
+  > tbody > tr > th {
+    height: 32px;
+    padding: 0 8px;
+    border-right: 1px solid token('border-color-light');
+    border-bottom: 1px solid token('border-color-light');
+    background: token('bg-panel');
+    color: token('text-primary');
+    font-weight: token('fw-medium');
+    text-align: left;
+    vertical-align: middle;
+    transition: background 0.08s ease;
+    &.num { text-align: right; }
+  }
+  > tbody > tr > th:last-child { border-right: none; }
+  > tbody > tr:last-child > th { border-bottom: none; }
+  > tbody > tr:hover > th { background: token('bg-hover'); }
+
+  > tbody > tr.table__subtotal-row > :is(th, td),
+  > tbody > tr.table__total-row > :is(th, td) {
+    border-top: 1px solid token('border-strong');
+    font-weight: token('fw-semibold');
+  }
+  > tbody > tr.table__total-row > :is(th, td) {
+    border-bottom: 3px double token('border-strong');
+  }
+
+  > tbody > tr.table__empty-row > td {
+    height: auto;
+    padding: token('s-4') token('s-3');
+    color: token('text-tertiary');
+    white-space: normal;
+  }
+  > tbody > tr.table__empty-row:hover > td { background: token('bg-panel'); }
+
+  > tfoot > tr > :is(th, td) {
+    height: 32px;
+    padding: 0 8px;
+    border-top: 1px solid token('border-strong');
+    border-right: 1px solid token('border-color-light');
+    background: token('bg-panel');
+    color: token('text-primary');
+    font-weight: token('fw-semibold');
+    text-align: left;
+    vertical-align: middle;
+    &.num { text-align: right; }
+  }
+  > tfoot > tr > :last-child { border-right: none; }
+  > tfoot > tr + tr > :is(th, td) { border-top: 1px solid token('border-color-light'); }
+}
+
+@media (max-width: 760px) {
+  // `.table-wrap > .table` pins and truncates the first column (a record
+  // name). A report's first column is its row label: keep it pinned, but let
+  // it wrap so "Accounts payable and accrued liabilities" stays readable.
+  // (Kept at this specificity so a table's own phone card layout still wins.)
+  :is(.table-wrap, .table-scroll) > .table.table--report {
+    > thead > tr > th:first-child,
+    > tbody > tr > :first-child,
+    > tfoot > tr > :first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      min-width: 7rem;
+      max-width: 44vw;
+      overflow: visible;
+      background: token('bg-panel');
+      text-overflow: clip;
+      white-space: normal;
+    }
+    > thead > tr > th:first-child {
+      z-index: 3;
+      white-space: nowrap;
+    }
+    > tbody > tr.table__empty-row > td {
+      position: static;
+      max-width: none;
+    }
+  }
+}
+
 @media print {
   .report-table__controls {
     display: none;

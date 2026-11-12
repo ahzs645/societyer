@@ -114,7 +114,7 @@ export function PayrollViewSettings({
       {error && <p role="status">{error}</p>}
       <div className="payroll-calculator__table-wrap">
         <table
-          className="table payroll-calculator__view-prefs"
+          className="table table--report payroll-calculator__view-prefs"
           aria-label="Payroll view preferences"
         >
           <thead>

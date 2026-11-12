@@ -385,10 +385,6 @@
 }
 .org-history__budget-lines th:nth-child(3) {
   min-width: 120px;
-  text-align: right;
-}
-.org-history__budget-lines td:nth-child(3) {
-  text-align: right;
 }
 .org-history__budget-group-row td {
   background: token('bg-subtle');

@@ -777,18 +777,6 @@
 .treasurer-claim-stats {
   margin-bottom: token('s-4');
 }
-.treasurer-funding-table {
-  table-layout: fixed;
-}
-.treasurer-funding-table th:nth-child(1) {
-  width: 45%;
-}
-.treasurer-funding-table th:nth-child(2) {
-  width: 130px;
-}
-.treasurer-funding-table td {
-  overflow-wrap: anywhere;
-}
 
 /* ---- Accounting / Financials responsive hooks --------------------------
  * Financials currently relies on generic page/card/table chrome plus inline
@@ -812,10 +800,6 @@
 .accounting-control-row .input,
 .financials-control-row .input {
   min-width: min(100%, 220px);
-}
-.accounting-table,
-.financials-table {
-  table-layout: fixed;
 }
 
 /* Inline status banners. Used by setup, exports, and the agenda builder; the

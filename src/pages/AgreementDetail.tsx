@@ -283,9 +283,9 @@ export function AgreementDetailPage() {
               ["Payment terms", agreement.paymentTerms],
             ]} />
             {(agreement.paymentSchedule ?? []).length > 0 && (
-              <table className="table">
-                <thead><tr><th>Payment</th><th>Due</th><th>Amount</th></tr></thead>
-                <tbody>{agreement.paymentSchedule.map((row: any, index: number) => <tr key={index}><td>{row.label}</td><td>{row.dueDate ? formatDate(row.dueDate) : "—"}</td><td style={{ fontVariantNumeric: "tabular-nums" }}>{money(row.amountCents)}</td></tr>)}</tbody>
+              <table className="table table--report">
+                <thead><tr><th>Payment</th><th>Due</th><th className="num">Amount</th></tr></thead>
+                <tbody>{agreement.paymentSchedule.map((row: any, index: number) => <tr key={index}><td>{row.label}</td><td>{row.dueDate ? formatDate(row.dueDate) : "—"}</td><td className="num">{money(row.amountCents)}</td></tr>)}</tbody>
               </table>
             )}
           </div>

@@ -86,7 +86,7 @@ export function WorkspaceAccessViewer({
         </Link>
       </div>
       <div style={{ overflowX: "auto" }}>
-        <table className="table access-policy-table" aria-label={`Role policy for ${user.displayName}`}>
+        <table className="table table--report access-policy-table" aria-label={`Role policy for ${user.displayName}`}>
           <thead>
             <tr>
               <th scope="col">Module / area</th>
@@ -279,7 +279,7 @@ function RoleCompareTable({ moduleSource, entityKind }: { moduleSource: ModuleSo
         covers the module and its own rules apply.
       </p>
       <div className="role-compare__scroll">
-        <table className="table role-compare__table" aria-label="Access level by role">
+        <table className="table table--report role-compare__table" aria-label="Access level by role">
           <thead>
             <tr>
               <th scope="col">Module</th>

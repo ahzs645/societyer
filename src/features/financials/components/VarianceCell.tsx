@@ -23,7 +23,7 @@ export function VarianceCell({ variance, currency }: { variance: Variance; curre
     <span className="finance-table__variance">
       <Money cents={variance.cents} currency={currency} tone={tone} signDisplay="exceptZero" />
       {variance.percent != null && (
-        <span className={`finance-table__sub${tone === "auto" ? "" : ` money--${tone}`}`}>{formatPercentChange(variance.percent)}</span>
+        <span className={`table__sub${tone === "auto" ? "" : ` money--${tone}`}`}>{formatPercentChange(variance.percent)}</span>
       )}
     </span>
   );

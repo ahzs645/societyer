@@ -238,7 +238,7 @@ export function VendorDrawer({
             {payments.length === 0 ? (
               <p className="muted">No payments recorded.</p>
             ) : (
-              <table className="table vendor-history">
+              <table className="table table--report">
                 <thead><tr><th>Date</th><th>Bill #</th><th>Method</th><th>Reference</th><th className="num">Amount</th></tr></thead>
                 <tbody>
                   {payments.map((payment) => (

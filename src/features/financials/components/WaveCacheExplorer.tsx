@@ -185,7 +185,7 @@ export function WaveCacheExplorer({
           )}
         </>
       ) : (
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Type</th>
@@ -617,7 +617,7 @@ function AccountTransactionsPreview({
             : "No synced transactions for this account yet."}
         </div>
       ) : (
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Date</th>
@@ -679,7 +679,7 @@ function CounterpartyTransactionsPreview({
           Reimport Wave browser transactions to backfill vendor and customer links for older rows.
         </div>
       ) : (
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Date</th>

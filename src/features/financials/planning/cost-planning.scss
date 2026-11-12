@@ -103,24 +103,11 @@
     overflow: visible;
     max-width: none;
   }
-  &__table-wrap table[aria-label="Reusable planning costs"] {
-    min-width: 960px;
-  }
-  &__table-wrap table[aria-label="Staff planning costs"] {
-    min-width: 850px;
-  }
   &__table-wrap table[aria-label="Monthly planning totals"] {
     min-width: 850px;
   }
-  &__table-wrap table[aria-label="Reusable planning costs"] th:first-child,
-  &__table-wrap table[aria-label="Staff planning costs"] th:first-child {
-    min-width: 180px;
-  }
   &__columns &__table-wrap table {
     min-width: 0;
-  }
-  &__table-wrap table th {
-    text-align: left;
   }
   &__due-list {
     max-height: 430px;

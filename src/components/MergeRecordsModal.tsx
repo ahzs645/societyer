@@ -83,7 +83,7 @@ export function MergeRecordsModal<T extends { _id: string }>({
           />
         </div>
 
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Field</th>

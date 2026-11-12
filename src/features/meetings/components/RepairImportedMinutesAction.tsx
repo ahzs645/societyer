@@ -122,12 +122,12 @@ export function RepairImportedMinutesAction({ societyId }: { societyId: string }
                   ? "Nothing to repair: imported meetings, minutes and motions already match the source rules."
                   : "The repair corrects data left by earlier rule-based imports. Original wording is kept in source fields and notes; adopted minutes are never changed."}
             </p>
-            <table className="table" style={{ width: "100%" }}>
+            <table className="table table--report" style={{ width: "100%" }}>
               <tbody>
                 {ROWS.map(([key, label]) => (
                   <tr key={key}>
                     <td>{label}</td>
-                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><strong>{Number(report[key] ?? 0)}</strong></td>
+                    <td className="num"><strong>{Number(report[key] ?? 0)}</strong></td>
                   </tr>
                 ))}
               </tbody>

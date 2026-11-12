@@ -143,13 +143,11 @@
   padding: 0 16px 12px;
 }
 .access-summary__head { font-weight: 400; }
-.access-policy-table tbody th,
-.access-policy-table tbody td {
-  height: auto;
+/* Each cell is a permission with its explanation underneath: roomier, top-aligned. */
+.table.table--report.access-policy-table > tbody > tr > :is(th, td) {
   padding: 8px;
   vertical-align: top;
 }
-.access-policy-table tbody th { border-bottom: 1px solid token('border-color-light'); }
 .access-summary__text { font-weight: 400; }
 
 /* Users & access on phones: one role at a time, one row per module. */

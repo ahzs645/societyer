@@ -1,10 +1,6 @@
 @use "tokens" as *;
 @use "mixins" as *;
 
-.accounting-table td,
-.financials-table td {
-  overflow-wrap: anywhere;
-}
 .treasurer-page {
   // The dashboard scrolls inside a fixed-height app pane. Auto tracks can
   // shrink the header below its wrapped contents and cover its buttons.
@@ -42,12 +38,6 @@
     width: 100%;
     max-width: none;
   }
-  .accounting-table,
-  .financials-table,
-  .treasurer-funding-table {
-    table-layout: auto;
-    min-width: 680px;
-  }
   .treasurer-page {
     gap: token('s-3');
   }
@@ -78,19 +68,6 @@
   }
   .treasurer-claim-stats {
     margin-bottom: token('s-3');
-  }
-  .treasurer-budget-card .card__body,
-  .treasurer-restricted-card .card__body {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-  }
-  .treasurer-restricted-card .row {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-  .treasurer-restricted-card .row > div {
-    min-width: min(100%, 220px);
   }
 }
 @media (max-width: 480px) {
@@ -313,7 +290,9 @@
 }
 
 /* Table — Twenty RecordTable spec. 32px rows, sticky header, 8px horizontal
- * cell padding, per-cell right+bottom hairlines to produce a grid feel. */
+ * cell padding, per-cell right+bottom hairlines to produce a grid feel.
+ * Hand-written reports, statements, ledgers and previews add `.table--report`
+ * (totals, row labels, subtotals, phone label column): see _report-table. */
 .table {
   width: max-content;
   min-width: 100%;

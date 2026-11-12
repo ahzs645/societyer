@@ -71,7 +71,7 @@ export function TransactionJournalView({
       {lines.length === 0 ? (
         <p className="transaction-panel__meta">{PREVIEW_HOLD_REASONS[journal.preview.status] ?? "Nothing to post."}</p>
       ) : (
-        <table className="table txn-journal__table">
+        <table className="table table--report txn-journal__table">
           <thead>
             <tr>
               <th scope="col">Account</th>

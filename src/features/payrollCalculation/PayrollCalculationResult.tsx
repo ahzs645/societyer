@@ -107,7 +107,7 @@ export function PayrollCalculationResult({
         />
       </div>
       <div className="payroll-calculator__table-wrap">
-        <table className="table" aria-label="Detailed calculated earnings">
+        <table className="table table--report" aria-label="Detailed calculated earnings">
           <thead>
             <tr>
               <th scope="col">Earning</th>
