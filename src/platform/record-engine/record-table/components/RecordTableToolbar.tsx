@@ -107,9 +107,13 @@ export function RecordTableToolbar({
   collapsibleSearch = false,
   extraFilterCount = 0,
   searchPlaceholder,
+  hideTitle = false,
 }: {
   icon?: ReactNode;
   label: string;
+  /** No title and count: the table sits under a heading that already says
+   *  what it lists (a card's title). `label` still names its search. */
+  hideTitle?: boolean;
   views?: { _id: string; name: string; isSystem: boolean }[];
   currentViewId?: string | null;
   onChangeView?: (viewId: string) => void;
@@ -470,7 +474,7 @@ export function RecordTableToolbar({
               </ViewportPopover>
             )}
           </div>
-        ) : (
+        ) : hideTitle ? null : (
           <div className="record-table__title">
             {resolvedIcon}
             <span>{label}</span>

@@ -50,6 +50,7 @@ export function RecordTableScope({
   onCreate,
   onReorder,
   recordPreview = false,
+  highlightedRecordId = null,
   renderSidePanel,
   cellPreviews = true,
   defaultDisplayMode = "continuous",
@@ -73,6 +74,8 @@ export function RecordTableScope({
    * record page to open (no `onRecordClick`); the sidebar then omits Open.
    */
   recordPreview?: boolean;
+  /** Marks one row (`record-table__row--highlighted`) without opening it. */
+  highlightedRecordId?: string | null;
   /**
    * A record-specific preview panel in place of the generic field list. It
    * keeps the shared behaviour: ↑/↓ from the panel steps through the table,
@@ -278,8 +281,9 @@ export function RecordTableScope({
       onReorder,
       cellPreview: cellPreviews ? cellPreview : undefined,
       displayDefaults: { mode: defaultDisplayMode, pageSize: normalizedPageSize },
+      highlightedRecordId,
     }),
-    [tableId, objectMetadata, onRecordClick, onRecordIntent, recordPreview, handleRecordClick, onUpdate, canEditRecord, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
+    [highlightedRecordId, tableId, objectMetadata, onRecordClick, onRecordIntent, recordPreview, handleRecordClick, onUpdate, canEditRecord, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
   );
 
   const currentSidePanelRecord = activeSidePanelRecord

@@ -18,6 +18,8 @@ export { RECORD_TABLE_PAGE_SIZES, DEFAULT_RECORD_TABLE_PAGE_SIZE } from "./utils
 export type { RecordTableDisplay } from "./utils/viewDisplay";
 export type { RecordTableLoadingProgress } from "./state/recordTableStore";
 export { staticRecordTable } from "./utils/staticRecordTable";
+export { RecordListTable } from "./components/RecordListTable";
+export type { StaticRecordTableDefinition } from "./components/RecordListTable";
 export type { StaticFieldDefinition } from "./utils/staticRecordTable";
 export type { RecordTableCardHelpers, RecordTableCardRecord, RecordTableCardRenderer } from "./components/RecordTableCardList";
 export { recordPersonName, recordText, recordTitleText } from "./utils/recordTitle";

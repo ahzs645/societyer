@@ -287,6 +287,7 @@ export function RecordTable({
   emptyState,
   loading = false,
   virtualizeAbove = 40,
+  previewAction = true,
   renderRowActions,
   rowMenuSections,
   renderCell,
@@ -311,6 +312,9 @@ export function RecordTable({
   selectable?: boolean;
   emptyState?: ReactNode;
   loading?: boolean;
+  /** The "Preview in sidebar" row button (when rows open). Off for tables
+   *  defined in code, whose records have no preview of their own. */
+  previewAction?: boolean;
   /** Use virtualization only once the filtered row count exceeds this. */
   virtualizeAbove?: number;
   /**
@@ -473,7 +477,7 @@ export function RecordTable({
   );
   const [stretchRoot, setStretchRoot] = useState<HTMLElement | null>(null);
   const [columnStretch, setColumnStretch] = useState(1);
-  const hasOpenRecordAction = !!onRecordClick;
+  const hasOpenRecordAction = !!onRecordClick && previewAction;
   const hasRowActions = !!renderRowActions || !!rowMenuSections || hasOpenRecordAction;
   // Lays out the row actions and shares spare width among the columns. The
   // actions show inline while the table fits its frame; once it would scroll

@@ -18,7 +18,7 @@ import { SpendBudgetDrawer } from "../features/financials/spendBudgets/SpendBudg
 import { BUDGET_STATUS_TONE, SpendBudgetDetail, spendTone, windowLabel } from "../features/financials/spendBudgets/SpendBudgetDetail";
 import { errorMessage } from "../features/financials/banking/types";
 import type { SpendBudgetRow, SpendBudgetsData } from "../features/financials/spendBudgets/types";
-import { RegisterTable } from "../features/financials/components/RegisterTable";
+import { RecordListTable } from "@/platform/record-engine";
 import { SPEND_BUDGET_CYCLES, SPEND_BUDGET_CYCLE_LABELS } from "../../shared/spendBudgets";
 
 type BudgetTab = "active" | "upcoming" | "ended" | "archived";
@@ -198,7 +198,9 @@ export function SpendBudgetsPage() {
       />
 
       <div className="card spend-budgets-card">
-        <RegisterTable<BudgetRecord>
+        <RecordListTable<BudgetRecord>
+          variant="card"
+          showTitle
           table={BUDGETS_TABLE}
           tableId="spend-budgets"
           label={`${TAB_LABELS[tab]} budgets`}

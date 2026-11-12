@@ -47,6 +47,9 @@ export type RecordTableContextValue = {
    * (`RecordTableScope` `defaultDisplayMode` / `defaultPageSize`).
    */
   displayDefaults: RecordTableDisplay;
+  /** A row to mark as the one the page is about (the signed-in user, the
+   *  record a link pointed at), without opening it. */
+  highlightedRecordId?: string | null;
 };
 
 export const RecordTableContext = createContext<RecordTableContextValue | null>(null);

@@ -8,7 +8,7 @@ import type { MenuSection } from "../../../components/Menu";
 import { formatDate } from "../../../lib/format";
 import { mileageSummary } from "../../../../shared/expensePolicy";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { RegisterTable } from "./RegisterTable";
+import { RecordListTable } from "@/platform/record-engine";
 
 /* ------------------------------------------------------------------ shapes */
 
@@ -170,7 +170,8 @@ export function ExpenseClaimsTable({
     [claims],
   );
   return (
-    <RegisterTable<ClaimRecord>
+    <RecordListTable<ClaimRecord>
+      variant="card"
       table={CLAIMS_TABLE}
       tableId="treasurer-expense-claims"
       label="All claims"
@@ -346,7 +347,8 @@ export function FundingSourcesTable({
     [sources],
   );
   return (
-    <RegisterTable<SourceRecord>
+    <RecordListTable<SourceRecord>
+      variant="card"
       table={SOURCES_TABLE}
       tableId="treasurer-funding-sources"
       label="All sources"
@@ -482,7 +484,8 @@ export function FundingEventsTable({
     [sources],
   );
   return (
-    <RegisterTable<EventRecord>
+    <RecordListTable<EventRecord>
+      variant="card"
       table={EVENTS_TABLE}
       tableId="treasurer-funding-events"
       label="All events"
