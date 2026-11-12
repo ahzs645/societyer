@@ -350,22 +350,28 @@
 }
 
 // Buyer / issued-for page.
-.procurement-party__eyebrow {
-  margin: token('s-2') 0 calc(-1 * #{token('s-2')});
-  font-size: token('fs-xs');
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: token('text-tertiary');
-}
 .procurement-party .page__title-text { overflow-wrap: anywhere; }
-.procurement-party__section { display: grid; grid-template-columns: minmax(0, 1fr); gap: token('s-2'); min-width: 0; }
-.procurement-party__heading {
-  display: flex;
-  align-items: baseline;
-  gap: token('s-2');
-  margin: token('s-2') 0 0;
-  font-size: token('fs-md');
-  font-weight: 600;
-  .muted { font-weight: 400; font-variant-numeric: tabular-nums; }
+.procurement-party__panel { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: token('s-4'); min-width: 0; }
+// Tabs sit in a stack that already spaces its children.
+.procurement-party > .tabs { margin-bottom: 0; }
+// The overview's short lists of notices (closing soonest, latest awards).
+.procurement-party__notices {
+  list-style: none;
+  margin: 0 calc(-1 * #{token('s-2')});
+  padding: 0;
+  > li + li { border-top: 1px solid token('border-color-light'); }
+}
+.procurement-party__notice-aside {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+// Phones: the three tabs (Overview, Opportunities 190, Awards 1,207) fit one
+// row at common widths, sharing it; on the narrowest phones the row scrolls.
+@media (max-width: 760px) {
+  .procurement-party > .tabs {
+    gap: 0;
+    .tab { flex: 1 0 auto; justify-content: center; padding-inline: 6px; }
+  }
 }

@@ -91,6 +91,8 @@ export function PageHeader({
   actions,
   info,
   breadcrumbs,
+  eyebrow,
+  leading,
 }: {
   /**
    * Breadcrumb trail. Omit to derive it from the route (detail pages get
@@ -109,6 +111,10 @@ export function PageHeader({
   /** Override the auto-detected route. Usually omit — the current pathname is used. */
   routeKey?: string;
   actions?: ReactNode;
+  /** A small label over the title naming what kind of record it is ("Buyer"). */
+  eyebrow?: ReactNode;
+  /** A control before the title, on its row, such as a detail page's Back arrow on phones. */
+  leading?: ReactNode;
 }) {
   // Auto-resolve from the current location so every page reads its identity
   // from the registry, even ones that haven't been migrated. Registry wins
@@ -148,8 +154,10 @@ export function PageHeader({
   return (
     <div className={`page__header${crumbs ? " page__header--with-crumbs" : ""}`} ref={headerRef}>
       <div className="page__header-main">
+        {leading && <div className="page__leading">{leading}</div>}
         <div className="page__intro">
           {crumbs && crumbs.length > 0 && <Breadcrumbs items={crumbs} />}
+          {eyebrow && <p className="page__eyebrow">{eyebrow}</p>}
           {info ? (
             // The ⓘ sits beside the heading, not inside it, so the heading's
             // accessible name stays the page title.
@@ -244,7 +252,15 @@ function usePhoneHeaderActionsFit(
       // actions. Otherwise the actions compact or wrap under the title.
       const titleText = header.querySelector<HTMLElement>(".page__title-text");
       let titleRoom = Math.max(PHONE_HEADER_MIN_TITLE, titleWordRoom(header));
-      if (titleText) {
+      // A detail page with a Back arrow before its title reads like an app bar:
+      // the arrow and the actions frame the title, which wraps between them and
+      // keeps most of the row, so the actions drop their words before they
+      // would wrap below it.
+      const leading = header.querySelector<HTMLElement>(".page__leading");
+      if (leading) {
+        const main = header.querySelector<HTMLElement>(".page__header-main");
+        titleRoom = Math.max(titleRoom, width * 0.6) + leading.offsetWidth + (main ? parseFloat(getComputedStyle(main).columnGap) || 0 : 0);
+      } else if (titleText) {
         const previous = titleText.style.whiteSpace;
         titleText.style.whiteSpace = "nowrap";
         const natural = titleText.getBoundingClientRect().width;

@@ -104,6 +104,30 @@
 .page__title-text {
   min-width: 0;
 }
+/* A small label over the title naming what kind of record it is ("Buyer"). */
+.page__eyebrow {
+  margin: 0 0 2px;
+  font-size: token('fs-xs');
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: token('text-tertiary');
+}
+/* A control before the title on its row (a detail page's Back arrow), level
+ * with the title's first line however many lines the title wraps to, or
+ * centred on the eyebrow and title together. */
+.page__leading {
+  flex: none;
+  align-self: flex-start;
+  display: flex;
+  margin-top: -1px;
+}
+.page__header-main:has(> .page__intro > .page__eyebrow) > .page__leading { margin-top: 8px; }
+.page__header-main:has(> .page__leading) { gap: token('s-2'); }
+@media (max-width: 760px) {
+  .page__leading { margin-top: -6px; }
+  .page__header-main:has(> .page__intro > .page__eyebrow) > .page__leading { margin-top: 4px; }
+}
 .page__title-sub {
   color: token('text-tertiary');
   font-weight: 400;

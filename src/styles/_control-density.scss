@@ -1018,6 +1018,17 @@ $tap-block: (
   grid-row: 1 / span 2;
   color: token('text-tertiary');
 }
+// A second meta line (RecordTablePhoneCard's `detail`): quieter, and the
+// badge and chevron centre on all three rows.
+.record-phone-card__meta--detail {
+  color: token('text-tertiary');
+}
+.record-phone-card--detail {
+  > .record-phone-card__badge,
+  > .record-phone-card__chevron {
+    grid-row: 1 / span 3;
+  }
+}
 
 // A card in RecordTable's card list (a page's RecordTablePhoneCard or the
 // automatic RecordTableAutoPhoneCard): the standard card, plus a "…" button
@@ -1034,8 +1045,9 @@ $tap-block: (
     }
   }
 }
-// Generated titles can be long ("Organization Visa statement (last month)"):
-// two lines before the ellipsis.
+// Generated titles can be long ("Organization Visa statement (last month)"),
+// and so can a page's when it asks (wrapTitle): two lines before the ellipsis.
+.record-phone-card--wrap-title .record-phone-card__title,
 .record-phone-card-shell--auto .record-phone-card__title {
   display: -webkit-box;
   -webkit-box-orient: vertical;

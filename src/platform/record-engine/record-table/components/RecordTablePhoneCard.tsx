@@ -22,6 +22,8 @@ export function RecordTablePhoneCard({
   selecting = false,
   recordName,
   variant = "page",
+  detail,
+  wrapTitle = false,
 }: {
   title: ReactNode;
   badge?: ReactNode;
@@ -35,29 +37,37 @@ export function RecordTablePhoneCard({
   recordName?: string;
   /** "auto": RecordTable's generated card, whose long titles wrap to two lines. */
   variant?: "page" | "auto";
+  /** A second, quieter meta line (who, attachments), joined the same way, for records whose first line is full. */
+  detail?: ReactNode[];
+  /** Long titles wrap to two lines before the ellipsis (notice and document names). */
+  wrapTitle?: boolean;
 }) {
   const facts = Children.toArray(meta ?? []).filter((fact) => fact !== "" && fact != null);
+  const details = Children.toArray(detail ?? []).filter((fact) => fact !== "" && fact != null);
+  const line = (items: ReactNode[], className: string) => (
+    <span className={className}>
+      {items.map((fact, index) => (
+        <Fragment key={index}>
+          {index > 0 && <span className="record-phone-card__dot" aria-hidden="true"> · </span>}
+          <span className="record-phone-card__fact">{fact}</span>
+        </Fragment>
+      ))}
+    </span>
+  );
   const body = (
     <>
       <span className="record-phone-card__title">{title}</span>
-      {facts.length > 0 && (
-        <span className="record-phone-card__meta">
-          {facts.map((fact, index) => (
-            <Fragment key={index}>
-              {index > 0 && <span className="record-phone-card__dot" aria-hidden="true"> · </span>}
-              <span className="record-phone-card__fact">{fact}</span>
-            </Fragment>
-          ))}
-        </span>
-      )}
+      {facts.length > 0 && line(facts, "record-phone-card__meta")}
+      {details.length > 0 && line(details, "record-phone-card__meta record-phone-card__meta--detail")}
       {badge ? <span className="record-phone-card__badge">{badge}</span> : null}
       {onOpen && <ChevronRight size={16} aria-hidden="true" className="record-phone-card__chevron" />}
     </>
   );
+  const cardClass = ["record-phone-card", wrapTitle && "record-phone-card--wrap-title", details.length > 0 && "record-phone-card--detail"].filter(Boolean).join(" ");
   const card = onOpen ? (
-    <button type="button" className="record-phone-card" onClick={onOpen} tabIndex={selecting ? -1 : undefined}>{body}</button>
+    <button type="button" className={cardClass} onClick={onOpen} tabIndex={selecting ? -1 : undefined}>{body}</button>
   ) : (
-    <div className="record-phone-card">{body}</div>
+    <div className={cardClass}>{body}</div>
   );
   const actions = useRecordTableCardActions();
   if (!actions) return card;

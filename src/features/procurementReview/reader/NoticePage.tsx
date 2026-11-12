@@ -6,23 +6,15 @@
  * facts and contact beside every tab; phones and tablets open Overview with
  * them, under the tabs.
  *
- * Back (above the title, on every screen) names the place it returns to, the
- * list or the buyer page the notice was opened from, and runs `onBack`, so the
+ * Back (ReaderHeader: above the title, or beside it on phones) names the place
+ * it returns to, the list or the buyer page the notice was opened from, so the
  * list underneath comes back at the same rows. The buyer and issued-for names
- * open that organisation's page; they are real links, so a middle-click or a
- * long-press opens it in a new tab.
+ * open that organisation's page, and its Back names this notice; they are real
+ * links, so a middle-click or a long-press opens it in a new tab.
  */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
-import { useSearchParams } from "react-router-dom";
-import {
-  ArrowLeft,
   ChevronRight,
   ExternalLink,
   FileSearch,
@@ -32,7 +24,6 @@ import {
   Phone,
   Sparkles,
 } from "lucide-react";
-import { PageHeader } from "../../../pages/_helpers";
 import {
   Badge,
   EmptyState,
@@ -44,7 +35,6 @@ import { Tooltip } from "../../../components/Tooltip";
 import { Progress, Tabs } from "../../../components/primitives";
 import { useMediaQuery } from "../../../lib/useSheetDrag";
 import {
-  backLabel,
   describeNotice,
   formatSourceDate,
   noticeDocumentRows,
@@ -64,9 +54,10 @@ import {
   BUYER_PARAM,
   ISSUED_FOR_PARAM,
   NOTICE_PARAM,
-  SECTION_PARAM,
+  ReaderPlaceTitleContext,
   useReaderNavigation,
 } from "./routes";
+import { plainClick, ReaderBackButton, ReaderHeader } from "./ReaderHeader";
 import { useReaderSource } from "./source";
 
 /** Not a registered route, so the header shows no icon tile: beside a two-line notice title it wraps onto its own line. */
@@ -86,23 +77,7 @@ function parse(json: string): unknown {
   }
 }
 
-/** A click the page handles itself; with a modifier or another button the browser opens the link's href (a new tab or window). */
-const plainClick = (event: MouseEvent) =>
-  event.button === 0 &&
-  !event.metaKey &&
-  !event.ctrlKey &&
-  !event.shiftKey &&
-  !event.altKey;
-
-export function NoticePage({
-  recordKey,
-  listHref,
-  onBack,
-}: {
-  recordKey: string;
-  listHref: string;
-  onBack: () => void;
-}) {
+export function NoticePage({ recordKey }: { recordKey: string }) {
   const source = useReaderSource();
   const record = source.useRecord(recordKey);
   const documents = source.useDocuments(recordKey, null);
@@ -118,6 +93,7 @@ export function NoticePage({
   );
   const stacked = useMediaQuery(STACKED);
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
   const requested = params.get("tab");
   const hasReview = Boolean(review && !review.empty);
   const tab: NoticeTab =
@@ -132,30 +108,18 @@ export function NoticePage({
         else nextParams.set("tab", next);
         return nextParams;
       },
-      { replace: true },
+      // Keep the entry's state: it says where Back leads.
+      { replace: true, state: location.state },
     );
   const top = useRef<HTMLDivElement>(null);
   useEffect(() => {
     top.current?.closest(".page")?.scrollTo({ top: 0 });
   }, [recordKey]);
 
-  // The Back button is the trail: one control naming the one place it leads.
-  const backTo = backLabel({
-    buyer: params.get(BUYER_PARAM),
-    issuedFor: params.get(ISSUED_FOR_PARAM),
-    section: params.get(SECTION_PARAM),
-    kind: params.get("kind"),
-  });
-  const back = <BackLink href={listHref} label={backTo} onBack={onBack} />;
   if (record === undefined) {
     return (
       <div ref={top} className="procurement-notice" aria-busy="true">
-        {back}
-        <PageHeader
-          title="Loading notice…"
-          routeKey={NOTICE_ROUTE_KEY}
-          breadcrumbs={false}
-        />
+        <ReaderHeader title="Loading notice…" routeKey={NOTICE_ROUTE_KEY} />
         <div className="card">
           <div className="card__body col">
             <Skeleton variant="line" width="90%" />
@@ -169,21 +133,12 @@ export function NoticePage({
   if (!record || !model) {
     return (
       <div ref={top} className="procurement-notice">
-        {back}
-        <PageHeader
-          title="Notice not found"
-          routeKey={NOTICE_ROUTE_KEY}
-          breadcrumbs={false}
-        />
+        <ReaderHeader title="Notice not found" routeKey={NOTICE_ROUTE_KEY} />
         <EmptyState
           icon={<FileSearch size={18} />}
           title="This notice isn't in the published catalog"
           description="Zoer may have published a newer catalog without it, or the link is from another workspace."
-          action={
-            <button type="button" className="btn btn--accent" onClick={onBack}>
-              Back to {backTo}
-            </button>
-          }
+          action={<ReaderBackButton />}
         />
       </div>
     );
@@ -201,101 +156,118 @@ export function NoticePage({
   const triage = model.kind === "opportunity" && (
     <NoticeTriage
       recordKey={recordKey}
-      notice={triageTaskNotice({ title: model.title, buyer: model.buyer, date: record.summary.date, dateText: record.summary.dateText, reference: model.reference })}
+      notice={triageTaskNotice({
+        title: model.title,
+        buyer: model.buyer,
+        date: record.summary.date,
+        dateText: record.summary.dateText,
+        reference: model.reference,
+      })}
     />
   );
 
   return (
-    <div ref={top} className="procurement-notice">
-      {back}
-      {record.removed && <p className="card card__body" role="status">This notice was removed from the current source. Its last published details are retained for reference.</p>}
-      <PageHeader
-        title={model.title}
-        routeKey={NOTICE_ROUTE_KEY}
-        breadcrumbs={false}
-        subtitle={
-          model.buyer ? (
-            <PartyLink party="organization" name={model.buyer} />
-          ) : undefined
-        }
-        actions={
-          model.sourceUrl && (
-            <a
-              className="btn"
-              href={model.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`View on ${model.source}`}
-            >
-              <ExternalLink size={14} aria-hidden="true" />{" "}
-              <span className="procurement-notice__source-label">
-                View on{" "}
-                {model.source === "Buyer's website"
-                  ? "buyer's site"
-                  : model.source}
-              </span>
-            </a>
-          )
-        }
-      />
-      <NoticeBadges model={model} />
-      {stacked && triage}
-      <div className="procurement-notice__layout">
-        <div className="procurement-notice__main">
-          <Tabs
-            value={tab}
-            onChange={setTab}
-            items={tabs}
-            tabRoles
-            ariaLabel="Notice sections"
-          />
-          <div
-            role="tabpanel"
-            aria-label={tabs.find((item) => item.id === tab)?.label}
-            className="procurement-notice__panel"
-          >
-            {tab === "overview" && (
-              <>
-                {stacked && <NoticeFacts model={model} />}
-                {review && !review.empty && (
-                  <ReviewTeaser
-                    review={review}
-                    onOpen={() => setTab("review")}
-                  />
-                )}
-                {model.description && <Description text={model.description} />}
-                {stacked && <NoticeContacts model={model} />}
-                <NoticeFields model={model} />
-                <SourceCapture data={parse(record.dataJson)} />
-                {!model.description &&
-                  model.fields.length === 0 &&
-                  !stacked && (
-                    <p className="muted">
-                      The source published no description for this notice.
-                    </p>
-                  )}
-              </>
-            )}
-            {tab === "documents" && (
-              <NoticeDocuments recordKey={recordKey} model={model} />
-            )}
-            {tab === "review" && reviewRows && review && (
-              <NoticeReview review={review} truncated={reviewRows.truncated} />
-            )}
-          </div>
-        </div>
-        {!stacked && (
-          <aside
-            className="procurement-notice__side"
-            aria-label="Notice details"
-          >
-            {triage}
-            <NoticeFacts model={model} />
-            <NoticeContacts model={model} />
-          </aside>
+    // A buyer opened from here says "Back to <this notice>".
+    <ReaderPlaceTitleContext.Provider value={model.title}>
+      <div ref={top} className="procurement-notice">
+        <ReaderHeader
+          title={model.title}
+          routeKey={NOTICE_ROUTE_KEY}
+          subtitle={
+            model.buyer ? (
+              <PartyLink party="organization" name={model.buyer} />
+            ) : undefined
+          }
+          actions={
+            model.sourceUrl && (
+              <a
+                className="btn"
+                href={model.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`View on ${model.source}`}
+              >
+                <ExternalLink size={14} aria-hidden="true" />{" "}
+                <span className="procurement-notice__source-label">
+                  View on{" "}
+                  {model.source === "Buyer's website"
+                    ? "buyer's site"
+                    : model.source}
+                </span>
+              </a>
+            )
+          }
+        />
+        <NoticeBadges model={model} />
+        {record.removed && (
+          <p className="card card__body" role="status">
+            This notice was removed from the current source. Its last published
+            details are retained for reference.
+          </p>
         )}
+        {stacked && triage}
+        <div className="procurement-notice__layout">
+          <div className="procurement-notice__main">
+            <Tabs
+              value={tab}
+              onChange={setTab}
+              items={tabs}
+              tabRoles
+              ariaLabel="Notice sections"
+            />
+            <div
+              role="tabpanel"
+              aria-label={tabs.find((item) => item.id === tab)?.label}
+              className="procurement-notice__panel"
+            >
+              {tab === "overview" && (
+                <>
+                  {stacked && <NoticeFacts model={model} />}
+                  {review && !review.empty && (
+                    <ReviewTeaser
+                      review={review}
+                      onOpen={() => setTab("review")}
+                    />
+                  )}
+                  {model.description && (
+                    <Description text={model.description} />
+                  )}
+                  {stacked && <NoticeContacts model={model} />}
+                  <NoticeFields model={model} />
+                  <SourceCapture data={parse(record.dataJson)} />
+                  {!model.description &&
+                    model.fields.length === 0 &&
+                    !stacked && (
+                      <p className="muted">
+                        The source published no description for this notice.
+                      </p>
+                    )}
+                </>
+              )}
+              {tab === "documents" && (
+                <NoticeDocuments recordKey={recordKey} model={model} />
+              )}
+              {tab === "review" && reviewRows && review && (
+                <NoticeReview
+                  review={review}
+                  truncated={reviewRows.truncated}
+                />
+              )}
+            </div>
+          </div>
+          {!stacked && (
+            <aside
+              className="procurement-notice__side"
+              aria-label="Notice details"
+            >
+              {triage}
+              <NoticeFacts model={model} />
+              <NoticeContacts model={model} />
+            </aside>
+          )}
+        </div>
       </div>
-    </div>
+    </ReaderPlaceTitleContext.Provider>
   );
 }
 
@@ -362,24 +334,25 @@ function NoticeFacts({ model }: { model: NoticeModel }) {
             <dd>{model.source}</dd>
           </div>
         </dl>
-        {model.commodities.length > 0 && (
-          <div className="procurement-notice__commodities">
-            <span className="procurement-notice__kv-label">
-              {model.commodities.length === 1 ? "Commodity" : "Commodities"}
-            </span>
-            <ul>
-              {model.commodities.slice(0, 6).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            {model.commodities.length > 6 && (
-              <span className="muted">
-                and {model.commodities.length - 6} more
-              </span>
-            )}
-          </div>
-        )}
       </div>
+      {/* Its own section of the card, so the rule above it runs edge to edge. */}
+      {model.commodities.length > 0 && (
+        <div className="card__body procurement-notice__commodities">
+          <span className="procurement-notice__kv-label">
+            {model.commodities.length === 1 ? "Commodity" : "Commodities"}
+          </span>
+          <ul>
+            {model.commodities.slice(0, 6).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          {model.commodities.length > 6 && (
+            <span className="muted">
+              and {model.commodities.length - 6} more
+            </span>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -491,33 +464,6 @@ function OneLine({
   );
 }
 
-/** Back to the place under the notice. Its href is the same place, for a middle-click. */
-function BackLink({
-  href,
-  label,
-  onBack,
-}: {
-  href: string;
-  label: string;
-  onBack: () => void;
-}) {
-  return (
-    <a
-      className="procurement-notice__back"
-      href={href}
-      aria-label={`Back to ${label}`}
-      onClick={(event) => {
-        if (!plainClick(event)) return;
-        event.preventDefault();
-        onBack();
-      }}
-    >
-      <ArrowLeft size={16} aria-hidden="true" />
-      <span>{label}</span>
-    </a>
-  );
-}
-
 /**
  * A buyer or issued-for name that opens the organisation's page. With
  * `countKind`, says how many of that kind's notices name it, once the list
@@ -532,7 +478,12 @@ function PartyLink({
   name: string;
   countKind?: string;
 }) {
-  const { params, openParty } = useReaderNavigation();
+  const { params, openParty, pushed, back } = useReaderNavigation();
+  // Opened from this organisation's own page: its link goes back there rather than opening it again.
+  const fromHere =
+    pushed &&
+    params.get(party === "organization" ? BUYER_PARAM : ISSUED_FOR_PARAM) ===
+      name;
   const source = useReaderSource();
   const href = useMemo(() => {
     const next = new URLSearchParams(params);
@@ -549,7 +500,8 @@ function PartyLink({
       onClick={(event) => {
         if (!plainClick(event)) return;
         event.preventDefault();
-        openParty(party, name);
+        if (fromHere) back();
+        else openParty(party, name);
       }}
     >
       <span className="procurement-notice__party-name">{name}</span>
@@ -761,13 +713,50 @@ function Description({ text }: { text: string }) {
 }
 
 /** Preserve unlabelled source-tab content alongside structured notice fields. */
-function SourceCapture({data}:{data:unknown}) {
- if(!data || typeof data !== 'object') return null;
- const source=data as {tabCoverage?:{complete:boolean;visited?:string[];failures?:{label:string;message:string}[]};sourceTabs?:{label:string;text:string;truncated?:boolean}[];detailNeedsRefresh?:boolean};
- if(!source.tabCoverage && !source.detailNeedsRefresh) return null;
- return <section className="card"><div className="card__body"><details><summary>Source capture: {source.tabCoverage?.complete ? 'all public tabs visited' : 'incomplete / refresh needed'}</summary>
- <p className="small muted">{source.tabCoverage?.visited?.length ? `Visited: ${source.tabCoverage.visited.join(', ')}.` : 'No tab coverage receipt was published.'} Attachment links and downloaded files are tracked separately.</p>
- {source.tabCoverage?.failures?.map((failure,i)=><p key={i}>{failure.label}: {failure.message}</p>)}
- {source.sourceTabs?.map((tab,i)=><details key={i}><summary>{tab.label}{tab.truncated ? ' (partial)' : ''}</summary><p style={{whiteSpace:'pre-wrap'}}>{tab.text}</p></details>)}
- </details></div></section>;
+function SourceCapture({ data }: { data: unknown }) {
+  if (!data || typeof data !== "object") return null;
+  const source = data as {
+    tabCoverage?: {
+      complete: boolean;
+      visited?: string[];
+      failures?: { label: string; message: string }[];
+    };
+    sourceTabs?: { label: string; text: string; truncated?: boolean }[];
+    detailNeedsRefresh?: boolean;
+  };
+  if (!source.tabCoverage && !source.detailNeedsRefresh) return null;
+  return (
+    <section className="card">
+      <div className="card__body">
+        <details>
+          <summary>
+            Source capture:{" "}
+            {source.tabCoverage?.complete
+              ? "all public tabs visited"
+              : "incomplete / refresh needed"}
+          </summary>
+          <p className="small muted">
+            {source.tabCoverage?.visited?.length
+              ? `Visited: ${source.tabCoverage.visited.join(", ")}.`
+              : "No tab coverage receipt was published."}{" "}
+            Attachment links and downloaded files are tracked separately.
+          </p>
+          {source.tabCoverage?.failures?.map((failure, i) => (
+            <p key={i}>
+              {failure.label}: {failure.message}
+            </p>
+          ))}
+          {source.sourceTabs?.map((tab, i) => (
+            <details key={i}>
+              <summary>
+                {tab.label}
+                {tab.truncated ? " (partial)" : ""}
+              </summary>
+              <p style={{ whiteSpace: "pre-wrap" }}>{tab.text}</p>
+            </details>
+          ))}
+        </details>
+      </div>
+    </section>
+  );
 }

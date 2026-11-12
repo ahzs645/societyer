@@ -84,7 +84,7 @@ function ReaderLayers({ source, header }: { source: ReaderSource; header: ReactN
           <BuyerPage key={`${party.field}:${party.name}`} field={party.field} name={party.name} />
         </Layer>
       )}
-      {notice && <NoticePage key={notice} recordKey={notice} listHref={nav.parentHref()} onBack={nav.back} />}
+      {notice && <NoticePage key={notice} recordKey={notice} />}
     </>
   );
 }

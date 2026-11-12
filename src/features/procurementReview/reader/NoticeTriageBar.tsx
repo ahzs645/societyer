@@ -3,7 +3,9 @@
  * Reviewed and Classification the list edits, the action items
  * (actionItems.tsx), and who last changed them. Built from the shared
  * Checkbox, Select (a bottom sheet on phones), Button and Menu. It keeps its
- * place while the triage loads.
+ * place while the triage loads. Three rows: the heading with who last changed
+ * it, the triage itself (Reviewed beside the classification), then the action
+ * items; on phones the two action buttons share a row with shorter labels.
  */
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -13,6 +15,8 @@ import { Select } from "../../../components/Select";
 import { Button } from "../../../components/ui";
 import { useToast } from "../../../components/Toast";
 import { Menu } from "../../../components/Menu";
+import { mobileCardMediaQuery } from "../../../lib/breakpoints";
+import { useMediaQuery } from "../../../lib/useSheetDrag";
 import { useUndoableAction } from "../../../hooks/useUndoableAction";
 import { formatSourceDate } from "../lib/notice";
 import {
@@ -41,6 +45,7 @@ function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; 
   const navigate = useNavigate();
   const commands = useActionItemCommands(triage);
   const [creating, setCreating] = useState(false);
+  const phone = useMediaQuery(mobileCardMediaQuery);
   const entry = triage.entries?.get(recordKey);
   const current: Triage = entry ? { reviewed: entry.reviewed, classification: entry.classification } : NO_TRIAGE;
   const disabled = !triage.entries || !triage.canEdit;
@@ -76,51 +81,59 @@ function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; 
 
   return (
     <section className="procurement-triage" aria-label="Our bid triage" aria-busy={!triage.entries || undefined}>
-      <span className="procurement-triage__title">Our triage</span>
-      <Checkbox checked={current.reviewed} onChange={(reviewed) => void save({ ...current, reviewed })} label="Reviewed" disabled={disabled} />
-      <Select
-        className="procurement-triage__select"
-        value={current.classification}
-        onChange={(value) => void save({ ...current, classification: triageClassification(value) })}
-        options={OPTIONS}
-        clearable
-        clearLabel="Not classified"
-        placeholder="Not classified"
-        aria-label="Classification"
-        sheetTitle="Classification"
-        disabled={disabled}
-      />
+      <div className="procurement-triage__head">
+        <span className="procurement-triage__title">Our triage</span>
+        {by && <small className="muted procurement-triage__by">{by}</small>}
+      </div>
+      <div className="procurement-triage__state">
+        <Checkbox checked={current.reviewed} onChange={(reviewed) => void save({ ...current, reviewed })} label="Reviewed" disabled={disabled} />
+        <Select
+          className="procurement-triage__select"
+          value={current.classification}
+          onChange={(value) => void save({ ...current, classification: triageClassification(value) })}
+          options={OPTIONS}
+          clearable
+          clearLabel="Not classified"
+          placeholder="Not classified"
+          aria-label="Classification"
+          sheetTitle="Classification"
+          disabled={disabled}
+        />
+      </div>
       {items?.length === 1 && !mayAct && (
-        <Link className="btn btn--sm" to={taskHref(items[0].taskId)}>
-          <ListTodo size={14} aria-hidden="true" /> Open action item
-        </Link>
+        <div className="procurement-triage__actions">
+          <Link className="btn btn--sm" to={taskHref(items[0].taskId)}>
+            <ListTodo size={14} aria-hidden="true" /> Open action item
+          </Link>
+        </div>
       )}
       {items && items.length > 0 && (items.length > 1 || mayAct) && (
-        <Menu
-          label="Action items"
-          sheetTitle="Action items"
-          trigger={
-            <button type="button" className="btn btn--sm">
-              <ListTodo size={14} aria-hidden="true" /> {items.length === 1 ? "Action item" : `${items.length} action items`}{" "}
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
-          }
-          sections={[{ id: "task", items: actionItemMenuItems({ triage, target, current, open: (taskId) => navigate(taskHref(taskId)), commands }) }]}
-        />
+        <div className="procurement-triage__actions">
+          <Menu
+            label="Action items"
+            sheetTitle="Action items"
+            trigger={
+              <button type="button" className="btn btn--sm">
+                <ListTodo size={14} aria-hidden="true" /> {items.length === 1 ? "Action item" : `${items.length} action items`}{" "}
+                <ChevronDown size={14} aria-hidden="true" />
+              </button>
+            }
+            sections={[{ id: "task", items: actionItemMenuItems({ triage, target, current, open: (taskId) => navigate(taskHref(taskId)), commands }) }]}
+          />
+        </div>
       )}
       {items && items.length === 0 && mayAct && (
-        <>
-          <Button size="sm" icon={<Plus size={14} />} disabled={creating} onClick={() => void createTask()}>
-            Create action item
+        <div className="procurement-triage__actions" data-pair="">
+          <Button size="sm" icon={<Plus size={14} />} disabled={creating} onClick={() => void createTask()} aria-label="Create action item">
+            {phone ? "New action item" : "Create action item"}
           </Button>
-          <Button size="sm" variant="ghost" icon={<ListPlus size={14} />} onClick={() => commands.pick(target)}>
-            Add to an existing action item…
+          <Button size="sm" variant="ghost" icon={<ListPlus size={14} />} onClick={() => commands.pick(target)} aria-label="Add to an existing action item">
+            {phone ? "Add to existing" : "Add to an existing action item…"}
           </Button>
-        </>
+        </div>
       )}
       {commands.dialog}
       {isTriageArchived(current) && <span className="procurement-triage__archived">Archived: only in the list's Archived view</span>}
-      {by && <small className="muted procurement-triage__by">{by}</small>}
     </section>
   );
 }

@@ -301,9 +301,8 @@ $zoer-theme: (
     dd { margin: 0; overflow-wrap: anywhere; }
     &--two { grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); }
   }
+  // A section of the facts card under them: its rule spans the card.
   &__commodities {
-    margin-top: token("s-3");
-    padding-top: token("s-3");
     border-top: 1px solid token("border");
     font-size: token("fs-sm");
     ul { margin: 0; padding-left: 1.1em; display: grid; gap: 2px; }
@@ -384,31 +383,6 @@ $zoer-theme: (
     > svg { margin-top: 3px; }
   }
 
-  // Back to the list or buyer page under the notice.
-  &__back {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    max-width: 100%;
-    min-height: 32px;
-    margin: 0 0 token("s-2") -8px;
-    padding: 0 8px;
-    border-radius: token("r-sm");
-    color: token("text-secondary");
-    font-size: token("fs-sm");
-    font-weight: token("fw-medium");
-    text-decoration: none;
-    > svg { flex: none; }
-    > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    &:hover { background: token("bg-hover"); color: token("text-primary"); }
-    &:focus-visible { outline: 2px solid token("accent"); outline-offset: 0; }
-    // A 32px control with a 44px hit area.
-    @media (pointer: coarse) {
-      &::after { content: ""; position: absolute; top: 50%; left: 50%; width: max(100%, #{token("tap-target")}); height: max(100%, #{token("tap-target")}); transform: translate(-50%, -50%); }
-    }
-  }
-
   // A buyer or issued-for name: a quiet underline says it opens their page.
   &__party {
     display: inline-flex;
@@ -476,39 +450,85 @@ $zoer-theme: (
   &__block > .btn { align-self: flex-start; margin-left: -8px; }
 }
 
-// The notice page's bar for the workspace's own bid triage (NoticeTriageBar.tsx). The controls
-// are the shared Checkbox, Select and Button; this only lays them out, wrapping on phones.
+// The notice page's card for the workspace's own bid triage (NoticeTriageBar.tsx): a heading
+// with who last changed it, the triage (Reviewed and the classification), then the action
+// items. The controls are the shared Checkbox, Select and Button; this only lays them out.
 .procurement-triage {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: token("s-2") token("s-4");
+  flex-direction: column;
+  align-items: stretch;
+  gap: token("s-2");
   margin: token("s-3") 0;
-  padding: token("s-2") token("s-3");
+  padding: token("s-3");
   border: 1px solid token("border");
   border-radius: token("r-sm");
   background: token("bg-subtle");
   font-size: token("fs-sm");
 
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 token("s-3");
+  }
   &__title { font-weight: token("fw-semibold"); }
-  &__select { min-width: 180px; }
+  &__by { min-width: 0; font-size: token("fs-xs"); }
+  &__state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token("s-2") token("s-4");
+  }
+  &__state > .check-row { flex: none; width: auto; }
+  &__select { flex: 0 1 240px; min-width: 180px; }
+  &__actions { display: flex; flex-wrap: wrap; gap: token("s-2"); }
   &__archived { color: token("danger"); font-weight: token("fw-medium"); }
-  &__by { margin-left: auto; }
 
+  // Phones: Reviewed beside the classification on one row, the action buttons filling the next.
   @media (max-width: 760px) {
-    &__title, &__select { flex: 1 1 100%; }
-    &__by { margin-left: 0; }
+    margin: 0 0 token("s-3");
+    &__state { flex-wrap: nowrap; gap: token("s-3"); }
+    &__select { flex: 1 1 auto; min-width: 0; }
+    &__actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      > * { min-width: 0; }
+      .btn { width: 100%; justify-content: center; }
+    }
+    &__actions[data-pair] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
-  // In the notice's side column: a stacked card above the details, controls full width.
+  // In the notice's side column: a narrow card, every control full width.
   .procurement-notice__side & {
-    flex-direction: column;
-    align-items: stretch;
-    gap: token("s-2");
     margin: 0;
-    padding: token("s-3");
-    > .btn, &__select { width: 100%; min-width: 0; }
-    > .btn { justify-content: center; }
-    &__by { margin-left: 0; }
+    &__state { flex-direction: column; align-items: stretch; }
+    &__select { flex: none; width: 100%; min-width: 0; }
+    &__actions { flex-direction: column; .btn { width: 100%; justify-content: center; } }
+  }
+}
+
+// Back from a notice or buyer page to the place it was opened from (ReaderHeader.tsx): an
+// arrow on the title's row, pulled left so the arrow itself lines up with the page's edge.
+.procurement-back {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  margin-left: -8px;
+  padding: 0;
+  justify-content: center;
+  color: token("text-secondary");
+  &:hover { color: token("text-primary"); }
+  // Buttons size their icons at 14px; the page's one way back reads at a glance.
+  > svg { width: 18px; height: 18px; }
+  @media (max-width: 760px) {
+    > svg { width: 20px; height: 20px; }
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    margin-left: -10px;
+    color: token("text-primary");
   }
 }

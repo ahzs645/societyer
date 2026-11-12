@@ -10,9 +10,13 @@
  * the list (its view, search or kind) replaces the current one. The in-page
  * Back steps back through the entries the reader added, exactly as the
  * browser's Back does, and otherwise (a pasted link) goes to the parent place.
+ * Each entry the reader adds remembers the place it was opened from, so Back
+ * names where it really leads: a buyer opened from a notice says the notice,
+ * not the list under both.
  */
-import { useCallback } from "react";
+import { createContext, useCallback, useContext } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { backLabel as placeLabelOf } from "../lib/notice";
 
 /** `?notice=<record key>` (the shared table keeps `record` for its side panel). */
 export const NOTICE_PARAM = "notice";
@@ -29,6 +33,8 @@ export function canonicalReaderParams(params: URLSearchParams): URLSearchParams 
 export const BUYER_PARAM = "buyer";
 export const ISSUED_FOR_PARAM = "issuedFor";
 export const SECTION_PARAM = "section";
+/** A buyer page's tab (`overview` when absent): `opportunities` or `awards`. */
+export const PARTY_TAB_PARAM = "partyTab";
 export type PartyField = "organization" | "issuedFor";
 export type ReaderSection = "analytics";
 
@@ -60,6 +66,22 @@ export function placeKey(place: ReaderPlace): string {
 
 /** History entries the reader pushed itself carry this, so Back can step back instead of guessing a parent. */
 const PUSHED = "procurementReader";
+/** With it, the name and address of the place the entry was opened from. */
+type PushedState = { [PUSHED]: true; from: string; fromSearch: string };
+const pushedState = (state: unknown): PushedState | null => {
+  const value = state as Partial<PushedState> | null;
+  return value?.[PUSHED] ? { [PUSHED]: true, from: typeof value.from === "string" ? value.from : "", fromSearch: typeof value.fromSearch === "string" ? value.fromSearch : "" } : null;
+};
+
+/**
+ * What the place showing is called, for the Back of whatever opens over it. A
+ * notice provides its title (NoticePage); the list, the analytics and a buyer
+ * are named from the URL.
+ */
+export const ReaderPlaceTitleContext = createContext<string | null>(null);
+const placeLabel = (params: URLSearchParams, title: string | null) =>
+  (params.get(NOTICE_PARAM) || params.get(LEGACY_NOTICE_PARAM)) ? title || "Notice"
+    : placeLabelOf({ buyer: params.get(BUYER_PARAM), issuedFor: params.get(ISSUED_FOR_PARAM), section: params.get(SECTION_PARAM), kind: params.get("kind") });
 
 const patched = (params: URLSearchParams, patch: Record<string, string | null>) => {
   const next = new URLSearchParams(params);
@@ -69,7 +91,7 @@ const patched = (params: URLSearchParams, patch: Record<string, string | null>) 
   return next;
 };
 const partyPatch = (field: PartyField, name: string): Record<string, string | null> => ({
-  [NOTICE_PARAM]: null, tab: null,
+  [NOTICE_PARAM]: null, tab: null, [PARTY_TAB_PARAM]: null,
   [BUYER_PARAM]: field === "organization" ? name : null,
   [ISSUED_FOR_PARAM]: field === "issuedFor" ? name : null,
 });
@@ -78,16 +100,19 @@ export function useReaderNavigation() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const pushed = Boolean((location.state as Record<string, unknown> | null)?.[PUSHED]);
+  const title = useContext(ReaderPlaceTitleContext);
+  const state = pushedState(location.state);
+  const pushed = Boolean(state);
 
   const go = useCallback((patch: Record<string, string | null>, replace = false) => {
-    navigate({ search: `?${patched(params, patch).toString()}` }, { replace, state: replace ? location.state : { [PUSHED]: true } });
-  }, [params, navigate, location.state]);
+    const from: PushedState = { [PUSHED]: true, from: placeLabel(params, title), fromSearch: `?${params.toString()}` };
+    navigate({ search: `?${patched(params, patch).toString()}` }, { replace, state: replace ? location.state : from });
+  }, [params, navigate, location.state, title]);
 
   /** Where Back leads when the reader didn't push the current entry (a pasted link). */
   const parentPatch = (): Record<string, string | null> =>
     params.get(NOTICE_PARAM) || params.get(LEGACY_NOTICE_PARAM) ? { [NOTICE_PARAM]: null, tab: null }
-      : params.get(BUYER_PARAM) || params.get(ISSUED_FOR_PARAM) ? { [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null }
+      : params.get(BUYER_PARAM) || params.get(ISSUED_FOR_PARAM) ? { [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null, [PARTY_TAB_PARAM]: null }
       : { [SECTION_PARAM]: null };
 
   const back = useCallback(() => { if (pushed) navigate(-1); else go(parentPatch(), true); }, [pushed, navigate, go]); // eslint-disable-line react-hooks/exhaustive-deps -- parentPatch reads `params`, which `go` follows
@@ -105,8 +130,10 @@ export function useReaderNavigation() {
     /** The catalog's analytics, over the list. */
     openAnalytics: useCallback(() => go({ [SECTION_PARAM]: "analytics" }), [go]),
     back,
-    /** The href Back leads to when not stepping through history (breadcrumbs, middle-click). */
-    parentHref: () => `?${patched(params, parentPatch()).toString()}`,
+    /** The name of the place Back leads to: the one this was opened from, or (from a pasted link) the parent. */
+    backLabel: state?.from || placeLabel(patched(params, parentPatch()), null),
+    /** The address Back leads to, for the link's href (a middle-click or long-press opens it in a new tab). */
+    backHref: state?.fromSearch || `?${patched(params, parentPatch()).toString()}`,
     /** Change list state in place (no new history entry). */
     update: useCallback((patch: Record<string, string | null>) => go(patch, true), [go]),
   };

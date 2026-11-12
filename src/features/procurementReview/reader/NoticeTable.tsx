@@ -367,9 +367,12 @@ function useCells(
 }
 
 /**
- * Phones: the title, the status tag, and one line of meta: the paperclip
- * count first (it is short, and the line truncates at its end), then the date
- * (a long buyer name would push it out of the line), then who.
+ * Phones: the title on up to two lines and the status tag, then two lines of
+ * meta. The first is when, the day without its time, plus how long is left
+ * ("Closes Nov 13 · in 2 days"); for an award, its value. The second, quieter,
+ * is who (the buyer, or an award's supplier), then the paperclip count and
+ * whether we reviewed it. Each line truncates on its own, so a long buyer
+ * name never pushes the date out.
  */
 const renderPhoneCard: RecordTableCardRenderer = (
   record,
@@ -385,30 +388,35 @@ const renderPhoneCard: RecordTableCardRenderer = (
         : row.state === "closed"
           ? "Closed "
           : "Closes ";
+  // The card has no room for the time; the notice page shows it.
+  const day = row.when ? shortSourceDate(row.when.slice(0, 10)) : row.whenText;
   return (
     <RecordTablePhoneCard
       title={row.title}
+      wrapTitle
       // The workspace's classification, once there is one, says more than "Open" in the open views.
       badge={award ? undefined : row.classification ? field("classification") : row.status ? field("status") : undefined}
       meta={[
-        !award && row.documents ? (
-          <DocumentsCount documents={row.documents} />
-        ) : (
-          ""
-        ),
-        row.whenText && (
+        day && (
           <span
             className="procurement-reader__when"
             data-state={award ? undefined : row.state}
           >
             {prefix}
-            {row.whenText}
+            {day}
             {row.relative && <small> · {row.relative}</small>}
           </span>
         ),
         award ? money(row.value, row.currency) : "",
-        row.reviewed ? "Reviewed" : "",
+      ]}
+      detail={[
         award ? row.supplier || row.organization : row.organization,
+        !award && row.documents ? (
+          <DocumentsCount documents={row.documents} />
+        ) : (
+          ""
+        ),
+        row.reviewed ? "Reviewed" : "",
       ]}
       onOpen={open}
       selecting={selecting}

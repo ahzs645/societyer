@@ -40,8 +40,11 @@ test("buyer and issued-for pages render both lists on the catalog service", asyn
   for (const [field, name] of [["buyer", "Example municipality"], ["issuedFor", "Example public agency"]]) {
     await page.goto(`/tests/fixtures/procurement-service.html?${new URLSearchParams({ [field]: name })}`);
     await expect(page.getByRole("heading", { name, exact: true }).first()).toBeVisible();
-    await expect(page.getByRole("region", { name: /^Opportunities/ }).getByText("Fictional road project", { exact: true })).toBeVisible();
-    await expect(page.getByRole("region", { name: /^Awards/ }).getByText("Synthetic award 0", { exact: true })).toBeVisible();
+    // Overview, Opportunities and Awards are tabs; each list shows in its own panel.
+    await page.getByRole("tab", { name: /^Opportunities/ }).click();
+    await expect(page.getByRole("tabpanel", { name: "Opportunities" }).getByText("Fictional road project", { exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: /^Awards/ }).click();
+    await expect(page.getByRole("tabpanel", { name: "Awards" }).getByText("Synthetic award 0", { exact: true })).toBeVisible();
   }
   expect(failures).toEqual([]);
 });
