@@ -296,7 +296,7 @@ test("semester recurrence and staff edits propagate through live totals, exports
   await expect(insurance).toContainText("$394.52");
   await expect(insurance).toContainText("$0.00");
   const costRegion = page.getByRole("region", { name: "Reusable planning costs table", exact: true });
-  const costCards = costRegion.locator(".record-cards");
+  const costCards = page.locator(".record-cards").filter({ hasText: "Annual insurance" });
   if (await costCards.isVisible()) {
     // Phones list costs as cards, which carry the period amounts: nothing to pan.
     await costCards.screenshot({ path: testInfo.outputPath("planner-costs.png") });

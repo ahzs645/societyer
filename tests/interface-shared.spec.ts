@@ -500,10 +500,12 @@ test("workflow preparation is readable for Viewer while workflow and package wri
   await expect(page.locator(".workflow-sidepanel fieldset")).toHaveAttribute("disabled", "");
   await navigate("Workflow packages");
   await expect(page.getByRole("button", { name: "New package", exact: true })).toBeDisabled();
-  // Phones keep row actions behind the card's "…" button, so they may be hidden.
-  await expect(page.getByRole("button", { name: "Task", exact: true, includeHidden: true }).first()).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Edit", exact: true, includeHidden: true }).first()).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Delete workflow package", exact: true, includeHidden: true }).first()).toBeDisabled();
+  // Phones keep row actions behind the card's "…" button, so they may be hidden;
+  // look only inside the packages list (other parts of the page have their own "Edit").
+  const packages = page.locator(".record-list-table");
+  await expect(packages.getByRole("button", { name: "Task", exact: true, includeHidden: true }).first()).toBeDisabled();
+  await expect(packages.getByRole("button", { name: "Edit", exact: true, includeHidden: true }).first()).toBeDisabled();
+  await expect(packages.getByRole("button", { name: "Delete workflow package", exact: true, includeHidden: true }).first()).toBeDisabled();
 });
 
 test("row actions stay reachable by touch for receipt, workflow, insurance and asset callbacks", async ({ page }, testInfo) => {

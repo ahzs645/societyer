@@ -327,12 +327,12 @@ export function PlanningCostsTable({
         <RecordTablePhoneCard
           title={record.name}
           badge={field("status")}
-          meta={[field("amountCents"), record.category]}
-          detail={[
-            coverage(record.cost.startDate, record.cost.endDate),
-            <span key="cash">Period cash {field("cashCents")}</span>,
-            <span key="allocated">Period allocated {field("allocatedCents")}</span>,
+          // The period's figures first: the second line is cut short on narrow phones.
+          meta={[
+            <span key="cash">Cash {field("cashCents")}</span>,
+            <span key="allocated">Allocated {field("allocatedCents")}</span>,
           ]}
+          detail={[field("amountCents"), record.category, coverage(record.cost.startDate, record.cost.endDate)]}
           selecting={selecting}
         />
       )}
@@ -444,11 +444,14 @@ export function PlanningStaffTable({
         <RecordTablePhoneCard
           title={record.name}
           badge={field("status")}
-          meta={[field("rateCents"), record.member.assumptionsConfirmed ? "" : "assumptions unconfirmed"]}
+          meta={[
+            <span key="cash">Cash {field("cashCents")}</span>,
+            <span key="allocated">Allocated {field("allocatedCents")}</span>,
+          ]}
           detail={[
+            field("rateCents"),
             coverage(record.member.startDate, record.member.endDate),
-            <span key="cash">Period cash {field("cashCents")}</span>,
-            <span key="allocated">Period allocated {field("allocatedCents")}</span>,
+            record.member.assumptionsConfirmed ? "" : "assumptions unconfirmed",
           ]}
           selecting={selecting}
         />
