@@ -355,7 +355,7 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     await page.getByRole("option", { name: "Active", exact: true }).click();
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await page.locator("tr", { hasText: name }).getByRole("button", { name: "Act as", exact: true }).click();
+    await runRowAction(recordRows(page).filter({ hasText: name }), "Act as");
     await expect(page.getByText(`Now acting as ${name}`, { exact: true })).toBeVisible();
     // BrowserRouter navigation retains the intentionally in-memory demo actor.
     async function navigate(route: string) {

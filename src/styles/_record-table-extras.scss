@@ -802,3 +802,18 @@
 
 // Phones: the toolbar folds into one row of icon buttons — see the "Phone
 // toolbars" section of _control-density.scss.
+
+// A record table set under a card's heading (Users & access, Membership &
+// billing, Webhooks): its rows run edge to edge like any card table, while the
+// toolbar and filter chips take the heading's inset. Phones, where cards go
+// flush, give the whole register the page gutter (as .role-holders-register).
+@media (max-width: 760px) {
+  .card-register {
+    padding-inline: token('s-3');
+  }
+}
+@media (min-width: 761px) {
+  .card-register > :is(.record-table__toolbar, .record-table__chips) {
+    padding-inline: token('s-4');
+  }
+}

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { recordRows, runRowAction } from "./helpers/rowActions";
 
 test("saved pathway branches, freezes inputs, requires independent review and records an honest manual handoff", async ({ page }) => {
   const errors: string[] = [];
@@ -44,7 +45,7 @@ test("saved pathway branches, freezes inputs, requires independent review and re
   await expect(panel.getByRole("textbox", { name: "Registered office address" })).toHaveValue("100 Example Street, Ottawa, Ontario", { timeout: 25_000 });
   await expect(panel.getByTestId("pathway-node-prepare-documents").getByText("Completed", { exact: true })).toBeVisible();
   await page.goto("/app/users");
-  await page.locator("tr", { hasText: "Independent Pathway Reviewer" }).getByRole("button", { name: "Act as", exact: true }).click();
+  await runRowAction(recordRows(page).filter({ hasText: "Independent Pathway Reviewer" }), "Act as");
   await page.goto("/app/post-incorporation");
   await panel.getByTestId("pathway-node-review").getByRole("button", { name: "Approve review" }).click();
   const submission = panel.getByTestId("pathway-node-submit");

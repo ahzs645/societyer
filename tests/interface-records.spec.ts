@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { chooseViewType, searchRecords } from "./helpers/recordTableToolbar";
-import { openRowMenu, recordRows } from "./helpers/rowActions";
+import { openRowMenu, recordRows, runRowAction } from "./helpers/rowActions";
 
 async function openNavigation(page: Page) {
   const mobileMore = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
@@ -202,7 +202,7 @@ test("document metadata opens its review workbench and validates page comments",
   await page.getByRole("option", { name: "Active", exact: true }).click();
   await userDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(userDialog).toHaveCount(0);
-  await page.locator("tr", { hasText: "Interface Records Viewer" }).getByRole("button", { name: "Act as", exact: true }).click();
+  await runRowAction(recordRows(page).filter({ hasText: "Interface Records Viewer" }), "Act as");
   await expect(page.getByText("Now acting as Interface Records Viewer", { exact: true })).toBeVisible();
   // Demo actors are intentionally in-memory; use router navigation to preserve the selected role.
   await openNavigation(page);
