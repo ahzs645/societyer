@@ -152,12 +152,6 @@ export function currencyDecimalAmount(field: FieldMetadata, value: unknown): num
   return (field.config as CurrencyFieldConfig | undefined)?.isCents ? number / 100 : number;
 }
 
-/** Stored currency value as integer cents, honouring `isCents`. */
-export function currencyCents(field: FieldMetadata, value: unknown): number | null {
-  const amount = currencyDecimalAmount(field, value);
-  return amount == null ? null : Math.round(amount * 100);
-}
-
 function booleanLabel(field: FieldMetadata, value: boolean) {
   const config = field.config as { trueLabel?: string; falseLabel?: string } | undefined;
   return value ? config?.trueLabel ?? "Yes" : config?.falseLabel ?? "No";
