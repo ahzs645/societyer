@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { CalendarDays } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
@@ -54,6 +56,68 @@ function LeaveHistory({ events }: { events: PayrollVacationAudit[] }) {
     </details>
   );
 }
+const VACATION_DAYS_TABLE = staticRecordTable({
+  id: "payroll:vacation-days",
+  nameSingular: "payrollVacationDay",
+  namePlural: "payrollVacationDays",
+  labelSingular: "Vacation date",
+  labelPlural: "Vacation dates",
+  labelIdentifierFieldName: "date",
+  viewName: "Recorded vacation dates",
+  fields: [
+    { name: "date", label: "Date", fieldType: FIELD_TYPES.DATE, size: 140, config: { groupable: false } },
+    { name: "time", label: "Time", fieldType: FIELD_TYPES.TEXT, size: 130 },
+    { name: "minutes", label: "Exact minutes", fieldType: FIELD_TYPES.NUMBER, size: 130 },
+    {
+      name: "linked",
+      label: "Payroll work link",
+      fieldType: FIELD_TYPES.BOOLEAN,
+      size: 220,
+      config: { trueLabel: "Linked same dated absence", falseLabel: "Unlinked" },
+    },
+  ],
+});
+
+/** One date of a vacation request, with its payroll work-day link. */
+type VacationDayRecord = { _id: string; date: string; time: string; minutes: number; linked: boolean };
+
+/** The dates a vacation request covers, each with its payroll work-day link. */
+function VacationDaysTable({ days: source }: { days: PayrollVacationRequestRecord["days"] }) {
+  const days = useMemo<VacationDayRecord[]>(
+    () =>
+      source.map((day) => ({
+        _id: day.date,
+        date: day.date,
+        time: vacationHoursLabel(day.minutes),
+        minutes: day.minutes,
+        linked: Boolean(day.payrollWorkDayId),
+      })),
+    [source],
+  );
+  return (
+    <RecordListTable<VacationDayRecord>
+      variant="card"
+      showTitle
+      table={VACATION_DAYS_TABLE}
+      tableId="payroll-leave-days"
+      label="Recorded vacation dates"
+      icon={<CalendarDays size={14} />}
+      records={days}
+      renderCell={({ record: day, field }) => {
+        if (field.name === "linked") return day.linked ? "Linked same dated absence" : "Unlinked";
+        return undefined;
+      }}
+      renderPhoneCard={(day) => (
+        <RecordTablePhoneCard
+          title={formatDate(day.date)}
+          meta={[day.time, `${day.minutes} minutes`]}
+          detail={[day.linked ? "Linked same dated absence" : "Unlinked"]}
+        />
+      )}
+    />
+  );
+}
+
 function LeaveRequestCard({
   societyId,
   record,
@@ -112,33 +176,7 @@ function LeaveRequestCard({
         <p>Late-use evidence: {record.lateUseEvidence}</p>
       )}
       {record.notes && <p>{record.notes}</p>}
-      <div className="payroll-calculator__table-wrap">
-        <table className="table">
-          <caption>Recorded vacation dates</caption>
-          <thead>
-            <tr>
-              <th scope="col">Date</th>
-              <th scope="col">Time</th>
-              <th scope="col">Exact minutes</th>
-              <th scope="col">Payroll work link</th>
-            </tr>
-          </thead>
-          <tbody>
-            {record.days.map((day) => (
-              <tr key={day.date}>
-                <td>{formatDate(day.date)}</td>
-                <td>{vacationHoursLabel(day.minutes)}</td>
-                <td>{day.minutes}</td>
-                <td>
-                  {day.payrollWorkDayId
-                    ? "Linked same dated absence"
-                    : "Unlinked"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <VacationDaysTable days={record.days} />
       <LeaveHistory events={record.history} />
       {!["cancelled", "rejected"].includes(record.status) && (
         <>

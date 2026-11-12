@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Link, useNavigate } from "react-router-dom";
+import { Landmark } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
 import type {
   CalculationInput,
@@ -30,6 +33,68 @@ const PAYMENT_METHODS: Record<PayrollPaymentMethod, string> = {
   cash: "Cash",
   other: "Other",
 };
+
+type PayrollPayment = NonNullable<PayrollCalculationRecord["payments"]>[number];
+
+const PAYMENTS_TABLE = staticRecordTable({
+  id: "payroll:run-payments",
+  nameSingular: "payrollRunPayment",
+  namePlural: "payrollRunPayments",
+  labelSingular: "Payment",
+  labelPlural: "Payments",
+  labelIdentifierFieldName: "transactionId",
+  viewName: "Recorded bank payments",
+  fields: [
+    { name: "date", label: "Effective date", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "forName", label: "For", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "amountCents", label: "Net amount", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+    { name: "reference", label: "Reference", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    {
+      name: "method",
+      label: "Method / destination",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 200,
+      config: { options: Object.entries(PAYMENT_METHODS).map(([value, label]) => ({ value, label, color: "gray" })) },
+    },
+    { name: "transactionId", label: "Bank transaction", fieldType: FIELD_TYPES.TEXT, size: 200, config: { groupable: false } },
+    { name: "journalEntryId", label: "Clearing journal", fieldType: FIELD_TYPES.TEXT, size: 200, config: { groupable: false } },
+  ],
+});
+
+type PaymentRecord = {
+  _id: string;
+  date: string;
+  /** The employee the payment was for, or "Whole calculation". */
+  forName: string;
+  amountCents: number;
+  reference: string;
+  method: PayrollPaymentMethod | null;
+  payee?: string;
+  destinationReference?: string;
+  transactionId: string;
+  journalEntryId: string | null;
+};
+
+function paymentRecord(payment: PayrollPayment, record: PayrollCalculationRecord): PaymentRecord {
+  return {
+    _id: payment.key,
+    date: payment.date,
+    forName: payment.employeeId
+      ? (record.result.employees.find((employee) => employee.employeeId === payment.employeeId)?.employeeName ?? payment.employeeId)
+      : "Whole calculation",
+    amountCents: payment.amountCents,
+    reference: payment.reference,
+    method: payment.method ?? null,
+    payee: payment.payee,
+    destinationReference: payment.destinationReference,
+    transactionId: payment.transactionId,
+    journalEntryId: payment.journalEntryId ?? null,
+  };
+}
+
+/** A bank transaction as Financials opens it. */
+const transactionHref = (transactionId: string) =>
+  `/app/financials?tab=transactions&transaction=${encodeURIComponent(transactionId)}`;
 
 export function PayrollResultReview({
   societyId,
@@ -615,6 +680,7 @@ export function PayrollSavedReview({
     [post, setPost] = useState(false),
     [reversing, setReversing] = useState(false),
     [payment, setPayment] = useState(false);
+  const navigate = useNavigate();
   async function action(operation: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError("");
@@ -824,54 +890,38 @@ export function PayrollSavedReview({
             />
             .
           </p>
-          <div className="payroll-calculator__table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Effective date</th>
-                  <th>For</th>
-                  <th>Net amount</th>
-                  <th>Reference</th>
-                  <th>Method / destination</th>
-                  <th>Bank transaction / clearing journal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {linkedPayments.map((payment) => (
-                  <tr key={payment.key}>
-                    <td>{formatDate(payment.date)}</td>
-                    <td>
-                      {payment.employeeId
-                        ? (record.result.employees.find(
-                            (employee) =>
-                              employee.employeeId === payment.employeeId,
-                          )?.employeeName ?? payment.employeeId)
-                        : "Whole calculation"}
-                    </td>
-                    <td>
-                      <Money cents={payment.amountCents} currency="CAD" />
-                    </td>
-                    <td>{payment.reference}</td>
-                    <td>
-                      {payment.method
-                        ? PAYMENT_METHODS[payment.method]
-                        : "Method unknown"}
-                      {payment.payee && <small>{payment.payee}</small>}
-                      {payment.destinationReference && (
-                        <small>{payment.destinationReference}</small>
-                      )}
-                    </td>
-                    <td>
-                      {payment.transactionId}
-                      {payment.journalEntryId && (
-                        <small>{payment.journalEntryId}</small>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <RecordListTable<PaymentRecord>
+            variant="card"
+            table={PAYMENTS_TABLE}
+            tableId="payroll-run-payments"
+            label="Recorded bank payments"
+            icon={<Landmark size={14} />}
+            records={linkedPayments.map((payment) => paymentRecord(payment, record))}
+            onOpen={(payment) => navigate(transactionHref(payment.transactionId))}
+            renderCell={({ record: payment, field }) => {
+              if (field.name === "amountCents") return <Money cents={payment.amountCents} currency="CAD" />;
+              if (field.name === "method")
+                return (
+                  <>
+                    {payment.method ? PAYMENT_METHODS[payment.method] : "Method unknown"}
+                    {payment.payee && <small>{payment.payee}</small>}
+                    {payment.destinationReference && <small>{payment.destinationReference}</small>}
+                  </>
+                );
+              if (field.name === "journalEntryId")
+                return payment.journalEntryId ? <Link to={`/app/financials/journal-entries?entry=${encodeURIComponent(payment.journalEntryId)}`}>{payment.journalEntryId}</Link> : <span className="muted">—</span>;
+              return undefined;
+            }}
+            renderPhoneCard={(payment, { open, selecting }) => (
+              <RecordTablePhoneCard
+                title={payment.forName}
+                meta={[<Money key="amount" cents={payment.amountCents} currency="CAD" />, formatDate(payment.date)]}
+                detail={[payment.reference, payment.method ? PAYMENT_METHODS[payment.method] : "Method unknown"]}
+                onOpen={open}
+                selecting={selecting}
+              />
+            )}
+          />
           <a href="/app/financials">Open financial transactions</a>
         </section>
       )}

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { CalendarClock, Plus } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
@@ -47,6 +48,92 @@ const ORIGIN_LABELS: Record<string, string> = {
   committee_structure: "Committee cadence",
 };
 
+type RulePackRule = { ruleKey: string; title: string; severity: string; bodyKind: string; rule: CadenceRule; citation?: string; caveat?: string; stored?: boolean };
+type CommitteeCadence = { key: string; title: string; committeeId: string; rule: CadenceRule; effectiveFrom?: string; effectiveTo?: string };
+type StoredExpectation = {
+  _id: string;
+  title: string;
+  kind: string;
+  bodyKind: string;
+  committeeId?: string;
+  rule: CadenceRule;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  severity: string;
+  citation?: string;
+  notes?: string;
+  origin: string;
+  status: string;
+  ruleKey?: string;
+};
+
+/** One expectation as the table lists it, whichever of the three places it comes from. */
+type ExpectationRecord = {
+  _id: string;
+  title: string;
+  severity: string;
+  expectationKind: string | null;
+  body: string;
+  committeeId: string | null;
+  cadence: string;
+  effective: string;
+  source: string;
+  sourceNote: string;
+  origin: string;
+  /** "automatic" for rule-pack rules and committee cadences nobody stored. */
+  status: string;
+  entry:
+    | { kind: "rule"; row: RulePackRule }
+    | { kind: "committee"; row: CommitteeCadence }
+    | { kind: "stored"; row: StoredExpectation };
+};
+
+const EXPECTATIONS_TABLE = staticRecordTable({
+  id: "coverage:expectations",
+  nameSingular: "continuityExpectation",
+  namePlural: "continuityExpectations",
+  labelSingular: "Expectation",
+  labelPlural: "Expectations",
+  labelIdentifierFieldName: "title",
+  viewName: "All expectations",
+  fields: [
+    { name: "title", label: "Expectation", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    {
+      name: "severity",
+      label: "Severity",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 140,
+      config: { options: [{ value: "statutory", label: SEVERITY_LABELS.statutory, color: "red" }, { value: "bylaw", label: SEVERITY_LABELS.bylaw, color: "amber" }, { value: "practice", label: SEVERITY_LABELS.practice, color: "gray" }] },
+    },
+    {
+      name: "expectationKind",
+      label: "Record expected",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 180,
+      isVisible: false,
+      config: { options: EXPECTATION_KINDS.map((kind) => ({ value: kind, label: EXPECTATION_KIND_LABELS[kind], color: "gray" })) },
+    },
+    { name: "body", label: "Body", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "cadence", label: "Cadence", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "effective", label: "Effective", fieldType: FIELD_TYPES.TEXT, size: 170 },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 170,
+      config: { options: [{ value: "automatic", label: "Applies automatically", color: "blue" }, { value: "active", label: "Active", color: "green" }, { value: "archived", label: "Switched off", color: "gray" }] },
+    },
+    { name: "source", label: "Source", fieldType: FIELD_TYPES.TEXT, size: 200 },
+    {
+      name: "origin",
+      label: "Origin",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 170,
+      config: { options: Object.entries(ORIGIN_LABELS).map(([value, label]) => ({ value, label, color: "gray" })) },
+    },
+  ],
+});
+
 const emptyForm = (): ExpectationForm => ({ title: "", kind: "meeting", bodyKind: "board", rule: { frequency: "monthly" }, effectiveFrom: "", effectiveTo: "", severity: "practice", citation: "", notes: "" });
 
 /** Governance expectations: rule pack, bylaw-derived, manual and inferred cadences. */
@@ -63,11 +150,73 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
   const confirm = useConfirm();
   const toast = useToast();
   const undoable = useUndoableAction();
+  const navigate = useNavigate();
   const [form, setForm] = useState<ExpectationForm | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!data) return <div className="muted">Loading expectations…</div>;
   const committeeName = (id?: string) => committees?.find((committee) => committee._id === id)?.name ?? "Committee";
+  const bodyLabel = (bodyKind: string) => BODY_OPTIONS.find((option) => option.value === bodyKind)?.label ?? bodyKind;
+  const effectiveRange = (from?: string, to?: string) => `${from ?? "—"}${to ? ` to ${to}` : ""}`;
+  const rulePack: { title: string; rules: RulePackRule[] } | null = data.rulePack ?? null;
+  const committeeCadences: CommitteeCadence[] = data.committeeCadences ?? [];
+  const stored: StoredExpectation[] = data.stored;
+  const records: ExpectationRecord[] = [
+    ...(rulePack?.rules ?? []).filter((rule) => !rule.stored).map((rule): ExpectationRecord => ({
+      _id: `rule:${rule.ruleKey}`,
+      title: rule.title,
+      severity: rule.severity,
+      expectationKind: null,
+      body: bodyLabel(rule.bodyKind),
+      committeeId: null,
+      cadence: describeCadenceRule(rule.rule),
+      effective: "From incorporation",
+      source: rule.citation ?? ORIGIN_LABELS.rule_pack,
+      sourceNote: rule.caveat ?? `${rulePack?.title ?? ORIGIN_LABELS.rule_pack} · draft`,
+      origin: "rule_pack",
+      status: "automatic",
+      entry: { kind: "rule", row: rule },
+    })),
+    ...committeeCadences.map((row): ExpectationRecord => ({
+      _id: `committee:${row.key}`,
+      title: row.title,
+      severity: "practice",
+      expectationKind: "meeting",
+      body: committeeName(row.committeeId),
+      committeeId: row.committeeId,
+      cadence: describeCadenceRule(row.rule),
+      effective: effectiveRange(row.effectiveFrom, row.effectiveTo),
+      source: ORIGIN_LABELS.committee_structure,
+      sourceNote: "Change it on the committee page",
+      origin: "committee_structure",
+      status: "automatic",
+      entry: { kind: "committee", row },
+    })),
+    ...stored.map((row): ExpectationRecord => ({
+      _id: row._id,
+      title: row.title,
+      severity: row.severity,
+      expectationKind: row.kind,
+      body: row.bodyKind === "committee" ? committeeName(row.committeeId) : bodyLabel(row.bodyKind),
+      committeeId: row.bodyKind === "committee" ? row.committeeId ?? null : null,
+      cadence: describeCadenceRule(row.rule),
+      effective: effectiveRange(row.effectiveFrom, row.effectiveTo),
+      source: row.citation ?? ORIGIN_LABELS[row.origin] ?? row.origin,
+      sourceNote: ORIGIN_LABELS[row.origin] ?? row.origin,
+      origin: row.origin,
+      status: row.status,
+      entry: { kind: "stored", row },
+    })),
+  ];
+  const editStored = (row: StoredExpectation) => {
+    setError(null);
+    setForm({ id: row._id, title: row.title, kind: row.kind, bodyKind: row.bodyKind, committeeId: row.committeeId, rule: row.rule, effectiveFrom: row.effectiveFrom ?? "", effectiveTo: row.effectiveTo ?? "", severity: row.severity, citation: row.citation ?? "", notes: row.notes ?? "" });
+  };
+  /** A committee's cadence opens its committee; a stored expectation opens for editing. */
+  const openExpectation = (record: ExpectationRecord) => {
+    if (record.entry.kind === "committee") navigate(`/app/committees/${record.entry.row.committeeId}`);
+    else if (record.entry.kind === "stored" && canWrite) editStored(record.entry.row);
+  };
 
   const save = async () => {
     if (!form) return;
@@ -110,106 +259,88 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
           <h2 className="card__title">Expectations</h2>
           <span className="card__subtitle">What records should exist: meetings by body, AGMs, filings, statements, director terms</span>
         </div>
-        {canWrite && (
-          <div className="card__body" style={{ paddingBottom: 0 }}>
-            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-              {data.rulePack && data.rulePack.rules.some((rule: any) => !rule.stored) && (
+        <RecordListTable<ExpectationRecord>
+          variant="card"
+          table={EXPECTATIONS_TABLE}
+          tableId="coverage-expectations"
+          label="Expectations"
+          icon={<CalendarClock size={14} />}
+          records={records}
+          onOpen={openExpectation}
+          toolbarActions={canWrite ? (
+            <>
+              {rulePack?.rules.some((rule) => !rule.stored) && (
                 <button type="button" className="btn btn--sm" onClick={() => run("Rule pack stored", () => seed({ societyId }))}>Store rule pack to edit</button>
               )}
               <button type="button" className="btn btn--sm" disabled={!data.hasActiveBylawRules} title={data.hasActiveBylawRules ? undefined : "Activate a bylaw rule set first"} onClick={() => run("Derived from bylaw rules", () => derive({ societyId }))}>Derive from bylaw rules</button>
               <button type="button" className="btn-action btn-action--primary" onClick={() => { setError(null); setForm(emptyForm()); }}><Plus size={12} /> Add expectation</button>
-            </div>
-          </div>
-        )}
-        <div className="coverage-table-scroll">
-          <table className="table">
-            <thead>
-              <tr><th>Expectation</th><th>Body</th><th>Cadence</th><th>Effective</th><th>Source</th><th aria-label="Actions" /></tr>
-            </thead>
-            <tbody>
-              {data.rulePack?.rules.filter((rule: any) => !rule.stored).map((rule: any) => (
-                <tr key={rule.ruleKey}>
-                  <td>
-                    <strong>{rule.title}</strong>
-                    <div className="row" style={{ gap: 4, marginTop: 2 }}><Badge tone={SEVERITY_TONE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge><Badge tone="info">Applies automatically</Badge></div>
-                  </td>
-                  <td>{BODY_OPTIONS.find((option) => option.value === rule.bodyKind)?.label}</td>
-                  <td>{describeCadenceRule(rule.rule)}</td>
-                  <td className="muted">From incorporation</td>
-                  <td><span title={rule.caveat}>{rule.citation}</span><div className="muted" style={{ fontSize: 11 }}>{data.rulePack.title} · draft</div></td>
-                  <td />
-                </tr>
-              ))}
-              {(data.committeeCadences ?? []).map((row: any) => (
-                <tr key={row.key}>
-                  <td>
-                    <strong>{row.title}</strong>
-                    <div className="row" style={{ gap: 4, marginTop: 2 }}><Badge tone={SEVERITY_TONE.practice}>{SEVERITY_LABELS.practice}</Badge><Badge tone="info">Applies automatically</Badge></div>
-                  </td>
-                  <td>{committeeName(row.committeeId)}</td>
-                  <td>{describeCadenceRule(row.rule)}</td>
-                  <td className="muted">{row.effectiveFrom ?? "—"}{row.effectiveTo ? ` to ${row.effectiveTo}` : ""}</td>
-                  <td>{ORIGIN_LABELS.committee_structure}<div className="muted" style={{ fontSize: 11 }}>Change it on the committee page</div></td>
-                  <td><Link className="btn btn--sm" to={`/app/committees/${row.committeeId}`}>Open committee</Link></td>
-                </tr>
-              ))}
-              {data.stored.map((row: any) => (
-                <tr key={row._id} style={row.status === "archived" ? { opacity: 0.6 } : undefined}>
-                  <td>
-                    <strong>{row.title}</strong>
-                    <div className="row" style={{ gap: 4, marginTop: 2, flexWrap: "wrap" }}>
-                      <Badge tone={SEVERITY_TONE[row.severity] ?? "neutral"}>{SEVERITY_LABELS[row.severity] ?? row.severity}</Badge>
-                      <Badge tone="neutral">{EXPECTATION_KIND_LABELS[row.kind as keyof typeof EXPECTATION_KIND_LABELS] ?? row.kind}</Badge>
-                      {row.status !== "active" && <Badge tone="gray">{row.status}</Badge>}
-                    </div>
-                  </td>
-                  <td>{row.bodyKind === "committee" ? committeeName(row.committeeId) : BODY_OPTIONS.find((option) => option.value === row.bodyKind)?.label}</td>
-                  <td>{describeCadenceRule(row.rule)}</td>
-                  <td className="muted">{row.effectiveFrom ?? "—"}{row.effectiveTo ? ` to ${row.effectiveTo}` : ""}</td>
-                  <td>{row.citation ?? ORIGIN_LABELS[row.origin] ?? row.origin}<div className="muted" style={{ fontSize: 11 }}>{ORIGIN_LABELS[row.origin] ?? row.origin}</div></td>
-                  <td>
-                    {canWrite && (
-                      <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
-                        <button type="button" className="btn btn--sm" onClick={() => { setError(null); setForm({ id: row._id, title: row.title, kind: row.kind, bodyKind: row.bodyKind, committeeId: row.committeeId, rule: row.rule, effectiveFrom: row.effectiveFrom ?? "", effectiveTo: row.effectiveTo ?? "", severity: row.severity, citation: row.citation ?? "", notes: row.notes ?? "" }); }}>Edit</button>
-                        <button type="button" className="btn btn--sm" onClick={() => row.status === "archived"
-                          ? run("Expectation restored", () => update({ id: row._id, patch: { status: "active" } }))
-                          : void undoable({
-                            message: "Expectation switched off",
-                            description: row.title,
-                            errorMessage: "Expectation switched off failed",
-                            dedupeKey: `expectation-off-${row._id}`,
-                            run: () => update({ id: row._id, patch: { status: "archived" } }),
-                            undo: () => update({ id: row._id, patch: { status: row.status } }),
-                            undoneMessage: "Expectation restored",
-                          })}>
-                          {row.status === "archived" ? "Restore" : "Switch off"}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--sm btn--danger"
-                          onClick={async () => {
-                            const ok = await confirm({
-                              title: "Delete expectation?",
-                              message: `"${row.title}" and every period mark recorded against it (never held, cancelled, waived, attached evidence) will be deleted.${row.ruleKey ? " A rule-pack rule then applies automatically again." : ""}`,
-                              confirmLabel: "Delete",
-                              tone: "danger",
-                            });
-                            if (ok) await run("Expectation deleted", () => remove({ id: row._id }));
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {!data.stored.length && !data.rulePack && (
-                <tr><td colSpan={6} className="table__empty">No expectations yet. No record-continuity rule pack exists for this jurisdiction; add body cadences manually.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </>
+          ) : undefined}
+          renderCell={({ record, field }) => {
+            if (field.name === "severity") return <Badge tone={SEVERITY_TONE[record.severity] ?? "neutral"}>{SEVERITY_LABELS[record.severity] ?? record.severity}</Badge>;
+            if (field.name === "expectationKind") return record.expectationKind ? <Badge tone="neutral">{EXPECTATION_KIND_LABELS[record.expectationKind as keyof typeof EXPECTATION_KIND_LABELS] ?? record.expectationKind}</Badge> : <span className="muted">—</span>;
+            if (field.name === "status") {
+              if (record.status === "automatic") return <Badge tone="info">Applies automatically</Badge>;
+              if (record.status === "active") return <span className="muted">Active</span>;
+              return <Badge tone="gray">{record.status === "archived" ? "Switched off" : record.status}</Badge>;
+            }
+            if (field.name === "body" && record.committeeId) return <Link to={`/app/committees/${record.committeeId}`}>{record.body}</Link>;
+            if (field.name === "effective") return <span className="muted">{record.effective}</span>;
+            if (field.name === "source") return <span title={record.sourceNote}>{record.source}</span>;
+            return undefined;
+          }}
+          renderRowActions={(record) => {
+            const { entry } = record;
+            if (entry.kind === "committee")
+              return <Link className="btn btn--sm" to={`/app/committees/${entry.row.committeeId}`}>Open committee</Link>;
+            if (entry.kind !== "stored" || !canWrite) return null;
+            const row = entry.row;
+            return (
+              <>
+                <button type="button" className="btn btn--sm" onClick={() => editStored(row)}>Edit</button>
+                <button type="button" className="btn btn--sm" onClick={() => row.status === "archived"
+                  ? run("Expectation restored", () => update({ id: row._id, patch: { status: "active" } }))
+                  : void undoable({
+                    message: "Expectation switched off",
+                    description: row.title,
+                    errorMessage: "Expectation switched off failed",
+                    dedupeKey: `expectation-off-${row._id}`,
+                    run: () => update({ id: row._id, patch: { status: "archived" } }),
+                    undo: () => update({ id: row._id, patch: { status: row.status } }),
+                    undoneMessage: "Expectation restored",
+                  })}>
+                  {row.status === "archived" ? "Restore" : "Switch off"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--danger"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "Delete expectation?",
+                      message: `"${row.title}" and every period mark recorded against it (never held, cancelled, waived, attached evidence) will be deleted.${row.ruleKey ? " A rule-pack rule then applies automatically again." : ""}`,
+                      confirmLabel: "Delete",
+                      tone: "danger",
+                    });
+                    if (ok) await run("Expectation deleted", () => remove({ id: row._id }));
+                  }}
+                >
+                  Delete
+                </button>
+              </>
+            );
+          }}
+          renderPhoneCard={(record, { open, field, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.title}
+              badge={field("severity")}
+              meta={[record.cadence, record.body]}
+              detail={[record.status === "automatic" ? "Applies automatically" : record.status === "archived" ? "Switched off" : "", record.source]}
+              onOpen={record.entry.kind === "committee" || (record.entry.kind === "stored" && canWrite) ? open : undefined}
+              selecting={selecting}
+            />
+          )}
+          emptyState={<RecordTableEmpty title="No expectations yet." description="No record-continuity rule pack exists for this jurisdiction; add body cadences manually." />}
+        />
       </section>
 
       <section className="card">

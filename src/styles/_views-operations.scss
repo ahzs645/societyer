@@ -76,7 +76,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: token(s-2);
-  margin: 0 0 token(s-3);
+  margin: 0;
 }
 .portfolio-batch__label {
   display: inline-flex;
@@ -93,10 +93,7 @@
   min-width: 0;
   flex: 0 1 280px;
 }
-.portfolio-table__narrow { display: none; }
 @media (max-width: 560px) {
-  .portfolio-table .portfolio-table__wide { display: none; }
-  .portfolio-table__narrow { display: inline; }
   // Packet picker and Generate share the line; the group's aria-label names it.
   .portfolio-batch__packet { flex: 1 1 0; }
   .portfolio-batch__title { display: none; }
@@ -104,15 +101,7 @@
 }
 .portfolio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .portfolio-table__name {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: token(text-primary);
-  font: inherit;
   font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  &:hover { text-decoration: underline; }
 }
 .portfolio-table__deadlines {
   .badge + .badge { margin-left: 4px; }

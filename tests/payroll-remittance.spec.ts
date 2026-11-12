@@ -1,10 +1,15 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import {
   activateRemittance,
   inspectRemittance,
   expectRemittanceCards,
+  remittanceRowAction,
 } from "./payroll-remittance-responsive";
+const obligationsList = (panel: Locator) =>
+  panel.getByRole("region", { name: "CRA obligations", exact: true });
+const plansList = (panel: Locator) =>
+  panel.getByRole("region", { name: "Remittance plans", exact: true });
 const browserErrors = new WeakMap<Page, string[]>();
 test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
@@ -163,12 +168,7 @@ async function reopenRemittance(page: Page, amount?: string) {
       exact: true,
     });
   await expect(plans).toBeVisible();
-  const row = amount
-    ? plans.locator("tbody tr").filter({ hasText: amount })
-    : plans.locator("tbody tr");
-  await activateRemittance(
-    row.getByRole("button", { name: "Review plan", exact: true }).first(),
-  );
+  await remittanceRowAction(plans, "Review plan", amount);
   await expect(
     panel.getByRole("region", { name: "Remittance plan review", exact: true }),
   ).toBeVisible();
@@ -241,9 +241,7 @@ test("CRA plans require review, export no payment, and actual partial bank settl
   const { panel, societyId, bankAccountId } = await seed(page);
   await inspectRemittance(page, testInfo, "initial-obligations");
   await expectRemittanceCards(page, testInfo);
-  await activateRemittance(
-    panel.getByRole("button", { name: "Prepare payment plan", exact: true }),
-  );
+  await remittanceRowAction(obligationsList(panel), "Prepare payment plan");
   const planForm = panel.getByRole("form", {
     name: "CRA remittance plan",
     exact: true,
@@ -578,9 +576,7 @@ test("a stale partially paid plan releases only its unpaid remainder for a corre
     },
     { societyId, bankAccountId, obligationId },
   );
-  await activateRemittance(
-    panel.getByRole("button", { name: "Review plan", exact: true }),
-  );
+  await remittanceRowAction(plansList(panel), "Review plan");
   const review = panel.getByRole("region", {
     name: "Remittance plan review",
     exact: true,
@@ -611,9 +607,7 @@ test("a stale partially paid plan releases only its unpaid remainder for a corre
   await expect(
     review.getByText("Matched bank outflow", { exact: false }),
   ).toHaveCount(1);
-  await activateRemittance(
-    panel.getByRole("button", { name: "Prepare payment plan", exact: true }),
-  );
+  await remittanceRowAction(obligationsList(panel), "Prepare payment plan");
   const form = panel.getByRole("form", {
     name: "CRA remittance plan",
     exact: true,
@@ -719,9 +713,7 @@ test("remittance plan paging and read-only financial permissions remain accessib
   await expect(
     plans.getByText("Page 2 · 2 visible", { exact: true }),
   ).toBeVisible();
-  await activateRemittance(
-    plans.getByRole("button", { name: "Review plan", exact: true }).first(),
-  );
+  await remittanceRowAction(plans, "Review plan");
   await expect(
     panel.getByRole("region", { name: "Remittance plan review", exact: true }),
   ).toBeVisible();
@@ -780,12 +772,7 @@ test("remittance plan paging and read-only financial permissions remain accessib
     .getByRole("button", { name: "Prepare payment plan", exact: true })
     .all())
     await expect(button).toBeDisabled();
-  await activateRemittance(
-    panel
-      .getByRole("region", { name: "Remittance plans", exact: true })
-      .getByRole("button", { name: "Review plan", exact: true })
-      .first(),
-  );
+  await remittanceRowAction(plansList(panel), "Review plan");
   const readonlyReview = panel.getByRole("region", {
     name: "Remittance plan review",
     exact: true,
