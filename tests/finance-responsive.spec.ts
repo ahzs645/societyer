@@ -348,15 +348,15 @@ test("semester recurrence and staff edits propagate through live totals, exports
   await page.reload();
   await expect(summary).toContainText("$4,864.64");
   await expect(
-    page.getByRole("row").filter({ hasText: "Monthly software" }),
+    recordRows(page).filter({ hasText: "Monthly software" }),
   ).toContainText("$500.00");
   await page.getByRole("button", { name: "Staff", exact: true }).click();
-  await page
-    .getByRole("button", {
-      name: "Edit staff cost Semester assistant",
-      exact: true,
-    })
-    .click();
+  // Inline on wide screens; behind the card's "…" on phones.
+  await runRowAction(
+    recordRows(page).filter({ hasText: "Semester assistant" }),
+    "Edit staff cost Semester assistant",
+    "Edit",
+  );
   dialog = page.getByRole("dialog");
   await expect(
     dialog.getByLabel("Hours per week", { exact: true }),
