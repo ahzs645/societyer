@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Eye, FilePlus2, Plus } from "lucide-react";
+import { Eye, FilePlus2, FileText, Plus } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
+import { formatDate } from "../../lib/format";
 import { Badge, Drawer, EmptyState, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { DatePicker } from "../../components/DatePicker";
@@ -12,7 +14,7 @@ import { useToast } from "../../components/Toast";
 import { addDays, partyKey } from "../../../shared/invoicing";
 import { INVOICE_CURRENCIES, resolveDocumentDesign } from "../../../shared/invoiceCommerce";
 import { assignedPriceList, quantityCatalogRate, type BillingPricingWorkspace } from "../../../shared/billingPricing";
-import type { BillingQuote, QuoteFields, QuoteStatus } from "../../../shared/billingDocuments";
+import { QUOTE_STATUSES, type BillingQuote, type QuoteFields, type QuoteStatus } from "../../../shared/billingDocuments";
 import { BillToPicker } from "./BillToPicker";
 import { LineItemsEditor, toLineDraft, type LineDraft } from "./LineItemsEditor";
 import { BillingDocumentPreview } from "./BillingDocumentPreview";
@@ -24,9 +26,36 @@ import type { InvoiceWorkspace } from "./types";
 import { taxTransactionContextChanged, taxTransactionContextKey, reassessTaxLines } from "../../../shared/tax";
 
 type Draft = Omit<QuoteFields, "lines"> & { id?: string; lines: LineDraft[] };
-type Props = { workspace: InvoiceWorkspace; societyId: string; canWrite: boolean; canExport: boolean; onOpenInvoice: (id: string) => void };
-type QuotePage = { quotes: Array<BillingQuote & { effectiveStatus: string }>; quote: (BillingQuote & { effectiveStatus: string }) | null; revisions: Array<{ revision: number; fields: QuoteFields; status: QuoteStatus }>; isDone: boolean; continueCursor: string };
-export function QuotesPanel({ workspace, societyId, canWrite, canExport, onOpenInvoice }: Props) {
+type Props = {
+  workspace: InvoiceWorkspace; societyId: string; canWrite: boolean; canExport: boolean; onOpenInvoice: (id: string) => void;
+  /** Opens a customer the way the Customers tab does: their invoices. */
+  onOpenCustomer?: (customer: { key: string; name: string }) => void;
+};
+type ListedQuote = BillingQuote & { effectiveStatus: string };
+type QuotePage = { quotes: ListedQuote[]; quote: ListedQuote | null; revisions: Array<{ revision: number; fields: QuoteFields; status: QuoteStatus }>; isDone: boolean; continueCursor: string };
+
+const QUOTE_STATUS_COLOR = { draft: "gray", sent: "blue", accepted: "green", declined: "red", expired: "amber" } as const;
+const QUOTES_TABLE = staticRecordTable({
+  id: "invoice-quotes",
+  nameSingular: "quote",
+  namePlural: "quotes",
+  labelSingular: "Quote",
+  labelPlural: "Quotes",
+  labelIdentifierFieldName: "number",
+  density: "comfortable",
+  fields: [
+    { name: "number", label: "Quote", fieldType: FIELD_TYPES.TEXT, size: 150, config: { groupable: false } },
+    { name: "customer", label: "Customer", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: QUOTE_STATUSES.map((status) => ({ value: status, label: status, color: QUOTE_STATUS_COLOR[status] })) } },
+    { name: "validUntil", label: "Valid until", fieldType: FIELD_TYPES.DATE, size: 130 },
+    // Each quote carries its own currency, so the cell draws it and there are no totals.
+    { name: "totalCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, size: 150, config: { isCents: true } },
+    { name: "invoice", label: "Invoice", fieldType: FIELD_TYPES.TEXT, size: 130 },
+  ],
+});
+type QuoteRecord = { _id: string; number: string; customer: string; status: string; validUntil: string; totalCents: number; invoice: string; quote: ListedQuote };
+
+export function QuotesPanel({ workspace, societyId, canWrite, canExport, onOpenInvoice, onOpenCustomer }: Props) {
   const [detailId, setDetailId] = useState<string | null>(null), [draft, setDraft] = useState<Draft | null>(null), [filter, setFilter] = useState("all"), [preview, setPreview] = useState<BillingQuote | null>(null);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [priceListId, setPriceListId] = useState("");
   const [priceListManual, setPriceListManual] = useState(false);
@@ -38,6 +67,16 @@ export function QuotesPanel({ workspace, societyId, canWrite, canExport, onOpenI
   const save = useMutation(api.billingDocuments.upsertQuote), status = useMutation(api.billingDocuments.setQuoteStatus), revise = useMutation(api.billingDocuments.reviseQuote), convert = useMutation(api.billingDocuments.convertQuote), createCustomer = useMutation(api.accounting.upsertCounterparty);
   const prompt = usePrompt(), toast = useToast();
   const detail = detailData?.quote;
+  const quoteRecords = useMemo<QuoteRecord[]>(() => (data?.quotes ?? []).map((quote) => ({
+    _id: quote._id,
+    number: `${quote.number} · r${quote.revision}`,
+    customer: quote.fields.billToName,
+    status: quote.effectiveStatus,
+    validUntil: quote.fields.validUntil,
+    totalCents: quote.totalCents,
+    invoice: quote.convertedInvoiceId ? "View invoice" : "",
+    quote,
+  })), [data]);
   const listFor = (value: Draft) => priceListManual ? workspace.priceLists?.find((list) => list._id === priceListId) : pricing ? assignedPriceList(workspace.priceLists ?? [], pricing, partyKey(value), value.currency, value.issueDate) : undefined;
   const reprice = (value: Draft, list: ReturnType<typeof listFor>) => ({ ...value, lines: value.lines.map((line) => { const item = workspace.catalog.find((item) => item._id === line.catalogItemId); if (!item || line.rateOverridden) return line; const rate = quantityCatalogRate(item, line.quantity, value.currency, value.issueDate, list, pricing ?? { profiles: [], assignments: [] }, workspace.ledger.workspaceCurrency); return rate === null ? line : { ...line, unitPriceCents: rate, priceInput: (rate / 100).toFixed(2) }; }) });
   const change = (patch: Partial<Draft>) => setDraft((current) => { if (!current) return current; const next = { ...current, ...patch }; if (taxTransactionContextChanged(current, next)) next.lines = reassessTaxLines(next.lines, next.issueDate); return ["partyKind", "memberId", "counterpartyId", "billToName", "currency", "issueDate"].some((key) => Object.hasOwn(patch, key)) ? reprice(next, listFor(next)) : next; });
@@ -50,7 +89,46 @@ export function QuotesPanel({ workspace, societyId, canWrite, canExport, onOpenI
     <div className="card__head"><div><h2 className="card__title">Quotes & estimates</h2><span className="card__subtitle">Publish a revision, record the customer decision, and convert accepted terms to one linked invoice.</span></div><button className="btn btn--accent btn--sm" disabled={!canWrite || !pricing} onClick={() => open()}><Plus size={14} />New quote</button></div>
     {error && !draft && !detail && <p className="field__error" role="alert">{error}</p>}
     {!(filter === "all" && data?.isDone && data.quotes.length === 0) && <div className="card__body"><Select aria-label="Quote status filter" value={filter} onChange={setFilter} options={[{ value: "all", label: "All quotes" }, ...["draft", "sent", "accepted", "declined", "expired"].map((value) => ({ value, label: value }))]} /></div>}
-    {!data ? <p className="muted">Loading quotes…</p> : !data.quotes.length ? <EmptyState title="No quotes on this page" description={data.isDone ? "No quotes match this selection. Save products and services into a new estimate." : "Continue to the next page to see the remaining matching quotes."} /> : <table className="table table--comfortable invoice-table"><thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th>Valid until</th><th className="num">Amount</th><th>Invoice</th></tr></thead><tbody>{data.quotes.map((quote) => <tr key={quote._id}><td><button className="invoice-table__link" onClick={() => { setError(""); setDetailId(quote._id); }}>{quote.number} · r{quote.revision}</button></td><td>{quote.fields.billToName}</td><td><Badge>{quote.effectiveStatus}</Badge></td><td>{quote.fields.validUntil}</td><td className="num"><Money cents={quote.totalCents} currency={quote.fields.currency} /> {quote.fields.currency}</td><td>{quote.convertedInvoiceId ? <button className="invoice-table__link" onClick={() => onOpenInvoice(quote.convertedInvoiceId!)}>View invoice</button> : "—"}</td></tr>)}</tbody></table>}
+    <RecordListTable<QuoteRecord>
+      variant="card"
+      table={QUOTES_TABLE}
+      tableId="invoice-quotes"
+      label="Quotes"
+      icon={<FileText size={14} />}
+      records={quoteRecords}
+      loading={!data}
+      onOpen={(record) => { setError(""); setDetailId(record._id); }}
+      renderCell={({ record, field }) => {
+        const quote = record.quote;
+        switch (field.name) {
+          case "customer":
+            return onOpenCustomer
+              ? <button type="button" className="invoice-table__link" title={`Show invoices for ${quote.fields.billToName}`} onClick={(event) => { event.stopPropagation(); onOpenCustomer({ key: partyKey(quote.fields), name: quote.fields.billToName }); }}>{quote.fields.billToName}</button>
+              : undefined;
+          case "status":
+            return <Badge>{quote.effectiveStatus}</Badge>;
+          case "totalCents":
+            return <><Money cents={quote.totalCents} currency={quote.fields.currency} /> {quote.fields.currency}</>;
+          case "invoice":
+            return quote.convertedInvoiceId
+              ? <button type="button" className="invoice-table__link" onClick={(event) => { event.stopPropagation(); onOpenInvoice(quote.convertedInvoiceId!); }}>View invoice</button>
+              : <span className="muted">—</span>;
+          default:
+            return undefined;
+        }
+      }}
+      renderPhoneCard={(record, { open, selecting }) => (
+        <RecordTablePhoneCard
+          title={record.number}
+          badge={<Badge>{record.quote.effectiveStatus}</Badge>}
+          meta={[record.customer, <span key="total"><Money cents={record.totalCents} currency={record.quote.fields.currency} /> {record.quote.fields.currency}</span>]}
+          detail={[`Valid until ${formatDate(record.validUntil)}`]}
+          onOpen={open}
+          selecting={selecting}
+        />
+      )}
+      emptyState={<EmptyState title="No quotes on this page" description={data?.isDone ? "No quotes match this selection. Save products and services into a new estimate." : "Continue to the next page to see the remaining matching quotes."} />}
+    />
     <BillingDocumentPagination label="quotes" pagination={quotePagination} result={data} />
     <Drawer open={Boolean(detailId)} title={detail ? `${detail.number} · revision ${detail.revision}` : "Quote"} onClose={() => !busy && setDetailId(null)} size="wide">
       {error && <p className="field__error" role="alert">{error}</p>}{detailId && !detailData && <p className="muted">Loading quote…</p>}{detail && <div className="form-stack"><p><strong>{detail.fields.billToName}</strong> · <Badge>{detail.effectiveStatus}</Badge></p><p>Valid through {detail.fields.validUntil} · <Money cents={detail.totalCents} currency={detail.fields.currency} /> {detail.fields.currency}</p>

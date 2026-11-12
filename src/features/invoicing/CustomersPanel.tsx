@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FilePlus2, FileText, MoreHorizontal, Pencil, Plus, Search, Users } from "lucide-react";
+import { FilePlus2, FileText, Pencil, Plus, Users } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { EmptyState } from "../../components/ui";
-import { Menu } from "../../components/Menu";
 import { Money } from "../../components/Money";
-import { formatDate } from "../../lib/format";
 import type { CustomerSummary } from "../../../shared/invoicing";
 import { CustomerEditor, type CustomerDetails } from "./CustomerEditor";
+import { tablePerCurrency } from "./currencyTables";
 import type { PartyOption } from "./types";
 
 type Props = {
@@ -23,14 +23,66 @@ type Props = {
 
 const KIND_LABEL: Record<string, string> = { member: "Member", organization: "Customer", custom: "One-off" };
 
-/** Saved customers and everyone else who has been billed, with what they owe. */
+const customersTable = tablePerCurrency((currency) => {
+  const money = { isCents: true, currencyCode: currency };
+  return staticRecordTable({
+    id: "invoice-customers",
+    nameSingular: "customer",
+    namePlural: "customers",
+    labelSingular: "Customer",
+    labelPlural: "Customers",
+    labelIdentifierFieldName: "name",
+    density: "comfortable",
+    fields: [
+      { name: "name", label: "Customer", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+      {
+        name: "kind",
+        label: "Type",
+        fieldType: FIELD_TYPES.SELECT,
+        size: 110,
+        isVisible: false,
+        config: { options: [{ value: "member", label: "Member", color: "blue" }, { value: "organization", label: "Customer", color: "green" }, { value: "custom", label: "One-off", color: "gray" }] },
+      },
+      { name: "email", label: "Email", fieldType: FIELD_TYPES.EMAIL, size: 200, isVisible: false },
+      { name: "invoiceCount", label: "Invoices", fieldType: FIELD_TYPES.NUMBER, size: 100 },
+      { name: "billedCents", label: "Billed", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: money },
+      { name: "outstandingCents", label: "Outstanding", fieldType: FIELD_TYPES.CURRENCY, size: 150, config: money },
+      { name: "overdueCents", label: "Overdue", fieldType: FIELD_TYPES.CURRENCY, size: 130, isVisible: false, config: money },
+      { name: "lastIssueDate", label: "Last invoice", fieldType: FIELD_TYPES.DATE, size: 130 },
+    ],
+  });
+});
+
+type CustomerRecord = {
+  _id: string;
+  name: string;
+  kind: string;
+  email: string;
+  invoiceCount: number;
+  billedCents: number;
+  outstandingCents: number;
+  overdueCents: number;
+  lastIssueDate: string | null;
+  customer: CustomerSummary;
+};
+
+const kindAndEmail = (customer: CustomerSummary) => [KIND_LABEL[customer.partyKind] ?? "Customer", customer.email].filter(Boolean).join(" · ");
+
+/** Saved customers and everyone else who has been billed, with what they owe. A customer opens as their invoices. */
 export function CustomersPanel({ currency = "CAD", customers, organizations, societyId, canWrite, onShowInvoices, onNewInvoice, onStatement }: Props) {
   const [editing, setEditing] = useState<CustomerDetails | null>(null);
-  const [search, setSearch] = useState("");
-  const shown = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return query ? customers.filter((customer) => `${customer.name} ${customer.email ?? ""}`.toLowerCase().includes(query)) : customers;
-  }, [customers, search]);
+  const records = useMemo<CustomerRecord[]>(() => customers.map((customer) => ({
+    _id: customer.key,
+    name: customer.name,
+    kind: customer.partyKind,
+    email: customer.email ?? "",
+    invoiceCount: customer.invoiceCount,
+    billedCents: customer.billedCents,
+    outstandingCents: customer.outstandingCents,
+    overdueCents: customer.overdueCents,
+    lastIssueDate: customer.lastIssueDate ?? null,
+    customer,
+  })), [customers]);
 
   const edit = (customer: CustomerSummary) => {
     const saved = organizations.find((party) => party._id === customer.counterpartyId);
@@ -45,74 +97,71 @@ export function CustomersPanel({ currency = "CAD", customers, organizations, soc
           <h2 className="card__title">Customers</h2>
           <span className="card__subtitle">Keep customer details up to date and see what each one owes.</span>
         </div>
-        <div className="invoice-customers__tools">
-          {customers.length > 0 && (
-            <label className="invoice-customers__search">
-              <Search size={14} aria-hidden="true" />
-              <input className="input" type="search" aria-label="Search customers" placeholder="Search customers" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </label>
-          )}
-          <button type="button" className="btn btn--sm btn--accent" disabled={!canWrite} onClick={() => setEditing({ name: "" })}>
-            <Plus size={14} aria-hidden="true" /> Add customer
-          </button>
-        </div>
+        <button type="button" className="btn btn--sm btn--accent" disabled={!canWrite} onClick={() => setEditing({ name: "" })}>
+          <Plus size={14} aria-hidden="true" /> Add customer
+        </button>
       </div>
-      {customers.length === 0 ? (
-        <div className="card__body">
-          <EmptyState icon={<Users size={20} />} title="No customers yet" description="Add a customer here, or create one while billing them." />
-        </div>
-      ) : shown.length === 0 ? (
-        <div className="card__body">
-          <EmptyState variant="filtered" onClearFilters={() => setSearch("")} />
-        </div>
-      ) : (
-        <table className="table table--comfortable invoice-table invoice-table--customers">
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th className="num">Invoices</th>
-              <th className="num">Billed</th>
-              <th className="num">Outstanding</th>
-              <th>Last invoice</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((customer) => (
-              <tr key={customer.key}>
-                <td data-label="Customer" className="invoice-table__primary">
-                  <button type="button" className="invoice-table__link" onClick={() => onShowInvoices(customer)}>{customer.name}</button>
-                  <span className="muted invoice-table__sub">{[KIND_LABEL[customer.partyKind] ?? "Customer", customer.email].filter(Boolean).join(" · ")}</span>
-                </td>
-                <td data-label="Invoices" className="num">{customer.invoiceCount}</td>
-                <td data-label="Billed" className="num"><Money cents={customer.billedCents} currency={currency} /></td>
-                <td data-label="Outstanding" className="num">
-                  {customer.outstandingCents > 0 ? <Money cents={customer.outstandingCents} currency={currency} /> : <span className="muted">—</span>}
-                  {customer.overdueCents > 0 && <span className="invoice-table__overdue"><Money cents={customer.overdueCents} currency={currency} /> overdue</span>}
-                </td>
-                <td data-label="Last invoice">{customer.lastIssueDate ? formatDate(customer.lastIssueDate) : "—"}</td>
-                <td className="invoice-table__actions">
-                  {customer.memberId ? (
-                    <Link className="btn btn--ghost btn--sm" to={`/app/members/${customer.memberId}`} aria-label={`Edit member ${customer.name}`}><Pencil size={14} aria-hidden="true" /> Edit</Link>
-                  ) : (
-                    <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite} aria-label={`Edit ${customer.name}`} onClick={() => edit(customer)}><Pencil size={14} aria-hidden="true" /> Edit</button>
-                  )}
-                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => onNewInvoice(customer)}>
-                    <FilePlus2 size={14} aria-hidden="true" /> Invoice
-                  </button>
-                  {onStatement && (
-                    <Menu
-                      align="right"
-                      trigger={<button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${customer.name}`}><MoreHorizontal size={14} /></button>}
-                      sections={[{ id: "customer", items: [{ id: "statement", label: "Statement", icon: <FileText size={14} />, onSelect: () => onStatement(customer) }] }]}
-                    />
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <RecordListTable<CustomerRecord>
+        variant="card"
+        table={customersTable(currency)}
+        tableId="invoice-customers"
+        label="Customers"
+        icon={<Users size={14} />}
+        records={records}
+        onOpen={(record) => onShowInvoices(record.customer)}
+        renderCell={({ record, field }) => {
+          const customer = record.customer;
+          if (field.name === "name") {
+            return (
+              <span>
+                <span className="invoice-table__name">{customer.name}</span>
+                <span className="muted invoice-table__sub">{kindAndEmail(customer)}</span>
+              </span>
+            );
+          }
+          if (field.name === "outstandingCents") {
+            return (
+              <span>
+                {customer.outstandingCents > 0 ? <Money cents={customer.outstandingCents} currency={currency} /> : <span className="muted">—</span>}
+                {customer.overdueCents > 0 && <span className="invoice-table__overdue"><Money cents={customer.overdueCents} currency={currency} /> overdue</span>}
+              </span>
+            );
+          }
+          return undefined;
+        }}
+        renderRowActions={(record) => {
+          const customer = record.customer;
+          return (
+            <>
+              {customer.memberId ? (
+                <Link className="btn btn--ghost btn--sm" to={`/app/members/${customer.memberId}`} aria-label={`Edit member ${customer.name}`}><Pencil size={14} aria-hidden="true" /> Edit</Link>
+              ) : (
+                <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite} aria-label={`Edit ${customer.name}`} onClick={() => edit(customer)}><Pencil size={14} aria-hidden="true" /> Edit</button>
+              )}
+              <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => onNewInvoice(customer)}>
+                <FilePlus2 size={14} aria-hidden="true" /> Invoice
+              </button>
+            </>
+          );
+        }}
+        rowMenuSections={(record) => onStatement ? [{ id: "customer", items: [{ id: "statement", label: "Statement", icon: <FileText size={14} />, onSelect: () => onStatement(record.customer) }] }] : []}
+        renderPhoneCard={(record, { open, selecting }) => {
+          const customer = record.customer;
+          return (
+            <RecordTablePhoneCard
+              title={customer.name}
+              meta={[
+                customer.outstandingCents > 0 ? <span key="owed"><Money cents={customer.outstandingCents} currency={currency} /> outstanding</span> : "Nothing outstanding",
+                customer.overdueCents > 0 ? <span key="overdue" className="invoice-table__overdue"><Money cents={customer.overdueCents} currency={currency} /> overdue</span> : "",
+              ]}
+              detail={[kindAndEmail(customer)]}
+              onOpen={open}
+              selecting={selecting}
+            />
+          );
+        }}
+        emptyState={<EmptyState icon={<Users size={20} />} title="No customers yet" description="Add a customer here, or create one while billing them." />}
+      />
       <CustomerEditor customer={editing} societyId={societyId} canWrite={canWrite} onClose={() => setEditing(null)} />
     </div>
   );

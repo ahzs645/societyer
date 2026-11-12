@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Eye, Plus, Wrench } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
+import { partyKey } from "../../../shared/invoicing";
 import { Badge, Drawer, EmptyState, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { DatePicker } from "../../components/DatePicker";
 import { Money } from "../../components/Money";
 import { useToast } from "../../components/Toast";
 import { formatDate } from "../../lib/format";
-import { INVOICE_CURRENCIES, REPAIR_STATUS_LABEL, REPAIR_TRANSITIONS, type RepairStatus } from "../../../shared/invoiceCommerce";
+import { INVOICE_CURRENCIES, REPAIR_STATUSES, REPAIR_STATUS_LABEL, REPAIR_TRANSITIONS, type RepairStatus } from "../../../shared/invoiceCommerce";
 import { BillToPicker, type BillToValue } from "./BillToPicker";
 import { LineItemsEditor, toLineDraft, type LineDraft } from "./LineItemsEditor";
 import { BillingDocumentPreview } from "./BillingDocumentPreview";
@@ -18,7 +20,37 @@ import type { InvoiceWorkspace, RepairJob } from "./types";
 import { taxTransactionContextKey, taxTransactionContextChanged, reassessTaxLines } from "../../../shared/tax";
 
 type Draft = BillToValue & { id?: string; asset: string; serialNumber: string; problem: string; notes: string; receivedDate: string; targetDate: string; currency: string; lines: LineDraft[] };
-export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, logoUrl, onOpenInvoice, focusId }: { workspace: InvoiceWorkspace; societyId: string; canWrite: boolean; canExport: boolean; logoUrl?: string | null; onOpenInvoice: (id: string) => void; focusId?: string | null }) {
+
+const REPAIR_STATUS_COLOR: Record<RepairStatus, "gray" | "blue" | "amber" | "purple" | "teal" | "green" | "red"> = {
+  received: "gray", diagnosing: "blue", awaiting_approval: "amber", in_progress: "purple", ready: "teal", completed: "green", cancelled: "red",
+};
+const REPAIRS_TABLE = staticRecordTable({
+  id: "invoice-repairs",
+  nameSingular: "repair",
+  namePlural: "repairs",
+  labelSingular: "Repair",
+  labelPlural: "Repairs",
+  labelIdentifierFieldName: "number",
+  density: "comfortable",
+  fields: [
+    { name: "number", label: "Repair", fieldType: FIELD_TYPES.TEXT, size: 130, config: { groupable: false } },
+    { name: "customer", label: "Customer / equipment", fieldType: FIELD_TYPES.TEXT, size: 240 },
+    { name: "equipment", label: "Equipment", fieldType: FIELD_TYPES.TEXT, size: 200, isVisible: false },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 150, config: { options: REPAIR_STATUSES.map((status) => ({ value: status, label: REPAIR_STATUS_LABEL[status], color: REPAIR_STATUS_COLOR[status] })) } },
+    { name: "targetDate", label: "Target", fieldType: FIELD_TYPES.DATE, size: 120 },
+    // Each repair carries its own currency, so the cell draws it and there are no totals.
+    { name: "totalCents", label: "Estimate", fieldType: FIELD_TYPES.CURRENCY, size: 150, config: { isCents: true } },
+    { name: "invoice", label: "Invoice", fieldType: FIELD_TYPES.TEXT, size: 170 },
+  ],
+});
+type RepairRecord = { _id: string; number: string; customer: string; equipment: string; status: RepairStatus; targetDate: string | null; totalCents: number; invoice: string; job: RepairJob };
+
+export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, logoUrl, onOpenInvoice, onOpenCustomer, focusId }: {
+  workspace: InvoiceWorkspace; societyId: string; canWrite: boolean; canExport: boolean; logoUrl?: string | null; onOpenInvoice: (id: string) => void;
+  /** Opens a customer the way the Customers tab does: their invoices. */
+  onOpenCustomer?: (customer: { key: string; name: string }) => void;
+  focusId?: string | null;
+}) {
   const save = useMutation(api.invoices.upsertRepairJob);
   const createCounterparty = useMutation(api.accounting.upsertCounterparty);
   const setStatus = useMutation(api.billingDocuments.setRepairStatus);
@@ -32,7 +64,7 @@ export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, log
   const [workOrderId, setWorkOrderId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState("");
   const update = (patch: Partial<Draft>) => setDraft((current) => { if (!current) return current; const next = { ...current, ...patch }; if (taxTransactionContextChanged(current, next) || current.receivedDate !== next.receivedDate) next.lines = reassessTaxLines(next.lines, next.receivedDate); return next; });
-  const jobs = workspace.repairJobs ?? [];
+  const jobs = useMemo(() => workspace.repairJobs ?? [], [workspace.repairJobs]);
   const detail = jobs.find((job) => job._id === detailId);
   const workOrder = jobs.find((job) => job._id === workOrderId);
   const workOrderData = useQuery(api.billingDocuments.repairOperations, workOrder ? { societyId, repairJobId: workOrder._id } : "skip") as { operations: Array<{ technicianUserId?: string; scheduledDate?: string; approvalRequired: boolean; approvalStatus: string; approvalStale?: boolean; approvalCustomerName?: string }>; technicians: Array<{ _id: string; name: string }>; entries: Array<{ durationMinutes?: number }> } | undefined;
@@ -59,14 +91,68 @@ export function RepairJobsPanel({ workspace, societyId, canWrite, canExport, log
     setDraft(null); setDetailId(id); toast.success("Repair saved");
   });
   const bill = (job: RepairJob) => run(async () => { const id = await invoiceRepair({ id: job._id }); setDetailId(null); onOpenInvoice(id); });
-  const visible = jobs.filter((job) => filter === "all" || (filter === "open" ? !["completed", "cancelled"].includes(job.status) : job.status === filter));
+  const records = useMemo<RepairRecord[]>(() => jobs
+    .filter((job) => filter === "all" || (filter === "open" ? !["completed", "cancelled"].includes(job.status) : job.status === filter))
+    .map((job) => ({
+      _id: job._id,
+      number: job.number,
+      customer: job.billToName,
+      equipment: `${job.asset}${job.serialNumber ? ` · ${job.serialNumber}` : ""}`,
+      status: job.status,
+      targetDate: job.targetDate || null,
+      totalCents: job.totalCents,
+      invoice: job.invoice ? `${job.invoice.number} · ${job.invoice.status}` : "",
+      job,
+    })), [jobs, filter]);
   return <div className="card invoice-card">
     <div className="card__head"><div><h2 className="card__title">Repairs</h2><span className="card__subtitle">Track intake, diagnosis, approval, work, and pickup. Parts and labour become a linked invoice.</span></div><button className="btn btn--sm btn--accent" disabled={!canWrite} onClick={() => open()}><Plus size={14} /> New repair</button></div>
     {jobs.length > 0 && <RepairWorkloadBoard societyId={societyId} jobs={jobs} onOpenRepair={(id) => { setError(""); setDetailId(id); }} />}
     {jobs.length > 0 && <div className="card__body"><Select aria-label="Repair status filter" value={filter} onChange={setFilter} options={[{ value: "open", label: "Open repairs" }, { value: "all", label: "All repairs" }, ...Object.entries(REPAIR_STATUS_LABEL).map(([value, label]) => ({ value, label }))]} /></div>}
-    {!visible.length ? <EmptyState icon={<Wrench size={20} />} title="No repairs in this view" description="Create a repair to record the customer, equipment, problem, parts, and service rates." /> : <div className="invoice-commerce-table"><table className="table table--comfortable invoice-table"><thead><tr><th>Repair</th><th>Customer / equipment</th><th>Status</th><th>Target</th><th className="num">Estimate</th><th>Invoice</th></tr></thead><tbody>
-      {visible.map((job) => <tr key={job._id}><td data-label="Repair"><button className="invoice-table__link" onClick={() => { setError(""); setDetailId(job._id); }}>{job.number}</button></td><td data-label="Customer">{job.billToName}<span className="muted invoice-table__sub">{job.asset}{job.serialNumber ? ` · ${job.serialNumber}` : ""}</span></td><td data-label="Status"><Badge>{REPAIR_STATUS_LABEL[job.status]}</Badge></td><td data-label="Target">{job.targetDate ? formatDate(job.targetDate) : "—"}</td><td data-label="Estimate" className="num"><Money cents={job.totalCents} currency={job.currency} /> {job.currency}</td><td data-label="Invoice">{job.invoice ? <button className="invoice-table__link" onClick={() => onOpenInvoice(job.invoice!._id)}>{job.invoice.number} · {job.invoice.status}</button> : "Not invoiced"}</td></tr>)}
-    </tbody></table></div>}
+    <RecordListTable<RepairRecord>
+      variant="card"
+      table={REPAIRS_TABLE}
+      tableId="invoice-repairs"
+      label="Repairs"
+      icon={<Wrench size={14} />}
+      records={records}
+      highlightedRecordId={detailId}
+      onOpen={(record) => { setError(""); setDetailId(record._id); }}
+      renderCell={({ record, field }) => {
+        const job = record.job;
+        switch (field.name) {
+          case "customer":
+            return (
+              <span>
+                {onOpenCustomer
+                  ? <button type="button" className="invoice-table__link" title={`Show invoices for ${job.billToName}`} onClick={(event) => { event.stopPropagation(); onOpenCustomer({ key: partyKey(job), name: job.billToName }); }}>{job.billToName}</button>
+                  : <span className="invoice-table__name">{job.billToName}</span>}
+                <span className="muted invoice-table__sub">{record.equipment}</span>
+              </span>
+            );
+          case "status":
+            return <Badge>{REPAIR_STATUS_LABEL[job.status]}</Badge>;
+          case "totalCents":
+            return <><Money cents={job.totalCents} currency={job.currency} /> {job.currency}</>;
+          case "invoice":
+            return job.invoice
+              ? <button type="button" className="invoice-table__link" onClick={(event) => { event.stopPropagation(); onOpenInvoice(job.invoice!._id); }}>{record.invoice}</button>
+              : <span className="muted">Not invoiced</span>;
+          default:
+            return undefined;
+        }
+      }}
+      renderPhoneCard={(record, { open, selecting }) => (
+        <RecordTablePhoneCard
+          title={record.number}
+          badge={<Badge>{REPAIR_STATUS_LABEL[record.job.status]}</Badge>}
+          meta={[record.customer, <span key="estimate"><Money cents={record.totalCents} currency={record.job.currency} /> {record.job.currency}</span>]}
+          detail={[record.equipment, record.targetDate ? `Target ${formatDate(record.targetDate)}` : "", record.invoice || "Not invoiced"]}
+          onOpen={open}
+          selecting={selecting}
+        />
+      )}
+      emptyState={<EmptyState icon={<Wrench size={20} />} title="No repairs in this view" description="Create a repair to record the customer, equipment, problem, parts, and service rates." />}
+    />
     <Drawer open={Boolean(detail)} title={detail?.number ?? "Repair"} onClose={() => !busy && setDetailId(null)} footer={detail && <><button className="btn" disabled={!canWrite || busy} onClick={() => open(detail)}>Edit repair</button><button className="btn btn--accent" disabled={busy || (!detail.invoice && (!canWrite || detail.status === "cancelled" || !detail.lines.length))} onClick={() => detail.invoice ? onOpenInvoice(detail.invoice._id) : void bill(detail)}>{detail.invoice ? "View invoice" : "Create invoice"}</button></>}>
       {error && <p className="field__error" role="alert">{error}</p>}{detail && <div className="form-stack"><h3>{detail.asset}</h3><p>{detail.billToName}{detail.serialNumber ? ` · Serial ${detail.serialNumber}` : ""}</p><p className="invoice-commerce-notes">{detail.problem}</p>
         <div><button type="button" className="btn btn--sm" onClick={() => { setTemplateId(workspace.settings.defaultTemplateId ?? ""); setWorkOrderId(detail._id); }}><Eye size={14} aria-hidden="true" />Preview work order</button></div>

@@ -1,4 +1,3 @@
-import type { InvoiceListView } from "../../../shared/billingPricing";
 import { INVOICE_STATUS_LABEL } from "../../../shared/invoicing";
 import type { XlsxSheet } from "../../lib/xlsx";
 import type { InvoiceRow } from "./types";
@@ -11,7 +10,7 @@ function balanceDue(row: InvoiceRow) {
 }
 
 /** CSV / TSV rows: decimal amounts, ISO dates, status labels. */
-export function invoiceExportTextRows(list: InvoiceRow[], columns?: InvoiceListView["columns"]): string[][] {
+export function invoiceExportTextRows(list: InvoiceRow[]): string[][] {
   const rows = [
     HEADER,
     ...list.map((row) => [
@@ -28,14 +27,11 @@ export function invoiceExportTextRows(list: InvoiceRow[], columns?: InvoiceListV
       row.reference ?? "",
     ]),
   ];
-  if (!columns) return rows;
-  const keys = ["number","customer","email","issueDate","dueDate","status","total","paid","balance","currency","reference"];
-  const visible = columns.filter(c => c.visible);
-  return [visible.map(c => c.label), ...rows.slice(1).map(row => visible.map(c => row[keys.indexOf(c.key)]))];
+  return rows;
 }
 
 /** The same invoices as a typed sheet: real dates and amounts in each invoice's currency. */
-export function invoiceExportSheet(list: InvoiceRow[], columns?: InvoiceListView["columns"]): XlsxSheet {
+export function invoiceExportSheet(list: InvoiceRow[]): XlsxSheet {
   const sheet: XlsxSheet = {
     name: "Invoices",
     columns: [
@@ -65,8 +61,5 @@ export function invoiceExportSheet(list: InvoiceRow[], columns?: InvoiceListView
       row.reference ?? "",
     ]),
   };
-  if (!columns) return sheet;
-  const keys = ["number","customer","email","issueDate","dueDate","status","total","paid","balance","currency","reference"];
-  const visible = columns.filter(c => c.visible);
-  return { ...sheet, columns: visible.map(c => ({ ...sheet.columns[keys.indexOf(c.key)], header:c.label })), rows:sheet.rows.map(row => visible.map(c => (Array.isArray(row) ? row : row.cells)[keys.indexOf(c.key)])) };
+  return sheet;
 }
