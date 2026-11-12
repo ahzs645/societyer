@@ -7,7 +7,8 @@ import { useParams, Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useRecordQuery } from "../hooks/useRecordQuery";
 import { api } from "@/lib/convexApi";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { useSociety } from "../hooks/useSociety";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -73,6 +74,59 @@ if (STEP_ORDER.map((s) => s.id).join(",") !== AGM_STEP_ORDER.join(",")) {
   throw new Error("AgmWorkflow STEP_ORDER has drifted from the shared AGM_STEP_ORDER.");
 }
 
+const DELIVERIES_TABLE = staticRecordTable({
+  id: "agm-notice-deliveries",
+  nameSingular: "noticeDelivery",
+  namePlural: "noticeDeliveries",
+  labelSingular: "Notice delivery",
+  labelPlural: "Notice deliveries",
+  labelIdentifierFieldName: "recipientName",
+  fields: [
+    { name: "recipientName", label: "Recipient", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    {
+      name: "channel",
+      label: "Channel",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "email", label: "email", color: "gray" },
+          { value: "mail", label: "mail", color: "gray" },
+          { value: "in-person", label: "in-person", color: "gray" },
+        ],
+      },
+    },
+    { name: "sentAtISO", label: "Sent", fieldType: FIELD_TYPES.DATE, size: 130 },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "queued", label: "queued", color: "orange" },
+          { value: "sent", label: "sent", color: "green" },
+          { value: "bounced", label: "bounced", color: "red" },
+          { value: "failed", label: "failed", color: "orange" },
+          { value: "skipped", label: "skipped", color: "orange" },
+        ],
+      },
+    },
+    { name: "recipientEmail", label: "Email", fieldType: FIELD_TYPES.EMAIL, size: 220, isVisible: false },
+  ],
+});
+
+type DeliveryRecord = {
+  _id: Id<"noticeDeliveries">;
+  recipientName: string;
+  recipientEmail: string | null;
+  channel: string;
+  sentAtISO: string;
+  status: string;
+  memberId: Id<"members"> | null;
+  directorId: Id<"directors"> | null;
+};
+
 export function AgmWorkflowPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
@@ -85,7 +139,21 @@ export function AgmWorkflowPage() {
   const meetingId = meeting?._id as Id<"meetings"> | undefined;
   const minutes = useQuery(api.minutes.getByMeeting, meetingId ? { meetingId } : "skip");
   const run = useQuery(api.agm.runForMeeting, meetingId ? { meetingId } : "skip");
-  const deliveries = useQuery(api.agm.noticeDeliveries, meetingId ? { meetingId } : "skip");
+  const deliveries = useQuery(api.agm.noticeDeliveries, meetingId ? { meetingId } : "skip") as Doc<"noticeDeliveries">[] | undefined;
+  const deliveryRecords = useMemo<DeliveryRecord[]>(
+    () =>
+      (deliveries ?? []).map((delivery) => ({
+        _id: delivery._id,
+        recipientName: delivery.recipientName,
+        recipientEmail: delivery.recipientEmail ?? null,
+        channel: delivery.channel,
+        sentAtISO: delivery.sentAtISO,
+        status: delivery.status,
+        memberId: delivery.memberId ?? null,
+        directorId: delivery.directorId ?? null,
+      })),
+    [deliveries],
+  );
   // Statutory recipients come from the legal member/shareholder audience,
   // with the applicable director and appointed-auditor rights.
   const coverage = useQuery(api.agm.noticeCoverage, meetingId ? { meetingId } : "skip") as
@@ -497,28 +565,49 @@ export function AgmWorkflowPage() {
           <h2 className="card__title">Notice delivery log</h2>
           <span className="card__subtitle">{deliveries?.length ?? 0} {(deliveries?.length ?? 0) === 1 ? "delivery record" : "delivery records"}</span>
         </div>
-        <div className="table-wrap">
-        <table className="table table--stack-mobile agm-delivery-log">
-          <thead><tr><th>Recipient</th><th>Channel</th><th>Sent</th><th>Status</th></tr></thead>
-          <tbody>
-            {(deliveries ?? []).map((d: any) => (
-              <tr key={d._id}>
-                <td>{d.recipientName}{d.recipientEmail && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{d.recipientEmail}</div>}</td>
-                <td data-label="Channel"><Badge>{d.channel}</Badge></td>
-                <td data-label="Sent">{formatDate(d.sentAtISO)}</td>
-                <td data-label="Status"><Badge tone={d.status === "sent" ? "success" : d.status === "bounced" ? "danger" : "warn"}>{d.status}</Badge></td>
-              </tr>
-            ))}
-            {(deliveries ?? []).length === 0 && (
-              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                {communicationsEnabled
-                  ? "No deliveries logged yet."
-                  : "Communications module is disabled, so notice delivery is being tracked outside Societyer."}
-              </td></tr>
-            )}
-          </tbody>
-        </table>
-        </div>
+        <RecordListTable<DeliveryRecord>
+          variant="card"
+          table={DELIVERIES_TABLE}
+          tableId="agm-notice-deliveries"
+          label="Notice deliveries"
+          icon={<Send size={14} />}
+          records={deliveryRecords}
+          loading={deliveries === undefined}
+          renderCell={({ record, field }) => {
+            if (field.name === "recipientName") {
+              const name = record.memberId
+                ? <Link to={`/app/members/${record.memberId}`}>{record.recipientName}</Link>
+                : record.directorId
+                  ? <Link to={`/app/directors?record=${record.directorId}`}>{record.recipientName}</Link>
+                  : record.recipientName;
+              return (
+                <span>
+                  {name}
+                  {record.recipientEmail && <span className="muted" style={{ display: "block", fontSize: "var(--fs-sm)" }}>{record.recipientEmail}</span>}
+                </span>
+              );
+            }
+            if (field.name === "channel") return <Badge>{record.channel}</Badge>;
+            if (field.name === "status") return <Badge tone={record.status === "sent" ? "success" : record.status === "bounced" ? "danger" : "warn"}>{record.status}</Badge>;
+            return undefined;
+          }}
+          renderPhoneCard={(record, { field, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.recipientName}
+              badge={field("status")}
+              meta={[record.channel, formatDate(record.sentAtISO)]}
+              detail={[record.recipientEmail ?? ""]}
+              selecting={selecting}
+            />
+          )}
+          emptyState={
+            <RecordTableEmpty
+              title={communicationsEnabled
+                ? "No deliveries logged yet."
+                : "Communications module is disabled, so notice delivery is being tracked outside Societyer."}
+            />
+          }
+        />
       </div>
       </div>
     </div>

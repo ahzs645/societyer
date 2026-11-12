@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, EmptyState, Field, InspectorNote, SkeletonRows } from "../components/ui";
+import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { Money } from "../components/Money";
 import { DEFAULT_CURRENCY, formatMoney } from "../lib/money";
 import { DatePicker } from "../components/DatePicker";
@@ -23,6 +23,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { isCorporation } from "../../shared/organizationDomain";
 import { formatDate } from "../lib/format";
 import { NotRequiredNote } from "./SignificantIndividuals";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 
 type DividendRow = {
   _id: string;
@@ -52,6 +53,52 @@ type DividendOptions = {
 
 const STATUS_LABEL: Record<string, string> = { draft: "Draft", declared: "Declared", paid: "Paid", cancelled: "Cancelled", recorded: "Recorded" };
 const STATUS_TONE: Record<string, "neutral" | "success" | "warn" | "info"> = { draft: "warn", declared: "success", paid: "info", cancelled: "neutral", recorded: "neutral" };
+
+type DividendRecord = {
+  _id: string;
+  declaredOn: string;
+  shareClass: string;
+  recordDate: string | null;
+  paymentDate: string | null;
+  perShare: number;
+  sharesOutstanding: number;
+  totalCents: number;
+  status: string;
+  dividend: DividendRow;
+};
+
+const DIVIDENDS_TABLE = staticRecordTable({
+  id: "dividends",
+  nameSingular: "dividend",
+  namePlural: "dividends",
+  labelSingular: "Dividend declaration",
+  labelPlural: "Dividend declarations",
+  labelIdentifierFieldName: "shareClass",
+  fields: [
+    { name: "shareClass", label: "Share class", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "declaredOn", label: "Declared on", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "recordDate", label: "Record date", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "paymentDate", label: "Payment date", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "perShare", label: "Per share", fieldType: FIELD_TYPES.NUMBER, size: 120 },
+    { name: "sharesOutstanding", label: "Shares", fieldType: FIELD_TYPES.NUMBER, size: 140 },
+    { name: "totalCents", label: "Total", fieldType: FIELD_TYPES.CURRENCY, size: 140, config: { isCents: true } },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 200,
+      config: {
+        options: [
+          { value: "draft", label: "Draft", color: "orange" },
+          { value: "declared", label: "Declared", color: "green" },
+          { value: "paid", label: "Paid", color: "blue" },
+          { value: "cancelled", label: "Cancelled", color: "gray" },
+          { value: "recorded", label: "Recorded", color: "gray" },
+        ],
+      },
+    },
+  ],
+});
 
 /** The solvency rule shown to the user, worded for the organization's Act. */
 function solvencyRuleText(scope: DividendRuleScope | undefined): string {
@@ -210,6 +257,20 @@ export function DividendsPage() {
   };
 
   const rows = items;
+  const records: DividendRecord[] = (rows ?? []).map((dividend) => ({
+    _id: dividend._id,
+    declaredOn: dividend.declaredOn,
+    shareClass: dividend.shareClass,
+    recordDate: dividend.recordDate ?? null,
+    paymentDate: dividend.paymentDate ?? null,
+    perShare: Number(dividend.perShareAmount ?? dividend.perShareCents / 100),
+    sharesOutstanding: dividend.sharesOutstanding,
+    totalCents: dividend.totalCents,
+    // Rows saved before statuses existed keep a neutral "Recorded" label.
+    status: dividend.status ?? "recorded",
+    dividend,
+  }));
+  const expandedRow = rows?.find((row) => row._id === expanded && row.entitlements?.length) ?? null;
   const byClass = summary?.byClass ?? {};
   const otherClasses = classes.filter((c) => c._id !== form?.rightsClassId);
 
@@ -244,105 +305,119 @@ export function DividendsPage() {
       )}
 
       <div className="card">
-        {rows === undefined ? (
-          <SkeletonRows rows={3} columns={6} />
-        ) : rows.length === 0 ? (
-          <EmptyState size="sm" title="No dividend declarations yet" description="Record a declaration with its record date, per-share amount and the board's solvency confirmation." />
-        ) : (
+        <RecordListTable<DividendRecord>
+          variant="card"
+          showTitle
+          table={DIVIDENDS_TABLE}
+          tableId="dividends"
+          label="Declarations"
+          icon={<Coins size={14} />}
+          records={records}
+          loading={rows === undefined}
+          highlightedRecordId={expanded}
+          renderCell={({ record, field }) => {
+            const r = record.dividend;
+            if (field.name === "shareClass")
+              return (
+                <span>
+                  {r.shareClass}
+                  {!!r.excludedClassIds?.length && (
+                    <span className="muted" style={{ display: "block" }}>Not declared: {r.excludedClassIds.map(className).filter(Boolean).join(", ") || `${r.excludedClassIds.length} class(es)`}</span>
+                  )}
+                </span>
+              );
+            if (field.name === "recordDate" && !r.recordDate) return "—";
+            if (field.name === "paymentDate" && !r.paymentDate) return "—";
+            if (field.name === "perShare") return <span>{r.currency} {r.perShareAmount}</span>;
+            if (field.name === "sharesOutstanding")
+              return (
+                <span>
+                  {r.sharesOutstanding.toLocaleString()}
+                  <span className="muted" style={{ display: "block" }}>{r.sharesSource === "ledger" ? "From the ledger" : r.sharesSource === "manual" ? "Entered by hand" : ""}</span>
+                </span>
+              );
+            if (field.name === "totalCents") return <Money cents={r.totalCents} currency={r.currency} />;
+            if (field.name === "status")
+              return (
+                <span>
+                  <Badge tone={STATUS_TONE[record.status] ?? "neutral"}>{STATUS_LABEL[record.status] ?? record.status}</Badge>
+                  {!r.solvencyConfirmedAt && r.status !== "draft" && r.status !== "cancelled" && <span className="muted" style={{ display: "block" }}>No solvency confirmation recorded</span>}
+                </span>
+              );
+            return undefined;
+          }}
+          renderRowActions={(record) => {
+            const r = record.dividend;
+            return (
+              <>
+                {!!r.entitlements?.length && (
+                  <button type="button" className="btn btn--ghost btn--sm" aria-expanded={expanded === r._id} onClick={() => setExpanded(expanded === r._id ? null : r._id)}>
+                    {expanded === r._id ? "Hide holders" : "Holders"}
+                  </button>
+                )}
+                {r.status === "draft" && (
+                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDeclaring({
+                    row: r,
+                    solvencyConfirmedAt: r.solvencyConfirmedAt ?? todayDateOnly(),
+                    solvencyBasis: r.solvencyBasis ?? "",
+                    declaredByResolutionId: "",
+                  })}>
+                    Mark declared
+                  </button>
+                )}
+                {r.status === "declared" && (
+                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite || !r.paymentDate} title={r.paymentDate ? undefined : "Record a payment date first."} onClick={() => void changeStatus(r, "paid")}>
+                    Mark paid
+                  </button>
+                )}
+                {(r.status === "draft" || r.status === "declared") && (
+                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => void changeStatus(r, "cancelled")}>
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete dividend declared ${formatDate(r.declaredOn)}`}
+                  onClick={() => remove({ id: r._id })} disabled={!canWrite}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            );
+          }}
+          renderPhoneCard={(record, { field, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.shareClass}
+              badge={field("status")}
+              meta={[<Money key="total" cents={record.totalCents} currency={record.dividend.currency} />, `${record.dividend.currency} ${record.dividend.perShareAmount ?? ""} per share`]}
+              detail={[`Declared ${formatDate(record.declaredOn)}`, record.paymentDate ? `paid ${formatDate(record.paymentDate)}` : ""]}
+              selecting={selecting}
+            />
+          )}
+          emptyState={<RecordTableEmpty title="No dividend declarations yet" description="Record a declaration with its record date, per-share amount and the board's solvency confirmation." />}
+        />
+      </div>
+
+      {expandedRow && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card__head">
+            <h2 className="card__title">Holders at record date</h2>
+            <span className="card__subtitle">{expandedRow.shareClass} · declared {formatDate(expandedRow.declaredOn)}</span>
+            <button type="button" className="btn btn--ghost btn--sm" style={{ marginLeft: "auto" }} onClick={() => setExpanded(null)}>Hide holders</button>
+          </div>
           <div className="table-wrap">
             <table className="table">
-              <thead>
-                <tr>
-                  <th>Declared on</th>
-                  <th>Share class</th>
-                  <th>Record date</th>
-                  <th>Payment date</th>
-                  <th className="num">Per share</th>
-                  <th className="num">Shares</th>
-                  <th className="num">Total</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
+              <thead><tr><th>Holder at record date</th><th className="num">Shares</th><th className="num">Amount</th></tr></thead>
               <tbody>
-                {rows.map((r) => {
-                  // Rows saved before statuses existed keep a neutral "Recorded" label.
-                  const status = r.status ?? "recorded";
-                  return (
-                    <tr key={r._id}>
-                      <td>{formatDate(r.declaredOn)}</td>
-                      <td>
-                        {r.shareClass}
-                        {!!r.excludedClassIds?.length && (
-                          <div className="muted">Not declared: {r.excludedClassIds.map(className).filter(Boolean).join(", ") || `${r.excludedClassIds.length} class(es)`}</div>
-                        )}
-                      </td>
-                      <td>{r.recordDate ? formatDate(r.recordDate) : "—"}</td>
-                      <td>{r.paymentDate ? formatDate(r.paymentDate) : "—"}</td>
-                      <td className="num">{r.currency} {r.perShareAmount}</td>
-                      <td className="num">
-                        {r.sharesOutstanding.toLocaleString()}
-                        <div className="muted">{r.sharesSource === "ledger" ? "From the ledger" : r.sharesSource === "manual" ? "Entered by hand" : ""}</div>
-                      </td>
-                      <td className="num"><Money cents={r.totalCents} currency={r.currency} /></td>
-                      <td>
-                        <Badge tone={STATUS_TONE[status] ?? "neutral"}>{STATUS_LABEL[status] ?? status}</Badge>
-                        {!r.solvencyConfirmedAt && r.status !== "draft" && r.status !== "cancelled" && <div className="muted">No solvency confirmation recorded</div>}
-                      </td>
-                      <td>
-                        <div className="row" style={{ gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                          {!!r.entitlements?.length && (
-                            <button className="btn btn--ghost btn--sm" onClick={() => setExpanded(expanded === r._id ? null : r._id)}>
-                              {expanded === r._id ? "Hide holders" : "Holders"}
-                            </button>
-                          )}
-                          {r.status === "draft" && (
-                            <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDeclaring({
-                              row: r,
-                              solvencyConfirmedAt: r.solvencyConfirmedAt ?? todayDateOnly(),
-                              solvencyBasis: r.solvencyBasis ?? "",
-                              declaredByResolutionId: "",
-                            })}>
-                              Mark declared
-                            </button>
-                          )}
-                          {r.status === "declared" && (
-                            <button className="btn btn--ghost btn--sm" disabled={!canWrite || !r.paymentDate} title={r.paymentDate ? undefined : "Record a payment date first."} onClick={() => void changeStatus(r, "paid")}>
-                              Mark paid
-                            </button>
-                          )}
-                          {(r.status === "draft" || r.status === "declared") && (
-                            <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => void changeStatus(r, "cancelled")}>
-                              Cancel
-                            </button>
-                          )}
-                          <button
-                            className="btn btn--ghost btn--sm btn--icon"
-                            aria-label={`Delete dividend declared ${formatDate(r.declaredOn)}`}
-                            onClick={() => remove({ id: r._id })} disabled={!canWrite}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                        {expanded === r._id && (
-                          <table className="table" style={{ marginTop: 8 }}>
-                            <thead><tr><th>Holder at record date</th><th className="num">Shares</th><th className="num">Amount</th></tr></thead>
-                            <tbody>
-                              {(r.entitlements ?? []).map((e) => (
-                                <tr key={e.holderKey}><td>{e.holderName}</td><td className="num">{e.shares.toLocaleString()}</td><td className="num">{r.currency} {e.amount}</td></tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {(expandedRow.entitlements ?? []).map((e) => (
+                  <tr key={e.holderKey}><td>{e.holderName}</td><td className="num">{e.shares.toLocaleString()}</td><td className="num">{expandedRow.currency} {e.amount}</td></tr>
+                ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <Drawer
         open={open}

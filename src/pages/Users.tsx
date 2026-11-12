@@ -30,7 +30,7 @@ import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
 import { organizationKind } from "../../shared/organizationDomain";
 import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
-import { AccessRequestsPanel } from "../components/AccessRequestsPanel";
+import { AccessRequestsPanel } from "../features/people/AccessRequestsPanel";
 import { membershipStatusLabel } from "../../shared/membershipStatusLabel";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];

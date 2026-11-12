@@ -84,9 +84,10 @@ test("invalid dividend input stays editable, reports the problem, and a correcte
   await input(page, "Currency").fill("cad");
   await save.click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator("tr", { hasText: "Operations audit common" })).toContainText("$10.00");
+  // Phones show the declaration as a card, wider screens as a table row.
+  await expect(page.locator("tr, .record-phone-card", { hasText: "Operations audit common" })).toContainText("$10.00");
   await page.reload();
-  await expect(page.locator("tr", { hasText: "Operations audit common" })).toBeVisible();
+  await expect(page.locator("tr, .record-phone-card", { hasText: "Operations audit common" })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
