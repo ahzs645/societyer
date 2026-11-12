@@ -417,6 +417,7 @@
     "test:development-mail": "tsx scripts/check-development-mail.ts",
     "test:whisperx": "tsx scripts/check-whisperx-queue.ts && tsx scripts/check-whisperx-transfer.ts",
     "test:invoice-preferences": "tsx scripts/check-invoice-preferences.ts",
+    "test:list-views": "tsx scripts/check-list-views.ts",
     "test:cost-planning": "tsx scripts/check-cost-planning.ts && tsx scripts/check-cost-planning-backend.ts",
     "test:cost-planning-ui": "playwright test --config playwright.cost-planning.config.ts",
     "test:payroll-register": "tsx scripts/check-payroll-register.ts && tsx scripts/check-business-registers.ts",

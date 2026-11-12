@@ -11,10 +11,12 @@ import {
   Download,
   Filter,
   Kanban,
+  Pencil,
   RotateCcw,
   Save,
   Search,
   SlidersHorizontal,
+  Trash2,
   Table2,
   X,
   ListChecks,
@@ -30,7 +32,7 @@ import {
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
 import { useToast } from "../../../../components/Toast";
-import { usePrompt } from "../../../../components/Modal";
+import { useConfirm, usePrompt } from "../../../../components/Modal";
 import { useTranslation } from "react-i18next";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
@@ -100,6 +102,9 @@ export function RecordTableToolbar({
   onOpenFilter,
   onSaveView,
   onSaveAsView,
+  saveAsViewMessage,
+  onRenameView,
+  onDeleteView,
   actions,
   listView,
   pageViews,
@@ -128,6 +133,14 @@ export function RecordTableToolbar({
   // new to fork off, so "Save as" stays hidden until the user changes
   // something (filters, sort, columns, density).
   onSaveAsView?: (name: string) => void | Promise<unknown>;
+  /** What "Save as" says it saves (default: a personal view). */
+  saveAsViewMessage?: string;
+  /**
+   * Rename / delete the view on show, offered at the foot of the views menu
+   * for a view that isn't a system view, to people who may save views.
+   */
+  onRenameView?: (viewId: string, name: string) => void | Promise<void>;
+  onDeleteView?: (viewId: string) => void | Promise<void>;
   actions?: ReactNode;
   /**
    * Adds a "List view" button ahead of the table/kanban/calendar switch for
@@ -174,6 +187,7 @@ export function RecordTableToolbar({
   const { objectMetadata } = useRecordTableContextOrThrow();
   const toast = useToast();
   const prompt = usePrompt();
+  const confirm = useConfirm();
   const { t } = useTranslation();
   const canPersistView = usePermissions().can("settings:write");
   // Phones: search is an icon until tapped, and the "Select records" toggle
@@ -304,8 +318,8 @@ export function RecordTableToolbar({
     return () => window.removeEventListener("mousedown", onDown);
   }, [columnMenuOpen, viewMenuOpen]);
 
-  const activeViewName =
-    (views ?? []).find((v) => v._id === currentViewId)?.name ?? t("recordTable.allRecords", "All records");
+  const currentView = (views ?? []).find((v) => v._id === currentViewId);
+  const activeViewName = currentView?.name ?? t("recordTable.allRecords", "All records");
   // One "Export …" command per mounted table, alongside page-specific exports.
   useRegisterCommand({
     id: `record-table-export:${tableId}`,
@@ -471,6 +485,67 @@ export function RecordTableToolbar({
                     {v._id === currentViewId && viewEdited && <span className="record-table__menu-badge">reset</span>}
                   </button>
                 ))}
+                {currentView && !currentView.isSystem && canPersistView && (onRenameView || onDeleteView) && (
+                  <div className="record-table__menu-divider" role="presentation">
+                    {onRenameView && (
+                      <button
+                        type="button"
+                        className="record-table__menu-item"
+                        disabled={isSaving}
+                        onClick={async () => {
+                          setViewMenuOpen(false);
+                          const name = await prompt({
+                            title: t("recordTable.renameViewTitle", "Rename view"),
+                            placeholder: t("recordTable.viewName", "View name"),
+                            defaultValue: currentView.name,
+                            confirmLabel: t("recordTable.renameView", "Rename"),
+                            required: true,
+                          });
+                          if (!name?.trim() || name.trim() === currentView.name) return;
+                          try {
+                            setIsSaving(true);
+                            await onRenameView(currentView._id, name.trim());
+                          } catch (error) {
+                            toast.error("Couldn't rename view", error instanceof Error ? error.message : undefined);
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                      >
+                        <Pencil size={12} />
+                        {t("recordTable.renameViewItem", "Rename view…")}
+                      </button>
+                    )}
+                    {onDeleteView && (
+                      <button
+                        type="button"
+                        className="record-table__menu-item"
+                        disabled={isSaving}
+                        onClick={async () => {
+                          setViewMenuOpen(false);
+                          const ok = await confirm({
+                            title: t("recordTable.deleteViewTitle", "Delete view?"),
+                            message: `“${currentView.name}” is removed for everyone in the workspace. The records stay as they are.`,
+                            confirmLabel: t("recordTable.deleteView", "Delete view"),
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          try {
+                            setIsSaving(true);
+                            await onDeleteView(currentView._id);
+                          } catch (error) {
+                            toast.error("Couldn't delete view", error instanceof Error ? error.message : undefined);
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                      >
+                        <Trash2 size={12} />
+                        {t("recordTable.deleteViewItem", "Delete view")}
+                      </button>
+                    )}
+                  </div>
+                )}
               </ViewportPopover>
             )}
           </div>
@@ -631,7 +706,7 @@ export function RecordTableToolbar({
             onClick={async () => {
               const name = await prompt({
                 title: t("recordTable.saveViewTitle", "Save as a new view"),
-                message: t("recordTable.saveViewMessage", "Saves the current columns, filters and sort as a personal view."),
+                message: saveAsViewMessage ?? t("recordTable.saveViewMessage", "Saves the current columns, filters and sort as a personal view."),
                 placeholder: t("recordTable.viewName", "View name"),
                 confirmLabel: t("recordTable.saveView", "Save view"),
                 required: true,

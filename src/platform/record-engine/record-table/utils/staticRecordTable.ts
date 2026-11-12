@@ -1,5 +1,6 @@
 import type { AggregateOperation, FieldMetadata, HydratedView, ObjectMetadata, ViewGroupBy, ViewOpenRecordIn, ViewSortDirection } from "../../types";
 import { withViewGroupBy } from "./groupRecords";
+import { staticFieldId } from "../../../../../shared/listViewState";
 
 /** One column of a table whose shape is fixed in code. */
 export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fieldType"> & {
@@ -22,7 +23,9 @@ export type StaticGroupByDefinition = Omit<ViewGroupBy, "fieldMetadataId" | "sum
  * in the workspace's object metadata: read-only data from another system
  * (procurement catalogs) or fixtures. The table gets the shared toolbar,
  * column picker, density, phone cards and keyboard navigation without seeding
- * metadata; column choices last for the visit and aren't saved.
+ * metadata. `RecordListTable` remembers a person's column choices in their
+ * browser and keeps named views in `listViews` (shared/listViewState.ts), both
+ * by the field ids made here (`staticFieldId`).
  */
 export function staticRecordTable({
   id,
@@ -58,7 +61,7 @@ export function staticRecordTable({
   groupBy?: StaticGroupByDefinition;
 }): { objectMetadata: ObjectMetadata; hydratedView: HydratedView } {
   const metadata: FieldMetadata[] = fields.map((definition, position) => ({
-    _id: `${id}:field:${definition.name}`,
+    _id: staticFieldId(id, definition.name),
     objectMetadataId: id,
     name: definition.name,
     label: definition.label,
@@ -73,7 +76,7 @@ export function staticRecordTable({
   }));
   const fieldId = (name: string) => {
     if (!fields.some((field) => field.name === name)) throw new Error(`staticRecordTable "${id}": no field "${name}"`);
-    return `${id}:field:${name}`;
+    return staticFieldId(id, name);
   };
   return {
     objectMetadata: {

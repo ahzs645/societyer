@@ -6,6 +6,7 @@ import {
   createRecordTableStore,
   useRecordTableState,
   useRecordTableStoreHandle,
+  type RecordTableState,
   type RecordTableStore,
 } from "../state/recordTableStore";
 import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
@@ -34,6 +35,9 @@ export const RECORD_DEEP_LINK_PARAM = "record";
  */
 export const RECORD_STACK_PARAM = "stack";
 
+/** The view each store last loaded from its scope's `hydratedView`. */
+const loadedViews = new WeakMap<RecordTableStore, HydratedView>();
+
 /**
  * Sets up both the per-instance zustand store *and* the metadata context
  * for a single table. All RecordTable components must render inside this
@@ -61,6 +65,7 @@ export function RecordTableScope({
   defaultPageSize = DEFAULT_RECORD_TABLE_PAGE_SIZE,
   loadingProgress,
   serverProcessed = false,
+  initialize,
   children,
 }: {
   tableId: string;
@@ -112,6 +117,13 @@ export function RecordTableScope({
    * store by whatever pages them in (`records` is then ignored).
    */
   serverProcessed?: boolean;
+  /**
+   * Runs right after the store loads a view from `hydratedView`: with
+   * `previous` null on a new store, and with the state just replaced when a
+   * new `hydratedView` loads into the same store. `RecordListTable` uses it to
+   * restore a list's remembered state and to keep it across a redefinition.
+   */
+  initialize?: (store: RecordTableStore, previous: RecordTableState | null) => void;
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -140,7 +152,11 @@ export function RecordTableScope({
       // The first render for a different actor must not retain the previous
       // actor's filters, saved view, selection, cells or drawer record. Hydrate
       // a newly scoped store immediately from the current authorized snapshot.
-      if (loadableView) next.getState().loadView(loadableView);
+      if (loadableView) {
+        next.getState().loadView(loadableView);
+        loadedViews.set(next, loadableView);
+      }
+      initialize?.(next, null);
       next.getState().setServerProcessed(serverProcessed);
       // Start on the organisation's calendar, so the first render's filters (and
       // a server-processed table's first request) aren't redone a moment later.
@@ -237,9 +253,16 @@ export function RecordTableScope({
     store.getState().setDateContext({ today: organizationToday, fiscalYearEnd });
   }, [store, organizationToday, fiscalYearEnd]);
 
-  // Pipe view + records into the store when they change.
+  // Pipe view + records into the store when they change. The view the store
+  // was created with is already loaded (and possibly restored over).
+  const initializeRef = useRef(initialize);
+  initializeRef.current = initialize;
   useEffect(() => {
-    if (loadableView) store.getState().loadView(loadableView);
+    if (!loadableView || loadedViews.get(store) === loadableView) return;
+    const previous = store.getState();
+    store.getState().loadView(loadableView);
+    loadedViews.set(store, loadableView);
+    initializeRef.current?.(store, previous);
   }, [loadableView, store]);
   // A server-processed table's rows are set by whatever pages them in (and kept
   // across a replaced store); a records prop re-rendered here must not wipe them.

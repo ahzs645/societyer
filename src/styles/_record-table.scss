@@ -438,6 +438,12 @@ select.record-table__menu-select,
   color: token('accent');
 }
 
+.record-table__menu-divider {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid token('border-color-light');
+}
+
 .record-table__menu-badge {
   margin-left: auto;
   padding: 1px 6px;

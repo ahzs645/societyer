@@ -51,7 +51,7 @@ export const TRANSFER_COPY_TABLES = [
   "intakeExtracts", "intakeFieldReviews", "intakeFiles", "intakeProcessingLog", "intakeRuns", "inventoryBalances", "inventoryCandidates", "inventoryConnections",
   "inventoryCountLines", "inventoryCounts", "inventoryItems", "inventoryLocations", "inventoryLots", "investmentHoldings", "invoiceCatalogItems", "invoicePriceLists",
   "invoiceDocumentRevisions", "invoiceSeries", "invoiceSettings", "invoiceTemplates", "invoices", "journalEntries", "journalLines", "legalPrecedentRuns", "legalPrecedents",
-  "legalSigners", "legalTemplateDataFields", "legalTemplates", "meetingAttendanceRecords", "meetingMaterials", "meetingTemplates", "meetingTranscriptPages",
+  "legalSigners", "legalTemplateDataFields", "legalTemplates", "listViews", "meetingAttendanceRecords", "meetingMaterials", "meetingTemplates", "meetingTranscriptPages",
   "meetingTranscriptionJobs", "meetings", "memberAssessments", "memberCommunicationPrefs", "memberHistoryEvents", "memberProposals", "memberSubscriptions", "members",
   "membershipFeePeriods", "membershipRuleVersions", "minuteBookItems", "minutes", "motionEvidence", "motionTemplates", "motions", "nameSearchItems",
   "notes", "noticeDeliveries", "notificationReceipts", "notificationRules", "notifications", "objectMetadata",

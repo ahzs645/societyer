@@ -139,6 +139,9 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "paperless:recordSyncResult": ["paperlessTaskId"],
   "legalOperations:upsertGeneratedLegalDocument": ["syngrafiiFileId", "syngrafiiDocumentId", "syngrafiiPackageId"],
   "legalOperations:upsertJurisdictionMetadata": ["nuansReservationReportTypeId", "sourceOptionId"],
+  // A list's id in code (RecordListTable `tableId`), not a row.
+  "listViews:list": ["tableId"],
+  "listViews:create": ["tableId"],
 };
 
 export function actionPermission(name: string, kind: "query" | "mutation" | "action"): Permission | null {
@@ -154,6 +157,9 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (domain === "procurementCatalog" || domain === "procurementCatalogActions") return "documents:read";
   // Things attached to a task read and change with the task.
   if (domain === "taskAttachments") return kind === "query" ? "tasks:read" : "tasks:write";
+  // Named list views are shared with the workspace: every member may choose one;
+  // saving, renaming and deleting them is a settings change, as for object views.
+  if (domain === "listViews") return kind === "query" ? "society:read" : "settings:write";
   const resource = RESOURCES[domain];
   if (!resource) throw new Error(`Unclassified application action: ${name}.`);
   // Raw meeting sources are working material for meeting editors, including reads.
