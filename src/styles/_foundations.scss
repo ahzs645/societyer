@@ -34,16 +34,14 @@
 }
 
 // Right-aligned numeric cells. Use on <td>/<th> holding amounts or counts.
-.num,
-.cell-num {
+.num {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 // `.table thead th` sets text-align: left at higher specificity, which left
 // numeric column headers sitting over the far edge of right-aligned amounts.
-.table thead th.num,
-.table thead th.cell-num {
+.table thead th.num {
   text-align: right;
 }
 

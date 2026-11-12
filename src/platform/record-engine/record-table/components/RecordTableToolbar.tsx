@@ -42,7 +42,7 @@ import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { useIsBottomSheet } from "../../../../lib/useSheetDrag";
 import { useRegisterCommand } from "../../../../lib/commands";
-import { RecordTableGroupByEditor } from "./RecordTableGroupByPopover";
+import { RecordTableGroupByEditor } from "./RecordTableGroupByEditor";
 import { Select } from "@/components/Select";
 import { RecordTableExportDialog } from "./RecordTableExportDialog";
 import { getViewGroupBy } from "../utils/groupRecords";

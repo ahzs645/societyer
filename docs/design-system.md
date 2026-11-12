@@ -72,15 +72,21 @@ Render several inside `.stat-grid`. Do not hand-roll `.stat` markup.
 
 - **RecordTable** (`src/platform/record-engine/record-table/`) for record lists:
   views, filters, group by, export, range copy, preview panel. Currency and
-  number fields right-align automatically.
+  number fields right-align automatically. Lists backed by object metadata use
+  `ObjectRecordTable`; lists whose rows are already in memory and whose columns
+  are fixed in code use `RecordListTable` with a module-level
+  `staticRecordTable(...)` definition.
 - **ReportTable** (`src/components/ReportTable.tsx`) for financial statements:
   hierarchical rows (section → row → subtotal/total), several value columns,
   optional prior-period comparison with Δ and Δ%, collapsible sections and
   drilldown on any amount.
-- **Small summary tables** (`table.table.finance-table`) sort client-side with
-  `useSortableRows(rows, accessors)` and `<SortableTh column sort onSort>`
-  headers, which set `aria-sort`. Text sorts ascending first, amounts largest
-  first, blanks last; a third click restores the original order.
+- **Plain report tables** (`table.table.table--report`, see
+  `src/styles/_report-table.scss`) for statements, ledgers, documents and
+  computed previews that are not record lists. Small ones can sort
+  client-side with `useSortableRows(rows, accessors)` and
+  `<SortableTh column sort onSort>` headers, which set `aria-sort`. Text sorts
+  ascending first, amounts largest first, blanks last; a third click restores
+  the original order.
 - Dates in tables: `formatShortDate(value, organizationTodayISO(org))` gives
   "Mar 3" this year and "Mar 3, 2025" otherwise; put the full date in a `title`.
 

@@ -18,22 +18,6 @@ export type SerializedViewFilterGroup = {
   groups?: SerializedViewFilterGroup[];
 };
 
-export function recordMatchesViewFilters({
-  record,
-  columns,
-  filters,
-  filterGroups,
-  dateContext,
-}: {
-  record: Record<string, unknown>;
-  columns: RecordField[];
-  filters: ViewFilter[];
-  filterGroups?: ViewFilterGroup[];
-  dateContext?: DateRangeContext;
-}) {
-  return compileViewFilters({ columns, filters, filterGroups, dateContext })(record);
-}
-
 /**
  * The view's filter tree as one predicate: each condition compiled once and
  * the AND / OR groups resolved up front, so filtering a long list does no

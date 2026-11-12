@@ -7,7 +7,7 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { lowerLabel } from "../utils/lowerLabel";
 import type { RecordField } from "../../types";
 import { RecordTableSortEditor } from "./RecordTableSortPopover";
-import { RecordTableGroupByEditor } from "./RecordTableGroupByPopover";
+import { RecordTableGroupByEditor } from "./RecordTableGroupByEditor";
 import { RecordTableDisplayOptions } from "./RecordTableDisplayOptions";
 
 export type RecordTableViewTypeOption<Id extends string = string> = {

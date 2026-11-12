@@ -63,7 +63,7 @@ src/
 | `Layout`, `Layout.internal` | `app/` (allowed shell exception) |
 | `NotificationBell`, `NotesPanel`, `ActivityTimeline` | borderline — decide per file |
 
-Everything else in `components/` (Modal, Select, Kanban, CommandPalette, ...) is
+Everything else in `components/` (Modal, Select, RecordBoard, CommandPalette, ...) is
 genuinely generic and **stays put**. (The legacy `DataTable` was retired; tables are
 metadata-driven through `platform/record-engine`.)
 

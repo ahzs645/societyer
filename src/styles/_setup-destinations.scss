@@ -20,8 +20,7 @@
 
 // ---------------------------------------- profile: governance documents
 // The last column is an Upload / Open action, sized to its button.
-.society-doc-table th:last-child,
-.society-doc-table td.society-doc-table__action {
+.society-doc-table th:last-child {
   width: 1px;
   white-space: nowrap;
   text-align: right;

@@ -143,16 +143,6 @@ function fieldsSignature(fields: FieldMetadata[]) {
 }
 
 /**
- * What the quick search looks in, folded (foldSearchText): every field as its
- * cell reads (option labels and relation names, not stored keys or ids),
- * stored option keys as well, and an adapter's `_searchText`. Built once per
- * record object; an edited record is a new object and gets a fresh entry.
- */
-export function recordSearchText(record: FilterableRecord, fields: FieldMetadata[]): string {
-  return searchCorpus(record, fields).text;
-}
-
-/**
  * Builds the search text of `records` ahead of the first search, a few
  * milliseconds at a time, so the first letter typed over a long table
  * doesn't wait for every record's text. Returns a function that stops it.
@@ -173,6 +163,12 @@ export function prepareRecordSearch(records: readonly object[], fields: FieldMet
   return () => { if (timer !== null) clearTimeout(timer); };
 }
 
+/**
+ * What the quick search looks in, folded (foldSearchText): every field as its
+ * cell reads (option labels and relation names, not stored keys or ids),
+ * stored option keys as well, and an adapter's `_searchText`. Built once per
+ * record object; an edited record is a new object and gets a fresh entry.
+ */
 function searchCorpus(record: FilterableRecord, fields: FieldMetadata[]): SearchCorpus {
   const signature = fieldsSignature(fields);
   let cache = searchTextCaches.get(signature);
@@ -205,15 +201,6 @@ function searchCorpus(record: FilterableRecord, fields: FieldMetadata[]): Search
 }
 
 /* -------------------------------- filters -------------------------------- */
-
-export function applyRecordFilter(
-  record: FilterableRecord,
-  column: RecordField | undefined,
-  filter: ViewFilter,
-  dateContext?: DateRangeContext,
-): boolean {
-  return compileRecordFilter(column, filter, dateContext)(record);
-}
 
 const matchAll: RecordPredicate = () => true;
 

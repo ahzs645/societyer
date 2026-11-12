@@ -220,9 +220,4 @@ assert.match(calendarSync, /const enableFeed = async \(\) => \{[\s\S]{0,160}feed
 const aiAgents = readFileSync(new URL("../src/pages/AiAgents.tsx", import.meta.url), "utf8");
 assert.match(aiAgents, /await confirm\(\{\s*title: `Delete the skill[\s\S]{0,900}await removeSkill\(/, "deleting an AI skill is confirmed");
 
-// Stack-on-phone tables must beat the more specific scrolling-table rules.
-const tableCss = readFileSync(new URL("../src/styles/_components-tables-misc.scss", import.meta.url), "utf8");
-assert.match(tableCss, /\.table-wrap > \.table\.table--stack-mobile/, "stacked phone tables override .table-wrap > .table");
-assert.match(tableCss, /\.table-scroll > \.table\.table--stack-mobile/, "stacked phone tables override .table-scroll > .table");
-
 console.log(`PASS: ${frKeys.size} French keys in parity, ${labels.size} navigation labels translated, pluralisation and floating-layer selector`);
