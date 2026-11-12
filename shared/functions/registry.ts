@@ -64,6 +64,7 @@ import * as retentionFns from "./retention";
 import * as serviceProvidersFns from "./serviceProviders";
 import * as tasksFns from "./tasks";
 import * as taskAttachmentsFns from "./taskAttachments";
+import * as listViewsFns from "./listViews";
 import * as agmFns from "./agm";
 import * as financialsFns from "./financials";
 const firmFns = lazyHandlers(() => import("./firm"), "firm");
@@ -301,6 +302,12 @@ const TASK_ATTACHMENT_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "taskAttachments:listByKind", handler: taskAttachmentsFns.listByKind }),
   definePortableMutation({ name: "taskAttachments:attach", handler: taskAttachmentsFns.attachToTask }),
   definePortableMutation({ name: "taskAttachments:detach", handler: taskAttachmentsFns.detachFromTask }),
+  // listViews
+  definePortableQuery({ name: "listViews:list", handler: listViewsFns.listPortable }),
+  definePortableMutation({ name: "listViews:create", handler: listViewsFns.createPortable }),
+  definePortableMutation({ name: "listViews:update", handler: listViewsFns.updatePortable }),
+  definePortableMutation({ name: "listViews:remove", handler: listViewsFns.removePortable }),
+  definePortableMutation({ name: "listViews:importInvoiceViews", handler: listViewsFns.importInvoiceViewsPortable }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [

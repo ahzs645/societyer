@@ -181,6 +181,7 @@ export const EXPORTABLE_TABLES = [
   "fieldMetadata",
   "views",
   "viewFields",
+  "listViews",
   "commandMenuItems",
   "members",
   "memberHistoryEvents",

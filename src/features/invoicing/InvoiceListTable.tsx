@@ -1,4 +1,5 @@
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
+import { useMutation } from "convex/react";
 import { ReceiptText } from "lucide-react";
 import { FIELD_TYPES, RecordListTable, RecordTableBulkBar, RecordTablePhoneCard, staticRecordTable, type BulkAction } from "@/platform/record-engine";
 import { Money } from "../../components/Money";
@@ -6,6 +7,10 @@ import { formatDate } from "../../lib/format";
 import { InvoiceStatusPill, NeedsActionPill } from "./InvoiceStatusPill";
 import type { InvoiceRow } from "./types";
 import { tablePerCurrency } from "./currencyTables";
+import { api } from "@/lib/convexApi";
+import { useSociety } from "@/hooks/useSociety";
+import { usePermissions } from "@/hooks/usePermissions";
+import { INVOICE_LIST_TABLE_ID } from "../../../shared/invoiceListViewMigration";
 import { INVOICE_CLIENT_RESPONSE_LABEL as CLIENT_RESPONSE_LABEL, INVOICE_STATUSES, INVOICE_STATUS_LABEL, type InvoiceStatus } from "../../../shared/invoicing";
 
 const STATUS_COLOR: Record<InvoiceStatus, "gray" | "blue" | "amber" | "green" | "red"> = {
@@ -16,7 +21,8 @@ const STATUS_COLOR: Record<InvoiceStatus, "gray" | "blue" | "amber" | "green" | 
 const invoiceTable = tablePerCurrency((currency) => {
   const money = { isCents: true, currencyCode: currency };
   return staticRecordTable({
-    id: "invoices",
+    // shared/invoiceListViewMigration.ts names these columns by this id and their field names.
+    id: INVOICE_LIST_TABLE_ID,
     nameSingular: "invoice",
     namePlural: "invoices",
     labelSingular: "Invoice",
@@ -87,6 +93,30 @@ function invoiceRecord(row: InvoiceRow): InvoiceRecord {
   };
 }
 
+const importedWorkspaces = new Set<string>();
+
+/**
+ * The invoice list's old saved views (each person's own, from the former
+ * "Filters and columns" drawer) become views of this list the first time
+ * someone who may save views opens it (listViews:importInvoiceViews, which
+ * converts each old view once; see shared/invoiceListViewMigration.ts).
+ */
+function useImportLegacyInvoiceViews() {
+  const society = useSociety() as { _id?: string } | null | undefined;
+  const societyId = society?._id ? String(society._id) : null;
+  const { can, loaded } = usePermissions();
+  const mayImport = loaded && can("settings:write");
+  const importViews = useMutation(api.listViews.importInvoiceViews);
+  useEffect(() => {
+    if (!societyId || !mayImport || importedWorkspaces.has(societyId)) return;
+    importedWorkspaces.add(societyId);
+    void Promise.resolve(importViews({ societyId })).catch(() => {
+      // Tried again on the next visit.
+      importedWorkspaces.delete(societyId);
+    });
+  }, [societyId, mayImport, importViews]);
+}
+
 function itemsSummary(row: InvoiceRow) {
   return `${row.lines[0]?.item ?? ""}${row.lines.length > 1 ? ` +${row.lines.length - 1}` : ""}`;
 }
@@ -124,10 +154,12 @@ export function InvoiceListTable({
   onOpenSeries: (seriesId: string) => void;
 }) {
   const records = useMemo(() => rows.map(invoiceRecord), [rows]);
+  useImportLegacyInvoiceViews();
   return (
     <RecordListTable<InvoiceRecord>
       table={invoiceTable(currency)}
-      tableId="invoices"
+      tableId={INVOICE_LIST_TABLE_ID}
+      savedViews
       label={label}
       icon={<ReceiptText size={14} />}
       records={records}

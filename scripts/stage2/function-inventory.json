@@ -16867,6 +16867,98 @@
     ]
   },
   {
+    "key": "convex:listViews:create",
+    "surface": "convex",
+    "name": "listViews:create",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/listViews.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:listViews:importInvoiceViews",
+    "surface": "convex",
+    "name": "listViews:importInvoiceViews",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/listViews.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:listViews:list",
+    "surface": "convex",
+    "name": "listViews:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/listViews.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:listViews:remove",
+    "surface": "convex",
+    "name": "listViews:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/listViews.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "listViews",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:listViews:update",
+    "surface": "convex",
+    "name": "listViews:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/listViews.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "listViews",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:mcpOAuth:approve",
     "surface": "convex",
     "name": "mcpOAuth:approve",
@@ -44996,6 +45088,98 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:listViews:create",
+    "surface": "portable",
+    "name": "listViews:create",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:listViews:importInvoiceViews",
+    "surface": "portable",
+    "name": "listViews:importInvoiceViews",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:listViews:list",
+    "surface": "portable",
+    "name": "listViews:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:listViews:remove",
+    "surface": "portable",
+    "name": "listViews:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "listViews",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:listViews:update",
+    "surface": "portable",
+    "name": "listViews:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "id",
+        "table": "listViews",
         "array": false,
         "optional": false
       }
