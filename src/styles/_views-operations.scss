@@ -3,93 +3,20 @@
 
 // Finance, operations and admin views (WP-F).
 
-// Users & access roster: a plain table on wide screens, stacked cards on
-// phones so emails and names stop wrapping one character per line.
-.users-table td.mono {
-  overflow-wrap: anywhere;
-}
+// Users & access roster (a record table; phones get cards): the avatar beside
+// the name and email.
 .users-table__who {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
-.users-table__identity {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.3;
-  strong { font-weight: 600; }
+// The user whose module access the viewer below the roster shows.
+.users-table .record-table__row:has(.users-table__who[data-current]) > td {
+  background: token('bg-subtle');
 }
-.users-table__email {
-  color: token('text-tertiary');
-  font-size: token('fs-sm');
-  overflow-wrap: anywhere;
-}
-.users-table__role { width: 150px; }
-.users-table__actions {
-  white-space: nowrap;
-  text-align: right;
-  > * { vertical-align: middle; }
-}
-.users-table__narrow-status { display: none; }
-.users-table tr.is-selected td { background: token('bg-subtle'); }
 
 @media (max-width: 760px) {
-  .table.users-table { width: 100%; min-width: 0; }
-  .users-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-  .users-table tbody { display: block; }
-  /* Each user is one row: who on the left, role and actions on the right. */
-  .users-table tbody tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
-    gap: 6px 10px;
-    padding: 10px 16px;
-    border-bottom: 1px solid token('border');
-  }
-  .users-table tbody tr:last-child { border-bottom: 0; }
-  .table.users-table tbody td {
-    height: auto;
-    border: 0;
-    padding: 0;
-    background: transparent;
-  }
-  .users-table .users-table__wide { display: none; }
-  .users-table__narrow-status { display: inline-flex; margin-left: auto; }
-  .users-table__role { width: auto; grid-column: 2; grid-row: 1; }
-  .users-table__actions { grid-column: 3; grid-row: 1; display: flex; justify-content: flex-end; gap: 0; }
-  .users-table td[colspan] { grid-column: 1 / -1; }
-  .users-table .avatar { font-size: token('fs-tiny'); }
-  /* The key icon stands in for "Act as" (still its accessible name). */
-  .users-table__act-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .page .table.users-table > tbody > tr > td { min-width: 0; }
-  .users-table__actions > .btn { padding-inline: 8px; }
-  .users-table__email {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* Too narrow for name, role and actions together: role drops to a second line. */
-  @media (max-width: 360px) {
-    .users-table tbody tr { grid-template-columns: auto minmax(0, 1fr); }
-    .page .table.users-table > tbody > tr > td:first-child { grid-column: 1 / -1; }
-    .users-table__role { grid-column: 1; grid-row: 2; }
-    .users-table__actions { grid-column: 2; grid-row: 2; }
-  }
   .users-invitations__head .card__title { flex: 1 1 0; }
   .users-invitations__head .card__subtitle { order: 1; flex: 1 1 100%; }
 }

@@ -6,7 +6,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field, type ToneVariant } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -29,8 +29,22 @@ import {
   Upload,
   ReceiptText,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  RecordTable,
+  RecordTableEmpty,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  RecordTablePhoneCard,
+  RecordTableScope,
+  RecordTableToolbar,
+  staticRecordTable,
+  useRecordTableState,
+  type RecordTableCardRenderer,
+  type RecordTableCellRenderer,
+} from "../platform/record-engine/record-table";
+import { FIELD_TYPES } from "../platform/record-engine/types";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { MembersTrendCardLazy } from "../features/people/insights/lazy";
@@ -67,6 +81,122 @@ const FEE_STATUSES = [
 
 function todayISO() {
   return todayDateOnly();
+}
+
+/** A row of subscriptions:feeTimeline: a dated fee period, or a plan's current price (`synthetic`). */
+type FeePeriod = {
+  _id: string;
+  planId?: string;
+  planName?: string;
+  label: string;
+  membershipClass?: string;
+  priceCents: number;
+  currency?: string;
+  interval: string;
+  /** "current" for a plan's undated price. */
+  effectiveFrom: string;
+  effectiveTo?: string;
+  status: string;
+  notes?: string;
+  synthetic?: boolean;
+};
+type FeePeriodRecord = FeePeriod & { effectiveDate: string | null };
+
+type MembershipSubscriber = {
+  _id: string;
+  planId: string;
+  fullName: string;
+  email: string;
+  status: string;
+  demo?: boolean;
+  startedAtISO: string;
+  currentPeriodEndISO?: string;
+  lastPaymentCents?: number | null;
+  memberId?: string;
+  stripeSubscriptionId?: string;
+};
+type SubscriberRecord = MembershipSubscriber & { planName?: string };
+
+const FEE_STATUS_TONES: Record<string, ToneVariant> = { active: "success", planned: "warn" };
+const SUBSCRIPTION_STATUS_TONES: Record<string, ToneVariant> = { active: "success", pending: "warn", canceled: "danger" };
+
+const FEE_TIMELINE_TABLE = staticRecordTable({
+  id: "membership-fee-timeline",
+  nameSingular: "memberFeePeriod",
+  namePlural: "memberFeePeriods",
+  labelSingular: "Fee period",
+  labelPlural: "Fee periods",
+  labelIdentifierFieldName: "label",
+  fields: [
+    { name: "label", label: "Tier", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "membershipClass", label: "Class", fieldType: FIELD_TYPES.TEXT, size: 140 },
+    { name: "priceCents", label: "Fee", fieldType: FIELD_TYPES.CURRENCY, size: 150, config: { isCents: true, currencyCode: "CAD", groupable: false } },
+    {
+      name: "interval",
+      label: "Interval",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 130,
+      isVisible: false,
+      config: { options: FEE_INTERVALS.map((option) => ({ ...option, color: "gray" })) },
+    },
+    { name: "effectiveDate", label: "Effective", fieldType: FIELD_TYPES.DATE, size: 200 },
+    { name: "effectiveTo", label: "Effective to", fieldType: FIELD_TYPES.DATE, size: 140, isVisible: false },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "planned", label: "Planned", color: "amber" },
+          { value: "active", label: "Active", color: "green" },
+          { value: "retired", label: "Retired", color: "gray" },
+        ],
+      },
+    },
+    { name: "notes", label: "Notes", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+  ],
+});
+
+const SUBSCRIBERS_TABLE = staticRecordTable({
+  id: "membership-subscribers",
+  nameSingular: "memberSubscription",
+  namePlural: "memberSubscriptions",
+  labelSingular: "Subscriber",
+  labelPlural: "Subscribers",
+  labelIdentifierFieldName: "fullName",
+  density: "comfortable",
+  fields: [
+    { name: "fullName", label: "Member", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    { name: "email", label: "Email", fieldType: FIELD_TYPES.EMAIL, size: 240, isVisible: false, config: { groupable: false } },
+    { name: "planName", label: "Plan", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 140,
+      config: {
+        options: [
+          { value: "active", label: "Active", color: "green" },
+          { value: "pending", label: "Pending", color: "amber" },
+          { value: "trialing", label: "Trialing", color: "blue" },
+          { value: "past_due", label: "Past due", color: "blue" },
+          { value: "canceled", label: "Canceled", color: "red" },
+        ],
+      },
+    },
+    { name: "demo", label: "Demo", fieldType: FIELD_TYPES.BOOLEAN, size: 100, isVisible: false },
+    { name: "startedAtISO", label: "Started", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "currentPeriodEndISO", label: "Renews", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "lastPaymentCents", label: "Last payment", fieldType: FIELD_TYPES.CURRENCY, size: 140, config: { isCents: true, currencyCode: "CAD", groupable: false } },
+  ],
+});
+
+/** Tells the page whether the table is searched or filtered (the phone list then shows every subscriber). */
+function ReportNarrowed({ onChange }: { onChange: (narrowed: boolean) => void }) {
+  const narrowed = useRecordTableState((s) => s.searchTerm.trim() !== "" || s.filters.length > 0);
+  useEffect(() => onChange(narrowed), [narrowed, onChange]);
+  return null;
 }
 
 function newFeeDraft(plan?: any) {
@@ -145,6 +275,25 @@ export function MembershipPage() {
   const [levyImportOpen, setLevyImportOpen] = useState(false);
   const isMobile = useIsMobile();
   const [showAllSubs, setShowAllSubs] = useState(false);
+  const [feeFilterOpen, setFeeFilterOpen] = useState(false);
+  const [subsFilterOpen, setSubsFilterOpen] = useState(false);
+  const [subsNarrowed, setSubsNarrowed] = useState(false);
+  const feeRecords = useMemo<FeePeriodRecord[]>(
+    () => ((feeTimeline ?? []) as FeePeriod[]).map((period) => ({
+      ...period,
+      effectiveDate: period.effectiveFrom === "current" ? null : period.effectiveFrom,
+    })),
+    [feeTimeline],
+  );
+  const subscriberRecords = useMemo<SubscriberRecord[]>(() => {
+    const planNames = new Map<string, string>(((plans ?? []) as { _id: string; name: string }[]).map((plan) => [plan._id, plan.name]));
+    return ((subs ?? []) as MembershipSubscriber[]).map((sub) => ({ ...sub, planName: planNames.get(sub.planId) }));
+  }, [subs, plans]);
+  // Phones list the first few until "Show all"; a search or filter looks through everyone.
+  const visibleSubs = useMemo(
+    () => isMobile && !showAllSubs && !subsNarrowed ? subscriberRecords.slice(0, PHONE_SUBSCRIBER_LIMIT) : subscriberRecords,
+    [isMobile, showAllSubs, subsNarrowed, subscriberRecords],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -153,7 +302,182 @@ export function MembershipPage() {
   const activeSubs = (subs ?? []).filter((s) => s.status === "active");
   const activeFeePeriods = (feeTimeline ?? []).filter((p: any) => p.status === "active");
   const allSubs = subs ?? [];
-  const visibleSubs = isMobile && !showAllSubs ? allSubs.slice(0, PHONE_SUBSCRIBER_LIMIT) : allSubs;
+
+  const renderFeeCell: RecordTableCellRenderer = ({ record, field }) => {
+    const period = record as FeePeriodRecord;
+    switch (field.name) {
+      case "label":
+        return (
+          <span className="record-table__identifier-lines">
+            <strong className="record-table__identifier-primary">{period.label}</strong>
+            {period.planName && period.planName !== period.label && (
+              <span className="record-table__identifier-secondary">{period.planName}</span>
+            )}
+          </span>
+        );
+      case "membershipClass":
+        return period.membershipClass ? <Badge tone="info">{period.membershipClass}</Badge> : <span className="muted">—</span>;
+      case "priceCents":
+        return (
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>
+            {money(period.priceCents)} <span className="muted">/ {intervalLabel(period.interval)}</span>
+          </span>
+        );
+      case "effectiveDate":
+        return (
+          <span>
+            {period.effectiveFrom === "current" ? "Current" : formatDate(period.effectiveFrom)}
+            {period.effectiveTo ? ` – ${formatDate(period.effectiveTo)}` : ""}
+          </span>
+        );
+      case "status":
+        return <Badge tone={FEE_STATUS_TONES[period.status] ?? "neutral"}>{sentenceCase(period.status)}</Badge>;
+      case "notes":
+        return <span className="muted">{period.notes ?? (period.synthetic ? "Current plan price; add a dated period to preserve history." : "—")}</span>;
+      default:
+        return undefined;
+    }
+  };
+
+  const renderFeeActions = (period: FeePeriodRecord) => period.synthetic ? (
+    <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => setFeeDraft(feeDraftFromPeriod(period))}>
+      Add
+    </button>
+  ) : (
+    <Menu
+      align="right"
+      trigger={
+        <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for fee period ${period.label}`}>
+          <MoreHorizontal size={14} />
+        </button>
+      }
+      sections={[{
+        id: "period",
+        items: [
+          { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canManage, onSelect: () => setFeeDraft(feeDraftFromPeriod(period)) },
+          {
+            id: "delete",
+            label: "Delete fee period",
+            icon: <Trash2 size={14} />,
+            destructive: true,
+            disabled: !canManage,
+            onSelect: async () => {
+              await removeFeePeriod({ id: period._id });
+              toast.success("Fee period removed");
+            },
+          },
+        ],
+      }]}
+    />
+  );
+
+  const renderFeeCard: RecordTableCardRenderer = (record, { selecting }) => {
+    const period = record as unknown as FeePeriodRecord;
+    return (
+      <RecordTablePhoneCard
+        title={period.label}
+        badge={<Badge tone={FEE_STATUS_TONES[period.status] ?? "neutral"}>{sentenceCase(period.status)}</Badge>}
+        meta={[
+          `${money(period.priceCents)} / ${intervalLabel(period.interval)}`,
+          `${period.effectiveFrom === "current" ? "Current" : formatDate(period.effectiveFrom)}${period.effectiveTo ? ` – ${formatDate(period.effectiveTo)}` : ""}`,
+        ]}
+        detail={[period.membershipClass ?? "", period.notes ?? ""]}
+        selecting={selecting}
+      />
+    );
+  };
+
+  const subscriptionBadges = (sub: SubscriberRecord) => (
+    <>
+      <Badge tone={SUBSCRIPTION_STATUS_TONES[sub.status] ?? "info"}>{sentenceCase(sub.status)}</Badge>
+      {sub.demo && <Badge>Demo</Badge>}
+    </>
+  );
+
+  const renderSubscriberCell: RecordTableCellRenderer = ({ record, field }) => {
+    const sub = record as SubscriberRecord;
+    switch (field.name) {
+      case "fullName":
+        return (
+          <span className="record-table__identifier-lines">
+            <strong className="record-table__identifier-primary">{sub.fullName}</strong>
+            <span className="record-table__identifier-secondary" title={sub.email}>{sub.email}</span>
+          </span>
+        );
+      case "planName":
+        return <span>{sub.planName ?? "—"}</span>;
+      case "status":
+        return <span>{subscriptionBadges(sub)}</span>;
+      case "startedAtISO":
+        return <span>{formatDate(sub.startedAtISO)}</span>;
+      case "currentPeriodEndISO":
+        return <span>{sub.currentPeriodEndISO ? formatDate(sub.currentPeriodEndISO) : "—"}</span>;
+      case "lastPaymentCents":
+        return <span>{sub.lastPaymentCents != null ? <Money cents={sub.lastPaymentCents} trimWholeCents /> : "—"}</span>;
+      default:
+        return undefined;
+    }
+  };
+
+  const renderSubscriberActions = (sub: SubscriberRecord) => (
+    <>
+      {sub.memberId && sub.status !== "canceled" && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          disabled={!canInvoice}
+          onClick={async () => {
+            try {
+              const id = await billMemberDues({ societyId: society._id, memberId: sub.memberId });
+              toast.success("Dues invoice drafted", "Review it, then mark it as sent.");
+              navigate(`/app/invoices?builder=${id}`);
+            } catch (error) { toast.error("Could not bill dues", error instanceof Error ? error.message : "Please try again."); }
+          }}
+        >
+          <ReceiptText size={12} /> Bill dues
+        </button>
+      )}
+      {sub.status !== "canceled" && !sub.demo && sub.stripeSubscriptionId ? (
+        <a className="btn btn--ghost btn--sm" href="https://dashboard.stripe.com/subscriptions" target="_blank" rel="noopener noreferrer">Manage in Stripe</a>
+      ) : sub.status !== "canceled" && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          disabled={!canManage}
+          onClick={async () => {
+            const approved = await confirm({
+              title: "Cancel subscription?",
+              message: `${sub.fullName}'s ${sub.planName ?? "membership"} subscription will be marked canceled. This can't be undone here; they would need to sign up again.`,
+              confirmLabel: "Cancel subscription",
+              cancelLabel: "Keep subscription",
+              tone: "danger",
+            });
+            if (!approved) return;
+            try { await cancelSub({ id: sub._id }); toast.success("Subscription record canceled"); }
+            catch (error) { toast.error("Could not cancel subscription", error instanceof Error ? error.message : "Please try again."); }
+          }}
+        >
+          Cancel
+        </button>
+      )}
+    </>
+  );
+
+  const renderSubscriberCard: RecordTableCardRenderer = (record, { selecting }) => {
+    const sub = record as unknown as SubscriberRecord;
+    return (
+      <RecordTablePhoneCard
+        title={sub.fullName}
+        badge={subscriptionBadges(sub)}
+        meta={[
+          sub.planName ?? "",
+          sub.lastPaymentCents != null ? <Money cents={sub.lastPaymentCents} trimWholeCents /> : "",
+        ]}
+        detail={[sub.email, sub.currentPeriodEndISO ? `Renews ${formatDate(sub.currentPeriodEndISO)}` : ""]}
+        selecting={selecting}
+      />
+    );
+  };
   const planSummary = (plans ?? []).length
     ? (plans ?? []).map((p) => `${p.name} ${money(p.priceCents)}/${p.interval === "one_time" ? "once" : intervalLabel(p.interval)}`).join(" · ")
     : "No plans yet";
@@ -320,87 +644,32 @@ export function MembershipPage() {
             <CalendarClock size={12} /> Add period
           </button>
         </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Tier</th>
-              <th>Class</th>
-              <th>Fee</th>
-              <th>Effective</th>
-              <th>Status</th>
-              <th>Notes</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {(feeTimeline ?? []).map((period: any) => (
-              <tr key={period._id}>
-                <td>
-                  <strong>{period.label}</strong>
-                  {period.planName && period.planName !== period.label && (
-                    <div className="muted" style={{ fontSize: 11 }}>{period.planName}</div>
-                  )}
-                </td>
-                <td>{period.membershipClass ? <Badge tone="info">{period.membershipClass}</Badge> : <span className="muted">—</span>}</td>
-                <td style={{ fontVariantNumeric: "tabular-nums" }}>
-                  {money(period.priceCents)} <span className="muted">/ {intervalLabel(period.interval)}</span>
-                </td>
-                <td>
-                  {period.effectiveFrom === "current" ? "Current" : formatDate(period.effectiveFrom)}
-                  {period.effectiveTo ? ` – ${formatDate(period.effectiveTo)}` : ""}
-                </td>
-                <td>
-                  <Badge tone={period.status === "active" ? "success" : period.status === "planned" ? "warn" : "neutral"}>
-                    {sentenceCase(period.status)}
-                  </Badge>
-                </td>
-                <td className="muted" style={{ maxWidth: 320 }}>{period.notes ?? (period.synthetic ? "Current plan price; add a dated period to preserve history." : "—")}</td>
-                <td>
-                  <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                    {period.synthetic ? (
-                      <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => setFeeDraft(feeDraftFromPeriod(period))}>
-                        Add
-                      </button>
-                    ) : (
-                      <Menu
-                        align="right"
-                        trigger={
-                          <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for fee period ${period.label}`}>
-                            <MoreHorizontal size={14} />
-                          </button>
-                        }
-                        sections={[{
-                          id: "period",
-                          items: [
-                            { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canManage, onSelect: () => setFeeDraft(feeDraftFromPeriod(period)) },
-                            {
-                              id: "delete",
-                              label: "Delete fee period",
-                              icon: <Trash2 size={14} />,
-                              destructive: true,
-                              disabled: !canManage,
-                              onSelect: async () => {
-                                await removeFeePeriod({ id: period._id });
-                                toast.success("Fee period removed");
-                              },
-                            },
-                          ],
-                        }]}
-                      />
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {(feeTimeline ?? []).length === 0 && (
-              <tr>
-                <td colSpan={7} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                  No fee periods yet. Add one to record the timeline.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="card-register">
+          <RecordTableScope
+            tableId="membership-fee-timeline"
+            objectMetadata={FEE_TIMELINE_TABLE.objectMetadata}
+            hydratedView={FEE_TIMELINE_TABLE.hydratedView}
+            records={feeRecords}
+            cellPreviews={false}
+          >
+            <RecordTableToolbar
+              icon={<CalendarClock size={14} />}
+              label="All fee periods"
+              onOpenFilter={() => setFeeFilterOpen((open) => !open)}
+            />
+            <RecordTableFilterPopover open={feeFilterOpen} onClose={() => setFeeFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable
+              fillViewport={false}
+              showAggregateFooter={false}
+              loading={feeTimeline === undefined}
+              renderCell={renderFeeCell}
+              renderRowActions={renderFeeActions}
+              renderPhoneCard={renderFeeCard}
+              emptyState={<RecordTableEmpty title="No fee periods yet." description="Add one to record the timeline." />}
+            />
+          </RecordTableScope>
+        </div>
       </div>
       </MobileFold>
 
@@ -410,100 +679,33 @@ export function MembershipPage() {
           <h2 className="card__title">Subscribers</h2>
           <span className="card__subtitle">{allSubs.length} total</span>
         </div>
-        <table className="table table--comfortable membership-subscribers-table">
-          <thead>
-            <tr>
-              <th>Member</th>
-              <th>Plan</th>
-              <th>Status</th>
-              <th>Started</th>
-              <th>Renews</th>
-              <th className="num">Last payment</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {visibleSubs.map((s) => {
-              const plan = (plans ?? []).find((p) => p._id === s.planId);
-              return (
-                <tr key={s._id}>
-                  <td>
-                    <strong>{s.fullName}</strong>
-                    <div className="membership-subscribers-table__email" title={s.email}>{s.email}</div>
-                  </td>
-                  <td>{plan?.name ?? "—"}</td>
-                  <td>
-                    <Badge
-                      tone={
-                        s.status === "active"
-                          ? "success"
-                          : s.status === "pending"
-                          ? "warn"
-                          : s.status === "canceled"
-                          ? "danger"
-                          : "info"
-                      }
-                    >
-                      {sentenceCase(s.status)}
-                    </Badge>
-                    {s.demo && <Badge>Demo</Badge>}
-                  </td>
-                  <td>{formatDate(s.startedAtISO)}</td>
-                  <td>{s.currentPeriodEndISO ? formatDate(s.currentPeriodEndISO) : "—"}</td>
-                  <td className="num">{s.lastPaymentCents != null ? <Money cents={s.lastPaymentCents} trimWholeCents /> : "—"}</td>
-                  <td>
-                    <div className="row membership-subscribers-table__actions">
-                    {s.memberId && s.status !== "canceled" && (
-                      <button
-                        className="btn btn--ghost btn--sm"
-                        disabled={!canInvoice}
-                        onClick={async () => {
-                          try {
-                            const id = await billMemberDues({ societyId: society._id, memberId: s.memberId });
-                            toast.success("Dues invoice drafted", "Review it, then mark it as sent.");
-                            navigate(`/app/invoices?builder=${id}`);
-                          } catch (error) { toast.error("Could not bill dues", error instanceof Error ? error.message : "Please try again."); }
-                        }}
-                      >
-                        <ReceiptText size={12} /> Bill dues
-                      </button>
-                    )}
-                    {s.status !== "canceled" && !s.demo && s.stripeSubscriptionId ? (
-                      <a className="btn btn--ghost btn--sm" href="https://dashboard.stripe.com/subscriptions" target="_blank" rel="noopener noreferrer">Manage in Stripe</a>
-                    ) : s.status !== "canceled" && (
-                      <button
-                        className="btn btn--ghost btn--sm"
-                        disabled={!canManage}
-                        onClick={async () => {
-                          const approved = await confirm({
-                            title: "Cancel subscription?",
-                            message: `${s.fullName}'s ${plan?.name ?? "membership"} subscription will be marked canceled. This can't be undone here; they would need to sign up again.`,
-                            confirmLabel: "Cancel subscription",
-                            cancelLabel: "Keep subscription",
-                            tone: "danger",
-                          });
-                          if (!approved) return;
-                          try { await cancelSub({ id: s._id }); toast.success("Subscription record canceled"); }
-                          catch (error) { toast.error("Could not cancel subscription", error instanceof Error ? error.message : "Please try again."); }
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {(subs ?? []).length === 0 && (
-              <tr>
-                <td colSpan={7} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                  No subscriptions yet. Sign up from one of the plan cards above.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="card-register">
+          <RecordTableScope
+            tableId="membership-subscribers"
+            objectMetadata={SUBSCRIBERS_TABLE.objectMetadata}
+            hydratedView={SUBSCRIBERS_TABLE.hydratedView}
+            records={visibleSubs}
+            cellPreviews={false}
+          >
+            <ReportNarrowed onChange={setSubsNarrowed} />
+            <RecordTableToolbar
+              icon={<CreditCard size={14} />}
+              label="All subscribers"
+              onOpenFilter={() => setSubsFilterOpen((open) => !open)}
+            />
+            <RecordTableFilterPopover open={subsFilterOpen} onClose={() => setSubsFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable
+              fillViewport={false}
+              showAggregateFooter={false}
+              loading={subs === undefined}
+              renderCell={renderSubscriberCell}
+              renderRowActions={renderSubscriberActions}
+              renderPhoneCard={renderSubscriberCard}
+              emptyState={<RecordTableEmpty title="No subscriptions yet." description="Sign up from one of the plan cards above." />}
+            />
+          </RecordTableScope>
+        </div>
         {visibleSubs.length < allSubs.length && (
           <div className="card__body">
             <button type="button" className="btn" style={{ width: "100%" }} onClick={() => setShowAllSubs(true)}>
