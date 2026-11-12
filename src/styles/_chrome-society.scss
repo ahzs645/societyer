@@ -851,37 +851,16 @@
 .treasurer-claim-stats {
   margin-bottom: token('s-4');
 }
-.treasurer-claims-table,
-.treasurer-funding-table,
-.treasurer-source-table,
-.treasurer-timeline-table {
+.treasurer-funding-table {
   table-layout: fixed;
 }
-.treasurer-claims-table th:nth-child(1) { width: 26%; }
-.treasurer-claims-table th:nth-child(2) { width: 18%; }
-.treasurer-claims-table th:nth-child(3) { width: 120px; }
-.treasurer-claims-table th:nth-child(4) { width: 120px; }
-.treasurer-claims-table th:nth-child(5) { width: 18%; }
-.treasurer-claims-table th:nth-child(6) { width: 210px; }
-.treasurer-funding-table th:nth-child(1),
-.treasurer-source-table th:nth-child(1) {
+.treasurer-funding-table th:nth-child(1) {
   width: 45%;
 }
-.treasurer-funding-table th:nth-child(2),
-.treasurer-source-table th:nth-child(2) {
+.treasurer-funding-table th:nth-child(2) {
   width: 130px;
 }
-.treasurer-source-table th:nth-child(5) {
-  width: 180px;
-}
-.treasurer-timeline-table th:nth-child(1) { width: 110px; }
-.treasurer-timeline-table th:nth-child(4) { width: 120px; }
-.treasurer-timeline-table th:nth-child(5) { width: 130px; }
-.treasurer-timeline-table th:nth-child(6) { width: 120px; }
-.treasurer-claims-table td,
-.treasurer-funding-table td,
-.treasurer-source-table td,
-.treasurer-timeline-table td {
+.treasurer-funding-table td {
   overflow-wrap: anywhere;
 }
 
