@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { chooseGuidedSetupAct } from "./helpers/guidedSetup";
+import { pinnedRowActions, recordRows, rowActionsArePinned } from "./helpers/rowActions";
 
 /**
  * The pages organization setup steps link to, for a federal (CBCA)
@@ -110,9 +111,16 @@ test("setup destinations work for a corporation that is preparing incorporation"
   await classDialog.getByLabel("Class name", { exact: true }).fill("Common");
   await classDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Share class saved", { exact: true })).toBeVisible();
-  const classRow = page.locator(".rights-ledger-table").first().locator("tbody tr", { hasText: "Common" });
-  await expect(classRow.getByRole("button", { name: "Edit", exact: true })).toBeInViewport();
-  await expect(classRow.getByRole("button", { name: "Split", exact: true })).toBeInViewport();
+  // The share classes are a record table: Edit and Split sit beside the row,
+  // or behind its pinned "Row actions" button when the table scrolls sideways
+  // (phone cards always pin them).
+  const classRow = recordRows(page).filter({ hasText: "Common" }).first();
+  if (await rowActionsArePinned(classRow)) {
+    await expect(pinnedRowActions(classRow)).toBeInViewport();
+  } else {
+    await expect(classRow.getByRole("button", { name: "Edit", exact: true })).toBeInViewport();
+    await expect(classRow.getByRole("button", { name: "Split", exact: true })).toBeInViewport();
+  }
   await fits(page);
 
   // Dashboard: no statutory red flags before the certificate.
