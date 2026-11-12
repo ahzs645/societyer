@@ -1421,7 +1421,7 @@ export function RightsLedgerPage() {
             return undefined;
           }}
           renderRowActions={(record) => <RowActions onEdit={() => setTransferDraft(editTransfer(record.row))} onDelete={() => deleteRow("transfer", record.row)} label="ledger transfer" />}
-          emptyState={<RecordTableEmpty title="No holding transfers yet." />}
+          emptyState={<RecordTableEmpty title="No holding transfers yet" />}
         />
       </Section>
 
@@ -1883,7 +1883,7 @@ export function TemplateEnginePage() {
             return undefined;
           }}
           renderRowActions={(record) => <DeleteCell label="template" onDelete={() => del(removeTemplate, record.row._id, "template")} />}
-          emptyState={<RecordTableEmpty title="No templates yet." />}
+          emptyState={<RecordTableEmpty title="No templates yet" />}
         />
       </Section>
 
@@ -1905,7 +1905,7 @@ export function TemplateEnginePage() {
             return undefined;
           }}
           renderRowActions={(record) => <DeleteCell label="precedent" onDelete={() => del(removePrecedent, record.row._id, "precedent")} />}
-          emptyState={<RecordTableEmpty title="No precedents yet." />}
+          emptyState={<RecordTableEmpty title="No precedents yet" />}
         />
       </Section>
 
@@ -1932,7 +1932,7 @@ export function TemplateEnginePage() {
             return undefined;
           }}
           renderRowActions={(record) => <DeleteCell label="document" onDelete={() => del(removeDocument, record.row._id, "document")} />}
-          emptyState={<RecordTableEmpty title="No generated documents yet." />}
+          emptyState={<RecordTableEmpty title="No generated documents yet" />}
         />
       </Section>
 
@@ -2181,7 +2181,7 @@ export function FormationMaintenancePage() {
             return undefined;
           }}
           renderRowActions={(record) => <DeleteCell label="formation record" onDelete={() => del(removeFormation, record.row._id, "formation record")} />}
-          emptyState={<RecordTableEmpty title="No formation records yet." />}
+          emptyState={<RecordTableEmpty title="No formation records yet" />}
         />
       </Section>
 
@@ -2212,7 +2212,7 @@ export function FormationMaintenancePage() {
               onDelete={() => del(removeNameSearch, record.row._id, "name search")}
             />
           )}
-          emptyState={<RecordTableEmpty title="No name searches yet." />}
+          emptyState={<RecordTableEmpty title="No name searches yet" />}
         />
       </Section>
 
@@ -2235,7 +2235,7 @@ export function FormationMaintenancePage() {
               onDelete={() => del(removeAmendment, record.row._id, "amendment")}
             />
           )}
-          emptyState={<RecordTableEmpty title="No amendments yet." />}
+          emptyState={<RecordTableEmpty title="No amendments yet" />}
         />
       </Section>
 
@@ -2256,7 +2256,7 @@ export function FormationMaintenancePage() {
             return undefined;
           }}
           renderRowActions={(record) => <DeleteCell label="annual maintenance record" onDelete={() => del(removeAnnual, record.row._id, "annual maintenance record")} />}
-          emptyState={<RecordTableEmpty title="No annual maintenance records yet." />}
+          emptyState={<RecordTableEmpty title="No annual maintenance records yet" />}
         />
       </Section>
 
@@ -2275,7 +2275,7 @@ export function FormationMaintenancePage() {
             return undefined;
           }}
           renderRowActions={(record) => <DeleteCell label="jurisdiction metadata" onDelete={() => del(removeJurisdiction, record.row._id, "jurisdiction metadata")} />}
-          emptyState={<RecordTableEmpty title="No jurisdiction metadata yet." />}
+          emptyState={<RecordTableEmpty title="No jurisdiction metadata yet" />}
         />
       </Section>
 
@@ -2295,7 +2295,7 @@ export function FormationMaintenancePage() {
             return undefined;
           }}
           renderRowActions={(record) => <DeleteCell label="log entry" onDelete={() => del(removeLog, record.row._id, "log entry")} />}
-          emptyState={<RecordTableEmpty title="No operational logs yet." />}
+          emptyState={<RecordTableEmpty title="No operational logs yet" />}
         />
       </Section>
 

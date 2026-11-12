@@ -339,7 +339,7 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
               selecting={selecting}
             />
           )}
-          emptyState={<RecordTableEmpty title="No expectations yet." description="No record-continuity rule pack exists for this jurisdiction; add body cadences manually." />}
+          emptyState={<RecordTableEmpty title="No expectations yet" description="No record-continuity rule pack exists for this jurisdiction; add body cadences manually." />}
         />
       </section>
 

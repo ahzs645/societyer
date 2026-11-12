@@ -395,7 +395,7 @@ export function PoliciesPage() {
             },
           ];
         }}
-        emptyState={<RecordTableEmpty title="No policies yet." />}
+        emptyState={<RecordTableEmpty title="No policies yet" />}
       />
 
       <Drawer

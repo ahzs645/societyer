@@ -1369,7 +1369,7 @@ function LocationContentsTable<Item extends InventoryItemRef>({
           selecting={selecting}
         />
       )}
-      emptyState={<RecordTableEmpty title="This location is empty." />}
+      emptyState={<RecordTableEmpty title="This location is empty" />}
     />
   );
 }

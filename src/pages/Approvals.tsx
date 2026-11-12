@@ -439,14 +439,9 @@ export function ApprovalsPage() {
               );
             }}
             emptyState={<EmptyState icon={<ClipboardCheck size={20} />} title={EMPTY_COPY[claimTab ?? "awaiting"].title} description={EMPTY_COPY[claimTab ?? "awaiting"].description} />}
-          >
-            {tab === "awaiting" && (
-              <RecordTableBulkBar
-                summary={(selected) => <Money cents={selected.reduce((sum, record) => sum + (typeof record.amountCents === "number" ? record.amountCents : 0), 0)} />}
-                actions={[{ id: "approve", label: "Approve", icon: <Check size={12} aria-hidden="true" />, onRun: (ids) => approveSelected(ids) }]}
-              />
-            )}
-          </RecordListTable>
+            bulkActions={tab === "awaiting" && approvable.length > 0 ? [{ id: "approve", label: "Approve", icon: <Check size={12} aria-hidden="true" />, onRun: (ids) => approveSelected(ids) }] : undefined}
+            bulkSummary={(selected) => <Money cents={selected.reduce((sum, record) => sum + (typeof record.amountCents === "number" ? record.amountCents : 0), 0)} />}
+          />
         </div>
       )}
 

@@ -321,7 +321,7 @@ export function BackfillReviewDrawer({
                     selecting={selecting}
                   />
                 )}
-                emptyState={<RecordTableEmpty title="No imported transactions are waiting to be posted." />}
+                emptyState={<RecordTableEmpty title="No imported transactions are waiting to be posted" />}
               />
             </div>
           </details>

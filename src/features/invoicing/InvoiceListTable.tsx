@@ -194,13 +194,8 @@ export function InvoiceListTable({
           />
         );
       }}
-    >
-      {selectable && (
-        <RecordTableBulkBar
-          actions={bulkActions}
-          summary={(selected) => <><Money currency={currency} cents={selected.reduce((sum, record) => sum + (typeof record.balanceCents === "number" ? record.balanceCents : 0), 0)} /> due</>}
-        />
-      )}
-    </RecordListTable>
+      bulkActions={selectable ? bulkActions : undefined}
+      bulkSummary={(selected) => <><Money currency={currency} cents={selected.reduce((sum, record) => sum + (typeof record.balanceCents === "number" ? record.balanceCents : 0), 0)} /> due</>}
+    />
   );
 }

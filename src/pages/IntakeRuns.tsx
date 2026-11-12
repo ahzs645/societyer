@@ -649,7 +649,7 @@ export function IntakeRunsPage() {
               selecting={selecting}
             />
           )}
-          emptyState={<RecordTableEmpty title="No intake runs yet." />}
+          emptyState={<RecordTableEmpty title="No intake runs yet" />}
         />
       </section>
 
@@ -771,7 +771,7 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
                     wrapTitle
                   />
                 )}
-                emptyState={<RecordTableEmpty title="No files match this disposition." />}
+                emptyState={<RecordTableEmpty title="No files match this disposition" />}
               />
             </>
           )}
@@ -800,7 +800,7 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
                   detail={[record.file, record.masked ? `masked: ${record.masked}` : ""]}
                 />
               )}
-              emptyState={<RecordTableEmpty title="Nothing logged for this run yet." />}
+              emptyState={<RecordTableEmpty title="Nothing logged for this run yet" />}
             />
           )}
           {tab === "gaps" && (

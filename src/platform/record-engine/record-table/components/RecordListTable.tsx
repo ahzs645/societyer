@@ -48,14 +48,16 @@ type RecordListTableProps<T extends { _id: string }> = {
    * checked (Mark verified…). Giving any turns on `selectable`.
    */
   bulkActions?: BulkAction[];
+  /** Shown in that bar after the count, from the checked rows (their total, say). */
+  bulkSummary?: (records: T[]) => ReactNode;
   /** Column totals under the table (default: on for `page`, off for `card`). */
   showTotals?: boolean;
   /** The toolbar's title and count (default: on for `page`, off for `card`). */
   showTitle?: boolean;
   /**
-   * Rendered inside the table's scope, after the table: a `RecordTableBulkBar`
-   * for a `selectable` list, or small pieces that read the table's state with
-   * `useRecordTableState` (whether it is searched, say).
+   * Rendered inside the table's scope, after the table: small pieces that
+   * read the table's state with `useRecordTableState` (whether it is
+   * searched, say). Bulk bars use `bulkActions` / `bulkSummary`.
    */
   children?: ReactNode;
 };
@@ -88,6 +90,7 @@ export function RecordListTable<T extends { _id: string }>({
   highlightedRecordId = null,
   selectable = false,
   bulkActions,
+  bulkSummary,
   showTotals,
   showTitle,
   children,
@@ -127,7 +130,12 @@ export function RecordListTable<T extends { _id: string }>({
           rowMenuSections={rowMenuSections ? (record) => rowMenuSections(record as T) : undefined}
           renderPhoneCard={renderPhoneCard ? (record, helpers) => renderPhoneCard(record as unknown as T, helpers) : undefined}
         />
-        {bulkActions && bulkActions.length > 0 && <RecordTableBulkBar actions={bulkActions} />}
+        {bulkActions && bulkActions.length > 0 && (
+          <RecordTableBulkBar
+            actions={bulkActions}
+            summary={bulkSummary ? (selected) => bulkSummary(selected as unknown as T[]) : undefined}
+          />
+        )}
         {children}
       </RecordTableScope>
     </div>

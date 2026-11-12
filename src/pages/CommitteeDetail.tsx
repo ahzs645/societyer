@@ -423,7 +423,7 @@ export function CommitteeDetailPage() {
                 selecting={selecting}
               />
             )}
-            emptyState={<RecordTableEmpty title="No members yet." description="Add people, or add them from imported roster sheets." />}
+            emptyState={<RecordTableEmpty title="No members yet" description="Add people, or add them from imported roster sheets." />}
           />
         </div>
   );
@@ -448,7 +448,7 @@ export function CommitteeDetailPage() {
               if (field.name === "minutes") return m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>;
               return undefined;
             }}
-            emptyState={<RecordTableEmpty title="No meetings yet." />}
+            emptyState={<RecordTableEmpty title="No meetings yet" />}
           />
         </div>
   );
@@ -495,7 +495,7 @@ export function CommitteeDetailPage() {
             }}
             emptyState={
               <RecordTableEmpty
-                title="No tasks yet."
+                title="No tasks yet"
                 description={historicalTaskCount > 0 ? <Link to={`/app/tasks?register=historical&committeeId=${committee._id}`}>See {historicalTaskCount} historical source actions</Link> : undefined}
               />
             }

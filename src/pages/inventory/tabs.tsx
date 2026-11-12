@@ -138,7 +138,7 @@ export function StockTab({
           records={itemRecords}
           loading={loading.items}
           onRecordClick={(_id, row) => onEdit(row)}
-          emptyState={<RecordTableEmpty title="No items yet." description="Use New › Item to add a supply, consumable or tracked item." />}
+          emptyState={<RecordTableEmpty title="No items yet" description="Use New › Item to add a supply, consumable or tracked item." />}
           renderCell={({ record: row, field }) => {
             if (field.name === "name") return (
               <span className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
@@ -195,7 +195,7 @@ export function StockTab({
           records={balanceRecords}
           loading={loading.balances || loading.items || loading.locations}
           onRecordClick={(_id, row) => { const item = itemById.get(row.inventoryItemId); if (item) onEdit(item); }}
-          emptyState={<RecordTableEmpty title="No stock balances yet." description="Place or receive stock to see what is held where." />}
+          emptyState={<RecordTableEmpty title="No stock balances yet" description="Place or receive stock to see what is held where." />}
           renderCell={({ record: row, field }) => {
             if (field.name === "itemName") return (
               <span className="record-table__identifier-lines">
@@ -226,7 +226,7 @@ export function StockTab({
           icon={<History size={14} />}
           records={movementRecords}
           loading={loading.movements || loading.items || loading.locations}
-          emptyState={<RecordTableEmpty title="No stock movements yet." description="Receipts, transfers and adjustments are listed here once posted." />}
+          emptyState={<RecordTableEmpty title="No stock movements yet" description="Receipts, transfers and adjustments are listed here once posted." />}
           renderCell={({ record: row, field }) => {
             if (field.name === "movementType") return <Badge tone={movementTone(row.movementType) as any}>{row.movementType}</Badge>;
             if (field.name === "quantity") return <span className="mono">{formatQuantity(row.quantity, row.unitOfMeasure)}</span>;
@@ -379,7 +379,7 @@ export function LocationsTab({
       loading={loading}
       transformView={transformView}
       onRecordClick={(_id, row) => onWhatsHere(row)}
-      emptyState={<RecordTableEmpty title="No locations yet." description="Add a facility, room, shelf, or bin so you can say where things live." />}
+      emptyState={<RecordTableEmpty title="No locations yet" description="Add a facility, room, shelf, or bin so you can say where things live." />}
       renderCell={({ record: row, field }) => {
         if (field.name === "name") {
           const collapsed = collapsedIds.has(String(row._id));
@@ -463,7 +463,7 @@ export function LotsTab({
       records={records}
       loading={loading}
       onRecordClick={(_id, row) => onEdit(row)}
-      emptyState={<RecordTableEmpty title="No lots or serials yet." description="Enable lot/serial tracking on an item, then add a lot." />}
+      emptyState={<RecordTableEmpty title="No lots or serials yet" description="Enable lot/serial tracking on an item, then add a lot." />}
       renderCell={({ record: row, field }) => {
         if (field.name === "itemName") return (
           <span className="record-table__identifier-lines">
@@ -527,7 +527,7 @@ export function CountsTab({
       records={records}
       loading={loading}
       onRecordClick={(_id, row) => { if (row.status === "open" && canWrite) onEnter(row); }}
-      emptyState={<RecordTableEmpty title="No physical counts yet." description="Start a count to verify what's actually on the shelf." />}
+      emptyState={<RecordTableEmpty title="No physical counts yet" description="Start a count to verify what's actually on the shelf." />}
       renderCell={({ record: row, field }) => {
         if (field.name === "title") return (
           <span className="record-table__identifier-lines">

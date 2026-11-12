@@ -514,7 +514,7 @@ function RecordBundlesCard({ rows, partial }: { rows: RecordBundle[]; partial?: 
             />
           );
         }}
-        emptyState={<RecordTableEmpty title="No connected record bundles yet." />}
+        emptyState={<RecordTableEmpty title="No connected record bundles yet" />}
       />
     </div>
   );

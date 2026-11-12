@@ -319,7 +319,7 @@ export function WorkflowPackagesPage() {
               selecting={selecting}
             />
           )}
-          emptyState={<RecordTableEmpty title="No workflow packages yet." />}
+          emptyState={<RecordTableEmpty title="No workflow packages yet" />}
         />
       </div>
 

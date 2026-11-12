@@ -287,7 +287,7 @@ export function PortfolioPage() {
               selecting={selecting}
             />
           )}
-          emptyState={<RecordTableEmpty title="No entities yet." />}
+          emptyState={<RecordTableEmpty title="No entities yet" />}
         />
       )}
     </div>

@@ -290,14 +290,14 @@ export function WebhooksPage() {
           variant="card"
           table={ENDPOINTS_TABLE}
           tableId="webhook-endpoints"
-          label="All endpoints"
+          label="Endpoints"
           icon={<Webhook size={14} />}
           records={endpointRecords}
           loading={subscriptions === undefined}
           renderCell={renderEndpointCell}
           renderRowActions={canConfigure ? renderEndpointActions : undefined}
           renderPhoneCard={renderEndpointCard}
-          emptyState={<RecordTableEmpty title="No webhook endpoints yet." />}
+          emptyState={<RecordTableEmpty title="No webhook endpoints yet" />}
         />
       </div>
 
@@ -307,13 +307,13 @@ export function WebhooksPage() {
           variant="card"
           table={DELIVERIES_TABLE}
           tableId="webhook-deliveries"
-          label="Latest deliveries"
+          label="Deliveries"
           icon={<Webhook size={14} />}
           records={deliveryRecords}
           loading={deliveries === undefined}
           renderCell={renderDeliveryCell}
           renderPhoneCard={renderDeliveryCard}
-          emptyState={<RecordTableEmpty title="No deliveries yet." />}
+          emptyState={<RecordTableEmpty title="No deliveries yet" />}
         />
       </div>
 

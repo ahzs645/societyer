@@ -175,7 +175,7 @@ export function BoardRosterCard({ societyId, activeDirectorCount }: { societyId:
                 selecting={selecting}
               />
             )}
-            emptyState={<RecordTableEmpty title="No observations on this roster." />}
+            emptyState={<RecordTableEmpty title="No observations on this roster" />}
           />
         </>
       )}

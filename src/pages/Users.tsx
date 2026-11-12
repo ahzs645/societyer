@@ -520,7 +520,7 @@ function UsersRoster({
       variant="card"
       table={ROSTER_TABLE}
       tableId="users-roster"
-      label="All users"
+      label="Users"
       icon={<UserCog size={14} />}
       records={records}
       loading={users === undefined}
@@ -530,7 +530,7 @@ function UsersRoster({
       renderRowActions={renderRowActions}
       rowMenuSections={rowMenuSections}
       renderPhoneCard={renderPhoneCard}
-      emptyState={<RecordTableEmpty title="No users yet." description="Add one to start testing role-based access." />}
+      emptyState={<RecordTableEmpty title="No users yet" description="Add one to start testing role-based access." />}
     />
   );
 }
@@ -878,14 +878,14 @@ function InvitationsPanel({
         variant="card"
         table={INVITATIONS_TABLE}
         tableId="users-invitations"
-        label="All invitations"
+        label="Invitations"
         icon={<UserCog size={14} />}
         records={records}
         loading={invitations === undefined}
         renderCell={renderCell}
         renderRowActions={renderRowActions}
         renderPhoneCard={renderPhoneCard}
-        emptyState={<RecordTableEmpty title="No invitations yet." />}
+        emptyState={<RecordTableEmpty title="No invitations yet" />}
       />
 
       <Drawer

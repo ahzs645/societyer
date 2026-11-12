@@ -306,7 +306,7 @@ function ObligationsTable({
           selecting={selecting}
         />
       )}
-      emptyState={<RecordTableEmpty title="No obligations in this page." />}
+      emptyState={<RecordTableEmpty title="No obligations in this page" />}
     />
   );
 }
@@ -342,7 +342,7 @@ function PlansTable({ rows, onSelect }: { rows: PlanRow[]; onSelect: (id: string
           selecting={selecting}
         />
       )}
-      emptyState={<RecordTableEmpty title="No plans in this page." />}
+      emptyState={<RecordTableEmpty title="No plans in this page" />}
     />
   );
 }

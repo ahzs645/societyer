@@ -836,7 +836,7 @@ export function RecordsArchivePage() {
         ) : null}
         rows={evidenceShown}
         loading={data === undefined}
-        empty={statusFilter === "all" ? <EmptyNote text="No evidence links yet." info="Approved section imports automatically create source evidence links here." /> : <RecordTableEmpty title="No evidence links have this status." />}
+        empty={statusFilter === "all" ? <EmptyNote text="No evidence links yet." info="Approved section imports automatically create source evidence links here." /> : <RecordTableEmpty title="No evidence links have this status" />}
         renderCell={({ record, field }) => {
           const { row } = record;
           if (field.name === "sourceTitle") return <EvidenceSourceCell row={row} />;
@@ -871,7 +871,7 @@ function useRegisters() {
 function EmptyRegister({ kind, links }: { kind: string; links: [string, string][] }) {
   return (
     <RecordTableEmpty
-      title="Nothing imported yet."
+      title="Nothing imported yet"
       description={
         <>
           Approved {kind} imports appear here. Current data:{" "}
@@ -953,7 +953,7 @@ function Register({
         renderRowActions={renderRowActions}
         rowMenuSections={rowMenuSections}
         bulkActions={bulkActions}
-        emptyState={restricted && rows.length === 0 ? <RecordTableEmpty title="This section requires additional access." /> : empty}
+        emptyState={restricted && rows.length === 0 ? <RecordTableEmpty title="This section requires additional access" /> : empty}
       />
     </div>
   );

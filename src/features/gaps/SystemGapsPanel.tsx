@@ -316,7 +316,7 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
               selecting={selecting}
             />
           )}
-          emptyState={<RecordTableEmpty title="No system gaps recorded." />}
+          emptyState={<RecordTableEmpty title="No system gaps recorded" />}
         />
       </section>
 

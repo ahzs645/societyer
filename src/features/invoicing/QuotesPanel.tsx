@@ -34,6 +34,9 @@ type Props = {
 type ListedQuote = BillingQuote & { effectiveStatus: string };
 type QuotePage = { quotes: ListedQuote[]; quote: ListedQuote | null; revisions: Array<{ revision: number; fields: QuoteFields; status: QuoteStatus }>; isDone: boolean; continueCursor: string };
 
+/** "Accepted", as repair statuses read (stored values stay lower case). */
+const quoteStatusLabel = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
+
 const QUOTE_STATUS_COLOR = { draft: "gray", sent: "blue", accepted: "green", declined: "red", expired: "amber" } as const;
 const QUOTES_TABLE = staticRecordTable({
   id: "invoice-quotes",
@@ -46,7 +49,7 @@ const QUOTES_TABLE = staticRecordTable({
   fields: [
     { name: "number", label: "Quote", fieldType: FIELD_TYPES.TEXT, size: 150, config: { groupable: false } },
     { name: "customer", label: "Customer", fieldType: FIELD_TYPES.TEXT, size: 220 },
-    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: QUOTE_STATUSES.map((status) => ({ value: status, label: status, color: QUOTE_STATUS_COLOR[status] })) } },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: QUOTE_STATUSES.map((status) => ({ value: status, label: quoteStatusLabel(status), color: QUOTE_STATUS_COLOR[status] })) } },
     { name: "validUntil", label: "Valid until", fieldType: FIELD_TYPES.DATE, size: 130 },
     // Each quote carries its own currency, so the cell draws it and there are no totals.
     { name: "totalCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, size: 150, config: { isCents: true } },
@@ -88,7 +91,7 @@ export function QuotesPanel({ workspace, societyId, canWrite, canExport, onOpenI
   return <div className="card invoice-card">
     <div className="card__head"><div><h2 className="card__title">Quotes & estimates</h2><span className="card__subtitle">Publish a revision, record the customer decision, and convert accepted terms to one linked invoice.</span></div><button className="btn btn--accent btn--sm" disabled={!canWrite || !pricing} onClick={() => open()}><Plus size={14} />New quote</button></div>
     {error && !draft && !detail && <p className="field__error" role="alert">{error}</p>}
-    {!(filter === "all" && data?.isDone && data.quotes.length === 0) && <div className="card__body"><Select aria-label="Quote status filter" value={filter} onChange={setFilter} options={[{ value: "all", label: "All quotes" }, ...["draft", "sent", "accepted", "declined", "expired"].map((value) => ({ value, label: value }))]} /></div>}
+    {!(filter === "all" && data?.isDone && data.quotes.length === 0) && <div className="card__body"><Select aria-label="Quote status filter" value={filter} onChange={setFilter} options={[{ value: "all", label: "All quotes" }, ...["draft", "sent", "accepted", "declined", "expired"].map((value) => ({ value, label: quoteStatusLabel(value) }))]} /></div>}
     <RecordListTable<QuoteRecord>
       variant="card"
       table={QUOTES_TABLE}

@@ -174,7 +174,7 @@ export function ExpenseClaimsTable({
       variant="card"
       table={CLAIMS_TABLE}
       tableId="treasurer-expense-claims"
-      label="All claims"
+      label="Claims"
       icon={<Receipt size={14} />}
       records={records}
       loading={claims === undefined}
@@ -218,7 +218,7 @@ export function ExpenseClaimsTable({
           selecting={selecting}
         />
       )}
-      emptyState={<RecordTableEmpty title="No reimbursement claims yet." />}
+      emptyState={<RecordTableEmpty title="No reimbursement claims yet" />}
     />
   );
 }
@@ -351,7 +351,7 @@ export function FundingSourcesTable({
       variant="card"
       table={SOURCES_TABLE}
       tableId="treasurer-funding-sources"
-      label="All sources"
+      label="Funding sources"
       icon={<Landmark size={14} />}
       records={records}
       loading={sources === undefined}
@@ -381,7 +381,7 @@ export function FundingSourcesTable({
           selecting={selecting}
         />
       )}
-      emptyState={<RecordTableEmpty title="No funding sources yet." description={emptyDescription} />}
+      emptyState={<RecordTableEmpty title="No funding sources yet" description={emptyDescription} />}
     />
   );
 }
@@ -488,7 +488,7 @@ export function FundingEventsTable({
       variant="card"
       table={EVENTS_TABLE}
       tableId="treasurer-funding-events"
-      label="All events"
+      label="Funding events"
       icon={<CalendarClock size={14} />}
       records={records}
       loading={sources === undefined}
@@ -516,7 +516,7 @@ export function FundingEventsTable({
       )}
       emptyState={
         <RecordTableEmpty
-          title="No funding events yet."
+          title="No funding events yet"
           description="Record receipts, pledges and remittances from a source's ⋯ menu."
         />
       }

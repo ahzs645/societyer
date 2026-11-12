@@ -3,6 +3,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { entityHref } from "../../../components/HoverCard/entityRefs";
 import { useAction, useQuery } from "convex/react";
 import { Download, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -271,7 +272,7 @@ function LinkedPersonName({ name, people }: { name: string; people: PersonLinkCa
   // Link styling already conveys "this name resolves to a record" — no badge needed.
   return (
     <Link
-      to={match.kind === "director" ? "/app/directors" : "/app/members"}
+      to={entityHref({ kind: match.kind, id: match.id, name: match.name }) ?? (match.kind === "director" ? "/app/directors" : "/app/members")}
       title={[match.role, match.status].filter(Boolean).join(" · ") || undefined}
     >
       {name}

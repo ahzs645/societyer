@@ -107,7 +107,7 @@ export function PlanningActualsTable({ rows }: { rows: PlanningActual[] }) {
         if (field.name === "sourceCurrency") return record.sourceCurrency || "Unknown · excluded";
         return undefined;
       }}
-      emptyState={<RecordTableEmpty title="No recorded spending on the linked budget yet." />}
+      emptyState={<RecordTableEmpty title="No recorded spending on the linked budget yet" />}
     />
   );
 }

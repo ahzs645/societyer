@@ -629,7 +629,7 @@ export function MembershipPage() {
           variant="card"
           table={FEE_TIMELINE_TABLE}
           tableId="membership-fee-timeline"
-          label="All fee periods"
+          label="Fee periods"
           icon={<CalendarClock size={14} />}
           records={feeRecords}
           loading={feeTimeline === undefined}
@@ -637,7 +637,7 @@ export function MembershipPage() {
           renderRowActions={renderFeeActions}
           rowMenuSections={feeMenuSections}
           renderPhoneCard={renderFeeCard}
-          emptyState={<RecordTableEmpty title="No fee periods yet." description="Add one to record the timeline." />}
+          emptyState={<RecordTableEmpty title="No fee periods yet" description="Add one to record the timeline." />}
         />
       </div>
       </MobileFold>
@@ -652,14 +652,14 @@ export function MembershipPage() {
           variant="card"
           table={SUBSCRIBERS_TABLE}
           tableId="membership-subscribers"
-          label="All subscribers"
+          label="Subscribers"
           icon={<CreditCard size={14} />}
           records={visibleSubs}
           loading={subs === undefined}
           renderCell={renderSubscriberCell}
           renderRowActions={renderSubscriberActions}
           renderPhoneCard={renderSubscriberCard}
-          emptyState={<RecordTableEmpty title="No subscriptions yet." description="Sign up from one of the plan cards above." />}
+          emptyState={<RecordTableEmpty title="No subscriptions yet" description="Sign up from one of the plan cards above." />}
         >
           <ReportNarrowed onChange={setSubsNarrowed} />
         </RecordListTable>

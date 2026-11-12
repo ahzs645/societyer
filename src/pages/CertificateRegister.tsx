@@ -185,7 +185,7 @@ export function CertificateRegisterPage() {
         showTotals={false}
         renderCell={renderCertificateCell}
         renderPhoneCard={renderCertificateCard}
-        emptyState={<RecordTableEmpty title="No certificates issued yet." />}
+        emptyState={<RecordTableEmpty title="No certificates issued yet" />}
         renderRowActions={({ certificate: c }) => (
           <>
             {!c.cancelledOn && (

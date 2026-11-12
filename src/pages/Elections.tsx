@@ -305,7 +305,7 @@ export function ElectionsPage() {
           variant="card"
           table={ELECTIONS_TABLE}
           tableId="elections"
-          label="All elections"
+          label="Elections"
           icon={<Vote size={14} />}
           records={electionRecords}
           loading={elections === undefined}
@@ -397,7 +397,7 @@ export function ElectionsPage() {
               selecting={selecting}
             />
           )}
-          emptyState={<RecordTableEmpty title="No elections yet." />}
+          emptyState={<RecordTableEmpty title="No elections yet" />}
         />
       </div>
 

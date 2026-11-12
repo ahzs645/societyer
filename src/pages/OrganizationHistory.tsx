@@ -856,7 +856,7 @@ export function OrganizationHistoryPage() {
                 if (field.name === "positions") return <span>{record.positions || "-"}</span>;
                 return undefined;
               }}
-              emptyState={<RecordTableEmpty title="No board or motion connections yet." />}
+              emptyState={<RecordTableEmpty title="No board or motion connections yet" />}
             />
           ) : (
             <RecordListTable<BoardTermRecord>
@@ -885,7 +885,7 @@ export function OrganizationHistoryPage() {
                   </IconButton>
                 </>
               )}
-              emptyState={<RecordTableEmpty title="No historical board terms yet." />}
+              emptyState={<RecordTableEmpty title="No historical board terms yet" />}
             />
           )}
         </div>
@@ -908,7 +908,7 @@ export function OrganizationHistoryPage() {
             records={motionRecords}
             loading={data === undefined}
             onRecordClick={(_id, motion) => setMotionForm(motionEditForm(motion))}
-            emptyState={<RecordTableEmpty title="No converted motions yet." />}
+            emptyState={<RecordTableEmpty title="No converted motions yet" />}
             renderCell={({ record: motion, field }) => {
               if (field.name === "motionTitle") return <MotionReviewCell motion={motion} />;
               if (field.name === "meetingDate") return <span className="muted">{formatDueDate(motion.meetingDate) || "-"}</span>;
@@ -967,7 +967,7 @@ export function OrganizationHistoryPage() {
                 </IconButton>
               </>
             )}
-            emptyState={<RecordTableEmpty title="No budget snapshots yet." />}
+            emptyState={<RecordTableEmpty title="No budget snapshots yet" />}
           />
         </div>
       )}

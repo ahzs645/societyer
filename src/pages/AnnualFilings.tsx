@@ -284,7 +284,7 @@ export function AnnualFilingsPage() {
         onOpen={canEdit ? (record) => openEdit(record.filing) : undefined}
         renderCell={renderAnnualFilingCell}
         renderPhoneCard={renderAnnualFilingCard}
-        emptyState={<RecordTableEmpty title="No annual filings yet." />}
+        emptyState={<RecordTableEmpty title="No annual filings yet" />}
         renderRowActions={({ filing: r }) => (
           <button
             className="btn btn--ghost btn--sm btn--icon"

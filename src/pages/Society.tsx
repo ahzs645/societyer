@@ -1145,7 +1145,7 @@ export function SocietyPage() {
                   return undefined;
                 }}
                 renderRowActions={(record) => <RowActions onEdit={() => { setDrawerKind("address"); setDraft(record.row); }} onRemove={() => removeDetailRow("address", record.row)} />}
-                emptyState={<RecordTableEmpty title="No structured addresses yet." />}
+                emptyState={<RecordTableEmpty title="No structured addresses yet" />}
               />
             </DetailSection>
 
@@ -1184,7 +1184,7 @@ export function SocietyPage() {
                     return undefined;
                   }}
                   renderRowActions={(record) => <RowActions onEdit={() => editRegistration(record.row)} onRemove={() => removeDetailRow("registration", record.row)} />}
-                  emptyState={<RecordTableEmpty title="No external or extra-provincial registrations yet." />}
+                  emptyState={<RecordTableEmpty title="No external or extra-provincial registrations yet" />}
                 />
               </DetailSection>
 
@@ -1213,7 +1213,7 @@ export function SocietyPage() {
                     return undefined;
                   }}
                   renderRowActions={(record) => <RowActions onEdit={() => { setDrawerKind("identifier"); setDraft(record.row); }} onRemove={() => removeDetailRow("identifier", record.row)} />}
-                  emptyState={<RecordTableEmpty title="No tax or registry identifiers yet." />}
+                  emptyState={<RecordTableEmpty title="No tax or registry identifiers yet" />}
                 />
               </DetailSection></div>
             </div>
