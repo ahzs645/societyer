@@ -13,6 +13,7 @@ import { useConfirm } from "../components/Modal";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { convexSiteUrl } from "../lib/convexSite";
 import { CalendarClock, UploadCloud, Rss, Copy, RefreshCw } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { formatIcsWhen, parseIcs as parseIcsEvents } from "../../shared/icsCalendar";
 
 const VIEWER_TIME_ZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
@@ -31,6 +32,33 @@ function icsProblem(text: string, parsedCount: number): string | null {
   if (ends < begins) return `${begins - ends} event block${begins - ends === 1 ? " is" : "s are"} missing END:VEVENT, so the file looks truncated.`;
   return `${begins} event block${begins === 1 ? "" : "s"} found, but none has a SUMMARY or DTSTART line, so nothing can be staged.`;
 }
+
+const PARSED_EVENTS_TABLE = staticRecordTable({
+  id: "calendar-sync:parsed-events",
+  nameSingular: "parsedCalendarEvent",
+  namePlural: "parsedCalendarEvents",
+  labelSingular: "Event",
+  labelPlural: "Events",
+  labelIdentifierFieldName: "summary",
+  viewName: "Parsed events",
+  fields: [
+    { name: "summary", label: "Title", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    { name: "start", label: "Start", fieldType: FIELD_TYPES.DATE_TIME, size: 200 },
+    { name: "end", label: "End", fieldType: FIELD_TYPES.DATE_TIME, size: 200 },
+    { name: "location", label: "Location", fieldType: FIELD_TYPES.TEXT, size: 220 },
+  ],
+});
+
+/** One event read from the pasted calendar; the first 100 are listed. */
+type ParsedEventRecord = {
+  _id: string;
+  summary: string;
+  start: string | null;
+  end: string | null;
+  startTimeZone?: string;
+  endTimeZone?: string;
+  location: string;
+};
 
 export function CalendarSyncPage() {
   const society = useSociety();
@@ -53,6 +81,19 @@ export function CalendarSyncPage() {
 
   const parsed = useMemo(() => (icsText.trim() ? parseIcs(icsText) : []), [icsText]);
   const parseProblem = useMemo(() => icsProblem(icsText, parsed.length), [icsText, parsed.length]);
+  const parsedRecords = useMemo<ParsedEventRecord[]>(
+    () =>
+      parsed.slice(0, 100).map((event, index) => ({
+        _id: `ics-${index}`,
+        summary: event.summary,
+        start: event.start ?? null,
+        end: event.end ?? null,
+        startTimeZone: event.startTimeZone,
+        endTimeZone: event.endTimeZone,
+        location: event.location ?? "",
+      })),
+    [parsed],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -289,26 +330,32 @@ export function CalendarSyncPage() {
           <h2 className="card__title">Parsed events</h2>
           <Badge>{parsed.length}</Badge>
         </div>
-        <table className="table">
-          <thead><tr><th>Title</th><th>Start</th><th>End</th><th>Location</th></tr></thead>
-          <tbody>
-            {parsed.slice(0, 100).map((e, i) => (
-              <tr key={i}>
-                <td><strong>{e.summary}</strong></td>
-                <td>{formatIcsWhen(e.start, e.startTimeZone, VIEWER_TIME_ZONE)}</td>
-                <td>{formatIcsWhen(e.end, e.endTimeZone, VIEWER_TIME_ZONE)}</td>
-                <td className="muted">{e.location ?? "—"}</td>
-              </tr>
-            ))}
-            {parsed.length === 0 && (
-              <tr>
-                <td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                  {parseProblem ? <span role="alert" style={{ color: "var(--danger)" }}>{parseProblem}</span> : "No events parsed yet. Paste or upload an .ics calendar above."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <RecordListTable<ParsedEventRecord>
+          variant="card"
+          table={PARSED_EVENTS_TABLE}
+          tableId="calendar-sync-parsed-events"
+          label="Parsed events"
+          icon={<CalendarClock size={14} />}
+          records={parsedRecords}
+          renderCell={({ record, field }) => {
+            if (field.name === "summary") return <strong>{record.summary}</strong>;
+            if (field.name === "start") return formatIcsWhen(record.start ?? undefined, record.startTimeZone, VIEWER_TIME_ZONE);
+            if (field.name === "end") return formatIcsWhen(record.end ?? undefined, record.endTimeZone, VIEWER_TIME_ZONE);
+            if (field.name === "location" && !record.location) return <span className="muted">—</span>;
+            return undefined;
+          }}
+          renderPhoneCard={(record) => (
+            <RecordTablePhoneCard
+              title={record.summary}
+              meta={[formatIcsWhen(record.start ?? undefined, record.startTimeZone, VIEWER_TIME_ZONE), record.location]}
+            />
+          )}
+          emptyState={
+            parseProblem
+              ? <RecordTableEmpty title="Nothing to stage" description={<span role="alert" style={{ color: "var(--danger)" }}>{parseProblem}</span>} />
+              : <RecordTableEmpty title="No events parsed yet" description="Paste or upload an .ics calendar above." />
+          }
+        />
       </div>
     </div>
   );

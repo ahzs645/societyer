@@ -55,17 +55,6 @@
 .intake-errors { border: 1px solid var(--border-color-danger); border-radius: 8px; padding: 8px 10px; background: var(--danger-soft); font-size: var(--fs-xs); }
 .intake-errors ul { margin: 6px 0 0; padding-left: 18px; }
 
-.intake-link-button {
-  background: none;
-  border: 0;
-  padding: 0;
-  color: var(--accent);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-}
-.intake-link-button:hover { text-decoration: underline; }
 
 .spin { animation: intake-spin 1s linear infinite; }
 @keyframes intake-spin { to { transform: rotate(360deg); } }
@@ -241,8 +230,6 @@ mark.intake-hl, .intake-hl {
 
 .intake-check { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-sm); }
 .intake-check input { margin-top: 3px; flex: none; }
-.intake-path-cell { white-space: normal !important; word-break: break-all; min-width: 140px; max-width: 280px; font-size: var(--fs-xs); }
-.intake-detail-table td { white-space: normal; vertical-align: top; }
 
 /* Header and bar never shrink under the panes (flex column). */
 .intake-review > * { flex-shrink: 0; }
@@ -261,33 +248,3 @@ mark.intake-hl, .intake-hl {
 .intake-compact__title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-md, 14px); }
 .intake-compact__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 
-.intake-runs-empty { margin: 0; padding: 20px 16px; text-align: center; }
-
-/* Phones: each run is a card (name and status, its counts, then actions) in
-   place of a seven-column table. */
-@media (max-width: 760px) {
-  .intake-runs-table,
-  .intake-runs-table tbody { display: block; }
-  .intake-runs-table thead { display: none; }
-  .intake-runs-table tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px 12px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-  }
-  .intake-runs-table tbody td { display: block; padding: 0; border: 0; min-width: 0; white-space: normal; }
-  .intake-runs-table tbody td[data-label] {
-    grid-column: 1 / -1;
-    display: flex;
-    gap: 12px;
-    font-size: var(--fs-sm);
-  }
-  .intake-runs-table td[data-label]::before {
-    content: attr(data-label);
-    margin-right: auto;
-    color: var(--text-secondary);
-    font-family: var(--font-sans, inherit);
-  }
-  .intake-runs-table tbody td:last-child { grid-column: 1 / -1; }
-}
