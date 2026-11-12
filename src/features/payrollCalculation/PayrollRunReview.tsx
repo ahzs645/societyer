@@ -13,6 +13,8 @@ import type {
 import { Money } from "../../components/Money";
 import { Field } from "../../components/ui";
 import { formatDate } from "../../lib/format";
+import { usePermissions } from "../../hooks/usePermissions";
+import { employeeHref, payRunHref } from "../businessRegisters/payrollLinks";
 import { PayrollCalculationResult } from "./PayrollCalculationResult";
 import { PayrollRuleSnapshot } from "./PayrollRuleSnapshot";
 import { PayrollStatementActions } from "./PayrollStatementActions";
@@ -66,6 +68,7 @@ type PaymentRecord = {
   date: string;
   /** The employee the payment was for, or "Whole calculation". */
   forName: string;
+  employeeId: string | null;
   amountCents: number;
   reference: string;
   method: PayrollPaymentMethod | null;
@@ -82,6 +85,7 @@ function paymentRecord(payment: PayrollPayment, record: PayrollCalculationRecord
     forName: payment.employeeId
       ? (record.result.employees.find((employee) => employee.employeeId === payment.employeeId)?.employeeName ?? payment.employeeId)
       : "Whole calculation",
+    employeeId: payment.employeeId ?? null,
     amountCents: payment.amountCents,
     reference: payment.reference,
     method: payment.method ?? null,
@@ -681,6 +685,7 @@ export function PayrollSavedReview({
     [reversing, setReversing] = useState(false),
     [payment, setPayment] = useState(false);
   const navigate = useNavigate();
+  const canReadEmployees = usePermissions().can("employees:read");
   async function action(operation: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError("");
@@ -861,7 +866,7 @@ export function PayrollSavedReview({
         {record.payRunId && (
           <p>
             Recorded pay run: {record.payRunId} ·{" "}
-            <a href="/app/payroll">Open payroll register</a>
+            <Link to={payRunHref(record.payRunId)}>Open in payroll register</Link>
           </p>
         )}
         {record.journalEntryIds?.length ? (
@@ -899,6 +904,8 @@ export function PayrollSavedReview({
             records={linkedPayments.map((payment) => paymentRecord(payment, record))}
             onOpen={(payment) => navigate(transactionHref(payment.transactionId))}
             renderCell={({ record: payment, field }) => {
+              if (field.name === "forName" && payment.employeeId && canReadEmployees)
+                return <Link to={employeeHref(payment.employeeId)}>{payment.forName}</Link>;
               if (field.name === "amountCents") return <Money cents={payment.amountCents} currency="CAD" />;
               if (field.name === "method")
                 return (

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex/react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
@@ -27,6 +27,51 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { useToast } from "../components/Toast";
+import { EMPLOYEE_PARAM } from "../features/businessRegisters/payrollLinks";
+
+/** Text fields the employee drawer edits, as stored. */
+const EMPLOYEE_TEXT_FIELDS = [
+  "firstName", "lastName", "email", "phone", "birthDate", "addressLine1", "addressLine2", "city", "province",
+  "postalCode", "country", "role", "startDate", "endDate", "employmentType", "worksafeBCNumber",
+] as const;
+
+type EmployeeTextField = (typeof EMPLOYEE_TEXT_FIELDS)[number];
+type EmployeeFlags = { annualSalaryCents?: number; hourlyWageCents?: number; cppExempt?: boolean; eiExempt?: boolean };
+type EmployeeDoc = { _id: string } & EmployeeFlags & Partial<Record<EmployeeTextField, string>>;
+type EmployeePatch = EmployeeFlags & Partial<Record<EmployeeTextField, string>>;
+
+const centsToDollarInput = (cents: number | undefined) => (typeof cents === "number" ? String(cents / 100) : "");
+
+/** The drawer's form for an existing employee: stored fields plus dollar inputs. */
+function employeeFormValues(employee: EmployeeDoc) {
+  return {
+    ...employee,
+    cppExempt: Boolean(employee.cppExempt),
+    eiExempt: Boolean(employee.eiExempt),
+    annualSalaryDollars: centsToDollarInput(employee.annualSalaryCents),
+    hourlyWageDollars: centsToDollarInput(employee.hourlyWageCents),
+  };
+}
+
+/** Only what changed, so fields the drawer doesn't show stay as stored. */
+function employeePatch(original: EmployeeDoc, form: Record<string, unknown>): EmployeePatch {
+  const patch: EmployeePatch = {};
+  for (const field of EMPLOYEE_TEXT_FIELDS) {
+    const value = typeof form[field] === "string" ? form[field] : "";
+    if (value !== (original[field] ?? "")) patch[field] = value;
+  }
+  for (const [dollarsField, centsField] of [["annualSalaryDollars", "annualSalaryCents"], ["hourlyWageDollars", "hourlyWageCents"]] as const) {
+    const input = typeof form[dollarsField] === "string" ? form[dollarsField] : "";
+    if (input === centsToDollarInput(original[centsField])) continue;
+    // A cleared amount reads as none, as for an employee saved without one.
+    patch[centsField] = input.trim() ? dollarInputToCents(input) : 0;
+  }
+  for (const flag of ["cppExempt", "eiExempt"] as const) {
+    if (Boolean(form[flag]) !== Boolean(original[flag])) patch[flag] = Boolean(form[flag]);
+  }
+  return patch;
+}
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   FullTime: "Full-time",
@@ -41,15 +86,54 @@ export function EmployeesPage() {
   const canWrite = permissions.loaded && permissions.can("employees:write");
   const items = useQuery(api.employees.list, society ? { societyId: society._id } : "skip");
   const create = usePermissionedMutation(api.employees.create, canWrite);
+  const update = usePermissionedMutation(api.employees.update, canWrite);
   const remove = usePermissionedMutation(api.employees.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const toast = useToast();
+  // The open employee lives in the URL (?employee=<id>), so payroll and other
+  // pages can link straight to one.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const employeeId = searchParams.get(EMPLOYEE_PARAM);
+  const employees = items as EmployeeDoc[] | undefined;
+  const linkedEmployee = employeeId ? employees?.find((employee) => String(employee._id) === employeeId) ?? null : null;
+  const setEmployeeParam = (id: string | null) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) next.set(EMPLOYEE_PARAM, id);
+      else next.delete(EMPLOYEE_PARAM);
+      return next;
+    }, { replace: !id });
+  };
 
   useEffect(() => {
     if (!canWrite) setOpen(false);
   }, [canWrite]);
+
+  // Load the linked employee into the drawer once per id. A missing one
+  // (removed, or another workspace's) drops the parameter instead.
+  const loadedEmployeeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!employeeId) {
+      loadedEmployeeRef.current = null;
+      return;
+    }
+    if (employees === undefined || loadedEmployeeRef.current === employeeId) return;
+    loadedEmployeeRef.current = employeeId;
+    const found = employees.find((employee) => String(employee._id) === employeeId);
+    if (found) {
+      setForm(employeeFormValues(found));
+      return;
+    }
+    toast.info("That employee isn't available", "They may have been removed, or they belong to another workspace.");
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete(EMPLOYEE_PARAM);
+      return next;
+    }, { replace: true });
+  }, [employeeId, employees, toast, setSearchParams]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -71,6 +155,7 @@ export function EmployeesPage() {
 
   const openNew = () => {
     if (!canWrite) return;
+    if (employeeId) setEmployeeParam(null);
     setForm({
       firstName: "",
       lastName: "",
@@ -82,8 +167,19 @@ export function EmployeesPage() {
     });
     setOpen(true);
   };
+  const editing = Boolean(linkedEmployee && form?._id === employeeId);
+  const closeDrawer = () => {
+    setOpen(false);
+    if (employeeId) setEmployeeParam(null);
+  };
   const save = async () => {
     if (!canWrite) return;
+    if (editing && linkedEmployee) {
+      const patch = employeePatch(linkedEmployee, form);
+      if (Object.keys(patch).length) await update({ id: linkedEmployee._id, patch });
+      closeDrawer();
+      return;
+    }
     const { annualSalaryDollars, hourlyWageDollars, ...rest } = form;
     await create({
       societyId: society._id,
@@ -120,6 +216,7 @@ export function EmployeesPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
+          onRecordClick={(id) => setEmployeeParam(id)}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -163,13 +260,14 @@ export function EmployeesPage() {
       ) : null}
 
       <Drawer
-        open={open && canWrite}
-        onClose={() => setOpen(false)}
-        title="New employee"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
+        open={editing || (open && canWrite)}
+        onClose={closeDrawer}
+        title={editing && linkedEmployee ? [linkedEmployee.firstName, linkedEmployee.lastName].filter(Boolean).join(" ") || "Employee" : "New employee"}
+        footer={<><button className="btn" onClick={closeDrawer}>{canWrite ? "Cancel" : "Close"}</button>{canWrite && <button className="btn btn--accent" onClick={save}>Save</button>}</>}
       >
         {form && (
-          <div>
+          // Anyone who can see the list can open an employee; only editors change it.
+          <fieldset disabled={!canWrite} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <InspectorNote title="Payroll recordkeeping">
               Keep remuneration, exemptions, and work status accurate here so year-end slips and
               disclosure thresholds stay consistent.
@@ -235,7 +333,7 @@ export function EmployeesPage() {
                 />
               </div>
             )}
-          </div>
+          </fieldset>
         )}
       </Drawer>
     </div>

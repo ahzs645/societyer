@@ -24,6 +24,7 @@ import { useClaimShareActions } from "../features/financials/approvals/ClaimChec
 import type { ApprovalQueue, QueueRow, QueueTab } from "../features/financials/approvals/types";
 import { BillApprovalsPanel, useBillsAwaitingApproval } from "../features/bills/BillApprovalsPanel";
 import { exportClaimsCsv } from "../features/financials/approvals/claimExport";
+import { spendBudgetHref } from "../features/financials/spendBudgets/spendBudgetLinks";
 import { mileageSummary } from "../../shared/expensePolicy";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -400,6 +401,8 @@ export function ApprovalsPage() {
             onOpen={(record) => setOpenId(record._id)}
             renderCell={({ record, field }) => {
               const { row } = record;
+              if (field.name === "spendBudget" && row.spendBudget)
+                return <Link to={spendBudgetHref(row.spendBudget._id)}>{row.spendBudget.name}</Link>;
               if (field.name === "claimantName") return <>{row.claimantName}{row.isMine ? <span className="muted"> (you)</span> : null}</>;
               if (field.name === "amountCents") return <Money cents={row.amountCents} currency={row.currency} />;
               if (field.name === "status") return <Badge tone={CLAIM_STATUS_TONE[row.status] ?? "neutral"}>{CLAIM_STATUS_LABEL[row.status] ?? row.status}</Badge>;

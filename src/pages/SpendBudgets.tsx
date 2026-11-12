@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Archive, ArchiveRestore, ClipboardCheck, Gauge, Pencil, Plus, Trash2 } from "lucide-react";
 import { FIELD_TYPES, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
@@ -20,6 +20,7 @@ import { errorMessage } from "../features/financials/banking/types";
 import type { SpendBudgetRow, SpendBudgetsData } from "../features/financials/spendBudgets/types";
 import { RecordListTable } from "@/platform/record-engine";
 import { SPEND_BUDGET_CYCLES, SPEND_BUDGET_CYCLE_LABELS } from "../../shared/spendBudgets";
+import { SPEND_BUDGET_PARAM } from "../features/financials/spendBudgets/spendBudgetLinks";
 
 type BudgetTab = "active" | "upcoming" | "ended" | "archived";
 
@@ -119,12 +120,30 @@ export function SpendBudgetsPage() {
   const toast = useToast();
   const [tab, setTab] = useState<BudgetTab>("active");
   const [editing, setEditing] = useState<{ budget: SpendBudgetRow | null } | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // The open budget lives in the URL (?budget=<id>), so claims can link to it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get(SPEND_BUDGET_PARAM);
+  const setOpenId = (id: string | null) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) next.set(SPEND_BUDGET_PARAM, id);
+      else next.delete(SPEND_BUDGET_PARAM);
+      return next;
+    }, { replace: !id });
+  };
 
   const rows = useMemo(() => (data?.rows ?? []).filter((row) => (tab === "archived" ? row.archived : !row.archived && row.status === tab)), [data, tab]);
   const records = useMemo<BudgetRecord[]>(() => rows.map(budgetRecord), [rows]);
   const count = (which: BudgetTab) => (data?.rows ?? []).filter((row) => (which === "archived" ? row.archived : !row.archived && row.status === which)).length;
   const open = data?.rows.find((row) => row._id === openId) ?? null;
+  const missingBudget = Boolean(data && openId && !open);
+  useEffect(() => {
+    if (!missingBudget) return;
+    toast.info("That spend budget isn't available", "It may have been deleted, or it belongs to another workspace.");
+    setOpenId(null);
+    // Only when a linked budget turns out to be missing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingBudget]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
