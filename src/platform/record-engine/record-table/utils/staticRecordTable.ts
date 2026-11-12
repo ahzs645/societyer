@@ -1,4 +1,4 @@
-import type { FieldMetadata, HydratedView, ObjectMetadata, ViewOpenRecordIn } from "../../types";
+import type { AggregateOperation, FieldMetadata, HydratedView, ObjectMetadata, ViewOpenRecordIn } from "../../types";
 
 /** One column of a table whose shape is fixed in code. */
 export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fieldType"> & {
@@ -9,6 +9,8 @@ export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fiel
   isVisible?: boolean;
   /** Cells are read-only unless a column says otherwise. */
   isReadOnly?: boolean;
+  /** The column's footer total when the table shows totals (e.g. "sum" for money); none unless set. */
+  aggregate?: AggregateOperation;
 };
 
 /**
@@ -97,7 +99,7 @@ export function staticRecordTable({
         position,
         size: fields[position].size ?? 160,
         isVisible: fields[position].isVisible ?? true,
-        aggregateOperation: null,
+        aggregateOperation: fields[position].aggregate ?? null,
         viewFieldGroupId: null,
         field,
       })),

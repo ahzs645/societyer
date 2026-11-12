@@ -296,8 +296,9 @@ test("semester recurrence and staff edits propagate through live totals, exports
   await expect(insurance).toContainText("$394.52");
   await expect(insurance).toContainText("$0.00");
   const costViewport = page
-    .getByRole("table", { name: "Reusable planning costs", exact: true })
-    .locator("..");
+    .getByRole("region", { name: "Reusable planning costs table", exact: true })
+    .locator(".record-table__scroll, .record-table__virtuoso")
+    .first();
   await panToLastColumn(page, costViewport, testInfo, "planner-costs");
   await costViewport.screenshot({
     path: testInfo.outputPath("planner-costs.png"),

@@ -1,14 +1,96 @@
-import { Link2, PlusCircle, Settings, Trash2 } from "lucide-react";
+import { Link2, PlusCircle, Repeat, Settings, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Badge, Skeleton } from "../../../components/ui";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
+import { Badge } from "../../../components/ui";
 import { formatDate } from "../../../lib/format";
 import { Money } from "../../../components/Money";
 import { StatTile } from "../../../components/StatTile";
 import {
+  OPERATING_SUBSCRIPTION_INTERVALS,
+  OPERATING_SUBSCRIPTION_STATUSES,
   monthlyEstimateCents,
   operatingSubscriptionIntervalLabel,
   operatingSubscriptionStatusTone,
 } from "../lib/operatingSubscriptions";
+
+/** A recurring operating cost as `financialHub.operatingSubscriptions` returns it. */
+export type OperatingSubscriptionRow = {
+  _id: string;
+  name: string;
+  vendorName?: string;
+  category: string;
+  status: string;
+  amountCents: number;
+  currency?: string;
+  interval: string;
+  monthlyEstimateCents?: number;
+  nextRenewalDate?: string;
+  notes?: string;
+};
+
+const STATUS_COLOR: Record<string, string> = { Active: "green", Planned: "blue", Paused: "amber" };
+
+const SUBSCRIPTIONS_TABLE = staticRecordTable({
+  id: "financials:operating-subscriptions",
+  nameSingular: "operatingSubscription",
+  namePlural: "operatingSubscriptions",
+  labelSingular: "Subscription",
+  labelPlural: "Subscriptions",
+  labelIdentifierFieldName: "name",
+  viewName: "All subscriptions",
+  density: "comfortable",
+  fields: [
+    { name: "name", label: "Service", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "vendorName", label: "Vendor", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, size: 140 },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 110,
+      config: { options: OPERATING_SUBSCRIPTION_STATUSES.map((status) => ({ ...status, color: STATUS_COLOR[status.value] ?? "gray" })) },
+    },
+    { name: "amountCents", label: "Billing", fieldType: FIELD_TYPES.CURRENCY, size: 160, config: { isCents: true } },
+    {
+      name: "interval",
+      label: "Billed",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 110,
+      isVisible: false,
+      config: { options: OPERATING_SUBSCRIPTION_INTERVALS.map((interval) => ({ ...interval, color: "gray" })) },
+    },
+    { name: "monthlyEstimateCents", label: "Monthly est.", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true }, aggregate: "sum" },
+    { name: "nextRenewalDate", label: "Renewal", fieldType: FIELD_TYPES.DATE, size: 120 },
+  ],
+});
+
+type SubscriptionRecord = {
+  _id: string;
+  name: string;
+  vendorName: string;
+  category: string;
+  status: string;
+  amountCents: number;
+  interval: string;
+  monthlyEstimateCents: number;
+  nextRenewalDate: string | null;
+  row: OperatingSubscriptionRow;
+};
+
+function subscriptionRecord(row: OperatingSubscriptionRow): SubscriptionRecord {
+  return {
+    _id: row._id,
+    name: row.name,
+    vendorName: row.vendorName ?? "",
+    category: row.category,
+    status: row.status,
+    amountCents: row.amountCents,
+    interval: row.interval,
+    monthlyEstimateCents: row.monthlyEstimateCents ?? monthlyEstimateCents(row),
+    nextRenewalDate: row.nextRenewalDate ?? null,
+    row,
+  };
+}
 
 export function OperatingSubscriptionsCard({
   rows,
@@ -20,14 +102,14 @@ export function OperatingSubscriptionsCard({
   onEdit,
   onRemove,
 }: {
-  rows: any[];
+  rows: OperatingSubscriptionRow[];
   loading: boolean;
   activeMonthlyCents: number;
   plannedMonthlyCents: number;
   projectedMonthlyCents: number;
   onNew: () => void;
-  onEdit: (row: any) => void;
-  onRemove: (row: any) => void | Promise<void>;
+  onEdit: (row: OperatingSubscriptionRow) => void;
+  onRemove: (row: OperatingSubscriptionRow) => void | Promise<void>;
 }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
@@ -51,63 +133,59 @@ export function OperatingSubscriptionsCard({
         <StatTile label="Annual run-rate" value={<Money variant="hero" cents={projectedMonthlyCents * 12} />} />
       </div>
 
-      <table className="table table--comfortable financials-subscriptions-table">
-        <thead>
-          <tr>
-            <th>Service</th>
-            <th>Category</th>
-            <th>Status</th>
-            <th>Billing</th>
-            <th className="num">Monthly est.</th>
-            <th>Renewal</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row._id}>
-              <td>
-                <strong>{row.name}</strong>
-                {row.vendorName && <div className="muted" style={{ fontSize: 12 }}>{row.vendorName}</div>}
-              </td>
-              <td className="financials-subscriptions-table__category"><span className="cell-tag">{row.category}</span></td>
-              <td className="financials-subscriptions-table__status"><Badge tone={operatingSubscriptionStatusTone(row.status)}>{row.status}</Badge></td>
-              <td className="financials-subscriptions-table__billing">
+      <RecordListTable<SubscriptionRecord>
+        variant="card"
+        table={SUBSCRIPTIONS_TABLE}
+        tableId="financials-operating-subscriptions"
+        label="Subscriptions"
+        icon={<Repeat size={14} />}
+        records={rows.map(subscriptionRecord)}
+        loading={loading}
+        onOpen={(record) => onEdit(record.row)}
+        renderCell={({ record, field }) => {
+          const { row } = record;
+          if (field.name === "category") return <span className="cell-tag">{row.category}</span>;
+          if (field.name === "status") return <Badge tone={operatingSubscriptionStatusTone(row.status)}>{row.status}</Badge>;
+          if (field.name === "amountCents")
+            return (
+              <>
                 <Money cents={row.amountCents} currency={row.currency} />
                 <span className="muted"> / {operatingSubscriptionIntervalLabel(row.interval)}</span>
-              </td>
-              <td className="num financials-subscriptions-table__monthly">
-                <Money cents={row.monthlyEstimateCents ?? monthlyEstimateCents(row)} currency={row.currency} />
-              </td>
-              <td className="financials-subscriptions-table__renewal">{row.nextRenewalDate ? formatDate(row.nextRenewalDate) : "—"}</td>
-              <td className="num financials-subscriptions-table__actions">
-                <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}>
-                  Edit
-                </button>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Remove subscription cost ${row.name}`}
-                  onClick={() => onRemove(row)}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </td>
-            </tr>
-          ))}
-          {!loading && rows.length === 0 && (
-            <tr className="finance-empty-row">
-              <td colSpan={7} className="muted">
-                No subscription costs yet. Add software, services, or other recurring expenses to estimate monthly spend.
-              </td>
-            </tr>
-          )}
-          {loading && [0, 1, 2].map((index) => (
-            <tr key={`loading-${index}`} aria-hidden="true">
-              <td colSpan={7}><Skeleton variant="line" width={index === 1 ? "45%" : "60%"} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </>
+            );
+          if (field.name === "monthlyEstimateCents") return <Money cents={record.monthlyEstimateCents} currency={row.currency} />;
+          return undefined;
+        }}
+        renderRowActions={(record) => (
+          <>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => onEdit(record.row)}>
+              Edit
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove subscription cost ${record.name}`} onClick={() => void onRemove(record.row)}>
+              <Trash2 size={12} />
+            </button>
+          </>
+        )}
+        renderPhoneCard={(record, { open, field, selecting }) => (
+          <RecordTablePhoneCard
+            title={record.name}
+            badge={field("status")}
+            meta={[
+              <span key="monthly"><Money cents={record.monthlyEstimateCents} currency={record.row.currency} /> / month</span>,
+              record.category,
+            ]}
+            detail={[record.vendorName, record.nextRenewalDate ? `Renews ${formatDate(record.nextRenewalDate)}` : ""]}
+            onOpen={open}
+            selecting={selecting}
+          />
+        )}
+        emptyState={
+          <RecordTableEmpty
+            title="No subscription costs yet"
+            description="Add software, services, or other recurring expenses to estimate monthly spend."
+          />
+        }
+      />
     </div>
   );
 }
