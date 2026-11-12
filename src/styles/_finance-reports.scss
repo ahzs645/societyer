@@ -191,41 +191,9 @@
 }
 
 // ---------- Operational finance tables ----------
-// Simple tables (budget lines, funding mix, registers): sticky header (from
-// .table), money right-aligned, a totals row with a hairline above it.
-.finance-table-wrap {
-  max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-}
-.finance-table {
-  width: 100%;
-  min-width: max-content;
-}
-// Phones: the wrap scrolls, so the table stays a real table and its label
-// column stays in view (a block table would be the sticky column's scroll box).
+// Funding mix, variance, restricted funds, statements: `.table.table--report`
+// (see _report-table) gives the totals row, amounts and phone behaviour.
 @media (max-width: 760px) {
-  .table.finance-table--sticky-label {
-    display: table;
-    width: max-content;
-    min-width: 100%;
-    overflow: visible;
-    thead th:first-child,
-    tbody td:first-child,
-    tfoot th:first-child {
-      position: sticky;
-      left: 0;
-      z-index: 1;
-      max-width: 44vw;
-      border-right: 1px solid token('border-color-light');
-      background: token('bg-panel');
-      white-space: normal;
-    }
-    thead th:first-child {
-      z-index: 2;
-    }
-  }
   // Year-over-year: the auditor's name mustn't push the figures off-screen.
   .yoy-audit {
     flex-direction: column;
@@ -262,35 +230,13 @@
     }
   }
 }
-.finance-table td.num,
-.finance-table th.num {
-  text-align: right;
-}
-.finance-table tfoot td,
-.finance-table tfoot th {
-  height: token('row-h-compact');
-  padding: 0 8px;
-  border-top: 1px solid token('border-strong');
-  background: token('bg-panel');
-  font-weight: token('fw-semibold');
-  text-align: left;
-  &.num { text-align: right; }
-}
-.finance-table__sub {
-  color: token('text-tertiary');
-  font-size: token('fs-xs');
-}
+// An amount over its percentage, in variance cells (record tables too).
 .finance-table__variance {
   @include flex-column;
   align-items: flex-end;
   gap: 0;
   line-height: 1.2;
   padding: 2px 0;
-}
-.finance-empty-row td {
-  padding: token('s-4') token('s-3') !important;
-  height: auto !important;
-  white-space: normal;
 }
 
 .finance-statement-stack {

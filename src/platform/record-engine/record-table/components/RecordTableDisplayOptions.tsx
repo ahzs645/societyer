@@ -1,3 +1,4 @@
+import { Select } from "@/components/Select";
 import { useId } from "react";
 import { useRecordTableDisplay } from "../hooks/useRecordTableDisplay";
 import { RECORD_TABLE_PAGE_SIZES } from "../utils/viewDisplay";
@@ -44,21 +45,16 @@ export function RecordTableDisplayOptions({ variant }: { variant: "menu" | "shee
 
   const sizePicker = mode === "pages" && (
     <div className="record-table__page-size">
-      <label className="record-table__menu-label" htmlFor={sizeId}>
+      <span className="record-table__menu-label" id={sizeId}>
         Rows per page
-      </label>
-      <select
-        id={sizeId}
-        className="record-table__menu-select"
-        value={pageSize}
-        onChange={(event) => choose({ mode: "pages", pageSize: Number(event.target.value) })}
-      >
-        {sizes.map((size) => (
-          <option key={size} value={size}>
-            {size}
-          </option>
-        ))}
-      </select>
+      </span>
+      <Select
+        size="sm"
+        aria-label="Rows per page"
+        value={String(pageSize)}
+        onChange={(value) => choose({ mode: "pages", pageSize: Number(value) })}
+        options={sizes.map((size) => ({ value: String(size), label: String(size) }))}
+      />
     </div>
   );
 

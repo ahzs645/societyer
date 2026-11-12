@@ -1,7 +1,18 @@
 import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
+import { WAVE_RESOURCE_VIEW_NAMES } from "../../../../convex/recordTableDomainObjects";
 
 export type WaveAccountView = "working" | "transaction" | "category" | "ledger" | "all";
+
+/** Seeded per-resource Wave views; older workspaces are topped up. */
+export const WAVE_REQUIRED_VIEWS = Object.values(WAVE_RESOURCE_VIEW_NAMES);
+const PER_RESOURCE_VIEW_NAMES = new Set(WAVE_REQUIRED_VIEWS);
+
+/** A table already narrowed to one resource type would repeat (or empty) the
+ * per-resource views; they belong to the all-resources table. */
+export function withoutPerResourceViews<V extends { name: string }>(views: V[]): V[] {
+  return views.filter((view) => !PER_RESOURCE_VIEW_NAMES.has(view.name));
+}
 
 export function waveTypeLabel(type: string) {
   const labels: Record<string, string> = {

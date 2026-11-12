@@ -67,8 +67,7 @@ $tap-block: (
   ".record-table__segmented button",
   ".record-table__aggregate-trigger",
   ".sortable-th__btn",
-  ".invoice-table__link",
-  ".approvals-table__title"
+  ".invoice-table__link"
 );
 
 @media (pointer: coarse) {
@@ -826,30 +825,6 @@ $tap-block: (
       border-right: 0;
     }
   }
-  // Invoice cards: at true text sizes "RCS-0025 Recurring" no longer fits
-  // beside the status on a 320px phone — let the tag drop under the number.
-  .invoice-table--list td.invoice-table__number {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px token('s-1');
-    white-space: normal;
-  }
-  // Invoices: the tab strip shares its row with a search icon.
-  .invoice-tabs-row {
-    display: flex;
-    align-items: center;
-    gap: token('s-2');
-    margin-bottom: token('s-2');
-    > .tabs {
-      flex: 1 1 auto;
-      min-width: 0;
-      margin-bottom: 0;
-    }
-    > .btn {
-      flex: none;
-    }
-  }
 }
 
 // RecordTable card body (phones, e.g. Assets): the table's row model drawn
@@ -1059,7 +1034,9 @@ $tap-block: (
 .record-phone-card__actions {
   position: absolute;
   top: 50%;
-  right: 2px;
+  // Far enough in that the button's 44px tap area (::after) stays inside the
+  // card: at 2px it stuck out and gave card lists a sideways scroll.
+  right: 8px;
   transform: translateY(-50%);
   > .record-phone-card__actions-button {
     width: token('tap-target');

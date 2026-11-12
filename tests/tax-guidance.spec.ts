@@ -46,7 +46,8 @@ test("catalog guidance persists; invoice assessment distinguishes exemptions and
   await drawer.getByRole("button", { name: "Save", exact: true }).click();
   await expect(drawer).not.toBeVisible();
   await page.reload();
-  await expect(page.getByRole("row").filter({ hasText: name })).toContainText("GST: Taxable 5%; PST: Taxable 7%");
+  // The catalog is a shared record table: a row on wide screens, a card on phones.
+  await expect(page.locator(".record-table__row, .record-cards__item").filter({ hasText: name })).toContainText("GST: Taxable 5%; PST: Taxable 7%");
 
   await page.goto("/app/invoices?builder=new");
   const form = page.locator(".invoice-builder__form");

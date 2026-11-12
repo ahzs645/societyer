@@ -9,7 +9,7 @@ import { IncorporationPreparation } from "../components/IncorporationPreparation
 import { GoverningDocumentPicker, GoverningDocumentRow, useGoverningDocumentActions } from "../features/governingDocuments/GoverningDocuments";
 import { governingDocumentSlots, type GoverningDocumentField } from "../../shared/governingDocuments";
 import { authenticatedFetch } from "@/lib/authToken";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
@@ -34,7 +34,14 @@ import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { revealAnchor } from "../lib/anchorReveal";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
-import { optionChoices, optionLabel } from "../lib/orgHubOptions";
+import { OPTION_SETS, optionChoices, optionLabel, type OptionSetName } from "../lib/orgHubOptions";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  staticRecordTable,
+  type SelectOption,
+} from "@/platform/record-engine";
 import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
 import { homeJurisdictionCode, isCorporation, isPreparingIncorporation, isSociety } from "../../shared/organizationDomain";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
@@ -153,6 +160,104 @@ function RestoreBackupCard({
   );
 }
 
+/* ----------------------------------------------- organization detail registers */
+
+/** A register row as the table reads it: the values its columns sort and filter by, plus the row. */
+type DetailRecord<T> = Record<string, unknown> & { _id: string; row: T };
+
+type AddressRow = {
+  _id: string;
+  type?: string;
+  status?: string;
+  unit?: string;
+  street?: string;
+  city?: string;
+  provinceState?: string;
+  postalCode?: string;
+  country?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+};
+
+type RegistrationRow = {
+  _id: string;
+  jurisdiction?: string;
+  registrationType?: string;
+  assumedName?: string;
+  registrationNumber?: string;
+  nuansNumber?: string;
+  registrationDate?: string;
+  activityCommencementDate?: string;
+  deRegistrationDate?: string;
+  status?: string;
+  representativeIds?: string[];
+};
+
+type IdentifierRow = {
+  _id: string;
+  kind?: string;
+  number?: string;
+  accessLevel?: string;
+  foreignJurisdiction?: string;
+  jurisdiction?: string;
+  status?: string;
+};
+
+/** Select options for an option set; `color` picks each option's tag colour. */
+function detailOptions(setName: OptionSetName, color: (value: string) => NonNullable<SelectOption["color"]> = () => "gray"): SelectOption[] {
+  return OPTION_SETS[setName].map((option) => ({ value: option.value, label: option.label, color: color(option.value) }));
+}
+
+const ADDRESSES_TABLE = staticRecordTable({
+  id: "organization-details:addresses",
+  nameSingular: "organizationAddress",
+  namePlural: "organizationAddresses",
+  labelSingular: "Address",
+  labelPlural: "Addresses",
+  labelIdentifierFieldName: "address",
+  fields: [
+    { name: "type", label: "Type", fieldType: FIELD_TYPES.SELECT, size: 150, config: { options: detailOptions("addressTypes") } },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 110, config: { options: detailOptions("addressStatuses", (value) => (value === "current" ? "green" : "gray")) } },
+    { name: "address", label: "Address", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+    { name: "effectiveFrom", label: "Effective from", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "effectiveTo", label: "Until", fieldType: FIELD_TYPES.DATE, size: 120 },
+  ],
+});
+
+const REGISTRATIONS_TABLE = staticRecordTable({
+  id: "organization-details:registrations",
+  nameSingular: "organizationRegistration",
+  namePlural: "organizationRegistrations",
+  labelSingular: "Registration",
+  labelPlural: "Registrations",
+  labelIdentifierFieldName: "jurisdiction",
+  fields: [
+    { name: "jurisdiction", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "registration", label: "Registration", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "registrationDate", label: "Registered", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "activityCommencementDate", label: "Business started", fieldType: FIELD_TYPES.DATE, size: 140 },
+    { name: "deRegistrationDate", label: "Ended", fieldType: FIELD_TYPES.DATE, size: 120, isVisible: false },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: detailOptions("registrationStatuses", (value) => (value === "active" ? "green" : "amber")) } },
+  ],
+});
+
+const IDENTIFIERS_TABLE = staticRecordTable({
+  id: "organization-details:identifiers",
+  nameSingular: "organizationIdentifier",
+  namePlural: "organizationIdentifiers",
+  labelSingular: "Identifier",
+  labelPlural: "Identifiers",
+  labelIdentifierFieldName: "kind",
+  fields: [
+    { name: "kind", label: "Kind", fieldType: FIELD_TYPES.SELECT, size: 200, config: { options: detailOptions("taxNumberTypes") } },
+    { name: "number", label: "Number", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "jurisdiction", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 140 },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: detailOptions("identifierStatuses", (value) => (value === "active" ? "green" : "amber")) } },
+  ],
+});
+
+const NO_DETAIL_ROWS: never[] = [];
+
 export function SocietyPage() {
   const society = useSociety();
   const permissions = usePermissions();
@@ -243,6 +348,47 @@ export function SocietyPage() {
       console.error("Organization detail backfill failed", error);
     });
   }, [canEdit, autoBackfilledSocietyId, backfillRecords, detail, society]);
+
+  const addressRecords = useMemo<DetailRecord<AddressRow>[]>(
+    () =>
+      ((detail?.addresses ?? NO_DETAIL_ROWS) as AddressRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        type: row.type ?? "",
+        status: row.status ?? "",
+        address: addressLine(row),
+        effectiveFrom: row.effectiveFrom ?? null,
+        effectiveTo: row.effectiveTo ?? null,
+      })),
+    [detail?.addresses],
+  );
+  const registrationRecords = useMemo<DetailRecord<RegistrationRow>[]>(
+    () =>
+      ((detail?.registrations ?? NO_DETAIL_ROWS) as RegistrationRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        jurisdiction: optionLabel("entityJurisdictions", row.jurisdiction),
+        registration: [row.assumedName || "Legal name", row.registrationNumber, row.nuansNumber ? `NUANS ${row.nuansNumber}` : ""].filter(Boolean).join(" · "),
+        registrationDate: row.registrationDate ?? null,
+        activityCommencementDate: row.activityCommencementDate ?? null,
+        deRegistrationDate: row.deRegistrationDate ?? null,
+        status: row.status ?? "",
+      })),
+    [detail?.registrations],
+  );
+  const identifierRecords = useMemo<DetailRecord<IdentifierRow>[]>(
+    () =>
+      ((detail?.identifiers ?? NO_DETAIL_ROWS) as IdentifierRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        kind: row.kind ?? "",
+        // A restricted number is searched and sorted by its masked form only.
+        number: row.accessLevel === "restricted" ? mask(row.number) : row.number ?? "",
+        jurisdiction: row.foreignJurisdiction || row.jurisdiction || "",
+        status: row.status ?? "",
+      })),
+    [detail?.identifiers],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -483,6 +629,11 @@ export function SocietyPage() {
     setDrawerKind(null);
     setDraft(null);
     } catch (error: any) { toast.error("Could not save record", error?.message ?? String(error)); }
+  };
+
+  const editRegistration = (row: RegistrationRow) => {
+    setDrawerKind("registration");
+    setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") });
   };
 
   const removeDetailRow = async (kind: DrawerKind, row: any) => {
@@ -979,18 +1130,22 @@ export function SocietyPage() {
               count={detail?.addresses?.length ?? 0}
               action={<button className="btn-action btn-action--primary" onClick={() => openNewDetailRow("address")}><Plus size={12} /> Address</button>}
             >
-              <SimpleTable
-                rows={detail?.addresses ?? []}
-                empty="No structured addresses yet."
-                columns={["Type", "Status", "Address", "Effective", ""]}
-                tableClassName="org-address-table"
-                render={(row: any) => [
-                  optionLabel("addressTypes", row.type),
-                  <Badge key="s" tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>,
-                  <span key="address" className="org-address-table__address">{addressLine(row)}</span>,
-                  dateRange(row.effectiveFrom, row.effectiveTo),
-                  <RowActions key="a" onEdit={() => { setDrawerKind("address"); setDraft(row); }} onRemove={() => removeDetailRow("address", row)} />,
-                ]}
+              <RecordListTable<DetailRecord<AddressRow>>
+                variant="card"
+                table={ADDRESSES_TABLE}
+                tableId="organization-addresses"
+                label="Structured addresses"
+                records={addressRecords}
+                loading={detail === undefined}
+                onOpen={(record) => { setDrawerKind("address"); setDraft(record.row); }}
+                renderCell={({ record, field }) => {
+                  const { row } = record;
+                  if (field.name === "type") return <span>{optionLabel("addressTypes", row.type)}</span>;
+                  if (field.name === "status") return <Badge tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>;
+                  return undefined;
+                }}
+                renderRowActions={(record) => <RowActions onEdit={() => { setDrawerKind("address"); setDraft(record.row); }} onRemove={() => removeDetailRow("address", record.row)} />}
+                emptyState={<RecordTableEmpty title="No structured addresses yet" />}
               />
             </DetailSection>
 
@@ -1001,21 +1156,35 @@ export function SocietyPage() {
                 count={detail?.registrations?.length ?? 0}
                 action={<button className="btn-action btn-action--primary" onClick={() => openNewDetailRow("registration")}><Plus size={12} /> Registration</button>}
               >
-                <SimpleTable
-                  rows={detail?.registrations ?? []}
-                  empty="No external or extra-provincial registrations yet."
-                  columns={["Jurisdiction", "Registration", "Dates", "Status", ""]}
-                  tableClassName="table--stack-mobile"
-                  render={(row: any) => [
-                    <div key="j">
-                      <strong>{optionLabel("entityJurisdictions", row.jurisdiction)}</strong>
-                      <div className="muted">{optionLabel("registrationTypes", row.registrationType ?? "extra_provincial")}</div>
-                    </div>,
-                    <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ? <TooltipCopyable value={row.registrationNumber} label="registration number" /> : "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
-                    <div key="dates"><div>Registered: {row.registrationDate ? formatDate(row.registrationDate) : "Unknown"}</div><div>Business started: {row.activityCommencementDate ? formatDate(row.activityCommencementDate) : "Unknown"}</div>{row.deRegistrationDate && <div>Ended: {formatDate(row.deRegistrationDate)}</div>}</div>,
-                    <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>,
-                    <RowActions key="a" onEdit={() => { setDrawerKind("registration"); setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") }); }} onRemove={() => removeDetailRow("registration", row)} />,
-                  ]}
+                <RecordListTable<DetailRecord<RegistrationRow>>
+                  variant="card"
+                  table={REGISTRATIONS_TABLE}
+                  tableId="organization-registrations"
+                  label="Registration records"
+                  records={registrationRecords}
+                  loading={detail === undefined}
+                  onOpen={(record) => editRegistration(record.row)}
+                  renderCell={({ record, field }) => {
+                    const { row } = record;
+                    if (field.name === "jurisdiction")
+                      return (
+                        <span className="record-table__identifier-lines">
+                          <strong className="record-table__identifier-primary">{optionLabel("entityJurisdictions", row.jurisdiction)}</strong>
+                          <span className="record-table__identifier-secondary">{optionLabel("registrationTypes", row.registrationType ?? "extra_provincial")}</span>
+                        </span>
+                      );
+                    if (field.name === "registration")
+                      return (
+                        <span className="record-table__identifier-lines">
+                          <strong className="record-table__identifier-primary">{row.assumedName || "Legal name"}</strong>
+                          <span className="record-table__identifier-secondary mono">{row.registrationNumber ? <TooltipCopyable value={row.registrationNumber} label="registration number" /> : "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</span>
+                        </span>
+                      );
+                    if (field.name === "status") return <Badge tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>;
+                    return undefined;
+                  }}
+                  renderRowActions={(record) => <RowActions onEdit={() => editRegistration(record.row)} onRemove={() => removeDetailRow("registration", record.row)} />}
+                  emptyState={<RecordTableEmpty title="No external or extra-provincial registrations yet" />}
                 />
               </DetailSection>
 
@@ -1025,20 +1194,26 @@ export function SocietyPage() {
                 count={detail?.identifiers?.length ?? 0}
                 action={<button className="btn-action btn-action--primary" onClick={() => openNewDetailRow("identifier")}><Plus size={12} /> Identifier</button>}
               >
-                <SimpleTable
-                  rows={detail?.identifiers ?? []}
-                  empty="No tax or registry identifiers yet."
-                  columns={["Kind", "Number", "Jurisdiction", "Status", ""]}
-                  tableClassName="table--stack-mobile"
-                  render={(row: any) => [
-                    optionLabel("taxNumberTypes", row.kind),
-                    row.accessLevel === "restricted" || !row.number
-                      ? <span key="n" className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>
-                      : <TooltipCopyable key="n" value={row.number} label={`${optionLabel("taxNumberTypes", row.kind)} number`} />,
-                    row.foreignJurisdiction || row.jurisdiction || "-",
-                    <Badge key="s" tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{optionLabel("identifierStatuses", row.status)}</Badge>,
-                    <RowActions key="a" onEdit={() => { setDrawerKind("identifier"); setDraft(row); }} onRemove={() => removeDetailRow("identifier", row)} />,
-                  ]}
+                <RecordListTable<DetailRecord<IdentifierRow>>
+                  variant="card"
+                  table={IDENTIFIERS_TABLE}
+                  tableId="organization-identifiers"
+                  label="Tax and registry identifiers"
+                  records={identifierRecords}
+                  loading={detail === undefined}
+                  onOpen={(record) => { setDrawerKind("identifier"); setDraft(record.row); }}
+                  renderCell={({ record, field }) => {
+                    const { row } = record;
+                    if (field.name === "kind") return <span>{optionLabel("taxNumberTypes", row.kind)}</span>;
+                    if (field.name === "number")
+                      return row.accessLevel === "restricted" || !row.number
+                        ? <span className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>
+                        : <TooltipCopyable value={row.number} label={`${optionLabel("taxNumberTypes", row.kind)} number`} />;
+                    if (field.name === "status") return <Badge tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{optionLabel("identifierStatuses", row.status)}</Badge>;
+                    return undefined;
+                  }}
+                  renderRowActions={(record) => <RowActions onEdit={() => { setDrawerKind("identifier"); setDraft(record.row); }} onRemove={() => removeDetailRow("identifier", record.row)} />}
+                  emptyState={<RecordTableEmpty title="No tax or registry identifiers yet" />}
                 />
               </DetailSection></div>
             </div>
@@ -1176,21 +1351,6 @@ function DetailSection({ id, icon, title, count, action, children }: any) {
   );
 }
 
-function SimpleTable({ rows, columns, render, empty, tableClassName }: any) {
-  if (rows.length === 0) return <div className="card__body muted">{empty}</div>;
-  const className = ["table", tableClassName].filter(Boolean).join(" ");
-  return (
-    <table className={className}>
-      <thead><tr>{columns.map((column: string) => <th key={column}>{column}</th>)}</tr></thead>
-      <tbody>
-        {rows.map((row: any) => (
-          <tr key={row._id}>{render(row).map((cell: any, index: number) => <td key={index} data-label={columns[index] || undefined}>{cell}</td>)}</tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
 function RowActions({ onEdit, onRemove }: { onEdit: () => void; onRemove: () => void }) {
   return (
     <div className="row org-row-actions">
@@ -1296,11 +1456,6 @@ function drawerTitle(kind: DrawerKind | null, draft: any) {
 function csv(value: any) {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
   return String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function dateRange(start?: string, end?: string) {
-  if (!start && !end) return "-";
-  return `${start ? formatDate(start) : "?"} - ${end ? formatDate(end) : "current"}`;
 }
 
 function mask(value?: string) {

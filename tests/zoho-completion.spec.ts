@@ -10,36 +10,31 @@ async function seed(page:Page){return page.evaluate(async()=>{
   return {societyId,itemId,customerId,priceListId,invoiceId};
 });}
 
-test('saved invoice filters, custom columns and matching exports persist across reload',async({page})=>{
+test('the invoice list searches, hides columns, opens the customer and exports through the shared record table',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/app/invoices');await expect(page.getByRole('button',{name:'Filters and columns',exact:true})).toBeVisible();await seed(page);await page.reload();
-  await page.getByRole('searchbox',{name:'Search invoices',exact:true}).fill('Volume pricing customer');
-  await expect(page.locator('.invoice-table--list tbody tr')).toHaveCount(1);
-  await page.getByRole('button',{name:'Filters and columns',exact:true}).click();const drawer=page.getByRole('dialog');
-  await drawer.getByLabel('View name',{exact:true}).fill('Accounts follow-up');
-  await drawer.getByLabel('Issued from',{exact:true}).fill('2026-01-01');await drawer.getByLabel('Issued to',{exact:true}).fill('2026-01-31');
-  await drawer.getByLabel('customer column label',{exact:true}).fill('Recipient');await drawer.getByLabel('customer column width',{exact:true}).fill('305');
-  await drawer.getByText('Due',{exact:true}).click();
-  await drawer.getByRole('button',{name:'Save view',exact:true}).click();await expect(drawer.getByRole('button',{name:'Update saved view',exact:true})).toBeVisible();
-  await drawer.getByRole('button',{name:'Apply view',exact:true}).click();
-  await expect(page.getByRole('columnheader',{name:'Recipient',exact:true})).toBeVisible();await expect(page.getByRole('columnheader',{name:'Due',exact:true})).toHaveCount(0);
-  const url=page.url();expect(url).toContain('view=');await page.reload();await expect(page.getByRole('columnheader',{name:'Recipient',exact:true})).toBeVisible();await expect(page.locator('.invoice-table--list tbody tr')).toHaveCount(1);
-  // This goes through the actual configured export projection, including custom labels/order.
+  const search=page.getByLabel('Search invoices',{exact:true}),rows=page.locator('.record-table__row');
+  await page.goto('/app/invoices');await expect(search).toBeVisible();await seed(page);await page.reload();
+  await search.fill('Volume pricing customer');
+  await expect(rows).toHaveCount(1);
+  // Line items are searchable even though their column starts hidden.
+  await search.fill('Volume maintenance');await expect(rows).toHaveCount(1);
+  // Columns hide from their header menu.
+  await page.getByRole('button',{name:'Column menu for Due',exact:true}).click();
+  await page.getByRole('button',{name:'Hide field',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Column menu for Due',exact:true})).toHaveCount(0);
+  // The page's exports carry every invoice column, whatever the table shows.
   const downloading=page.waitForEvent('download');await page.getByRole('button',{name:"More actions",exact:true}).first().click();
-  const csvOption=page.getByRole('menuitem',{name:/CSV/i});
-  if(await csvOption.count()){await csvOption.first().click();}else{await page.getByRole('menuitem',{name:/Export.*view/i}).first().click();}
-  const download=await downloading;const body=await readFile((await download.path())!);expect(body.toString()).toContain('Recipient');expect(body.toString()).toContain('Volume pricing customer');expect(body.toString().split('\n')[0]).not.toMatch(/(^|,)Due(,|$)/);
-  // Reset and reselect the account-owned saved view.
-  const select=page.getByLabel('Saved invoice view',{exact:true});await select.selectOption('');await expect(page.getByRole('columnheader',{name:'Customer',exact:true})).toBeVisible();
-  const savedValue=await select.locator('option').filter({hasText:'Accounts follow-up'}).getAttribute('value');await select.selectOption(savedValue!);await expect(page.getByRole('columnheader',{name:'Recipient',exact:true})).toBeVisible();
-  await page.setViewportSize({width:390,height:844});await expect(page.locator('.invoice-table--custom-view thead')).toBeVisible();
-  expect(await page.locator('.invoice-table--custom-view').evaluate(table=>getComputedStyle(table).display)).toBe('table');
+  await page.getByRole('menuitem',{name:/CSV/i}).first().click();
+  const download=await downloading;const body=(await readFile((await download.path())!)).toString();expect(body).toContain('Volume pricing customer');expect(body.split('\n')[0]).toMatch(/(^|,)Due date(,|$)/);
+  // The customer opens their invoices: the whole list, filtered to them.
+  await rows.first().getByRole('button',{name:'Volume pricing customer',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Clear filter: Volume pricing customer',exact:true})).toBeVisible();
   expect(errors).toEqual([]);
 });
 
 test('customer assignment and quantity tiers update rates while preserving manual overrides',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/app/invoices');await expect(page.getByRole('button',{name:'Filters and columns',exact:true})).toBeVisible();await seed(page);
+  await page.goto('/app/invoices');await expect(page.getByLabel('Search invoices',{exact:true})).toBeVisible();await seed(page);
   await page.goto('/app/invoices?builder=new');const form=page.locator('.invoice-builder__form');
   await form.getByRole('combobox',{name:'Bill to',exact:true}).fill('Volume pricing customer');await page.getByRole('option',{name:/Volume pricing customer/}).first().click();await expect(form.locator('.billto__name')).toHaveText('Volume pricing customer');
   await expect(form.getByLabel('Price list',{exact:true})).toContainText('Volume contract');

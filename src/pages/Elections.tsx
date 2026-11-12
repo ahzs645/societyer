@@ -1,6 +1,6 @@
 import { formatDate } from "../lib/format";
 import { useConfirm } from "../components/Modal";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -20,6 +20,8 @@ import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
 import { pluralize, toDateTimeLocalValue } from "../lib/format";
 import { normalizeElectionWindow, validateElectionQuestion } from "../../shared/electionValidation";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 
 type ElectionCreateForm = {
   title: string;
@@ -35,6 +37,53 @@ type ElectionCreateForm = {
 
 const EMPTY_OPTION_LABELS = ["", ""];
 
+const ELECTIONS_TABLE = staticRecordTable({
+  id: "elections",
+  nameSingular: "election",
+  namePlural: "elections",
+  labelSingular: "Election",
+  labelPlural: "Elections",
+  labelIdentifierFieldName: "title",
+  routePath: "/app/elections",
+  fields: [
+    { name: "title", label: "Election", fieldType: FIELD_TYPES.TEXT, size: 300, config: { groupable: false } },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "Draft", label: "Draft", color: "blue" },
+          { value: "Open", label: "Open", color: "green" },
+          { value: "Closed", label: "Closed", color: "orange" },
+          { value: "Tallied", label: "Tallied", color: "orange" },
+          { value: "Cancelled", label: "Cancelled", color: "gray" },
+        ],
+      },
+    },
+    { name: "opensAtISO", label: "Opens", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "closesAtISO", label: "Closes", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, size: 240, isVisible: false },
+  ],
+});
+
+type ElectionRecord = {
+  _id: Id<"elections">;
+  title: string;
+  description: string | null;
+  status: string;
+  opensAtISO: string;
+  closesAtISO: string;
+  election: Doc<"elections">;
+};
+
+function electionStatusTone(status: string) {
+  if (status === "Closed" || status === "Tallied") return "warn" as const;
+  if (status === "Open") return "success" as const;
+  return "info" as const;
+}
+
 export function ElectionsPage() {
   const navigate = useNavigate();
   const society = useSociety();
@@ -45,6 +94,19 @@ export function ElectionsPage() {
   const elections = useQuery(
     api.elections.list,
     society ? { societyId: society._id } : "skip",
+  ) as Doc<"elections">[] | undefined;
+  const electionRecords = useMemo<ElectionRecord[]>(
+    () =>
+      (elections ?? []).map((election) => ({
+        _id: election._id,
+        title: election.title,
+        description: election.description ?? null,
+        status: election.status,
+        opensAtISO: election.opensAtISO,
+        closesAtISO: election.closesAtISO,
+        election,
+      })),
+    [elections],
   );
   const users = useQuery(
     api.users.list,
@@ -239,125 +301,104 @@ export function ElectionsPage() {
           <h2 className="card__title">All elections</h2>
           <span className="card__subtitle">{elections?.length ?? 0} total</span>
         </div>
-        <div className="table-wrap">
-        <table className="table table--stack-mobile elections-table">
-          <thead>
-            <tr>
-              <th>Election</th>
-              <th>Status</th>
-              <th>Opens</th>
-              <th>Closes</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {(elections ?? []).map((election: any) => (
-              <tr key={election._id}>
-                <td>
-                  <strong>{election.title}</strong>
-                  {election.description && (
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      {election.description}
-                    </div>
+        <RecordListTable<ElectionRecord>
+          variant="card"
+          table={ELECTIONS_TABLE}
+          tableId="elections"
+          label="Elections"
+          icon={<Vote size={14} />}
+          records={electionRecords}
+          loading={elections === undefined}
+          onOpen={(record) => navigate(`/app/elections/${record._id}`)}
+          renderCell={({ record, field }) => {
+            if (field.name === "title")
+              return (
+                <span>
+                  <strong>{record.title}</strong>
+                  {record.description && (
+                    <span className="muted" style={{ display: "block", fontSize: 12 }}>
+                      {record.description}
+                    </span>
                   )}
-                </td>
-                <td data-label="Status">
-                  <Badge
-                    tone={
-                      election.status === "Closed" || election.status === "Tallied"
-                        ? "warn"
-                        : election.status === "Open"
-                        ? "success"
-                        : "info"
-                    }
+                </span>
+              );
+            if (field.name === "status") return <Badge tone={electionStatusTone(record.status)}>{record.status}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => {
+            const election = record.election;
+            if (!canManage) return null;
+            return (
+              <>
+                {election.status === "Draft" && vocab.isCorporation && <Link to={`/app/elections/${election._id}`} className="btn btn--ghost btn--sm">Review electorate</Link>}
+                {election.status === "Draft" && !vocab.isCorporation && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      try {
+                        const result = await snapshotEligibleVoters({ electionId: election._id });
+                        toast.success(`Snapshotted ${pluralize(result.eligibleCount, "eligible voter")} and opened voting`);
+                      } catch (error) { toast.error(error instanceof Error ? error.message : "Could not open this election."); }
+                    }}
                   >
-                    {election.status}
-                  </Badge>
-                </td>
-                <td data-label="Opens" style={{ whiteSpace: "nowrap" }}>
-                  {formatDate(election.opensAtISO)}
-                </td>
-                <td data-label="Closes" style={{ whiteSpace: "nowrap" }}>
-                  {formatDate(election.closesAtISO)}
-                </td>
-                <td className="elections-table__actions">
-                  <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                    <Link to={`/app/elections/${election._id}`} className="btn btn--ghost btn--sm">
-                      View
-                    </Link>
-                    {canManage && (
-                      <>
-                        {election.status === "Draft" && vocab.isCorporation && <Link to={`/app/elections/${election._id}`} className="btn btn--ghost btn--sm">Review electorate</Link>}
-                        {election.status === "Draft" && !vocab.isCorporation && (
-                          <button
-                            className="btn btn--ghost btn--sm"
-                            onClick={async () => {
-                              try {
-                                const result = await snapshotEligibleVoters({ electionId: election._id });
-                                toast.success(`Snapshotted ${pluralize(result.eligibleCount, "eligible voter")} and opened voting`);
-                              } catch (error) { toast.error(error instanceof Error ? error.message : "Could not open this election."); }
-                            }}
-                          >
-                            <Users size={12} /> Lock voter list and open
-                          </button>
-                        )}
-                        {election.status === "Open" && (
-                          <button
-                            className="btn btn--ghost btn--sm"
-                            onClick={async () => {
-                              const early = Date.parse(election.closesAtISO) > Date.now();
-                              const ok = await confirm({
-                                title: `Close voting on "${election.title}"?`,
-                                message: `${early ? `Voting is scheduled to stay open until ${formatDate(election.closesAtISO)}. ` : ""}Closing stops all further ballots and cannot be reopened.`,
-                                confirmLabel: early ? "Close early" : "Close voting",
-                                tone: early ? "danger" : "warn",
-                              });
-                              if (!ok) return;
-                              await closeElection({
-                                electionId: election._id,
-                              });
-                              toast.info("Election closed");
-                            }}
-                          >
-                            <CheckCircle2 size={12} /> Close
-                          </button>
-                        )}
-                        {canTally && election.status === "Closed" && (
-                          <button
-                            className="btn btn--ghost btn--sm"
-                            onClick={async () => {
-                              const ok = await confirm({
-                                title: `Publish results for "${election.title}"?`,
-                                message: "The ballots will be tallied and the results recorded as final. Open the election to review the ballot count first.",
-                                confirmLabel: "Publish results",
-                                tone: "warn",
-                              });
-                              if (!ok) return;
-                              await tallyElection({
-                                electionId: election._id,
-                              });
-                              toast.success("Results published");
-                            }}
-                          >
-                            <CheckCircle2 size={12} /> Publish results
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {(elections ?? []).length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                  No elections yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        </div>
+                    <Users size={12} /> Lock voter list and open
+                  </button>
+                )}
+                {election.status === "Open" && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      const early = Date.parse(election.closesAtISO) > Date.now();
+                      const ok = await confirm({
+                        title: `Close voting on "${election.title}"?`,
+                        message: `${early ? `Voting is scheduled to stay open until ${formatDate(election.closesAtISO)}. ` : ""}Closing stops all further ballots and cannot be reopened.`,
+                        confirmLabel: early ? "Close early" : "Close voting",
+                        tone: early ? "danger" : "warn",
+                      });
+                      if (!ok) return;
+                      await closeElection({ electionId: election._id });
+                      toast.info("Election closed");
+                    }}
+                  >
+                    <CheckCircle2 size={12} /> Close
+                  </button>
+                )}
+                {canTally && election.status === "Closed" && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Publish results for "${election.title}"?`,
+                        message: "The ballots will be tallied and the results recorded as final. Open the election to review the ballot count first.",
+                        confirmLabel: "Publish results",
+                        tone: "warn",
+                      });
+                      if (!ok) return;
+                      await tallyElection({ electionId: election._id });
+                      toast.success("Results published");
+                    }}
+                  >
+                    <CheckCircle2 size={12} /> Publish results
+                  </button>
+                )}
+              </>
+            );
+          }}
+          renderPhoneCard={(record, { open, field, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.title}
+              badge={field("status")}
+              meta={[`Opens ${formatDate(record.opensAtISO)}`, `closes ${formatDate(record.closesAtISO)}`]}
+              detail={[record.description ?? ""]}
+              onOpen={open}
+              selecting={selecting}
+            />
+          )}
+          emptyState={<RecordTableEmpty title="No elections yet" />}
+        />
       </div>
 
       <Drawer

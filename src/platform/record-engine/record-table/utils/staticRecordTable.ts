@@ -1,4 +1,6 @@
-import type { FieldMetadata, HydratedView, ObjectMetadata, ViewOpenRecordIn } from "../../types";
+import type { AggregateOperation, FieldMetadata, HydratedView, ObjectMetadata, ViewGroupBy, ViewOpenRecordIn, ViewSortDirection } from "../../types";
+import { withViewGroupBy } from "./groupRecords";
+import { staticFieldId } from "../../../../../shared/listViewState";
 
 /** One column of a table whose shape is fixed in code. */
 export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fieldType"> & {
@@ -9,14 +11,21 @@ export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fiel
   isVisible?: boolean;
   /** Cells are read-only unless a column says otherwise. */
   isReadOnly?: boolean;
+  /** The column's footer total when the table shows totals (e.g. "sum" for money); none unless set. */
+  aggregate?: AggregateOperation;
 };
+
+/** The default view's group-by, naming its field by `name` (the reader can still change it). */
+export type StaticGroupByDefinition = Omit<ViewGroupBy, "fieldMetadataId" | "sumFieldMetadataId"> & { field: string };
 
 /**
  * Object metadata and a default view for a table defined in code rather than
  * in the workspace's object metadata: read-only data from another system
  * (procurement catalogs) or fixtures. The table gets the shared toolbar,
  * column picker, density, phone cards and keyboard navigation without seeding
- * metadata; column choices last for the visit and aren't saved.
+ * metadata. `RecordListTable` remembers a person's column choices in their
+ * browser and keeps named views in `listViews` (shared/listViewState.ts), both
+ * by the field ids made here (`staticFieldId`).
  */
 export function staticRecordTable({
   id,
@@ -31,6 +40,8 @@ export function staticRecordTable({
   viewName = `All ${labelPlural.toLowerCase()}`,
   openRecordIn = "page",
   density = "compact",
+  sorts = [],
+  groupBy,
 }: {
   id: string;
   nameSingular: string;
@@ -44,9 +55,13 @@ export function staticRecordTable({
   viewName?: string;
   openRecordIn?: ViewOpenRecordIn;
   density?: "compact" | "comfortable";
+  /** The default view's sort, by field `name`, first key first. */
+  sorts?: { field: string; direction: ViewSortDirection }[];
+  /** The default view's grouping, e.g. `{ field: "jurisdiction", sort: "label", direction: "asc" }`. */
+  groupBy?: StaticGroupByDefinition;
 }): { objectMetadata: ObjectMetadata; hydratedView: HydratedView } {
   const metadata: FieldMetadata[] = fields.map((definition, position) => ({
-    _id: `${id}:field:${definition.name}`,
+    _id: staticFieldId(id, definition.name),
     objectMetadataId: id,
     name: definition.name,
     label: definition.label,
@@ -59,6 +74,10 @@ export function staticRecordTable({
     isReadOnly: definition.isReadOnly ?? true,
     position,
   }));
+  const fieldId = (name: string) => {
+    if (!fields.some((field) => field.name === name)) throw new Error(`staticRecordTable "${id}": no field "${name}"`);
+    return staticFieldId(id, name);
+  };
   return {
     objectMetadata: {
       _id: id,
@@ -81,9 +100,9 @@ export function staticRecordTable({
         type: "table",
         filters: [],
         filterGroups: [],
-        sorts: [],
+        sorts: sorts.map((sort) => ({ id: sort.field, fieldMetadataId: fieldId(sort.field), direction: sort.direction })),
         fieldGroups: [],
-        groups: [],
+        groups: groupBy ? withViewGroupBy([], viewGroupBy(groupBy, fieldId(groupBy.field))) : [],
         density,
         visibility: "system",
         openRecordIn,
@@ -97,10 +116,14 @@ export function staticRecordTable({
         position,
         size: fields[position].size ?? 160,
         isVisible: fields[position].isVisible ?? true,
-        aggregateOperation: null,
+        aggregateOperation: fields[position].aggregate ?? null,
         viewFieldGroupId: null,
         field,
       })),
     },
   };
+}
+
+function viewGroupBy({ field: _field, ...options }: StaticGroupByDefinition, fieldMetadataId: string): ViewGroupBy {
+  return { ...options, fieldMetadataId };
 }

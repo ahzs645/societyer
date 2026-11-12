@@ -10,6 +10,22 @@ export async function activateRemittance(locator: Locator) {
     await locator.tap();
   else await locator.click();
 }
+/**
+ * Runs a remittance list row's action. Desktop rows show the button itself;
+ * phone cards keep their row actions behind the card's "Row actions for …"
+ * menu, as every shared record list does.
+ */
+export async function remittanceRowAction(list: Locator, name: string, rowText?: string) {
+  const rows = list.locator("tr.record-table__row, .record-phone-card-shell");
+  const row = rowText ? rows.filter({ hasText: rowText }).first() : rows.first();
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const target = row.getByRole("button", { name: new RegExp(`^(${escaped}|Row actions for .+)$`) }).first();
+  await expect(target).toBeVisible();
+  const label = (await target.getAttribute("aria-label")) ?? "";
+  await activateRemittance(target);
+  if (label.startsWith("Row actions for "))
+    await activateRemittance(list.page().getByRole("menuitem", { name, exact: true }));
+}
 export async function inspectRemittance(
   page: Page,
   testInfo: TestInfo,
@@ -36,7 +52,8 @@ export async function inspectRemittance(
         ),
       ]
         .filter((el) => {
-          if (el.closest(".payroll-calculator__table-wrap")) return false;
+          // Table scroll regions and the shared record lists scroll their own content.
+          if (el.closest(".payroll-calculator__table-wrap, .record-list-table")) return false;
           const rect = el.getBoundingClientRect();
           return (
             rect.width > 0 &&
@@ -50,6 +67,14 @@ export async function inspectRemittance(
           left: el.getBoundingClientRect().left,
           right: el.getBoundingClientRect().right,
         }));
+      // The touch target: the box itself, or the invisible ::after hit area
+      // that compact controls get on touch screens (_control-density.scss
+      // tap-area), whichever is taller.
+      const hitHeight = (el: HTMLElement) => {
+        const after = getComputedStyle(el, "::after");
+        const pseudo = after.content !== "none" && after.position === "absolute" ? parseFloat(after.height) || 0 : 0;
+        return Math.max(el.offsetHeight, pseudo);
+      };
       const smallTargets = touch
         ? [
             ...panel.querySelectorAll<HTMLElement>(
@@ -61,12 +86,12 @@ export async function inspectRemittance(
             // its touch target.
             .filter((el) => {
               const rect = el.getBoundingClientRect();
-              return rect.width > 0 && rect.height > 0 && el.offsetHeight < 44;
+              return rect.width > 0 && rect.height > 0 && hitHeight(el) < 44;
             })
             .map((el) => ({
               tag: el.tagName,
               text: el.textContent?.slice(0, 100),
-              height: el.offsetHeight,
+              height: hitHeight(el),
             }))
         : [];
       return {
@@ -121,20 +146,22 @@ export async function inspectRemittance(
 }
 /**
  * Phones show each CRA obligation as a card: nothing in the obligations list
- * may need a sideways swipe, and each card names its facts.
+ * may need a sideways swipe, and each card names its period, due date and
+ * amount.
  */
 export async function expectRemittanceCards(page: Page, testInfo: TestInfo) {
   if (!testInfo.project.use.hasTouch) return;
-  const wrapper = page
+  const list = page
     .getByRole("region", { name: "CRA obligations", exact: true })
-    .locator(".payroll-calculator__table-wrap");
-  await wrapper.scrollIntoViewIfNeeded();
-  const fit = await wrapper.evaluate((el) => ({
+    .locator(".record-list-table");
+  await list.scrollIntoViewIfNeeded();
+  const fit = await list.evaluate((el) => ({
     scroll: el.scrollWidth,
     client: el.clientWidth,
   }));
   expect(fit.scroll, "obligations fit without a sideways swipe").toBeLessThanOrEqual(fit.client + 1);
-  const firstCard = wrapper.locator("tbody tr").first();
-  await expect(firstCard.locator('td[data-label="Due"]')).toBeVisible();
-  await expect(firstCard.locator('td[data-label="Amount"]')).toBeVisible();
+  const firstCard = list.locator(".record-phone-card").first();
+  await expect(firstCard).toBeVisible();
+  await expect(firstCard).toContainText(/Due \d{4}-\d{2}-\d{2}|Schedule unconfirmed/);
+  await expect(firstCard).toContainText("$");
 }

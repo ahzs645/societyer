@@ -147,7 +147,7 @@ export function JournalEntryDrawer({ record, accounts, links, canWrite, closeDat
         <p className="muted">This entry is no longer available.</p>
       ) : (
         <div className="books-register__lines">
-          <table className="table">
+          <table className="table table--report">
             <thead>
               <tr>
                 <th scope="col">Account</th>

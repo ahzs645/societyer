@@ -287,6 +287,7 @@ export function RecordTable({
   emptyState,
   loading = false,
   virtualizeAbove = 40,
+  previewAction = true,
   renderRowActions,
   rowMenuSections,
   renderCell,
@@ -311,6 +312,9 @@ export function RecordTable({
   selectable?: boolean;
   emptyState?: ReactNode;
   loading?: boolean;
+  /** The "Preview in sidebar" row button (when rows open). Off for tables
+   *  defined in code, whose records have no preview of their own. */
+  previewAction?: boolean;
   /** Use virtualization only once the filtered row count exceeds this. */
   virtualizeAbove?: number;
   /**
@@ -379,6 +383,16 @@ export function RecordTable({
   const progressiveLoading = useRecordTableState((s) => s.loadingProgress !== null);
   const showLoading = progressiveLoading ? records.length === 0 : loading;
   const page = rowModel.page;
+  // Plain rows up to `virtualizeAbove`, a windowed list beyond. While a column
+  // menu is open (filtering as you type) the layout holds, so the header the
+  // menu belongs to isn't remounted under it.
+  const wantsPlainLayout = (rowModel.items.length <= virtualizeAbove && !onEndReached) || Boolean(page);
+  const columnMenuOpen = useRecordTableState((s) => s.openColumnMenu !== null);
+  const [heldLayout, setHeldLayout] = useState<boolean | null>(null);
+  useEffect(() => {
+    setHeldLayout((held) => (columnMenuOpen ? held ?? wantsPlainLayout : null));
+  }, [columnMenuOpen, wantsPlainLayout]);
+  const plainLayout = columnMenuOpen ? heldLayout ?? wantsPlainLayout : wantsPlainLayout;
   const handle = useRecordTableStoreHandle();
   const saveRecord = useRecordTableUpdate();
   const getTableState = handle.get;
@@ -463,7 +477,7 @@ export function RecordTable({
   );
   const [stretchRoot, setStretchRoot] = useState<HTMLElement | null>(null);
   const [columnStretch, setColumnStretch] = useState(1);
-  const hasOpenRecordAction = !!onRecordClick;
+  const hasOpenRecordAction = !!onRecordClick && previewAction;
   const hasRowActions = !!renderRowActions || !!rowMenuSections || hasOpenRecordAction;
   // Lays out the row actions and shares spare width among the columns. The
   // actions show inline while the table fits its frame; once it would scroll
@@ -527,6 +541,8 @@ export function RecordTable({
   }, [rowModel.items, visibleColumns, renderRowActions]);
   const onRowContextMenu: RowContextMenuHandler | undefined = rowMenuSections
     ? (event, record) => {
+        // A row with nothing in its menu keeps the browser's own.
+        if (!rowMenuSections(record).some((section) => section.items.length > 0)) return;
         event.preventDefault();
         setRowContextMenu({ x: event.clientX, y: event.clientY, record });
       }
@@ -1006,7 +1022,7 @@ export function RecordTable({
     hasRowActions,
   };
 
-  if ((rowModel.items.length <= virtualizeAbove && !onEndReached) || page) {
+  if (plainLayout) {
     return withGridMode(
       <>
       <div

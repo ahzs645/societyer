@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { Layers, Plus } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
 import { Badge, Banner, Drawer, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
-import { Menu } from "../../components/Menu";
 import { InfoPopover } from "../../components/InfoPopover";
 import { useConfirm, usePrompt } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
@@ -37,6 +37,46 @@ const GAP_STATUS_LABELS: Record<GapStatus, string> = {
 };
 
 const PAGE = 25;
+
+const GAP_GROUPS_TABLE = staticRecordTable({
+  id: "coverage:system-gap-groups",
+  nameSingular: "systemGapGroup",
+  namePlural: "systemGapGroups",
+  labelSingular: "Information type",
+  labelPlural: "Information types",
+  labelIdentifierFieldName: "label",
+  viewName: "Backlog by information type",
+  fields: [
+    { name: "label", label: "Information type", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "area", label: "Area", fieldType: FIELD_TYPES.TEXT, size: 150 },
+    {
+      name: "reason",
+      label: "Reason",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 200,
+      config: { options: GAP_REASONS.map((reason) => ({ value: reason, label: GAP_REASON_LABELS[reason], color: "gray" })) },
+    },
+    { name: "open", label: "Open", fieldType: FIELD_TYPES.NUMBER, size: 90 },
+    { name: "keptAsText", label: "Kept as text", fieldType: FIELD_TYPES.NUMBER, size: 120 },
+    { name: "fieldRequested", label: "New field requested", fieldType: FIELD_TYPES.NUMBER, size: 160 },
+    { name: "closed", label: "Resolved / won't fix", fieldType: FIELD_TYPES.NUMBER, size: 160 },
+    { name: "suggestedTarget", label: "Suggested target", fieldType: FIELD_TYPES.TEXT, size: 200, config: { groupable: false } },
+  ],
+});
+
+/** One information type and reason in the backlog, with its gaps counted by status. */
+type GapGroupRecord = {
+  _id: string;
+  label: string;
+  area: string;
+  reason: string;
+  open: number;
+  keptAsText: number;
+  fieldRequested: number;
+  closed: number;
+  suggestedTarget: string;
+  group: Group;
+};
 
 type Group = { infoType: string; label: string; area: string; suggestedTarget?: string; reason: string; total: number; byStatus: Record<string, number>; examples: { _id: string; title?: string; sourceTitle?: string }[] };
 
@@ -133,6 +173,18 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
   };
 
   const groups: Group[] = summary.groups;
+  const groupRecords: GapGroupRecord[] = groups.map((group) => ({
+    _id: `${group.infoType}|${group.reason}`,
+    label: group.label,
+    area: group.area,
+    reason: group.reason,
+    open: group.byStatus.open ?? 0,
+    keptAsText: group.byStatus.kept_as_text ?? 0,
+    fieldRequested: group.byStatus.schema_change_requested ?? 0,
+    closed: (group.byStatus.resolved_native ?? 0) + (group.byStatus.wont_fix ?? 0),
+    suggestedTarget: group.suggestedTarget ?? "",
+    group,
+  }));
   const visibleRows = detailRows?.slice(page * PAGE, page * PAGE + PAGE);
   const recordFocused = Boolean((affectedTable && affectedId) || focusGapId);
   const detailSection = selected || recordFocused ? (
@@ -230,66 +282,42 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
           <InfoPopover label="About system gaps">
             <p>Details from source files that Societyer can't hold as structured data yet. Gaps appear here from imports, preflight checks and reviewer entries, ranked by open count.</p>
           </InfoPopover>
-          {canWrite && (
-            <button type="button" className="btn-action" style={{ marginLeft: "auto" }} onClick={() => setCreating(true)}>
+        </div>
+        <RecordListTable<GapGroupRecord>
+          variant="card"
+          table={GAP_GROUPS_TABLE}
+          tableId="coverage-system-gap-groups"
+          label="Backlog by information type"
+          icon={<Layers size={14} />}
+          records={groupRecords}
+          highlightedRecordId={selected ? `${selected.infoType}|${selected.reason ?? ""}` : null}
+          onOpen={(record) => { setSelected({ infoType: record.group.infoType, reason: record.group.reason }); setPage(0); }}
+          toolbarActions={canWrite ? (
+            <button type="button" className="btn-action" onClick={() => setCreating(true)}>
               <Plus size={12} /> Record a gap
             </button>
+          ) : undefined}
+          renderCell={({ record, field }) => {
+            if (field.name === "area") return <span className="muted">{record.area}</span>;
+            if (field.name === "suggestedTarget") return record.suggestedTarget ? <code style={{ fontSize: 11 }}>{record.suggestedTarget}</code> : <span className="muted">—</span>;
+            return undefined;
+          }}
+          rowMenuSections={(record) => canWrite ? [{ id: "triage", items: [
+            { id: "kept_as_text", label: "Keep as text", onSelect: () => void bulk(record.group, "kept_as_text") },
+            { id: "schema_change_requested", label: "Request a new field", onSelect: () => void bulk(record.group, "schema_change_requested") },
+            { id: "wont_fix", label: "Won't fix", onSelect: () => void bulk(record.group, "wont_fix") },
+          ] }] : []}
+          renderPhoneCard={(record, { open, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.label}
+              meta={[`${record.open} open`, GAP_REASON_LABELS[record.reason as GapReason] ?? record.reason]}
+              detail={[record.area]}
+              onOpen={open}
+              selecting={selecting}
+            />
           )}
-        </div>
-        {!groups.length ? (
-          <div className="card__body muted">No system gaps recorded.</div>
-        ) : (
-        <div className="coverage-table-scroll">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Information type</th>
-                <th>Reason</th>
-                <th>Open</th>
-                <th>Kept as text</th>
-                <th>New field requested</th>
-                <th>Resolved / won't fix</th>
-                <th>Suggested target</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((group) => {
-                const isSelected = selected?.infoType === group.infoType && selected?.reason === group.reason;
-                return (
-                  <tr key={`${group.infoType}|${group.reason}`} className={isSelected ? "is-selected" : undefined}>
-                    <td>
-                      <button type="button" className="btn-link" onClick={() => { setSelected({ infoType: group.infoType, reason: group.reason }); setPage(0); }}>
-                        {group.label}
-                      </button>
-                      <div className="muted" style={{ fontSize: 11 }}>{group.area}</div>
-                    </td>
-                    <td>{GAP_REASON_LABELS[group.reason as GapReason] ?? group.reason}</td>
-                    <td>{group.byStatus.open ?? 0}</td>
-                    <td>{group.byStatus.kept_as_text ?? 0}</td>
-                    <td>{group.byStatus.schema_change_requested ?? 0}</td>
-                    <td>{(group.byStatus.resolved_native ?? 0) + (group.byStatus.wont_fix ?? 0)}</td>
-                    <td><code style={{ fontSize: 11 }}>{group.suggestedTarget ?? "—"}</code></td>
-                    <td>
-                      {canWrite && (
-                        <Menu
-                          align="right"
-                          trigger={<button type="button" className="btn-action btn-action--icon" aria-label={`Triage ${group.label}`}><MoreHorizontal size={14} /></button>}
-                          sections={[{ id: "triage", items: [
-                            { id: "kept_as_text", label: "Keep as text", onSelect: () => void bulk(group, "kept_as_text") },
-                            { id: "schema_change_requested", label: "Request a new field", onSelect: () => void bulk(group, "schema_change_requested") },
-                            { id: "wont_fix", label: "Won't fix", onSelect: () => void bulk(group, "wont_fix") },
-                          ] }]}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        )}
+          emptyState={<RecordTableEmpty title="No system gaps recorded" />}
+        />
       </section>
 
       {!recordFocused && detailSection}

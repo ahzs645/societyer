@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useSearchParams } from "react-router-dom";
-import { BellRing, Check, ClipboardCheck, Download, Landmark, Link2, MoreHorizontal } from "lucide-react";
+import { BellRing, Check, ClipboardCheck, Download, Landmark, Link2 } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTableBulkBar, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
-import { Menu } from "../components/Menu";
+import type { MenuSection } from "../components/Menu";
 import { Money } from "../components/Money";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -23,9 +24,130 @@ import { useClaimShareActions } from "../features/financials/approvals/ClaimChec
 import type { ApprovalQueue, QueueRow, QueueTab } from "../features/financials/approvals/types";
 import { BillApprovalsPanel, useBillsAwaitingApproval } from "../features/bills/BillApprovalsPanel";
 import { exportClaimsCsv } from "../features/financials/approvals/claimExport";
+import { spendBudgetHref } from "../features/financials/spendBudgets/spendBudgetLinks";
 import { mileageSummary } from "../../shared/expensePolicy";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const TAB_IDS: QueueTab[] = ["awaiting", "bills", "approved", "paid", "closed", "drafts", "rules", "policy"];
+
+/** The tabs that list expense claims. */
+type ClaimTab = Exclude<QueueTab, "bills" | "rules" | "policy">;
+
+const CLAIM_FLAG_OPTIONS = [
+  { value: "policy_exception", label: "Policy exception", color: "amber" },
+  { value: "misses_policy", label: "Misses policy", color: "amber" },
+  { value: "possible_duplicate", label: "Possible duplicate", color: "orange" },
+  { value: "over_budget", label: "Over budget", color: "amber" },
+];
+
+const CLAIM_STATUS_COLOR: Record<string, string> = { Draft: "gray", Submitted: "blue", Approved: "purple", Paid: "green", Rejected: "red", Recalled: "amber" };
+
+/** One table per claim tab: the date column and the last column change with the tab. */
+function claimQueueTable(tab: ClaimTab) {
+  const dateLabel = tab === "approved" ? "Approved" : tab === "paid" ? "Paid" : tab === "drafts" ? "Incurred" : "Submitted";
+  const progress =
+    tab === "closed"
+      ? {
+          name: "status",
+          label: "Status",
+          fieldType: FIELD_TYPES.SELECT,
+          size: 150,
+          config: { options: Object.entries(CLAIM_STATUS_LABEL).map(([value, label]) => ({ value, label, color: CLAIM_STATUS_COLOR[value] ?? "gray" })) },
+        }
+      : tab === "paid"
+        ? { name: "paymentReference", label: "Reference", fieldType: FIELD_TYPES.TEXT, size: 160 }
+        : { name: "approvals", label: "Approvals", fieldType: FIELD_TYPES.TEXT, size: 160 };
+  return staticRecordTable({
+    id: `approvals:${tab}`,
+    nameSingular: "approvalQueueClaim",
+    namePlural: "approvalQueueClaims",
+    labelSingular: "Claim",
+    labelPlural: "Claims",
+    labelIdentifierFieldName: "title",
+    viewName: "All claims",
+    density: "comfortable",
+    fields: [
+      { name: "title", label: "Claim", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+      { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, size: 160 },
+      { name: "claimantName", label: "Requester", fieldType: FIELD_TYPES.TEXT, size: 160 },
+      { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, size: 120, config: { isCents: true }, aggregate: "sum" },
+      { name: "date", label: dateLabel, fieldType: FIELD_TYPES.DATE, size: 120 },
+      progress,
+      { name: "flags", label: "Flags", fieldType: FIELD_TYPES.MULTI_SELECT, size: 200, config: { options: CLAIM_FLAG_OPTIONS } },
+      { name: "spendBudget", label: "Spend budget", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    ],
+  });
+}
+
+const CLAIM_QUEUE_TABLES: Record<ClaimTab, ReturnType<typeof claimQueueTable>> = {
+  awaiting: claimQueueTable("awaiting"),
+  approved: claimQueueTable("approved"),
+  paid: claimQueueTable("paid"),
+  closed: claimQueueTable("closed"),
+  drafts: claimQueueTable("drafts"),
+};
+
+type ClaimRecord = {
+  _id: string;
+  title: string;
+  /** Its expense category, or "Mileage · 12 km". */
+  category: string;
+  claimantName: string;
+  amountCents: number;
+  /** The date the tab is about: submitted, approved, paid or incurred. */
+  date: string | null;
+  approvals: string;
+  paymentReference: string;
+  status: string;
+  flags: string[];
+  spendBudget: string;
+  row: QueueRow;
+};
+
+function claimDate(row: QueueRow, tab: ClaimTab) {
+  const date = tab === "approved" ? row.approvedAtISO : tab === "paid" ? row.paidAtISO : tab === "drafts" ? row.incurredAtISO : row.submittedAtISO ?? row.incurredAtISO;
+  return date ?? null;
+}
+
+function claimFlags(row: QueueRow): string[] {
+  const flags: string[] = [];
+  if (row.policyException) flags.push("policy_exception");
+  else if (row.status === "Submitted" && row.policyIssues.length > 0) flags.push("misses_policy");
+  if (row.possibleDuplicate) flags.push("possible_duplicate");
+  if (row.spendBudget?.exceeds && !["Paid", "Rejected", "Recalled"].includes(row.status)) flags.push("over_budget");
+  return flags;
+}
+
+function claimRecord(row: QueueRow, tab: ClaimTab): ClaimRecord {
+  const required = Math.max(1, row.requiredApprovals);
+  return {
+    _id: row._id,
+    title: row.title,
+    category: row.claimType === "mileage" ? mileageSummary(row.mileage) : row.category,
+    claimantName: row.claimantName,
+    amountCents: row.amountCents,
+    date: claimDate(row, tab),
+    approvals: tab === "drafts" ? "Not submitted" : `${Math.min(row.approvals.length, required)} of ${required}`,
+    paymentReference: row.paymentReference ?? "",
+    status: row.status,
+    flags: claimFlags(row),
+    spendBudget: row.spendBudget?.name ?? "",
+    row,
+  };
+}
+
+const FLAG_BADGE: Record<string, { label: string; tone: "warn" | "orange" }> = {
+  policy_exception: { label: "Policy exception", tone: "warn" },
+  misses_policy: { label: "Misses policy", tone: "warn" },
+  possible_duplicate: { label: "Possible duplicate", tone: "orange" },
+  over_budget: { label: "Over budget", tone: "warn" },
+};
+
+type BulkApproveResult = { approved?: number; recorded?: number; skipped?: Array<{ error?: string }> };
+
+function errorText(error: unknown) {
+  return error instanceof Error ? error.message : undefined;
+}
 
 function rowsForTab(rows: QueueRow[], tab: QueueTab): QueueRow[] {
   switch (tab) {
@@ -72,12 +194,11 @@ export function ApprovalsPage() {
     setSearchParams(params, { replace: !id });
   };
   const share = useClaimShareActions();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState(false);
 
   const rows = useMemo(() => (queue ? rowsForTab(queue.rows, tab) : []), [queue, tab]);
+  const claimTab: ClaimTab | null = tab === "bills" || tab === "rules" || tab === "policy" ? null : tab;
+  const records = useMemo(() => (claimTab ? rows.map((row) => claimRecord(row, claimTab)) : []), [rows, claimTab]);
   const approvable = rows.filter((row) => row.canApprove);
-  const selectedRows = approvable.filter((row) => selected.has(row._id));
   const openRow = queue?.rows.find((row) => row._id === openId) ?? null;
   const missingClaim = Boolean(queue && openId && !openRow);
   useEffect(() => {
@@ -98,20 +219,17 @@ export function ApprovalsPage() {
     if (next === "awaiting") params.delete("tab");
     else params.set("tab", next);
     setSearchParams(params, { replace: true });
-    setSelected(new Set());
   };
 
-  const toggle = (id: string) =>
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const allSelected = approvable.length > 0 && selectedRows.length === approvable.length;
-
-  const approveSelected = async () => {
-    if (!selectedRows.length) return;
+  /** Bulk approve from the selection bar: only the selected claims you may approve. */
+  const approveSelected = async (selectedIds: string[]) => {
+    const selected = new Set(selectedIds);
+    const selectedRows = approvable.filter((row) => selected.has(row._id));
+    const notYours = selectedIds.length - selectedRows.length;
+    if (!selectedRows.length) {
+      toast.info("Nothing you can approve", "The selected claims need someone else's approval.");
+      return;
+    }
     const total = selectedRows.reduce((sum, row) => sum + row.amountCents, 0);
     const completing = selectedRows.filter((row) => row.approvalsRemaining <= 1).length;
     const ok = await confirm({
@@ -133,41 +251,57 @@ export function ApprovalsPage() {
           {completing < selectedRows.length && (
             <p className="muted">{pluralize(selectedRows.length - completing, "claim")} still need{selectedRows.length - completing === 1 ? "s" : ""} another approval after yours.</p>
           )}
+          {notYours > 0 && (
+            <p className="muted">{pluralize(notYours, "selected claim")} you can't approve {notYours === 1 ? "is" : "are"} left out.</p>
+          )}
         </div>
       ),
       confirmLabel: `Approve ${formatMoney(total)}`,
     });
     if (!ok) return;
-    setBusy(true);
     try {
-      const result: any = await bulkApprove({ societyId: society._id, ids: selectedRows.map((row) => row._id) as any });
+      const result = (await bulkApprove({ societyId: society._id, ids: selectedRows.map((row) => row._id as Id<"expenseReports">) })) as BulkApproveResult;
       const parts = [
         result.approved ? `${pluralize(result.approved, "claim")} approved` : "",
         result.recorded ? `${pluralize(result.recorded, "approval")} recorded` : "",
       ].filter(Boolean);
       toast.success(parts.join(", ") || "Nothing approved", result.skipped?.length ? `${result.skipped.length} skipped: ${result.skipped[0].error}` : undefined);
-      setSelected(new Set());
-    } catch (error: any) {
-      toast.error("Could not approve claims", error?.message);
-    } finally {
-      setBusy(false);
+    } catch (error: unknown) {
+      toast.error("Could not approve claims", errorText(error));
     }
   };
 
   const quickApprove = async (row: QueueRow) => {
     try {
-      await decide({ id: row._id as any, decision: "approve" });
+      await decide({ id: row._id as Id<"expenseReports">, decision: "approve" });
       toast.success(row.approvalsRemaining <= 1 ? "Claim approved" : "Approval recorded", row.approvalsRemaining <= 1 ? "It's ready to pay." : `${row.approvalsRemaining - 1} more approval needed.`);
-    } catch (error: any) {
-      toast.error("Could not approve", error?.message);
+    } catch (error: unknown) {
+      toast.error("Could not approve", errorText(error));
     }
   };
 
+  const claimMenu = (row: QueueRow): MenuSection[] =>
+    tab === "awaiting"
+      ? [
+          {
+            id: "share",
+            items: [
+              {
+                id: "remind",
+                label: "Remind approvers",
+                icon: <BellRing size={14} />,
+                disabled: !row.canRemind,
+                hint: row.nextReminderAtISO ? "Once a day" : undefined,
+                onSelect: () => void share.remindApprovers(row._id),
+              },
+              { id: "copy-link", label: "Copy approval link", icon: <Link2 size={14} />, onSelect: () => void share.copyApprovalLink(row._id) },
+            ],
+          },
+        ]
+      : [];
+
   const counts = queue?.counts;
   const policyRules = queue?.policy.rules.filter((rule) => rule.enabled) ?? [];
-  const dateColumn = tab === "approved" ? "Approved" : tab === "paid" ? "Paid" : tab === "drafts" ? "Incurred" : "Submitted";
-  const dateFor = (row: QueueRow) =>
-    tab === "approved" ? row.approvedAtISO : tab === "paid" ? row.paidAtISO : tab === "drafts" ? row.incurredAtISO : row.submittedAtISO ?? row.incurredAtISO;
 
   return (
     <div className="page approvals-page">
@@ -255,133 +389,62 @@ export function ApprovalsPage() {
               </span>
             </div>
           )}
-          {tab === "awaiting" && selectedRows.length > 0 && (
-            <div className="approvals-bulkbar" role="region" aria-label="Bulk actions">
-              <span>
-                <strong>{selectedRows.length}</strong> selected · <Money cents={selectedRows.reduce((sum, row) => sum + row.amountCents, 0)} />
-              </span>
-              <button type="button" className="btn btn--sm" onClick={() => setSelected(new Set())}>Clear</button>
-              <button type="button" className="btn btn--sm btn--accent" disabled={busy} onClick={() => void approveSelected()}>
-                <Check size={12} aria-hidden="true" /> Approve {selectedRows.length}
-              </button>
-            </div>
-          )}
-          {rows.length === 0 ? (
-            <div className="card__body">
-              <EmptyState icon={<ClipboardCheck size={20} />} title={EMPTY_COPY[tab].title} description={EMPTY_COPY[tab].description} />
-            </div>
-          ) : (
-            <table className="table table--comfortable approvals-table">
-              <thead>
-                <tr>
-                  {tab === "awaiting" && (
-                    <th className="approvals-table__check">
-                      <input
-                        type="checkbox"
-                        aria-label="Select every claim you can approve"
-                        checked={allSelected}
-                        disabled={approvable.length === 0}
-                        onChange={() => setSelected(allSelected ? new Set() : new Set(approvable.map((row) => row._id)))}
-                      />
-                    </th>
-                  )}
-                  <th>Claim</th>
-                  <th>Requester</th>
-                  <th className="num">Amount</th>
-                  <th>{dateColumn}</th>
-                  <th>{tab === "closed" ? "Status" : tab === "paid" ? "Reference" : "Approvals"}</th>
-                  <th className="approvals-table__actions"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row._id} className={selected.has(row._id) ? "is-selected" : undefined} onClick={() => setOpenId(row._id)}>
-                    {tab === "awaiting" && (
-                      <td className="approvals-table__check" onClick={(event) => event.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${row.title}`}
-                          checked={selected.has(row._id)}
-                          disabled={!row.canApprove}
-                          title={row.canApprove ? undefined : row.cannotApproveReason}
-                          onChange={() => toggle(row._id)}
-                        />
-                      </td>
-                    )}
-                    <td data-label="Claim" className="approvals-table__claim">
-                      <button type="button" className="approvals-table__title" onClick={(event) => { event.stopPropagation(); setOpenId(row._id); }}>
-                        {row.title}
-                      </button>
-                      <span className="muted approvals-table__category">
-                        {row.claimType === "mileage" ? mileageSummary(row.mileage) : row.category}
-                        {row.spendBudget ? ` · ${row.spendBudget.name}` : ""}
-                      </span>
-                      {(row.policyException || (row.status === "Submitted" && row.policyIssues.length > 0) || row.possibleDuplicate || row.spendBudget?.exceeds) && (
-                        <span className="approvals-table__flags">
-                          {row.policyException ? <Badge tone="warn">Policy exception</Badge> : row.status === "Submitted" && row.policyIssues.length > 0 ? <Badge tone="warn">Misses policy</Badge> : null}
-                          {row.possibleDuplicate && <Badge tone="orange">Possible duplicate</Badge>}
-                          {row.spendBudget?.exceeds && !["Paid", "Rejected", "Recalled"].includes(row.status) && <Badge tone="warn">Over budget</Badge>}
-                        </span>
-                      )}
-                    </td>
-                    <td data-label="Requester">{row.claimantName}{row.isMine ? <span className="muted"> (you)</span> : null}</td>
-                    <td data-label="Amount" className="num"><Money cents={row.amountCents} currency={row.currency} /></td>
-                    <td data-label={dateColumn}>{dateFor(row) ? formatDate(dateFor(row)) : <span className="muted">—</span>}</td>
-                    <td data-label={tab === "closed" ? "Status" : tab === "paid" ? "Reference" : "Approvals"}>
-                      {tab === "closed" ? (
-                        <Badge tone={CLAIM_STATUS_TONE[row.status] ?? "neutral"}>{CLAIM_STATUS_LABEL[row.status] ?? row.status}</Badge>
-                      ) : tab === "paid" ? (
-                        row.paymentReference ?? <span className="muted">—</span>
-                      ) : tab === "drafts" ? (
-                        <span className="muted">Not submitted</span>
-                      ) : (
-                        <ApprovalProgress row={row} />
-                      )}
-                    </td>
-                    <td className="approvals-table__actions" onClick={(event) => event.stopPropagation()}>
-                      <span className="approvals-table__action-group">
-                        {tab === "awaiting" && row.canApprove ? (
-                          <button type="button" className="btn btn--sm" onClick={() => void quickApprove(row)}>
-                            <Check size={12} aria-hidden="true" /> Approve
-                          </button>
-                        ) : (
-                          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpenId(row._id)}>
-                            {tab === "approved" ? "Pay" : "Open"}
-                          </button>
-                        )}
-                        {tab === "awaiting" && (
-                          <Menu
-                            align="right"
-                            trigger={
-                              <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${row.title}`}>
-                                <MoreHorizontal size={14} />
-                              </button>
-                            }
-                            sections={[
-                              {
-                                id: "share",
-                                items: [
-                                  {
-                                    id: "remind",
-                                    label: "Remind approvers",
-                                    icon: <BellRing size={14} />,
-                                    disabled: !row.canRemind,
-                                    hint: row.nextReminderAtISO ? "Once a day" : undefined,
-                                    onSelect: () => void share.remindApprovers(row._id),
-                                  },
-                                  { id: "copy-link", label: "Copy approval link", icon: <Link2 size={14} />, onSelect: () => void share.copyApprovalLink(row._id) },
-                                ],
-                              },
-                            ]}
-                          />
-                        )}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <RecordListTable<ClaimRecord>
+            key={tab}
+            variant="card"
+            table={CLAIM_QUEUE_TABLES[claimTab ?? "awaiting"]}
+            tableId={`approvals-${tab}`}
+            label="Claims"
+            icon={<ClipboardCheck size={14} />}
+            records={records}
+            selectable={tab === "awaiting" && approvable.length > 0}
+            onOpen={(record) => setOpenId(record._id)}
+            renderCell={({ record, field }) => {
+              const { row } = record;
+              if (field.name === "spendBudget" && row.spendBudget)
+                return <Link to={spendBudgetHref(row.spendBudget._id)}>{row.spendBudget.name}</Link>;
+              if (field.name === "claimantName") return <>{row.claimantName}{row.isMine ? <span className="muted"> (you)</span> : null}</>;
+              if (field.name === "amountCents") return <Money cents={row.amountCents} currency={row.currency} />;
+              if (field.name === "status") return <Badge tone={CLAIM_STATUS_TONE[row.status] ?? "neutral"}>{CLAIM_STATUS_LABEL[row.status] ?? row.status}</Badge>;
+              if (field.name === "approvals") return tab === "drafts" ? <span className="muted">Not submitted</span> : <ApprovalProgress row={row} />;
+              if (field.name === "flags")
+                return record.flags.length ? (
+                  <span className="approvals-table__flags">
+                    {record.flags.map((flag) => <Badge key={flag} tone={FLAG_BADGE[flag].tone}>{FLAG_BADGE[flag].label}</Badge>)}
+                  </span>
+                ) : <span className="muted">—</span>;
+              return undefined;
+            }}
+            renderRowActions={(record) => {
+              const { row } = record;
+              if (tab === "awaiting" && row.canApprove)
+                return (
+                  <button type="button" className="btn btn--sm" onClick={() => void quickApprove(row)}>
+                    <Check size={12} aria-hidden="true" /> Approve
+                  </button>
+                );
+              if (tab === "approved")
+                return <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpenId(row._id)}>Pay</button>;
+              return null;
+            }}
+            rowMenuSections={(record) => claimMenu(record.row)}
+            renderPhoneCard={(record, { open, selecting }) => {
+              const { row } = record;
+              return (
+                <RecordTablePhoneCard
+                  title={row.title}
+                  badge={tab === "closed" ? <Badge tone={CLAIM_STATUS_TONE[row.status] ?? "neutral"}>{CLAIM_STATUS_LABEL[row.status] ?? row.status}</Badge> : tab === "drafts" || tab === "paid" ? undefined : <ApprovalProgress row={row} />}
+                  meta={[<Money key="amount" cents={row.amountCents} currency={row.currency} />, `${row.claimantName}${row.isMine ? " (you)" : ""}`]}
+                  detail={[record.category, record.spendBudget, record.date ? formatDate(record.date) : "", ...record.flags.map((flag) => FLAG_BADGE[flag].label)]}
+                  onOpen={open}
+                  selecting={selecting}
+                />
+              );
+            }}
+            emptyState={<EmptyState icon={<ClipboardCheck size={20} />} title={EMPTY_COPY[claimTab ?? "awaiting"].title} description={EMPTY_COPY[claimTab ?? "awaiting"].description} />}
+            bulkActions={tab === "awaiting" && approvable.length > 0 ? [{ id: "approve", label: "Approve", icon: <Check size={12} aria-hidden="true" />, onRun: (ids) => approveSelected(ids) }] : undefined}
+            bulkSummary={(selected) => <Money cents={selected.reduce((sum, record) => sum + (typeof record.amountCents === "number" ? record.amountCents : 0), 0)} />}
+          />
         </div>
       )}
 

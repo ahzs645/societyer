@@ -27,6 +27,7 @@ import { DEVICE_AI_SETTINGS_HREF, useDeviceAi } from "../lib/localAi/useDeviceAi
 import { CompactRunPanel } from "../features/intake/CompactRunPanel";
 import "../features/intake/intake.css";
 import { StatTile } from "../components/StatTile";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 
 const STAGES: Array<{ id: IntakeStageId; label: string }> = [
   { id: "inventory", label: "Inventory" },
@@ -41,6 +42,207 @@ const STAGE_ORDER: IntakeStageId[] = ["inventory", "junk", "extract", "cluster",
 
 const STATUS_TONE: Record<string, "success" | "warn" | "danger" | "info" | "neutral"> = { created: "neutral", running: "info", extracted: "warn", reviewing: "info", completed: "success", failed: "danger", cancelled: "neutral" };
 const STATUS_LABEL: Record<string, string> = { created: "Created", running: "Running", extracted: "Ready for review", reviewing: "In review", completed: "Completed", failed: "Failed", cancelled: "Cancelled" };
+
+type IntakeRunRow = {
+  _id: string;
+  name: string;
+  status: string;
+  createdAtISO: string;
+  engine?: { llm?: { provider: string; model: string }; minutes?: string };
+  stats?: { files?: number };
+  coverage?: { coverage?: number };
+  recordGaps?: number;
+};
+type IntakeRunSummaryRow = { promoted: number; extractions: number; promotedCoverage?: number };
+type IntakeFileRow = {
+  _id: string;
+  path: string;
+  disposition: string;
+  dispositionReason?: string;
+  docClass?: string;
+  sensitivity?: string;
+  documentId?: string;
+  classification?: { bodyLabel?: string; restrictedReason?: string };
+};
+type IntakeLogRow = {
+  _id: string;
+  atISO: string;
+  stage: string;
+  fileKey?: string;
+  provider?: string;
+  model?: string;
+  sentToProvider?: boolean;
+  redactions?: Record<string, number>;
+  note?: string;
+};
+
+const percent = (share: unknown) => (typeof share === "number" ? Math.round(share * 100) : null);
+
+const INTAKE_RUNS_TABLE = staticRecordTable({
+  id: "intake:runs",
+  nameSingular: "intakeRun",
+  namePlural: "intakeRuns",
+  labelSingular: "Run",
+  labelPlural: "Runs",
+  labelIdentifierFieldName: "name",
+  viewName: "All runs",
+  fields: [
+    { name: "name", label: "Run", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 150,
+      config: {
+        options: [
+          { value: "created", label: STATUS_LABEL.created, color: "gray" },
+          { value: "running", label: STATUS_LABEL.running, color: "blue" },
+          { value: "extracted", label: STATUS_LABEL.extracted, color: "amber" },
+          { value: "reviewing", label: STATUS_LABEL.reviewing, color: "blue" },
+          { value: "completed", label: STATUS_LABEL.completed, color: "green" },
+          { value: "failed", label: STATUS_LABEL.failed, color: "red" },
+          { value: "cancelled", label: STATUS_LABEL.cancelled, color: "gray" },
+        ],
+      },
+    },
+    { name: "createdAtISO", label: "Started", fieldType: FIELD_TYPES.DATE_TIME, size: 130 },
+    { name: "engine", label: "Engine", fieldType: FIELD_TYPES.TEXT, size: 170 },
+    { name: "files", label: "Files", fieldType: FIELD_TYPES.NUMBER, size: 90 },
+    { name: "reviewed", label: "Reviewed", fieldType: FIELD_TYPES.TEXT, size: 150 },
+    { name: "promotedCoverage", label: "Native coverage", fieldType: FIELD_TYPES.NUMBER, size: 140 },
+    { name: "extractableCoverage", label: "Extractable", fieldType: FIELD_TYPES.NUMBER, size: 120 },
+    { name: "recordGaps", label: "Record gaps", fieldType: FIELD_TYPES.NUMBER, size: 120 },
+  ],
+});
+
+type IntakeRunRecord = {
+  _id: string;
+  name: string;
+  status: string;
+  createdAtISO: string;
+  /** The model that read the files, or "deterministic". */
+  engine: string;
+  files: number | null;
+  /** "3/7 promoted"; empty before review. */
+  reviewed: string;
+  /** Promoted fields ÷ extracted facts, as a whole percent. */
+  promotedCoverage: number | null;
+  /** Native-mappable share at extraction time, as a whole percent. */
+  extractableCoverage: number | null;
+  recordGaps: number;
+};
+
+function intakeRunRecord(run: IntakeRunRow, summary: IntakeRunSummaryRow | undefined): IntakeRunRecord {
+  return {
+    _id: String(run._id),
+    name: run.name,
+    status: run.status,
+    createdAtISO: run.createdAtISO,
+    engine: run.engine?.llm ? `${run.engine.llm.provider} ${run.engine.llm.model}` : run.engine?.minutes ?? "deterministic",
+    files: run.stats?.files ?? null,
+    reviewed: summary ? `${summary.promoted}/${summary.extractions} promoted` : "",
+    promotedCoverage: percent(summary?.promotedCoverage),
+    extractableCoverage: percent(run.coverage?.coverage),
+    recordGaps: run.recordGaps || 0,
+  };
+}
+
+const DISPOSITION_OPTIONS: Array<{ value: string; color: string }> = [
+  { value: "extract", color: "green" },
+  { value: "catalogue", color: "gray" },
+  { value: "junk", color: "amber" },
+  { value: "excluded", color: "red" },
+  { value: "duplicate", color: "blue" },
+  { value: "pending", color: "amber" },
+  { value: "restricted", color: "red" },
+];
+
+const INTAKE_FILES_TABLE = staticRecordTable({
+  id: "intake:run-files",
+  nameSingular: "intakeFile",
+  namePlural: "intakeFiles",
+  labelSingular: "File",
+  labelPlural: "Files",
+  labelIdentifierFieldName: "path",
+  viewName: "All files",
+  fields: [
+    { name: "path", label: "File", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+    { name: "disposition", label: "Disposition", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: DISPOSITION_OPTIONS.map((option) => ({ ...option, label: option.value })) } },
+    { name: "docClass", label: "Class", fieldType: FIELD_TYPES.TEXT, size: 150 },
+    { name: "bodyLabel", label: "Body", fieldType: FIELD_TYPES.TEXT, size: 150, isVisible: false },
+    { name: "reason", label: "Reason", fieldType: FIELD_TYPES.TEXT, size: 260 },
+    { name: "restricted", label: "Restricted", fieldType: FIELD_TYPES.BOOLEAN, size: 110, isVisible: false },
+  ],
+});
+
+type IntakeFileRecord = {
+  _id: string;
+  path: string;
+  disposition: string;
+  docClass: string;
+  bodyLabel: string;
+  reason: string;
+  restricted: boolean;
+  /** The document the file became, when it was promoted. */
+  documentId: string | null;
+};
+
+function intakeFileRecord(file: IntakeFileRow): IntakeFileRecord {
+  return {
+    _id: String(file._id),
+    path: file.path,
+    disposition: file.disposition,
+    docClass: file.docClass ?? "",
+    bodyLabel: file.classification?.bodyLabel ?? "",
+    reason: file.dispositionReason ?? file.classification?.restrictedReason ?? "",
+    restricted: file.sensitivity === "restricted",
+    documentId: file.documentId ? String(file.documentId) : null,
+  };
+}
+
+const INTAKE_LOG_TABLE = staticRecordTable({
+  id: "intake:run-log",
+  nameSingular: "intakeLogEntry",
+  namePlural: "intakeLogEntries",
+  labelSingular: "Log entry",
+  labelPlural: "Log entries",
+  labelIdentifierFieldName: "note",
+  viewName: "Processing log",
+  fields: [
+    { name: "atISO", label: "When", fieldType: FIELD_TYPES.DATE_TIME, size: 100 },
+    { name: "stage", label: "Stage", fieldType: FIELD_TYPES.TEXT, size: 130 },
+    { name: "file", label: "File", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "provider", label: "Provider", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "sentToProvider", label: "Sent to a provider", fieldType: FIELD_TYPES.BOOLEAN, size: 150, isVisible: false },
+    { name: "masked", label: "Masked", fieldType: FIELD_TYPES.TEXT, size: 180, isVisible: false },
+    { name: "note", label: "Note", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+  ],
+});
+
+type IntakeLogRecord = {
+  _id: string;
+  atISO: string;
+  stage: string;
+  file: string;
+  provider: string;
+  sentToProvider: boolean;
+  /** What was masked before sending ("email 2, phone 1"). */
+  masked: string;
+  note: string;
+};
+
+function intakeLogRecord(entry: IntakeLogRow): IntakeLogRecord {
+  return {
+    _id: String(entry._id),
+    atISO: entry.atISO,
+    stage: entry.stage,
+    file: entry.fileKey?.replace(/^local:/, "") ?? "",
+    provider: entry.provider ? `${entry.provider} ${entry.model ?? ""}`.trim() : "",
+    sentToProvider: Boolean(entry.sentToProvider),
+    masked: entry.redactions ? Object.entries(entry.redactions).map(([kind, count]) => `${kind} ${count}`).join(", ") : "",
+    note: entry.note ?? "",
+  };
+}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -215,6 +417,7 @@ export function IntakeRunsPage() {
 
   const stageIndex = progress ? STAGE_ORDER.indexOf(progress.stage) : -1;
   const allRuns = runs ?? [];
+  const runRecords = allRuns.map((run: IntakeRunRow) => intakeRunRecord(run, summariesById.get(String(run._id))));
 
   return (
     <div className="page intake-page">
@@ -409,39 +612,45 @@ export function IntakeRunsPage() {
             }}>Forget cached originals</button>
           )}
         </div>
-        {runs && allRuns.length === 0 ? (
-          <p className="muted intake-runs-empty">No intake runs yet.</p>
-        ) : (
-        <div className="table-wrap">
-          <table className="table intake-runs-table">
-            <thead><tr><th>Run</th><th>Status</th><th>Files</th><th>Reviewed</th><th>Native coverage</th><th>Record gaps</th><th><span className="sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              {runs === undefined && <tr><td colSpan={7} className="muted">Loading…</td></tr>}
-              {allRuns.map((run: any) => {
-                const summaryRow = summariesById.get(String(run._id));
-                const coverage = run.coverage?.coverage;
-                return (
-                  <tr key={run._id}>
-                    <td>
-                      <button type="button" className="intake-link-button" onClick={() => setDetailRunId(run._id)}>{run.name}</button>
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{relative(run.createdAtISO)} · {run.engine?.llm ? `${run.engine.llm.provider} ${run.engine.llm.model}` : run.engine?.minutes ?? "deterministic"}</div>
-                    </td>
-                    <td><Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{STATUS_LABEL[run.status] ?? run.status}</Badge></td>
-                    <td className="mono" data-label="Files">{run.stats?.files ?? "—"}</td>
-                    <td className="mono" data-label="Reviewed">{summaryRow ? `${summaryRow.promoted}/${summaryRow.extractions} promoted` : "—"}</td>
-                    <td className="mono" data-label="Native coverage" title="Reviewed: promoted fields ÷ extracted facts. Extractable: native-mappable share at extraction time.">{typeof summaryRow?.promotedCoverage === "number" ? `${Math.round(summaryRow.promotedCoverage * 100)}%` : "—"}<div className="muted" style={{ fontSize: 11 }}>{typeof coverage === "number" ? `${Math.round(coverage * 100)}% extractable` : ""}</div></td>
-                    <td className="mono" data-label="Record gaps">{run.recordGaps || 0}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <Link className="btn btn--sm btn--accent" to={`/app/intake/${run._id}/review`}>Review</Link>{" "}
-                      <button type="button" className="btn btn--sm" onClick={() => setDetailRunId(run._id)}>Details</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        )}
+        <RecordListTable<IntakeRunRecord>
+          variant="card"
+          table={INTAKE_RUNS_TABLE}
+          tableId="intake-runs"
+          label="Runs"
+          icon={<ScrollText size={14} />}
+          records={runRecords}
+          loading={runs === undefined}
+          onOpen={(record) => setDetailRunId(record._id)}
+          renderCell={({ record, field }) => {
+            if (field.name === "status") return <Badge tone={STATUS_TONE[record.status] ?? "neutral"}>{STATUS_LABEL[record.status] ?? record.status}</Badge>;
+            if (field.name === "createdAtISO") return <span title={formatDateTime(record.createdAtISO)}>{relative(record.createdAtISO)}</span>;
+            if (field.name === "files") return <span className="mono">{record.files ?? "—"}</span>;
+            if (field.name === "reviewed") return <span className="mono">{record.reviewed || "—"}</span>;
+            if (field.name === "promotedCoverage")
+              return <span className="mono" title="Reviewed: promoted fields ÷ extracted facts.">{record.promotedCoverage === null ? "—" : `${record.promotedCoverage}%`}</span>;
+            if (field.name === "extractableCoverage")
+              return <span className="mono" title="Extractable: native-mappable share at extraction time.">{record.extractableCoverage === null ? "—" : `${record.extractableCoverage}%`}</span>;
+            if (field.name === "recordGaps") return <span className="mono">{record.recordGaps}</span>;
+            return undefined;
+          }}
+          renderRowActions={(record) => (
+            <>
+              <Link className="btn btn--sm btn--accent" to={`/app/intake/${record._id}/review`}>Review</Link>
+              <button type="button" className="btn btn--sm" onClick={() => setDetailRunId(record._id)}>Details</button>
+            </>
+          )}
+          renderPhoneCard={(record, { open, field, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.name}
+              badge={field("status")}
+              meta={[relative(record.createdAtISO), record.engine]}
+              detail={[record.files !== null ? pluralize(record.files, "file") : "", record.reviewed]}
+              onOpen={open}
+              selecting={selecting}
+            />
+          )}
+          emptyState={<RecordTableEmpty title="No intake runs yet" />}
+        />
       </section>
 
       <RunDetailDrawer societyId={society._id} runId={detailRunId} onClose={() => setDetailRunId(null)} />
@@ -472,8 +681,13 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
   const log = useQuery(api.intake.processingLog, runId ? { societyId, runId } : "skip") as any[] | undefined;
   const [tab, setTab] = useState<"files" | "log" | "gaps">("files");
   const [filter, setFilter] = useState("all");
-  const shown = (files ?? []).filter((file) => filter === "all" || file.disposition === filter);
   const sent = (log ?? []).filter((entry) => entry.sentToProvider);
+  const navigate = useNavigate();
+  const fileRecords = useMemo(
+    () => (files ?? []).filter((file) => filter === "all" || file.disposition === filter).slice(0, 400).map((file: IntakeFileRow) => intakeFileRecord(file)),
+    [files, filter],
+  );
+  const logRecords = useMemo(() => (log ?? []).map((entry: IntakeLogRow) => intakeLogRecord(entry)), [log]);
   const toast = useToast();
   const originalsPicker = useRef<HTMLInputElement>(null);
   const [caching, setCaching] = useState(false);
@@ -528,40 +742,66 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
                 </button>
                 <input ref={originalsPicker} type="file" multiple hidden aria-label="Choose original source files for this run" data-testid="intake-run-originals-input" onChange={(event) => void addOriginals(event)} {...{ webkitdirectory: "", directory: "" }} />
               </div>
-              <div className="table-wrap">
-                <table className="table intake-detail-table">
-                  <thead><tr><th>File</th><th>Disposition</th><th>Class</th><th>Reason</th></tr></thead>
-                  <tbody>
-                    {shown.slice(0, 400).map((file) => (
-                      <tr key={file._id}>
-                        <td className="intake-path-cell"><span className="mono">{file.path}</span>{file.sensitivity === "restricted" && <> <Badge tone="danger"><Lock size={10} /> restricted</Badge></>}</td>
-                        <td><Badge tone={DISPOSITION_TONE[file.disposition] ?? "neutral"}>{file.disposition}</Badge></td>
-                        <td>{file.docClass ?? "—"}{file.classification?.bodyLabel ? <div className="muted">{file.classification.bodyLabel}</div> : null}</td>
-                        <td className="muted">{file.dispositionReason ?? file.classification?.restrictedReason ?? ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <RecordListTable<IntakeFileRecord>
+                variant="card"
+                table={INTAKE_FILES_TABLE}
+                tableId="intake-run-files"
+                label="Files"
+                icon={<Files size={14} />}
+                records={fileRecords}
+                loading={files === undefined}
+                onOpen={(record) => { if (record.documentId) navigate(`/app/documents/${record.documentId}`); }}
+                renderCell={({ record, field }) => {
+                  if (field.name === "path")
+                    return <><span className="mono">{record.path}</span>{record.restricted && <> <Badge tone="danger"><Lock size={10} /> restricted</Badge></>}</>;
+                  if (field.name === "disposition") return <Badge tone={DISPOSITION_TONE[record.disposition] ?? "neutral"}>{record.disposition}</Badge>;
+                  if (field.name === "docClass") return record.docClass ? <span title={record.bodyLabel || undefined}>{record.docClass}</span> : "—";
+                  if (field.name === "reason") return <span className="muted">{record.reason}</span>;
+                  return undefined;
+                }}
+                renderRowActions={(record) => record.documentId ? <Link className="btn btn--sm" to={`/app/documents/${record.documentId}`}>Open document</Link> : null}
+                renderPhoneCard={(record, { open, field, selecting }) => (
+                  <RecordTablePhoneCard
+                    title={record.path}
+                    badge={field("disposition")}
+                    meta={[record.docClass, record.restricted ? "restricted" : ""]}
+                    detail={[record.reason]}
+                    onOpen={record.documentId ? open : undefined}
+                    selecting={selecting}
+                    wrapTitle
+                  />
+                )}
+                emptyState={<RecordTableEmpty title="No files match this disposition" />}
+              />
             </>
           )}
           {tab === "log" && (
-            <div className="table-wrap">
-              <table className="table intake-detail-table">
-                <thead><tr><th>When</th><th>Stage</th><th>File</th><th>Provider</th><th>Note</th></tr></thead>
-                <tbody>
-                  {(log ?? []).map((entry) => (
-                    <tr key={entry._id}>
-                      <td className="mono">{entry.atISO.slice(11, 19)}</td>
-                      <td>{entry.stage}{entry.sentToProvider && <> <Badge tone="warn">sent</Badge></>}</td>
-                      <td className="mono intake-path-cell">{entry.fileKey?.replace(/^local:/, "") ?? "—"}</td>
-                      <td>{entry.provider ? `${entry.provider} ${entry.model ?? ""}` : "—"}{entry.redactions && Object.keys(entry.redactions).length ? <div className="muted">masked: {Object.entries(entry.redactions).map(([kind, count]) => `${kind} ${count}`).join(", ")}</div> : null}</td>
-                      <td className="muted">{entry.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <RecordListTable<IntakeLogRecord>
+              variant="card"
+              table={INTAKE_LOG_TABLE}
+              tableId="intake-run-log"
+              label="Processing log"
+              icon={<ScrollText size={14} />}
+              records={logRecords}
+              loading={log === undefined}
+              renderCell={({ record, field }) => {
+                if (field.name === "atISO") return <span className="mono" title={formatDateTime(record.atISO)}>{record.atISO.slice(11, 19)}</span>;
+                if (field.name === "stage") return <>{record.stage}{record.sentToProvider && <> <Badge tone="warn">sent</Badge></>}</>;
+                if (field.name === "file") return <span className="mono">{record.file || "—"}</span>;
+                if (field.name === "provider") return record.provider ? <span title={record.masked ? `masked: ${record.masked}` : undefined}>{record.provider}</span> : "—";
+                if (field.name === "note") return <span className="muted">{record.note}</span>;
+                return undefined;
+              }}
+              renderPhoneCard={(record) => (
+                <RecordTablePhoneCard
+                  title={record.note || record.stage}
+                  badge={record.sentToProvider ? <Badge tone="warn">sent</Badge> : undefined}
+                  meta={[record.atISO.slice(11, 19), record.stage, record.provider]}
+                  detail={[record.file, record.masked ? `masked: ${record.masked}` : ""]}
+                />
+              )}
+              emptyState={<RecordTableEmpty title="Nothing logged for this run yet" />}
+            />
           )}
           {tab === "gaps" && (
             <div className="col" style={{ gap: 8 }}>

@@ -892,7 +892,7 @@ export function AccountingWorkbenchPage() {
 }
 
 function ResponsiveTable({ children }: { children: ReactNode }) {
-  return <div className="accounting-table-wrap"><table className="table">{children}</table></div>;
+  return <div className="accounting-table-wrap"><table className="table table--report">{children}</table></div>;
 }
 
 function FormGrid({ children }: { children: ReactNode }) {

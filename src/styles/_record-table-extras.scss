@@ -205,6 +205,13 @@
   box-shadow: inset 2px 0 0 token('accent');
 }
 
+// The row the page is about (RecordTableScope `highlightedRecordId`): the
+// signed-in user, the record a link pointed at. An accent edge only, so it
+// reads apart from the open (active) and selected rows.
+.record-table__row--highlighted > td:first-child {
+  box-shadow: inset 2px 0 0 token('accent');
+}
+
 /* --------------------- Condensed beside the panel --------------------- */
 
 .record-table__cell,
@@ -302,9 +309,6 @@
   color: token('text-tertiary');
 }
 
-.record-table__group-popover {
-  width: min(300px, calc(100vw - 16px));
-}
 
 
 /* --------------------------- Filter editor --------------------------- */
@@ -802,3 +806,18 @@
 
 // Phones: the toolbar folds into one row of icon buttons — see the "Phone
 // toolbars" section of _control-density.scss.
+
+// A record table set under a card's heading (RecordListTable variant="card"):
+// its rows run edge to edge like any card table, while the toolbar and filter
+// chips take the heading's inset. Phones, where cards go flush, give the whole
+// register the page gutter (as .role-holders-register).
+@media (max-width: 760px) {
+  .record-list-table--card {
+    padding-inline: token('s-3');
+  }
+}
+@media (min-width: 761px) {
+  .record-list-table--card > :is(.record-table__toolbar, .record-table__chips) {
+    padding-inline: token('s-4');
+  }
+}

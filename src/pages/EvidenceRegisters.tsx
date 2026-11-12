@@ -13,10 +13,8 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch, Plus } from "lucide-react";
-import { formatDate, money } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
-import { InfoPopover } from "../components/InfoPopover";
 import {
   EVIDENCE_REVIEW_STATUSES,
   evidenceReviewStatusLabel,
@@ -24,6 +22,399 @@ import {
   normalizeEvidenceReviewStatus,
 } from "../../shared/documentReviewStatus";
 import { StatTile } from "../components/StatTile";
+import type { MenuSection } from "../components/Menu";
+import { entityHref } from "../components/HoverCard/entityRefs";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  staticRecordTable,
+  type BulkAction,
+  type FieldMetadata,
+  type StaticFieldDefinition,
+  type StaticRecordTableDefinition,
+} from "@/platform/record-engine";
+
+/* ------------------------------------------------------------ register tables */
+
+/** A register row as `evidenceRegisters.overview` returns it (the fields these registers read). */
+type EvidenceRow = {
+  _id: string;
+  status?: string;
+  sourceDocumentIds?: string[];
+  personName?: string;
+  directorId?: string;
+  memberId?: string;
+  directoryPersonId?: string;
+  roleTitle?: string;
+  roleGroup?: string;
+  startDate?: string;
+  effectiveDate?: string;
+  changeType?: string;
+  institutionName?: string;
+  authorityType?: string;
+  meetingId?: string;
+  meetingTitle?: string;
+  meetingDate?: string;
+  attendanceStatus?: string;
+  confidence?: string;
+  duplicateCount?: number;
+  motionText?: string;
+  outcome?: string;
+  fiscalYear?: string | number;
+  title?: string;
+  totalIncomeCents?: number;
+  totalExpenseCents?: number;
+  periodEnd?: string;
+  statementType?: string;
+  revenueCents?: number;
+  expensesCents?: number;
+  reportDate?: string;
+  cashBalanceCents?: number;
+  highlights?: unknown[];
+  transactionDate?: string;
+  description?: string;
+  debitCredit?: string;
+  amountCents?: number;
+  chequeNumber?: string;
+  balanceCents?: number;
+  dateReceived?: string;
+  containerType?: string;
+  location?: string;
+  sourceTitle?: string;
+  sourceDocumentId?: string;
+  sourceDocumentKind?: string;
+  canonicalDocumentId?: string;
+  evidenceKind?: string;
+  targetTable?: string;
+  accessLevel?: string;
+};
+
+/** A register row as its table reads it: the values its columns sort and filter by, plus the row. */
+type RegisterRecord = Record<string, unknown> & { _id: string; row: EvidenceRow };
+
+type RegisterDefinition = {
+  table: StaticRecordTableDefinition;
+  values: (row: EvidenceRow) => Record<string, unknown>;
+};
+
+const NO_ROWS: EvidenceRow[] = [];
+
+/** Every register's status: review states by label, plus the stored vocabularies imports write. */
+const STATUS_FIELD: StaticFieldDefinition = {
+  name: "status",
+  label: "Status",
+  fieldType: FIELD_TYPES.SELECT,
+  size: 130,
+  config: {
+    options: [
+      { value: "Needs review", label: "Needs review", color: "amber" },
+      { value: "Linked", label: "Linked", color: "blue" },
+      { value: "Verified", label: "Verified", color: "green" },
+      { value: "Rejected", label: "Rejected", color: "red" },
+      { value: "Observed", label: "Observed", color: "blue" },
+      { value: "Extracted", label: "Extracted", color: "blue" },
+    ],
+  },
+};
+
+/** The documents a register row was read from (the first opens in Documents). */
+const SOURCE_FIELD: StaticFieldDefinition = { name: "sourceDocuments", label: "Source", fieldType: FIELD_TYPES.NUMBER, size: 110 };
+
+function registerDefinition({
+  name,
+  singular,
+  plural,
+  identifier,
+  fields,
+  values,
+  sourceColumn = true,
+}: {
+  /** camelCase, unique among registers. */
+  name: string;
+  singular: string;
+  plural: string;
+  identifier: string;
+  fields: StaticFieldDefinition[];
+  values: RegisterDefinition["values"];
+  /** A "Source" column for the row's source documents (off where the row is itself a source link). */
+  sourceColumn?: boolean;
+}): RegisterDefinition {
+  return {
+    table: staticRecordTable({
+      id: `evidence-register:${name}`,
+      nameSingular: `evidenceRegister${name[0].toUpperCase()}${name.slice(1)}`,
+      namePlural: `evidenceRegister${name[0].toUpperCase()}${name.slice(1)}s`,
+      labelSingular: singular,
+      labelPlural: plural,
+      labelIdentifierFieldName: identifier,
+      fields: [...fields, STATUS_FIELD, ...(sourceColumn ? [SOURCE_FIELD] : [])],
+    }),
+    values: (row) => ({ ...values(row), status: registerStatusLabel(row.status), sourceDocuments: row.sourceDocumentIds?.length ?? 0 }),
+  };
+}
+
+const ROLE_ASSIGNMENTS = registerDefinition({
+  name: "roleAssignment",
+  singular: "Role assignment",
+  plural: "Role assignments",
+  identifier: "personName",
+  fields: [
+    { name: "personName", label: "Person", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "roleTitle", label: "Role", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    { name: "roleGroup", label: "Group", fieldType: FIELD_TYPES.TEXT, size: 130 },
+    { name: "startDate", label: "Start", fieldType: FIELD_TYPES.DATE, size: 120 },
+    {
+      name: "directorRegister",
+      label: "Director register",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 140,
+      config: { options: [{ value: "Promoted", label: "Promoted", color: "green" }, { value: "Not promoted", label: "Not promoted", color: "gray" }] },
+    },
+  ],
+  values: (row) => ({
+    personName: row.personName ?? "",
+    roleTitle: row.roleTitle ?? "",
+    roleGroup: row.roleGroup ?? "",
+    startDate: row.startDate ?? null,
+    directorRegister: row.directorId ? "Promoted" : "Not promoted",
+  }),
+});
+
+const ROLE_CHANGES = registerDefinition({
+  name: "roleChange",
+  singular: "Role change",
+  plural: "Role changes",
+  identifier: "personName",
+  fields: [
+    { name: "personName", label: "Person", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "changeType", label: "Change", fieldType: FIELD_TYPES.TEXT, size: 150 },
+    { name: "roleTitle", label: "Role", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    { name: "effectiveDate", label: "Effective", fieldType: FIELD_TYPES.DATE, size: 120 },
+  ],
+  values: (row) => ({
+    personName: row.personName ?? "",
+    changeType: row.changeType ?? "",
+    roleTitle: row.roleTitle ?? "",
+    effectiveDate: row.effectiveDate ?? null,
+  }),
+});
+
+const SIGNING_AUTHORITIES = registerDefinition({
+  name: "signingAuthority",
+  singular: "Signing authority",
+  plural: "Signing authorities",
+  identifier: "personName",
+  fields: [
+    { name: "personName", label: "Person", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "institutionName", label: "Institution", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "authorityType", label: "Authority", fieldType: FIELD_TYPES.TEXT, size: 140 },
+    { name: "effectiveDate", label: "Effective", fieldType: FIELD_TYPES.DATE, size: 120 },
+  ],
+  values: (row) => ({
+    personName: row.personName ?? "",
+    institutionName: row.institutionName ?? "",
+    authorityType: capitalize(row.authorityType),
+    effectiveDate: row.effectiveDate ?? null,
+  }),
+});
+
+const ATTENDANCE = registerDefinition({
+  name: "attendance",
+  singular: "Attendance record",
+  plural: "Attendance records",
+  identifier: "meetingTitle",
+  fields: [
+    { name: "meetingTitle", label: "Meeting", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "meetingDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "personName", label: "Person", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "attendanceStatus", label: "Attendance", fieldType: FIELD_TYPES.TEXT, size: 150 },
+    {
+      name: "confidence",
+      label: "Confidence",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "High", label: "High", color: "green" },
+          { value: "Medium", label: "Medium", color: "blue" },
+          { value: "Low", label: "Low", color: "amber" },
+          { value: "Review", label: "Review", color: "amber" },
+        ],
+      },
+    },
+  ],
+  values: (row) => ({
+    meetingTitle: row.meetingTitle ?? "",
+    meetingDate: row.meetingDate ?? null,
+    personName: row.personName ?? "",
+    attendanceStatus: !row.attendanceStatus || /^unknown$/i.test(row.attendanceStatus) ? "Not stated" : row.attendanceStatus,
+    confidence: row.confidence ?? "Review",
+  }),
+});
+
+const MOTIONS = registerDefinition({
+  name: "motionEvidence",
+  singular: "Motion",
+  plural: "Motions",
+  identifier: "motionText",
+  fields: [
+    { name: "motionText", label: "Motion", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+    { name: "meetingTitle", label: "Meeting", fieldType: FIELD_TYPES.TEXT, size: 200 },
+    { name: "meetingDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "outcome", label: "Outcome", fieldType: FIELD_TYPES.TEXT, size: 130 },
+  ],
+  values: (row) => ({
+    motionText: row.motionText ?? "",
+    meetingTitle: row.meetingTitle ?? "",
+    meetingDate: row.meetingDate ?? null,
+    outcome: row.outcome ?? "",
+  }),
+});
+
+const BUDGET_SNAPSHOTS = registerDefinition({
+  name: "budgetSnapshot",
+  singular: "Budget snapshot",
+  plural: "Budget snapshots",
+  identifier: "title",
+  fields: [
+    { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "fiscalYear", label: "Fiscal year", fieldType: FIELD_TYPES.TEXT, size: 110 },
+    { name: "totalIncomeCents", label: "Income", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+    { name: "totalExpenseCents", label: "Expense", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+  ],
+  values: (row) => ({
+    title: row.title ?? "",
+    fiscalYear: row.fiscalYear == null ? "" : String(row.fiscalYear),
+    totalIncomeCents: row.totalIncomeCents ?? null,
+    totalExpenseCents: row.totalExpenseCents ?? null,
+  }),
+});
+
+const STATEMENT_IMPORTS = registerDefinition({
+  name: "statementImport",
+  singular: "Statement import",
+  plural: "Statement imports",
+  identifier: "statementType",
+  fields: [
+    { name: "statementType", label: "Type", fieldType: FIELD_TYPES.TEXT, size: 200 },
+    { name: "periodEnd", label: "Period end", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "revenueCents", label: "Revenue", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+    { name: "expensesCents", label: "Expenses", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+  ],
+  values: (row) => ({
+    statementType: row.statementType ?? "",
+    periodEnd: row.periodEnd ?? null,
+    revenueCents: row.revenueCents ?? null,
+    expensesCents: row.expensesCents ?? null,
+  }),
+});
+
+const TREASURER_REPORTS = registerDefinition({
+  name: "treasurerReport",
+  singular: "Treasurer report",
+  plural: "Treasurer reports",
+  identifier: "title",
+  fields: [
+    { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "reportDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "cashBalanceCents", label: "Cash", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+    { name: "highlights", label: "Highlights", fieldType: FIELD_TYPES.NUMBER, size: 110 },
+  ],
+  values: (row) => ({
+    title: row.title ?? "",
+    reportDate: row.reportDate ?? null,
+    cashBalanceCents: row.cashBalanceCents ?? null,
+    highlights: row.highlights?.length ?? 0,
+  }),
+});
+
+const TRANSACTION_CANDIDATES = registerDefinition({
+  name: "transactionCandidate",
+  singular: "Transaction",
+  plural: "Transactions",
+  identifier: "description",
+  fields: [
+    { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, size: 280, config: { groupable: false } },
+    { name: "transactionDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "debitCredit", label: "Debit/Credit", fieldType: FIELD_TYPES.TEXT, size: 120 },
+    { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+    { name: "chequeNumber", label: "Cheque/ref", fieldType: FIELD_TYPES.TEXT, size: 120 },
+    { name: "balanceCents", label: "Balance", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+  ],
+  values: (row) => ({
+    description: row.description ?? "",
+    transactionDate: row.transactionDate ?? null,
+    debitCredit: row.debitCredit ?? "",
+    amountCents: row.amountCents ?? null,
+    chequeNumber: row.chequeNumber ?? "",
+    balanceCents: row.balanceCents ?? null,
+  }),
+});
+
+const ACCESSIONS = registerDefinition({
+  name: "archiveAccession",
+  singular: "Accession",
+  plural: "Accessions",
+  identifier: "title",
+  fields: [
+    { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "dateReceived", label: "Received", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "containerType", label: "Container", fieldType: FIELD_TYPES.TEXT, size: 140 },
+    { name: "location", label: "Location", fieldType: FIELD_TYPES.TEXT, size: 180 },
+  ],
+  values: (row) => ({
+    title: row.title ?? "",
+    dateReceived: row.dateReceived ?? null,
+    containerType: row.containerType ?? "",
+    location: row.location ?? "",
+  }),
+});
+
+const EVIDENCE_KIND_LABELS: Record<string, string> = {
+  provenance: "Provenance",
+  restricted: "Restricted",
+  publication_sidecar: "Publication sidecar",
+  import_support: "Import support",
+};
+
+const SOURCE_EVIDENCE = registerDefinition({
+  name: "sourceEvidence",
+  singular: "Evidence link",
+  plural: "Evidence links",
+  identifier: "sourceTitle",
+  sourceColumn: false,
+  fields: [
+    { name: "sourceTitle", label: "Source", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    {
+      name: "evidenceKind",
+      label: "Kind",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 150,
+      config: { options: Object.entries(EVIDENCE_KIND_LABELS).map(([value, label]) => ({ value, label, color: "gray" })) },
+    },
+    { name: "targetTable", label: "Model destination", fieldType: FIELD_TYPES.TEXT, size: 170 },
+    {
+      name: "accessLevel",
+      label: "Access",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 110,
+      config: {
+        options: [
+          { value: "public", label: "public", color: "blue" },
+          { value: "internal", label: "internal", color: "blue" },
+          { value: "restricted", label: "restricted", color: "red" },
+        ],
+      },
+    },
+  ],
+  values: (row) => ({
+    sourceTitle: row.sourceTitle ?? "",
+    evidenceKind: row.evidenceKind ?? "",
+    targetTable: row.targetTable ?? "",
+    accessLevel: row.accessLevel ?? "",
+  }),
+});
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
@@ -54,9 +445,9 @@ export function GovernanceRegistersPage() {
     setAddForm(null);
   };
 
-  const roles = data?.boardRoleAssignments ?? [];
-  const changes = data?.boardRoleChanges ?? [];
-  const signing = data?.signingAuthorities ?? [];
+  const roles = (data?.boardRoleAssignments ?? NO_ROWS) as EvidenceRow[];
+  const changes = (data?.boardRoleChanges ?? NO_ROWS) as EvidenceRow[];
+  const signing = (data?.signingAuthorities ?? NO_ROWS) as EvidenceRow[];
 
   const promoteRole = async (row: any) => {
     if (!canPromote) return;
@@ -164,36 +555,40 @@ export function GovernanceRegistersPage() {
         <Stat label="Signing authorities" value={signing.length} />
         <Stat label="Restricted sources" value={countRestricted([...roles, ...changes, ...signing])} tone="warn" />
       </div>
-      <RegisterTable
+      <Register
         title="People and director timeline"
+        definition={ROLE_ASSIGNMENTS}
+        tableId="governance-role-assignments"
         restricted={data?.restrictedResources?.includes("directors")}
         rows={roles}
+        loading={data === undefined}
         empty={<EmptyRegister kind="role-assignment" links={[["Directors", "/app/directors"], ["Role holders", "/app/role-holders"]]} />}
-        columns={["Person", "Role", "Group", "Start", "Status", "Actions"]}
-        render={(row) => [
-          <PersonCell key="p" row={row} name={row.personName} people={people} />,
-          row.roleTitle,
-          row.roleGroup ?? "-",
-          formatDate(row.startDate),
-          <Status key="s" value={row.status} />,
-          <PromoteAction key="a" row={row} disabled={!canPromote} onPromote={() => promoteRole(row)} />,
-        ]}
+        renderCell={({ record, field }) => {
+          if (field.name === "personName") return <PersonCell row={record.row} people={people} />;
+          if (field.name === "directorRegister") return <DirectorRegisterCell row={record.row} />;
+          return undefined;
+        }}
+        renderRowActions={(record) => <PromoteAction row={record.row} disabled={!canPromote} onPromote={() => promoteRole(record.row)} />}
       />
-      <RegisterTable
+      <Register
         title="Board role changes"
+        definition={ROLE_CHANGES}
+        tableId="governance-role-changes"
         restricted={data?.restrictedResources?.includes("directors")}
         rows={changes}
+        loading={data === undefined}
         empty={<EmptyRegister kind="role-change" links={[["Directors", "/app/directors"], ["Role holders", "/app/role-holders"]]} />}
-        columns={["Effective", "Change", "Role", "Person", "Status"]}
-        render={(row) => [formatDate(row.effectiveDate), row.changeType, row.roleTitle, <PersonCell key="p" row={row} name={row.personName} people={people} />, <Status key="s" value={row.status} />]}
+        renderCell={({ record, field }) => (field.name === "personName" ? <PersonCell row={record.row} people={people} /> : undefined)}
       />
-      <RegisterTable
+      <Register
         title="Signing authorities"
+        definition={SIGNING_AUTHORITIES}
+        tableId="governance-signing-authorities"
         restricted={data?.restrictedResources?.includes("documents")}
         rows={signing}
+        loading={data === undefined}
         empty={<EmptyRegister kind="signing-authority" links={[["Directors", "/app/directors"], ["Role holders", "/app/role-holders"]]} />}
-        columns={["Effective", "Person", "Institution", "Authority", "Status"]}
-        render={(row) => [formatDate(row.effectiveDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.institutionName ?? "-", capitalize(row.authorityType), <Status key="s" value={row.status} />]}
+        renderCell={({ record, field }) => (field.name === "personName" ? <PersonCell row={record.row} people={people} /> : undefined)}
       />
     </div>
   );
@@ -219,7 +614,7 @@ export function MeetingEvidencePage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const motions = data?.motionEvidence ?? [];
+  const motions = (data?.motionEvidence ?? NO_ROWS) as EvidenceRow[];
 
   return (
     <div className="page">
@@ -239,21 +634,38 @@ export function MeetingEvidencePage() {
         <Stat label="Needs review" value={[...attendance, ...motions].filter((row: any) => row.status !== "Verified").length} tone="warn" />
         <Stat label="Sources" value={uniqueSources([...attendance, ...motions]).length} />
       </div>
-      <RegisterTable
+      <Register
         title="Attendance"
+        definition={ATTENDANCE}
+        tableId="meeting-evidence-attendance"
         restricted={data?.restrictedResources?.includes("meetings")}
         rows={attendance}
+        loading={data === undefined}
         empty={<EmptyRegister kind="attendance" links={[["Meetings", "/app/meetings"], ["Minutes", "/app/minutes"]]} />}
-        columns={["Meeting", "Date", "Person", "Attendance", "Confidence"]}
-        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, <span key="a">{!row.attendanceStatus || /^unknown$/i.test(row.attendanceStatus) ? "Not stated" : row.attendanceStatus}{row.duplicateCount > 1 ? <span className="muted" title="The same person, meeting and status appeared more than once in the imported evidence"> · recorded {row.duplicateCount}×</span> : null}</span>, <Confidence key="c" value={row.confidence} />]}
+        renderCell={({ record, field }) => {
+          const { row } = record;
+          if (field.name === "meetingTitle") return <MeetingCell row={row} />;
+          if (field.name === "personName") return <PersonCell row={row} people={people} />;
+          if (field.name === "attendanceStatus")
+            return (
+              <span>
+                {String(record.attendanceStatus)}
+                {(row.duplicateCount ?? 0) > 1 ? <span className="muted" title="The same person, meeting and status appeared more than once in the imported evidence"> · recorded {row.duplicateCount}×</span> : null}
+              </span>
+            );
+          if (field.name === "confidence") return <Confidence value={row.confidence} />;
+          return undefined;
+        }}
       />
-      <RegisterTable
+      <Register
         title="Motion evidence"
+        definition={MOTIONS}
+        tableId="meeting-evidence-motions"
         restricted={data?.restrictedResources?.includes("motions")}
         rows={motions}
+        loading={data === undefined}
         empty={<EmptyRegister kind="motion-evidence" links={[["Meetings", "/app/meetings"], ["Minutes", "/app/minutes"]]} />}
-        columns={["Meeting", "Date", "Motion", "Outcome", "Status"]}
-        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), truncate(row.motionText, 100), row.outcome, <Status key="s" value={row.status} />]}
+        renderCell={({ record, field }) => (field.name === "meetingTitle" ? <MeetingCell row={record.row} /> : undefined)}
       />
     </div>
   );
@@ -264,10 +676,10 @@ export function FinanceImportsPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const budgets = data?.budgetSnapshots ?? [];
-  const statements = data?.financialStatementImports ?? [];
-  const reports = data?.treasurerReports ?? [];
-  const transactions = data?.transactionCandidates ?? [];
+  const budgets = (data?.budgetSnapshots ?? NO_ROWS) as EvidenceRow[];
+  const statements = (data?.financialStatementImports ?? NO_ROWS) as EvidenceRow[];
+  const reports = (data?.treasurerReports ?? NO_ROWS) as EvidenceRow[];
+  const transactions = (data?.transactionCandidates ?? NO_ROWS) as EvidenceRow[];
 
   return (
     <div className="page">
@@ -287,45 +699,41 @@ export function FinanceImportsPage() {
         <Stat label="Treasurer reports" value={data?.restrictedResources?.includes("financials") ? "Restricted" : reports.length} />
         <Stat label="Transactions" value={data?.restrictedResources?.includes("financials") ? "Restricted" : transactions.length} tone={transactions.length ? "warn" : undefined} />
       </div>
-      <RegisterTable
+      <Register
         title="Budget snapshots"
+        definition={BUDGET_SNAPSHOTS}
+        tableId="finance-imports-budgets"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={budgets}
+        loading={data === undefined}
         empty={<EmptyRegister kind="budget snapshot" links={[["Financials", "/app/financials"], ["Treasurer", "/app/treasurer"]]} />}
-        columns={["Fiscal year", "Title", "Income", "Expense", "Status"]}
-        render={(row) => [row.fiscalYear, row.title, formatMoney(row.totalIncomeCents), formatMoney(row.totalExpenseCents), <Status key="s" value={row.status} />]}
       />
-      <RegisterTable
+      <Register
         title="Financial statement imports"
+        definition={STATEMENT_IMPORTS}
+        tableId="finance-imports-statements"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={statements}
+        loading={data === undefined}
         empty={<EmptyRegister kind="financial statement" links={[["Financials", "/app/financials"], ["Treasurer", "/app/treasurer"]]} />}
-        columns={["Period end", "Type", "Revenue", "Expenses", "Status"]}
-        render={(row) => [formatDate(row.periodEnd), row.statementType, formatMoney(row.revenueCents), formatMoney(row.expensesCents), <Status key="s" value={row.status} />]}
       />
-      <RegisterTable
+      <Register
         title="Treasurer reports"
+        definition={TREASURER_REPORTS}
+        tableId="finance-imports-treasurer-reports"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={reports}
+        loading={data === undefined}
         empty={<EmptyRegister kind="treasurer report" links={[["Treasurer", "/app/treasurer"], ["Financials", "/app/financials"]]} />}
-        columns={["Date", "Title", "Cash", "Highlights", "Status"]}
-        render={(row) => [formatDate(row.reportDate), row.title, formatMoney(row.cashBalanceCents), row.highlights?.length ?? 0, <Status key="s" value={row.status} />]}
       />
-      <RegisterTable
+      <Register
         title="Transaction candidates"
+        definition={TRANSACTION_CANDIDATES}
+        tableId="finance-imports-transactions"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={transactions}
+        loading={data === undefined}
         empty={<EmptyRegister kind="transaction" links={[["Financials", "/app/financials"], ["Treasurer", "/app/treasurer"]]} />}
-        columns={["Date", "Description", "Debit/Credit", "Amount", "Cheque/ref", "Balance", "Status"]}
-        render={(row) => [
-          formatDate(row.transactionDate),
-          truncate(row.description, 90),
-          row.debitCredit ?? "-",
-          formatMoney(row.amountCents),
-          row.chequeNumber ?? "-",
-          formatMoney(row.balanceCents),
-          <Status key="s" value={row.status} />,
-        ]}
       />
     </div>
   );
@@ -342,8 +750,8 @@ export function RecordsArchivePage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const accessions = data?.archiveAccessions ?? [];
-  const evidence = data?.sourceEvidence ?? [];
+  const accessions = (data?.archiveAccessions ?? NO_ROWS) as EvidenceRow[];
+  const evidence = (data?.sourceEvidence ?? NO_ROWS) as EvidenceRow[];
   const statusCounts = EVIDENCE_REVIEW_STATUSES.map((status) => [status, evidence.filter((row: any) => normalizeEvidenceReviewStatus(row.status) === status).length] as const);
   const evidenceShown = statusFilter === "all" ? evidence : evidence.filter((row: any) => normalizeEvidenceReviewStatus(row.status) === statusFilter);
   const setStatus = async (row: any, status: string) => {
@@ -400,16 +808,19 @@ export function RecordsArchivePage() {
         <Stat label="Restricted" value={evidence.filter((row: any) => row.accessLevel === "restricted").length} tone="warn" />
         <Stat label="Linked targets" value={evidence.filter((row: any) => row.targetId).length} />
       </div>
-      <RegisterTable
+      <Register
         title="Archive custody and accessions"
+        definition={ACCESSIONS}
+        tableId="records-archive-accessions"
         restricted={data?.restrictedResources?.includes("documents")}
         rows={accessions}
+        loading={data === undefined}
         empty={<EmptyNote text="No accessions yet." info="Approve archive accession imports for boxes, binders, drives, and external archive transfers." />}
-        columns={["Received", "Title", "Container", "Location", "Status"]}
-        render={(row) => [row.dateReceived ? formatDate(row.dateReceived) : "-", row.title, row.containerType, row.location, <Status key="s" value={row.status} />]}
       />
-      <RegisterTable
+      <Register
         title="Source evidence and provenance"
+        definition={SOURCE_EVIDENCE}
+        tableId="records-archive-source-evidence"
         restricted={data?.restrictedResources?.includes("documents")}
         /* Status chips filter this register only, so they sit inside its
            card (and only once there is evidence to filter). */
@@ -424,32 +835,27 @@ export function RecordsArchivePage() {
           </div>
         ) : null}
         rows={evidenceShown}
-        empty={statusFilter === "all" ? <EmptyNote text="No evidence links yet." info="Approved section imports automatically create source evidence links here." /> : "No evidence links have this status."}
-        columns={["Source", "Kind", "Model destination", "Access", "Status"]}
-        pageActions={(pageRows) => canEdit && pageRows.length > 0 ? (
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button className="btn-action" onClick={() => { void bulkStatus(pageRows, "Verified"); }}>Mark {pageRows.length} shown verified</button>
-            <button className="btn-action" onClick={() => { void bulkStatus(pageRows, "Linked"); }}>Mark {pageRows.length} shown linked</button>
-          </div>
-        ) : null}
-        render={(row) => [
-          <EvidenceSourceCell key="src" row={row} />,
-          row.evidenceKind,
-          row.targetTable ?? "-",
-          <Badge key="a" tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>,
-          canEdit ? (
-            <select key="s" className="input input--sm evidence-status-select" aria-label={`Status for ${row.sourceTitle}`} value={normalizeEvidenceReviewStatus(row.status)} onChange={(event) => { void setStatus(row, event.target.value); }}>
-              {EVIDENCE_REVIEW_STATUSES.map((status) => <option key={status} value={status}>{evidenceReviewStatusLabel(status)}</option>)}
-            </select>
-          ) : <Status key="s" value={row.status} />,
-        ]}
+        loading={data === undefined}
+        empty={statusFilter === "all" ? <EmptyNote text="No evidence links yet." info="Approved section imports automatically create source evidence links here." /> : <RecordTableEmpty title="No evidence links have this status" />}
+        renderCell={({ record, field }) => {
+          const { row } = record;
+          if (field.name === "sourceTitle") return <EvidenceSourceCell row={row} />;
+          if (field.name === "accessLevel") return <Badge tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>;
+          if (field.name === "evidenceKind") return row.evidenceKind ? <span>{EVIDENCE_KIND_LABELS[row.evidenceKind] ?? row.evidenceKind}</span> : undefined;
+          return undefined;
+        }}
+        rowMenuSections={(record) => (canEdit ? evidenceStatusMenu(record.row, (status) => { void setStatus(record.row, status); }) : [])}
+        bulkActions={canEdit ? [
+          { id: "verified", label: "Mark verified", onRun: (_ids, records) => bulkStatus(registerRows(records), "Verified") },
+          { id: "linked", label: "Mark linked", onRun: (_ids, records) => bulkStatus(registerRows(records), "Linked") },
+        ] : undefined}
       />
     </div>
   );
 }
 
 function capitalize(value?: string) {
-  return value ? value.charAt(0).toUpperCase() + value.slice(1) : "-";
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
 }
 
 function useRegisters() {
@@ -461,90 +867,94 @@ function useRegisters() {
   return { society, data, people: personLinkCandidates(members, directors) };
 }
 
-/** One-line empty state: what will appear and where today's live data is. */
+/** Empty register: what will appear here and where today's live data is. */
 function EmptyRegister({ kind, links }: { kind: string; links: [string, string][] }) {
   return (
-    <span className="evidence-empty">
-      Nothing imported yet.
-      <InfoPopover label={`About ${kind} imports`}>
-        <p>Approved {kind} imports appear here.</p>
-        <p>
-          Current data:{" "}
+    <RecordTableEmpty
+      title="Nothing imported yet"
+      description={
+        <>
+          Approved {kind} imports appear here. Current data:{" "}
           {links.map(([label, to], index) => (
             <span key={to}>
               {index > 0 && " · "}
               <Link to={to}>{label}</Link>
             </span>
           ))}
-        </p>
-      </InfoPopover>
-    </span>
+        </>
+      }
+    />
   );
 }
 
-/** One-line empty state with the background behind an ⓘ. */
+/** Empty register with a line on what fills it. */
 function EmptyNote({ text, info }: { text: string; info: string }) {
-  return (
-    <span className="evidence-empty">
-      {text}
-      <InfoPopover label="About this register"><p>{info}</p></InfoPopover>
-    </span>
-  );
+  return <RecordTableEmpty title={text} description={info} />;
 }
 
-function RegisterTable({
+/**
+ * One evidence register: a card with its heading (and any filters under it)
+ * around the shared record table. Status and source-document cells are drawn
+ * the same way in every register; pages draw the rest.
+ */
+function Register({
   title,
+  definition,
+  tableId,
   rows,
-  columns,
-  render,
+  loading,
   empty,
   restricted,
-  pageActions,
   toolbar,
+  renderCell,
+  renderRowActions,
+  rowMenuSections,
+  bulkActions,
 }: {
   title: string;
-  rows: any[];
-  columns: string[];
-  render: (row: any) => any[];
+  definition: RegisterDefinition;
+  tableId: string;
+  rows: EvidenceRow[];
+  loading: boolean;
   empty: ReactNode;
   restricted?: boolean;
-  /** Actions over the rows currently shown on this page (bulk review). */
-  pageActions?: (pageRows: any[]) => ReactNode;
   /** Filters shown under the title (e.g. status chips). */
   toolbar?: ReactNode;
+  renderCell?: (cell: { record: RegisterRecord; field: FieldMetadata }) => ReactNode | undefined;
+  renderRowActions?: (record: RegisterRecord) => ReactNode;
+  rowMenuSections?: (record: RegisterRecord) => MenuSection[];
+  bulkActions?: BulkAction[];
 }) {
-  const [page,setPage]=useState(0);const [search,setSearch]=useState("");
-  const filtered=rows.filter(row=>[row.sourceTitle,row.personName,row.meetingTitle,row.title,row.motionText,row.targetTable,row.summary,row.notes].join(" ").toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  const safePage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 25) - 1));
-  const pageRows = filtered.slice(safePage*25,safePage*25+25);
+  const records = useMemo<RegisterRecord[]>(
+    () => rows.map((row) => ({ ...definition.values(row), _id: String(row._id), row })),
+    [rows, definition],
+  );
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card__head">
         <h2 className="card__title">{title}</h2>
         {restricted && <span className="card__subtitle">Access limited</span>}
       </div>
-      {toolbar && <div className="card__body register-table__toolbar">{toolbar}</div>}
-      {rows.length>25&&<div className="card__body"><input className="input" aria-label={`Search ${title}`} placeholder="Search this evidence register" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></div>}
-      {pageActions && pageRows.length > 0 && <div className="card__body" style={{ paddingTop: 0 }}>{pageActions(pageRows)}</div>}
-      {rows.length === 0 ? (
-        <div className="card__body muted">{restricted ? "This section requires additional access." : empty}</div>
-      ) : (
-        <div className="table-wrap">
-        <table className="table table--stack-mobile register-table">
-          <thead>
-            <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
-          </thead>
-          <tbody>
-            {pageRows.map((row) => (
-              <tr key={row._id}>
-                {render(row).map((cell, index) => <td key={index} data-label={index > 0 ? columns[index] : undefined}>{cell}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      )}
-      {filtered.length>25&&<div className="card__body row" style={{gap:12,flexWrap:"wrap"}}><button className="btn" disabled={!safePage} onClick={()=>setPage(safePage-1)}>Previous</button><span>Page {safePage+1} of {Math.ceil(filtered.length/25)} · {filtered.length} matching rows</span><button className="btn" disabled={(safePage+1)*25>=filtered.length} onClick={()=>setPage(safePage+1)}>Next</button></div>}
+      {toolbar && <div className="card__body">{toolbar}</div>}
+      <RecordListTable<RegisterRecord>
+        variant="card"
+        table={definition.table}
+        tableId={tableId}
+        label={title}
+        records={records}
+        loading={loading}
+        renderCell={({ record, field }) => {
+          const custom = renderCell?.({ record, field });
+          if (custom !== undefined) return custom;
+          if (field.name === "status") return <Status value={record.row.status} />;
+          if (field.name === "sourceDocuments") return <SourceDocumentsCell row={record.row} />;
+          return undefined;
+        }}
+        renderRowActions={renderRowActions}
+        rowMenuSections={rowMenuSections}
+        bulkActions={bulkActions}
+        emptyState={restricted && rows.length === 0 ? <RecordTableEmpty title="This section requires additional access" /> : empty}
+      />
     </div>
   );
 }
@@ -554,16 +964,57 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
   return <StatTile label={label} value={value} tone={!value || tone === "ok" ? undefined : tone} />;
 }
 
+/** Register rows use their own vocabularies (Observed, Draft, Filed…); only review states are relabelled. */
+function isReviewState(value?: string) {
+  return !value || /^(needs ?review|needsreview|linked|verified|rejected)$/i.test(value);
+}
+
+/** The status as shown (and filtered): review states by their label, anything else as stored. */
+function registerStatusLabel(value?: string) {
+  return isReviewState(value) ? evidenceReviewStatusLabel(value) : String(value);
+}
+
 function Status({ value }: { value?: string }) {
-  // Register rows use their own vocabularies (Observed, Draft, Filed…); only
-  // review states are relabelled, anything else is shown as stored.
-  const reviewState = !value || /^(needs ?review|needsreview|linked|verified|rejected)$/i.test(value);
-  if (!reviewState) return <Badge tone="info">{value}</Badge>;
+  if (!isReviewState(value)) return <Badge tone="info">{value}</Badge>;
   return <Badge tone={evidenceReviewStatusTone(value)}>{evidenceReviewStatusLabel(value)}</Badge>;
 }
 
+/** The register row's source documents: the first opens in Documents, the rest are counted. */
+function SourceDocumentsCell({ row }: { row: EvidenceRow }) {
+  const ids = row.sourceDocumentIds ?? [];
+  if (!ids.length) return <span className="muted">None</span>;
+  return (
+    <span>
+      <Link to={`/app/documents/${ids[0]}`}>Document</Link>
+      {ids.length > 1 && <span className="muted"> +{ids.length - 1}</span>}
+    </span>
+  );
+}
+
+/** The evidence row's "…" menu: set its review status. */
+function evidenceStatusMenu(row: EvidenceRow, onSet: (status: string) => void): MenuSection[] {
+  const current = normalizeEvidenceReviewStatus(row.status);
+  return [
+    {
+      id: "status",
+      label: "Set status",
+      items: EVIDENCE_REVIEW_STATUSES.map((status) => ({
+        id: status,
+        label: evidenceReviewStatusLabel(status),
+        hint: status === current ? "Current" : undefined,
+        disabled: status === current,
+        onSelect: () => onSet(status),
+      })),
+    },
+  ];
+}
+
+function registerRows(records: RegisterRecord[]) {
+  return records.map((record) => record.row);
+}
+
 /** Source link that prefers the canonical document over a staged import candidate (D-20). */
-function EvidenceSourceCell({ row }: { row: any }) {
+function EvidenceSourceCell({ row }: { row: EvidenceRow }) {
   if (!row.sourceDocumentId) return <span>{row.sourceTitle}</span>;
   if (row.sourceDocumentKind === "candidate") {
     return row.canonicalDocumentId
@@ -574,9 +1025,9 @@ function EvidenceSourceCell({ row }: { row: any }) {
   return <Link to={`/app/documents/${row.sourceDocumentId}`}>{row.sourceTitle}</Link>;
 }
 
-function PromoteAction({ row, onPromote, disabled }: { row: any; onPromote: () => void; disabled?: boolean }) {
-  if (row.directorId) return <Badge tone="success">Director</Badge>;
-  if (row.status === "Rejected") return <span className="muted">Rejected</span>;
+/** Promote, for a role assignment not yet on the director register (and not rejected). */
+function PromoteAction({ row, onPromote, disabled }: { row: EvidenceRow; onPromote: () => void; disabled?: boolean }) {
+  if (row.directorId || row.status === "Rejected") return null;
   return (
     <button className="btn btn--ghost btn--sm" disabled={disabled} onClick={onPromote}>
       Promote
@@ -584,12 +1035,28 @@ function PromoteAction({ row, onPromote, disabled }: { row: any; onPromote: () =
   );
 }
 
-function PersonCell({ row, name, people }: { row: any; name?: string; people?: PersonLinkCandidate[] }) {
+/** The promoted director, opened on the directors register. */
+function DirectorRegisterCell({ row }: { row: EvidenceRow }) {
+  if (!row.directorId) return <span className="muted">{row.status === "Rejected" ? "Rejected" : "Not promoted"}</span>;
+  return <Link to={entityHref({ kind: "director", id: row.directorId }) ?? "/app/directors"}><Badge tone="success">Director</Badge></Link>;
+}
+
+/**
+ * The person a register row names, opened where the app keeps them: the
+ * reviewed directory identity, else the linked director or member record,
+ * else the one director or member whose name matches (a suggestion).
+ */
+function PersonCell({ row, people }: { row: EvidenceRow; people?: PersonLinkCandidate[] }) {
+  const name = row.personName;
   const label = name || "-";
   if(row.directoryPersonId)return <Link to={`/app/people-directory/${row.directoryPersonId}`}>{label} <Badge tone="success">Reviewed identity</Badge></Link>;
   const fallback = findPersonLink(name, people ?? []);
   const linked = Boolean(row.directorId || row.memberId);
-  const to = row.directorId || fallback?.kind === "director" ? "/app/directors" : row.memberId || fallback?.kind === "member" ? "/app/members" : null;
+  const to = row.directorId
+    ? entityHref({ kind: "director", id: row.directorId })
+    : row.memberId
+      ? entityHref({ kind: "member", id: row.memberId })
+      : fallback ? entityHref({ kind: fallback.kind, id: fallback.id }) : null;
   const content = (
     <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>
       <span>{label}</span>
@@ -640,22 +1107,13 @@ function normalizePersonName(value: string) {
     .replace(/\s+/g, " ");
 }
 
-function MeetingCell({ row }: { row: any }) {
+function MeetingCell({ row }: { row: EvidenceRow }) {
   const label = row.meetingTitle || "-";
   return row.meetingId ? <Link to={`/app/meetings/${row.meetingId}`}>{label}</Link> : label;
 }
 
 function Confidence({ value }: { value?: string }) {
   return <Badge tone={value === "High" ? "success" : value === "Medium" ? "info" : "warn"}>{value ?? "Review"}</Badge>;
-}
-
-function formatMoney(value?: number) {
-  return typeof value === "number" ? money(value) : "-";
-}
-
-function truncate(value: string | undefined, length: number) {
-  const text = String(value ?? "-");
-  return text.length > length ? `${text.slice(0, length - 1)}...` : text;
 }
 
 function uniqueSources(rows: any[]) {

@@ -132,7 +132,8 @@ test("acting Member sees own access without a roster and cannot edit member or m
   const picker = page.getByTitle("Switch acting user", { exact: true });
   if (!(await picker.isVisible())) await page.getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
-  await page.locator("span").filter({ hasText: /^Interface Member$/ }).click();
+  // Inside the acting-user list: a phone card in the Users list can carry the same name.
+  await page.getByRole("listbox", { name: "Acting user" }).getByText("Interface Member", { exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByText("Your role does not permit viewing the workspace roster. Your own access is shown above.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add user", exact: true })).toHaveCount(0);

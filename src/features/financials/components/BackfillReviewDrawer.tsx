@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useNavigate } from "react-router-dom";
 import { AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
@@ -19,6 +21,82 @@ const STATUS_LABEL: Record<string, { label: string; tone: "success" | "warn" | "
   needs_mapping: { label: "Needs mapping", tone: "danger" },
   zero_amount: { label: "Zero amount", tone: "neutral" },
 };
+
+const BACKFILL_ROWS_TABLE = staticRecordTable({
+  id: "backfill-review:transactions",
+  nameSingular: "backfillTransaction",
+  namePlural: "backfillTransactions",
+  labelSingular: "Transaction",
+  labelPlural: "Transactions",
+  labelIdentifierFieldName: "description",
+  viewName: "Posting plan",
+  fields: [
+    { name: "date", label: "Date", fieldType: FIELD_TYPES.DATE, size: 110 },
+    { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, size: 120, config: { isCents: true } },
+    { name: "postTo", label: "Post to", fieldType: FIELD_TYPES.TEXT, size: 200 },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 200,
+      config: {
+        options: [
+          { value: "post", label: "Will post", color: "green" },
+          { value: "already_posted", label: "Already posted", color: "gray" },
+          { value: "before_opening", label: "Before opening balances", color: "amber" },
+          { value: "no_cash_account", label: "No bank account", color: "red" },
+          { value: "needs_mapping", label: "Needs mapping", color: "red" },
+          { value: "zero_amount", label: "Zero amount", color: "gray" },
+        ],
+      },
+    },
+  ],
+});
+
+/** A row of `accounting.backfillPreview` (the fields the review reads). */
+type BackfillPreviewRow = {
+  transactionId: string;
+  date: string;
+  description?: string;
+  category?: string;
+  amountCents: number;
+  offsetAccountLabel?: string;
+  status: string;
+  beforeOpening?: boolean;
+};
+
+type BackfillRecord = {
+  _id: string;
+  date: string;
+  description: string;
+  category: string;
+  amountCents: number;
+  /** The ledger account it posts to; empty when it won't post. */
+  postTo: string;
+  status: string;
+  /** Posts although it's dated before the opening balances. */
+  flagged: boolean;
+};
+
+function backfillRecord(row: BackfillPreviewRow): BackfillRecord {
+  return {
+    _id: row.transactionId,
+    date: row.date,
+    description: row.description ?? "",
+    category: row.category ?? "",
+    amountCents: row.amountCents,
+    postTo: row.status === "post" ? row.offsetAccountLabel ?? "" : "",
+    status: row.status,
+    flagged: row.status === "post" && Boolean(row.beforeOpening),
+  };
+}
+
+/** Where Financials opens a transaction in its side panel. */
+function transactionHref(transactionId: string) {
+  return `/app/financials?tab=transactions&transactionId=${encodeURIComponent(transactionId)}`;
+}
 
 function plural(count: number, one: string, many = `${one}s`) {
   return `${count} ${count === 1 ? one : many}`;
@@ -47,6 +125,7 @@ export function BackfillReviewDrawer({
   canWrite: boolean;
 }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [includeBeforeOpening, setIncludeBeforeOpening] = useState(false);
   const [rememberMappings, setRememberMappings] = useState(true);
@@ -145,7 +224,7 @@ export function BackfillReviewDrawer({
 
           <h3 className="card__title" style={{ margin: "12px 0 6px" }}>Category mapping</h3>
           <div className="backfill-review__categories">
-            <table className="table">
+            <table className="table table--report">
               <thead>
                 <tr><th>Category</th><th className="num">Total</th><th>Post to</th></tr>
               </thead>
@@ -210,27 +289,40 @@ export function BackfillReviewDrawer({
           <details style={{ marginTop: 12 }}>
             <summary>Transactions ({preview.rows.length})</summary>
             <div className="backfill-review__table">
-              <table className="table">
-                <thead><tr><th>Date</th><th>Description</th><th>Category</th><th className="num">Amount</th><th>Post to</th><th>Status</th></tr></thead>
-                <tbody>
-                  {preview.rows.map((row: any) => {
-                    const status = STATUS_LABEL[row.status] ?? { label: row.status, tone: "neutral" as const };
+              <RecordListTable<BackfillRecord>
+                variant="card"
+                table={BACKFILL_ROWS_TABLE}
+                tableId="backfill-review-transactions"
+                label="Transactions"
+                icon={<FileSpreadsheet size={14} />}
+                records={(preview.rows as BackfillPreviewRow[]).map(backfillRecord)}
+                onOpen={(record) => navigate(transactionHref(record._id))}
+                renderCell={({ record, field }) => {
+                  if (field.name === "amountCents") return <Money cents={record.amountCents} tone={record.amountCents > 0 ? "in" : "auto"} />;
+                  if (field.name === "postTo" && !record.postTo) return <span className="muted">—</span>;
+                  if (field.name === "status") {
+                    const status = STATUS_LABEL[record.status] ?? { label: record.status, tone: "neutral" as const };
                     return (
-                      <tr key={row.transactionId} className={row.status === "post" ? undefined : "backfill-review__row--excluded"}>
-                        <td>{formatDate(row.date)}</td>
-                        <td>{row.description}</td>
-                        <td>{row.category || "—"}</td>
-                        <td className="num"><Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} /></td>
-                        <td>{row.status === "post" ? row.offsetAccountLabel ?? "—" : "—"}</td>
-                        <td>
-                          <Badge tone={status.tone}>{status.label}</Badge>
-                          {row.status === "post" && row.beforeOpening ? <> <Badge tone="warn">Flagged</Badge></> : null}
-                        </td>
-                      </tr>
+                      <>
+                        <Badge tone={status.tone}>{status.label}</Badge>
+                        {record.flagged ? <> <Badge tone="warn">Flagged</Badge></> : null}
+                      </>
                     );
-                  })}
-                </tbody>
-              </table>
+                  }
+                  return undefined;
+                }}
+                renderPhoneCard={(record, { open, field, selecting }) => (
+                  <RecordTablePhoneCard
+                    title={record.description || "Bank transaction"}
+                    badge={field("status")}
+                    meta={[<Money key="amount" cents={record.amountCents} tone={record.amountCents > 0 ? "in" : "auto"} />, formatDate(record.date)]}
+                    detail={[record.category, record.postTo ? `Posts to ${record.postTo}` : ""]}
+                    onOpen={open}
+                    selecting={selecting}
+                  />
+                )}
+                emptyState={<RecordTableEmpty title="No imported transactions are waiting to be posted" />}
+              />
             </div>
           </details>
         </div>

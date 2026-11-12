@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Pencil } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Pencil, ReceiptText } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
@@ -9,9 +10,53 @@ import { Select } from "../../components/Select";
 import { Money } from "../../components/Money";
 import { useToast } from "../../components/Toast";
 import { formatDate } from "../../lib/format";
-import { BILL_PAYMENT_METHODS, BILL_PAYMENT_METHOD_LABEL, BILL_TERMS, BILL_TERMS_LABEL, isBillPaymentMethod, normalizeBillTerms, type BillPaymentMethod, type BillTerms } from "../../../shared/bills";
+import { formatMoney } from "../../lib/money";
+import { BILL_PAYMENT_METHODS, BILL_PAYMENT_METHOD_LABEL, BILL_STATUSES, BILL_STATUS_LABEL, BILL_TERMS, BILL_TERMS_LABEL, isBillPaymentMethod, normalizeBillTerms, type BillPaymentMethod, type BillTerms } from "../../../shared/bills";
 import { BillStatusPill } from "./BillStatusPill";
-import { errorMessage, type BillsWorkspace, type BillVendor } from "./types";
+import { errorMessage, type BillRow, type BillsWorkspace, type BillVendor } from "./types";
+
+const BILL_STATUS_COLOR: Record<string, string> = {
+  draft: "gray", awaiting_approval: "purple", open: "blue", scheduled: "teal", partially_paid: "orange", paid: "green", overdue: "red", canceled: "gray",
+};
+
+/** The vendor's bill history: the same columns as the Bills register, without the vendor. */
+const VENDOR_BILLS_TABLE = staticRecordTable({
+  id: "vendor-drawer:bills",
+  nameSingular: "vendorBill",
+  namePlural: "vendorBills",
+  labelSingular: "Bill",
+  labelPlural: "Bills",
+  labelIdentifierFieldName: "billNumber",
+  viewName: "Bill history",
+  fields: [
+    { name: "billNumber", label: "Bill #", fieldType: FIELD_TYPES.TEXT, size: 130, config: { groupable: false } },
+    { name: "billDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 110 },
+    { name: "dueDate", label: "Due", fieldType: FIELD_TYPES.DATE, size: 110 },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 140, config: { options: BILL_STATUSES.map((value) => ({ value, label: BILL_STATUS_LABEL[value], color: BILL_STATUS_COLOR[value] })) } },
+    { name: "totalCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, size: 120, config: { isCents: true } },
+    { name: "balanceCents", label: "Outstanding", fieldType: FIELD_TYPES.CURRENCY, size: 130, config: { isCents: true } },
+  ],
+});
+
+type VendorBillRecord = {
+  _id: string;
+  billNumber: string;
+  billDate: string;
+  dueDate: string;
+  status: string;
+  totalCents: number;
+  balanceCents: number;
+  bill: BillRow;
+};
+
+function vendorBillRecord(bill: BillRow): VendorBillRecord {
+  return { _id: bill._id, billNumber: bill.billNumber ?? "", billDate: bill.billDate, dueDate: bill.dueDate, status: bill.status, totalCents: bill.totalCents, balanceCents: bill.balanceCents, bill };
+}
+
+/** Where the Bills page opens a bill: its editor while a draft, otherwise its panel. */
+function billHref(bill: BillRow) {
+  return `/app/bills?${bill.lifecycle === "draft" ? "edit" : "bill"}=${encodeURIComponent(bill._id)}`;
+}
 
 type Form = {
   name: string;
@@ -65,6 +110,7 @@ export function VendorDrawer({
   canWrite: boolean;
 }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const save = usePermissionedMutation(api.bills.upsertVendor, canWrite);
   const [editing, setEditing] = useState(!vendor);
   const [form, setForm] = useState<Form>(() => formFor(vendor));
@@ -157,21 +203,33 @@ export function VendorDrawer({
             {bills.length === 0 ? (
               <p className="muted">No bills from {vendor.name} yet. <Link to="/app/bills?edit=new">Create a bill</Link></p>
             ) : (
-              <table className="table vendor-history">
-                <thead><tr><th>Bill #</th><th>Date</th><th>Due</th><th>Status</th><th className="num">Amount</th><th className="num">Outstanding</th></tr></thead>
-                <tbody>
-                  {bills.map((bill) => (
-                    <tr key={bill._id}>
-                      <td><Link to={`/app/bills?${bill.lifecycle === "draft" ? "edit" : "bill"}=${bill._id}`}>{bill.billNumber ?? "No number"}</Link></td>
-                      <td>{formatDate(bill.billDate)}</td>
-                      <td>{formatDate(bill.dueDate)}</td>
-                      <td><BillStatusPill status={bill.status} daysOverdue={bill.daysOverdue} /></td>
-                      <td className="num"><Money cents={bill.totalCents} currency={bill.currency} /></td>
-                      <td className="num"><Money cents={bill.balanceCents} currency={bill.currency} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <RecordListTable<VendorBillRecord>
+                variant="card"
+                table={VENDOR_BILLS_TABLE}
+                tableId="vendor-drawer-bills"
+                label={`Bills from ${vendor.name}`}
+                icon={<ReceiptText size={14} />}
+                records={bills.map(vendorBillRecord)}
+                onOpen={(record) => navigate(billHref(record.bill))}
+                renderCell={({ record, field }) => {
+                  const { bill } = record;
+                  if (field.name === "billNumber" && !bill.billNumber) return <span className="muted">No number</span>;
+                  if (field.name === "status") return <BillStatusPill status={bill.status} daysOverdue={bill.daysOverdue} />;
+                  if (field.name === "totalCents") return <Money cents={bill.totalCents} currency={bill.currency} />;
+                  if (field.name === "balanceCents") return <Money cents={bill.balanceCents} currency={bill.currency} />;
+                  return undefined;
+                }}
+                renderPhoneCard={(record, { open, selecting }) => (
+                  <RecordTablePhoneCard
+                    title={record.bill.billNumber ?? "No number"}
+                    badge={<BillStatusPill status={record.bill.status} daysOverdue={record.bill.daysOverdue} />}
+                    meta={[<Money key="amount" cents={record.bill.totalCents} currency={record.bill.currency} />, `Due ${formatDate(record.dueDate)}`]}
+                    detail={[record.bill.balanceCents ? `${formatMoney(record.bill.balanceCents, { currency: record.bill.currency })} outstanding` : ""]}
+                    onOpen={open}
+                    selecting={selecting}
+                  />
+                )}
+              />
             )}
           </section>
 
@@ -180,13 +238,13 @@ export function VendorDrawer({
             {payments.length === 0 ? (
               <p className="muted">No payments recorded.</p>
             ) : (
-              <table className="table vendor-history">
+              <table className="table table--report">
                 <thead><tr><th>Date</th><th>Bill #</th><th>Method</th><th>Reference</th><th className="num">Amount</th></tr></thead>
                 <tbody>
                   {payments.map((payment) => (
                     <tr key={payment.key}>
                       <td>{formatDate(payment.date)}</td>
-                      <td>{payment.billNumber ?? <span className="muted">—</span>}</td>
+                      <td><Link to={`/app/bills?bill=${encodeURIComponent(payment.billId)}`}>{payment.billNumber ?? "Bill"}</Link></td>
                       <td>{isBillPaymentMethod(payment.method) ? BILL_PAYMENT_METHOD_LABEL[payment.method] : payment.method}{payment.transaction ? <span className="muted"> · matched</span> : null}</td>
                       <td>{payment.reference ?? <span className="muted">—</span>}</td>
                       <td className="num"><Money cents={payment.amountCents} currency={payment.currency} /></td>

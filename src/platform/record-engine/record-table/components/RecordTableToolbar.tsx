@@ -11,15 +11,16 @@ import {
   Download,
   Filter,
   Kanban,
+  Pencil,
   RotateCcw,
   Save,
   Search,
   SlidersHorizontal,
+  Trash2,
   Table2,
   X,
   ListChecks,
   List,
-  Rows3,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -31,7 +32,7 @@ import {
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
 import { useToast } from "../../../../components/Toast";
-import { usePrompt } from "../../../../components/Modal";
+import { useConfirm, usePrompt } from "../../../../components/Modal";
 import { useTranslation } from "react-i18next";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
@@ -41,7 +42,8 @@ import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { useIsBottomSheet } from "../../../../lib/useSheetDrag";
 import { useRegisterCommand } from "../../../../lib/commands";
-import { RecordTableGroupByPopover } from "./RecordTableGroupByPopover";
+import { RecordTableGroupByEditor } from "./RecordTableGroupByPopover";
+import { Select } from "@/components/Select";
 import { RecordTableExportDialog } from "./RecordTableExportDialog";
 import { getViewGroupBy } from "../utils/groupRecords";
 import { RecordTableAskFilterButton } from "./RecordTableAskFilterButton";
@@ -100,6 +102,9 @@ export function RecordTableToolbar({
   onOpenFilter,
   onSaveView,
   onSaveAsView,
+  saveAsViewMessage,
+  onRenameView,
+  onDeleteView,
   actions,
   listView,
   pageViews,
@@ -107,9 +112,13 @@ export function RecordTableToolbar({
   collapsibleSearch = false,
   extraFilterCount = 0,
   searchPlaceholder,
+  hideTitle = false,
 }: {
   icon?: ReactNode;
   label: string;
+  /** No title and count: the table sits under a heading that already says
+   *  what it lists (a card's title). `label` still names its search. */
+  hideTitle?: boolean;
   views?: { _id: string; name: string; isSystem: boolean }[];
   currentViewId?: string | null;
   onChangeView?: (viewId: string) => void;
@@ -124,6 +133,14 @@ export function RecordTableToolbar({
   // new to fork off, so "Save as" stays hidden until the user changes
   // something (filters, sort, columns, density).
   onSaveAsView?: (name: string) => void | Promise<unknown>;
+  /** What "Save as" says it saves (default: a personal view). */
+  saveAsViewMessage?: string;
+  /**
+   * Rename / delete the view on show, offered at the foot of the views menu
+   * for a view that isn't a system view, to people who may save views.
+   */
+  onRenameView?: (viewId: string, name: string) => void | Promise<void>;
+  onDeleteView?: (viewId: string) => void | Promise<void>;
   actions?: ReactNode;
   /**
    * Adds a "List view" button ahead of the table/kanban/calendar switch for
@@ -170,6 +187,7 @@ export function RecordTableToolbar({
   const { objectMetadata } = useRecordTableContextOrThrow();
   const toast = useToast();
   const prompt = usePrompt();
+  const confirm = useConfirm();
   const { t } = useTranslation();
   const canPersistView = usePermissions().can("settings:write");
   // Phones: search is an icon until tapped, and the "Select records" toggle
@@ -273,10 +291,8 @@ export function RecordTableToolbar({
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const groupButtonRef = useRef<HTMLButtonElement>(null);
   const groupByFieldId = useRecordTableState((s) => getViewGroupBy(s.viewGroups)?.fieldMetadataId ?? null);
   const groupByLabel = groupByFieldId
     ? columns.find((column) => column.fieldMetadataId === groupByFieldId)?.field.label ?? null
@@ -302,8 +318,8 @@ export function RecordTableToolbar({
     return () => window.removeEventListener("mousedown", onDown);
   }, [columnMenuOpen, viewMenuOpen]);
 
-  const activeViewName =
-    (views ?? []).find((v) => v._id === currentViewId)?.name ?? t("recordTable.allRecords", "All records");
+  const currentView = (views ?? []).find((v) => v._id === currentViewId);
+  const activeViewName = currentView?.name ?? t("recordTable.allRecords", "All records");
   // One "Export …" command per mounted table, alongside page-specific exports.
   useRegisterCommand({
     id: `record-table-export:${tableId}`,
@@ -419,6 +435,8 @@ export function RecordTableToolbar({
     </button>
   );
 
+  const setChipsSlot = useCallback((node: HTMLDivElement | null) => handle.get().setChipsSlot(node), [handle]);
+
   return (
     <div className="record-table__toolbar" ref={toolbarRef}>
       <div className="record-table__toolbar-left">
@@ -467,10 +485,71 @@ export function RecordTableToolbar({
                     {v._id === currentViewId && viewEdited && <span className="record-table__menu-badge">reset</span>}
                   </button>
                 ))}
+                {currentView && !currentView.isSystem && canPersistView && (onRenameView || onDeleteView) && (
+                  <div className="record-table__menu-divider" role="presentation">
+                    {onRenameView && (
+                      <button
+                        type="button"
+                        className="record-table__menu-item"
+                        disabled={isSaving}
+                        onClick={async () => {
+                          setViewMenuOpen(false);
+                          const name = await prompt({
+                            title: t("recordTable.renameViewTitle", "Rename view"),
+                            placeholder: t("recordTable.viewName", "View name"),
+                            defaultValue: currentView.name,
+                            confirmLabel: t("recordTable.renameView", "Rename"),
+                            required: true,
+                          });
+                          if (!name?.trim() || name.trim() === currentView.name) return;
+                          try {
+                            setIsSaving(true);
+                            await onRenameView(currentView._id, name.trim());
+                          } catch (error) {
+                            toast.error("Couldn't rename view", error instanceof Error ? error.message : undefined);
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                      >
+                        <Pencil size={12} />
+                        {t("recordTable.renameViewItem", "Rename view…")}
+                      </button>
+                    )}
+                    {onDeleteView && (
+                      <button
+                        type="button"
+                        className="record-table__menu-item"
+                        disabled={isSaving}
+                        onClick={async () => {
+                          setViewMenuOpen(false);
+                          const ok = await confirm({
+                            title: t("recordTable.deleteViewTitle", "Delete view?"),
+                            message: `“${currentView.name}” is removed for everyone in the workspace. The records stay as they are.`,
+                            confirmLabel: t("recordTable.deleteView", "Delete view"),
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          try {
+                            setIsSaving(true);
+                            await onDeleteView(currentView._id);
+                          } catch (error) {
+                            toast.error("Couldn't delete view", error instanceof Error ? error.message : undefined);
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                      >
+                        <Trash2 size={12} />
+                        {t("recordTable.deleteViewItem", "Delete view")}
+                      </button>
+                    )}
+                  </div>
+                )}
               </ViewportPopover>
             )}
           </div>
-        ) : (
+        ) : hideTitle ? null : (
           <div className="record-table__title">
             {resolvedIcon}
             <span>{label}</span>
@@ -550,6 +629,10 @@ export function RecordTableToolbar({
       </div>
       )}
 
+      {/* Filter chips sit in the toolbar's own row (RecordTableFilterChips
+          portals into this slot); phones keep them on a swipeable row below. */}
+      {!isPhone && <div className="record-table__toolbar-chips" ref={setChipsSlot} />}
+
       <div className="record-table__toolbar-right">
         {/* Phones keep the button beside the open field (it shows the search is on); wider screens swap it for the field. */}
         {collapsibleSearch && (isPhone || !showSearch) && (
@@ -623,7 +706,7 @@ export function RecordTableToolbar({
             onClick={async () => {
               const name = await prompt({
                 title: t("recordTable.saveViewTitle", "Save as a new view"),
-                message: t("recordTable.saveViewMessage", "Saves the current columns, filters and sort as a personal view."),
+                message: saveAsViewMessage ?? t("recordTable.saveViewMessage", "Saves the current columns, filters and sort as a personal view."),
                 placeholder: t("recordTable.viewName", "View name"),
                 confirmLabel: t("recordTable.saveView", "Save view"),
                 required: true,
@@ -801,34 +884,18 @@ export function RecordTableToolbar({
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 
-        {!listActive && viewType === "table" && (
-          <>
-            <button
-              type="button"
-              className={
-                "record-table__toolbar-button record-table__toolbar-button--group" +
-                (groupByLabel ? " record-table__toolbar-button--active" : "")
-              }
-              ref={groupButtonRef}
-              data-record-table-action="group"
-              aria-label={groupByLabel ? `Group · ${groupByLabel}` : "Group"}
-              aria-haspopup="dialog"
-              aria-expanded={groupMenuOpen}
-              title={groupByLabel ? `Grouped by ${groupByLabel}` : "Group records"}
-              onClick={() => setGroupMenuOpen((x) => !x)}
-            >
-              <Rows3 size={12} />
-              <span>{groupByLabel ? `Group · ${groupByLabel}` : "Group"}</span>
-            </button>
-            <RecordTableGroupByPopover open={groupMenuOpen} onClose={() => setGroupMenuOpen(false)} anchorRef={groupButtonRef} />
-          </>
-        )}
-
         <div className="record-table__view-switcher" ref={columnMenuRef}>
+          {/* Grouping, density, columns and export live here; a column's
+              header menu still offers "Group by this field". */}
           <button
             type="button"
-            className="record-table__toolbar-button record-table__toolbar-button--options"
-            aria-label={t("common.options", "Options")}
+            className={
+              "record-table__toolbar-button record-table__toolbar-button--options" +
+              (groupByLabel && !listActive && viewType === "table" ? " record-table__toolbar-button--active" : "")
+            }
+            data-record-table-action="group"
+            aria-label={`${t("common.options", "Options")}${groupByLabel && !listActive && viewType === "table" ? ` · grouped by ${groupByLabel}` : ""}`}
+            title={groupByLabel && !listActive && viewType === "table" ? `Grouped by ${groupByLabel}` : "Group, density, columns and export"}
             aria-haspopup="dialog"
             aria-expanded={columnMenuOpen}
             onClick={() => setColumnMenuOpen((x) => !x)}
@@ -838,49 +905,32 @@ export function RecordTableToolbar({
           </button>
           {columnMenuOpen && (
             <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
+              {!listActive && viewType === "table" && <RecordTableGroupByEditor />}
               {(viewType === "kanban" || viewType === "board") && (
                 <div className="record-table__menu-section">
-                  <label className="record-table__menu-label" htmlFor="record-table-kanban-field">
-                    Kanban field
-                  </label>
-                  <select
-                    id="record-table-kanban-field"
-                    className="record-table__menu-select"
+                  <span className="record-table__menu-label">Kanban field</span>
+                  <Select
+                    size="sm"
+                    aria-label="Kanban field"
                     value={kanbanFieldMetadataId ?? ""}
-                    onChange={(event) =>
-                      handle.get().setKanbanFieldMetadataId(event.target.value || undefined)
-                    }
-                  >
-                    <option value="">Choose field...</option>
-                    {selectableKanbanFields.map((column) => (
-                      <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
-                        {column.field.label}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Choose field…"
+                    onChange={(value) => handle.get().setKanbanFieldMetadataId(value || undefined)}
+                    options={selectableKanbanFields.map((column) => ({ value: column.fieldMetadataId, label: column.field.label }))}
+                  />
                 </div>
               )}
 
               {viewType === "calendar" && (
                 <div className="record-table__menu-section">
-                  <label className="record-table__menu-label" htmlFor="record-table-calendar-field">
-                    Calendar field
-                  </label>
-                  <select
-                    id="record-table-calendar-field"
-                    className="record-table__menu-select"
+                  <span className="record-table__menu-label">Calendar field</span>
+                  <Select
+                    size="sm"
+                    aria-label="Calendar field"
                     value={calendarFieldMetadataId ?? ""}
-                    onChange={(event) =>
-                      handle.get().setCalendarFieldMetadataId(event.target.value || undefined)
-                    }
-                  >
-                    <option value="">Choose date field...</option>
-                    {selectableCalendarFields.map((column) => (
-                      <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
-                        {column.field.label}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Choose date field…"
+                    onChange={(value) => handle.get().setCalendarFieldMetadataId(value || undefined)}
+                    options={selectableCalendarFields.map((column) => ({ value: column.fieldMetadataId, label: column.field.label }))}
+                  />
                 </div>
               )}
               <div className="record-table__menu-section">

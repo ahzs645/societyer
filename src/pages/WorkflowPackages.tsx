@@ -14,8 +14,75 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { FileJson, Plus, Trash2, Workflow } from "lucide-react";
 import { formatDate } from "../lib/format";
-import { optionLabel } from "../lib/orgHubOptions";
+import { OPTION_SETS, optionLabel } from "../lib/orgHubOptions";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
+
+type PackageLifecycleState = {
+  signerState?: string;
+  paymentState?: string;
+  openTaskCount?: number;
+  filingCount?: number;
+  filed?: boolean;
+};
+
+type PackageRow = Doc<"workflowPackages"> & { lifecycle?: PackageLifecycleState };
+
+type PackageRecord = {
+  _id: Id<"workflowPackages">;
+  packageName: string;
+  effectiveDate: string | null;
+  eventType: string;
+  workflowName: string | null;
+  documentTitle: string | null;
+  signerCount: number;
+  payment: string;
+  lifecycle: string;
+  status: string;
+  pkg: PackageRow;
+};
+
+const SELECT_COLOR_FOR_TONE = { success: "green", warn: "orange", danger: "red", neutral: "gray" } as const;
+
+const PACKAGES_TABLE = staticRecordTable({
+  id: "workflow-packages",
+  nameSingular: "workflowPackage",
+  namePlural: "workflowPackages",
+  labelSingular: "Workflow package",
+  labelPlural: "Workflow packages",
+  labelIdentifierFieldName: "packageName",
+  density: "comfortable",
+  fields: [
+    { name: "packageName", label: "Package", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "effectiveDate", label: "Effective", fieldType: FIELD_TYPES.DATE, size: 130 },
+    {
+      name: "eventType",
+      label: "Event",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 200,
+      config: { options: OPTION_SETS.eventTypes.map((option) => ({ value: option.value, label: option.label, color: "gray" })) },
+    },
+    { name: "workflowName", label: "Workflow", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "documentTitle", label: "Supporting document", fieldType: FIELD_TYPES.TEXT, size: 200, isVisible: false },
+    { name: "signerCount", label: "Signers", fieldType: FIELD_TYPES.NUMBER, size: 110 },
+    { name: "payment", label: "Payment", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "lifecycle", label: "Lifecycle", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 170,
+      config: {
+        options: OPTION_SETS.workflowPackageStatuses.map((option) => ({
+          value: option.value,
+          label: option.label,
+          color: SELECT_COLOR_FOR_TONE[toneForPackageStatus(option.value)],
+        })),
+      },
+    },
+  ],
+});
 
 export function WorkflowPackagesPage() {
   const society = useSociety();
@@ -34,10 +101,23 @@ export function WorkflowPackagesPage() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
 
-  const workflowById = useMemo(
-    () => new Map<string, any>((workflows ?? []).map((workflow: any) => [workflow._id, workflow])),
-    [workflows],
-  );
+  const packageRecords = useMemo<PackageRecord[]>(() => {
+    const workflowNames = new Map<string, string>((workflows ?? []).map((workflow: { _id: string; name: string }) => [workflow._id, workflow.name]));
+    const documentTitles = new Map<string, string>((documents ?? []).map((document: { _id: string; title: string }) => [document._id, document.title]));
+    return ((packages ?? []) as PackageRow[]).map((pkg) => ({
+      _id: pkg._id,
+      packageName: pkg.packageName,
+      effectiveDate: pkg.effectiveDate ?? null,
+      eventType: pkg.eventType,
+      workflowName: pkg.workflowId ? workflowNames.get(pkg.workflowId) ?? null : null,
+      documentTitle: pkg.supportingDocumentIds?.[0] ? documentTitles.get(pkg.supportingDocumentIds[0]) ?? null : null,
+      signerCount: pkg.signerRoster?.length ?? 0,
+      payment: [pkg.priceItems?.join(", "), paymentStatusLabel(pkg.lifecycle?.paymentState), pkg.stripeCheckoutSessionId ?? pkg.transactionId].filter(Boolean).join(" · "),
+      lifecycle: lifecycleText(pkg.lifecycle),
+      status: pkg.status,
+      pkg,
+    }));
+  }, [packages, workflows, documents]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -88,7 +168,21 @@ export function WorkflowPackagesPage() {
     toast.success("Workflow package saved");
   };
 
-  const confirmDelete = async (row: any) => {
+  const editPackage = (row: PackageRow) => {
+    if (!canManage) return;
+    setDraft({
+      ...row,
+      supportingDocumentId: row.supportingDocumentIds?.[0],
+      partsText: (row.parts ?? []).join(", "),
+      priceItemsText: (row.priceItems ?? []).join(", "),
+      signerRosterText: (row.signerRoster ?? []).join(", "),
+      signerEmailsText: (row.signerEmails ?? []).join(", "),
+      signingPackageIdsText: (row.signingPackageIds ?? []).join(", "),
+    });
+    setOpen(true);
+  };
+
+  const confirmDelete = async (row: PackageRow) => {
     if (!canManage) return;
     const ok = await confirm({
       title: "Delete workflow package?",
@@ -101,13 +195,13 @@ export function WorkflowPackagesPage() {
     toast.success("Workflow package deleted");
   };
 
-  const createPackageTask = async (row: any) => {
+  const createPackageTask = async (row: PackageRow) => {
     if (!canManage) return;
     await createFollowUpTask({ packageId: row._id });
     toast.success("Package task created");
   };
 
-  const filePackage = async (row: any) => {
+  const filePackage = async (row: PackageRow) => {
     if (!canManage) return;
     await markFiled({ packageId: row._id });
     toast.success("Package marked filed");
@@ -149,89 +243,84 @@ export function WorkflowPackagesPage() {
           <h2 className="card__title">Packages</h2>
           <Badge>{packages?.length ?? 0}</Badge>
         </div>
-        {(packages ?? []).length === 0 ? (
-          <div className="card__body muted">No workflow packages yet.</div>
-        ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Package</th>
-                <th>Event</th>
-                <th>Workflow</th>
-                <th>Signers</th>
-                <th>Payment</th>
-                <th>Lifecycle</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {(packages ?? []).map((row: any) => {
-                const workflow = row.workflowId ? workflowById.get(row.workflowId) : null;
-                return (
-                  <tr key={row._id}>
-                    <td>
-                      <strong>{row.packageName}</strong>
-                      <div className="muted">{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</div>
-                    </td>
-                    <td>
-                      <div>{optionLabel("eventTypes", row.eventType)}</div>
-                      <div className="muted">{row.parts?.length ? `${row.parts.length} parts` : "No parts listed"}</div>
-                    </td>
-                    <td>
-                      {workflow ? <Link to={`/app/workflows/${workflow._id}`}>{workflow.name}</Link> : <span className="muted">Not linked</span>}
-                    </td>
-                    <td>
-                      <div>{row.signerRoster?.length || 0} people</div>
-                      <div className="muted">{row.signerEmails?.length || 0} emails</div>
-                    </td>
-                    <td>
-                      <div>{row.priceItems?.length ? row.priceItems.join(", ") : "No price items"}</div>
-                      <div className="muted">{paymentStatusLabel(row.lifecycle?.paymentState)}</div>
-                      {(row.stripeCheckoutSessionId || row.transactionId) && (
-                        <div className="mono muted" style={{ fontSize: "var(--fs-xs)" }} title="Payment reference ID (for support)">
-                          {row.stripeCheckoutSessionId || row.transactionId}
-                        </div>
-                      )}
-                    </td>
-                    <td><PackageLifecycle lifecycle={row.lifecycle} /></td>
-                    <td><Badge tone={toneForPackageStatus(row.status)}>{optionLabel("workflowPackageStatuses", row.status)}</Badge></td>
-                    <td>
-                      <div className="row" style={{ justifyContent: "flex-end" }}>
-                        <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => createPackageTask(row)}>Task</button>
-                        {!row.lifecycle?.filed && <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => filePackage(row)}>Filed</button>}
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          disabled={!canManage}
-                          onClick={() => {
-                            if (!canManage) return;
-                            setDraft({
-                              ...row,
-                              supportingDocumentId: row.supportingDocumentIds?.[0],
-                              partsText: (row.parts ?? []).join(", "),
-                              priceItemsText: (row.priceItems ?? []).join(", "),
-                              signerRosterText: (row.signerRoster ?? []).join(", "),
-                              signerEmailsText: (row.signerEmails ?? []).join(", "),
-                              signingPackageIdsText: (row.signingPackageIds ?? []).join(", "),
-                            });
-                            setOpen(true);
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete workflow package" disabled={!canManage} onClick={() => confirmDelete(row)}>
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        )}
+        <RecordListTable<PackageRecord>
+          variant="card"
+          table={PACKAGES_TABLE}
+          tableId="workflow-packages"
+          label="Packages"
+          icon={<Workflow size={14} />}
+          records={packageRecords}
+          loading={packages === undefined}
+          onOpen={canManage ? (record) => editPackage(record.pkg) : undefined}
+          renderCell={({ record, field }) => {
+            const row = record.pkg;
+            if (field.name === "packageName") return <strong>{row.packageName}</strong>;
+            if (field.name === "effectiveDate" && !row.effectiveDate) return <span className="muted">No effective date</span>;
+            if (field.name === "eventType")
+              return (
+                <span>
+                  <span style={{ display: "block" }}>{optionLabel("eventTypes", row.eventType)}</span>
+                  <span className="muted" style={{ display: "block" }}>{row.parts?.length ? `${row.parts.length} parts` : "No parts listed"}</span>
+                </span>
+              );
+            if (field.name === "workflowName")
+              return row.workflowId && record.workflowName
+                ? <Link to={`/app/workflows/${row.workflowId}`}>{record.workflowName}</Link>
+                : <span className="muted">Not linked</span>;
+            if (field.name === "documentTitle") {
+              const documentId = row.supportingDocumentIds?.[0];
+              return documentId && record.documentTitle
+                ? <Link to={`/app/documents/${documentId}`}>{record.documentTitle}</Link>
+                : <span className="muted">None</span>;
+            }
+            if (field.name === "signerCount")
+              return (
+                <span>
+                  <span style={{ display: "block" }}>{row.signerRoster?.length || 0} people</span>
+                  <span className="muted" style={{ display: "block" }}>{row.signerEmails?.length || 0} emails</span>
+                </span>
+              );
+            if (field.name === "payment")
+              return (
+                <span>
+                  <span style={{ display: "block" }}>{row.priceItems?.length ? row.priceItems.join(", ") : "No price items"}</span>
+                  <span className="muted" style={{ display: "block" }}>{paymentStatusLabel(row.lifecycle?.paymentState)}</span>
+                  {(row.stripeCheckoutSessionId || row.transactionId) && (
+                    <span className="mono muted" style={{ display: "block", fontSize: "var(--fs-xs)" }} title="Payment reference ID (for support)">
+                      {row.stripeCheckoutSessionId || row.transactionId}
+                    </span>
+                  )}
+                </span>
+              );
+            if (field.name === "lifecycle") return <PackageLifecycle lifecycle={row.lifecycle} />;
+            if (field.name === "status") return <Badge tone={toneForPackageStatus(row.status)}>{optionLabel("workflowPackageStatuses", row.status)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => {
+            const row = record.pkg;
+            return (
+              <>
+                <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => createPackageTask(row)}>Task</button>
+                {!row.lifecycle?.filed && <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => filePackage(row)}>Filed</button>}
+                <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => editPackage(row)}>Edit</button>
+                <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label="Delete workflow package" disabled={!canManage} onClick={() => confirmDelete(row)}>
+                  <Trash2 size={12} />
+                </button>
+              </>
+            );
+          }}
+          renderPhoneCard={(record, { open, field, selecting }) => (
+            <RecordTablePhoneCard
+              title={record.packageName}
+              badge={field("status")}
+              meta={[optionLabel("eventTypes", record.eventType), record.effectiveDate ? formatDate(record.effectiveDate) : "No effective date"]}
+              detail={[record.workflowName ?? "", paymentStatusLabel(record.pkg.lifecycle?.paymentState)]}
+              onOpen={canManage ? open : undefined}
+              selecting={selecting}
+            />
+          )}
+          emptyState={<RecordTableEmpty title="No workflow packages yet" />}
+        />
       </div>
 
       }
@@ -302,7 +391,13 @@ function paymentStatusLabel(paymentState?: string) {
   return `Payment: ${labelize(paymentState)}`;
 }
 
-function PackageLifecycle({ lifecycle }: { lifecycle?: any }) {
+/** The lifecycle badges as one line of text, for search, sort and export. */
+function lifecycleText(lifecycle?: PackageLifecycleState) {
+  if (!lifecycle) return "";
+  return [labelize(lifecycle.signerState), paymentStatusLabel(lifecycle.paymentState), `${lifecycle.openTaskCount ?? 0} open tasks`, `${lifecycle.filingCount ?? 0} filings`].join(" · ");
+}
+
+function PackageLifecycle({ lifecycle }: { lifecycle?: PackageLifecycleState }) {
   if (!lifecycle) return <span className="muted">-</span>;
   return (
     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>

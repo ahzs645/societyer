@@ -203,7 +203,7 @@ export function ImportWizard({
             <Banner tone="info">
               We guessed mappings from your headers — double-check below. Unmapped columns are ignored.
             </Banner>
-            <table className="table import-wizard__mapping">
+            <table className="table table--report import-wizard__mapping">
               <thead>
                 <tr>
                   <th>Your column</th>
@@ -272,7 +272,7 @@ export function ImportWizard({
               {validationErrors.length > 0 && ` ${validationErrors.length} validation issue${validationErrors.length === 1 ? "" : "s"} — rows with missing required fields will fail to import.`}
             </Banner>
             <div className="import-wizard__preview-wrap">
-              <table className="table">
+              <table className="table table--report">
                 <thead>
                   <tr>
                     {target.fields.map((f) => <th key={f.id}>{f.label}</th>)}

@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Pencil } from "lucide-react";
+import { Pencil, UserPlus } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
-import type { Id } from "../../convex/_generated/dataModel";
-import { Badge, Drawer, Field } from "./ui";
-import { Select } from "./Select";
-import { Toggle } from "./Controls";
-import { useToast } from "./Toast";
-import { useConfirm } from "./Modal";
-import { formatDate } from "../lib/format";
-import { originHost } from "../lib/workspaceDomain";
+import type { Id } from "../../../convex/_generated/dataModel";
+import { Badge, Drawer, Field } from "../../components/ui";
+import { Select } from "../../components/Select";
+import { Toggle } from "../../components/Controls";
+import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/Modal";
+import { formatDate } from "../../lib/format";
+import { originHost } from "../../lib/workspaceDomain";
 
 // Owner is never granted from a request; promote after they join.
 const ACCESS_REQUEST_ROLES = ["Admin", "Director", "Member", "Viewer"];
@@ -26,6 +27,65 @@ const DECISION_FAILURES: Record<string, string> = {
   "identity-disabled": "This person's sign-in is disabled.",
   "email-in-use": "Another user here already uses this email. Edit or remove that user first.",
 };
+
+type AccessRequestRecord = {
+  _id: string;
+  id: string;
+  email: string;
+  note: string;
+  createdAtISO: string;
+  status: AccessRequestRow["status"];
+  /** The role granted, or (pending) the one preselected. */
+  role: string;
+  /** Who decided and when, for decided requests. */
+  decided: string;
+  request: AccessRequestRow;
+};
+
+const ACCESS_REQUESTS_TABLE = staticRecordTable({
+  id: "access-requests",
+  nameSingular: "accessRequest",
+  namePlural: "accessRequests",
+  labelSingular: "Access request",
+  labelPlural: "Access requests",
+  labelIdentifierFieldName: "email",
+  fields: [
+    { name: "email", label: "Person", fieldType: FIELD_TYPES.EMAIL, size: 240, config: { groupable: false } },
+    { name: "note", label: "Note", fieldType: FIELD_TYPES.TEXT, size: 240 },
+    { name: "createdAtISO", label: "Sent", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "role", label: "Role", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      isVisible: false,
+      config: {
+        options: [
+          { value: "pending", label: "Pending", color: "amber" },
+          { value: "approved", label: "Approved", color: "green" },
+          { value: "declined", label: "Declined", color: "gray" },
+          { value: "withdrawn", label: "Withdrawn", color: "gray" },
+        ],
+      },
+    },
+    { name: "decided", label: "Decided", fieldType: FIELD_TYPES.TEXT, size: 200 },
+  ],
+});
+
+function accessRequestRecord(request: AccessRequestRow): AccessRequestRecord {
+  return {
+    _id: request.id,
+    id: request.id,
+    email: request.email ?? "",
+    note: request.note ?? "",
+    createdAtISO: request.createdAtISO,
+    status: request.status,
+    role: request.grantedRole ?? "",
+    decided: request.status === "pending" ? "" : [request.decidedBy, request.decidedAtISO && formatDate(request.decidedAtISO)].filter(Boolean).join(", "),
+    request,
+  };
+}
 
 /**
  * Users & access: requests to join from this workspace's own web address, and
@@ -69,6 +129,23 @@ export function AccessRequestsPanel({ societyId, assignableRoles }: { societyId:
     }
   };
 
+  const records = rows.map(accessRequestRecord);
+  const roleCell = (request: AccessRequestRow) =>
+    request.status === "pending" ? (
+      <Select
+        size="sm"
+        value={roleFor(request)}
+        disabled={busy !== null}
+        onChange={(role) => setRoles((previous) => ({ ...previous, [request.id]: role }))}
+        aria-label={`Role for ${who(request)}`}
+        options={approverRoles.map((role) => ({ value: role, label: role }))}
+      />
+    ) : (
+      <Badge tone={request.status === "approved" ? "success" : "neutral"}>
+        {request.status === "approved" ? `Approved as ${request.grantedRole ?? "member"}` : "Declined"}
+      </Badge>
+    );
+
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="card__head users-invitations__head">
@@ -84,51 +161,48 @@ export function AccessRequestsPanel({ societyId, assignableRoles }: { societyId:
         </button>
       </div>
       {rows.length > 0 && (
-        <table className="table">
-          <thead>
-            <tr><th>Person</th><th>Note</th><th>Sent</th><th>Role</th><th /></tr>
-          </thead>
-          <tbody>
-            {rows.map((request) => (
-              <tr key={request.id}>
-                <td>
+        <RecordListTable<AccessRequestRecord>
+          variant="card"
+          table={ACCESS_REQUESTS_TABLE}
+          tableId="access-requests"
+          label="Access requests"
+          icon={<UserPlus size={14} />}
+          records={records}
+          renderCell={({ record, field }) => {
+            const { request } = record;
+            if (field.name === "email")
+              return (
+                <span>
                   <span className="mono">{request.email ?? "No email"}</span>
                   {request.name && request.name !== request.email && <div className="muted">{request.name}</div>}
-                </td>
-                <td className="muted">{request.note ?? "—"}</td>
-                <td className="muted">{formatDate(request.createdAtISO)}</td>
-                <td>
-                  {request.status === "pending" ? (
-                    <Select
-                      size="sm"
-                      value={roleFor(request)}
-                      disabled={busy !== null}
-                      onChange={(role) => setRoles((previous) => ({ ...previous, [request.id]: role }))}
-                      aria-label={`Role for ${who(request)}`}
-                      options={approverRoles.map((role) => ({ value: role, label: role }))}
-                    />
-                  ) : (
-                    <Badge tone={request.status === "approved" ? "success" : "neutral"}>
-                      {request.status === "approved" ? `Approved as ${request.grantedRole ?? "member"}` : "Declined"}
-                    </Badge>
-                  )}
-                </td>
-                <td className="table__actions">
-                  {request.status === "pending" ? (
-                    <>
-                      <button className="btn btn--sm btn--accent" disabled={busy !== null} onClick={() => void decide(request, true)}>
-                        {busy === request.id ? "Saving…" : "Approve"}
-                      </button>
-                      <button className="btn btn--sm btn--ghost" disabled={busy !== null} onClick={() => void decide(request, false)}>Decline</button>
-                    </>
-                  ) : (
-                    <span className="muted">{[request.decidedBy, request.decidedAtISO && formatDate(request.decidedAtISO)].filter(Boolean).join(", ")}</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </span>
+              );
+            if (field.name === "note") return <span className="muted">{request.note ?? "—"}</span>;
+            if (field.name === "role") return roleCell(request);
+            if (field.name === "decided") return <span className="muted">{record.decided}</span>;
+            return undefined;
+          }}
+          renderRowActions={(record) =>
+            record.request.status === "pending" ? (
+              <>
+                <button className="btn btn--sm btn--accent" disabled={busy !== null} onClick={() => void decide(record.request, true)}>
+                  {busy === record.id ? "Saving…" : "Approve"}
+                </button>
+                <button className="btn btn--sm btn--ghost" disabled={busy !== null} onClick={() => void decide(record.request, false)}>Decline</button>
+              </>
+            ) : null
+          }
+          renderPhoneCard={(record, { selecting }) => (
+            <RecordTablePhoneCard
+              title={record.request.email ?? "No email"}
+              recordName={who(record.request)}
+              badge={roleCell(record.request)}
+              meta={[record.request.name && record.request.name !== record.request.email ? record.request.name : "", `Sent ${formatDate(record.createdAtISO)}`]}
+              detail={[record.request.note ?? "", record.decided]}
+              selecting={selecting}
+            />
+          )}
+        />
       )}
       {settings && editing && (
         <SettingsDrawer societyId={societyId} settings={settings} host={host} onClose={() => setEditing(false)} />

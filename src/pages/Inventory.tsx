@@ -61,6 +61,7 @@ import { CountsTab, LocationsTab, LotsTab, StockTab } from "./inventory/tabs";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { StatStrip, StatTile } from "../components/StatTile";
 import { useScrollOverflow } from "../hooks/useScrollOverflow";
+import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 
 export function InventoryPage() {
   const { canWrite, canExport } = useFinancePermissions();
@@ -1069,25 +1070,11 @@ export function InventoryPage() {
               {detailLocation.parentLocationId ? ` · inside ${locationById.get(detailLocation.parentLocationId)?.name ?? "—"}` : ""}
               {detailLocation.custodianName ? ` · custodian: ${detailLocation.custodianName}` : ""}
             </div>
-            <table className="table">
-              <thead><tr><th>Item</th><th>SKU</th><th style={{ textAlign: "right" }}>On hand</th><th style={{ textAlign: "right" }}>Available</th></tr></thead>
-              <tbody>
-                {(balancesByLocationId.get(detailLocation._id) ?? []).length === 0 && (
-                  <tr><td colSpan={4} className="muted">This location is empty.</td></tr>
-                )}
-                {(balancesByLocationId.get(detailLocation._id) ?? []).map((b) => {
-                  const item = itemById.get(b.inventoryItemId);
-                  return (
-                    <tr key={b._id}>
-                      <td>{item?.name ?? "Unknown item"}</td>
-                      <td className="mono muted">{item?.sku ?? "-"}</td>
-                      <td className="mono" style={{ textAlign: "right" }}>{formatQuantity(b.quantityOnHand, item?.unitOfMeasure)}</td>
-                      <td className="mono" style={{ textAlign: "right" }}>{formatQuantity(b.quantityAvailable, item?.unitOfMeasure)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <LocationContentsTable
+              balances={balancesByLocationId.get(detailLocation._id) ?? []}
+              itemById={itemById}
+              onOpenItem={openEditItem}
+            />
           </div>
         )}
       </Drawer>
@@ -1296,5 +1283,93 @@ export function InventoryPage() {
         )}
       </Drawer>
     </div>
+  );
+}
+
+const LOCATION_CONTENTS_TABLE = staticRecordTable({
+  id: "inventory:location-contents",
+  nameSingular: "inventoryLocationBalance",
+  namePlural: "inventoryLocationBalances",
+  labelSingular: "Item",
+  labelPlural: "Items",
+  labelIdentifierFieldName: "name",
+  viewName: "What's here",
+  fields: [
+    { name: "name", label: "Item", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    { name: "sku", label: "SKU", fieldType: FIELD_TYPES.TEXT, size: 130 },
+    { name: "quantityOnHand", label: "On hand", fieldType: FIELD_TYPES.NUMBER, size: 130 },
+    { name: "quantityAvailable", label: "Available", fieldType: FIELD_TYPES.NUMBER, size: 130 },
+  ],
+});
+
+type InventoryItemRef = { _id: string; name?: string; sku?: string; unitOfMeasure?: string };
+type InventoryBalanceRef = { _id: string; inventoryItemId: string; quantityOnHand?: number | null; quantityAvailable?: number | null };
+
+type LocationContentsRecord = {
+  _id: string;
+  name: string;
+  sku: string;
+  quantityOnHand: number | null;
+  quantityAvailable: number | null;
+  unitOfMeasure?: string;
+  item: InventoryItemRef | undefined;
+};
+
+/** What one location holds; an item's name opens it, as on the Stock tab. */
+function LocationContentsTable<Item extends InventoryItemRef>({
+  balances,
+  itemById,
+  onOpenItem,
+}: {
+  balances: InventoryBalanceRef[];
+  itemById: Map<string, Item>;
+  onOpenItem: (item: Item) => void;
+}) {
+  const records = useMemo<LocationContentsRecord[]>(
+    () =>
+      balances.map((balance) => {
+        const item = itemById.get(balance.inventoryItemId);
+        return {
+          _id: balance._id,
+          name: item?.name ?? "Unknown item",
+          sku: item?.sku ?? "",
+          quantityOnHand: balance.quantityOnHand ?? null,
+          quantityAvailable: balance.quantityAvailable ?? null,
+          unitOfMeasure: item?.unitOfMeasure,
+          item,
+        };
+      }),
+    [balances, itemById],
+  );
+  const open = (record: LocationContentsRecord) => {
+    const item = itemById.get(record.item?._id ?? "");
+    if (item) onOpenItem(item);
+  };
+  return (
+    <RecordListTable<LocationContentsRecord>
+      variant="card"
+      table={LOCATION_CONTENTS_TABLE}
+      tableId="inventory-location-contents"
+      label="What's here"
+      icon={<Package size={14} />}
+      records={records}
+      onOpen={open}
+      renderCell={({ record, field }) => {
+        if (field.name === "sku") return record.sku ? <span className="mono muted">{record.sku}</span> : <span className="muted">-</span>;
+        if (field.name === "quantityOnHand") return <span className="mono">{formatQuantity(record.quantityOnHand, record.unitOfMeasure)}</span>;
+        if (field.name === "quantityAvailable") return <span className="mono">{formatQuantity(record.quantityAvailable, record.unitOfMeasure)}</span>;
+        return undefined;
+      }}
+      renderPhoneCard={(record, { open: openCard, selecting }) => (
+        <RecordTablePhoneCard
+          title={record.name}
+          meta={[`${formatQuantity(record.quantityOnHand, record.unitOfMeasure)} on hand`, `${formatQuantity(record.quantityAvailable, record.unitOfMeasure)} available`]}
+          detail={[record.sku]}
+          onOpen={record.item ? openCard : undefined}
+          selecting={selecting}
+        />
+      )}
+      emptyState={<RecordTableEmpty title="This location is empty" />}
+    />
   );
 }

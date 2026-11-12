@@ -5,28 +5,26 @@ import { QuotesPanel } from "../features/invoicing/QuotesPanel";
 import { CustomerStatementsPanel } from "../features/invoicing/CustomerStatementsPanel";
 import { BillingAutomationPanel } from "../features/invoicing/BillingAutomationPanel";
 import { RepairJobsPanel } from "../features/invoicing/RepairJobsPanel";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, Ban, Bell, BookCheck, Download, FileCheck2, FileSpreadsheet, FileText, Landmark, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
+import { Ban, Bell, BookCheck, Download, FileCheck2, FileSpreadsheet, FileText, Landmark, Plus, ReceiptText, Send, Settings2, Users, X } from "lucide-react";
+import type { BulkAction } from "@/platform/record-engine";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Banner, EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
-import { useIsBottomSheet } from "../lib/useSheetDrag";
 import { StatStrip, StatTile } from "../components/StatTile";
 import { Money } from "../components/Money";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { formatDate, pluralize } from "../lib/format";
+import { pluralize } from "../lib/format";
 import { downloadTableExport, readLastExportFormat, rememberExportFormat, type TableExportFormat } from "../lib/tableExport";
-import { addDays, isOpenStatus, partyKey, invoiceCurrencySummary, invoiceCashActivity, summarizeCustomers, type CustomerSummary } from "../../shared/invoicing";
+import { addDays, isOpenStatus, partyKey, invoiceCurrencySummary, invoiceCashActivity, summarizeCustomers } from "../../shared/invoicing";
 import { isSociety } from "../../shared/organizationDomain";
-import { InvoiceStatusPill, NeedsActionPill } from "../features/invoicing/InvoiceStatusPill";
 import { InvoiceGlMappingDrawer } from "../features/invoicing/InvoiceGlMappingDrawer";
 import { PostExistingInvoicesModal } from "../features/invoicing/PostExistingInvoicesModal";
 import { InvoiceBuilder } from "../features/invoicing/InvoiceBuilder";
@@ -41,17 +39,8 @@ import type { InvoiceRow, InvoiceTab, InvoiceWorkspace } from "../features/invoi
 import { invoiceExportSheet, invoiceExportTextRows } from "../features/invoicing/invoiceExport";
 
 import { useInvoiceCollections } from "../features/invoicing/useInvoiceCollections";
-import { InvoiceViewControls } from "../features/invoicing/InvoiceViewControls";
 import { InvoiceListTable } from "../features/invoicing/InvoiceListTable";
-import { DEFAULT_INVOICE_LIST_VIEW, cleanInvoiceListView, type InvoiceListView } from "../../shared/billingPricing";
 import "../features/invoicing/invoiceViews.css";
-
-function readView(params: URLSearchParams): InvoiceListView {
-  try { const raw = params.get("view"); return cleanInvoiceListView(raw ? JSON.parse(raw) : DEFAULT_INVOICE_LIST_VIEW); }
-  catch { return cleanInvoiceListView(DEFAULT_INVOICE_LIST_VIEW); }
-}
-
-const DEFAULT_VIEW_JSON = JSON.stringify(cleanInvoiceListView(DEFAULT_INVOICE_LIST_VIEW));
 
 const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "needs_action", "recurring", "customers", "catalog", "templates", "price_lists", "repairs", "quotes", "statements", "automation"];
 const LIST_TABS = new Set<InvoiceTab>(["all", "drafts", "outstanding", "overdue", "paid", "needs_action"]);
@@ -65,7 +54,6 @@ const SECTIONS = [
 ] as const satisfies readonly { id: string; label: string; tabs: readonly InvoiceTab[] }[];
 type InvoiceSection = (typeof SECTIONS)[number]["id"];
 const sectionForTab = (tab: InvoiceTab) => SECTIONS.find((section) => (section.tabs as readonly InvoiceTab[]).includes(tab)) ?? SECTIONS[0];
-type SortKey = "number" | "customer" | "issueDate" | "dueDate" | "total" | "balance";
 
 function rowsForTab(rows: InvoiceRow[], tab: InvoiceTab): InvoiceRow[] {
   switch (tab) {
@@ -100,9 +88,7 @@ export function InvoicesPage() {
   const collections = useInvoiceCollections(initialWorkspace,society?._id);
   const queriedWorkspace = collections.workspace;
   const [params, setParams] = useSearchParams();
-  const [initialView] = useState(() => readView(params));
-  const [advancedView, setAdvancedView] = useState(initialView);
-  const [currencyFilter, setCurrencyFilter] = useState(initialView.currency);
+  const [currencyFilter, setCurrencyFilter] = useState("");
   const currency = currencyFilter || queriedWorkspace?.ledger.workspaceCurrency || "CAD";
   const workspace = useMemo(() => queriedWorkspace ? { ...queriedWorkspace,
     invoices: queriedWorkspace.invoices.filter((row) => row.currency === currency),
@@ -122,18 +108,10 @@ export function InvoicesPage() {
   const [readyBuilder,setReadyBuilder]=useState<string|null>(null);
   useEffect(()=>{if(!builder)setReadyBuilder(null);else if(collections.ready)setReadyBuilder(builder);},[builder,collections.ready]);
   const duesOpen = params.get("dues") === "1";
-  const [recentOnly, setRecentOnly] = useState(initialView.recentOnly);
-  const [customerFilter, setCustomerFilter] = useState<{ key: string; name: string } | null>(initialView.customerKey ? { key: initialView.customerKey, name: "Customer" } : null);
-  const [seriesFilter, setSeriesFilter] = useState<{ id: string; name: string } | null>(initialView.seriesId ? { id: initialView.seriesId, name: "Recurring series" } : null);
+  const [recentOnly, setRecentOnly] = useState(false);
+  const [customerFilter, setCustomerFilter] = useState<{ key: string; name: string } | null>(null);
+  const [seriesFilter, setSeriesFilter] = useState<{ id: string; name: string } | null>(null);
   const [focusSeriesId, setFocusSeriesId] = useState<string | null>(null);
-  const [search, setSearch] = useState(initialView.search);
-  // Phones: search is an icon beside the tabs until it's opened (or in use).
-  const isPhone = useIsBottomSheet();
-  const [searchOpen, setSearchOpen] = useState(false);
-  const phoneSearchShown = searchOpen || search.length > 0;
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: initialView.sortKey, dir: initialView.sortDirection });
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glMappingOpen, setGlMappingOpen] = useState(false);
@@ -152,7 +130,6 @@ export function InvoicesPage() {
   };
   const setTab = (next: InvoiceTab, keepFilters = false) => {
     setParam({ tab: next === "all" ? null : next });
-    setSelected(new Set());
     if (!keepFilters) {
       setRecentOnly(false);
       setCustomerFilter(null);
@@ -160,51 +137,18 @@ export function InvoicesPage() {
     }
   };
 
-  const listView: InvoiceListView = { ...advancedView, tab: LIST_TABS.has(tab) ? tab as InvoiceListView["tab"] : "all", currency: currencyFilter, search, customerKey: customerFilter?.key ?? "", seriesId: seriesFilter?.id ?? "", recentOnly, sortKey: sort.key, sortDirection: sort.dir };
-  // The tab has its own param, so an untouched view leaves the address clean.
-  const viewJson = JSON.stringify({ ...listView, tab: "all" }) === DEFAULT_VIEW_JSON ? null : JSON.stringify(listView);
-  useEffect(() => {
-    setParams(previous => {
-      if (previous.get("view") === viewJson) return previous;
-      const next = new URLSearchParams(previous);
-      if (viewJson) next.set("view", viewJson); else next.delete("view");
-      return next;
-    }, { replace: true });
-  }, [viewJson, setParams]);
-  const applyView = (value: InvoiceListView) => {
-    setAdvancedView(value); setCurrencyFilter(value.currency); setSearch(value.search); setRecentOnly(value.recentOnly);
-    setCustomerFilter(value.customerKey ? { key: value.customerKey, name: queriedWorkspace?.customers.find(c => c.key === value.customerKey)?.name ?? "Customer" } : null);
-    setSeriesFilter(value.seriesId ? { id: value.seriesId, name: queriedWorkspace?.series.find(s => s._id === value.seriesId)?.name ?? "Recurring series" } : null);
-    setSort({ key: value.sortKey, dir: value.sortDirection }); setParam({ tab: value.tab === "all" ? null : value.tab }); setSelected(new Set());
-  };
-
+  // The page narrows the list by tab and by the filters other views hand it
+  // (a customer, a series, recent cash activity); search, column filters and
+  // sort belong to the table. Rows arrive newest first.
   const rows = useMemo(() => {
     if (!workspace) return [];
     const since = addDays(workspace.today, -30);
-    const q = search.trim().toLowerCase();
     let list = rowsForTab(workspace.invoices, tab);
     if (recentOnly) list = list.filter((row) => invoiceCashActivity(row.payments, since, workspace.today).hasActivity);
     if (customerFilter) list = list.filter((row) => partyKey(row) === customerFilter.key);
     if (seriesFilter) list = list.filter((row) => row.seriesId === seriesFilter.id);
-    list = list.filter(row => (!advancedView.fromDate || row.issueDate >= advancedView.fromDate) && (!advancedView.toDate || row.issueDate <= advancedView.toDate) && (!advancedView.dueFrom || row.dueDate >= advancedView.dueFrom) && (!advancedView.dueTo || row.dueDate <= advancedView.dueTo) && (advancedView.minimumBalanceCents == null || (row.status === "void" ? 0 : row.balanceCents) >= advancedView.minimumBalanceCents) && (advancedView.maximumBalanceCents == null || (row.status === "void" ? 0 : row.balanceCents) <= advancedView.maximumBalanceCents));
-    if (q) list = list.filter((row) => `${row.number} ${row.billToName} ${row.billToEmail ?? ""} ${row.reference ?? ""} ${row.lines.map((l) => l.item).join(" ")}`.toLowerCase().includes(q));
-    const value = (row: InvoiceRow): string | number => {
-      switch (sort.key) {
-        case "number": return row.sequence;
-        case "customer": return row.billToName.toLowerCase();
-        case "dueDate": return row.dueDate;
-        case "total": return row.totalCents;
-        case "balance": return row.status === "void" ? 0 : row.balanceCents;
-        default: return `${row.issueDate}-${String(row.sequence).padStart(8, "0")}`;
-      }
-    };
-    return [...list].sort((a, b) => {
-      const av = value(a);
-      const bv = value(b);
-      const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
-      return sort.dir === "asc" ? cmp : -cmp;
-    });
-  }, [workspace, tab, recentOnly, customerFilter, seriesFilter, search, sort, advancedView]);
+    return [...list].sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.sequence - a.sequence);
+  }, [workspace, tab, recentOnly, customerFilter, seriesFilter]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -212,8 +156,6 @@ export function InvoicesPage() {
   const societyLike = isSociety(society as any);
   const showMembers = societyLike && (workspace?.parties.members.length ?? 0) > 0;
   const openInvoice = queriedWorkspace?.invoices.find((row) => row._id === openId) ?? null;
-  const selectedRows = rows.filter((row) => selected.has(row._id));
-  const selectedTotal = selectedRows.reduce((sum, row) => sum + (row.status === "void" ? 0 : row.balanceCents), 0);
   const monthLabel = workspace ? new Intl.DateTimeFormat("en-CA", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${workspace.today}T12:00:00Z`)) : "";
 
   const openBuilder = (id: string | "new", party?: BillToValue | null) => {
@@ -258,20 +200,12 @@ export function InvoicesPage() {
     );
   }
 
-  const toggle = (id: string) => setSelected((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    return next;
-  });
-  const allSelected = rows.length > 0 && selectedRows.length === rows.length;
-
   const exportRows = async (list: InvoiceRow[], label: string, format: TableExportFormat = readLastExportFormat()) => {
     try {
       const fileName = await downloadTableExport(`Invoices - ${label} ${workspace?.today ?? ""}`, format, {
         title: `Invoices - ${label}`,
-        textRows: () => invoiceExportTextRows(list, listView.columns),
-        sheet: () => invoiceExportSheet(list, listView.columns),
+        textRows: () => invoiceExportTextRows(list),
+        sheet: () => invoiceExportSheet(list),
       });
       rememberExportFormat(format);
       toast.success(`Exported ${pluralize(list.length, "invoice")}`, fileName);
@@ -280,7 +214,7 @@ export function InvoicesPage() {
     }
   };
 
-  const bulkFinalize = async () => {
+  const bulkFinalize = async (selectedRows: InvoiceRow[]) => {
     const drafts = selectedRows.filter((row) => row.lifecycle === "draft");
     if (!drafts.length) return toast.info("Select draft invoices to finalize");
     const ok = await confirm({ title: `Finalize ${pluralize(drafts.length, "draft invoice")}?`, message: "This locks their details and records the invoices in the books when their accounts are configured. Download and send each invoice yourself afterward.", confirmLabel: "Finalize drafts" });
@@ -289,7 +223,6 @@ export function InvoicesPage() {
     try {
       const result: any = await issue({ societyId: society._id, ids: drafts.map((row) => row._id) });
       toast.success(`${pluralize(result.issued, "invoice")} finalized`, "Open an invoice to download it and record external sending.");
-      setSelected(new Set());
     } catch (err: any) {
       toast.error("Could not finalize invoices", err?.message);
     } finally {
@@ -297,7 +230,7 @@ export function InvoicesPage() {
     }
   };
 
-  const bulkMarkSent = async () => {
+  const bulkMarkSent = async (selectedRows: InvoiceRow[]) => {
     const issued = selectedRows.filter((row) => row.lifecycle === "issued");
     if (!issued.length) return toast.info("Select finalized invoices whose sending has not been recorded");
     const ok = await confirm({ title: "Record external sending today?", message: `Confirm that you have already sent ${pluralize(issued.length, "invoice")} yourself today. Societyer will record today's date and will not send an email. For another date or delivery details, open each invoice.`, confirmLabel: "Record sending" });
@@ -306,7 +239,6 @@ export function InvoicesPage() {
     try {
       const result: any = await markSent({ societyId: society._id, ids: issued.map((row) => row._id), sentDate: workspace!.today, method: "other" });
       toast.success(`External sending recorded for ${pluralize(result.sent, "invoice")}`);
-      setSelected(new Set());
     } catch (err: any) {
       toast.error("Could not mark as sent", err?.message);
     } finally {
@@ -314,7 +246,7 @@ export function InvoicesPage() {
     }
   };
 
-  const bulkRemind = async () => {
+  const bulkRemind = async (selectedRows: InvoiceRow[]) => {
     const open = selectedRows.filter((row) => row.lifecycle === "sent" && isOpenStatus(row.status));
     if (!open.length) return toast.info("Reminders are for sent invoices with a balance");
     setBusy(true);
@@ -322,7 +254,6 @@ export function InvoicesPage() {
       const result: any = await sendReminders({ societyId: society._id, ids: open.map((row) => row._id) as any });
       const notes = [result.skippedNoEmail ? `${result.skippedNoEmail} without an email` : ""].filter(Boolean).join(", ");
       toast.success(result.created ? `${pluralize(result.created, "reminder")} drafted in the Outbox` : "No reminders drafted", notes ? `Skipped ${notes}.` : "Review and send them from the Outbox.");
-      setSelected(new Set());
     } catch (err: any) {
       toast.error("Could not draft reminders", err?.message);
     } finally {
@@ -330,7 +261,7 @@ export function InvoicesPage() {
     }
   };
 
-  const bulkVoid = async () => {
+  const bulkVoid = async (selectedRows: InvoiceRow[]) => {
     const voidable = selectedRows.filter((row) => row.lifecycle !== "void");
     if (!voidable.length) return;
     const withPayments = voidable.filter((row) => row.paidCents > 0).length;
@@ -350,7 +281,6 @@ export function InvoicesPage() {
     try {
       const result: any = await voidInvoices({ societyId: society._id, ids: voidable.map((row) => row._id) as any });
       toast.success(`${pluralize(result.voided, "invoice")} voided`, result.skippedPaid ? `${result.skippedPaid} with payments skipped.` : undefined);
-      setSelected(new Set());
     } catch (err: any) {
       toast.error("Could not void", err?.message);
     } finally {
@@ -358,13 +288,30 @@ export function InvoicesPage() {
     }
   };
 
-  const showCustomer = (customer: CustomerSummary) => {
-    setParam({ tab: null });
-    setSelected(new Set());
+  /** A customer opens as their invoices: the whole list, filtered to them. */
+  const showCustomer = (customer: { key: string; name: string }) => {
+    setParam({ tab: null, invoice: null });
     setSeriesFilter(null);
     setRecentOnly(false);
     setCustomerFilter({ key: customer.key, name: customer.name });
   };
+  const openSeries = (seriesId: string) => {
+    setFocusSeriesId(seriesId);
+    setParam({ invoice: null, tab: "recurring" });
+  };
+
+  const rowsFor = (ids: string[]) => rows.filter((row) => ids.includes(row._id));
+  const bulkActions: BulkAction[] = [
+    ...(canWrite
+      ? [
+          { id: "remind", label: "Draft reminder email", icon: <Bell size={12} aria-hidden="true" />, onRun: (ids: string[]) => bulkRemind(rowsFor(ids)) },
+          { id: "finalize", label: "Finalize drafts", icon: <FileCheck2 size={12} aria-hidden="true" />, onRun: (ids: string[]) => bulkFinalize(rowsFor(ids)) },
+          { id: "mark-sent", label: "Record external sending", icon: <Send size={12} aria-hidden="true" />, onRun: (ids: string[]) => bulkMarkSent(rowsFor(ids)) },
+        ]
+      : []),
+    ...(canExport ? [{ id: "export", label: "Export", icon: <Download size={12} aria-hidden="true" />, keepSelection: true, onRun: (ids: string[]) => exportRows(rowsFor(ids), "selected") }] : []),
+    ...(canWrite ? [{ id: "void", label: "Void", icon: <Ban size={12} aria-hidden="true" />, tone: "danger" as const, onRun: (ids: string[]) => bulkVoid(rowsFor(ids)) }] : []),
+  ];
 
   const summary = workspace?.summary;
   const counts = workspace
@@ -502,27 +449,7 @@ export function InvoicesPage() {
       )}
 
       {sectionTabs}
-      {invoiceTabs && isPhone ? (
-        <div className="invoice-tabs-row invoice-subtabs">
-          {invoiceTabs}
-          {LIST_TABS.has(tab) && (
-            <button
-              type="button"
-              className="btn btn--ghost btn--icon"
-              aria-label="Search invoices"
-              aria-expanded={phoneSearchShown}
-              onClick={() => {
-                const next = !phoneSearchShown || Boolean(search);
-                setSearchOpen(next);
-                if (next) window.setTimeout(() => searchInputRef.current?.focus(), 0);
-              }}
-            >
-              <Search size={15} />
-            </button>
-          )}
-          {LIST_TABS.has(tab) && <InvoiceViewControls compact societyId={society._id} value={listView} onChange={applyView} />}
-        </div>
-      ) : invoiceTabs && <div className="invoice-subtabs">{invoiceTabs}</div>}
+      {invoiceTabs && <div className="invoice-subtabs">{invoiceTabs}</div>}
 
       {collections.loading && <p className="muted" role="status">Loading complete template, pricing and repair lists…</p>}
       {collections.error && <Banner tone="warn" title="Complete invoice lists could not load">{collections.error} <button className="btn btn--sm" onClick={collections.retry}>Retry loading lists</button></Banner>}
@@ -557,7 +484,7 @@ export function InvoicesPage() {
           })}
         />
       ) : tab === "quotes" ? (
-        <QuotesPanel workspace={queriedWorkspace!} societyId={society._id} canWrite={canWrite} canExport={canExport} onOpenInvoice={id => setParam({ tab: null, invoice: id, builder: null })} />
+        <QuotesPanel workspace={queriedWorkspace!} societyId={society._id} canWrite={canWrite} canExport={canExport} onOpenInvoice={id => setParam({ tab: null, invoice: id, builder: null })} onOpenCustomer={showCustomer} />
       ) : tab === "statements" ? (
         <CustomerStatementsPanel key={`${params.get("statementCustomer") ?? ""}:${currency}`} workspace={queriedWorkspace!} societyId={society._id} canExport={canExport} initialCustomerKey={params.get("statementCustomer") ?? undefined} initialCurrency={currency} />
       ) : tab === "automation" ? (
@@ -567,63 +494,31 @@ export function InvoicesPage() {
       ) : tab === "price_lists" ? (
         <PriceListsPanel workspace={workspace} societyId={society._id} canWrite={canWrite} />
       ) : tab === "repairs" ? (
-        <RepairJobsPanel key={params.get("repair")} workspace={workspace} societyId={society._id} canWrite={canWrite} canExport={canExport} logoUrl={(society as any).logoUrl ?? null} focusId={params.get("repair")} onOpenInvoice={(id) => setParam({ invoice: id, builder: null })} />
+        <RepairJobsPanel key={params.get("repair")} workspace={workspace} societyId={society._id} canWrite={canWrite} canExport={canExport} logoUrl={(society as any).logoUrl ?? null} focusId={params.get("repair")} onOpenInvoice={(id) => setParam({ invoice: id, builder: null })} onOpenCustomer={showCustomer} />
       ) : tab === "catalog" ? (
         <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} defaultCurrency={workspace.ledger.workspaceCurrency} assessmentDate={workspace.today} organization={workspace.organization} />
       ) : LIST_TABS.has(tab) ? (
-        <div className="card invoice-card">
-          {(!isPhone || phoneSearchShown || recentOnly || customerFilter || seriesFilter) && (
-          <div className="invoice-toolbar">
-            {(!isPhone || phoneSearchShown) && (
-            <label className="invoice-search">
-              <Search size={14} aria-hidden="true" />
-              <span className="sr-only">Search invoices</span>
-              <input ref={searchInputRef} className="input" type="search" value={search} placeholder="Search number, customer, item" onChange={(e) => setSearch(e.target.value)} />
-            </label>
-            )}
-            {!isPhone && <InvoiceViewControls societyId={society._id} value={listView} onChange={applyView} />}
-            <div className="invoice-chips">
+        <>
+          {(recentOnly || customerFilter || seriesFilter) && (
+            <div className="invoice-chips" aria-label="Invoice list filters" role="group">
               {recentOnly && <FilterChip label="Cash activity in the last 30 days" onClear={() => setRecentOnly(false)} />}
               {customerFilter && <FilterChip label={customerFilter.name} onClear={() => setCustomerFilter(null)} />}
-              {seriesFilter && (
-                <FilterChip
-                  label={`Series: ${seriesFilter.name}`}
-                  onClear={() => setSeriesFilter(null)}
-                />
-              )}
-            </div>
-            <span className="muted invoice-toolbar__count">
-              {pluralize(rows.length, "invoice")} · <Money currency={currency} cents={rows.reduce((sum, row) => sum + (row.status === "void" ? 0 : row.balanceCents), 0)} /> due
-            </span>
-          </div>
-          )}
-
-          {selectedRows.length > 0 && (
-            <div className="invoice-bulkbar" role="region" aria-label="Bulk actions">
-              <span><strong>{selectedRows.length}</strong> selected · <Money currency={currency} cents={selectedTotal} /> due</span>
-              <div className="invoice-bulkbar__actions">
-                <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkRemind()}>
-                  <Bell size={12} aria-hidden="true" /> Draft reminder email
-                </button>
-                <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkFinalize()}><FileCheck2 size={12} aria-hidden="true" /> Finalize drafts</button>
-                <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkMarkSent()}>
-                  <Send size={12} aria-hidden="true" /> Record external sending
-                </button>
-                <button type="button" className="btn btn--sm" disabled={!canExport} onClick={() => void exportRows(selectedRows, "selected")}>
-                  <Download size={12} aria-hidden="true" /> Export
-                </button>
-                <button type="button" className="btn btn--sm btn--danger" disabled={busy || !canWrite} onClick={() => void bulkVoid()}>
-                  <Ban size={12} aria-hidden="true" /> Void
-                </button>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelected(new Set())}>Clear</button>
-              </div>
+              {seriesFilter && <FilterChip label={`Series: ${seriesFilter.name}`} onClear={() => setSeriesFilter(null)} />}
             </div>
           )}
-
-          {rows.length === 0 ? (
-            <div className="card__body">
-              {search || recentOnly || customerFilter || seriesFilter ? (
-                <EmptyState variant="filtered" onClearFilters={() => { setSearch(""); setRecentOnly(false); setCustomerFilter(null); setSeriesFilter(null); }} />
+          <InvoiceListTable
+            rows={rows}
+            currency={currency}
+            label={tab === "all" ? "All invoices" : allViews.find((view) => view.id === tab)?.label ?? "Invoices"}
+            openId={openId}
+            selectable={canWrite || canExport}
+            bulkActions={bulkActions}
+            onOpen={(id) => setParam({ invoice: id })}
+            onOpenCustomer={(row) => showCustomer({ key: partyKey(row), name: row.billToName })}
+            onOpenSeries={openSeries}
+            emptyState={
+              recentOnly || customerFilter || seriesFilter ? (
+                <EmptyState variant="filtered" onClearFilters={() => { setRecentOnly(false); setCustomerFilter(null); setSeriesFilter(null); }} />
               ) : (
                 <EmptyState
                   icon={<ReceiptText size={20} />}
@@ -632,12 +527,10 @@ export function InvoicesPage() {
                   variant={tab === "overdue" || tab === "outstanding" ? "caught-up" : "default"}
                   action={tab === "all" || tab === "drafts" ? <button type="button" className="btn btn--accent" disabled={!canWrite} onClick={() => openBuilder("new")}><Plus size={14} aria-hidden="true" /> New invoice</button> : undefined}
                 />
-              )}
-            </div>
-          ) : (
-            <InvoiceListTable rows={rows} columns={listView.columns} sort={sort} selected={selected} openId={openId} onSort={key => setSort({ key, dir: sort.key === key ? sort.dir === "desc" ? "asc" : "desc" : key === "customer" || key === "number" ? "asc" : "desc" })} onToggle={toggle} onSelectAll={() => setSelected(allSelected ? new Set() : new Set(rows.map(row => row._id)))} onOpen={id => setParam({ invoice: id })} />
-          )}
-        </div>
+              )
+            }
+          />
+        </>
       ) : null}
 
       {openInvoice && workspace && (
@@ -649,7 +542,7 @@ export function InvoicesPage() {
           canWrite={canWrite}
           onClose={() => setParam({ invoice: null })}
           onEdit={(id) => openBuilder(id)}
-          onOpenSeries={(seriesId) => { setFocusSeriesId(seriesId); setParam({ invoice: null, tab: "recurring" }); }}
+          onOpenSeries={openSeries}
           onEditMapping={() => setGlMappingOpen(true)}
           canExport={canExport}
           canPost={canManageIntegration}

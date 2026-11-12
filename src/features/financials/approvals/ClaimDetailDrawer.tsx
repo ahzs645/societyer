@@ -26,6 +26,7 @@ import {
 } from "../../../../shared/expensePolicy";
 import { todayDateOnly } from "../../../../shared/dateOnly";
 import type { QueueRow } from "./types";
+import { spendBudgetHref } from "../spendBudgets/spendBudgetLinks";
 
 /** Reasons that come from the matching rule (who it names, self-approval) rather than workspace access. */
 const RULE_REASON = /approver for claims of this size|own claim/;
@@ -234,7 +235,7 @@ export function ClaimDetailDrawer({
           </>
         )}
         {row.spendBudget && (
-          <div><dt>Spend budget</dt><dd><Link to="/app/spend-budgets">{row.spendBudget.name}</Link></dd></div>
+          <div><dt>Spend budget</dt><dd><Link to={spendBudgetHref(row.spendBudget._id)}>{row.spendBudget.name}</Link></dd></div>
         )}
         {row.submittedAtISO && <div><dt>Submitted</dt><dd>{formatDate(row.submittedAtISO)}</dd></div>}
         <div>

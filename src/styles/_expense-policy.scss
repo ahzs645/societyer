@@ -149,17 +149,12 @@
   gap: token(s-2);
 }
 .claim-drawer__reminded { margin: token(s-2) 0 0; font-size: token(fs-xs); }
+// The claim's flags in one table cell: one line, like the cell's other tags.
 .approvals-table__flags {
   display: flex;
-  flex-wrap: wrap;
   gap: token(s-1);
-  margin-top: token(s-1);
-}
-.approvals-table__action-group {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: token(s-1);
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* ---------------------------------------------------------- claim editor */

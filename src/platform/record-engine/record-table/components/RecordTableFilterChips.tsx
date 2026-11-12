@@ -1,4 +1,5 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDownUp, X } from "lucide-react";
 import { computeIsSortEdited, useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { RecordField, ViewFilter, ViewFilterGroup } from "../../types";
@@ -62,6 +63,7 @@ export function RecordTableFilterChips({
   const sorts = useRecordTableState((s) => s.sorts);
   const sortEdited = useRecordTableState(computeIsSortEdited);
   const isPhone = useIsBottomSheet();
+  const chipsSlot = useRecordTableState((s) => s.chipsSlot);
   const handle = useRecordTableStoreHandle();
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
@@ -158,7 +160,7 @@ export function RecordTableFilterChips({
   const firstFilterChip = chips.find((chip) => !chip.sort && !chip.extra);
   const hiddenCount = chips.length - shown.length;
 
-  return (
+  const row = (
     <div className={`record-table__chips${isPhone ? " record-table__chips--swipe" : ""}`} ref={containerRef} role="group" aria-label={filterChipCount > 0 ? "Active filters" : "Active sort"}>
       {shown.map((chip) => (
         <Fragment key={chip.key}>
@@ -219,4 +221,6 @@ export function RecordTableFilterChips({
       </div>
     </div>
   );
+  // In the toolbar's own row when it offers one, else under it.
+  return chipsSlot && !isPhone ? createPortal(row, chipsSlot) : row;
 }

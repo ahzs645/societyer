@@ -318,9 +318,6 @@
   min-width: 150px;
   color: token('text-secondary');
 }
-.org-history__budget-open {
-  max-width: 360px;
-}
 .org-history__people-head {
   align-items: stretch;
   flex-direction: column;
@@ -388,10 +385,6 @@
 }
 .org-history__budget-lines th:nth-child(3) {
   min-width: 120px;
-  text-align: right;
-}
-.org-history__budget-lines td:nth-child(3) {
-  text-align: right;
 }
 .org-history__budget-group-row td {
   background: token('bg-subtle');
@@ -409,23 +402,6 @@
     min-width: 0;
     padding-inline: 4px;
   }
-  // Budget snapshots: title, then the three figures side by side.
-  .table.table--stack-mobile.org-history__budgets tbody tr {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding: token('s-2') token('s-3');
-    gap: 2px token('s-2');
-  }
-  .table.table--stack-mobile.org-history__budgets tbody td {
-    padding: 0;
-    width: auto;
-    text-align: left;
-  }
-  .org-history__budgets td:nth-child(2) { grid-column: 1 / -1; grid-row: 1; }
-  .org-history__budgets td:nth-child(1) { grid-column: 1; grid-row: 3; }
-  .org-history__budgets td:nth-child(6) { grid-column: 1 / -1; grid-row: 4; }
-  .org-history__budgets td:nth-child(7) { grid-column: 2 / -1; grid-row: 3; align-self: end; }
-  .org-history__budgets td:nth-child(7) .row { flex-wrap: nowrap; justify-content: flex-end !important; }
   // Line items: name and amount on one line, type and any note beneath.
   .table-wrap > .table.org-history__budget-lines {
     display: block;

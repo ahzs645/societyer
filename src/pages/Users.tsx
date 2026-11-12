@@ -5,13 +5,21 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId, setStoredUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Avatar, Badge, Drawer, Field } from "../components/ui";
+import { Avatar, Badge, Drawer, Field, type ToneVariant } from "../components/ui";
 import { Select } from "../components/Select";
-import { Copy, UserCog, Plus, PlusCircle, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil, MoreHorizontal } from "lucide-react";
-import { Menu, type MenuItem } from "../components/Menu";
+import { Copy, UserCog, Plus, PlusCircle, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil } from "lucide-react";
+import type { MenuItem, MenuSection } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { formatDate } from "../lib/format";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
+  type RecordTableCardHelpers,
+} from "../platform/record-engine/record-table";
+import { FIELD_TYPES, type FieldMetadata, type SelectOption } from "../platform/record-engine/types";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
@@ -22,7 +30,7 @@ import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
 import { organizationKind } from "../../shared/organizationDomain";
 import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
-import { AccessRequestsPanel } from "../components/AccessRequestsPanel";
+import { AccessRequestsPanel } from "../features/people/AccessRequestsPanel";
 import { membershipStatusLabel } from "../../shared/membershipStatusLabel";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
@@ -42,8 +50,6 @@ export function UsersPage() {
     society && canViewRoster ? { societyId: society._id } : "skip",
   );
   const upsert = useMutation(api.users.upsert);
-  const setRole = useMutation(api.users.setRole);
-  const remove = useMutation(api.users.remove);
   const securityDisable = useMutation(api.users.securityDisable);
   const [incident, setIncident] = useState<{ id: any; name: string; reason: string } | null>(null);
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -55,7 +61,6 @@ export function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [draftErrors, setDraftErrors] = useState<FieldErrors>({});
   const toast = useToast();
-  const confirm = useConfirm();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -127,140 +132,21 @@ export function UsersPage() {
         </div>
         {!permissionsLoaded && <p role="status" className="muted">Checking workspace access…</p>}
         {permissionsLoaded && !canViewRoster && <p role="status" className="muted">Your role does not permit viewing the workspace roster. Your own access is shown above.</p>}
-        {canViewRoster && <table className="table table--comfortable users-table">
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Role</th>
-              <th className="users-table__wide">Status</th>
-              <th className="users-table__wide">Last login</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {(users ?? []).map((u) => {
-              const ownerCount = (users ?? []).filter((x) => x.role === "Owner" && (!x.status || x.status === "Active")).length;
-              const isLastOwner = u.role === "Owner" && (!u.status || u.status === "Active") && ownerCount <= 1;
-              const mayManage = canManageUsers && (myRole === "Owner" || !["Owner", "Admin"].includes(u.role));
-              const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
-              const status = u.status ?? "Active";
-              const displayStatus = membershipStatusLabel(u, auth.mode !== "none");
-              // A duplicate retired by an operator stays only so history keeps resolving.
-              const retired = Boolean(u.mergedIntoUserId);
-              const removeUser = async () => {
-                const ok = await confirm({
-                  title: "Remove user access?",
-                  message: `${u.displayName} will be removed from this workspace user table. This does not delete related member, director, or audit records.`,
-                  confirmLabel: "Remove access",
-                  tone: "danger",
-                });
-                if (!ok) return;
-                try {
-                  await remove({ id: u._id });
-                  toast.success("User access removed");
-                } catch (error) {
-                  toast.error("Couldn't remove user", error instanceof Error ? error.message : String(error));
-                }
-              };
-              const rowActions: MenuItem[] = [
-                canManageUsers && { id: "access", label: "View module access", icon: <ShieldCheck size={14} />, onSelect: () => setSelectedUserId(u._id) },
-                mayManage && !retired && auth.mode !== "none" && !u.authSubject && !u.authIssuer && !["Disabled", "Suspended"].includes(status) && { id: "invite", label: "Invite to join", icon: <PlusCircle size={14} />, onSelect: () => setInviteParams({ intent: "invite", inviteEmail: u.email, inviteRole: u.role, inviteUserId: u._id }) },
-                mayManage && !retired && { id: "edit", label: "Edit user", icon: <Pencil size={14} />, onSelect: () => setDraft(u) },
-                mayManage && !retired && status !== "Disabled" && { id: "disable", label: "Security disable", icon: <ShieldOff size={14} />, onSelect: () => setIncident({ id: u._id, name: u.displayName, reason: "" }) },
-                !retired && {
-                  id: "remove",
-                  label: "Remove access",
-                  icon: <Trash2 size={14} />,
-                  destructive: true,
-                  disabled: isLastOwner || !canRemoveUsers,
-                  hint: isLastOwner ? "last owner" : !canRemoveUsers ? "owners only" : undefined,
-                  onSelect: () => void removeUser(),
-                },
-              ].filter(Boolean) as MenuItem[];
-              return (
-              <tr key={u._id} className={selectedUserId === u._id ? "is-selected" : undefined}>
-                <td>
-                  <div className="users-table__who">
-                    <Avatar label={u.displayName || u.email || "?"} />
-                    <span className="users-table__identity">
-                      <strong>{u.displayName}</strong>
-                      <span className="users-table__email" title={u.email}>{u.email}</span>
-                      {auth.mode !== "none" && !u.authSubject && <span className="muted">No linked sign-in</span>}
-                    </span>
-                    {status !== "Active" && (
-                      <span className="users-table__narrow-status"><Badge tone={status === "Invited" ? "warn" : "neutral"}>{retired ? displayStatus : status}</Badge></span>
-                    )}
-                  </div>
-                </td>
-                <td className="users-table__role" title={isLastOwner ? lastOwnerHint : undefined}>
-                  <Select
-                    size="sm"
-                    value={u.role}
-                    disabled={isLastOwner || !mayManage}
-                    onChange={async (v) => {
-                      const ok = await confirm({
-                        title: "Change user role?",
-                        message: `${u.displayName} will change from ${u.role} to ${v}. Review whether this affects access to governance, finance, or public publishing workflows.`,
-                        confirmLabel: "Change role",
-                        tone: "warn",
-                      });
-                      if (!ok) return;
-                      try {
-                        await setRole({ id: u._id, role: v });
-                        toast.success("Role updated");
-                      } catch (error) {
-                        toast.error("Couldn't change role", error instanceof Error ? error.message : String(error));
-                      }
-                    }}
-                    aria-label={`Role for ${u.displayName}`}
-                    options={assignableRoles.map((r) => ({ value: r, label: r }))}
-                  />
-                </td>
-                <td className="users-table__wide">
-                  <Badge tone={displayStatus === "Active" ? "success" : ["Invited", "Not joined"].includes(displayStatus) ? "warn" : "neutral"}>
-                    {displayStatus}
-                  </Badge>
-                </td>
-                <td className="users-table__wide">{u.lastLoginAtISO ? formatDate(u.lastLoginAtISO) : "—"}</td>
-                <td className="users-table__actions">
-                  {auth.mode === "none" && (
-                    <button
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => {
-                        setStoredUserId(u._id);
-                        toast.success(
-                          `Now acting as ${u.displayName}`,
-                          isStaticDemoRuntime() ? "Demo preview: this resets to the owner when the page reloads." : undefined,
-                        );
-                      }}
-                      title="Act as this user"
-                    >
-                      <KeyRound size={12} /> <span className="users-table__act-label">Act as</span>
-                    </button>
-                  )}
-                  <Menu
-                    align="right"
-                    minWidth={210}
-                    trigger={
-                      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${u.displayName}`}>
-                        <MoreHorizontal size={14} />
-                      </button>
-                    }
-                    sections={[{ id: "user", items: rowActions }]}
-                  />
-                </td>
-              </tr>
-              );
-            })}
-            {(users ?? []).length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                  No users yet. Add one to start testing role-based access.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>}
+        {canViewRoster && (
+          <UsersRoster
+            users={users}
+            myRole={myRole}
+            hostedSignIn={auth.mode !== "none"}
+            canManageUsers={canManageUsers}
+            canRemoveUsers={canRemoveUsers}
+            assignableRoles={assignableRoles}
+            selectedUserId={selectedUserId}
+            onViewAccess={setSelectedUserId}
+            onInvite={(user) => setInviteParams({ intent: "invite", inviteEmail: user.email, inviteRole: user.role, inviteUserId: user._id })}
+            onEdit={setDraft}
+            onSecurityDisable={(user) => setIncident({ id: user._id, name: user.displayName, reason: "" })}
+          />
+        )}
       </div>
 
       {canManageUsers && (
@@ -380,6 +266,275 @@ export function UsersPage() {
   );
 }
 
+/** A workspace membership as users:list returns it. */
+type WorkspaceUser = {
+  _id: Id<"users">;
+  displayName: string;
+  email: string;
+  role: string;
+  status?: string;
+  authSubject?: string;
+  authIssuer?: string;
+  mergedIntoUserId?: string;
+  mergedIntoDisplayName?: string;
+  lastLoginAtISO?: string;
+};
+type RosterRecord = WorkspaceUser & {
+  /** The status filter's key ("Merged" for every retired duplicate); `statusLabel` is what the row says. */
+  accessStatus: string;
+  statusLabel: string;
+  _searchText: string;
+};
+
+const ROLE_OPTIONS: SelectOption[] = [
+  { value: "Owner", label: "Owner", color: "purple" },
+  { value: "Admin", label: "Admin", color: "blue" },
+  { value: "Director", label: "Director", color: "teal" },
+  { value: "Member", label: "Member", color: "green" },
+  { value: "Viewer", label: "Viewer", color: "gray" },
+];
+const USER_STATUS_OPTIONS: SelectOption[] = [
+  { value: "Active", label: "Active", color: "green" },
+  { value: "Not joined", label: "Not joined", color: "amber" },
+  { value: "Invited", label: "Invited", color: "amber" },
+  { value: "Pending", label: "Pending", color: "gray" },
+  { value: "Disabled", label: "Disabled", color: "gray" },
+  { value: "Suspended", label: "Suspended", color: "gray" },
+  { value: "Merged", label: "Merged", color: "gray" },
+];
+
+const ROSTER_TABLE = staticRecordTable({
+  id: "users-roster",
+  nameSingular: "workspaceUser",
+  namePlural: "workspaceUsers",
+  labelSingular: "User",
+  labelPlural: "Users",
+  labelIdentifierFieldName: "displayName",
+  density: "comfortable",
+  fields: [
+    { name: "displayName", label: "User", fieldType: FIELD_TYPES.TEXT, size: 300, config: { groupable: false } },
+    { name: "email", label: "Email", fieldType: FIELD_TYPES.EMAIL, size: 240, isVisible: false, config: { groupable: false } },
+    { name: "role", label: "Role", fieldType: FIELD_TYPES.SELECT, size: 170, config: { options: ROLE_OPTIONS } },
+    { name: "accessStatus", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 150, config: { options: USER_STATUS_OPTIONS } },
+    { name: "lastLoginAtISO", label: "Last login", fieldType: FIELD_TYPES.DATE, size: 140 },
+  ],
+});
+
+function userStatusTone(statusLabel: string): ToneVariant {
+  return statusLabel === "Active" ? "success" : ["Invited", "Not joined"].includes(statusLabel) ? "warn" : "neutral";
+}
+
+/** A user's role, changed in place after a confirmation. The last Active Owner's stays fixed. */
+function UserRoleSelect({
+  user,
+  lastOwner,
+  disabled,
+  assignableRoles,
+}: {
+  user: WorkspaceUser;
+  lastOwner: boolean;
+  disabled: boolean;
+  assignableRoles: string[];
+}) {
+  const setRole = useMutation(api.users.setRole);
+  const toast = useToast();
+  const confirm = useConfirm();
+  return (
+    <span title={lastOwner ? "Promote another user to Owner before changing or removing this one." : undefined}>
+      <Select
+        size="sm"
+        value={user.role}
+        disabled={lastOwner || disabled}
+        onChange={async (v) => {
+          const ok = await confirm({
+            title: "Change user role?",
+            message: `${user.displayName} will change from ${user.role} to ${v}. Review whether this affects access to governance, finance, or public publishing workflows.`,
+            confirmLabel: "Change role",
+            tone: "warn",
+          });
+          if (!ok) return;
+          try {
+            await setRole({ id: user._id, role: v });
+            toast.success("Role updated");
+          } catch (error) {
+            toast.error("Couldn't change role", error instanceof Error ? error.message : String(error));
+          }
+        }}
+        aria-label={`Role for ${user.displayName}`}
+        options={assignableRoles.map((r) => ({ value: r, label: r }))}
+      />
+    </span>
+  );
+}
+
+/** The workspace roster on the shared record table: who, role (changed in place), status, last login. */
+function UsersRoster({
+  users,
+  myRole,
+  hostedSignIn,
+  canManageUsers,
+  canRemoveUsers,
+  assignableRoles,
+  selectedUserId,
+  onViewAccess,
+  onInvite,
+  onEdit,
+  onSecurityDisable,
+}: {
+  users: WorkspaceUser[] | undefined;
+  myRole: string | null;
+  hostedSignIn: boolean;
+  canManageUsers: boolean;
+  canRemoveUsers: boolean;
+  assignableRoles: string[];
+  selectedUserId: string | null;
+  onViewAccess: (userId: string) => void;
+  onInvite: (user: WorkspaceUser) => void;
+  onEdit: (user: WorkspaceUser) => void;
+  onSecurityDisable: (user: WorkspaceUser) => void;
+}) {
+  const remove = useMutation(api.users.remove);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const records = useMemo<RosterRecord[]>(
+    () => (users ?? []).map((user) => {
+      const statusLabel = membershipStatusLabel(user, hostedSignIn);
+      return {
+        ...user,
+        accessStatus: user.mergedIntoUserId ? "Merged" : statusLabel,
+        statusLabel,
+        _searchText: statusLabel,
+      };
+    }),
+    [users, hostedSignIn],
+  );
+  const ownerCount = records.filter((user) => user.role === "Owner" && (!user.status || user.status === "Active")).length;
+  const isLastOwner = (user: RosterRecord) => user.role === "Owner" && (!user.status || user.status === "Active") && ownerCount <= 1;
+  const mayManage = (user: RosterRecord) => canManageUsers && (myRole === "Owner" || !["Owner", "Admin"].includes(user.role));
+
+  const removeUser = async (user: RosterRecord) => {
+    const ok = await confirm({
+      title: "Remove user access?",
+      message: `${user.displayName} will be removed from this workspace user table. This does not delete related member, director, or audit records.`,
+      confirmLabel: "Remove access",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove({ id: user._id });
+      toast.success("User access removed");
+    } catch (error) {
+      toast.error("Couldn't remove user", error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const roleSelect = (user: RosterRecord) => (
+    <UserRoleSelect user={user} lastOwner={isLastOwner(user)} disabled={!mayManage(user)} assignableRoles={assignableRoles} />
+  );
+
+  const renderCell = ({ record: user, field }: { record: RosterRecord; field: FieldMetadata }) => {
+    switch (field.name) {
+      case "displayName":
+        return (
+          <div className="users-table__who">
+            <Avatar label={user.displayName || user.email || "?"} />
+            <span className="record-table__identifier-lines">
+              <strong className="record-table__identifier-primary">{user.displayName}</strong>
+              <span className="record-table__identifier-secondary" title={user.email}>{user.email}</span>
+              {hostedSignIn && !user.authSubject && <span className="record-table__identifier-secondary">No linked sign-in</span>}
+            </span>
+          </div>
+        );
+      case "role":
+        return roleSelect(user);
+      case "accessStatus":
+        return <Badge tone={userStatusTone(user.statusLabel)}>{user.statusLabel}</Badge>;
+      case "lastLoginAtISO":
+        return <span>{user.lastLoginAtISO ? formatDate(user.lastLoginAtISO) : "—"}</span>;
+      default:
+        return undefined;
+    }
+  };
+
+  const rowMenuSections = (record: RosterRecord): MenuSection[] => {
+    const status = record.status ?? "Active";
+    // A duplicate retired by an operator stays only so history keeps resolving.
+    const retired = Boolean(record.mergedIntoUserId);
+    const manage = mayManage(record);
+    const lastOwner = isLastOwner(record);
+    const candidates: (MenuItem | false)[] = [
+      canManageUsers && { id: "access", label: "View module access", icon: <ShieldCheck size={14} />, onSelect: () => onViewAccess(record._id) },
+      manage && !retired && hostedSignIn && !record.authSubject && !record.authIssuer && !["Disabled", "Suspended"].includes(status) && { id: "invite", label: "Invite to join", icon: <PlusCircle size={14} />, onSelect: () => onInvite(record) },
+      manage && !retired && { id: "edit", label: "Edit user", icon: <Pencil size={14} />, onSelect: () => onEdit(record) },
+      manage && !retired && status !== "Disabled" && { id: "disable", label: "Security disable", icon: <ShieldOff size={14} />, onSelect: () => onSecurityDisable(record) },
+      !retired && {
+        id: "remove",
+        label: "Remove access",
+        icon: <Trash2 size={14} />,
+        destructive: true,
+        disabled: lastOwner || !canRemoveUsers,
+        hint: lastOwner ? "last owner" : !canRemoveUsers ? "owners only" : undefined,
+        onSelect: () => void removeUser(record),
+      },
+    ];
+    return [{ id: "user", items: candidates.filter((item): item is MenuItem => item !== false) }];
+  };
+
+  const renderRowActions = (record: RosterRecord) => hostedSignIn ? null : (
+    <button
+      type="button"
+      className="btn btn--ghost btn--sm"
+      onClick={() => {
+        setStoredUserId(record._id);
+        toast.success(
+          `Now acting as ${record.displayName}`,
+          isStaticDemoRuntime() ? "Demo preview: this resets to the owner when the page reloads." : undefined,
+        );
+      }}
+      title="Act as this user"
+    >
+      <KeyRound size={12} /> Act as
+    </button>
+  );
+
+  // Phones: who on the card with the role still changed in place; the actions sit behind its "…".
+  const renderPhoneCard = (user: RosterRecord, { selecting }: RecordTableCardHelpers) => {
+    const status = user.status ?? "Active";
+    return (
+      <RecordTablePhoneCard
+        title={user.displayName}
+        recordName={user.displayName}
+        badge={roleSelect(user)}
+        meta={[user.email]}
+        detail={[
+          status !== "Active" ? <Badge tone={status === "Invited" ? "warn" : "neutral"}>{user.mergedIntoUserId ? user.statusLabel : status}</Badge> : "",
+          hostedSignIn && !user.authSubject ? "No linked sign-in" : "",
+        ]}
+        selecting={selecting}
+      />
+    );
+  };
+
+  return (
+    <RecordListTable<RosterRecord>
+      variant="card"
+      table={ROSTER_TABLE}
+      tableId="users-roster"
+      label="Users"
+      icon={<UserCog size={14} />}
+      records={records}
+      loading={users === undefined}
+      // The user whose module access the viewer below the roster shows.
+      highlightedRecordId={selectedUserId}
+      renderCell={renderCell}
+      renderRowActions={renderRowActions}
+      rowMenuSections={rowMenuSections}
+      renderPhoneCard={renderPhoneCard}
+      emptyState={<RecordTableEmpty title="No users yet" description="Add one to start testing role-based access." />}
+    />
+  );
+}
+
 const MFA_OPTIONS: Array<{ value: WorkspaceMfaPolicy; label: string }> = [
   { value: "optional", label: "Optional" },
   { value: "owners-admins", label: "Owners and Admins" },
@@ -448,10 +603,96 @@ function roleSummary(role?: string | null): string {
   }
 }
 
+/** An invitation as invitations:list returns it. */
+type Invitation = {
+  _id: string;
+  kind?: "email" | "link";
+  email?: string;
+  label?: string;
+  role: string;
+  createdAtISO: string;
+  expiresAtISO?: string;
+  acceptedAtISO?: string;
+  revokedAtISO?: string;
+  acceptedBy?: { displayName: string; email: string };
+  emailStatus?: string;
+  emailProvider?: string;
+  emailError?: string;
+  emailRequestedAtMs?: number;
+};
+type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
+type InvitationRecord = Invitation & {
+  invitee: string;
+  inviteKind: "email" | "link";
+  status: InvitationStatus;
+  emailState: string;
+  _searchText: string;
+};
+
+function invitationStatus(inv: Invitation, now: number): InvitationStatus {
+  return inv.acceptedAtISO
+    ? "accepted"
+    : inv.revokedAtISO
+      ? "revoked"
+      : !inv.expiresAtISO || Date.parse(inv.expiresAtISO) <= now
+        ? "expired" : "pending";
+}
+
+function invitationTone(status: InvitationStatus): ToneVariant {
+  return status === "accepted" ? "success" : status === "revoked" ? "danger" : "warn";
+}
+
+/** How the invitation went out, as its Email column says it. */
+function invitationEmailState(inv: Invitation): string {
+  if (inv.kind === "link") return "Send link yourself";
+  if (inv.emailStatus === "accepted") return inv.emailProvider === "demo" ? "Simulated (demo)" : "Accepted by mail provider";
+  if (inv.emailStatus === "queued") return "Queued";
+  if (inv.emailStatus === "failed") return "Email failed — resend";
+  return "Not emailed yet";
+}
+
+const INVITATIONS_TABLE = staticRecordTable({
+  id: "users-invitations",
+  nameSingular: "workspaceInvitation",
+  namePlural: "workspaceInvitations",
+  labelSingular: "Invitation",
+  labelPlural: "Invitations",
+  labelIdentifierFieldName: "invitee",
+  fields: [
+    { name: "invitee", label: "Invitee", fieldType: FIELD_TYPES.TEXT, size: 300, config: { groupable: false } },
+    {
+      name: "inviteKind",
+      label: "Type",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 140,
+      isVisible: false,
+      config: { options: [{ value: "email", label: "Email invitation", color: "blue" }, { value: "link", label: "Share link", color: "purple" }] },
+    },
+    { name: "role", label: "Role", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: ROLE_OPTIONS } },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "pending", label: "Pending", color: "amber" },
+          { value: "accepted", label: "Accepted", color: "green" },
+          { value: "expired", label: "Expired", color: "amber" },
+          { value: "revoked", label: "Revoked", color: "red" },
+        ],
+      },
+    },
+    { name: "createdAtISO", label: "Created", fieldType: FIELD_TYPES.DATE, size: 160 },
+    { name: "expiresAtISO", label: "Expires", fieldType: FIELD_TYPES.DATE, size: 140, isVisible: false },
+    { name: "emailState", label: "Email", fieldType: FIELD_TYPES.TEXT, size: 200 },
+  ],
+});
+
 function InvitationsPanel({
   societyId, assignableRoles,
 }: {
-  societyId: any;
+  societyId: Id<"societies">;
   assignableRoles: string[];
 }) {
   const hosted = useAuth().mode !== "none";
@@ -506,8 +747,16 @@ function InvitationsPanel({
     finally { setSending(null); }
   };
 
-  const pending = (invitations ?? []).filter(
-    (i: any) => !i.acceptedAtISO && !i.revokedAtISO && i.expiresAtISO && Date.parse(i.expiresAtISO) > now,
+  const records = useMemo<InvitationRecord[]>(
+    () => ((invitations ?? []) as Invitation[]).map((inv) => ({
+      ...inv,
+      invitee: inv.kind === "link" ? inv.label || "Anyone with the link" : inv.email ?? "",
+      inviteKind: inv.kind === "link" ? "link" : "email",
+      status: invitationStatus(inv, now),
+      emailState: invitationEmailState(inv),
+      _searchText: inv.acceptedBy ? `Joined as ${inv.acceptedBy.displayName} (${inv.acceptedBy.email})` : "",
+    })),
+    [invitations, now],
   );
 
   const copyInvitationLink = async (token: string, copiedMessage = "Invitation link copied") => {
@@ -519,6 +768,95 @@ function InvitationsPanel({
     } catch {
       toast.error("Could not copy the invitation link", "Use the copy button in the invitations list before leaving this page.");
     }
+  };
+
+  const renderCell = ({ record: inv, field }: { record: InvitationRecord; field: FieldMetadata }) => {
+    switch (field.name) {
+      case "invitee":
+        return (
+          <span className="record-table__identifier-lines">
+            <span className="record-table__identifier-primary">
+              {inv.kind === "link"
+                ? <><Badge>Share link</Badge> <span className="muted">{inv.invitee}</span></>
+                : <span className="mono">{inv.email}</span>}
+            </span>
+            {inv.acceptedBy && <span className="record-table__identifier-secondary">Joined as {inv.acceptedBy.displayName} ({inv.acceptedBy.email})</span>}
+          </span>
+        );
+      case "role":
+        return <Badge>{inv.role}</Badge>;
+      case "status":
+        return <Badge tone={invitationTone(inv.status)}>{inv.status}</Badge>;
+      case "createdAtISO":
+        return (
+          <span className="record-table__identifier-lines">
+            <span className="record-table__identifier-primary muted">{formatDate(inv.createdAtISO)}</span>
+            <span className="record-table__identifier-secondary">{inv.expiresAtISO ? `Expires ${formatDate(inv.expiresAtISO)}` : "Reissue required"}</span>
+          </span>
+        );
+      case "emailState":
+        return inv.kind !== "link" && inv.emailStatus === "failed" ? <span title={inv.emailError}>{inv.emailState}</span> : <span>{inv.emailState}</span>;
+      default:
+        return undefined;
+    }
+  };
+
+  const renderRowActions = (inv: InvitationRecord) => (
+    <>
+      {inv.kind !== "link" && !inv.acceptedAtISO && !inv.revokedAtISO && <button type="button" className="btn btn--sm" disabled={sending !== null || now - Number(inv.emailRequestedAtMs ?? 0) < 60_000} onClick={async () => {
+        setSending(inv._id);
+        try { const issued = await resendInvite({ id: inv._id }); setIssuedTokens(previous => ({ ...previous, [issued.id]: issued.token })); toast.success("Invitation queued again", "A new email link replaces the previous one."); }
+        catch (cause) { toast.error("Could not resend invitation", cause instanceof Error ? cause.message : String(cause)); }
+        finally { setSending(null); }
+      }}>{sending === inv._id ? "Sending…" : "Resend email"}</button>}
+      {inv.status === "pending" && (
+        <>
+          <button
+            type="button"
+            className="btn btn--sm btn--ghost btn--icon"
+            aria-label="Copy invitation link"
+            disabled={!issuedTokens[inv._id]}
+            title={issuedTokens[inv._id] ? "Copy the newly issued invitation link" : "Invitation secrets are shown once. Revoke and reissue to create a new link."}
+            onClick={() => void copyInvitationLink(issuedTokens[inv._id])}
+          >
+            <Copy size={12} />
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--ghost btn--icon"
+            aria-label="Revoke invitation"
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Revoke invitation?",
+                message: inv.kind === "link"
+                  ? "The share link will stop working."
+                  : `The pending invitation for ${inv.email} will be cancelled.`,
+                confirmLabel: "Revoke",
+                tone: "danger",
+              });
+              if (!ok) return;
+              await revokeInvite({ id: inv._id });
+            }}
+          >
+            <Trash2 size={12} />
+          </button>
+        </>
+      )}
+    </>
+  );
+
+  // Phones: who and the status, then role and dates, then how it went out; the actions sit behind its "…".
+  const renderPhoneCard = (inv: InvitationRecord, { selecting }: RecordTableCardHelpers) => {
+    return (
+      <RecordTablePhoneCard
+        title={inv.kind === "link" ? `Share link · ${inv.invitee}` : inv.invitee}
+        recordName={inv.invitee}
+        badge={<Badge tone={invitationTone(inv.status)}>{inv.status}</Badge>}
+        meta={[inv.role, formatDate(inv.createdAtISO), inv.expiresAtISO ? `Expires ${formatDate(inv.expiresAtISO)}` : "Reissue required"]}
+        detail={[inv.acceptedBy ? `Joined as ${inv.acceptedBy.displayName}` : inv.emailState]}
+        selecting={selecting}
+      />
+    );
   };
 
   return (
@@ -536,92 +874,19 @@ function InvitationsPanel({
           <PlusCircle size={12} /> Invite
         </button>
       </div>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Invitee</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Created</th>
-            <th>Email</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {(invitations ?? []).map((inv: any) => {
-            const status = inv.acceptedAtISO
-              ? "accepted"
-              : inv.revokedAtISO
-                ? "revoked"
-                : !inv.expiresAtISO || Date.parse(inv.expiresAtISO) <= now
-                  ? "expired" : "pending";
-            return (
-              <tr key={inv._id}>
-                <td>
-                  {inv.kind === "link"
-                    ? <><Badge>Share link</Badge> <span className="muted">{inv.label || "Anyone with the link"}</span></>
-                    : <span className="mono">{inv.email}</span>}
-                  {inv.acceptedBy && <div className="muted">Joined as {inv.acceptedBy.displayName} ({inv.acceptedBy.email})</div>}
-                </td>
-                <td><Badge>{inv.role}</Badge></td>
-                <td>
-                  <Badge tone={status === "accepted" ? "success" : status === "revoked" ? "danger" : "warn"}>
-                    {status}
-                  </Badge>
-                </td>
-                <td className="muted">{formatDate(inv.createdAtISO)}<div className="muted">{inv.expiresAtISO ? `Expires ${formatDate(inv.expiresAtISO)}` : "Reissue required"}</div></td>
-                <td>{inv.kind === "link" ? "Send link yourself" : inv.emailStatus === "accepted" ? (inv.emailProvider === "demo" ? "Simulated (demo)" : "Accepted by mail provider") : inv.emailStatus === "queued" ? "Queued" : inv.emailStatus === "failed" ? <span title={inv.emailError}>Email failed — resend</span> : "Not emailed yet"}</td>
-                <td className="table__actions">
-                  {inv.kind !== "link" && !inv.acceptedAtISO && !inv.revokedAtISO && <button className="btn btn--sm" disabled={sending !== null || now - Number(inv.emailRequestedAtMs ?? 0) < 60_000} onClick={async () => {
-                    setSending(inv._id);
-                    try { const issued = await resendInvite({ id: inv._id }); setIssuedTokens(previous => ({ ...previous, [issued.id]: issued.token })); toast.success("Invitation queued again", "A new email link replaces the previous one."); }
-                    catch (cause) { toast.error("Could not resend invitation", cause instanceof Error ? cause.message : String(cause)); }
-                    finally { setSending(null); }
-                  }}>{sending === inv._id ? "Sending…" : "Resend email"}</button>}
-                  {status === "pending" && (
-                    <>
-                      <button
-                        className="btn btn--sm btn--ghost btn--icon"
-                        aria-label="Copy invitation link"
-                        disabled={!issuedTokens[inv._id]}
-                        title={issuedTokens[inv._id] ? "Copy the newly issued invitation link" : "Invitation secrets are shown once. Revoke and reissue to create a new link."}
-                        onClick={() => void copyInvitationLink(issuedTokens[inv._id])}
-                      >
-                        <Copy size={12} />
-                      </button>
-                      <button
-                        className="btn btn--sm btn--ghost btn--icon"
-                        aria-label="Revoke invitation"
-                        onClick={async () => {
-                          const ok = await confirm({
-                            title: "Revoke invitation?",
-                            message: inv.kind === "link"
-                              ? "The share link will stop working."
-                              : `The pending invitation for ${inv.email} will be cancelled.`,
-                            confirmLabel: "Revoke",
-                            tone: "danger",
-                          });
-                          if (!ok) return;
-                          await revokeInvite({ id: inv._id });
-                        }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-          {pending.length === 0 && (invitations ?? []).length === 0 && (
-            <tr>
-              <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 16 }}>
-                No invitations yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      <RecordListTable<InvitationRecord>
+        variant="card"
+        table={INVITATIONS_TABLE}
+        tableId="users-invitations"
+        label="Invitations"
+        icon={<UserCog size={14} />}
+        records={records}
+        loading={invitations === undefined}
+        renderCell={renderCell}
+        renderRowActions={renderRowActions}
+        renderPhoneCard={renderPhoneCard}
+        emptyState={<RecordTableEmpty title="No invitations yet" />}
+      />
 
       <Drawer
         open={!!form}

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { chooseViewType, searchRecords } from "./helpers/recordTableToolbar";
-import { openRowMenu, recordRows } from "./helpers/rowActions";
+import { openRowMenu, recordRows, runRowAction } from "./helpers/rowActions";
 
 async function openNavigation(page: Page) {
   const mobileMore = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
@@ -145,7 +145,7 @@ test("company certificate writes remain disabled for its Viewer", async ({ page 
   await page.getByRole("menuitem", { name: /^Arjun Mehta/ }).click();
   await expect(page.locator(".demo-banner")).toContainText("as Viewer");
   await expect(page.getByRole("button", { name: "Issue certificate", exact: true })).toBeDisabled();
-  for (const remove of await page.getByRole("button", { name: /^Delete certificate / }).all()) await expect(remove).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Delete certificate /, disabled: false })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -202,7 +202,7 @@ test("document metadata opens its review workbench and validates page comments",
   await page.getByRole("option", { name: "Active", exact: true }).click();
   await userDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(userDialog).toHaveCount(0);
-  await page.locator("tr", { hasText: "Interface Records Viewer" }).getByRole("button", { name: "Act as", exact: true }).click();
+  await runRowAction(recordRows(page).filter({ hasText: "Interface Records Viewer" }), "Act as");
   await expect(page.getByText("Now acting as Interface Records Viewer", { exact: true })).toBeVisible();
   // Demo actors are intentionally in-memory; use router navigation to preserve the selected role.
   await openNavigation(page);
@@ -235,7 +235,7 @@ test("document metadata opens its review workbench and validates page comments",
   if (await recordsGroup.getAttribute("aria-expanded") !== "true") await recordsGroup.click();
   await page.getByRole("link", { name: "Annual filings", exact: true }).click();
   await expect(page.getByRole("button", { name: "Add filing", exact: true })).toBeDisabled();
-  for (const remove of await page.getByRole("button", { name: /^Delete .* filing$/ }).all()) await expect(remove).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Delete .* filing$/, disabled: false })).toHaveCount(0);
   const annualRow = page.locator("tbody tr").first();
   if (await annualRow.count()) {
     await annualRow.click();
@@ -263,10 +263,11 @@ test("document metadata opens its review workbench and validates page comments",
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
   await navigatePreview("governance-registers");
   await expect(page.getByRole("button", { name: "Add record", exact: true })).toBeDisabled();
-  for (const promote of await page.getByRole("button", { name: "Promote", exact: true }).all()) await expect(promote).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Promote", exact: true, disabled: false })).toHaveCount(0);
   await openNavigation(page);
   await page.getByRole("link", { name: "Obligations", exact: true }).first().click();
-  for (const action of await page.getByRole("button", { name: /^(Track|Review|Dismiss|Reopen|Packet)$/ }).all()) await expect(action).toBeDisabled();
+  // None enabled (checked as a whole: the shared table may re-render its row actions meanwhile).
+  await expect(page.getByRole("button", { name: /^(Track|Review|Dismiss|Reopen|Packet)$/, disabled: false })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -286,7 +287,7 @@ test("annual filing ledger validates required facts and saves a pending record",
   await dialog.getByRole("checkbox").uncheck();
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Annual filing saved", { exact: true })).toBeVisible();
-  await expect(page.locator("tr", { hasText: "2027" })).toContainText("✗");
+  await expect(recordRows(page).filter({ hasText: "2027" })).toContainText("✗");
   expect(errors).toEqual([]);
 });
 
@@ -301,6 +302,7 @@ test("an existing entity initializes its catalog and prepares an editable draft"
   await expect(template.getByRole("link", { name: "Open Template Engine", exact: true })).toBeVisible();
   await template.getByRole("link", { name: "Open Template Engine", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Template engine", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "BC society constitution — preparation draft", exact: true })).toBeVisible();
+  // A grid row on wider screens, a card on phones.
+  await expect(recordRows(page).filter({ hasText: "BC society constitution — preparation draft" }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });

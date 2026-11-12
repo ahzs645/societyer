@@ -14,8 +14,10 @@
       max-width: none;
     }
   }
-  // Phones: each obligation or plan is a card (period, labelled facts, then
-  // its action at full width) instead of a table to swipe sideways.
+  // Phones: each row of a plain table here (the plan form's CRA source
+  // amounts) is a card of labelled facts instead of a table to swipe
+  // sideways. The obligation and plan lists are shared record lists with
+  // their own phone cards.
   @media (max-width: 650px) {
     .payroll-calculator__table-wrap {
       overflow-x: visible;
@@ -32,12 +34,14 @@
         padding-block: 12px;
         border-bottom: 1px solid var(--border);
       }
-      tbody td {
+      tbody td,
+      &.table tbody th {
         display: block;
         padding: 0;
         border: 0;
         white-space: normal;
       }
+      &.table tbody th { height: auto; }
       tbody td:first-child { font-weight: 600; }
       tbody td[data-label] {
         display: flex;

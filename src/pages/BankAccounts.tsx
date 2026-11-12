@@ -8,6 +8,8 @@ import { useCreateIntent } from "../hooks/useCreateIntent";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { EmptyState } from "../components/ui";
+import { Money } from "../components/Money";
+import { pluralize } from "../lib/format";
 import { Tabs } from "../components/primitives";
 import { BANK_ACCOUNT_TABS, bankAccountMatchesTab, type BankAccountTab } from "../../shared/bankAccounts";
 import { AddAccountDrawer } from "../features/financials/banking/AddAccountDrawer";
@@ -103,19 +105,28 @@ export function BankAccountsPage() {
       />
 
       <div className="card bank-accounts-card">
-        {data === undefined ? (
-          <div className="card__body"><div className="record-table__loading">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="record-table__loading-row" />)}</div></div>
-        ) : rows.length === 0 ? (
-          <div className="card__body">
+        <BankAccountsTable
+          rows={rows}
+          label={showArchived ? "Archived accounts" : BANK_ACCOUNT_TABS.find((item) => item.id === tab)?.label ?? "Accounts"}
+          loading={data === undefined}
+          canWrite={canWrite}
+          onLink={setLinking}
+          menuFor={menuFor}
+          emptyState={
             <EmptyState
               icon={<Landmark size={20} />}
               title={showArchived ? "No archived accounts" : "No accounts here"}
               description={showArchived ? "Archived accounts can be restored from here." : EMPTY_TAB[tab]}
               action={!showArchived && canWrite ? <button type="button" className="btn btn--sm btn--accent" onClick={() => setAdding(true)}><Plus size={12} aria-hidden="true" /> Add account</button> : undefined}
             />
+          }
+        />
+        {!showArchived && rows.length > 1 && (
+          // Mixed currencies don't add up, so the total is the CAD accounts' (as before).
+          <div className="bank-accounts-card__total">
+            <span>Total CAD ({pluralize(rows.filter((row) => row.currency === "CAD").length, "account")})</span>
+            <Money cents={rows.filter((row) => row.currency === "CAD").reduce((sum, row) => sum + row.balanceCents, 0)} />
           </div>
-        ) : (
-          <BankAccountsTable rows={rows} canWrite={canWrite} showTotal={!showArchived && rows.length > 1} onLink={setLinking} menuFor={menuFor} />
         )}
       </div>
 

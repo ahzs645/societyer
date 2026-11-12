@@ -43,15 +43,6 @@
   }
 }
 
-/* Portfolio: the entity search was a fixed narrow input that cut its own
- * placeholder ("…former nam"); give it room, full width on phones. */
-.portfolio-batch__search {
-  flex: 1 1 320px;
-  max-width: 460px;
-}
-@media (max-width: 560px) {
-  .portfolio-batch__search { max-width: none; }
-}
 .portfolio-current-tag {
   color: token('accent');
 }

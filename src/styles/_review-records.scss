@@ -36,22 +36,6 @@
   }
 }
 
-// Minute book: connected-records table.
-// Fit the card instead of growing to max-content and scrolling the
-// Gaps/Status columns off the right edge.
-@media (min-width: 761px) {
-  .table.minute-book-bundles,
-  .table.obligations-table {
-    width: 100%;
-
-    tbody td {
-      padding-top: token('s-2');
-      padding-bottom: token('s-2');
-      vertical-align: top;
-    }
-  }
-}
-
 .minute-book-counts {
   display: flex;
   flex-wrap: wrap;
@@ -67,62 +51,6 @@
   }
 }
 
-// Minute book on phones: each connected record is one tappable row.
-.minute-book-bundle-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  > li + li { border-top: 1px solid token('border-color-light'); }
-}
-.minute-book-bundle-list__empty {
-  padding: token('s-5') token('s-4');
-  text-align: center;
-}
-.minute-book-bundle-row {
-  display: flex;
-  align-items: center;
-  gap: token('s-2');
-  min-height: token('control-h-touch');
-  padding: token('s-3') token('s-4');
-  color: inherit;
-  text-decoration: none;
-  -webkit-tap-highlight-color: transparent;
-}
-a.minute-book-bundle-row:active { background: token('bg-hover'); }
-.minute-book-bundle-row__main {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.minute-book-bundle-row__title {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: token('s-2');
-
-  strong { min-width: 0; overflow-wrap: anywhere; }
-  .badge { flex: none; }
-}
-.minute-book-bundle-row__meta {
-  overflow: hidden;
-  color: token('text-secondary');
-  font-size: token('fs-xs');
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.minute-book-bundle-row__gaps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 2px;
-}
-.minute-book-bundle-row__chevron {
-  flex: none;
-  color: token('text-tertiary');
-}
 // The four linked-record lists inside their phone fold: one flat column.
 .mobile-fold__body > .minute-book-linked {
   gap: 0;

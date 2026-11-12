@@ -178,51 +178,18 @@ export function ObjectRecordTable({
       />
       <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
       <RecordTableFilterChips />
-      <ObjectRecordTableBody
-        renderPhoneCard={renderPhoneCard}
-        cardListLabel={tableData.objectMetadata.labelPlural}
+      {/* Phones (table view): RecordTable draws the page's cards, with the
+          row actions behind each card's "…" button. */}
+      <RecordTable
         loading={loading || tableData.loading}
+        selectable={selectable}
         emptyState={emptyState}
-      >
-        <RecordTable
-          loading={loading || tableData.loading}
-          selectable={selectable}
-          emptyState={emptyState}
-          renderCell={renderCell}
-          renderRowActions={renderRowActions}
-          rowMenuSections={rowMenuSections}
-        />
-      </ObjectRecordTableBody>
+        renderCell={renderCell}
+        renderRowActions={renderRowActions}
+        rowMenuSections={rowMenuSections}
+        renderPhoneCard={renderPhoneCard}
+      />
       {children}
     </RecordTableScope>
   );
-}
-
-/** The table, or on phones (table view only) the page's record cards. */
-function ObjectRecordTableBody({
-  renderPhoneCard,
-  cardListLabel,
-  loading,
-  emptyState,
-  children,
-}: {
-  renderPhoneCard?: (record: any) => ReactNode;
-  cardListLabel: string;
-  loading: boolean;
-  emptyState?: ReactNode;
-  children: ReactNode;
-}) {
-  const isMobile = useIsMobile();
-  const viewType = useRecordTableState((s) => s.type);
-  if (!renderPhoneCard || !isMobile || viewType !== "table") return <>{children}</>;
-  if (loading) {
-    return (
-      <div className="record-table__loading" aria-busy="true">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="record-table__loading-row" />
-        ))}
-      </div>
-    );
-  }
-  return <RecordTableCardList renderCard={renderPhoneCard} emptyState={emptyState} label={cardListLabel} />;
 }

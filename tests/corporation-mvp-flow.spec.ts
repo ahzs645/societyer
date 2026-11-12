@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openRowMenu, recordRows, runRowAction } from "./helpers/rowActions";
 
 declare global {
   interface Window {
@@ -93,10 +94,11 @@ test("corporation MVP flow renders obligations, share register, registration, an
   await expect(page.getByText("ISC register annual review", { exact: false }).first()).toBeVisible();
   await expect(page.getByText("Initial return deadline", { exact: false }).first()).toBeVisible();
 
-  const annualReturnRow = page.locator("tr", { hasText: "Annual return filing window" }).first();
-  await annualReturnRow.getByRole("button", { name: "Track" }).click();
+  // The obligations are a record table: row actions sit inline, or behind the pinned "Row actions" menu.
+  const annualReturnRow = recordRows(page).filter({ hasText: "Annual return filing window" }).first();
+  await runRowAction(annualReturnRow, "Track");
   await expect(page.getByText("Filing created")).toBeVisible();
-  await annualReturnRow.getByRole("button", { name: /^More actions for / }).click();
+  await openRowMenu(annualReturnRow, "Actions for this obligation");
   await page.getByRole("menuitem", { name: "Stage document packet" }).click();
   await expect(page.getByText("Packet staged").last()).toBeVisible();
 

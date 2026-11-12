@@ -1,9 +1,10 @@
-import { ArrowDownAZ, ArrowUpAZ, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import type { RefObject } from "react";
 import { ViewportPopover } from "@/components/ViewportPopover";
 import { Select } from "@/components/Select";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { ViewSortDirection } from "../../types";
+import { sortDirectionLabels } from "../utils/sortLabels";
 
 export function RecordTableSortPopover({
   open,
@@ -55,7 +56,9 @@ export function RecordTableSortEditor() {
         <div className="record-table__popover-empty">No sort rules.</div>
       ) : (
         <div className="record-table__sort-list">
-          {sorts.map((sort, index) => (
+          {sorts.map((sort, index) => {
+            const labels = sortDirectionLabels(allColumns.find((column) => column.fieldMetadataId === sort.fieldMetadataId)?.field);
+            return (
             <div key={`${sort.fieldMetadataId}-${index}`} className="record-table__sort-row">
               <Select
                 size="sm"
@@ -71,34 +74,39 @@ export function RecordTableSortEditor() {
                 }))}
                 searchable={columns.length > 6}
               />
-              <button
-                type="button"
-                className="record-table__toolbar-button"
-                onClick={() => {
-                  const direction: ViewSortDirection = sort.direction === "asc" ? "desc" : "asc";
-                  const next = [...sorts];
-                  next[index] = { ...sort, direction };
-                  setSorts(next);
-                }}
-              >
-                {sort.direction === "asc" ? <ArrowUpAZ size={12} /> : <ArrowDownAZ size={12} />}
-                <span>{sort.direction === "asc" ? "Ascending" : "Descending"}</span>
-              </button>
+              <div className="record-table__menu-segmented record-table__sort-direction" role="group" aria-label="Direction">
+                {(["asc", "desc"] as const).map((direction: ViewSortDirection) => (
+                  <button
+                    key={direction}
+                    type="button"
+                    aria-pressed={sort.direction === direction}
+                    onClick={() => {
+                      const next = [...sorts];
+                      next[index] = { ...sort, direction };
+                      setSorts(next);
+                    }}
+                  >
+                    {direction === "asc" ? <ArrowUp size={11} aria-hidden="true" /> : <ArrowDown size={11} aria-hidden="true" />}
+                    {labels[direction]}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 className="record-table__icon-btn"
                 aria-label="Remove sort"
                 onClick={() => setSorts(sorts.filter((_, i) => i !== index))}
               >
-                <Trash2 size={12} />
+                <X size={13} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <button
         type="button"
-        className="record-table__toolbar-button"
+        className="record-table__toolbar-button record-table__popover-add"
         disabled={sorts.length >= columns.length || (serverProcessed && sorts.length >= 1)}
         onClick={addSort}
       >

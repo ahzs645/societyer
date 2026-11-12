@@ -1,7 +1,6 @@
 import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -9,18 +8,173 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, Field } from "../components/ui";
-import { Menu } from "../components/Menu";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { Toggle } from "../components/Controls";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { FileText, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
-import { optionLabel } from "../lib/orgHubOptions";
+import { OPTION_SETS, optionLabel } from "../lib/orgHubOptions";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { INCORPORATION_JURISDICTION_CODES } from "../../shared/incorporationActs";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
+} from "@/platform/record-engine";
+import type { TagColor } from "../components/Tag";
+
+/** The fields of a policy row (api.policies.list) this page reads. */
+type PolicyRow = {
+  _id: string;
+  policyName: string;
+  policyNumber?: string;
+  owner?: string;
+  effectiveDate?: string;
+  reviewDate?: string;
+  ceasedDate?: string;
+  docxDocumentId?: string;
+  pdfDocumentId?: string;
+  adoptedAtMeetingId?: string;
+  adoptedInMinutesId?: string;
+  adoptingMotionEvidenceId?: string;
+  signatureRequired?: boolean;
+  requiredSigners?: string[];
+  status?: string;
+  lifecycle?: {
+    reviewState?: string;
+    publicationStatus?: string;
+    signatureState?: string;
+    versionCount?: number;
+    taskCount?: number;
+    openTaskCount?: number;
+    draftPublicationCount?: number;
+  };
+};
+
+type AdoptionState = "linked" | "needs_record" | "not_linked";
+
+/** A policy as the table reads it: composite columns as searchable text or select values, the row itself for its cells and actions. */
+type PolicyRecord = {
+  _id: string;
+  policyName: string;
+  policyNumber: string | null;
+  status: string | null;
+  owner: string | null;
+  effectiveDate: string | null;
+  reviewDate: string | null;
+  ceasedDate: string | null;
+  documents: string;
+  docxLabel: string;
+  pdfLabel: string;
+  adoption: AdoptionState;
+  signatureRequired: boolean;
+  requiredSigners: string[];
+  policy: PolicyRow;
+};
+
+const TONE_COLORS: Record<ReturnType<typeof toneForStatus>, TagColor> = {
+  success: "green",
+  warn: "amber",
+  danger: "red",
+  neutral: "gray",
+};
+
+const POLICIES = staticRecordTable({
+  id: "policies",
+  nameSingular: "policy",
+  namePlural: "policies",
+  labelSingular: "Policy",
+  labelPlural: "Policies",
+  labelIdentifierFieldName: "policyName",
+  density: "comfortable",
+  fields: [
+    { name: "policyName", label: "Policy", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    // Status leads the facts so it stays in view however wide the register is (X-02).
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 260,
+      config: {
+        options: OPTION_SETS.policyStatuses.map((option) => ({
+          value: option.value,
+          label: option.label,
+          color: TONE_COLORS[toneForStatus(option.value)],
+        })),
+      },
+    },
+    { name: "owner", label: "Owner", fieldType: FIELD_TYPES.TEXT, size: 130 },
+    { name: "effectiveDate", label: "Dates", fieldType: FIELD_TYPES.DATE, size: 170 },
+    { name: "documents", label: "Documents", fieldType: FIELD_TYPES.TEXT, size: 180, config: { groupable: false } },
+    {
+      name: "adoption",
+      label: "Adoption",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 190,
+      config: {
+        options: [
+          { value: "linked", label: "Adoption linked", color: "green" },
+          { value: "needs_record", label: "Needs adoption record", color: "amber" },
+          { value: "not_linked", label: "Not linked", color: "gray" },
+        ],
+      },
+    },
+    { name: "signatureRequired", label: "Signers", fieldType: FIELD_TYPES.BOOLEAN, size: 180, config: { trueLabel: "Required", falseLabel: "Not required" } },
+    { name: "policyNumber", label: "Policy number", fieldType: FIELD_TYPES.TEXT, size: 140, isVisible: false },
+    { name: "reviewDate", label: "Review date", fieldType: FIELD_TYPES.DATE, size: 140, isVisible: false },
+    { name: "ceasedDate", label: "Ceased date", fieldType: FIELD_TYPES.DATE, size: 140, isVisible: false },
+    {
+      name: "requiredSigners",
+      label: "Required signers",
+      fieldType: FIELD_TYPES.MULTI_SELECT,
+      size: 200,
+      isVisible: false,
+      config: { options: OPTION_SETS.requiredSigners.map((option) => ({ ...option, color: "amber" })) },
+    },
+  ],
+});
+
+type AdoptionMaps = { meetings: Map<string, unknown>; minutes: Map<string, unknown>; motionEvidence: Map<string, unknown> };
+
+function toPolicyRecord(policy: PolicyRow, docById: Map<string, { title?: string }>, maps: AdoptionMaps): PolicyRecord {
+  const linked = [
+    policy.adoptedAtMeetingId && maps.meetings.get(policy.adoptedAtMeetingId),
+    policy.adoptedInMinutesId && maps.minutes.get(policy.adoptedInMinutesId),
+    policy.adoptingMotionEvidenceId && maps.motionEvidence.get(policy.adoptingMotionEvidenceId),
+  ].some(Boolean);
+  const docxLabel = policy.docxDocumentId ? docById.get(policy.docxDocumentId)?.title ?? "DOCX linked" : "No DOCX";
+  const pdfLabel = policy.pdfDocumentId ? docById.get(policy.pdfDocumentId)?.title ?? "PDF linked" : "No PDF";
+  return {
+    _id: policy._id,
+    policyName: policy.policyName,
+    policyNumber: policy.policyNumber ?? null,
+    status: policy.status ?? null,
+    owner: policy.owner ?? null,
+    effectiveDate: policy.effectiveDate ?? null,
+    reviewDate: policy.reviewDate ?? null,
+    ceasedDate: policy.ceasedDate ?? null,
+    documents: `${docxLabel} · ${pdfLabel}`,
+    docxLabel,
+    pdfLabel,
+    adoption: linked ? "linked" : policy.status === "Active" ? "needs_record" : "not_linked",
+    signatureRequired: !!policy.signatureRequired,
+    requiredSigners: policy.requiredSigners ?? [],
+    policy,
+  };
+}
+
+/** Table rows are one line tall: badge groups stay on one line (the cell clips them) rather than wrapping. */
+const ONE_LINE_BADGES = { flexWrap: "nowrap", maxWidth: "none" } as const;
+
+function reviewText(row: PolicyRow) {
+  if (!row.reviewDate) return "No review date";
+  return `Review ${formatDate(row.reviewDate)}${row.lifecycle?.reviewState === "overdue" ? " · Overdue" : ""}`;
+}
 
 export function PoliciesPage() {
   const society = useSociety();
@@ -31,15 +185,7 @@ export function PoliciesPage() {
   const adoptionOptions = useQuery(api.policies.adoptionOptions, society ? { societyId: society._id } : "skip");
   const upsert = usePermissionedMutation(api.policies.upsert, canWrite);
   const remove = usePermissionedMutation(api.policies.remove, canWrite);
-  // Global search links to `?record=<id>`: scroll that policy into view and mark it.
-  const [searchParams] = useSearchParams();
-  const linkedPolicyId = searchParams.get("record");
-  useEffect(() => {
-    if (!linkedPolicyId || !policies) return;
-    const row = document.getElementById(`policy-${linkedPolicyId}`);
-    row?.scrollIntoView({ block: "center" });
-    row?.focus({ preventScroll: true });
-  }, [linkedPolicyId, policies]);
+  // Global search links to `?record=<id>`: the record table opens that policy's preview and marks its row.
   const createReviewTask = usePermissionedMutation(api.policies.createReviewTask, canWrite);
   const createSignerTask = usePermissionedMutation(api.policies.createRequiredSignerTask, canWrite);
   const createTransparencyDraft = usePermissionedMutation(api.policies.createTransparencyDraft, canWrite);
@@ -59,6 +205,10 @@ export function PoliciesPage() {
       motionEvidence: new Map<string, any>((adoptionOptions?.motionEvidence ?? []).map((row: any) => [row._id, row])),
     }),
     [adoptionOptions],
+  );
+  const policyRecords = useMemo(
+    () => ((policies ?? []) as PolicyRow[]).map((policy) => toPolicyRecord(policy, docById, adoptionMaps)),
+    [policies, docById, adoptionMaps],
   );
 
   if (society === undefined) return <PageLoading />;
@@ -158,99 +308,95 @@ export function PoliciesPage() {
       />
       <ImportCandidatesNotice noun="policy" targets={["policies"]} kinds={["policy"]} documentCategory="Policy" emptyRegister={!(policies ?? []).length} />
 
-      <div className="card">
-        <div className="table-wrap">
-          <table className="table table--stack-mobile policies-table review-stack-inline">
-            <thead>
-              <tr>
-                <th>Policy</th>
-                <th>Owner</th>
-                <th>Dates</th>
-                <th>Documents</th>
-                <th>Adoption</th>
-                <th>Signers</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {(policies ?? []).map((row: any) => (
-                <tr
-                  key={row._id}
-                  id={`policy-${row._id}`}
-                  tabIndex={row._id === linkedPolicyId ? -1 : undefined}
-                  aria-current={row._id === linkedPolicyId ? "true" : undefined}
-                  className={row._id === linkedPolicyId ? "is-linked-record" : undefined}
-                >
-                  <td data-label="Policy">
-                    <strong>{row.policyName}</strong>
-                    {row.policyNumber && <div className="mono muted">{row.policyNumber}</div>}
-                    <SourceProvenanceButton table="policies" id={row._id} />
-                  </td>
-                  <td data-label="Owner">{row.owner || "-"}</td>
-                  <td data-label="Dates">
-                    <div>{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</div>
-                    <div className={row.lifecycle?.reviewState === "overdue" ? "" : "muted"} style={row.lifecycle?.reviewState === "overdue" ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
-                      {row.reviewDate ? `Review ${formatDate(row.reviewDate)}${row.lifecycle?.reviewState === "overdue" ? " · Overdue" : ""}` : "No review date"}
-                    </div>
-                  </td>
-                  <td data-label="Documents">
-                    <div>{row.docxDocumentId ? docById.get(row.docxDocumentId)?.title ?? "DOCX linked" : "No DOCX"}</div>
-                    <div className="muted">{row.pdfDocumentId ? docById.get(row.pdfDocumentId)?.title ?? "PDF linked" : "No PDF"}</div>
-                  </td>
-                  <td data-label="Adoption"><AdoptionCell row={row} maps={adoptionMaps} /></td>
-                  <td data-label="Signers">
-                    {row.signatureRequired ? (
-                      <div className="row policies-table__badges">
-                        {(row.requiredSigners ?? []).length
-                          ? (row.requiredSigners ?? []).map((value: string) => <Badge key={value} tone="warn">{optionLabel("requiredSigners", value)}</Badge>)
-                          : <Badge tone="warn">Needs review</Badge>}
-                      </div>
-                    ) : (
-                      <span className="muted">Not required</span>
-                    )}
-                  </td>
-                  <td data-label="Status">
-                    <div className="row policies-table__badges">
-                      <Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status) || row.status}</Badge>
-                      <LifecycleBadges lifecycle={row.lifecycle} />
-                    </div>
-                  </td>
-                  <td>
-                    <div className="row" style={{ justifyContent: "flex-end" }}>
-                      <Menu
-                        align="right"
-                        trigger={
-                          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Policy actions" disabled={!canWrite}>
-                            <MoreHorizontal size={14} />
-                          </button>
-                        }
-                        sections={[
-                          {
-                            id: "policy-actions",
-                            items: [
-                              { id: "review", label: "Review task", onSelect: () => createLifecycleTask(row, "review") },
-                              ...(row.signatureRequired
-                                ? [{ id: "signers", label: "Signer task", onSelect: () => createLifecycleTask(row, "signers") }]
-                                : []),
-                              { id: "publish", label: "Publish draft", onSelect: () => createPublication(row) },
-                              { id: "edit", label: "Edit", onSelect: () => { if (!canWrite) return; setDraft({ ...row }); setOpen(true); } },
-                              { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, onSelect: () => confirmDelete(row) },
-                            ],
-                          },
-                        ]}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(policies ?? []).length === 0 && (
-                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <RecordListTable<PolicyRecord>
+        table={POLICIES}
+        tableId="policies"
+        label="Policies"
+        icon={<FileText size={14} />}
+        records={policyRecords}
+        loading={policies === undefined}
+        showTotals={false}
+        renderCell={({ record, field }) => {
+          const { policy: row } = record;
+          if (field.name === "policyName") return (
+            <div className="record-table__identifier-lines">
+              <span className="record-table__identifier-primary row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                <strong>{row.policyName}</strong>
+                <SourceProvenanceButton table="policies" id={row._id} />
+              </span>
+              {row.policyNumber && <div className="record-table__identifier-secondary mono muted">{row.policyNumber}</div>}
+            </div>
+          );
+          if (field.name === "owner") return <span>{row.owner || "-"}</span>;
+          if (field.name === "effectiveDate") {
+            const overdue = row.lifecycle?.reviewState === "overdue";
+            return (
+              <div className="record-table__identifier-lines">
+                <span className="record-table__identifier-primary">{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</span>
+                <div className={overdue ? "record-table__identifier-secondary" : "record-table__identifier-secondary muted"} style={overdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
+                  {reviewText(row)}
+                </div>
+              </div>
+            );
+          }
+          if (field.name === "documents") {
+            const { docxLabel, pdfLabel } = record;
+            return (
+              <div className="record-table__identifier-lines">
+                <span className="record-table__identifier-primary">{docxLabel}</span>
+                <div className="record-table__identifier-secondary muted">{pdfLabel}</div>
+              </div>
+            );
+          }
+          if (field.name === "adoption") return <AdoptionCell row={row} maps={adoptionMaps} />;
+          if (field.name === "signatureRequired") return row.signatureRequired ? (
+            <div className="row policies-table__badges" style={ONE_LINE_BADGES}>
+              {(row.requiredSigners ?? []).length
+                ? (row.requiredSigners ?? []).map((value) => <Badge key={value} tone="warn">{optionLabel("requiredSigners", value)}</Badge>)
+                : <Badge tone="warn">Needs review</Badge>}
+            </div>
+          ) : (
+            <span className="muted">Not required</span>
+          );
+          if (field.name === "status") return (
+            <div className="row policies-table__badges" style={ONE_LINE_BADGES}>
+              <Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status ?? "") || row.status}</Badge>
+              <LifecycleBadges lifecycle={row.lifecycle} />
+            </div>
+          );
+          return undefined;
+        }}
+        renderPhoneCard={(record, { field, selecting }) => {
+          const { policy: row } = record;
+          return (
+            <RecordTablePhoneCard
+              title={row.policyName}
+              badge={field("status")}
+              meta={[row.owner ?? "", reviewText(row)]}
+              detail={[row.policyNumber ?? ""]}
+              selecting={selecting}
+            />
+          );
+        }}
+        rowMenuSections={(record) => {
+          const { policy: row } = record;
+          return [
+            {
+              id: "policy-actions",
+              items: [
+                { id: "review", label: "Review task", disabled: !canWrite, onSelect: () => createLifecycleTask(row, "review") },
+                ...(row.signatureRequired
+                  ? [{ id: "signers", label: "Signer task", disabled: !canWrite, onSelect: () => createLifecycleTask(row, "signers") }]
+                  : []),
+                { id: "publish", label: "Publish draft", disabled: !canWrite, onSelect: () => createPublication(row) },
+                { id: "edit", label: "Edit", disabled: !canWrite, onSelect: () => { if (!canWrite) return; setDraft({ ...row }); setOpen(true); } },
+                { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => confirmDelete(row) },
+              ],
+            },
+          ];
+        }}
+        emptyState={<RecordTableEmpty title="No policies yet" />}
+      />
 
       <Drawer
         open={open && canWrite}

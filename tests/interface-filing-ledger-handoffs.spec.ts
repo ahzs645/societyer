@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { completeGuidedOrganizationSetup } from './helpers/guidedSetup';
-import { runRowAction } from './helpers/rowActions';
+import { recordRows, runRowAction } from './helpers/rowActions';
 test.setTimeout(140_000);
 
 test('detailed annual filing links into the annual ledger, records manual evidence and persists without duplicate rows', async ({ page }, testInfo) => {
@@ -29,9 +29,12 @@ test('detailed annual filing links into the annual ledger, records manual eviden
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  const region = page.getByRole('region', { name: 'CA-BC annual filing records', exact: true });
-  await expect(region.locator('tbody tr')).toHaveCount(1);
-  await expect(region).toContainText('✗');
+  // The ledger is one record table grouped by jurisdiction; this workspace only has CA-BC rows.
+  const jurisdictionGroup = page.locator('.record-table__group-row', { hasText: 'CA-BC' });
+  const ledgerRows = recordRows(page);
+  await expect(jurisdictionGroup).toHaveCount(1);
+  await expect(ledgerRows).toHaveCount(1);
+  await expect(ledgerRows).toContainText('✗');
   await page.goto('/app/filings');
   await runRowAction(filing, 'Mark filed');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -42,17 +45,19 @@ test('detailed annual filing links into the annual ledger, records manual eviden
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.goto('/app/annual-filings');
-  await expect(region).toContainText('✓');
-  await expect(region).toContainText('Linked record');
+  await expect(ledgerRows).toContainText('✓');
+  await expect(ledgerRows).toContainText('Linked record');
   await page.reload();
-  await expect(region.locator('tbody tr')).toHaveCount(1);
-  await expect(region).toContainText('✓');
+  await expect(jurisdictionGroup).toHaveCount(1);
+  await expect(ledgerRows).toHaveCount(1);
+  await expect(ledgerRows).toContainText('✓');
   await page.getByRole('button', { name: 'Add filing', exact: true }).click();
   await sourcePicker.click();
   await page.getByRole('option', { name: 'BC society annual report · CA-BC · 2026 · Filed', exact: true }).click();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(region.locator('tbody tr')).toHaveCount(1);
+  await expect(jurisdictionGroup).toHaveCount(1);
+  await expect(ledgerRows).toHaveCount(1);
   await expect(page.getByText(/neither verifies government acceptance/)).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   expect(errors).toEqual([]);

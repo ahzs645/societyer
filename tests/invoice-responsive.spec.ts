@@ -17,6 +17,8 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   await page.addInitScript(() => document.addEventListener("touchstart", () => (window as any).recordResponsiveTouch(), { passive: true }));
   const activate = async (locator: Locator) => { if (hasTouch) await locator.tap(); else await locator.click(); };
   const fill = async (locator: Locator, value: string) => { await activate(locator); await locator.fill(value); };
+  // A record in a shared record table: a row on wide screens, a card on phones.
+  const listed = (text: string) => page.locator(hasTouch ? ".record-cards__item" : ".record-table__row").filter({ hasText: text });
   const pick = async (scope: Locator, label: string, value: string | RegExp) => {
     await activate(scope.getByLabel(label, { exact: true }));
     await activate(page.getByRole("option", { name: value, exact: true }));
@@ -41,11 +43,12 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   const touchTableActions = async (row: Locator, checkpoint: string) => {
     if (!hasTouch) return;
     await row.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+    // Phones list records as the shared record table's cards, not table rows.
     const surfaces = await row.evaluate(element => {
-      const table = element.closest("table")!;
-      const card = table.closest(".invoice-card")!;
-      for (const surface of [table, card]) surface.scrollLeft = 0;
-      return [table, card].map(surface => ({ className: surface.className, width: surface.clientWidth, scrollWidth: surface.scrollWidth }));
+      const list = element.closest(".record-cards")!;
+      const card = list.closest(".invoice-card")!;
+      for (const surface of [list, card]) surface.scrollLeft = 0;
+      return [list, card].map(surface => ({ className: surface.className, width: surface.clientWidth, scrollWidth: surface.scrollWidth }));
     });
     for (const surface of surfaces) expect(surface.scrollWidth, `${checkpoint}: phone card rows do not need a hidden nested horizontal scroll (${surface.className})`).toBeLessThanOrEqual(surface.width + 1);
     const box = (await row.boundingBox())!, viewport = page.viewportSize()!;
@@ -119,7 +122,7 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   await fit("catalog form", drawer);
   await activate(drawer.getByRole("button", { name: "Save", exact: true }));
   await expect(drawer).toBeHidden();
-  const catalogRow = page.getByRole("row").filter({ hasText: itemName });
+  const catalogRow = listed(itemName);
   await expect(catalogRow).toContainText("CAD / hour");
   await catalogRow.scrollIntoViewIfNeeded();
   await expect(catalogRow).toBeInViewport();
@@ -127,7 +130,7 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   await fit("saved catalog");
   await page.screenshot({ path: info.outputPath("catalog.png") });
   if (hasTouch) {
-    await activate(catalogRow.getByRole("button", { name: `Actions for ${itemName}`, exact: true }));
+    await activate(catalogRow.getByRole("button", { name: `Row actions for ${itemName}`, exact: true }));
     await activate(page.getByRole("menuitem", { name: "Edit", exact: true }));
     drawer = page.getByRole("dialog").last();
     await expect(drawer.getByLabel("Name", { exact: true })).toHaveValue(itemName);
@@ -259,14 +262,20 @@ test("invoice catalog, customer pricing, branded PDFs and linked payment persist
   }
   await info.attach("saved-record-propagation", { body: JSON.stringify(snapshot, null, 2), contentType: "application/json" });
   await page.goto("/app/invoices?tab=customers");
-  const customerRow = page.getByRole("row").filter({ hasText: customerName });
+  const customerRow = listed(customerName);
   await expect(customerRow).toContainText("$100.00");
   await customerRow.scrollIntoViewIfNeeded();
   await expect(customerRow).toBeInViewport();
   await touchTableActions(customerRow, "customer");
   await fit("customer balance list");
   await page.screenshot({ path: info.outputPath("customer-balance.png") });
-  await activate(customerRow.getByRole("button", { name: "Invoice", exact: true }));
+  if (hasTouch) {
+    // A phone card keeps the row's buttons in its actions menu.
+    await activate(customerRow.getByRole("button", { name: `Row actions for ${customerName}`, exact: true }));
+    await activate(page.getByRole("menuitem", { name: "Invoice", exact: true }));
+  } else {
+    await activate(customerRow.getByRole("button", { name: "Invoice", exact: true }));
+  }
   await expect(page.locator(".invoice-builder__form .billto__name")).toHaveText(customerName);
   await expect(page.locator(".invoice-builder__form").getByLabel("Template", { exact: true })).toContainText(templateName);
   if (hasTouch) expect(touchEvents).toBeGreaterThan(20);

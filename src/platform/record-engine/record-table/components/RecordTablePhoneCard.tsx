@@ -117,7 +117,8 @@ function RecordTablePhoneCardActions({
   useLayoutEffect(() => {
     setInlineActionCount(actionsSourceRef.current?.querySelectorAll("button, a[href]").length ?? 0);
   }, [rowActions]);
-  const hasActions = inlineActionCount > 0 || !!rowMenuSections;
+  const hasMenuItems = (rowMenuSections?.(record) ?? []).some((section) => section.items.length > 0);
+  const hasActions = inlineActionCount > 0 || hasMenuItems;
   const className = [
     "record-phone-card-shell",
     variant === "auto" ? "record-phone-card-shell--auto" : "",

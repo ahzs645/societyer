@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Drawer, Field } from "../../components/ui";
@@ -10,11 +10,65 @@ import { BillingScheduleForm } from "./BillingReportScheduleForm";
 import { runReportPortable } from "../../../shared/functions/commerceReports";
 import { commerceReportDocument } from "../../../shared/commerceReportDocument";
 import { makeFunctionReference } from "convex/server";
+import { CalendarClock } from "lucide-react";
+import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
+import type { BillingAutomationKind } from "../../../shared/billingAutomation";
+
+/** A delivery schedule as `billingAutomation.workspace` lists it (the fields the list reads). */
+type DeliverySchedule = { _id: string; name: string; kind: BillingAutomationKind; recipients: string[]; nextRunAtISO: string; nextLocalDate: string; localTime: string; timezone: string; active: boolean };
+
+const SCHEDULES_TABLE = staticRecordTable({
+  id: "billing-delivery-schedules",
+  nameSingular: "deliverySchedule",
+  namePlural: "deliverySchedules",
+  labelSingular: "Schedule",
+  labelPlural: "Schedules",
+  labelIdentifierFieldName: "name",
+  density: "comfortable",
+  fields: [
+    { name: "name", label: "Schedule", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "kind", label: "Sends", fieldType: FIELD_TYPES.TEXT, size: 160, isVisible: false },
+    { name: "recipients", label: "Recipients", fieldType: FIELD_TYPES.TEXT, size: 240 },
+    { name: "nextLocalDate", label: "Next local delivery", fieldType: FIELD_TYPES.DATE, size: 200 },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 110, config: { options: [{ value: "Enabled", label: "Enabled", color: "green" }, { value: "Paused", label: "Paused", color: "gray" }] } },
+  ],
+});
+
+type ScheduleRecord = {
+  _id: string;
+  name: string;
+  /** "recurring invoice", "invoice reminder" or "report". */
+  kind: string;
+  recipients: string;
+  /** Empty once the series is complete. */
+  nextLocalDate: string | null;
+  nextDelivery: string;
+  status: "Enabled" | "Paused";
+  schedule: DeliverySchedule;
+};
+
+function scheduleRecords(schedules: DeliverySchedule[]): ScheduleRecord[] {
+  return schedules.map((row) => {
+    const complete = row.nextRunAtISO.startsWith("9999");
+    return {
+      _id: row._id,
+      name: row.name,
+      kind: row.kind.replaceAll("_", " "),
+      recipients: row.recipients.join(", "),
+      nextLocalDate: complete ? null : row.nextLocalDate,
+      nextDelivery: complete ? "Series complete" : `${formatDate(row.nextLocalDate)} · ${row.localTime}`,
+      status: row.active ? "Enabled" : "Paused",
+      schedule: row,
+    };
+  });
+}
+
 export function BillingAutomationPanel({ societyId, canWrite }: { societyId: string; canWrite: boolean }) {
   const [scheduleCursors, setScheduleCursors] = useState<Array<string | null>>([null]), [runCursors, setRunCursors] = useState<Array<string | null>>([null]);
   const schedulePage = useQuery(api.billingAutomation.workspace, { societyId, collection: "schedules", scheduleCursor: scheduleCursors.at(-1) }) as any;
   const runPage = useQuery(api.billingAutomation.workspace, { societyId, collection: "runs", runCursor: runCursors.at(-1) }) as any;
   const workspace = schedulePage && runPage ? { ...schedulePage, runs: runPage.runs, runPagination: runPage.runPagination } : undefined;
+  const schedules = useMemo(() => scheduleRecords((schedulePage?.schedules ?? []) as DeliverySchedule[]), [schedulePage]);
   const saveSettings = useMutation(api.billingAutomation.saveSettings), setActive = useMutation(api.billingAutomation.setScheduleActive), retry = useMutation(api.billingAutomation.retryRun), prepare = useMutation(api.billingAutomation.prepareDue), deliverLocal = useMutation(api.billingAutomation.deliverLocal), hostedRun = useAction(api.billingAutomationActions.runDue);
   const client = useConvex(), toast = useToast();
   const local = ["local-indexeddb", "electron-local"].includes(getRuntimeMode());
@@ -55,7 +109,42 @@ export function BillingAutomationPanel({ societyId, canWrite }: { societyId: str
   useEffect(() => { if (!local || !canWrite || !workspace?.settings?.enabled) return; const timer = window.setInterval(() => void runDue(false), 60_000); return () => window.clearInterval(timer); }, [local, canWrite, workspace?.settings?.enabled, runDue]);
   if (!workspace) return <p className="muted">Loading automatic delivery…</p>;
   return <div className="form-stack"><section className="card"><div className="card__head"><div><h2 className="card__title">Automatic delivery</h2><p className="card__subtitle">Recurring invoices, unpaid reminders and saved financial reports with branded PDF attachments.</p></div><div className="btn-row"><button className="btn btn--sm" disabled={!canWrite || busy} onClick={() => setSettings(workspace.settings ?? { enabled: false, fromEmail: "", fromName: "", replyTo: "", senderConfirmed: false })}>Sender settings</button><button className="btn btn--sm btn--accent" disabled={!canWrite} onClick={() => setSchedule({})}>New delivery schedule</button></div></div><div className="card__body form-stack"><p className="invoice-automation__status">{workspace.settings?.enabled ? "Workspace delivery enabled" : "Workspace delivery disabled"} · {workspace.settings?.fromEmail || "No sender configured"}</p><p className="muted">{local ? "Local schedules run while this panel is open. Connect a native email service with attachments and idempotency, or use a hosted workspace for delivery when the app is closed." : "Hosted schedules run every five minutes, including when the app is closed."} New schedules start paused. Provider acceptance is recorded separately from delivery to the recipient.</p><button className="btn btn--sm" disabled={!canWrite || busy} onClick={() => void runDue()}>{busy ? "Checking…" : "Run due schedules"}</button>{error && <p className="field__error" role="alert">{error}</p>}</div></section>
-    <section className="card invoice-card"><div className="card__head"><h3 className="card__title">Delivery schedules</h3></div><div className="table-wrap">{workspace.schedules.length > 0 && <table className="table"><thead><tr><th>Schedule</th><th>Recipients</th><th>Next local delivery</th><th>Status</th><th>Actions</th></tr></thead><tbody>{workspace.schedules.map((row: any) => <tr key={row._id}><td>{row.name}<div className="muted">{row.kind.replaceAll("_", " ")}</div></td><td>{row.recipients.join(", ")}</td><td>{row.nextRunAtISO.startsWith("9999") ? "Series complete" : `${formatDate(row.nextLocalDate)} · ${row.localTime}`}<div className="muted">{row.timezone}</div></td><td>{row.active ? "Enabled" : "Paused"}</td><td><div className="btn-row"><button className="btn btn--sm" disabled={!canWrite} onClick={() => setSchedule(row)}>Edit schedule</button><button className="btn btn--sm" disabled={!canWrite} onClick={async () => { try { await setActive({ societyId, id: row._id, active: !row.active }); } catch (e) { setError(e instanceof Error ? e.message : "Could not change schedule."); } }}>{row.active ? "Pause" : "Resume"}</button></div></td></tr>)}</tbody></table>}{!workspace.schedules.length && <p className="card__body muted">Create a recurring series or save a report, then add a delivery schedule.</p>}{(scheduleCursors.length > 1 || !workspace.schedulePagination.isDone) && <div className="card__body btn-row"><button className="btn btn--sm" disabled={scheduleCursors.length === 1} onClick={() => setScheduleCursors(scheduleCursors.slice(0, -1))}>Previous schedules</button><span className="muted">Schedule page {scheduleCursors.length}</span><button className="btn btn--sm" disabled={workspace.schedulePagination.isDone} onClick={() => setScheduleCursors([...scheduleCursors, workspace.schedulePagination.continueCursor])}>Next schedules</button></div>}</div></section>
+    <section className="card invoice-card"><div className="card__head"><h3 className="card__title">Delivery schedules</h3></div><div className="table-wrap">
+      <RecordListTable<ScheduleRecord>
+        variant="card"
+        table={SCHEDULES_TABLE}
+        tableId="billing-delivery-schedules"
+        label="Delivery schedules"
+        icon={<CalendarClock size={14} />}
+        records={schedules}
+        onOpen={canWrite ? (record) => setSchedule(record.schedule) : undefined}
+        renderCell={({ record, field }) => {
+          const row = record.schedule;
+          if (field.name === "name") return <span>{row.name}<span className="muted invoice-table__sub">{record.kind}</span></span>;
+          if (field.name === "nextLocalDate") return <span>{record.nextDelivery}<span className="muted invoice-table__sub">{row.timezone}</span></span>;
+          return undefined;
+        }}
+        renderRowActions={(record) => {
+          const row = record.schedule;
+          return (
+            <>
+              <button type="button" className="btn btn--sm" disabled={!canWrite} onClick={() => setSchedule(row)}>Edit schedule</button>
+              <button type="button" className="btn btn--sm" disabled={!canWrite} onClick={async () => { try { await setActive({ societyId, id: row._id, active: !row.active }); } catch (e) { setError(e instanceof Error ? e.message : "Could not change schedule."); } }}>{row.active ? "Pause" : "Resume"}</button>
+            </>
+          );
+        }}
+        renderPhoneCard={(record, { open, selecting }) => (
+          <RecordTablePhoneCard
+            title={record.name}
+            badge={<span className="muted">{record.status}</span>}
+            meta={[record.kind, record.nextDelivery]}
+            detail={[record.recipients, record.schedule.timezone]}
+            onOpen={canWrite ? open : undefined}
+            selecting={selecting}
+          />
+        )}
+        emptyState={<p className="card__body muted">Create a recurring series or save a report, then add a delivery schedule.</p>}
+      />{(scheduleCursors.length > 1 || !workspace.schedulePagination.isDone) && <div className="card__body btn-row"><button className="btn btn--sm" disabled={scheduleCursors.length === 1} onClick={() => setScheduleCursors(scheduleCursors.slice(0, -1))}>Previous schedules</button><span className="muted">Schedule page {scheduleCursors.length}</span><button className="btn btn--sm" disabled={workspace.schedulePagination.isDone} onClick={() => setScheduleCursors([...scheduleCursors, workspace.schedulePagination.continueCursor])}>Next schedules</button></div>}</div></section>
     <section className="card"><div className="card__head"><h3 className="card__title">Delivery history</h3></div><div className="card__body form-stack">{workspace.runs.map((run: any) => <div className="invoice-template-card" key={run._id}><strong>{workspace.schedules.find((s: any) => s._id === run.scheduleId)?.name ?? "Schedule"}</strong><p>{run.occurrenceKey} · {run.status === "accepted" ? "Provider accepted" : run.status} · {run.attempts} attempts</p><p className="muted">{run.deliveries.filter((d: any) => d.status === "accepted").length}/{run.deliveries.length} recipients accepted</p>{run.lastError && <p role="status">{run.lastError}</p>}<div className="btn-row"><button className="btn btn--sm" onClick={() => setHistory(run)}>View delivery audit</button>{(!["accepted", "skipped", "working", "uncertain"].includes(run.status) || (run.status === "uncertain" && run.deliveries.filter((d: any) => d.status !== "accepted").every((d: any) => d.providerDraftId && d.submissionStartedAtISO))) && <button className="btn btn--sm" disabled={!canWrite} onClick={async () => { try { await retry({ societyId, id: run._id }); await runDue(); } catch (e) { setError(e instanceof Error ? e.message : "Could not retry."); } }}>{run.status === "uncertain" ? "Check provider acceptance" : "Retry delivery"}</button>}</div></div>)}{!workspace.runs.length && <p className="muted">No automatic deliveries yet.</p>}{(runCursors.length > 1 || !workspace.runPagination.isDone) && <div className="btn-row"><button className="btn btn--sm" disabled={runCursors.length === 1} onClick={() => setRunCursors(runCursors.slice(0, -1))}>Previous delivery history</button><span className="muted">Delivery history page {runCursors.length}</span><button className="btn btn--sm" disabled={workspace.runPagination.isDone} onClick={() => setRunCursors([...runCursors, workspace.runPagination.continueCursor])}>Next delivery history</button></div>}</div></section>
     <Drawer open={Boolean(settings)} title="Automatic delivery sender" onClose={() => setSettings(null)} footer={<button className="btn btn--accent" disabled={!canWrite || busy} onClick={async () => { setBusy(true); try { await saveSettings({ societyId, enabled: settings.enabled, fromEmail: settings.fromEmail, fromName: settings.fromName, replyTo: settings.replyTo || undefined, senderConfirmed: settings.senderConfirmed }); setSettings(null); toast.success("Sender settings saved"); } catch (e) { setError(e instanceof Error ? e.message : "Could not save sender."); } finally { setBusy(false); } }}>Save sender settings</button>}>
       {settings && <div className="form-stack">{error && <p role="alert" className="field__error">{error}</p>}<Field label="Sender email"><input className="input" aria-label="Sender email" type="email" value={settings.fromEmail} onChange={e => setSettings({ ...settings, fromEmail: e.target.value })} /></Field><Field label="Sender name"><input className="input" aria-label="Sender name" value={settings.fromName} onChange={e => setSettings({ ...settings, fromName: e.target.value })} /></Field><Field label="Reply-to email"><input className="input" aria-label="Reply-to email" type="email" value={settings.replyTo ?? ""} onChange={e => setSettings({ ...settings, replyTo: e.target.value })} /></Field><Checkbox label="This workspace is authorized to send from this address" checked={settings.senderConfirmed} onChange={senderConfirmed => setSettings({ ...settings, senderConfirmed })} /><Checkbox label="Enable automatic delivery for this workspace" checked={settings.enabled} onChange={enabled => setSettings({ ...settings, enabled })} /><p className="muted">The sender must match the server’s configured Resend or Microsoft 365 mailbox. Configure provider credentials in the deployment environment; missing credentials produce a visible blocked delivery and can be retried after configuration.</p></div>}

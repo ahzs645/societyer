@@ -75,7 +75,7 @@ test("sidebar counts carry a description", async ({ page }, testInfo) => {
 test("the minute book's connected records stack inside a phone screen", async ({ page }, testInfo) => {
   test.skip(!["phone", "narrow-phone"].includes(testInfo.project.name), "phone layout only");
   await page.goto("/demo/app/minute-book");
-  await expect(page.locator(".table--stack-mobile").first()).toBeVisible();
+  await expect(page.locator(".record-phone-card").first()).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(2);
 });

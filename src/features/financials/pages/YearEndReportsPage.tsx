@@ -573,7 +573,7 @@ function LineEditor({
   return (
     <div className="col" style={{ gap: 6 }}>
       <strong>{title}</strong>
-      <table className="table" style={{ width: "100%" }}>
+      <table className="table table--report" style={{ width: "100%" }}>
         <thead>
           <tr>
             <th>Line</th>

@@ -267,10 +267,6 @@
   width: 100%;
 }
 
-.webhooks-table th {
-  white-space: nowrap;
-}
-
 .api-keys__panel {
   margin-top: token('s-2');
 }
@@ -288,12 +284,6 @@
 }
 
 /* ---------- Evidence registers ---------- */
-.evidence-empty {
-  align-items: center;
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 2px;
-}
 @media (max-width: 760px) {
   /* "+" and "Review imports" both took title-row space; icons only here. */
   .evidence-action-label {

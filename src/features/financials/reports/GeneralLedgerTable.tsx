@@ -35,7 +35,7 @@ const LedgerRow = memo(function LedgerRow({ row, currency, withBalance, tags }: 
       </td>
       <td className="books-ledger__memo">
         <span className="books-ledger__truncate">{row.memo || description || "—"}</span>
-        {row.memo && description && <span className="books-ledger__truncate finance-table__sub">{description}</span>}
+        {row.memo && description && <span className="books-ledger__truncate table__sub">{description}</span>}
         {row.tagIds?.length ? <TagChips tagIds={row.tagIds} tags={tags} /> : null}
       </td>
       <td className="books-ledger__party">{row.counterparty ?? <span className="muted">—</span>}</td>
@@ -74,8 +74,8 @@ export function GeneralLedgerTable({ report, caption, tags }: { report: GeneralL
   const { account, currency } = report;
   const withBalance = Boolean(account);
   return (
-    <div className="finance-table-wrap books-ledger" role="region" aria-label={caption} tabIndex={0}>
-      <table className="table finance-table books-ledger__table">
+    <div className="books-ledger" role="region" aria-label={caption} tabIndex={0}>
+      <table className="table table--report books-ledger__table">
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
@@ -96,7 +96,7 @@ export function GeneralLedgerTable({ report, caption, tags }: { report: GeneralL
             <LedgerRow key={row.lineId} row={row} currency={currency} withBalance={withBalance} tags={tags} />
           ))}
           {report.rows.length === 0 && (
-            <tr className="finance-empty-row">
+            <tr className="table__empty-row">
               <td colSpan={withBalance ? 9 : 8} className="muted">No posted lines in this range.</td>
             </tr>
           )}

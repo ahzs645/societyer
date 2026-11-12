@@ -208,6 +208,7 @@
 .books-ledger {
   max-height: min(72vh, 960px);
   overflow: auto;
+  overscroll-behavior-x: contain;
   border: 1px solid token('border-color-light');
   border-radius: token('r-md');
   &:focus-visible {
@@ -215,33 +216,20 @@
     outline-offset: 2px;
   }
 }
-.books-ledger__table {
-  tbody td,
-  tbody th,
-  tfoot td,
-  tfoot th {
-    height: auto;
-    min-height: 32px;
-    padding: token('s-1') 8px;
+// Ledger lines run to several lines (contra accounts, memo, tags): top-align
+// them with a little air. The rest is `.table--report`.
+.books-ledger__table.table--report {
+  > tbody > tr > :is(td, th),
+  > tfoot > tr > :is(td, th) {
+    padding-block: token('s-1');
     vertical-align: top;
     line-height: 1.4;
   }
-  tbody th {
-    border-right: 1px solid token('border-color-light');
-    border-bottom: 1px solid token('border-color-light');
-    background: token('bg-panel');
-    font-weight: token('fw-medium');
-    text-align: left;
-  }
   // Totals and the closing balance stay pinned under a long ledger.
-  tfoot {
+  > tfoot {
     position: sticky;
     bottom: 0;
     z-index: token('z-base');
-  }
-  tfoot tr + tr td,
-  tfoot tr + tr th {
-    border-top: 1px solid token('border-color-light');
   }
 }
 // Phones keep the account in view while the memo and amounts scroll under it.
@@ -302,7 +290,7 @@
 }
 .books-ledger__memo {
   max-width: 320px;
-  .finance-table__sub {
+  .table__sub {
     display: block;
   }
 }
@@ -314,7 +302,4 @@
   width: 1%;
   white-space: nowrap;
   text-align: right;
-}
-.books-ledger .num {
-  white-space: nowrap;
 }

@@ -104,7 +104,10 @@ test("live annual filing validates evidence and persists a pending record", asyn
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Annual filing saved", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.locator(".card").filter({ has: page.getByRole("heading", { name: jurisdiction, exact: true }) }).locator("tr", { hasText: "2027" })).toContainText("✗");
+  // One ledger table grouped by jurisdiction: search narrows it to this run's jurisdiction.
+  await page.getByPlaceholder("Search annual filings…").fill(jurisdiction);
+  await expect(page.locator(".record-table__group-row", { hasText: jurisdiction })).toHaveCount(1);
+  await expect(page.locator(".record-table__row", { hasText: "2027" })).toContainText("✗");
 });
 
 test("live governance motion template creates, edits and deletes with confirmation", async ({ page }, testInfo) => {

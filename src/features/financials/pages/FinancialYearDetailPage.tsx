@@ -191,7 +191,7 @@ function StatementImportTables({
             <StatTile label="Restricted" value={<Money variant="hero" negativeStyle="parentheses" cents={row.restrictedFundsCents} />} />
           </div>
           {row.lines?.length > 0 ? (
-            <div className="finance-table-wrap">
+            <div className="table-wrap">
             <StatementLinesTable lines={row.lines} />
             </div>
           ) : (
@@ -213,7 +213,7 @@ function StatementLinesTable({ lines }: { lines: any[] }) {
     confidence: (line: any) => confidenceRank(line.confidence),
   });
   return (
-    <table className="table finance-table">
+    <table className="table table--report">
       <thead>
         <tr>
           <SortableTh column="section" sort={sort} onSort={toggle}>Section</SortableTh>
@@ -309,7 +309,7 @@ function ImportSummaryTable({ imports, exactImportIds }: { imports: any[]; exact
         <h2 className="card__title">Financial statement imports</h2>
         <span className="card__subtitle">Matched and related records for this fiscal year.</span>
       </div>
-      <table className="table">
+      <table className="table table--report">
         <thead>
           <tr>
             <SortableTh column="title" sort={sort} onSort={toggle}>Import</SortableTh>

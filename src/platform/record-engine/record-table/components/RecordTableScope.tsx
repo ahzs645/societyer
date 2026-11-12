@@ -6,6 +6,7 @@ import {
   createRecordTableStore,
   useRecordTableState,
   useRecordTableStoreHandle,
+  type RecordTableState,
   type RecordTableStore,
 } from "../state/recordTableStore";
 import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
@@ -22,13 +23,20 @@ import { useRecordPanelStack } from "./RecordTableSidePanelStack";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
 import { cellPreviewRef, decodeEntityStack, encodeEntityStack } from "@/components/HoverCard/entityRefs";
 
-/** Query parameter that opens a record's side panel, e.g. `/app/tasks?record=<id>`. */
+/**
+ * Query parameter that opens a record the way clicking its row does, e.g.
+ * `/app/tasks?record=<id>`: the preview side panel, or, where the view opens
+ * rows elsewhere (`openRecordIn` other than "drawer"), the page's `onRecordClick`.
+ */
 export const RECORD_DEEP_LINK_PARAM = "record";
 /**
  * Query parameter for related records stacked on top of the panel, up to
  * the visible card, e.g. `?record=<id>&stack=m.<memberId>~doc.<documentId>`.
  */
 export const RECORD_STACK_PARAM = "stack";
+
+/** The view each store last loaded from its scope's `hydratedView`. */
+const loadedViews = new WeakMap<RecordTableStore, HydratedView>();
 
 /**
  * Sets up both the per-instance zustand store *and* the metadata context
@@ -50,12 +58,14 @@ export function RecordTableScope({
   onCreate,
   onReorder,
   recordPreview = false,
+  highlightedRecordId = null,
   renderSidePanel,
   cellPreviews = true,
   defaultDisplayMode = "continuous",
   defaultPageSize = DEFAULT_RECORD_TABLE_PAGE_SIZE,
   loadingProgress,
   serverProcessed = false,
+  initialize,
   children,
 }: {
   tableId: string;
@@ -73,10 +83,13 @@ export function RecordTableScope({
    * record page to open (no `onRecordClick`); the sidebar then omits Open.
    */
   recordPreview?: boolean;
+  /** Marks one row (`record-table__row--highlighted`) without opening it. */
+  highlightedRecordId?: string | null;
   /**
    * A record-specific preview panel in place of the generic field list. It
    * keeps the shared behaviour: ↑/↓ from the panel steps through the table,
-   * the open row is marked, and `?record=<id>` deep links open it. Give the
+   * the open row is marked, and `?record=<id>` deep links that reach the
+   * panel (see `RECORD_DEEP_LINK_PARAM`) open it. Give the
    * panel's drawer the `record-side-panel` class so its arrow keys count.
    */
   renderSidePanel?: (panel: { record: any; onClose: () => void; onNavigate: (record: any) => void }) => ReactNode;
@@ -104,6 +117,13 @@ export function RecordTableScope({
    * store by whatever pages them in (`records` is then ignored).
    */
   serverProcessed?: boolean;
+  /**
+   * Runs right after the store loads a view from `hydratedView`: with
+   * `previous` null on a new store, and with the state just replaced when a
+   * new `hydratedView` loads into the same store. `RecordListTable` uses it to
+   * restore a list's remembered state and to keep it across a redefinition.
+   */
+  initialize?: (store: RecordTableStore, previous: RecordTableState | null) => void;
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -132,7 +152,11 @@ export function RecordTableScope({
       // The first render for a different actor must not retain the previous
       // actor's filters, saved view, selection, cells or drawer record. Hydrate
       // a newly scoped store immediately from the current authorized snapshot.
-      if (loadableView) next.getState().loadView(loadableView);
+      if (loadableView) {
+        next.getState().loadView(loadableView);
+        loadedViews.set(next, loadableView);
+      }
+      initialize?.(next, null);
       next.getState().setServerProcessed(serverProcessed);
       // Start on the organisation's calendar, so the first render's filters (and
       // a server-processed table's first request) aren't redone a moment later.
@@ -164,6 +188,14 @@ export function RecordTableScope({
     handledRequestRef.current = null;
   }, [scopeIdentity]);
 
+  // A row click opens the record where the view says: "drawer" (the default)
+  // is the preview panel; anything else is the page's own `onRecordClick`
+  // (its record page, its edit drawer…).
+  const rowOpenRecordIn = hydratedView?.view.openRecordIn ?? "drawer";
+  // Deep links open a record the way clicking its row does, so where rows go
+  // to the page's own view, deep links are handed to it too (further down).
+  const deepLinkOpensOwnView = !!onRecordClick && rowOpenRecordIn !== "drawer";
+
   // Deep link: `?record=<id>` (used by global search hits) opens that record's
   // side panel once it is among this table's records, and `&stack=` reopens
   // the related cards stacked on it. While the panel is open the URL follows
@@ -173,6 +205,7 @@ export function RecordTableScope({
   const requestedRecordId = searchParams.get(RECORD_DEEP_LINK_PARAM);
   const requestedStack = searchParams.get(RECORD_STACK_PARAM);
   useEffect(() => {
+    if (deepLinkOpensOwnView) return;
     if (!requestedRecordId || handledRequestRef.current === `${scopeIdentity}:${requestedRecordId}`) return;
     const match = records.find((record) => String(record?._id) === requestedRecordId);
     if (!match) return;
@@ -180,7 +213,7 @@ export function RecordTableScope({
     setSidePanelRecord({ scopeIdentity, recordId: requestedRecordId, record: match });
     const stacked = decodeEntityStack(requestedStack);
     if (stacked.length) restorePanelStack(requestedRecordId, stacked);
-  }, [records, requestedRecordId, requestedStack, scopeIdentity, restorePanelStack]);
+  }, [deepLinkOpensOwnView, records, requestedRecordId, requestedStack, scopeIdentity, restorePanelStack]);
 
   const visibleStackParam = panelRecordId
     ? encodeEntityStack(panelStack.stack.slice(0, panelStack.active))
@@ -220,9 +253,16 @@ export function RecordTableScope({
     store.getState().setDateContext({ today: organizationToday, fiscalYearEnd });
   }, [store, organizationToday, fiscalYearEnd]);
 
-  // Pipe view + records into the store when they change.
+  // Pipe view + records into the store when they change. The view the store
+  // was created with is already loaded (and possibly restored over).
+  const initializeRef = useRef(initialize);
+  initializeRef.current = initialize;
   useEffect(() => {
-    if (loadableView) store.getState().loadView(loadableView);
+    if (!loadableView || loadedViews.get(store) === loadableView) return;
+    const previous = store.getState();
+    store.getState().loadView(loadableView);
+    loadedViews.set(store, loadableView);
+    initializeRef.current?.(store, previous);
   }, [loadableView, store]);
   // A server-processed table's rows are set by whatever pages them in (and kept
   // across a replaced store); a records prop re-rendered here must not wipe them.
@@ -239,10 +279,7 @@ export function RecordTableScope({
 
   const handleRecordClick = useCallback<NonNullable<RecordTableContextValue["onRecordClick"]>>(
     (recordId, record, options) => {
-      const openRecordIn =
-        options.source === "row"
-          ? hydratedView?.view.openRecordIn ?? "drawer"
-          : options.openRecordIn;
+      const openRecordIn = options.source === "row" ? rowOpenRecordIn : options.openRecordIn;
       if (openRecordIn === "drawer") {
         setSidePanelRecord({ scopeIdentity, recordId, record });
         // Clicking the minimised record's row brings its panel back.
@@ -255,8 +292,35 @@ export function RecordTableScope({
       if (panelRecordId) clearPanelParams();
       onRecordClick?.(recordId, record, { ...options, openRecordIn });
     },
-    [hydratedView?.view.openRecordIn, onRecordClick, scopeIdentity, panelRecordId, setPanelMinimised, resetPanelStack, clearPanelParams],
+    [rowOpenRecordIn, onRecordClick, scopeIdentity, panelRecordId, setPanelMinimised, resetPanelStack, clearPanelParams],
   );
+
+  // Deep link where rows open the page's own view: once the record is among
+  // this table's records, open it exactly as clicking its row does, once per
+  // id. `record`/`stack` are dropped first, as closing the panel does, so Back
+  // or a reload doesn't open it again; a handler that navigates elsewhere
+  // still wins, since it navigates after.
+  const handedOffRef = useRef<{ key: string; params: URLSearchParams } | null>(null);
+  useEffect(() => {
+    if (!deepLinkOpensOwnView || !requestedRecordId) return;
+    const key = `${scopeIdentity}:${requestedRecordId}`;
+    const handedOff = handedOffRef.current;
+    if (handedOff?.key === key) {
+      // A handler that wrote the URL from the params it rendered with (adding
+      // `?claim=`, say) put `record` back: drop it again. The same params
+      // object means nothing has navigated since (a StrictMode replay).
+      if (handedOff.params !== searchParams) {
+        handedOffRef.current = { key, params: searchParams };
+        clearPanelParams();
+      }
+      return;
+    }
+    const match = records.find((record) => String(record?._id) === requestedRecordId);
+    if (!match) return;
+    handedOffRef.current = { key, params: searchParams };
+    clearPanelParams();
+    handleRecordClick(requestedRecordId, match, { source: "row" });
+  }, [deepLinkOpensOwnView, requestedRecordId, scopeIdentity, searchParams, records, clearPanelParams, handleRecordClick]);
 
   const objectNameSingular = objectMetadata.nameSingular;
   const cellPreview = useCallback<NonNullable<RecordTableContextValue["cellPreview"]>>(
@@ -278,8 +342,9 @@ export function RecordTableScope({
       onReorder,
       cellPreview: cellPreviews ? cellPreview : undefined,
       displayDefaults: { mode: defaultDisplayMode, pageSize: normalizedPageSize },
+      highlightedRecordId,
     }),
-    [tableId, objectMetadata, onRecordClick, onRecordIntent, recordPreview, handleRecordClick, onUpdate, canEditRecord, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
+    [highlightedRecordId, tableId, objectMetadata, onRecordClick, onRecordIntent, recordPreview, handleRecordClick, onUpdate, canEditRecord, onCreate, onReorder, cellPreviews, cellPreview, defaultDisplayMode, normalizedPageSize],
   );
 
   const currentSidePanelRecord = activeSidePanelRecord

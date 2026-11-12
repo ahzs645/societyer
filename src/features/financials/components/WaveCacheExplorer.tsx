@@ -20,9 +20,13 @@ import {
   waveResourceBadgeLabel,
   waveResourceDetailFields,
   waveResourceDetailHref,
+  WAVE_REQUIRED_VIEWS,
+  waveResourceRecord,
   waveSingularTypeLabel,
   waveTypeLabel,
+  withoutPerResourceViews,
 } from "../lib/waveResources";
+import { ObjectRecordTable, RecordTableEmpty } from "@/platform/record-engine";
 
 export function WaveCacheExplorer({
   societyId,
@@ -128,63 +132,41 @@ export function WaveCacheExplorer({
 
       {mode === "resources" ? (
         <>
-          <table className="table table--comfortable wave-cache-table">
-            <thead>
-              <tr>
-                <th>Resource</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th className="num">Value</th>
-                <th>Date</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visibleResources.map((row) => {
-                const selected = selectedResourceId === row._id;
+          <ObjectRecordTable
+            societyId={societyId}
+            nameSingular="waveResource"
+            tableId={`financials-wave-cache-${openTableType}`}
+            label={openTableType === "all" ? "Wave data" : `Wave ${waveTypeLabel(openTableType)}`}
+            objectLabel="Wave resource"
+            icon={<Database size={14} />}
+            records={visibleResources.map(waveResourceRecord)}
+            requiredViewNames={WAVE_REQUIRED_VIEWS}
+            filterViews={openTableType === "all" ? undefined : withoutPerResourceViews}
+            onRecordClick={(recordId) => onSelectResource(recordId)}
+            emptyState={<RecordTableEmpty title={summary ? "No cached rows match this view." : "Refresh the Wave cache to load data."} />}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "label") return <strong>{row.label}</strong>;
+              if (field.name === "kind")
                 return (
-                  <tr
-                    key={row._id}
-                    onClick={() => onSelectResource(row._id)}
-                    style={{ cursor: "pointer", background: selected ? "var(--bg-selected-alpha)" : undefined }}
-                  >
-                    <td>
-                      <strong>{row.label}</strong>
-                    </td>
-                    <td>
-                      <Badge>{waveTypeLabel(row.resourceType)}</Badge>
-                      {(row.typeValue || row.subtypeValue) && (
-                        <div className="wave-cache-table__subtype">
-                          {[humanizeWaveEnum(row.typeValue), humanizeWaveEnum(row.subtypeValue)].filter(Boolean).join(" · ")}
-                        </div>
-                      )}
-                    </td>
-                    <td>{row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{humanizeWaveEnum(row.status)}</Badge> : "—"}</td>
-                    <td className="num"><WaveResourceValue row={row} /></td>
-                    <td className={row.dateValue ? undefined : "wave-cache-table__empty"}>{row.dateValue ?? "—"}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <Link
-                        className="btn btn--ghost btn--sm"
-                        to={waveResourceDetailHref(row)}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                        }}
-                      >
-                        <ExternalLink size={12} /> Details
-                      </Link>
-                    </td>
-                  </tr>
+                  <span className="row" style={{ gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
+                    <span style={{ flex: "none" }}><Badge>{waveResourceBadgeLabel(row)}</Badge></span>
+                    {(row.typeValue || row.subtypeValue) && (
+                      <span className="record-cell__text muted">
+                        {[humanizeWaveEnum(row.typeValue), humanizeWaveEnum(row.subtypeValue)].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </span>
                 );
-              })}
-              {visibleResources.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 16 }}>
-                    {summary ? "No cached rows match this view." : "Refresh the Wave cache to load data."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              if (field.name === "status") return row.status ? <Badge tone={String(row.status).toLowerCase() === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—";
+              if (field.name === "value") return <span className="record-cell__number"><WaveResourceValue row={row} /></span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <Link className="btn btn--ghost btn--sm" to={waveResourceDetailHref(row)}>
+                <ExternalLink size={12} /> Details
+              </Link>
+            )}
+          />
 
           <WaveResourceDrawer
             open={Boolean(selectedResourceId)}
@@ -203,7 +185,7 @@ export function WaveCacheExplorer({
           )}
         </>
       ) : (
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Type</th>
@@ -635,7 +617,7 @@ function AccountTransactionsPreview({
             : "No synced transactions for this account yet."}
         </div>
       ) : (
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Date</th>
@@ -697,7 +679,7 @@ function CounterpartyTransactionsPreview({
           Reimport Wave browser transactions to backfill vendor and customer links for older rows.
         </div>
       ) : (
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Date</th>

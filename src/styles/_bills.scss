@@ -89,11 +89,6 @@
 
 .bill-approvals__progress { margin: 0; font-size: token(fs-sm); }
 
-.bill-detail__lines {
-  width: 100%;
-  font-size: token(fs-sm);
-  tfoot td { font-weight: token(fw-semibold); border-top: 1px solid token(border); }
-}
 .bill-detail__posting { margin: token(s-2) 0 0; font-size: token(fs-xs); }
 
 .bill-payments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: token(s-2); }
@@ -124,4 +119,3 @@
 
 .vendor-totals { margin-bottom: token(s-3); }
 .vendor-address { white-space: pre-line; }
-.vendor-history { width: 100%; font-size: token(fs-sm); }

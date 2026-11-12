@@ -22,8 +22,11 @@ export function useRecordRowClassName(recordId: string | null) {
   const isFlashing = useRecordTableState((state) => recordId !== null && state.flashRecordIds.has(recordId));
   const isActive = useRecordTableState((state) => recordId !== null && state.panelRecordId === recordId);
   const isSelected = useRecordTableState((state) => recordId !== null && state.selectedRecordIds.has(recordId));
+  const { highlightedRecordId } = useRecordTableContextOrThrow();
+  const isHighlighted = recordId !== null && highlightedRecordId === recordId;
   return (
     "record-table__row" +
+    (isHighlighted ? " record-table__row--highlighted" : "") +
     (isFlashing ? " row-flash" : "") +
     (isActive ? " record-table__row--active" : "") +
     (isSelected ? " record-table__row--selected" : "")
@@ -57,6 +60,8 @@ export function RecordTableRow({
   longPressSelect?: boolean;
 }) {
   const { objectMetadata, onRecordClick, onReorder } = useRecordTableContextOrThrow();
+  // A row whose menu would be empty gets no "…" button.
+  const menuSections = rowMenuSections?.(record).filter((section) => section.items.length > 0) ?? [];
   const isSelected = useRecordTableState((s) =>
     s.selectedRecordIds.has(String(record._id)),
   );
@@ -195,7 +200,7 @@ export function RecordTableRow({
         * inline; once it scrolls sideways RecordTable pins a narrow cell to
         * the right edge (`data-row-actions="pinned"` on the frame) where the
         * same actions open from one "Row actions" button instead. */}
-      {(showOpenRecordAction || renderRowActions || rowMenuSections) && (
+      {(showOpenRecordAction || renderRowActions || menuSections.length > 0) && (
         <td
           className="record-table__row-actions-cell"
           onClick={(e) => e.stopPropagation()}
@@ -220,13 +225,13 @@ export function RecordTableRow({
               </Tooltip>
             )}
             {renderRowActions?.(record)}
-            {rowMenuSections && (
+            {menuSections.length > 0 && (
               <Menu
                 align="right"
                 minWidth={180}
                 label={`Actions for ${recordName}`}
                 sheetTitle={`Actions for ${recordName}`}
-                sections={rowMenuSections(record)}
+                sections={menuSections}
                 trigger={
                   <button
                     type="button"
@@ -249,7 +254,7 @@ export function RecordTableRow({
             recordName={recordName}
             getSections={() => [
               { id: "row-actions", items: collectRowActionItems(actionsSourceRef.current, recordName) },
-              ...(rowMenuSections?.(record) ?? []),
+              ...menuSections,
             ].filter((section) => section.items.length > 0)}
           />
         </td>

@@ -19,18 +19,24 @@ import { BookTemplate, FileSignature, Landmark, Scale, Trash2, UserCheck, UsersR
 import { CreateMenu } from "../components/CreateMenu";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { formatDate } from "../lib/format";
-import { optionLabel } from "../lib/orgHubOptions";
+import { OPTION_SETS, optionLabel, type OptionSetName } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { roleHolderInlinePatch } from "../lib/roleHolderInlineEdit";
 import {
+  FIELD_TYPES,
+  RecordListTable,
   RecordTable,
+  RecordTableEmpty,
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableScope,
   RecordTableViewToolbar,
+  staticRecordTable,
   useObjectRecordTableData,
+  type SelectOption,
+  type StaticFieldDefinition,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
@@ -42,7 +48,7 @@ import {
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { deriveCurrentHoldings } from "../lib/equity";
-import { isRedeemableClass } from "../../shared/equityLedger";
+import { isRedeemableClass, type StructuredShareRights } from "../../shared/equityLedger";
 import { SHARE_CLASS_PRESETS } from "../../shared/shareClassPresets";
 import { StatTile } from "../components/StatTile";
 
@@ -621,6 +627,326 @@ export function RoleHoldersPage() {
   );
 }
 
+/* --------------------------------------------------------------- list tables */
+
+/** A list row as the table reads it: the values its columns sort and filter by, plus the row. */
+type ListRecord<T> = Record<string, unknown> & { _id: string; row: T };
+
+const TONE_COLOR: Record<ReturnType<typeof toneForStatus>, NonNullable<SelectOption["color"]>> = {
+  success: "green",
+  warn: "amber",
+  danger: "red",
+  neutral: "gray",
+};
+
+/** Select options for an option set, coloured the way its status badges are toned. */
+function statusOptions(setName: OptionSetName): SelectOption[] {
+  return OPTION_SETS[setName].map((option) => ({ value: option.value, label: option.label, color: TONE_COLOR[toneForStatus(option.value)] }));
+}
+
+/** Select options for an option set that names kinds rather than states. */
+function kindOptions(setName: OptionSetName): SelectOption[] {
+  return OPTION_SETS[setName].map((option) => ({ value: option.value, label: option.label, color: "gray" as const }));
+}
+
+function legalTable(
+  id: string,
+  singular: string,
+  plural: string,
+  labelIdentifierFieldName: string,
+  fields: StaticFieldDefinition[],
+) {
+  const name = id.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+  return staticRecordTable({
+    id: `legal-operations:${id}`,
+    nameSingular: `legal${name[0].toUpperCase()}${name.slice(1)}`,
+    namePlural: `legal${name[0].toUpperCase()}${name.slice(1)}s`,
+    labelSingular: singular,
+    labelPlural: plural,
+    labelIdentifierFieldName,
+    fields,
+  });
+}
+
+/** A rights or share class, as `legalOperations.rightsLedger` returns it (the fields the ledger reads). */
+type LedgerClass = StructuredShareRights & {
+  _id: string;
+  className: string;
+  classType?: string;
+  status?: string;
+  idPrefix?: string;
+  votingRights?: string;
+  conditionsToHold?: string;
+  conditionsToTransfer?: string;
+  startDate?: string;
+  endDate?: string;
+};
+
+type LedgerRoleHolder = { _id: string; fullName?: string; roleType?: string };
+
+/** A holding or transfer event, as `legalOperations.rightsLedger` returns it. */
+type LedgerTransfer = {
+  _id: string;
+  transferType?: string;
+  status?: string;
+  transferDate?: string;
+  rightsClassId?: string;
+  sourceRoleHolderId?: string;
+  destinationRoleHolderId?: string;
+  sourceHolderName?: string;
+  destinationHolderName?: string;
+  quantity?: number;
+  precedentRunId?: string;
+};
+
+type LedgerHolding = { rightsClassId: string; holderKey: string; quantity: number };
+
+const RIGHTS_CLASSES_TABLE = legalTable("rights-classes", "Class", "Classes", "className", [
+  { name: "className", label: "Class", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+  { name: "classType", label: "Type", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: kindOptions("rightsClassTypes") } },
+  { name: "votingRights", label: "Voting/conditions", fieldType: FIELD_TYPES.TEXT, size: 320 },
+  { name: "startDate", label: "Starts", fieldType: FIELD_TYPES.DATE, size: 120 },
+  { name: "endDate", label: "Ends", fieldType: FIELD_TYPES.DATE, size: 120 },
+  { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("rightsClassStatuses") } },
+]);
+
+const HOLDINGS_TABLE = legalTable("current-holdings", "Holding", "Holdings", "holderName", [
+  { name: "holderName", label: "Holder", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+  { name: "className", label: "Class", fieldType: FIELD_TYPES.TEXT, size: 200 },
+  { name: "quantity", label: "Quantity", fieldType: FIELD_TYPES.NUMBER, size: 120 },
+  { name: "source", label: "Source", fieldType: FIELD_TYPES.TEXT, size: 140 },
+]);
+
+const TRANSFERS_TABLE = legalTable("transfers", "Ledger transfer", "Ledger transfers", "transferType", [
+  { name: "transferDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120 },
+  { name: "transferType", label: "Type", fieldType: FIELD_TYPES.SELECT, size: 160, config: { options: kindOptions("rightsholdingTransferTypes") } },
+  { name: "className", label: "Class", fieldType: FIELD_TYPES.TEXT, size: 180 },
+  { name: "fromName", label: "From", fieldType: FIELD_TYPES.TEXT, size: 180 },
+  { name: "toName", label: "To", fieldType: FIELD_TYPES.TEXT, size: 180 },
+  { name: "quantity", label: "Quantity", fieldType: FIELD_TYPES.NUMBER, size: 110 },
+  { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("rightsholdingTransferStatuses") } },
+  { name: "evidence", label: "Evidence", fieldType: FIELD_TYPES.TEXT, size: 130 },
+]);
+
+const TEMPLATES_TABLE = legalTable("templates", "Template", "Templates", "name", [
+  { name: "name", label: "Name", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+  { name: "templateType", label: "Type", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: kindOptions("templateTypes") } },
+  { name: "coverage", label: "Coverage", fieldType: FIELD_TYPES.TEXT, size: 240 },
+  { name: "signing", label: "Signing", fieldType: FIELD_TYPES.TEXT, size: 150 },
+  { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("templateStatuses") } },
+]);
+
+const PRECEDENTS_TABLE = legalTable("precedents", "Precedent", "Precedents", "packageName", [
+  { name: "packageName", label: "Package", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+  { name: "timeline", label: "Timeline", fieldType: FIELD_TYPES.TEXT, size: 160 },
+  { name: "deliverables", label: "Deliverables", fieldType: FIELD_TYPES.TEXT, size: 200 },
+  { name: "addOnTerms", label: "Terms", fieldType: FIELD_TYPES.TEXT, size: 200 },
+  { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("precedentStatuses") } },
+]);
+
+const GENERATED_DOCUMENTS_TABLE = legalTable("generated-documents", "Generated document", "Generated documents", "title", [
+  { name: "title", label: "Document", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+  { name: "effectiveDate", label: "Effective", fieldType: FIELD_TYPES.DATE, size: 120, isVisible: false },
+  { name: "sourceTemplateName", label: "Template", fieldType: FIELD_TYPES.TEXT, size: 200 },
+  { name: "signingPackage", label: "Signing package", fieldType: FIELD_TYPES.TEXT, size: 170 },
+  { name: "signers", label: "Signers", fieldType: FIELD_TYPES.TEXT, size: 100 },
+  { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 140, config: { options: statusOptions("generatedDocumentStatuses") } },
+]);
+
+const FORMATIONS_TABLE = legalTable("formations", "Formation record", "Formation records", "nuansNumber", [
+  { name: "nuansNumber", label: "NUANS", fieldType: FIELD_TYPES.TEXT, size: 200, config: { groupable: false } },
+  { name: "nuansDate", label: "NUANS date", fieldType: FIELD_TYPES.DATE, size: 120, isVisible: false },
+  { name: "jurisdiction", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 200 },
+  { name: "purpose", label: "Purpose/classes", fieldType: FIELD_TYPES.TEXT, size: 260 },
+  { name: "staffSigning", label: "Staff/signing", fieldType: FIELD_TYPES.TEXT, size: 180 },
+  { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("formationStatuses") } },
+]);
+
+const NAME_SEARCHES_TABLE = legalTable("name-searches", "Name search", "Name searches", "name", [
+  { name: "name", label: "Name", fieldType: FIELD_TYPES.TEXT, size: 280, config: { groupable: false } },
+  {
+    name: "result",
+    label: "Result",
+    fieldType: FIELD_TYPES.SELECT,
+    size: 140,
+    config: {
+      options: [
+        { value: "Approved", label: "Approved", color: "green" },
+        { value: "Not approved", label: "Not approved", color: "red" },
+        { value: "No result yet", label: "No result yet", color: "gray" },
+      ],
+    },
+  },
+  { name: "report", label: "Report", fieldType: FIELD_TYPES.TEXT, size: 130 },
+]);
+
+const AMENDMENTS_TABLE = legalTable("amendments", "Amendment", "Amendments", "summary", [
+  { name: "summary", label: "Change", fieldType: FIELD_TYPES.TEXT, size: 340, config: { groupable: false } },
+  { name: "effectiveDate", label: "Effective", fieldType: FIELD_TYPES.DATE, size: 120 },
+  { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("amendmentStatuses") } },
+]);
+
+/** Annual maintenance: the meeting column is the "AGM" for societies, the "Annual meeting" for corporations. */
+function annualMaintenanceTable(meetingLabel: string) {
+  return legalTable(`annual-maintenance-${meetingLabel === "AGM" ? "society" : "corporation"}`, "Annual maintenance record", "Annual maintenance records", "yearFilingFor", [
+    { name: "yearFilingFor", label: "Year", fieldType: FIELD_TYPES.TEXT, size: 110, config: { groupable: false } },
+    { name: "lastAgmDate", label: meetingLabel, fieldType: FIELD_TYPES.DATE, size: 140 },
+    { name: "filingDate", label: "Filing", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "financialStatement", label: "Financial statement", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("annualMaintenanceStatuses") } },
+  ]);
+}
+const ANNUAL_SOCIETY_TABLE = annualMaintenanceTable("AGM");
+const ANNUAL_CORPORATION_TABLE = annualMaintenanceTable("Annual meeting");
+
+const JURISDICTIONS_TABLE = legalTable("jurisdiction-metadata", "Jurisdiction", "Jurisdictions", "label", [
+  { name: "label", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+  { name: "act", label: "Act", fieldType: FIELD_TYPES.TEXT, size: 220 },
+  { name: "nuansJurisdictionNumber", label: "NUANS jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 150 },
+  { name: "nuansReservationReportTypeId", label: "Reservation report", fieldType: FIELD_TYPES.TEXT, size: 160 },
+  { name: "incorporationServiceEligible", label: "Eligible", fieldType: FIELD_TYPES.BOOLEAN, size: 100 },
+]);
+
+const LOGS_TABLE = legalTable("operational-logs", "Log entry", "Log entries", "details", [
+  { name: "createdAtISO", label: "When", fieldType: FIELD_TYPES.DATE, size: 120 },
+  { name: "logType", label: "Type", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: kindOptions("logTypes") } },
+  { name: "page", label: "Page", fieldType: FIELD_TYPES.TEXT, size: 180 },
+  { name: "details", label: "Details", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
+  {
+    name: "severity",
+    label: "Severity",
+    fieldType: FIELD_TYPES.SELECT,
+    size: 120,
+    config: {
+      options: OPTION_SETS.logSeverities.map((option) => ({
+        value: option.value,
+        label: option.label,
+        color: option.value === "error" || option.value === "critical" ? "red" : option.value === "warning" ? "amber" : "gray",
+      })),
+    },
+  },
+]);
+
+type TemplateRow = {
+  _id: string;
+  name?: string;
+  owner?: string;
+  documentTag?: string;
+  templateType?: string;
+  jurisdictions?: string[];
+  entityTypes?: string[];
+  signatureRequired?: boolean;
+  requiredSigners?: unknown[];
+  status?: string;
+};
+
+type PrecedentRow = {
+  _id: string;
+  packageName?: string;
+  shortDescription?: string;
+  partType?: string;
+  timeline?: string;
+  deliverables?: string;
+  addOnTerms?: string;
+  status?: string;
+};
+
+type GeneratedDocumentRow = {
+  _id: string;
+  title?: string;
+  effectiveDate?: string;
+  sourceTemplateName?: string;
+  syngrafiiPackageId?: string;
+  syngrafiiDocumentId?: string;
+  signerTagsSigned?: string[];
+  signerTagsRequired?: string[];
+  draftDocumentId?: string;
+  signedDocumentId?: string;
+  status?: string;
+};
+
+type FormationRow = {
+  _id: string;
+  nuansNumber?: string;
+  nuansDate?: string;
+  jurisdiction?: string;
+  purposeStatement?: string;
+  classesOfMembership?: string;
+  assignedStaffIds?: string[];
+  signingPackageIds?: string[];
+  status?: string;
+};
+
+type NameSearchRow = {
+  _id: string;
+  name?: string;
+  suffix?: string;
+  success?: boolean;
+  reportUrl?: string;
+  rank?: number | string;
+  nuansReportNumber?: string;
+  expressService?: boolean;
+  errors?: string[];
+};
+
+type AmendmentRow = {
+  _id: string;
+  effectiveDate?: string;
+  entityNameNew?: string;
+  jurisdictionNew?: string;
+  directorsMinimum?: number;
+  directorsMaximum?: number;
+  shareClassAmendmentText?: string;
+  notes?: string;
+  status?: string;
+};
+
+type AnnualMaintenanceRow = {
+  _id: string;
+  yearFilingFor?: string;
+  lastAgmDate?: string;
+  filingDate?: string;
+  filingId?: string;
+  annualFinancialStatementOption?: string;
+  financialStatementReportType?: string;
+  status?: string;
+};
+
+type JurisdictionMetadataRow = {
+  _id: string;
+  label?: string;
+  jurisdiction?: string;
+  actFormedUnder?: string;
+  nuansJurisdictionNumber?: string;
+  nuansReservationReportTypeId?: string;
+  incorporationServiceEligible?: boolean;
+};
+
+type SupportLogRow = {
+  _id: string;
+  createdAtISO?: string;
+  logType?: string;
+  page?: string;
+  pageLocationUrl?: string;
+  errorMessage?: string;
+  detailsHeading?: string;
+  severity?: string;
+};
+
+const NO_CLASSES: LedgerClass[] = [];
+const NO_ROLE_HOLDERS: LedgerRoleHolder[] = [];
+const NO_TRANSFERS: LedgerTransfer[] = [];
+
+/** A holding's holder: the role holder's name, else the name as written on the ledger. */
+function holderLabel(holder: LedgerRoleHolder | undefined, holderKey: string) {
+  return holder?.fullName || (holderKey.startsWith("name:") ? holderKey.slice("name:".length) : holderKey);
+}
+
+/** The ledger's key for one side of a transfer (as `deriveCurrentHoldings` keys holdings). */
+function transferHolderKey(roleHolderId?: string, holderName?: string) {
+  return roleHolderId ? `roleHolder:${roleHolderId}` : holderName ? `name:${holderName}` : null;
+}
+
 export function RightsLedgerPage() {
   const society = useSociety();
   const { can } = usePermissions();
@@ -655,6 +981,65 @@ export function RightsLedgerPage() {
   const evidenceArgs = society && corporationWorkspace && transferDraft ? { societyId: society._id } : "skip";
   const documents = useQuery(api.documents.list, evidenceArgs) as any[] | undefined;
   const resolutions = useQuery(api.writtenResolutions.list, can("motions:read") ? evidenceArgs : "skip") as any[] | undefined;
+  const ledgerClasses = (data?.classes ?? NO_CLASSES) as LedgerClass[];
+  const ledgerRoleHolders = (data?.roleHolders ?? NO_ROLE_HOLDERS) as LedgerRoleHolder[];
+  const ledgerTransfers = (data?.transfers ?? NO_TRANSFERS) as LedgerTransfer[];
+  const classRecords = useMemo<ListRecord<LedgerClass>[]>(
+    () =>
+      ledgerClasses.map((row) => ({
+        _id: row._id,
+        row,
+        className: row.className,
+        classType: row.classType ?? "",
+        votingRights: row.votingRights ?? "",
+        startDate: row.startDate ?? null,
+        endDate: row.endDate ?? null,
+        status: row.status ?? "",
+      })),
+    [ledgerClasses],
+  );
+  const holdingRecords = useMemo<(ListRecord<LedgerHolding> & { rightsClass?: LedgerClass; holder?: LedgerRoleHolder })[]>(
+    () =>
+      currentHoldings.map((holding) => {
+        const rightsClass = ledgerClasses.find((item) => item._id === holding.rightsClassId);
+        const holder = roleHolderForHolding(ledgerRoleHolders, holding.holderKey);
+        return {
+          _id: `${holding.rightsClassId}:${holding.holderKey}`,
+          row: holding,
+          rightsClass,
+          holder,
+          holderName: holderLabel(holder, holding.holderKey),
+          className: rightsClass?.className || holding.rightsClassId,
+          quantity: holding.quantity,
+          source: "Posted ledger",
+        };
+      }),
+    [currentHoldings, ledgerClasses, ledgerRoleHolders],
+  );
+  const transferRecords = useMemo<(ListRecord<LedgerTransfer> & { rightsClass?: LedgerClass; fromKey: string | null; toKey: string | null })[]>(
+    () =>
+      ledgerTransfers.map((row) => {
+        const rightsClass = ledgerClasses.find((item) => item._id === row.rightsClassId);
+        const source = ledgerRoleHolders.find((item) => item._id === row.sourceRoleHolderId);
+        const destination = ledgerRoleHolders.find((item) => item._id === row.destinationRoleHolderId);
+        return {
+          _id: row._id,
+          row,
+          rightsClass,
+          fromKey: transferHolderKey(row.sourceRoleHolderId, row.sourceHolderName),
+          toKey: transferHolderKey(row.destinationRoleHolderId, row.destinationHolderName),
+          transferDate: row.transferDate ?? null,
+          transferType: row.transferType ?? "",
+          className: rightsClass?.className || "Unlinked",
+          fromName: source?.fullName || row.sourceHolderName || "Treasury/new issue",
+          toName: destination?.fullName || row.destinationHolderName || "No destination",
+          quantity: row.quantity ?? null,
+          status: row.status ?? "",
+          evidence: row.precedentRunId ? "Packet" : corporationWorkspace && row.transferType === "issuance" ? "Stage packet" : "No packet",
+        };
+      }),
+    [ledgerTransfers, ledgerClasses, ledgerRoleHolders, corporationWorkspace],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -780,7 +1165,7 @@ export function RightsLedgerPage() {
       ...(holding?.holderKey.startsWith("roleHolder:")
         ? {
             sourceRoleHolderId: holding.holderKey.slice("roleHolder:".length),
-            sourceHolderName: roleHolderForHolding(data?.roleHolders ?? [], holding.holderKey)?.fullName,
+            sourceHolderName: roleHolderForHolding(ledgerRoleHolders, holding.holderKey)?.fullName,
           }
         : holding?.holderKey.startsWith("name:") ? { sourceHolderName: holding.holderKey.slice("name:".length) } : {}),
       quantity: holding ? String(holding.quantity) : "",
@@ -888,67 +1273,73 @@ export function RightsLedgerPage() {
       {!can("settings:read") && <p className="muted">Controller records require additional workspace access and are omitted from this view. The visible register is not a complete controller register.</p>}
 
       <Section title={corporationWorkspace ? "Share classes" : "Rights and membership classes"} count={data?.classes?.length ?? 0}>
-        <div className="table-wrap">
-          {/* Labelled cards on phones, so each class's Edit and Split stay on screen. */}
-          <table className="table table--stack-mobile rights-ledger-table">
-            <thead><tr><th>Class</th><th>Type</th><th>Voting/conditions</th><th>Dates</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              {(data?.classes ?? []).map((row: any) => (
-                <tr key={row._id}>
-                  <td data-label="Class"><strong>{row.className}</strong><div className="muted">{row.idPrefix || "No ID prefix"}</div></td>
-                  <td data-label="Type">{optionLabel("rightsClassTypes", row.classType)}</td>
-                  <td data-label="Voting/conditions" className="rights-ledger-table__wrap"><div>{row.votingRights || "No voting text"}</div><div className="muted">{row.conditionsToHold || row.conditionsToTransfer || "No conditions"}</div>{corporationWorkspace && structuredRightsSummary(row) && <div className="muted">{structuredRightsSummary(row)}</div>}</td>
-                  <td data-label="Dates">{dateLabel(row.startDate)} to {dateLabel(row.endDate)}</td>
-                  <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsClassStatuses", row.status)}</Badge></td>
-                  <td className="rights-ledger-table__actions">
-                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                      {row.classType === "share" && (
-                        <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setSplitDraft({ rightsClassId: row._id, className: row.className, numerator: 2, denominator: 1 })}>Split</button>
-                      )}
-                      <RowActions onEdit={() => setClassDraft(editRightsClass(row))} onDelete={() => deleteRow("class", row)} label={classNoun} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(data?.classes ?? []).length === 0 && <EmptyRow cols={6} label={corporationWorkspace ? "No share classes yet." : "No rights classes yet."} />}
-            </tbody>
-          </table>
-        </div>
+        <RecordListTable<ListRecord<LedgerClass>>
+          variant="card"
+          table={RIGHTS_CLASSES_TABLE}
+          tableId="rights-ledger-classes"
+          label={corporationWorkspace ? "Share classes" : "Classes"}
+          records={classRecords}
+          loading={data === undefined}
+          onOpen={canWrite ? (record) => setClassDraft(editRightsClass(record.row)) : undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "className") return <RecordTitle title={row.className} subtitle={row.idPrefix || "No ID prefix"} />;
+            if (field.name === "classType") return <span>{optionLabel("rightsClassTypes", row.classType)}</span>;
+            if (field.name === "votingRights") {
+              const structured = corporationWorkspace ? structuredRightsSummary(row) : "";
+              return (
+                <TwoLines
+                  primary={row.votingRights || "No voting text"}
+                  secondary={[row.conditionsToHold || row.conditionsToTransfer || "No conditions", structured].filter(Boolean).join(" · ")}
+                />
+              );
+            }
+            if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{optionLabel("rightsClassStatuses", row.status)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => (
+            <>
+              {record.row.classType === "share" && (
+                <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setSplitDraft({ rightsClassId: record.row._id, className: record.row.className, numerator: 2, denominator: 1 })}>Split</button>
+              )}
+              <RowActions onEdit={() => setClassDraft(editRightsClass(record.row))} onDelete={() => deleteRow("class", record.row)} label={classNoun} />
+            </>
+          )}
+          emptyState={<RecordTableEmpty title={corporationWorkspace ? "No share classes yet." : "No rights classes yet."} />}
+        />
       </Section>
 
       <Section title={corporationWorkspace ? "Current share holdings" : "Current holdings"} count={currentHoldings.length}>
-        <div className="table-wrap">
-          <table className="table table--stack-mobile rights-ledger-table">
-            <thead><tr><th>Holder</th><th>Class</th><th className="rights-ledger-table__qty">Quantity</th><th>Source</th></tr></thead>
-            <tbody>
-              {currentHoldings.map((holding: any) => {
-                const rightsClass = data?.classes?.find((item: any) => item._id === holding.rightsClassId);
-                const holder = roleHolderForHolding(data?.roleHolders ?? [], holding.holderKey);
-                return (
-                  <tr key={`${holding.rightsClassId}:${holding.holderKey}`}>
-                    <td data-label="Holder">
-                      <button className="btn-link" onClick={() => setHolderDrill(holding.holderKey)} style={{ font: "inherit" }}>
-                        <strong>{holder?.fullName || holding.holderKey}</strong>
-                      </button>
-                      <div className="muted">{holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"}</div>
-                    </td>
-                    <td data-label="Class">{rightsClass?.className || holding.rightsClassId}<div className="muted">{rightsClass?.classType ? optionLabel("rightsClassTypes", rightsClass.classType) : "No class record"}</div></td>
-                    <td data-label="Quantity" className="rights-ledger-table__qty">{formatQuantity(holding.quantity)}</td>
-                    <td data-label="Source">
-                      <div className="row" style={{ gap: 6, alignItems: "center" }}>
-                        <Badge tone="success">Posted ledger</Badge>
-                        {corporationWorkspace && isRedeemableClass(rightsClass) && (
-                          <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => startRedemption(holding)}>Redeem</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {currentHoldings.length === 0 && <EmptyRow cols={4} label={corporationWorkspace ? "No posted share holdings yet." : "No posted holdings yet."} />}
-            </tbody>
-          </table>
-        </div>
+        <RecordListTable<ListRecord<LedgerHolding> & { rightsClass?: LedgerClass; holder?: LedgerRoleHolder }>
+          variant="card"
+          table={HOLDINGS_TABLE}
+          tableId="rights-ledger-holdings"
+          label={corporationWorkspace ? "Current share holdings" : "Current holdings"}
+          records={holdingRecords}
+          loading={data === undefined}
+          onOpen={(record) => setHolderDrill(record.row.holderKey)}
+          renderCell={({ record, field }) => {
+            const { rightsClass, holder } = record;
+            if (field.name === "holderName")
+              return <RecordTitle title={String(record.holderName)} subtitle={holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"} />;
+            if (field.name === "className")
+              return (
+                <TwoLines
+                  primary={<ClassLink rightsClass={rightsClass} label={String(record.className)} onOpen={canWrite ? (row) => setClassDraft(editRightsClass(row)) : undefined} />}
+                  secondary={rightsClass?.classType ? optionLabel("rightsClassTypes", rightsClass.classType) : "No class record"}
+                />
+              );
+            if (field.name === "quantity") return <span>{formatQuantity(record.row.quantity)}</span>;
+            if (field.name === "source") return <Badge tone="success">Posted ledger</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) =>
+            corporationWorkspace && isRedeemableClass(record.rightsClass) ? (
+              <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => startRedemption(record.row)}>Redeem</button>
+            ) : null
+          }
+          emptyState={<RecordTableEmpty title={corporationWorkspace ? "No posted share holdings yet." : "No posted holdings yet."} />}
+        />
       </Section>
 
       {corporationWorkspace && (
@@ -957,8 +1348,8 @@ export function RightsLedgerPage() {
           count={voting?.voting?.length ?? 0}
         >
           <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>Shareholder</th><th>Shares</th><th>% shares</th><th>Votes</th><th>% votes</th><th>Eligible to sign</th></tr></thead>
+            <table className="table table--report">
+              <thead><tr><th>Shareholder</th><th className="num">Shares</th><th className="num">% shares</th><th className="num">Votes</th><th className="num">% votes</th><th>Eligible to sign</th></tr></thead>
               <tbody>
                 {(voting?.voting ?? []).map((h: any) => (
                   <tr key={h.holderKey}>
@@ -967,10 +1358,10 @@ export function RightsLedgerPage() {
                         <strong>{h.holderName}</strong>
                       </button>
                     </td>
-                    <td>{h.totalShares}</td>
-                    <td>{(h.percentOfShares ?? 0).toFixed(1)}%</td>
-                    <td>{h.totalVotes}</td>
-                    <td>{(h.percentOfVotes ?? 0).toFixed(1)}%</td>
+                    <td className="num">{h.totalShares}</td>
+                    <td className="num">{(h.percentOfShares ?? 0).toFixed(1)}%</td>
+                    <td className="num">{h.totalVotes}</td>
+                    <td className="num">{(h.percentOfVotes ?? 0).toFixed(1)}%</td>
                     <td>{h.isEligibleSignatory ? <Badge tone="success">Eligible</Badge> : <Badge tone="warn">Not eligible</Badge>}</td>
                   </tr>
                 ))}
@@ -978,10 +1369,10 @@ export function RightsLedgerPage() {
                 {(voting?.nonVoting ?? []).map((h: any) => (
                   <tr key={h.holderKey} className="muted">
                     <td>{h.holderName}</td>
-                    <td>{h.totalShares}</td>
-                    <td>{(h.percentOfShares ?? 0).toFixed(1)}%</td>
-                    <td>0 (non-voting)</td>
-                    <td>—</td>
+                    <td className="num">{h.totalShares}</td>
+                    <td className="num">{(h.percentOfShares ?? 0).toFixed(1)}%</td>
+                    <td className="num">0 (non-voting)</td>
+                    <td className="num">—</td>
                     <td>—</td>
                   </tr>
                 ))}
@@ -997,42 +1388,41 @@ export function RightsLedgerPage() {
       )}
 
       <Section title="Holding and transfer events" count={data?.transfers?.length ?? 0}>
-        <div className="table-wrap">
-          <table className="table table--stack-mobile rights-ledger-table">
-            <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From</th><th>To</th><th className="rights-ledger-table__qty">Quantity</th><th>Status</th><th>Evidence</th><th><span className="sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              {(data?.transfers ?? []).map((row: any) => {
-                const rightsClass = data?.classes?.find((item: any) => item._id === row.rightsClassId);
-                const source = data?.roleHolders?.find((item: any) => item._id === row.sourceRoleHolderId);
-                const destination = data?.roleHolders?.find((item: any) => item._id === row.destinationRoleHolderId);
-                return (
-                  <tr key={row._id}>
-                    <td data-label="Date">{dateLabel(row.transferDate)}</td>
-                    <td data-label="Type">{optionLabel("rightsholdingTransferTypes", row.transferType)}</td>
-                    <td data-label="Class">{rightsClass?.className || "Unlinked"}</td>
-                    <td data-label="From">{source?.fullName || row.sourceHolderName || "Treasury/new issue"}</td>
-                    <td data-label="To">{destination?.fullName || row.destinationHolderName || "No destination"}</td>
-                    <td data-label="Quantity" className="rights-ledger-table__qty">{formatQuantity(row.quantity, "-")}</td>
-                    <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsholdingTransferStatuses", row.status)}</Badge></td>
-                    <td data-label="Evidence">
-                      {row.precedentRunId ? (
-                        <Link className="btn btn--sm" to="/app/template-engine"><BookTemplate size={12} /> Packet</Link>
-                      ) : corporationWorkspace && row.transferType === "issuance" ? (
-                        <button className="btn btn--sm" disabled={!canWrite} onClick={() => stageIssuancePacket(row)}>
-                          <BookTemplate size={12} /> Packet
-                        </button>
-                      ) : (
-                        <span className="muted">No packet</span>
-                      )}
-                    </td>
-                    <td className="rights-ledger-table__actions"><RowActions onEdit={() => setTransferDraft(editTransfer(row))} onDelete={() => deleteRow("transfer", row)} label="ledger transfer" /></td>
-                  </tr>
-                );
-              })}
-              {(data?.transfers ?? []).length === 0 && <EmptyRow cols={9} label="No holding transfers yet." />}
-            </tbody>
-          </table>
-        </div>
+        <RecordListTable<ListRecord<LedgerTransfer> & { rightsClass?: LedgerClass; fromKey: string | null; toKey: string | null }>
+          variant="card"
+          table={TRANSFERS_TABLE}
+          tableId="rights-ledger-transfers"
+          label="Holding and transfer events"
+          records={transferRecords}
+          loading={data === undefined}
+          onOpen={canWrite ? (record) => setTransferDraft(editTransfer(record.row)) : undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "transferType") return <span>{optionLabel("rightsholdingTransferTypes", row.transferType)}</span>;
+            if (field.name === "className")
+              return <ClassLink rightsClass={record.rightsClass} label={String(record.className)} onOpen={canWrite ? (rightsClass) => setClassDraft(editRightsClass(rightsClass)) : undefined} />;
+            if (field.name === "fromName" || field.name === "toName") {
+              const key = field.name === "fromName" ? record.fromKey : record.toKey;
+              const label = String(record[field.name]);
+              return key ? <button type="button" className="btn-link" onClick={() => setHolderDrill(key)} style={{ font: "inherit" }}>{label}</button> : <span>{label}</span>;
+            }
+            if (field.name === "quantity") return <span>{formatQuantity(row.quantity, "-")}</span>;
+            if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{optionLabel("rightsholdingTransferStatuses", row.status)}</Badge>;
+            if (field.name === "evidence")
+              return row.precedentRunId ? (
+                <Link className="btn btn--sm" to="/app/template-engine"><BookTemplate size={12} /> Packet</Link>
+              ) : corporationWorkspace && row.transferType === "issuance" ? (
+                <button className="btn btn--sm" disabled={!canWrite} onClick={() => stageIssuancePacket(row)}>
+                  <BookTemplate size={12} /> Packet
+                </button>
+              ) : (
+                <span className="muted">No packet</span>
+              );
+            return undefined;
+          }}
+          renderRowActions={(record) => <RowActions onEdit={() => setTransferDraft(editTransfer(record.row))} onDelete={() => deleteRow("transfer", record.row)} label="ledger transfer" />}
+          emptyState={<RecordTableEmpty title="No holding transfers yet" />}
+        />
       </Section>
 
       <Drawer
@@ -1093,7 +1483,7 @@ export function RightsLedgerPage() {
               </Field>
               <p className="muted" style={{ margin: 0 }}>{preset.description}</p>
               <div className="table-wrap">
-              <table className="table">
+              <table className="table table--report">
                 <thead><tr><th>Class</th><th>Votes per share</th><th>Redemption</th><th>Liquidation rank</th></tr></thead>
                 <tbody>
                   {preset.classes.map((cls) => (
@@ -1159,8 +1549,8 @@ export function RightsLedgerPage() {
         footer={<button className="btn" onClick={() => setHolderDrill(null)}>Close</button>}
       >
         {holderDrill && (() => {
-          const holder = roleHolderForHolding(data?.roleHolders ?? [], holderDrill);
-          const holderName = holder?.fullName || holderDrill;
+          const holder = roleHolderForHolding(ledgerRoleHolders, holderDrill);
+          const holderName = holderLabel(holder, holderDrill);
           const holdings = currentHoldings.filter((h: any) => h.holderKey === holderDrill);
           const votingRow = [...(voting?.voting ?? []), ...(voting?.nonVoting ?? [])]
             .find((h: any) => h.holderKey === holderDrill);
@@ -1195,12 +1585,12 @@ export function RightsLedgerPage() {
 
               <div>
                 <h4 style={{ margin: "0 0 6px" }}>Holdings by class</h4>
-                <table className="table">
-                  <thead><tr><th>Class</th><th className="rights-ledger-table__qty">Quantity</th></tr></thead>
+                <table className="table table--report">
+                  <thead><tr><th>Class</th><th className="num">Quantity</th></tr></thead>
                   <tbody>
                     {holdings.map((h: any) => {
                       const rc = data?.classes?.find((c: any) => c._id === h.rightsClassId);
-                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td className="rights-ledger-table__qty">{formatQuantity(h.quantity)}</td></tr>;
+                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td className="num">{formatQuantity(h.quantity)}</td></tr>;
                     })}
                     {holdings.length === 0 && <EmptyRow cols={2} label="No holdings on this date." />}
                   </tbody>
@@ -1209,8 +1599,8 @@ export function RightsLedgerPage() {
 
               <div>
                 <h4 style={{ margin: "0 0 6px" }}>Transfer history</h4>
-                <table className="table">
-                  <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From → To</th><th className="rights-ledger-table__qty">Qty</th></tr></thead>
+                <table className="table table--report">
+                  <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From → To</th><th className="num">Qty</th></tr></thead>
                   <tbody>
                     {holderTransfers.map((t: any) => {
                       const rc = data?.classes?.find((c: any) => c._id === t.rightsClassId);
@@ -1222,7 +1612,7 @@ export function RightsLedgerPage() {
                           <td>{optionLabel("rightsholdingTransferTypes", t.transferType)}</td>
                           <td>{rc?.className || "—"}</td>
                           <td>{(src?.fullName || t.sourceHolderName || "Treasury")} → {(dst?.fullName || t.destinationHolderName || "—")}</td>
-                          <td className="rights-ledger-table__qty">{formatQuantity(t.quantity, "—")}</td>
+                          <td className="num">{formatQuantity(t.quantity, "—")}</td>
                         </tr>
                       );
                     })}
@@ -1257,6 +1647,46 @@ export function TemplateEnginePage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
+  const templateRecords = useMemo<ListRecord<TemplateRow>[]>(
+    () =>
+      ((data?.templates ?? []) as TemplateRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        name: row.name ?? "",
+        templateType: row.templateType ?? "",
+        coverage: `${row.jurisdictions?.length || 0} jurisdictions / ${row.entityTypes?.length || 0} entity types`,
+        signing: row.signatureRequired ? `${row.requiredSigners?.length || 0} signer rules` : "No signature",
+        status: row.status ?? "",
+      })),
+    [data?.templates],
+  );
+  const precedentRecords = useMemo<ListRecord<PrecedentRow>[]>(
+    () =>
+      ((data?.precedents ?? []) as PrecedentRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        packageName: row.packageName ?? "",
+        timeline: row.timeline ?? "",
+        deliverables: row.deliverables ?? "",
+        addOnTerms: row.addOnTerms ?? "",
+        status: row.status ?? "",
+      })),
+    [data?.precedents],
+  );
+  const generatedRecords = useMemo<ListRecord<GeneratedDocumentRow>[]>(
+    () =>
+      ((data?.generatedDocuments ?? []) as GeneratedDocumentRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        title: row.title ?? "",
+        effectiveDate: row.effectiveDate ?? null,
+        sourceTemplateName: row.sourceTemplateName ?? "",
+        signingPackage: row.syngrafiiPackageId || row.syngrafiiDocumentId || "",
+        signers: `${row.signerTagsSigned?.length || 0}/${row.signerTagsRequired?.length || 0}`,
+        status: row.status ?? "",
+      })),
+    [data?.generatedDocuments],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -1438,17 +1868,22 @@ export function TemplateEnginePage() {
       />
 
       <Section title="Templates" count={data?.templates?.length ?? 0}>
-        <SimpleTable
-          cols={["Name", "Type", "Coverage", "Signing", "Status", ""]}
-          rows={(data?.templates ?? []).map((row: any) => [
-            <RecordTitle title={row.name} subtitle={row.owner || row.documentTag || "No owner/tag"} />,
-            optionLabel("templateTypes", row.templateType),
-            `${row.jurisdictions?.length || 0} jurisdictions / ${row.entityTypes?.length || 0} entity types`,
-            row.signatureRequired ? `${row.requiredSigners?.length || 0} signer rules` : "No signature",
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("templateStatuses", row.status)}</Badge>,
-            <DeleteCell label="template" onDelete={() => del(removeTemplate, row._id, "template")} />,
-          ])}
-          empty="No templates yet."
+        <RecordListTable<ListRecord<TemplateRow>>
+          variant="card"
+          table={TEMPLATES_TABLE}
+          tableId="template-engine-templates"
+          label="Templates"
+          records={templateRecords}
+          loading={data === undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "name") return <RecordTitle title={row.name ?? ""} subtitle={row.owner || row.documentTag || "No owner/tag"} />;
+            if (field.name === "templateType") return <span>{optionLabel("templateTypes", row.templateType)}</span>;
+            if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{optionLabel("templateStatuses", row.status)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => <DeleteCell label="template" onDelete={() => del(removeTemplate, record.row._id, "template")} />}
+          emptyState={<RecordTableEmpty title="No templates yet" />}
         />
       </Section>
 
@@ -1456,17 +1891,21 @@ export function TemplateEnginePage() {
         title="Precedents and runs"
         count={(data?.precedents?.length ?? 0) + (data?.runs?.length ?? 0)}
       >
-        <SimpleTable
-          cols={["Package", "Timeline", "Deliverables", "Terms", "Status", ""]}
-          rows={(data?.precedents ?? []).map((row: any) => [
-            <RecordTitle title={row.packageName} subtitle={row.shortDescription || row.partType || "No short description"} />,
-            row.timeline || "-",
-            row.deliverables || "-",
-            row.addOnTerms || "-",
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("precedentStatuses", row.status)}</Badge>,
-            <DeleteCell label="precedent" onDelete={() => del(removePrecedent, row._id, "precedent")} />,
-          ])}
-          empty="No precedents yet."
+        <RecordListTable<ListRecord<PrecedentRow>>
+          variant="card"
+          table={PRECEDENTS_TABLE}
+          tableId="template-engine-precedents"
+          label="Precedents"
+          records={precedentRecords}
+          loading={data === undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "packageName") return <RecordTitle title={row.packageName ?? ""} subtitle={row.shortDescription || row.partType || "No short description"} />;
+            if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{optionLabel("precedentStatuses", row.status)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => <DeleteCell label="precedent" onDelete={() => del(removePrecedent, record.row._id, "precedent")} />}
+          emptyState={<RecordTableEmpty title="No precedents yet" />}
         />
       </Section>
 
@@ -1474,17 +1913,26 @@ export function TemplateEnginePage() {
         title="Generated documents and signers"
         count={(data?.generatedDocuments?.length ?? 0) + (data?.signers?.length ?? 0)}
       >
-        <SimpleTable
-          cols={["Document", "Template", "Signing package", "Signers", "Status", ""]}
-          rows={(data?.generatedDocuments ?? []).map((row: any) => [
-            <RecordTitle title={row.title} subtitle={dateLabel(row.effectiveDate)} />,
-            row.sourceTemplateName || "-",
-            row.syngrafiiPackageId || row.syngrafiiDocumentId || "-",
-            `${row.signerTagsSigned?.length || 0}/${row.signerTagsRequired?.length || 0}`,
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("generatedDocumentStatuses", row.status)}</Badge>,
-            <DeleteCell label="document" onDelete={() => del(removeDocument, row._id, "document")} />,
-          ])}
-          empty="No generated documents yet."
+        <RecordListTable<ListRecord<GeneratedDocumentRow>>
+          variant="card"
+          table={GENERATED_DOCUMENTS_TABLE}
+          tableId="template-engine-generated-documents"
+          label="Generated documents"
+          records={generatedRecords}
+          loading={data === undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "title") {
+              // The signed copy once there is one, else the draft, opens in Documents.
+              const documentId = row.signedDocumentId ?? row.draftDocumentId;
+              const title = row.title ?? "";
+              return <RecordTitle title={title} subtitle={dateLabel(row.effectiveDate)} href={documentId ? `/app/documents/${documentId}` : undefined} />;
+            }
+            if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{optionLabel("generatedDocumentStatuses", row.status)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => <DeleteCell label="document" onDelete={() => del(removeDocument, record.row._id, "document")} />}
+          emptyState={<RecordTableEmpty title="No generated documents yet" />}
         />
       </Section>
 
@@ -1543,6 +1991,83 @@ export function FormationMaintenancePage() {
   const latestJurisdictionByCode = useMemo(
     () => new Map((data?.jurisdictionMetadata ?? []).map((row: any) => [row.jurisdiction, row])),
     [data],
+  );
+  const formationRecords = useMemo<ListRecord<FormationRow>[]>(
+    () =>
+      ((data?.formations ?? []) as FormationRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        nuansNumber: row.nuansNumber || "No NUANS",
+        nuansDate: row.nuansDate ?? null,
+        jurisdiction: row.jurisdiction ? optionLabel("entityJurisdictions", row.jurisdiction) : "",
+        purpose: row.purposeStatement || row.classesOfMembership || "",
+        staffSigning: `${row.assignedStaffIds?.length || 0} staff / ${row.signingPackageIds?.length || 0} packages`,
+        status: row.status ?? "",
+      })),
+    [data?.formations],
+  );
+  const nameSearchRecords = useMemo<ListRecord<NameSearchRow>[]>(
+    () =>
+      ((data?.nameSearches ?? []) as NameSearchRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        name: nameSearchName(row),
+        result: row.success === true ? "Approved" : row.success === false ? "Not approved" : "No result yet",
+        report: nameSearchReportUrl(row) ? "Open report" : "",
+      })),
+    [data?.nameSearches],
+  );
+  const amendmentRecords = useMemo<ListRecord<AmendmentRow>[]>(
+    () =>
+      ((data?.amendments ?? []) as AmendmentRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        summary: amendmentSummary(row),
+        effectiveDate: row.effectiveDate ?? null,
+        status: row.status ?? "",
+      })),
+    [data?.amendments],
+  );
+  const annualRecords = useMemo<ListRecord<AnnualMaintenanceRow>[]>(
+    () =>
+      ((data?.annualRecords ?? []) as AnnualMaintenanceRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        yearFilingFor: row.yearFilingFor ?? "",
+        lastAgmDate: row.lastAgmDate ?? null,
+        filingDate: row.filingDate ?? null,
+        financialStatement: row.annualFinancialStatementOption
+          ? optionLabel("annualFinancialStatementOptions", row.annualFinancialStatementOption)
+          : row.financialStatementReportType || "",
+        status: row.status ?? "",
+      })),
+    [data?.annualRecords],
+  );
+  const jurisdictionRecords = useMemo<ListRecord<JurisdictionMetadataRow>[]>(
+    () =>
+      ((data?.jurisdictionMetadata ?? []) as JurisdictionMetadataRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        label: row.label ?? "",
+        act: row.actFormedUnder ? optionLabel("actsFormedUnder", row.actFormedUnder) : "",
+        nuansJurisdictionNumber: row.nuansJurisdictionNumber ?? "",
+        nuansReservationReportTypeId: row.nuansReservationReportTypeId ?? "",
+        incorporationServiceEligible: Boolean(row.incorporationServiceEligible),
+      })),
+    [data?.jurisdictionMetadata],
+  );
+  const logRecords = useMemo<ListRecord<SupportLogRow>[]>(
+    () =>
+      ((data?.logs ?? []) as SupportLogRow[]).map((row) => ({
+        _id: row._id,
+        row,
+        createdAtISO: row.createdAtISO ?? null,
+        logType: row.logType ?? "",
+        page: row.page || row.pageLocationUrl || "",
+        details: row.errorMessage || row.detailsHeading || "",
+        severity: row.severity ?? "",
+      })),
+    [data?.logs],
   );
 
   if (society === undefined) return <PageLoading />;
@@ -1642,95 +2167,135 @@ export function FormationMaintenancePage() {
       />
 
       <Section title="Formation records" count={data?.formations?.length ?? 0}>
-        <SimpleTable
-          cols={["NUANS", "Jurisdiction", "Purpose/classes", "Staff/signing", "Status", ""]}
-          rows={(data?.formations ?? []).map((row: any) => [
-            <RecordTitle title={row.nuansNumber || "No NUANS"} subtitle={dateLabel(row.nuansDate)} />,
-            row.jurisdiction ? optionLabel("entityJurisdictions", row.jurisdiction) : "-",
-            row.purposeStatement || row.classesOfMembership || "-",
-            `${row.assignedStaffIds?.length || 0} staff / ${row.signingPackageIds?.length || 0} packages`,
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("formationStatuses", row.status)}</Badge>,
-            <DeleteCell label="formation record" onDelete={() => del(removeFormation, row._id, "formation record")} />,
-          ])}
-          empty="No formation records yet."
+        <RecordListTable<ListRecord<FormationRow>>
+          variant="card"
+          table={FORMATIONS_TABLE}
+          tableId="formation-records"
+          label="Formation records"
+          records={formationRecords}
+          loading={data === undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "nuansNumber") return <RecordTitle title={String(record.nuansNumber)} subtitle={dateLabel(row.nuansDate)} />;
+            if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{optionLabel("formationStatuses", row.status)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => <DeleteCell label="formation record" onDelete={() => del(removeFormation, record.row._id, "formation record")} />}
+          emptyState={<RecordTableEmpty title="No formation records yet" />}
         />
       </Section>
 
       <Section title="Name searches" count={data?.nameSearches?.length ?? 0}>
-        <SimpleTable
-          cols={["Name", "Result", ""]}
-          rows={(data?.nameSearches ?? []).map((row: any) => [
-            <NameSearchCell row={row} />,
-            <Badge tone={row.success === true ? "success" : row.success === false ? "danger" : "neutral"}>{row.success === true ? "Approved" : row.success === false ? "Not approved" : "No result yet"}</Badge>,
+        <RecordListTable<ListRecord<NameSearchRow>>
+          variant="card"
+          table={NAME_SEARCHES_TABLE}
+          tableId="formation-name-searches"
+          label="Name searches"
+          records={nameSearchRecords}
+          loading={data === undefined}
+          onOpen={canWrite ? (record) => setDraft(editNameSearch(record.row)) : undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "name") return <NameSearchCell row={row} />;
+            if (field.name === "result")
+              return <Badge tone={row.success === true ? "success" : row.success === false ? "danger" : "neutral"}>{String(record.result)}</Badge>;
+            if (field.name === "report") {
+              const report = nameSearchReportUrl(row);
+              return report ? <a href={report} target="_blank" rel="noreferrer">Open report</a> : <span className="muted">None</span>;
+            }
+            return undefined;
+          }}
+          renderRowActions={(record) => (
             <RowActions
               label="name search"
-              onEdit={() => setDraft({ ...row, kind: "nameSearch", rank: row.rank ?? "", errorsText: (row.errors ?? []).join(", ") })}
-              onDelete={() => del(removeNameSearch, row._id, "name search")}
-            />,
-          ])}
-          empty="No name searches yet."
+              onEdit={() => setDraft(editNameSearch(record.row))}
+              onDelete={() => del(removeNameSearch, record.row._id, "name search")}
+            />
+          )}
+          emptyState={<RecordTableEmpty title="No name searches yet" />}
         />
       </Section>
 
       <Section title="Amendments" count={data?.amendments?.length ?? 0}>
-        <SimpleTable
-          cols={["Effective", "Change", "Status", ""]}
-          rows={(data?.amendments ?? []).map((row: any) => [
-            dateLabel(row.effectiveDate),
-            amendmentSummary(row),
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("amendmentStatuses", row.status)}</Badge>,
+        <RecordListTable<ListRecord<AmendmentRow>>
+          variant="card"
+          table={AMENDMENTS_TABLE}
+          tableId="formation-amendments"
+          label="Amendments"
+          records={amendmentRecords}
+          loading={data === undefined}
+          onOpen={canWrite ? (record) => setDraft(editAmendment(record.row)) : undefined}
+          renderCell={({ record, field }) =>
+            field.name === "status" ? <Badge tone={toneForStatus(record.row.status)}>{optionLabel("amendmentStatuses", record.row.status)}</Badge> : undefined
+          }
+          renderRowActions={(record) => (
             <RowActions
               label="amendment"
-              onEdit={() => setDraft({ ...row, kind: "amendment", directorsMinimum: row.directorsMinimum ?? "", directorsMaximum: row.directorsMaximum ?? "" })}
-              onDelete={() => del(removeAmendment, row._id, "amendment")}
-            />,
-          ])}
-          empty="No amendments yet."
+              onEdit={() => setDraft(editAmendment(record.row))}
+              onDelete={() => del(removeAmendment, record.row._id, "amendment")}
+            />
+          )}
+          emptyState={<RecordTableEmpty title="No amendments yet" />}
         />
       </Section>
 
       <Section title="Annual maintenance" count={data?.annualRecords?.length ?? 0}>
-        <SimpleTable
-          cols={["Year", corporateMaintenance ? "Annual meeting" : "AGM", "Filing", "Financial statement", "Status", ""]}
-          rows={(data?.annualRecords ?? []).map((row: any) => [
-            row.yearFilingFor || "-",
-            dateLabel(row.lastAgmDate),
-            dateLabel(row.filingDate),
-            row.annualFinancialStatementOption ? optionLabel("annualFinancialStatementOptions", row.annualFinancialStatementOption) : row.financialStatementReportType || "-",
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("annualMaintenanceStatuses", row.status)}</Badge>,
-            <DeleteCell label="annual maintenance record" onDelete={() => del(removeAnnual, row._id, "annual maintenance record")} />,
-          ])}
-          empty="No annual maintenance records yet."
+        <RecordListTable<ListRecord<AnnualMaintenanceRow>>
+          variant="card"
+          table={corporateMaintenance ? ANNUAL_CORPORATION_TABLE : ANNUAL_SOCIETY_TABLE}
+          tableId="formation-annual-maintenance"
+          label="Annual maintenance"
+          records={annualRecords}
+          loading={data === undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            // The filing this record tracks opens in Filings.
+            if (field.name === "filingDate" && row.filingId)
+              return <Link to={`/app/filings?filing=${encodeURIComponent(row.filingId)}`}>{row.filingDate ? formatDate(row.filingDate) : "Open filing"}</Link>;
+            if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{optionLabel("annualMaintenanceStatuses", row.status)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => <DeleteCell label="annual maintenance record" onDelete={() => del(removeAnnual, record.row._id, "annual maintenance record")} />}
+          emptyState={<RecordTableEmpty title="No annual maintenance records yet" />}
         />
       </Section>
 
       <Section title="Jurisdiction metadata" count={data?.jurisdictionMetadata?.length ?? 0}>
-        <SimpleTable
-          cols={["Jurisdiction", "Act", "NUANS jurisdiction", "Reservation report", "Eligible", ""]}
-          rows={(data?.jurisdictionMetadata ?? []).map((row: any) => [
-            <RecordTitle title={row.label} subtitle={row.jurisdiction} />,
-            row.actFormedUnder ? optionLabel("actsFormedUnder", row.actFormedUnder) : "-",
-            row.nuansJurisdictionNumber || "-",
-            row.nuansReservationReportTypeId || "-",
-            row.incorporationServiceEligible ? "Yes" : "No",
-            <DeleteCell label="jurisdiction metadata" onDelete={() => del(removeJurisdiction, row._id, "jurisdiction metadata")} />,
-          ])}
-          empty="No jurisdiction metadata yet."
+        <RecordListTable<ListRecord<JurisdictionMetadataRow>>
+          variant="card"
+          table={JURISDICTIONS_TABLE}
+          tableId="formation-jurisdiction-metadata"
+          label="Jurisdiction metadata"
+          records={jurisdictionRecords}
+          loading={data === undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "label") return <RecordTitle title={row.label ?? ""} subtitle={row.jurisdiction} />;
+            if (field.name === "incorporationServiceEligible") return <span>{row.incorporationServiceEligible ? "Yes" : "No"}</span>;
+            return undefined;
+          }}
+          renderRowActions={(record) => <DeleteCell label="jurisdiction metadata" onDelete={() => del(removeJurisdiction, record.row._id, "jurisdiction metadata")} />}
+          emptyState={<RecordTableEmpty title="No jurisdiction metadata yet" />}
         />
       </Section>
 
       <Section title="Operational logs" count={data?.logs?.length ?? 0}>
-        <SimpleTable
-          cols={["When", "Type", "Page", "Details", "Severity", ""]}
-          rows={(data?.logs ?? []).map((row: any) => [
-            row.createdAtISO ? formatDate(row.createdAtISO) : "-",
-            optionLabel("logTypes", row.logType),
-            row.page || row.pageLocationUrl || "-",
-            row.errorMessage || row.detailsHeading || "-",
-            <Badge tone={row.severity === "error" || row.severity === "critical" ? "danger" : row.severity === "warning" ? "warn" : "neutral"}>{optionLabel("logSeverities", row.severity)}</Badge>,
-            <DeleteCell label="log entry" onDelete={() => del(removeLog, row._id, "log entry")} />,
-          ])}
-          empty="No operational logs yet."
+        <RecordListTable<ListRecord<SupportLogRow>>
+          variant="card"
+          table={LOGS_TABLE}
+          tableId="formation-operational-logs"
+          label="Operational logs"
+          records={logRecords}
+          loading={data === undefined}
+          renderCell={({ record, field }) => {
+            const { row } = record;
+            if (field.name === "logType") return <span>{optionLabel("logTypes", row.logType)}</span>;
+            if (field.name === "severity")
+              return <Badge tone={row.severity === "error" || row.severity === "critical" ? "danger" : row.severity === "warning" ? "warn" : "neutral"}>{optionLabel("logSeverities", row.severity)}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(record) => <DeleteCell label="log entry" onDelete={() => del(removeLog, record.row._id, "log entry")} />}
+          emptyState={<RecordTableEmpty title="No operational logs yet" />}
         />
       </Section>
 
@@ -1741,30 +2306,36 @@ export function FormationMaintenancePage() {
   );
 }
 
-/** Name search: the name, then rank, NUANS number and report link when recorded. */
-function NameSearchCell({ row }: { row: any }) {
-  const name = [row.name, row.suffix ? optionLabel("suffixCompanyNames", row.suffix) : ""].filter(Boolean).join(" ");
-  const report = /^https?:\/\//i.test(String(row.reportUrl ?? "")) ? String(row.reportUrl) : "";
+/** A name search's name with its suffix ("Northstar Holdings Inc."). */
+function nameSearchName(row: NameSearchRow) {
+  return [row.name, row.suffix ? optionLabel("suffixCompanyNames", row.suffix) : ""].filter(Boolean).join(" ");
+}
+
+/** The NUANS report link, when one was recorded as a web address. */
+function nameSearchReportUrl(row: NameSearchRow) {
+  return /^https?:\/\//i.test(String(row.reportUrl ?? "")) ? String(row.reportUrl) : "";
+}
+
+/** Name search: the name, then rank, NUANS number and express service when recorded. */
+function NameSearchCell({ row }: { row: NameSearchRow }) {
   const details = [
     row.rank != null && row.rank !== "" ? `Choice ${row.rank}` : "",
     row.nuansReportNumber ? `NUANS ${row.nuansReportNumber}` : "",
     row.expressService ? "Express" : "",
   ].filter(Boolean);
-  return (
-    <>
-      <strong>{name}</strong>
-      {(details.length > 0 || report) && (
-        <div className="muted">
-          {details.join(" · ")}
-          {report && <>{details.length ? " · " : ""}<a href={report} target="_blank" rel="noreferrer">Open report</a></>}
-        </div>
-      )}
-    </>
-  );
+  return <TwoLines primary={<strong>{nameSearchName(row)}</strong>} secondary={details.join(" · ")} />;
+}
+
+function editNameSearch(row: NameSearchRow) {
+  return { ...row, kind: "nameSearch", rank: row.rank ?? "", errorsText: (row.errors ?? []).join(", ") };
+}
+
+function editAmendment(row: AmendmentRow) {
+  return { ...row, kind: "amendment", directorsMinimum: row.directorsMinimum ?? "", directorsMaximum: row.directorsMaximum ?? "" };
 }
 
 /** One line describing what an amendment changes. */
-function amendmentSummary(row: any): string {
+function amendmentSummary(row: AmendmentRow): string {
   const changes = [
     row.entityNameNew ? `New name: ${row.entityNameNew}` : "",
     row.jurisdictionNew ? `Moves to ${optionLabel("entityJurisdictions", row.jurisdictionNew)}` : "",
@@ -1937,31 +2508,32 @@ function Section({ title, count, children }: { title: string; count: number; chi
   );
 }
 
-function SimpleTable({ cols, rows, empty }: { cols: string[]; rows: any[][]; empty: string }) {
-  // An empty register is one line, not a row of column headers (which also
-  // overflowed sideways on phones).
-  if (rows.length === 0) return <p className="muted legal-ops__empty">{empty}</p>;
-  return (
-    <div className="table-wrap">
-      <table className="table">
-        <thead><tr>{cols.map((col) => <th key={col}>{col}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function EmptyRow({ cols, label }: { cols: number; label: string }) {
   return <tr><td colSpan={cols} className="muted" style={{ textAlign: "center", padding: 24 }}>{label}</td></tr>;
 }
 
-function RecordTitle({ title, subtitle }: { title: string; subtitle?: string }) {
-  return <><strong>{title}</strong><div className="muted">{subtitle || "-"}</div></>;
+/** A list's name cell: the name (a link when it has its own page), with a muted line under it. */
+function RecordTitle({ title, subtitle, href }: { title: string; subtitle?: string; href?: string }) {
+  return <TwoLines primary={href ? <Link to={href}><strong>{title}</strong></Link> : <strong>{title}</strong>} secondary={subtitle || "-"} />;
 }
 
-function roleHolderForHolding(roleHolders: any[], holderKey: string) {
+/** A cell with a muted second line, kept to the row's height. */
+function TwoLines({ primary, secondary }: { primary: React.ReactNode; secondary?: React.ReactNode }) {
+  return (
+    <span className="record-table__identifier-lines">
+      <span className="record-table__identifier-primary">{primary}</span>
+      {secondary ? <span className="record-table__identifier-secondary">{secondary}</span> : null}
+    </span>
+  );
+}
+
+/** A class named in a ledger row: opens that class's editor, as its row in Share classes does. */
+function ClassLink({ rightsClass, label, onOpen }: { rightsClass?: LedgerClass; label: string; onOpen?: (rightsClass: LedgerClass) => void }) {
+  if (!rightsClass || !onOpen) return <span>{label}</span>;
+  return <button type="button" className="btn-link" onClick={() => onOpen(rightsClass)} style={{ font: "inherit" }}>{label}</button>;
+}
+
+function roleHolderForHolding<T extends { _id: string }>(roleHolders: T[], holderKey: string): T | undefined {
   const roleHolderId = holderKey.startsWith("roleHolder:") ? holderKey.slice("roleHolder:".length) : holderKey;
   return roleHolders.find((row) => row._id === roleHolderId);
 }

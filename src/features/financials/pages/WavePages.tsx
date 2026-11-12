@@ -39,6 +39,8 @@ import {
   waveResourceSingularLabel,
   waveSingularTypeLabel,
   waveTypeLabel,
+  WAVE_REQUIRED_VIEWS,
+  withoutPerResourceViews,
 } from "../lib/waveResources";
 import {
   RecordTable,
@@ -50,17 +52,6 @@ import {
   ObjectRecordTable,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
-import { WAVE_RESOURCE_VIEW_NAMES } from "../../../../convex/recordTableDomainObjects";
-
-/** Seeded per-resource Wave views; older workspaces are topped up. */
-const WAVE_REQUIRED_VIEWS = Object.values(WAVE_RESOURCE_VIEW_NAMES);
-const PER_RESOURCE_VIEW_NAMES = new Set(WAVE_REQUIRED_VIEWS);
-
-/** A single resource type's page already shows only that type, so the
- * per-resource views would repeat (or empty) it; they belong to "Wave Data". */
-function withoutPerResourceViews<V extends { name: string }>(views: V[]): V[] {
-  return views.filter((view) => !PER_RESOURCE_VIEW_NAMES.has(view.name));
-}
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export function WaveResourceTablePage() {

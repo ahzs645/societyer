@@ -632,30 +632,10 @@
 .org-detail-section .card__head > .btn-action {
   margin-left: auto;
 }
-.org-detail-section .table {
-  table-layout: fixed;
-}
-.org-detail-section .table th,
-.org-detail-section .table td {
-  overflow-wrap: anywhere;
-}
 .org-row-actions {
   justify-content: flex-end;
   flex-wrap: nowrap;
   gap: token('s-1');
-}
-@media (max-width: 760px) {
-  .org-detail-section .table--stack-mobile .org-row-actions {
-    justify-content: flex-start;
-  }
-}
-.org-address-table th:nth-child(1) { width: 150px; }
-.org-address-table th:nth-child(2) { width: 110px; }
-.org-address-table th:nth-child(4) { width: 130px; }
-.org-address-table th:nth-child(5) { width: 116px; }
-.org-address-table__address {
-  display: block;
-  line-height: 1.45;
 }
 .structured-address-fields {
   display: grid;
@@ -701,60 +681,6 @@
   .structured-address-fields__street-row,
   .structured-address-fields__region-row {
     grid-template-columns: 1fr;
-  }
-  .org-address-table {
-    display: block;
-    min-width: 0;
-  }
-  .org-address-table thead {
-    display: none;
-  }
-  .org-address-table tbody {
-    display: grid;
-    gap: token('s-2');
-  }
-  .org-address-table tbody tr {
-    display: grid;
-    gap: token('s-2');
-    padding: token('s-3');
-    border-bottom: 1px solid token('border');
-  }
-  .org-address-table tbody tr:last-child {
-    border-bottom: 0;
-  }
-  .org-detail-section .table.org-address-table tbody td {
-    display: grid;
-    grid-template-columns: 92px minmax(0, 1fr);
-    gap: token('s-2');
-    width: auto;
-    min-width: 0;
-    height: auto;
-    padding: 0;
-    border: 0;
-    box-shadow: none;
-    align-items: start;
-    white-space: normal;
-    line-height: 1.4;
-  }
-  .org-address-table tbody td .badge {
-    justify-self: start;
-  }
-  .org-address-table tbody td::before {
-    font-size: token('fs-xs');
-    font-weight: 600;
-    color: token('text-tertiary');
-    text-transform: uppercase;
-  }
-  .org-address-table tbody td:nth-child(1)::before { content: "Type"; }
-  .org-address-table tbody td:nth-child(2)::before { content: "Status"; }
-  .org-address-table tbody td:nth-child(3)::before { content: "Address"; }
-  .org-address-table tbody td:nth-child(4)::before { content: "Effective"; }
-  .org-address-table tbody td:nth-child(5)::before { content: ""; }
-  .org-detail-section .table.org-address-table tbody td:nth-child(5) {
-    grid-template-columns: 1fr;
-  }
-  .org-address-table tbody td:nth-child(5) .row {
-    justify-content: flex-start !important;
   }
 }
 
@@ -851,39 +777,6 @@
 .treasurer-claim-stats {
   margin-bottom: token('s-4');
 }
-.treasurer-claims-table,
-.treasurer-funding-table,
-.treasurer-source-table,
-.treasurer-timeline-table {
-  table-layout: fixed;
-}
-.treasurer-claims-table th:nth-child(1) { width: 26%; }
-.treasurer-claims-table th:nth-child(2) { width: 18%; }
-.treasurer-claims-table th:nth-child(3) { width: 120px; }
-.treasurer-claims-table th:nth-child(4) { width: 120px; }
-.treasurer-claims-table th:nth-child(5) { width: 18%; }
-.treasurer-claims-table th:nth-child(6) { width: 210px; }
-.treasurer-funding-table th:nth-child(1),
-.treasurer-source-table th:nth-child(1) {
-  width: 45%;
-}
-.treasurer-funding-table th:nth-child(2),
-.treasurer-source-table th:nth-child(2) {
-  width: 130px;
-}
-.treasurer-source-table th:nth-child(5) {
-  width: 180px;
-}
-.treasurer-timeline-table th:nth-child(1) { width: 110px; }
-.treasurer-timeline-table th:nth-child(4) { width: 120px; }
-.treasurer-timeline-table th:nth-child(5) { width: 130px; }
-.treasurer-timeline-table th:nth-child(6) { width: 120px; }
-.treasurer-claims-table td,
-.treasurer-funding-table td,
-.treasurer-source-table td,
-.treasurer-timeline-table td {
-  overflow-wrap: anywhere;
-}
 
 /* ---- Accounting / Financials responsive hooks --------------------------
  * Financials currently relies on generic page/card/table chrome plus inline
@@ -907,11 +800,6 @@
 .accounting-control-row .input,
 .financials-control-row .input {
   min-width: min(100%, 220px);
-}
-.accounting-table,
-.financials-table,
-.wave-cache-table {
-  table-layout: fixed;
 }
 
 /* Inline status banners. Used by setup, exports, and the agenda builder; the

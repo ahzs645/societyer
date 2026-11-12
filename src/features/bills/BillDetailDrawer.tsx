@@ -239,7 +239,7 @@ export function BillDetailDrawer({
 
       <section className="claim-drawer__section" aria-labelledby="bill-lines">
         <h3 id="bill-lines" className="claim-drawer__section-title">Lines</h3>
-        <table className="table bill-detail__lines">
+        <table className="table table--report">
           <thead>
             <tr><th>Account</th><th>Memo</th><th className="num">Amount</th></tr>
           </thead>

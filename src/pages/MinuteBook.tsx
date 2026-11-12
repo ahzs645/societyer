@@ -1,8 +1,8 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
 /* eslint-disable max-lines-per-function */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -16,13 +16,18 @@ import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { BookOpen, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Download, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { humanizeKey } from "../../shared/documentProvenance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
   RecordTable,
   RecordTableScope,
   RecordTableViewToolbar,
@@ -38,46 +43,6 @@ import {
 } from "../features/meetings/lib/minuteBookExport";
 import { StatTile } from "../components/StatTile";
 import { MobileFold } from "../components/MobileFold";
-import { useIsMobile } from "../lib/useIsMobile";
-
-/**
- * Tracks whether a horizontally-scrollable container is scrolled away from
- * either edge, so callers can toggle the `.table-scroll` fade-shadow classes
- * (see src/styles/_components-tables-misc.scss) that hint more content is
- * off-screen.
- */
-function useScrollEdges<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => {
-      const { scrollLeft, scrollWidth, clientWidth } = el;
-      setEdges({
-        left: scrollLeft > 0,
-        right: scrollLeft + clientWidth < scrollWidth - 1,
-      });
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", update);
-      ro.disconnect();
-    };
-  }, []);
-
-  const className = [
-    "table-scroll",
-    edges.left ? "is-scrolled-left" : "",
-    edges.right ? "is-scrolled-right" : "",
-  ].filter(Boolean).join(" ");
-
-  return { ref, className };
-}
 
 export function MinuteBookPage() {
   const society = useSociety();
@@ -419,19 +384,86 @@ export function MinuteBookPage() {
   );
 }
 
-function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }) {
-  const scroll = useScrollEdges<HTMLDivElement>();
+type BundleGap = { key: string; label: string; severity?: string };
+type BundleLink = { kind?: string; label?: string; href: string };
+type RecordBundle = {
+  key: string;
+  type: string;
+  title?: string;
+  date?: string;
+  status?: string;
+  href?: string;
+  badges?: Array<{ label?: string; tone?: string }>;
+  gaps?: BundleGap[];
+  counts?: Record<string, number>;
+  links?: BundleLink[];
+};
+type BundleRecord = {
+  _id: string;
+  title: string;
+  type: string;
+  date: string | null;
+  evidence: string;
+  counts: string;
+  gaps: string;
+  status: string;
+  bundle: RecordBundle;
+};
+
+const BUNDLE_TYPES = ["meeting", "filing", "policy", "written_resolution", "bylaw_amendment", "financials", "workflow_package", "archive"];
+
+const BUNDLES_TABLE = staticRecordTable({
+  id: "minute-book-bundles",
+  nameSingular: "minuteBookBundle",
+  namePlural: "minuteBookBundles",
+  labelSingular: "Connected record",
+  labelPlural: "Connected records",
+  labelIdentifierFieldName: "title",
+  density: "comfortable",
+  fields: [
+    { name: "title", label: "Record", fieldType: FIELD_TYPES.TEXT, size: 300, config: { groupable: false } },
+    {
+      name: "type",
+      label: "Type",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 150,
+      isVisible: false,
+      config: { options: BUNDLE_TYPES.map((type) => ({ value: type, label: labelize(type), color: "gray" })) },
+    },
+    { name: "date", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120, isVisible: false },
+    { name: "evidence", label: "Connected evidence", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    { name: "counts", label: "Counts", fieldType: FIELD_TYPES.TEXT, size: 200, config: { groupable: false } },
+    { name: "gaps", label: "Gaps", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "status", label: "Status", fieldType: FIELD_TYPES.TEXT, size: 140 },
+  ],
+});
+
+function RecordBundlesCard({ rows, partial }: { rows: RecordBundle[]; partial?: boolean }) {
   const annualMeetingTitle = organizationVocabulary(useSociety()).annualMeetingTitle;
-  const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const gapCount = rows.reduce((count, row) => count + actionableGaps(row.gaps).length, 0);
-  const visibleRows = rows
-    .slice()
-    .sort((a, b) => {
-      const gapDifference = gapScore(b.gaps) - gapScore(a.gaps);
-      if (gapDifference !== 0) return gapDifference;
-      return String(b.date ?? "").localeCompare(String(a.date ?? ""));
-    })
-    .slice(0, 40);
+  const records = useMemo<BundleRecord[]>(
+    () =>
+      rows
+        .slice()
+        .sort((a, b) => {
+          const gapDifference = gapScore(b.gaps) - gapScore(a.gaps);
+          if (gapDifference !== 0) return gapDifference;
+          return String(b.date ?? "").localeCompare(String(a.date ?? ""));
+        })
+        .map((row) => ({
+          _id: row.key,
+          title: bundleTitle(row),
+          type: row.type,
+          date: row.date ?? null,
+          evidence: (row.links ?? []).map((link) => link.kind).filter(Boolean).join(", "),
+          counts: Object.entries(row.counts ?? {}).filter(([, value]) => Number(value) > 0).map(([key, value]) => `${COUNT_LABELS[key] ?? humanizeKey(key)} ${value}`).join(", "),
+          gaps: actionableGaps(row.gaps).map((gap) => gap.label).join(", "),
+          status: sentenceCase(humanize(row.status)),
+          bundle: row,
+        })),
+    [rows],
+  );
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
@@ -439,83 +471,52 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
         <h2 className="card__title">Connected records</h2>
         <Badge tone={gapCount ? "warn" : partial ? "neutral" : "success"}>{gapCount ? `${gapCount} visible gaps` : partial ? "Access limited" : `${rows.length} records`}</Badge>
       </div>
-      {isMobile ? (
-        // Phones: one tap target per record (the whole row) instead of four
-        // small evidence links; the record's own page lists the evidence.
-        <ul className="minute-book-bundle-list">
-          {visibleRows.map((row) => <BundleRow key={row.key} row={row} partial={partial} annualMeetingTitle={annualMeetingTitle} />)}
-          {rows.length === 0 && <li className="minute-book-bundle-list__empty muted">No connected record bundles yet.</li>}
-        </ul>
-      ) : (
-      <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
-        <table className="table table--stack-mobile minute-book-bundles">
-          <thead>
-            <tr>
-              <th>Record</th>
-              <th>Connected evidence</th>
-              <th>Counts</th>
-              <th>Gaps</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleRows.map((row) => (
-              <tr key={row.key}>
-                <td data-label="Record">
-                  <div>{row.href ? <Link to={row.href}><strong>{bundleTitle(row)}</strong></Link> : <strong>{bundleTitle(row)}</strong>}</div>
-                  <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                    {bundleChips(row, annualMeetingTitle).map((chip) => <Badge key={`${row.key}:${chip.label}`} tone={chip.tone}>{chip.label}</Badge>)}
-                  </div>
-                </td>
-                <td data-label="Connected evidence"><BundleLinks links={row.links ?? []} partial={partial} /></td>
-                <td data-label="Counts"><CountBadges counts={row.counts ?? {}} partial={partial} /></td>
-                <td data-label="Gaps"><GapBadges gaps={row.gaps ?? []} partial={partial} /></td>
-                <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{sentenceCase(humanize(row.status)) || "-"}</Badge></td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No connected record bundles yet.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      )}
-      {rows.length > 40 && <div className="card__body muted">Showing the first 40 connected records.</div>}
+      <RecordListTable<BundleRecord>
+        variant="card"
+        table={BUNDLES_TABLE}
+        tableId="minute-book-bundles"
+        label="Connected records"
+        icon={<BookOpen size={14} />}
+        records={records}
+        onOpen={(record) => { if (record.bundle.href) navigate(record.bundle.href); }}
+        renderCell={({ record, field }) => {
+          const row = record.bundle;
+          if (field.name === "title")
+            return (
+              <span>
+                <strong>{record.title}</strong>
+                <span className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                  {bundleChips(row, annualMeetingTitle).map((chip) => <Badge key={`${row.key}:${chip.label}`} tone={chip.tone}>{chip.label}</Badge>)}
+                </span>
+              </span>
+            );
+          if (field.name === "evidence") return <BundleLinks links={row.links ?? []} partial={partial} />;
+          if (field.name === "counts") return <CountBadges counts={row.counts ?? {}} partial={partial} />;
+          if (field.name === "gaps") return <GapBadges gaps={row.gaps ?? []} partial={partial} />;
+          if (field.name === "status") return <Badge tone={toneForStatus(row.status)}>{record.status || "-"}</Badge>;
+          return undefined;
+        }}
+        renderPhoneCard={(record, { open, selecting }) => {
+          const row = record.bundle;
+          const gaps = actionableGaps(row.gaps);
+          const kinds = Array.from(new Set((row.links ?? []).map((link) => String(link.kind ?? "")).filter(Boolean)));
+          return (
+            <RecordTablePhoneCard
+              title={record.title}
+              badge={<Badge tone={toneForStatus(row.status)}>{record.status || "-"}</Badge>}
+              meta={[bundleChips(row, annualMeetingTitle).map((chip) => chip.label).join(" · ")]}
+              detail={[
+                kinds.length ? `Linked: ${kinds.join(", ")}` : partial ? "No accessible linked evidence" : "No linked evidence",
+                gaps.length ? `${gaps.length} ${gaps.length === 1 ? "gap" : "gaps"}` : "",
+              ]}
+              onOpen={row.href ? open : undefined}
+              selecting={selecting}
+            />
+          );
+        }}
+        emptyState={<RecordTableEmpty title="No connected record bundles yet" />}
+      />
     </div>
-  );
-}
-
-function BundleRow({ row, partial, annualMeetingTitle }: { row: any; partial?: boolean; annualMeetingTitle: string }) {
-  const gaps = actionableGaps(row.gaps);
-  const links: any[] = row.links ?? [];
-  const kinds = Array.from(new Set(links.map((link) => String(link.kind ?? "")).filter(Boolean)));
-  const body = (
-    <>
-      <span className="minute-book-bundle-row__main">
-        <span className="minute-book-bundle-row__title">
-          <strong>{bundleTitle(row)}</strong>
-          <Badge tone={toneForStatus(row.status)}>{sentenceCase(humanize(row.status)) || "-"}</Badge>
-        </span>
-        <span className="minute-book-bundle-row__meta">
-          {bundleChips(row, annualMeetingTitle).map((chip) => chip.label).join(" · ")}
-        </span>
-        <span className="minute-book-bundle-row__meta">
-          {kinds.length ? `Linked: ${kinds.join(", ")}` : partial ? "No accessible linked evidence" : "No linked evidence"}
-        </span>
-        {gaps.length > 0 && (
-          <span className="minute-book-bundle-row__gaps">
-            {gaps.slice(0, 2).map((gap) => <Badge key={gap.key} tone={gap.severity === "danger" ? "danger" : "warn"}>{gap.label}</Badge>)}
-            {gaps.length > 2 && <Badge tone="warn">+{gaps.length - 2}</Badge>}
-          </span>
-        )}
-      </span>
-      {row.href && <ChevronRight size={16} className="minute-book-bundle-row__chevron" aria-hidden="true" />}
-    </>
-  );
-  return (
-    <li>
-      {row.href ? <Link className="minute-book-bundle-row" to={row.href}>{body}</Link> : <div className="minute-book-bundle-row">{body}</div>}
-    </li>
   );
 }
 
@@ -606,7 +607,7 @@ function RecordSelect({ label, value, rows, onChange, getLabel }: any) {
 
 function linkSummary(row: any, maps: any, textOnly = false) {
   const document = row.documentIds?.[0] ? maps.documents.get(row.documentIds[0]) : null;
-  if (document) return textOnly ? document.title : <Link to="/app/documents">{document.title}</Link>;
+  if (document) return textOnly ? document.title : <Link to={`/app/documents/${document._id}`}>{document.title}</Link>;
   const meeting = row.meetingId ? maps.meetings.get(row.meetingId) : null;
   if (meeting) return textOnly ? meeting.title : <Link to={`/app/meetings/${meeting._id}`}>{meeting.title}</Link>;
   const minutes = row.minutesId ? maps.minutes.get(row.minutesId) : null;

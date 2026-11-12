@@ -145,18 +145,6 @@
 
 .books-register__lines {
   overflow-x: auto;
-
-  .table {
-    width: 100%;
-  }
-  tfoot th,
-  tfoot td {
-    border-top: 1px solid token('border-strong');
-    font-weight: token('fw-semibold');
-  }
-  tfoot th {
-    text-align: left;
-  }
 }
 
 .books-register__blocked {
