@@ -2,8 +2,7 @@
 @use "mixins" as *;
 
 .accounting-table td,
-.financials-table td,
-.wave-cache-table td {
+.financials-table td {
   overflow-wrap: anywhere;
 }
 .treasurer-page {
@@ -45,7 +44,6 @@
   }
   .accounting-table,
   .financials-table,
-  .wave-cache-table,
   .treasurer-funding-table {
     table-layout: auto;
     min-width: 680px;

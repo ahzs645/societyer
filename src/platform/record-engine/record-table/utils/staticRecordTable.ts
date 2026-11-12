@@ -1,4 +1,4 @@
-import type { FieldMetadata, HydratedView, ObjectMetadata, ViewGroupBy, ViewOpenRecordIn, ViewSortDirection } from "../../types";
+import type { AggregateOperation, FieldMetadata, HydratedView, ObjectMetadata, ViewGroupBy, ViewOpenRecordIn, ViewSortDirection } from "../../types";
 import { withViewGroupBy } from "./groupRecords";
 
 /** One column of a table whose shape is fixed in code. */
@@ -10,6 +10,8 @@ export type StaticFieldDefinition = Pick<FieldMetadata, "name" | "label" | "fiel
   isVisible?: boolean;
   /** Cells are read-only unless a column says otherwise. */
   isReadOnly?: boolean;
+  /** The column's footer total when the table shows totals (e.g. "sum" for money); none unless set. */
+  aggregate?: AggregateOperation;
 };
 
 /** The default view's group-by, naming its field by `name` (the reader can still change it). */
@@ -111,7 +113,7 @@ export function staticRecordTable({
         position,
         size: fields[position].size ?? 160,
         isVisible: fields[position].isVisible ?? true,
-        aggregateOperation: null,
+        aggregateOperation: fields[position].aggregate ?? null,
         viewFieldGroupId: null,
         field,
       })),

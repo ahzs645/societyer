@@ -199,77 +199,13 @@
   gap: token('s-2');
   margin-left: auto;
 }
-// Phones: service and monthly cost first, the rest beneath, actions in reach.
+// Phones: the card's actions wrap under its title.
 @media (max-width: 760px) {
   .financials-subscriptions__actions {
     flex: 1 1 100%;
     flex-wrap: wrap;
     justify-content: flex-end;
     margin-left: 0;
-  }
-  .card > .table.financials-subscriptions-table {
-    display: block;
-    min-width: 0;
-    thead {
-      display: none;
-    }
-    tbody {
-      display: block;
-    }
-    tr {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 2px token('s-2');
-      padding: token('s-2') token('s-3');
-      border-top: 1px solid token('border-color-light');
-    }
-    td {
-      display: block;
-      height: auto;
-      min-width: 0;
-      padding: 0;
-      border: 0;
-      white-space: normal;
-      &:first-child,
-      &[colspan] {
-        grid-column: 1 / 3;
-      }
-      &[colspan] {
-        grid-column: 1 / -1;
-      }
-    }
-    .financials-subscriptions-table__monthly {
-      grid-column: 3;
-      grid-row: 1;
-      font-weight: token('fw-semibold');
-    }
-    .financials-subscriptions-table__billing {
-      grid-column: 1 / 3;
-      grid-row: 2;
-      color: token('text-secondary');
-      font-size: token('fs-sm');
-    }
-    .financials-subscriptions-table__status {
-      grid-column: 3;
-      grid-row: 2;
-      text-align: right;
-    }
-    .financials-subscriptions-table__category {
-      grid-column: 1;
-      grid-row: 3;
-    }
-    .financials-subscriptions-table__renewal {
-      grid-column: 2;
-      grid-row: 3;
-      color: token('text-secondary');
-      font-size: token('fs-sm');
-    }
-    .financials-subscriptions-table__actions {
-      grid-column: 3;
-      grid-row: 3;
-      white-space: nowrap;
-    }
   }
 }
 .financials-summary-card__stats {
@@ -432,64 +368,11 @@
 }
 
 // ---- Wave ---------------------------------------------------------------------------
-// Type badge with Wave's own type/subtype underneath.
-// Phones read each cached row as a card: name and value, then type, status and
-// its Details link, so nothing sits past a sideways scroll.
+// Phones drop the control groups' labels; the buttons name themselves.
 @media (max-width: 760px) {
   .wave-controls__label {
     display: none;
   }
-  .card > .table.wave-cache-table {
-    display: block;
-    min-width: 0;
-    thead {
-      display: none;
-    }
-    tbody {
-      display: block;
-    }
-    tr {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
-      align-items: center;
-      gap: token('s-1') token('s-2');
-      padding: token('s-2') token('s-3');
-      border-top: 1px solid token('border-color-light');
-    }
-    td {
-      display: block;
-      height: auto;
-      min-width: 0;
-      padding: 0;
-      border: 0;
-      white-space: normal;
-      &[colspan] {
-        grid-column: 1 / -1;
-      }
-    }
-    td:first-child {
-      grid-column: 1 / 3;
-    }
-    td:nth-child(4) {
-      grid-column: 3;
-      grid-row: 1;
-      font-weight: token('fw-semibold');
-    }
-    td:nth-child(5) {
-      grid-column: 1 / -1;
-      grid-row: 3;
-      color: token('text-secondary');
-      font-size: token('fs-xs');
-    }
-    .wave-cache-table__empty {
-      display: none;
-    }
-  }
-}
-.wave-cache-table__subtype {
-  margin-top: 2px;
-  color: token('text-tertiary');
-  font-size: token('fs-xs');
 }
 @media (max-width: 760px) {
   // Account views scroll sideways in one row instead of wrapping into three.

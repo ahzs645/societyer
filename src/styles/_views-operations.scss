@@ -27,15 +27,6 @@
 
 .backfill-review__table {
   width: 100%;
-  overflow-x: auto;
-}
-
-.backfill-review__table table {
-  min-width: 560px;
-}
-
-.backfill-review__row--excluded td {
-  color: token('text-tertiary');
 }
 
 .backfill-review__categories table {

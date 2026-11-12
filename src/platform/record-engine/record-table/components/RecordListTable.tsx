@@ -47,8 +47,9 @@ type RecordListTableProps<T extends { _id: string }> = {
   /** The toolbar's title and count (default: on for `page`, off for `card`). */
   showTitle?: boolean;
   /**
-   * Rendered inside the table's scope, before the toolbar: small pieces that
-   * read its state with `useRecordTableState` (whether it is searched, say).
+   * Rendered inside the table's scope, after the table: a `RecordTableBulkBar`
+   * for a `selectable` list, or small pieces that read the table's state with
+   * `useRecordTableState` (whether it is searched, say).
    */
   children?: ReactNode;
 };
@@ -97,7 +98,6 @@ export function RecordListTable<T extends { _id: string }>({
         highlightedRecordId={highlightedRecordId}
         onRecordClick={onOpen ? (_recordId, record) => onOpen(record as T) : undefined}
       >
-        {children}
         <RecordTableToolbar
           label={label}
           icon={icon}
@@ -120,6 +120,7 @@ export function RecordListTable<T extends { _id: string }>({
           rowMenuSections={rowMenuSections ? (record) => rowMenuSections(record as T) : undefined}
           renderPhoneCard={renderPhoneCard ? (record, helpers) => renderPhoneCard(record as unknown as T, helpers) : undefined}
         />
+        {children}
       </RecordTableScope>
     </div>
   );

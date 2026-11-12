@@ -14,11 +14,11 @@ import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { formatDate, formatDateTime, formatShortDate, pluralize } from "../lib/format";
 import { organizationTodayISO } from "../lib/dateRanges";
-import { budgetVariance, formatMoney } from "../lib/money";
+import { formatMoney } from "../lib/money";
 import { Money } from "../components/Money";
 import { useUrlTab } from "../hooks/useUrlTab";
-import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/VarianceCell";
-import { inferBudgetKind } from "../features/financials/lib/budgetKind";
+import { VARIANCE_HELP } from "../features/financials/components/VarianceCell";
+import { BudgetLinesTable, type BudgetLine } from "../features/financials/components/BudgetLinesTable";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { CategorizationProvenance, TransactionRulesBar } from "../features/financials/rules";
@@ -42,8 +42,7 @@ import {
   type TransactionFilterState,
 } from "../features/financials/transactions/transactionFilters";
 import { isSplitTransaction, splitLabel, transactionTagIds } from "../../shared/transactionLines";
-import { Database, Download, FileUp, Keyboard, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
-import { Menu } from "../components/Menu";
+import { Database, Download, FileUp, Keyboard, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
 import { InfoPopover } from "../components/InfoPopover";
 import { Tabs } from "../components/primitives";
 import { useMemo, useRef, useState } from "react";
@@ -344,12 +343,7 @@ export function FinancialsPage() {
     return types;
   }, [waveSummary]);
   const budgetRows = (hub?.budgetRows ?? []) as any[];
-  const budgetSort = useSortableRows(budgetRows, {
-    category: (b: any) => b.category,
-    planned: (b: any) => b.plannedCents,
-    actual: (b: any) => b.actualCents,
-    variance: (b: any) => budgetVariance(b.plannedCents, b.actualCents, inferBudgetKind(b, { accounts: accounts ?? [], transactions: transactions ?? [] })).cents,
-  });
+  const budgetEvidence = useMemo(() => ({ accounts: accounts ?? [], transactions: transactions ?? [] }), [accounts, transactions]);
   const restrictedSort = useSortableRows(hub?.restrictedAccounts as Array<{ name: string; purpose?: string; balanceCents: number }> | undefined, {
     fund: (a) => a.name,
     purpose: (a) => a.purpose,
@@ -763,6 +757,7 @@ export function FinancialsPage() {
             <div className="card__head">
               <h2 className="card__title">Budget vs actuals — FY {budgetFiscalYear}</h2>
               <span className="card__subtitle">Plan a category, actuals come from synced transactions.</span>
+              <InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>
               <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button className="btn-action" onClick={() => setBudgetGridOpen(true)}>
                   <Table2 size={12} /> Edit as grid
@@ -775,113 +770,27 @@ export function FinancialsPage() {
                 </button>
               </div>
             </div>
-            <div className="finance-table-wrap">
-            <table className="table finance-table finance-table--sticky-label">
-              <thead>
-                <tr>
-                  <SortableTh column="category" sort={budgetSort.sort} onSort={budgetSort.toggle}>Category</SortableTh>
-                  <SortableTh column="planned" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Planned</SortableTh>
-                  <SortableTh column="actual" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Actual</SortableTh>
-                  <SortableTh
-                    column="variance"
-                    sort={budgetSort.sort}
-                    onSort={budgetSort.toggle}
-                    className="num"
-                    extra={<InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>}
-                  >
-                    Variance
-                  </SortableTh>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {budgetSort.rows.map((b: any) => {
-                  const kind = inferBudgetKind(b, { accounts: accounts ?? [], transactions: transactions ?? [] });
-                  return (
-                    <tr key={b._id}>
-                      <td>
-                        {b.category}
-                        {kind === "revenue" && <span className="finance-table__sub"> · revenue</span>}
-                      </td>
-                      <td className="num"><Money cents={b.plannedCents} /></td>
-                      <td className="num"><Money cents={b.actualCents} /></td>
-                      <td className="num">
-                        <VarianceCell variance={budgetVariance(b.plannedCents, b.actualCents, kind)} />
-                      </td>
-                      <td className="num">
-                        <Menu
-                          align="right"
-                          trigger={
-                            <button
-                              type="button"
-                              className="btn btn--ghost btn--sm btn--icon"
-                              aria-label={`Actions for budget ${b.category}`}
-                              title="More actions"
-                              disabled={!canWrite}
-                            >
-                              <MoreHorizontal size={14} />
-                            </button>
-                          }
-                          sections={[
-                            {
-                              id: "budget-actions",
-                              items: [
-                                {
-                                  id: "edit",
-                                  label: "Edit planned amount",
-                                  icon: <Pencil size={14} />,
-                                  onSelect: () => { setBudgetErrors({}); setBudgetForm({ id: b._id, category: b.category, planned: String((b.plannedCents ?? 0) / 100) }); },
-                                },
-                                {
-                                  id: "delete",
-                                  label: "Delete budget line",
-                                  icon: <Trash2 size={14} />,
-                                  destructive: true,
-                                  onSelect: async () => {
-                                    const approved = await confirm({
-                                      title: "Delete budget line?",
-                                      message: `The FY ${budgetFiscalYear} "${b.category}" budget of ${formatMoney(b.plannedCents)} will be removed. Actual transactions are not affected.`,
-                                      confirmLabel: "Delete budget line",
-                                      tone: "danger",
-                                    });
-                                    if (!approved) return;
-                                    try {
-                                      await removeBudget({ id: b._id });
-                                      toast.success("Budget line deleted", b.category);
-                                    } catch (error: any) {
-                                      toast.error("Could not delete budget line", error?.message);
-                                    }
-                                  },
-                                },
-                              ],
-                            },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-                {budgetRows.length === 0 && (
-                  <tr className="finance-empty-row">
-                    <td colSpan={5} className="muted">
-                      No budget lines yet. Add a category to start tracking variance.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              {budgetRows.length > 1 && (
-                <tfoot>
-                  <tr>
-                    <th scope="row">Total</th>
-                    <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.plannedCents ?? 0), 0)} /></td>
-                    <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.actualCents ?? 0), 0)} /></td>
-                    <td />
-                    <td />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-            </div>
+            <BudgetLinesTable
+              rows={budgetRows as BudgetLine[]}
+              evidence={budgetEvidence}
+              canWrite={canWrite}
+              onEdit={(line) => { setBudgetErrors({}); setBudgetForm({ id: line._id, category: line.category, planned: String((line.plannedCents ?? 0) / 100) }); }}
+              onDelete={async (line) => {
+                const approved = await confirm({
+                  title: "Delete budget line?",
+                  message: `The FY ${budgetFiscalYear} "${line.category}" budget of ${formatMoney(line.plannedCents)} will be removed. Actual transactions are not affected.`,
+                  confirmLabel: "Delete budget line",
+                  tone: "danger",
+                });
+                if (!approved) return;
+                try {
+                  await removeBudget({ id: line._id as Id<"budgets"> });
+                  toast.success("Budget line deleted", line.category);
+                } catch (error: unknown) {
+                  toast.error("Could not delete budget line", error instanceof Error ? error.message : undefined);
+                }
+              }}
+            />
 
             {budgetForm && (
               <div className="card__body" style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
