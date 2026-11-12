@@ -8,6 +8,7 @@ import { RecordTableScope } from "./RecordTableScope";
 import { RecordTableToolbar } from "./RecordTableToolbar";
 import { RecordTableFilterPopover } from "./RecordTableFilterPopover";
 import { RecordTableFilterChips } from "./RecordTableFilterChips";
+import { RecordTableBulkBar, type BulkAction } from "./RecordTableBulkBar";
 
 export type StaticRecordTableDefinition = ReturnType<typeof staticRecordTable>;
 
@@ -42,6 +43,11 @@ type RecordListTableProps<T extends { _id: string }> = {
   highlightedRecordId?: string | null;
   /** Row checkboxes for bulk actions. */
   selectable?: boolean;
+  /**
+   * Actions over the checked rows, in the floating bar shown while any are
+   * checked (Mark verified…). Giving any turns on `selectable`.
+   */
+  bulkActions?: BulkAction[];
   /** Column totals under the table (default: on for `page`, off for `card`). */
   showTotals?: boolean;
   /** The toolbar's title and count (default: on for `page`, off for `card`). */
@@ -81,6 +87,7 @@ export function RecordListTable<T extends { _id: string }>({
   toolbarActions,
   highlightedRecordId = null,
   selectable = false,
+  bulkActions,
   showTotals,
   showTitle,
   children,
@@ -112,7 +119,7 @@ export function RecordListTable<T extends { _id: string }>({
           showAggregateFooter={showTotals ?? !card}
           // Rows defined in code have no record page to preview.
           previewAction={false}
-          selectable={selectable}
+          selectable={selectable || Boolean(bulkActions?.length)}
           loading={loading}
           emptyState={emptyState}
           renderCell={renderCell ? ({ record, field }) => renderCell({ record: record as T, field }) : undefined}
@@ -120,6 +127,7 @@ export function RecordListTable<T extends { _id: string }>({
           rowMenuSections={rowMenuSections ? (record) => rowMenuSections(record as T) : undefined}
           renderPhoneCard={renderPhoneCard ? (record, helpers) => renderPhoneCard(record as unknown as T, helpers) : undefined}
         />
+        {bulkActions && bulkActions.length > 0 && <RecordTableBulkBar actions={bulkActions} />}
         {children}
       </RecordTableScope>
     </div>
