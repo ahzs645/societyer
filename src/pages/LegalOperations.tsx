@@ -1348,8 +1348,8 @@ export function RightsLedgerPage() {
           count={voting?.voting?.length ?? 0}
         >
           <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>Shareholder</th><th>Shares</th><th>% shares</th><th>Votes</th><th>% votes</th><th>Eligible to sign</th></tr></thead>
+            <table className="table table--report">
+              <thead><tr><th>Shareholder</th><th className="num">Shares</th><th className="num">% shares</th><th className="num">Votes</th><th className="num">% votes</th><th>Eligible to sign</th></tr></thead>
               <tbody>
                 {(voting?.voting ?? []).map((h: any) => (
                   <tr key={h.holderKey}>
@@ -1358,10 +1358,10 @@ export function RightsLedgerPage() {
                         <strong>{h.holderName}</strong>
                       </button>
                     </td>
-                    <td>{h.totalShares}</td>
-                    <td>{(h.percentOfShares ?? 0).toFixed(1)}%</td>
-                    <td>{h.totalVotes}</td>
-                    <td>{(h.percentOfVotes ?? 0).toFixed(1)}%</td>
+                    <td className="num">{h.totalShares}</td>
+                    <td className="num">{(h.percentOfShares ?? 0).toFixed(1)}%</td>
+                    <td className="num">{h.totalVotes}</td>
+                    <td className="num">{(h.percentOfVotes ?? 0).toFixed(1)}%</td>
                     <td>{h.isEligibleSignatory ? <Badge tone="success">Eligible</Badge> : <Badge tone="warn">Not eligible</Badge>}</td>
                   </tr>
                 ))}
@@ -1369,10 +1369,10 @@ export function RightsLedgerPage() {
                 {(voting?.nonVoting ?? []).map((h: any) => (
                   <tr key={h.holderKey} className="muted">
                     <td>{h.holderName}</td>
-                    <td>{h.totalShares}</td>
-                    <td>{(h.percentOfShares ?? 0).toFixed(1)}%</td>
-                    <td>0 (non-voting)</td>
-                    <td>—</td>
+                    <td className="num">{h.totalShares}</td>
+                    <td className="num">{(h.percentOfShares ?? 0).toFixed(1)}%</td>
+                    <td className="num">0 (non-voting)</td>
+                    <td className="num">—</td>
                     <td>—</td>
                   </tr>
                 ))}
@@ -1483,7 +1483,7 @@ export function RightsLedgerPage() {
               </Field>
               <p className="muted" style={{ margin: 0 }}>{preset.description}</p>
               <div className="table-wrap">
-              <table className="table">
+              <table className="table table--report">
                 <thead><tr><th>Class</th><th>Votes per share</th><th>Redemption</th><th>Liquidation rank</th></tr></thead>
                 <tbody>
                   {preset.classes.map((cls) => (
@@ -1585,12 +1585,12 @@ export function RightsLedgerPage() {
 
               <div>
                 <h4 style={{ margin: "0 0 6px" }}>Holdings by class</h4>
-                <table className="table">
-                  <thead><tr><th>Class</th><th className="rights-ledger-table__qty">Quantity</th></tr></thead>
+                <table className="table table--report">
+                  <thead><tr><th>Class</th><th className="num">Quantity</th></tr></thead>
                   <tbody>
                     {holdings.map((h: any) => {
                       const rc = data?.classes?.find((c: any) => c._id === h.rightsClassId);
-                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td className="rights-ledger-table__qty">{formatQuantity(h.quantity)}</td></tr>;
+                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td className="num">{formatQuantity(h.quantity)}</td></tr>;
                     })}
                     {holdings.length === 0 && <EmptyRow cols={2} label="No holdings on this date." />}
                   </tbody>
@@ -1599,8 +1599,8 @@ export function RightsLedgerPage() {
 
               <div>
                 <h4 style={{ margin: "0 0 6px" }}>Transfer history</h4>
-                <table className="table">
-                  <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From → To</th><th className="rights-ledger-table__qty">Qty</th></tr></thead>
+                <table className="table table--report">
+                  <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From → To</th><th className="num">Qty</th></tr></thead>
                   <tbody>
                     {holderTransfers.map((t: any) => {
                       const rc = data?.classes?.find((c: any) => c._id === t.rightsClassId);
@@ -1612,7 +1612,7 @@ export function RightsLedgerPage() {
                           <td>{optionLabel("rightsholdingTransferTypes", t.transferType)}</td>
                           <td>{rc?.className || "—"}</td>
                           <td>{(src?.fullName || t.sourceHolderName || "Treasury")} → {(dst?.fullName || t.destinationHolderName || "—")}</td>
-                          <td className="rights-ledger-table__qty">{formatQuantity(t.quantity, "—")}</td>
+                          <td className="num">{formatQuantity(t.quantity, "—")}</td>
                         </tr>
                       );
                     })}

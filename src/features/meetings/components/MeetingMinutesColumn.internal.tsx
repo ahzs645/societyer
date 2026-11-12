@@ -272,7 +272,7 @@ function renderMinutesMarkdown(value: string) {
           ? <div key={index}>{renderMinutesProse(segment.text)}</div>
           : (
             <div className="table-wrap" key={index}>
-              <table className="table meeting-minutes-source-table" data-testid="minutes-source-table">
+              <table className="table table--report" data-testid="minutes-source-table">
                 {segment.header && <thead><tr>{segment.rows[0].map((cell, cellIndex) => <th key={cellIndex}>{renderInlineMarkdown(cell)}</th>)}</tr></thead>}
                 <tbody>
                   {(segment.header ? segment.rows.slice(1) : segment.rows).map((row, rowIndex) => (

@@ -37,7 +37,7 @@ export function MonthTransactionsTable({
   }
   return (
     <div className="card recon-month-table">
-      <table className="table recon-month-table__table">
+      <table className="table table--report recon-month-table__table">
         <thead>
           <tr>
             <th>Date</th>

@@ -205,7 +205,7 @@ export function RemittancePlanForm({
             and actual CRA receipt date.
           </p>
           <div className="payroll-calculator__table-wrap">
-            <table className="table">
+            <table className="table table--report">
               <caption>
                 CRA source amounts from {preview.payRunIds.length} retained
                 payroll runs

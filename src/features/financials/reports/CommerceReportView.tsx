@@ -232,7 +232,7 @@ function ComposerTable({
         }}
       >
         <table
-          className="table"
+          className="table table--report"
           style={{
             display: "table",
             overflow: "visible",

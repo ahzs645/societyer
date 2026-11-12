@@ -193,7 +193,7 @@ export function PayrollTd1FormReview({
                         tabIndex={0}
                       >
                         <table
-                          className="table"
+                          className="table table--report"
                           aria-label={`${title} extracted claim lines`}
                         >
                           <thead>

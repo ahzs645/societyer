@@ -24,7 +24,7 @@ export function IntakeRunCoverage({ societyId }: { societyId: string }) {
       {runs && !runs.length && <div className="card__body muted">No AI intake runs yet. <Link to="/app/intake">Start one</Link> to turn source files into native records and gaps.</div>}
       {runs && runs.length > 0 && (
         <div className="table-wrap">
-          <table className="table">
+          <table className="table table--report">
             <thead><tr><th>Run</th><th>Documents promoted</th><th>Fields with provenance</th><th>Native coverage (reviewed)</th><th>Extractable coverage</th><th>System gaps</th><th>Record gaps</th></tr></thead>
             <tbody>
               {runs.map((run) => (

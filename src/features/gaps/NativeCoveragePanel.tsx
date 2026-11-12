@@ -41,7 +41,7 @@ export function NativeCoveragePanel({ societyId }: { societyId: string }) {
         Coverage = native ÷ (native + unresolved gaps). Areas you cannot read show "—".
       </p>
       <div className="coverage-table-scroll">
-        <table className="table">
+        <table className="table table--report">
           <thead>
             <tr>
               <th>Area</th>

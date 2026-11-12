@@ -72,16 +72,21 @@
   width: auto;
   min-width: 168px;
 }
-// The funding mix sits in a half-width card: let its columns size to content
-// so Received / Expected stay visible instead of scrolling away.
+// The funding mix sits in a half-width card and its source names carry a long
+// detail line: fixed columns keep Received / Expected in view and let the
+// source wrap. Phones scroll it inside its wrap instead.
 @media (min-width: 761px) {
-  .treasurer-funding-table {
+  .table.treasurer-funding-table {
     width: 100%;
+    table-layout: fixed;
   }
-  .treasurer-funding-table th:nth-child(1) { width: auto; }
+  .treasurer-funding-table th:nth-child(2) { width: 130px; }
   .treasurer-funding-table th:nth-child(3),
   .treasurer-funding-table th:nth-child(4) { width: 112px; }
-  .treasurer-funding-table td.mono { white-space: nowrap; }
+  .treasurer-funding-table td { overflow-wrap: anywhere; }
+}
+@media (max-width: 760px) {
+  .table.treasurer-funding-table { min-width: 680px; }
 }
 .treasurer-card-head-action {
   margin-left: auto;
@@ -257,34 +262,6 @@
 }
 
 // ---- Accounting ----------------------------------------------------------------
-// Statement section headings and totals read as left-aligned labels in the
-// same column as the account names, not centred across the table.
-.accounting-statement-table tbody th {
-  text-align: left;
-  font-weight: 600;
-  padding-left: token('s-2');
-}
-.accounting-statement-table tbody th[colspan] {
-  padding-top: token('s-3');
-  color: token('text-secondary');
-}
-.accounting-statement-table {
-  width: 100%;
-}
-@media (max-width: 760px) {
-  // Two-column statements fit a phone: labels wrap, amounts stay visible.
-  .accounting-table-wrap .accounting-statement-table {
-    min-width: 0;
-    width: 100%;
-  }
-  .accounting-statement-table :is(th, td) {
-    white-space: normal !important;
-  }
-  .accounting-statement-table td.mono {
-    white-space: nowrap !important;
-    width: 1%;
-  }
-}
 .accounting-section-heading {
   @include flex-center;
   gap: token('s-2');

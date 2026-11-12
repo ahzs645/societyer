@@ -109,7 +109,7 @@ export function BudgetLinesTable({
           return (
             <>
               {record.category}
-              {record.kind === "revenue" && <span className="finance-table__sub"> · revenue</span>}
+              {record.kind === "revenue" && <span className="table__sub"> · revenue</span>}
             </>
           );
         if (field.name === "actualCents")

@@ -567,7 +567,7 @@ function ReadableFieldList({ fields }: { fields: ReadableField[] }) {
             )}
             {field.kind === "table" && (
               <div className="table-wrap document-fields__table">
-                <table className="table">
+                <table className="table table--report">
                   <tbody>
                     {(field.rows ?? []).map((row, rowIndex) => (
                       <tr key={rowIndex}>{row.map((cell, cellIndex) => rowIndex === 0 ? <th key={cellIndex}>{cell}</th> : <td key={cellIndex}>{cell}</td>)}</tr>

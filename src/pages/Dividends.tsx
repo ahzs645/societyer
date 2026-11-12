@@ -407,7 +407,7 @@ export function DividendsPage() {
             <button type="button" className="btn btn--ghost btn--sm" style={{ marginLeft: "auto" }} onClick={() => setExpanded(null)}>Hide holders</button>
           </div>
           <div className="table-wrap">
-            <table className="table">
+            <table className="table table--report">
               <thead><tr><th>Holder at record date</th><th className="num">Shares</th><th className="num">Amount</th></tr></thead>
               <tbody>
                 {(expandedRow.entitlements ?? []).map((e) => (
@@ -527,7 +527,7 @@ export function DividendsPage() {
                   {preview.sharesOutstanding.toLocaleString()} shares {preview.sharesSource === "ledger" ? "at the record date (from the share ledger)" : "(entered by hand)"} · total {form.currency.toUpperCase()} {preview.totalAmount}
                 </strong>
                 {preview.snapshot && preview.snapshot.entitlements.length > 0 && (
-                  <table className="table" style={{ marginTop: 8 }}>
+                  <table className="table table--report" style={{ marginTop: 8 }}>
                     <thead><tr><th>Holder</th><th className="num">Shares</th><th className="num">Amount</th></tr></thead>
                     <tbody>
                       {preview.snapshot.entitlements.map((e) => (

@@ -68,7 +68,6 @@
 .invoices-page .card.invoice-card { padding: 0; }
 .invoice-card > .card__head { gap: token(s-3); }
 .invoice-card > .card__head > .btn { margin-left: auto; flex: none; }
-.invoice-table td.num { white-space: nowrap; overflow-wrap: normal; }
 
 /* Filters another view handed the invoice list (a customer, a series). */
 .invoice-chips { display: flex; flex-wrap: wrap; gap: token(s-1); margin-bottom: token(s-2); }
@@ -98,9 +97,6 @@
   cursor: pointer;
   &:hover { background: token(bg-hover-alpha); color: token(text-primary); }
 }
-.invoice-table { width: 100%; }
-.invoice-table thead th.num { text-align: right; }
-.invoice-table tbody td { vertical-align: middle; }
 .invoice-table__link {
   padding: 0;
   white-space: nowrap;
@@ -128,6 +124,7 @@
 .invoice-table__due--overdue { color: token(orange-11); font-weight: token(fw-medium); }
 .invoice-table__overdue { display: block; color: token(orange-11); font-size: token(fs-xs); }
 
+// Customer statement on phones: each movement is a two-column card.
 @media (max-width: 760px) {
   .invoice-table thead { display: none; }
   .invoice-table,

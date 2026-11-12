@@ -718,8 +718,8 @@ export function FinancialsPage() {
               </p>
             </InfoPopover>
           </div>
-          <div className="finance-table-wrap">
-            <table className="table finance-table financials-restricted-table">
+          <div className="table-wrap">
+            <table className="table table--report financials-restricted-table">
               <thead>
                 <tr>
                   <SortableTh column="fund" sort={restrictedSort.sort} onSort={restrictedSort.toggle}>Fund</SortableTh>
@@ -1030,7 +1030,7 @@ export function FinancialsPage() {
               <h2 className="card__title">Remuneration disclosure — FY {latest.fiscalYear}</h2>
               <span className="card__subtitle">Top employees/contractors paid ≥ $75,000 (s.36 Societies Act).</span>
             </div>
-            <table className="table finance-table finance-table--sticky-label">
+            <table className="table table--report">
               <thead>
                 <tr><th>Position</th><th className="num">Total compensation</th></tr>
               </thead>

@@ -90,7 +90,7 @@ export function ChartCard({
 export function ChartDataTable({ table }: { table: ChartTable }) {
   return (
     <div className="chart-table-scroll" tabIndex={0} role="region" aria-label={table.caption}>
-      <table className="table chart-table">
+      <table className="table table--report chart-table">
         <caption className="sr-only">{table.caption}</caption>
         <thead>
           <tr>

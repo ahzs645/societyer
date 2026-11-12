@@ -34,12 +34,14 @@
         padding-block: 12px;
         border-bottom: 1px solid var(--border);
       }
-      tbody td {
+      tbody td,
+      &.table tbody th {
         display: block;
         padding: 0;
         border: 0;
         white-space: normal;
       }
+      &.table tbody th { height: auto; }
       tbody td:first-child { font-weight: 600; }
       tbody td[data-label] {
         display: flex;

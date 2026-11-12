@@ -990,7 +990,7 @@ function RuleDifferences({
       </summary>
       {differences.length ? (
         <div className="payroll-calculator__table-wrap">
-          <table className="table" aria-label="Payroll rule changes">
+          <table className="table table--report" aria-label="Payroll rule changes">
             <thead>
               <tr>
                 <th>Parameter</th>
@@ -1062,7 +1062,7 @@ function RulePreview({ draft }: { draft: PayrollRuleDraft }) {
           aria-label="Rule calculation comparison table"
           tabIndex={0}
         >
-          <table className="table">
+          <table className="table table--report">
             <thead>
               <tr>
                 <th>Amount</th>

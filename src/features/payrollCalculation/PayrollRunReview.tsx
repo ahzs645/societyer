@@ -334,7 +334,7 @@ export function PayrollResultReview({
             >
               <h3>Employer cost allocations · {employee.employeeName}</h3>
               <div className="payroll-calculator__table-wrap">
-                <table className="table">
+                <table className="table table--report">
                   <thead>
                     <tr>
                       <th>Allocation</th>

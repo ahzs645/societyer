@@ -94,9 +94,9 @@ export function CountEntry({
       {lines.length === 0 ? (
         <div className="muted">No expected lines — this scope had no balances on hand. Add found stock below.</div>
       ) : (
-        <table className="table">
+        <table className="table table--report">
           <thead>
-            <tr><th>Item</th><th>Location</th><th style={{ textAlign: "right" }}>Expected</th><th style={{ textAlign: "right" }}>Counted</th><th style={{ textAlign: "right" }}>Δ</th></tr>
+            <tr><th>Item</th><th>Location</th><th className="num">Expected</th><th className="num">Counted</th><th className="num">Δ</th></tr>
           </thead>
           <tbody>
             {lines.map((line) => {
@@ -109,8 +109,8 @@ export function CountEntry({
                 <tr key={line._id}>
                   <td>{item?.name ?? "Unknown"}<div className="muted mono">{item?.sku ?? ""}</div></td>
                   <td>{location?.name ?? "—"}{location?.code ? <span className="muted"> ({location.code})</span> : null}</td>
-                  <td className="mono" style={{ textAlign: "right" }}>{line.expectedQuantity ?? 0}</td>
-                  <td style={{ textAlign: "right" }}>
+                  <td className="mono num">{line.expectedQuantity ?? 0}</td>
+                  <td className="num">
                     <input
                       className="input mono"
                       style={{ width: 90, textAlign: "right" }}
@@ -125,7 +125,7 @@ export function CountEntry({
                       disabled={!canWrite || !open}
                     />
                   </td>
-                  <td className="mono" style={{ textAlign: "right", color: variance ? "var(--warn, #b45309)" : undefined }}>{variance == null ? "-" : variance > 0 ? `+${variance}` : variance}</td>
+                  <td className="mono num" style={{ color: variance ? "var(--warn, #b45309)" : undefined }}>{variance == null ? "-" : variance > 0 ? `+${variance}` : variance}</td>
                 </tr>
               );
             })}

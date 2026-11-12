@@ -224,7 +224,7 @@ export function BackfillReviewDrawer({
 
           <h3 className="card__title" style={{ margin: "12px 0 6px" }}>Category mapping</h3>
           <div className="backfill-review__categories">
-            <table className="table">
+            <table className="table table--report">
               <thead>
                 <tr><th>Category</th><th className="num">Total</th><th>Post to</th></tr>
               </thead>

@@ -299,14 +299,9 @@ $tag-dot-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pin
   &.is-posted svg { color: token(green-11); }
 }
 
-.txn-journal__table {
-  width: 100%;
-  font-size: token(fs-sm);
-
-  td, th { vertical-align: top; }
-  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  tfoot th, tfoot td { font-weight: token(fw-semibold); }
-}
+// Account lines carry tags and fund notes beneath them: keep the amounts
+// level with the account name.
+.txn-journal__table.table--report > :is(tbody, tfoot) > tr > :is(td, th) { vertical-align: top; }
 
 .txn-journal__account { overflow-wrap: anywhere; }
 
