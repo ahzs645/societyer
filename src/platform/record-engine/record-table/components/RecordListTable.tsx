@@ -46,6 +46,11 @@ type RecordListTableProps<T extends { _id: string }> = {
   showTotals?: boolean;
   /** The toolbar's title and count (default: on for `page`, off for `card`). */
   showTitle?: boolean;
+  /**
+   * Rendered inside the table scope after the table, so it can read the
+   * table's state: a `RecordTableBulkBar` for a `selectable` list.
+   */
+  children?: ReactNode;
 };
 
 /**
@@ -77,6 +82,7 @@ export function RecordListTable<T extends { _id: string }>({
   selectable = false,
   showTotals,
   showTitle,
+  children,
 }: RecordListTableProps<T>) {
   const [filterOpen, setFilterOpen] = useState(false);
   const card = variant === "card";
@@ -113,6 +119,7 @@ export function RecordListTable<T extends { _id: string }>({
           rowMenuSections={rowMenuSections ? (record) => rowMenuSections(record as T) : undefined}
           renderPhoneCard={renderPhoneCard ? (record, helpers) => renderPhoneCard(record as unknown as T, helpers) : undefined}
         />
+        {children}
       </RecordTableScope>
     </div>
   );

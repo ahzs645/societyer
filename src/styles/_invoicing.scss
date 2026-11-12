@@ -68,44 +68,10 @@
 .invoices-page .card.invoice-card { padding: 0; }
 .invoice-card > .card__head { gap: token(s-3); }
 .invoice-card > .card__head > .btn { margin-left: auto; flex: none; }
-.invoice-table td[data-label="Issued"],
-.invoice-table td[data-label="Due"],
-.invoice-table td[data-label="Last invoice"],
 .invoice-table td.num { white-space: nowrap; overflow-wrap: normal; }
 
-/* When the invoice panel narrows the list, drop the least useful columns first
- * and keep the balance and status in view. A custom view keeps every column the
- * person chose and scrolls instead. */
-@media (min-width: 761px) {
-  @container (max-width: 900px) {
-    .invoice-table--list:not(.invoice-table--custom-view) [data-column="issueDate"] { display: none; }
-    .invoice-table--list .invoice-table__sub { max-width: 170px; }
-    .invoice-table--list:not(.invoice-table--custom-view) :is(th, td) { padding-inline: token(s-2); }
-  }
-  @container (max-width: 720px) {
-    .invoice-table--list:not(.invoice-table--custom-view) :is([data-column="dueDate"], [data-column="total"]) { display: none; }
-  }
-}
-
-.invoice-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: token(s-2) token(s-3);
-  padding: token(s-3) token(s-4);
-  border-bottom: 1px solid token(border);
-}
-.invoice-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: 1 1 220px;
-  max-width: 340px;
-  color: token(text-tertiary);
-  svg { position: absolute; left: token(s-2); pointer-events: none; }
-  .input { width: 100%; padding-left: 28px; }
-}
-.invoice-chips { display: flex; flex-wrap: wrap; gap: token(s-1); }
+/* Filters another view handed the invoice list (a customer, a series). */
+.invoice-chips { display: flex; flex-wrap: wrap; gap: token(s-1); margin-bottom: token(s-2); }
 .invoice-chip {
   display: inline-flex;
   align-items: center;
@@ -132,28 +98,9 @@
   cursor: pointer;
   &:hover { background: token(bg-hover-alpha); color: token(text-primary); }
 }
-.invoice-toolbar__count { margin-left: auto; font-size: token(fs-xs); white-space: nowrap; }
-
-.invoice-bulkbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: token(s-2) token(s-3);
-  padding: token(s-2) token(s-4);
-  background: token(bg-selected-alpha);
-  border-bottom: 1px solid token(border-alpha-strong);
-  font-size: token(fs-sm);
-}
-.invoice-bulkbar__actions { display: flex; flex-wrap: wrap; gap: token(s-1); margin-left: auto; }
-
 .invoice-table { width: 100%; }
 .invoice-table thead th.num { text-align: right; }
 .invoice-table tbody td { vertical-align: middle; }
-.invoice-table--list tbody tr { cursor: pointer; }
-.invoice-table tbody tr.is-open td { background: token(bg-selected-alpha); }
-.invoice-table tbody tr.is-void td,
-.invoice-table tbody tr.is-muted td { color: token(text-tertiary); }
-.invoice-table__check { width: 40px; }
 .invoice-table__link {
   padding: 0;
   white-space: nowrap;
@@ -176,53 +123,12 @@
   font-weight: token(fw-medium);
   vertical-align: 1px;
 }
-.invoice-table__customer,
-.invoice-table__primary { min-width: 180px; }
 .invoice-table__name { display: block; color: token(text-primary); }
 .invoice-table__sub { display: block; font-size: token(fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
 .invoice-table__due--overdue { color: token(orange-11); font-weight: token(fw-medium); }
 .invoice-table__overdue { display: block; color: token(orange-11); font-size: token(fs-xs); }
-.invoice-table__actions { width: 1%; white-space: nowrap; text-align: right; }
-
-.invoice-sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  &:hover, &.is-active { color: token(text-primary); }
-}
-th.num .invoice-sort { flex-direction: row-reverse; }
-
-/* Tablet and phone: the bulk bar floats above the bottom navigation, like the
- * RecordTable bulk island, so it stays reachable while scrolling. */
-@media (max-width: 980px) {
-  .invoice-bulkbar {
-    position: fixed;
-    left: token(s-2);
-    right: token(s-2);
-    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + #{token(s-2)});
-    z-index: token(z-dropdown);
-    border: 1px solid token(border-alpha-strong);
-    border-radius: token(r-card);
-    background: token(bg-panel);
-    box-shadow: token(elevation-3);
-  }
-  .invoice-card:has(.invoice-bulkbar) { padding-bottom: 132px; }
-}
 
 @media (max-width: 760px) {
-  .invoice-toolbar__count { margin-left: 0; width: 100%; }
-  .invoice-search { max-width: none; }
-  .invoice-bulkbar__actions { margin-left: 0; }
-  .invoice-table tbody tr.is-selected { background: token(bg-selected-alpha); }
-  .invoice-table tbody tr.is-selected td,
-  .invoice-table tbody tr.is-selected:hover td { background: transparent; }
-
   .invoice-table thead { display: none; }
   .invoice-table,
   .invoice-table tbody { display: block; }
@@ -241,67 +147,7 @@ th.num .invoice-sort { flex-direction: row-reverse; }
     min-width: 0;
     height: auto;
   }
-  /* List: number + status on top, customer under it, amounts on the right. */
-  .invoice-table--list tbody tr { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .invoice-table--list .invoice-table__check { grid-column: 1; grid-row: 1 / span 3; width: auto; padding-top: 2px; }
-  .invoice-table--list td[data-label="Number"] { grid-column: 2; grid-row: 1; }
-  .invoice-table--list td[data-label="Status"] { grid-column: 3; grid-row: 1; justify-self: end; }
-  .invoice-table--list td[data-label="Customer"] { grid-column: 2; grid-row: 2; min-width: 0; }
-  .invoice-table--list td[data-label="Balance due"] { grid-column: 3; grid-row: 2; text-align: right; font-weight: token(fw-medium); }
-  .invoice-table--list td[data-label="Issued"] { display: none; }
-  .invoice-table--list td[data-label="Due"] { grid-column: 2; grid-row: 3; font-size: token(fs-xs); color: token(text-tertiary); &::before { content: "Due "; } }
-  .invoice-table--list td[data-label="Due"].invoice-table__due--overdue { color: token(orange-11); }
-  .invoice-table--list td[data-label="Amount"] { grid-column: 3; grid-row: 3; text-align: right; font-size: token(fs-xs); color: token(text-tertiary); }
   .invoice-table__sub { max-width: none; }
-
-  .invoice-table--catalog td[data-label="Item"],
-  .invoice-table--customers td[data-label="Customer"] { grid-column: 1; grid-row: 1; min-width: 0; }
-  .invoice-table--catalog td[data-label="Price"],
-  .invoice-table--customers td[data-label="Outstanding"] { grid-column: 2; grid-row: 1; text-align: right; }
-  .invoice-table--catalog td[data-label="Category"],
-  .invoice-table--catalog td[data-label="Tax"],
-  .invoice-table--customers td[data-label="Invoices"],
-  .invoice-table--customers td[data-label="Billed"],
-  .invoice-table--customers td[data-label="Last invoice"] {
-    grid-column: 1;
-    font-size: token(fs-xs);
-    color: token(text-tertiary);
-    text-align: left;
-    &::before { content: attr(data-label) ": "; }
-  }
-  .invoice-table--catalog .invoice-table__actions,
-  .invoice-table--customers .invoice-table__actions { grid-column: 2; grid-row: 2 / span 3; align-self: end; width: auto; }
-}
-
-/* Phone list cards: one amount when the balance due is the whole total (a
- * draft, an unpaid invoice) or nothing is owed (paid, void); "Balance" and
- * "Total" labels when part has been paid. The invoice number stretches its
- * tap area over the whole card (the checkbox stays on top). */
-@media (max-width: 760px) {
-  .invoice-table--list tbody tr[data-amounts="single"] td[data-label="Balance due"] { display: none; }
-  .invoice-table--list tbody tr[data-amounts="single"] td[data-label="Amount"] {
-    grid-row: 2;
-    font-size: inherit;
-    color: token(text-primary);
-    font-weight: token(fw-medium);
-  }
-  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Balance due"]::before,
-  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Amount"]::before {
-    margin-right: 4px;
-    font-size: token(fs-xs);
-    font-weight: token(fw-regular);
-    color: token(text-tertiary);
-  }
-  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Balance due"]::before { content: "Balance"; }
-  .invoice-table--list tbody tr[data-amounts="split"] td[data-label="Amount"]::before { content: "Total"; }
-
-  .invoice-table--list tbody tr { position: relative; }
-  .invoice-table--list .invoice-table__link::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-  }
-  .invoice-table--list .invoice-table__check { position: relative; z-index: 1; }
 }
 
 @media (pointer: coarse) {
@@ -1164,15 +1010,6 @@ th.num .invoice-sort { flex-direction: row-reverse; }
   max-height: var(--invoice-preview-max-height, 100dvh);
 }
 
-/* Items and customers beside an open invoice panel. */
-.invoice-table--catalog td { overflow-wrap: break-word; }
-@media (min-width: 761px) {
-  @container (max-width: 760px) {
-    .invoice-table--catalog tr > :is(:nth-child(2), :nth-child(3)),
-    .invoice-table--customers tr > :is(:nth-child(2), :nth-child(3), :nth-child(5)) { display: none; }
-  }
-}
-
 /* Set a final price or total, taxes included. */
 .invoice-final-price {
   display: flex;
@@ -1190,13 +1027,8 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 .invoice-builder__summary > .invoice-final-price__open { grid-column: 1 / -1; }
 .invoice-builder__summary > .invoice-final-price__open { justify-self: start; }
 
-/* Customers */
-.invoice-customers__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: token(s-2); margin-left: auto; }
-.invoice-customers__search { position: relative; display: flex; align-items: center; color: token(text-secondary); }
-.invoice-customers__search svg { position: absolute; left: token(s-2); pointer-events: none; }
-.invoice-customers__search .input { width: 200px; padding-left: calc(#{token(s-2)} + 20px); }
-/* Phones: the tab already says Customers. Search and Add share one row, and a
- * panel's single head button stays beside its title. */
+/* Phones: the tab already says Customers, and a panel's single head button
+ * stays beside its title. */
 @media (max-width: 560px) {
   .invoice-customers__intro {
     position: absolute;
@@ -1206,17 +1038,6 @@ th.num .invoice-sort { flex-direction: row-reverse; }
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .invoice-customers__tools { flex: 1 1 100%; flex-wrap: nowrap; margin-left: 0; }
-  .invoice-customers__tools > :first-child:not(.btn) { flex: 1 1 auto; min-width: 0; }
-  .invoice-customers__search .input { width: 100%; }
   .invoice-card > .card__head:has(> .btn) { flex-wrap: nowrap; align-items: flex-start; }
   .invoice-card > .card__head:has(> .btn) > :first-child { flex: 1 1 auto; min-width: 0; }
-}
-/* Laptop widths: keep the row actions in view. The card layout takes over on phones. */
-@media (min-width: 761px) and (max-width: 1360px) {
-  .invoice-table--customers tr > :nth-child(5) { display: none; }
-  .invoice-table--customers .invoice-table__sub { max-width: 180px; }
-  .table:is(.invoice-table--customers, .invoice-table--catalog) :is(thead th, tbody td) { padding-inline: token(s-2); }
-  .invoice-table--customers .invoice-table__primary,
-  .invoice-table--customers .invoice-table__customer { min-width: 0; }
 }

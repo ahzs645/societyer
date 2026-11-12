@@ -826,30 +826,6 @@ $tap-block: (
       border-right: 0;
     }
   }
-  // Invoice cards: at true text sizes "RCS-0025 Recurring" no longer fits
-  // beside the status on a 320px phone — let the tag drop under the number.
-  .invoice-table--list td.invoice-table__number {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px token('s-1');
-    white-space: normal;
-  }
-  // Invoices: the tab strip shares its row with a search icon.
-  .invoice-tabs-row {
-    display: flex;
-    align-items: center;
-    gap: token('s-2');
-    margin-bottom: token('s-2');
-    > .tabs {
-      flex: 1 1 auto;
-      min-width: 0;
-      margin-bottom: 0;
-    }
-    > .btn {
-      flex: none;
-    }
-  }
 }
 
 // RecordTable card body (phones, e.g. Assets): the table's row model drawn

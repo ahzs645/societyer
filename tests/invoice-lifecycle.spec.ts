@@ -53,7 +53,8 @@ test("correct an unsent unposted invoice in place and retain its previous PDF", 
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Invoice saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Invoices", exact: true }).click();
-  await page.getByRole("button", { name: issued.number, exact: true }).click();
+  // The list's number opens the invoice: its name cell on wide screens, the whole card (named from the number) on phones.
+  await page.getByRole("button", { name: new RegExp(`^${issued.number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`) }).first().click();
   await expect(drawer).toBeVisible();
   await expect(drawer).toContainText("Never sent; correct the service charge");
   const downloading = page.waitForEvent("download");
