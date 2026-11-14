@@ -141,12 +141,15 @@
   }
 }
 
-// The list's toolbar belongs to the catalog tabs above it, so it sits close
-// under them at every width: the tabs' usual 16px gap, plus the reader's own
-// top margin and the toolbar's padding, read as an empty band between the two
-// rows. The analytics, which follows the same tabs, keeps the usual gap.
+// The list's toolbar belongs to the catalog tabs above it, so the queue sits
+// 8px under them at every width, a little closer than the tabs sit to the
+// page header (12px), so the two rows read as one control. The tabs' usual
+// 16px gap, the reader's own top margin and the toolbar's top padding (it
+// isn't sticky here) used to stack into an empty band. The analytics, which
+// follows the same tabs, keeps the usual gap.
 .procurement-reader__list > .tabs:has(+ .procurement-reader__layer:not(.is-covered)) { margin-bottom: token('s-2'); }
 .procurement-reader__list .procurement-reader { margin-top: 0; }
+.procurement-reader__list .procurement-reader > .record-table__toolbar { padding-top: 0; }
 
 // ---------------------------------------------------------------------------
 // Rows: the title on up to two lines, the buyer under it, the new dot.
