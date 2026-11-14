@@ -4,7 +4,9 @@
 // (NoticeTable.tsx).
 
 // ---------------------------------------------------------------------------
-// Queue states: a segmented row with counts; phones scroll it sideways.
+// Queue states: the app's segmented control at the head of the toolbar, or,
+// where it doesn't fit beside the toolbar's buttons, one view-picker button
+// with a menu (QueueBar decides by measuring).
 // ---------------------------------------------------------------------------
 .record-table__toolbar-left--leading {
   flex: 0 1 auto;
@@ -19,51 +21,36 @@
 }
 
 .procurement-queue {
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 2px;
   min-width: 0;
   max-width: 100%;
-  padding: 2px;
-  border: 1px solid token('border-color-medium');
-  border-radius: token('r-sm');
-  background: token('bg-secondary');
-  overflow-x: auto;
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
 }
 
-.procurement-queue__state {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: token('text-secondary');
-  font: inherit;
-  font-size: token('fs-sm');
-  font-weight: token('fw-medium');
-  white-space: nowrap;
-  cursor: pointer;
+// The segmented row is only shown where it fits, so it never scrolls or clips
+// (the phone rule for segmented controls would otherwise make it a scroller).
+.procurement-queue__row {
+  flex: none;
+  max-width: none;
+  overflow: visible;
+}
+.procurement-queue__row .segmented__btn { white-space: nowrap; }
 
-  &:hover { color: token('text-primary'); background: token('bg-transparent-light'); }
-  &:focus-visible { outline: 2px solid token('accent'); outline-offset: 1px; }
-  &.is-active {
-    color: token('text-primary');
-    background: token('bg-panel');
-    border-color: token('border-color-medium');
-    box-shadow: token('shadow-sm');
+// Mouse and trackpad: the row is the search field's height (28px), as the
+// view pickers of other lists are. Touch keeps the segmented control's touch
+// scale (_control-density.scss).
+@media (pointer: fine) {
+  .procurement-queue__row {
+    gap: 2px;
+    padding: 1px;
+    > .segmented__btn {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 10px;
+    }
   }
-}
-
-.procurement-queue__count {
-  color: token('text-tertiary');
-  font-variant-numeric: tabular-nums;
-  .is-active > & { color: token('text-secondary'); }
 }
 
 .procurement-queue__fresh {
@@ -74,12 +61,56 @@
   font-size: token('fs-xs');
   font-weight: token('fw-semibold');
   line-height: 18px;
+  white-space: nowrap;
 }
 
+// "More views" (or the view chosen there): a menu button at the row's end.
 .procurement-queue__more {
-  max-width: 260px;
-  > .procurement-queue__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 240px;
+  > .procurement-queue__more-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   > svg { flex: 0 0 auto; color: token('text-tertiary'); }
+}
+
+// The folded form: the state on show with its count, as other lists' view pickers.
+.procurement-queue__picker {
+  min-width: 0;
+  max-width: 100%;
+  > .record-table__view-button {
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+    > svg { flex: none; color: token('text-tertiary'); }
+  }
+  .record-table__view-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.procurement-queue__menu-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.procurement-queue__menu-spacer {
+  display: inline-block;
+  width: 14px;
+}
+
+// The row at its natural width, measured out of sight.
+.procurement-queue__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  > .segmented { width: max-content; max-width: none; }
 }
 
 // Table, Board and Calendar: named beside their icons where the toolbar has the
@@ -96,31 +127,14 @@
   }
 }
 
-// Phones: one row, the pills scrolling sideways beside Search, Filter and View options.
+// Phones: the view picker leads the row, beside Search, Filter and View options.
 @media (max-width: 560px) {
   .record-table__toolbar-left--leading { flex: 1 1 0; }
-  .procurement-queue {
-    @include scroll-fade;
-    gap: 6px;
+  .procurement-queue > .procurement-queue__picker {
     padding: 0;
     border: 0;
-    border-radius: 0;
     background: none;
   }
-  .procurement-queue__state {
-    height: token('control-h-touch');
-    padding: 0 12px;
-    border-color: token('border-color-medium');
-    border-radius: token('r-pill');
-    background: token('bg-primary');
-    &.is-active {
-      border-color: token('accent');
-      background: token('accent-soft');
-      color: token('accent');
-      box-shadow: none;
-    }
-  }
-  .procurement-queue__more { max-width: 200px; }
   // The first card starts right under the toolbar.
   .procurement-reader__list > .tabs { margin-bottom: token('s-2'); }
   .procurement-reader__list .procurement-reader { margin-top: 0; }

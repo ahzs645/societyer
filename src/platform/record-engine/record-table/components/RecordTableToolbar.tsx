@@ -114,6 +114,7 @@ export function RecordTableToolbar({
   searchPlaceholder,
   hideTitle = false,
   leading,
+  compactTools = false,
   viewTypeNames,
 }: {
   icon?: ReactNode;
@@ -179,6 +180,14 @@ export function RecordTableToolbar({
    * phones too, beside Search, Filter and View options.
    */
   leading?: ReactNode;
+  /**
+   * Show the right-hand buttons (Search, Ask, Filter, Sort, Options) as
+   * icons, named by tooltip and to screen readers, so a `leading` switcher
+   * that needs the row's room keeps it on laptop-width screens. The page
+   * decides (the procurement queue measures). Unsaved-view buttons keep
+   * their words.
+   */
+  compactTools?: boolean;
   /**
    * Names for the view-type switch (Table, Board, Calendar) shown beside its
    * icons and used as their tooltips, for lists whose board and calendar mean
@@ -441,19 +450,20 @@ export function RecordTableToolbar({
       }
       data-record-table-filter-trigger=""
       aria-label={`${t("common.filter", "Filter")}${filterCount > 0 ? ` · ${filterCount}` : ""}`}
+      title={compactTools ? `${t("common.filter", "Filter")}${filterCount > 0 ? ` · ${filterCount}` : ""}` : undefined}
       aria-haspopup="dialog"
       onClick={onOpenFilter}
     >
       <Filter size={12} />
       <span>{t("common.filter", "Filter")}{filterCount > 0 ? ` · ${filterCount}` : ""}</span>
-      {isPhone && filterCount > 0 && <b className="record-table__toolbar-badge" aria-hidden="true">{filterCount}</b>}
+      {(isPhone || compactTools) && filterCount > 0 && <b className="record-table__toolbar-badge" aria-hidden="true">{filterCount}</b>}
     </button>
   );
 
   const setChipsSlot = useCallback((node: HTMLDivElement | null) => handle.get().setChipsSlot(node), [handle]);
 
   return (
-    <div className="record-table__toolbar" ref={toolbarRef}>
+    <div className={`record-table__toolbar${compactTools ? " record-table__toolbar--compact-tools" : ""}`} ref={toolbarRef}>
       <div className={`record-table__toolbar-left${leading ? " record-table__toolbar-left--leading" : ""}`}>
         {leading ? leading : isPhone && hideViewPickerOnPhone ? (
           <div className="record-table__title record-table__title--count" aria-live="polite">
@@ -899,12 +909,14 @@ export function RecordTableToolbar({
           }
           ref={sortButtonRef}
           aria-label={`${t("common.sort", "Sort")}${sorts.length > 0 ? ` · ${sorts.length}` : ""}`}
+          title={compactTools ? `${t("common.sort", "Sort")}${sorts.length > 0 ? ` · ${sorts.length}` : ""}` : undefined}
           aria-haspopup="dialog"
           aria-expanded={sortMenuOpen}
           onClick={() => setSortMenuOpen((x) => !x)}
         >
           <ArrowDownUp size={12} />
           <span>{t("common.sort", "Sort")}{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
+          {compactTools && sorts.length > 0 && <b className="record-table__toolbar-badge" aria-hidden="true">{sorts.length}</b>}
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 

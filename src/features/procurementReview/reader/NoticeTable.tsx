@@ -456,6 +456,8 @@ export function NoticeTable({
 
   // The BC Bid filters as the filter editor is changing them; null while they are as applied.
   const [sourceDraft, setSourceDraft] = useState<BcBidSourceFilters | null>(null);
+  // The queue's row fits on a laptop-width toolbar with the buttons as icons (QueueBar).
+  const [compactTools, setCompactTools] = useState(false);
   const [codeInvalid, setCodeInvalid] = useState(false);
   const closeFilters = () => {
     setFiltering(false);
@@ -566,6 +568,7 @@ export function NoticeTable({
           onOpenFilter={() => (filtering ? closeFilters() : setFiltering(true))}
           extraFilterCount={sourceChips.length}
           viewTypeNames={VIEW_TYPE_NAMES}
+          compactTools={compactTools}
           leading={
             offersViews && onChangeView ? (
               <QueueBar
@@ -575,6 +578,7 @@ export function NoticeTable({
                 counts={counted?.counts}
                 fresh={counted?.newToReview ?? 0}
                 onChange={onChangeView}
+                onCompactTools={setCompactTools}
               />
             ) : undefined
           }
