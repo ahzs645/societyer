@@ -24,6 +24,8 @@ export type MenuItem = {
   label: ReactNode;
   icon?: ReactNode;
   hint?: ReactNode;
+  /** Shown at the row's end and never cut off, such as a count; a long label wraps or shortens before it does. */
+  right?: ReactNode;
   disabled?: boolean;
   destructive?: boolean;
   onSelect?: () => void;
@@ -276,6 +278,7 @@ export function Menu({ trigger, sections, minWidth, align = "left", label, sheet
               icon={item.icon}
               label={item.label}
               hint={item.hint}
+              right={item.right}
               active={isActive}
               disabled={item.disabled}
               destructive={item.destructive}

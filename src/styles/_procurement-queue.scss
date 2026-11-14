@@ -95,6 +95,10 @@
   align-items: center;
   gap: 6px;
 }
+// A view's count at the end of its menu row, lined up down the menu.
+.procurement-queue__menu-count {
+  font-variant-numeric: tabular-nums;
+}
 .procurement-queue__menu-spacer {
   display: inline-block;
   width: 14px;

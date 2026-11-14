@@ -92,7 +92,7 @@ export function QueueBar({
     id,
     icon: id === current ? <Check size={14} aria-label="Showing" /> : <span className="procurement-queue__menu-spacer" />,
     label,
-    hint: counts?.[id] !== undefined ? count(counts[id] ?? 0) : undefined,
+    right: counts?.[id] !== undefined ? <span className="procurement-queue__menu-count">{count(counts[id] ?? 0)}</span> : undefined,
     onSelect: () => onChange(id),
   });
   const moreItems = more.map((id) => menuItem(id, noticeViewName(id)));

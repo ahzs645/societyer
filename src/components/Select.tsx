@@ -17,6 +17,11 @@ export type SelectOption<T extends string = string> = {
   label: string;
   icon?: ReactNode;
   hint?: string;
+  /**
+   * Other words the search should find this option by, which the label
+   * doesn't show: an older name, an abbreviation ("RFQ"). Never displayed.
+   */
+  keywords?: string;
   disabled?: boolean;
   /**
    * When set, the option's label renders as a colored `<Tag />` inside
@@ -161,11 +166,10 @@ export function Select<T extends string>({
   const anyTagged = useMemo(() => options.some((o) => o.color), [options]);
   const renderedSearchable = searchable ?? (anyTagged || (isBottomSheet && options.length > SHEET_SEARCH_MIN_ITEMS));
 
-  const filtered = useMemo(() => {
-    if (!renderedSearchable || !query.trim()) return options;
-    const q = query.toLowerCase();
-    return options.filter((o) => o.label.toLowerCase().includes(q));
-  }, [options, query, renderedSearchable]);
+  const filtered = useMemo(
+    () => (renderedSearchable ? searchOptions(options, query) : options),
+    [options, query, renderedSearchable],
+  );
 
   const visibleItems: (SelectOption<T> | { value: ""; label: string; _clear: true })[] = useMemo(() => {
     // The clear row only earns its place when there is something to clear,
@@ -519,4 +523,38 @@ export function Select<T extends string>({
         : null}
     </>
   );
+}
+
+/**
+ * The options a search finds, best first. Every word typed has to appear in
+ * the label or the option's `keywords`, in any order, so "proposal request"
+ * finds "Request for Proposal" and "quotation" finds an option that lists it
+ * as a keyword. Best first: labels that start with what was typed, then
+ * labels with words that start with each word typed, then labels that merely
+ * contain the words, then whole-word matches in the keywords, then anything
+ * else. Equal matches put the shorter label first (the closer fit), then keep
+ * the list's own order.
+ */
+export function searchOptions<O extends { label: string; keywords?: string }>(options: readonly O[], query: string): O[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...options];
+  const words = q.split(/\s+/);
+  const wordsOf = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const rank = (option: O): number => {
+    const label = option.label.toLowerCase();
+    const keywords = option.keywords?.toLowerCase() ?? "";
+    if (!words.every((word) => label.includes(word) || keywords.includes(word))) return -1;
+    if (label.startsWith(q)) return 0;
+    const labelWords = wordsOf(label);
+    if (words.every((word) => labelWords.some((part) => part.startsWith(word)))) return 1;
+    if (words.every((word) => label.includes(word))) return 2;
+    const keywordWords = [...labelWords, ...wordsOf(keywords)];
+    if (words.every((word) => keywordWords.some((part) => part.startsWith(word)))) return 3;
+    return 4;
+  };
+  return options
+    .map((option, index) => ({ option, index, rank: rank(option) }))
+    .filter((entry) => entry.rank >= 0)
+    .sort((a, b) => a.rank - b.rank || a.option.label.length - b.option.label.length || a.index - b.index)
+    .map((entry) => entry.option);
 }

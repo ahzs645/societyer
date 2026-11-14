@@ -23,7 +23,7 @@ import { HISTORICAL_TYPE_PREFIX, currentTypeOf, historicalTypeCode, historicalTy
 import type { ListRow } from "./source";
 import { CommodityField } from "./filters/CommodityField";
 
-type Option = { value: string; label: string; hint?: string };
+type Option = { value: string; label: string; hint?: string; keywords?: string };
 
 /** "April 2015 – December 2022", from the reference file's own range. */
 const HISTORICAL_SPAN = [historical.from, historical.to]
@@ -43,13 +43,23 @@ function crosswalkHint(code: string): string {
   return `Also pre-2023: ${[...(exact ? ["this type"] : []), ...others].join(", ")}`;
 }
 
+/**
+ * What the type search also finds a current type by: the pre-2023 names
+ * crosswalked to it and the codes BC Bid uses, so "Quotation" finds
+ * Invitation to Quote and "SRFP" finds Request for Proposal.
+ */
+function crosswalkKeywords(code: string): string {
+  const matches = historicalTypesOf(code);
+  return [code, ...matches.flatMap((match) => [match.code, HISTORICAL_TITLES.get(match.code) ?? ""])].filter(Boolean).join(" ");
+}
+
 /** Pre-2023 types without a current equivalent are picked by their reference id (`historicalType`). */
 const PRE_2023 = "pre-2023:";
 const TYPE_OPTIONS: Option[] = [
-  ...current.types.map((type) => ({ value: type.code, label: type.title, hint: crosswalkHint(type.code) })),
+  ...current.types.map((type) => ({ value: type.code, label: type.title, hint: crosswalkHint(type.code), keywords: crosswalkKeywords(type.code) })),
   ...historical.types
     .filter((type) => !currentTypeOf(type.code))
-    .map((type) => ({ value: PRE_2023 + type.code, label: type.title, hint: `Pre-2023 only (${HISTORICAL_SPAN})` })),
+    .map((type) => ({ value: PRE_2023 + type.code, label: type.title, hint: `Pre-2023 only (${HISTORICAL_SPAN})`, keywords: type.code })),
 ];
 const INDUSTRY_OPTIONS: Option[] = reference.industryCategories.map((category) => ({ value: category.title, label: category.title }));
 /** Two places share a name (Cariboo is an economic region and a regional district), so each says which it is. */
