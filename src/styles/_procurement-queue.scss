@@ -187,10 +187,6 @@
   vertical-align: middle;
 }
 
-// The split view's one-column list says when each notice closes and how it's classified.
-.procurement-queue__split-meta { display: none; }
-.procurement-queue__split-class { color: token('text-secondary'); }
-
 // The row J/K moved to.
 .procurement-reader .record-table__row:has(> .record-table__cell--focused) > .record-table__cell {
   background: linear-gradient(token('bg-selected-alpha'), token('bg-selected-alpha')), token('bg-panel');

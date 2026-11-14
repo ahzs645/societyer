@@ -18,7 +18,6 @@ import {
 } from "../../../platform/record-engine/record-table";
 import { Badge } from "../../../components/ui";
 import { shortSourceDate } from "../lib/notice";
-import { triageLabel } from "../../../../shared/procurementTriage";
 import type { NoticeRow } from "../../../../shared/procurementNoticeRow";
 import { DocumentsCell, DocumentsCount } from "./DocumentsCell";
 import { useReaderNavigation } from "./routes";
@@ -55,7 +54,6 @@ function NoticeTitle({ row, fresh, buyerFixed }: { row: NoticeRow & Partial<Tria
     state.columns.some((column) => column.field.name === "organization" && column.isVisible),
   );
   const buyer = !buyerFixed && !buyerColumnShown ? row.organization : "";
-  const classification = row.classification ? triageLabel(row.classification) : "";
   return (
     <span className="procurement-queue__title">
       <span className="procurement-queue__title-text">
@@ -63,15 +61,6 @@ function NoticeTitle({ row, fresh, buyerFixed }: { row: NoticeRow & Partial<Tria
         {row.title}
       </span>
       {buyer && <span className="procurement-queue__buyer">{buyer}</span>}
-      {row.kind !== "award" && (
-        <span className="procurement-queue__split-meta" aria-hidden="true">
-          <span className="procurement-reader__when" data-state={row.state}>
-            {row.whenText || "No closing date"}
-            {row.relative && <small> · {row.relative}</small>}
-          </span>
-          {classification && <span className="procurement-queue__split-class" data-classification={row.classification}>{classification}</span>}
-        </span>
-      )}
     </span>
   );
 }

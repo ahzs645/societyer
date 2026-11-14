@@ -25,7 +25,7 @@ import { NoticePanelContext, NOTICE_PARAM, SECTION_PARAM, canonicalReaderParams,
 import { ReaderSourceContext, type ReaderSource } from "./source";
 import { ReaderTriageContext, type ReaderTriage } from "./triage";
 import { ListOrderContext, createListOrderStore } from "./listOrder";
-import { SplitViewContext } from "./splitView";
+import { NoticePanelOpenContext } from "./noticePanelOpen";
 
 /** Reference data (taxonomy terms and the like) is published too, but isn't something a reviewer browses. */
 const KINDS: { id: NoticeKind; label: string }[] = [
@@ -104,9 +104,9 @@ function ReaderLayers({ source, header }: { source: ReaderSource; header: ReactN
           />
           {/* The list stays mounted under the analytics too, so going back keeps its rows and place. */}
           <Layer covered={analytics}>
-            <SplitViewContext.Provider value={Boolean(notice) && !party && !analytics}>
+            <NoticePanelOpenContext.Provider value={Boolean(notice) && !party && !analytics}>
               <CatalogBrowser key={kind} kind={kind} />
-            </SplitViewContext.Provider>
+            </NoticePanelOpenContext.Provider>
           </Layer>
           {analytics && <ProcurementAnalytics />}
         </Layer>

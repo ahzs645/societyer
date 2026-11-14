@@ -68,7 +68,7 @@ import { TRIAGE_FIELDS, joinTriage, useTriageEditing, type TriagedRow } from "./
 import { ListShortcuts, PublishListOrder, useCells, usePhoneCard } from "./noticeCells";
 import { newSince, usePreviousVisit } from "./lastVisit";
 import { QueueBar } from "./QueueBar";
-import { useSplitView } from "./splitView";
+import { useNoticePanelOpen } from "./noticePanelOpen";
 import {
   OPEN_VIEWS,
   availableView,
@@ -441,7 +441,7 @@ export function NoticeTable({
   const [filtering, setFiltering] = useState(false);
   const isPhone = useIsBottomSheet();
   const places = readerPlaces(nav.params);
-  const splitView = useSplitView();
+  const noticePanelOpen = useNoticePanelOpen();
   const openKey = places.notice;
 
   // This person's last state of each view, kept in this browser (as RecordListTable does).
@@ -498,7 +498,7 @@ export function NoticeTable({
         <RecordTable
           fillViewport
           // Beside an open notice (the split view), stepping to the next notice keeps its row in sight.
-          followHighlight={splitView}
+          followHighlight={noticePanelOpen}
           onEndReached={onEndReached}
           listFooter={footer}
           loading={loading || serverLoading}
