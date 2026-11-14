@@ -557,7 +557,7 @@ export const DOCUMENT_TIP_NAMES = 8;
 /**
  * What the list's paperclip tooltip names: the published files, and the files
  * the notice links to that weren't downloaded. The latter are matched against
- * every stored file, as the notice's Documents tab does, so they are only
+ * every stored file, as the notice's Documents section does, so they are only
  * named when `complete` (all stored files are known).
  */
 export function documentTipNames(stored: readonly DocumentListing[], rawData: unknown, complete: boolean) {

@@ -127,7 +127,7 @@ export function useReaderNavigation() {
     params,
     /** Whether Back steps back through history (the reader opened this place) rather than going to its parent. */
     pushed,
-    /** A notice over whatever is showing; `tab` opens one of its tabs ("documents", "review"). */
+    /** A notice over whatever is showing; `tab` scrolls it to a section ("documents", or "review" for the decision panel). */
     openNotice: useCallback((recordKey: string, tab?: "documents" | "review") => go({ [NOTICE_PARAM]: recordKey, tab: tab ?? null }), [go]),
     /** A buyer (or issued-for organisation) page; opened from a notice, it takes the notice's place over the list. */
     openParty: useCallback((field: PartyField, name: string) => go(partyPatch(field, name)), [go]),

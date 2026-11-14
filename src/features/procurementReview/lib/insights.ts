@@ -4,7 +4,7 @@
  * The opportunity figures read the list rows; the decision figures follow
  * Zoer's Decision insights (`dashboard/review-workspace/Insights.tsx` and
  * `home-data.ts`) over the published review rows, decoded the way a notice's
- * Review tab decodes them (review.ts). AI suggestions are counted apart from
+ * decision panel decodes them (review.ts). AI suggestions are counted apart from
  * the decisions people recorded and never stand in for one.
  */
 import type { CatalogReviewRow, ListRow } from "../reader/source";

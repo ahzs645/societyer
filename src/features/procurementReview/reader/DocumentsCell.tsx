@@ -4,7 +4,7 @@
  * focusing it names them, and separately the files the notice links to that
  * weren't downloaded; both are read only once the tooltip opens, and the
  * hosted reader reads just the names (convex/procurementReview.ts documentTip). Clicking it
- * opens the notice's Documents tab.
+ * opens the notice at its Documents section.
  */
 import { useMemo } from "react";
 import { Paperclip } from "lucide-react";
