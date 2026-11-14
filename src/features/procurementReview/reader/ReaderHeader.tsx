@@ -4,13 +4,18 @@
  * keeps it with the history entry), and steps back to it, so that place comes
  * back at the same rows. From a pasted link it goes to the parent place.
  *
- * Back is an arrow on the title's row, to the left of the title and its
- * eyebrow ("Buyer"), so the header stays short. Where it leads is its tooltip
- * and its accessible label.
+ * Back says where it leads in words ("← Opportunities", "← District of
+ * Saanich") on a row of its own above the title, where a page can put more
+ * of its own navigation (the notice's previous and next). On phones it is an
+ * arrow on the title's row, so the header stays short; where it leads is the
+ * arrow's tooltip and accessible label. A page with its own app bar (the
+ * notice on a phone) leaves Back out here.
  */
 import type { MouseEvent, ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "../../../pages/_helpers";
+import { mobileCardMediaQuery } from "../../../lib/breakpoints";
+import { useMediaQuery } from "../../../lib/useSheetDrag";
 import { useReaderNavigation } from "./routes";
 
 /** A click the page handles itself; with a modifier or another button the browser opens the link's href (a new tab or window). */
@@ -23,6 +28,8 @@ export function ReaderHeader({
   eyebrow,
   subtitle,
   actions,
+  back = "auto",
+  trailing,
 }: {
   title: ReactNode;
   /** Not a registered route, so the header shows no icon tile beside a long title. */
@@ -30,36 +37,59 @@ export function ReaderHeader({
   eyebrow?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  /**
+   * How Back shows: "words" on its own row, "icon" as an arrow beside the
+   * title, "none" when the page shows Back itself; "auto" (the default) is
+   * words, or the arrow on phones.
+   */
+  back?: "auto" | "words" | "icon" | "none";
+  /** More navigation on Back's row, at its end (the notice's previous and next). Shown with words only. */
+  trailing?: ReactNode;
 }) {
+  const phone = useMediaQuery(mobileCardMediaQuery);
+  const style = back === "auto" ? (phone ? "icon" : "words") : back;
   return (
-    <PageHeader
-      title={title}
-      routeKey={routeKey}
-      breadcrumbs={false}
-      eyebrow={eyebrow}
-      subtitle={subtitle}
-      actions={actions}
-      leading={<ReaderBackLink />}
-    />
+    <>
+      {style === "words" && (
+        <div className="procurement-back-row">
+          <ReaderBackLink words />
+          {trailing}
+        </div>
+      )}
+      <PageHeader
+        title={title}
+        routeKey={routeKey}
+        breadcrumbs={false}
+        eyebrow={eyebrow}
+        subtitle={subtitle}
+        actions={actions}
+        leading={style === "icon" ? <ReaderBackLink /> : undefined}
+      />
+    </>
   );
 }
 
-/** Back to the place this page was opened from. Its href is that place, for a middle-click or a long-press. */
-function ReaderBackLink() {
+/**
+ * Back to the place this page was opened from: an arrow, or with `words` the
+ * arrow and the place's name. Its href is that place, for a middle-click or a
+ * long-press.
+ */
+export function ReaderBackLink({ words = false }: { words?: boolean }) {
   const nav = useReaderNavigation();
   return (
     <a
-      className="btn btn--ghost btn--icon procurement-back"
+      className={words ? "btn btn--ghost btn--sm procurement-back procurement-back--words" : "btn btn--ghost btn--icon procurement-back"}
       href={nav.backHref}
       aria-label={`Back to ${nav.backLabel}`}
-      title={`Back to ${nav.backLabel}`}
+      title={words ? undefined : `Back to ${nav.backLabel}`}
       onClick={(event) => {
         if (!plainClick(event)) return;
         event.preventDefault();
         nav.back();
       }}
     >
-      <ArrowLeft size={18} aria-hidden="true" />
+      <ArrowLeft size={words ? 14 : 18} aria-hidden="true" />
+      {words && <span className="procurement-back__label">{nav.backLabel}</span>}
     </a>
   );
 }

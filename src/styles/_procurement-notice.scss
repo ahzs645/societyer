@@ -1,1 +1,594 @@
-// Procurement reader: notice styles.
+@use "tokens" as *;
+
+// Procurement reader: the notice and award pages (reader/NoticePage.tsx and reader/notice/*),
+// and the reader's Back (ReaderHeader.tsx), which the buyer pages share.
+//
+// The notice lays itself out by its own width, not the window's (notice/layout.ts sets
+// `data-layout` on its root): `wide` puts the facts in a sticky rail beside the content,
+// `stacked` is one column, `narrow` is a phone, with an app bar at the top and an action
+// bar at the bottom. So the page reads the same at full width, in the list's ~800px pane
+// beside the list, and on a phone.
+
+// ---------------------------------------------------------------------------
+// Back, with words on its own row above the title ("← Opportunities"), and the page's
+// previous / next at the row's end. Phones keep the arrow on the title's row.
+
+.procurement-back-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  min-width: 0;
+  // The arrow lines up with the title's left edge.
+  margin: -6px 0 token("s-1") -8px;
+}
+.procurement-back {
+  color: token("text-secondary");
+  &:hover { color: token("text-primary"); }
+  &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: 1px; }
+}
+// The arrow alone, beside the title (phones; buyer pages).
+.procurement-back:not(.procurement-back--words) {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  margin-left: -8px;
+  padding: 0;
+  justify-content: center;
+  // Buttons size their icons at 14px; the page's one way back reads at a glance.
+  > svg { width: 18px; height: 18px; }
+  @media (max-width: 760px) {
+    > svg { width: 20px; height: 20px; }
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    margin-left: -10px;
+    color: token("text-primary");
+  }
+}
+.procurement-back--words {
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  font-weight: token("fw-medium");
+  > svg { flex: none; }
+}
+.procurement-back__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+// ‹ 3 of 7 ›
+.procurement-pager {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  &__position {
+    min-width: 4.5em;
+    color: token("text-tertiary");
+    font-size: token("fs-sm");
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The page.
+
+.procurement-notice {
+  &__badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token("s-2");
+    margin: -4px 0 token("s-4");
+    font-size: token("fs-sm");
+  }
+  &__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: token("s-4");
+    align-items: start;
+  }
+  &[data-layout="wide"] &__layout { grid-template-columns: minmax(0, 1fr) 18rem; }
+  &__main { display: flex; flex-direction: column; gap: token("s-4"); min-width: 0; }
+  // Facts and contact stay in view beside a long description or document list. A rail taller
+  // than the screen scrolls on its own rather than hiding its end.
+  &__side {
+    position: sticky;
+    top: token("s-4");
+    display: flex;
+    flex-direction: column;
+    gap: token("s-4");
+    min-width: 0;
+    max-height: calc(100dvh - 7rem);
+    overflow-y: auto;
+    // Room for the cards' ring and shadow, which the scroll box would clip.
+    margin: -4px;
+    padding: 4px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  &__no-description { margin: 0; font-size: token("fs-sm"); }
+
+  // Closes, Buyer and Type under the header where there is no rail.
+  &__strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: token("s-2") token("s-4");
+    margin: 0 0 token("s-4");
+    > div { min-width: 0; }
+    dt { color: token("text-tertiary"); font-size: token("fs-xs"); margin-bottom: 2px; }
+    dd { margin: 0; font-size: token("fs-sm"); font-weight: token("fw-medium"); overflow-wrap: anywhere; }
+  }
+
+  // A count in a section heading: "Documents 3".
+  &__count {
+    margin-left: 4px;
+    color: token("text-tertiary");
+    font-weight: token("fw-regular");
+    font-variant-numeric: tabular-nums;
+  }
+
+  // No documents: one line, not an empty card.
+  &__nodocs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    color: token("text-secondary");
+    font-size: token("fs-sm");
+    > svg { flex: none; color: token("text-tertiary"); }
+    a {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      color: token("accent");
+      border-radius: token("r-xs");
+      &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: 2px; }
+    }
+  }
+  &__nodocs-title { margin: 0; font-size: inherit; font-weight: token("fw-medium"); color: token("text-primary"); }
+
+  // Everything else about the notice, after the documents where there is no rail.
+  &__all { display: flex; flex-direction: column; gap: token("s-4"); min-width: 0; }
+  &__all-title { margin: 0; font-size: token("fs-md"); font-weight: token("fw-semibold"); }
+  &__all-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: token("s-4");
+    align-items: start;
+  }
+  // Phones: folded at the end of the page.
+  details#{&}__all {
+    gap: 0;
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: token("s-2");
+      min-height: token("control-h-touch");
+      padding: token("s-2") 0;
+      cursor: pointer;
+      list-style: none;
+      &::-webkit-details-marker { display: none; }
+      &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: 2px; border-radius: token("r-xs"); }
+    }
+    &[open] > summary .procurement-notice__all-chevron { transform: rotate(180deg); }
+  }
+  &__all-chevron { flex: none; color: token("text-tertiary"); transition: transform token("anim-fast") ease; }
+  &__all-body { display: flex; flex-direction: column; gap: token("s-4"); padding-top: token("s-2"); }
+
+  &__kv {
+    display: grid;
+    gap: token("s-3");
+    margin: 0;
+    > div { min-width: 0; }
+    dt, &-label { display: block; color: token("text-tertiary"); font-size: token("fs-xs"); margin-bottom: 2px; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    &--two { grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); }
+  }
+  // Without the rail the facts sit two-up (the labels are short).
+  &:not([data-layout="wide"]) &__facts &__kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  // A section of the facts card under them: its rule spans the card.
+  &__commodities {
+    border-top: 1px solid token("border");
+    font-size: token("fs-sm");
+    ul { margin: 0; padding-left: 1.1em; display: grid; gap: 2px; }
+  }
+
+  &__description {
+    margin: 0;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+    max-width: 75ch;
+  }
+
+  &__docs { list-style: none; margin: 0; padding: 0; }
+  &__doc {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token("s-2") token("s-3");
+    padding: token("s-2") 0;
+    & + & { border-top: 1px solid token("border"); }
+  }
+  &__doc-icon { flex: none; color: token("text-tertiary"); }
+  // Only on the source: the same row, a fainter icon, and "Open on …" for an action.
+  &__doc[data-state="elsewhere"] &__doc-icon { color: token("text-placeholder"); }
+  &__doc-name {
+    flex: 1 1 12rem;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    > span { overflow-wrap: anywhere; }
+    small { font-size: token("fs-xs"); }
+  }
+  &__doc-actions { display: flex; gap: 4px; margin-left: auto; }
+  &__doc-busy { flex-basis: 100%; }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: token("s-3") token("s-4");
+    margin: 0;
+    > div { min-width: 0; }
+    > div[data-long] { grid-column: 1 / -1; }
+    dt { color: token("text-tertiary"); font-size: token("fs-xs"); margin-bottom: 2px; }
+    dd { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+  }
+
+  // Each detail on one line, cut with "…"; the full value is in the tooltip.
+  &__person {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    font-size: token("fs-sm");
+    & + & { padding-top: token("s-3"); border-top: 1px solid token("border"); }
+  }
+  &__person-name { font-weight: token("fw-semibold"); }
+  &__line {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+    > svg { flex: none; }
+  }
+  &__line[href] {
+    border-radius: token("r-xs");
+    &:hover .procurement-notice__line-text { text-decoration: underline; text-underline-offset: 2px; }
+    &:focus-visible { outline: 2px solid token("accent"); outline-offset: 2px; }
+  }
+  &__line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  // The office address wraps (it is read, not scanned), with the pin beside its first line.
+  &__address {
+    align-items: flex-start;
+    color: token("text-secondary");
+    overflow-wrap: anywhere;
+    > svg { margin-top: 3px; }
+  }
+
+  // A buyer, issued-for or supplier name: a quiet underline says it opens their page.
+  &__party {
+    display: inline-flex;
+    flex-direction: column;
+    max-width: 100%;
+    color: inherit;
+    text-decoration: none;
+    border-radius: token("r-xs");
+    &:hover { color: token("accent"); }
+    &:focus-visible { outline: 2px solid token("accent"); outline-offset: 2px; }
+  }
+  &__party-name {
+    text-decoration: underline;
+    text-decoration-color: token("border-strong");
+    text-underline-offset: 3px;
+    .procurement-notice__party:hover & { text-decoration-color: currentColor; }
+  }
+  &__party-count { color: token("text-tertiary"); font-size: token("fs-xs"); }
+  .page__subtitle &__party { display: inline; }
+
+  // Phones: room under the last section for the action bar, and anchors clear of the app bar.
+  &[data-layout="narrow"] {
+    padding-bottom: 72px;
+    [id] { scroll-margin-top: 60px; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The decision panel (notice/DecisionPanel.tsx): our triage beside Zoer's verdict, side by
+// side once the panel itself is wide enough, otherwise one above the other.
+
+.card.procurement-decision {
+  padding: 0;
+}
+.procurement-decision {
+  container: notice-decision / inline-size;
+  &__halves {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    > * { min-width: 0; padding: token("s-4"); }
+    > * + * { border-top: 1px solid token("border"); }
+  }
+}
+@container notice-decision (min-width: 600px) {
+  .procurement-decision__halves[data-count="2"] {
+    grid-template-columns: minmax(15rem, 2fr) minmax(0, 3fr);
+    > * + * { border-top: 0; border-left: 1px solid token("border"); }
+  }
+}
+
+// Our triage (NoticeTriageBar.tsx). The controls are the shared Checkbox, Select and Button;
+// this only lays them out.
+.procurement-triage {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: token("s-3");
+  font-size: token("fs-sm");
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 token("s-3");
+  }
+  &__title { margin: 0; font-size: token("fs-sm"); font-weight: token("fw-semibold"); }
+  &__by { min-width: 0; font-size: token("fs-xs"); }
+  &__state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token("s-2") token("s-4");
+  }
+  &__state > .check-row { flex: none; width: auto; }
+  &__select { flex: 1 1 11rem; min-width: 0; max-width: 18rem; }
+  &__actions { display: flex; flex-wrap: wrap; gap: token("s-2"); }
+  &__archived { color: token("danger"); font-weight: token("fw-medium"); }
+  &__keys {
+    font-size: token("fs-xs");
+    kbd {
+      padding: 0 4px;
+      border: 1px solid token("border");
+      border-radius: token("r-xs");
+      background: token("bg-subtle");
+      font-family: inherit;
+      font-size: inherit;
+    }
+  }
+
+  // Phones: Reviewed beside the classification on one row, the action buttons filling the next.
+  @media (max-width: 760px) {
+    &__state { flex-wrap: nowrap; gap: token("s-3"); }
+    &__select { flex: 1 1 auto; max-width: none; }
+    &__actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      > * { min-width: 0; }
+      .btn { width: 100%; justify-content: center; }
+    }
+    &__actions[data-pair] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+}
+
+// Zoer's verdict (NoticeReview.tsx `ReviewVerdict`).
+.procurement-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-2");
+  font-size: token("fs-sm");
+  p { margin: 0; }
+  &__eyebrow { margin: 0; color: token("text-tertiary"); font-size: token("fs-xs"); font-weight: token("fw-regular"); }
+  &__title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token("s-2");
+    font-size: token("fs-lg");
+    font-weight: token("fw-semibold");
+    line-height: 1.3;
+    &[data-tone="success"] { color: token("success"); }
+    &[data-tone="warn"] { color: token("orange-11"); }
+    &[data-tone="danger"] { color: token("danger"); }
+  }
+  &__decision {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px token("s-2");
+    padding-bottom: token("s-2");
+    border-bottom: 1px solid token("border");
+  }
+  &__label { font-weight: token("fw-semibold"); }
+  &__note { flex-basis: 100%; }
+  // The five factors, each with a dot in its tone.
+  &__factors {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: token("s-2") token("s-4");
+    margin: 0;
+    dt { font-size: token("fs-xs"); color: token("text-tertiary"); }
+    dd { margin: 0; display: flex; align-items: flex-start; gap: 6px; font-weight: token("fw-medium"); }
+  }
+  &__dot { flex: none; width: 8px; height: 8px; margin-top: .45em; border-radius: 999px; background: token("text-placeholder"); }
+  [data-tone="success"] &__dot { background: token("success"); }
+  [data-tone="warn"] &__dot { background: token("warn"); }
+  [data-tone="danger"] &__dot { background: token("danger"); }
+  &__reasons { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; }
+  &__requirements a {
+    color: token("accent");
+    border-radius: token("r-xs");
+    &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: 2px; }
+  }
+  &__source { font-size: token("fs-xs"); }
+  &--none { justify-content: center; }
+}
+
+// The rest of Zoer's review (NoticeReview.tsx `ReviewDetails`).
+.procurement-review-card {
+  &__body { display: flex; flex-direction: column; gap: token("s-4"); }
+  &__block {
+    display: flex;
+    flex-direction: column;
+    gap: token("s-2");
+    p { margin: 0; }
+    & + & { padding-top: token("s-4"); border-top: 1px solid token("border"); }
+  }
+  &__line { display: flex; flex-wrap: wrap; align-items: center; gap: token("s-2"); }
+  &__source { margin: 0; font-size: token("fs-xs"); }
+  &__label { margin: 0; font-size: token("fs-xs"); font-weight: token("fw-semibold"); color: token("text-tertiary"); text-transform: uppercase; letter-spacing: .04em; }
+  &__list { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; }
+  &__tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  &__reqs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    li { display: flex; flex-direction: column; gap: 4px; padding: token("s-2") 0; }
+    li + li { border-top: 1px solid token("border"); }
+  }
+  &__req-meta { display: flex; flex-wrap: wrap; align-items: center; gap: token("s-2"); font-size: token("fs-sm"); }
+  &__block > .btn { align-self: flex-start; margin-left: -8px; }
+}
+
+// ---------------------------------------------------------------------------
+// Awards (notice/AwardParts.tsx).
+
+.procurement-award {
+  &__facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: token("s-3") token("s-4");
+    margin: 0;
+    > div { min-width: 0; }
+    dt { color: token("text-tertiary"); font-size: token("fs-xs"); margin-bottom: 2px; }
+    dd { margin: 0; font-size: token("fs-md"); font-weight: token("fw-medium"); font-variant-numeric: tabular-nums; }
+  }
+  // The supplier leads, on a row of its own.
+  &__supplier {
+    grid-column: 1 / -1;
+    dd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px token("s-2"); font-size: token("fs-lg"); font-weight: token("fw-semibold"); }
+  }
+  &__origin {
+    margin: token("s-3") 0 0;
+    padding-top: token("s-3");
+    border-top: 1px solid token("border");
+    font-size: token("fs-sm");
+  }
+  &__link {
+    color: token("text-primary");
+    font-weight: token("fw-medium");
+    text-decoration: underline;
+    text-decoration-color: token("border-strong");
+    text-underline-offset: 3px;
+    border-radius: token("r-xs");
+    &:hover { color: token("accent"); text-decoration-color: currentColor; }
+    &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: 2px; }
+  }
+}
+.procurement-related {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: token("s-4");
+  align-items: start;
+  &__list ul {
+    list-style: none;
+    margin: 0;
+    padding-block: token("s-1");
+    li { display: flex; flex-direction: column; gap: 2px; padding: token("s-2") 0; font-size: token("fs-sm"); }
+    li + li { border-top: 1px solid token("border"); }
+  }
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 0;
+    color: token("text-tertiary");
+    font-size: token("fs-xs");
+    font-variant-numeric: tabular-nums;
+    > span:not(.badge) + span:not(.badge)::before { content: "·"; margin: 0 6px; }
+    > .badge { margin-left: 6px; }
+  }
+  &__foot { padding-block: token("s-2"); .btn { margin-left: -8px; } }
+}
+
+// ---------------------------------------------------------------------------
+// Phones (notice/PhoneBars.tsx).
+
+// The app bar: sticks to the top of the page's scroller, edge to edge.
+.procurement-appbar {
+  // --appbar-inset is the page's top padding (PhoneBars.tsx): the bar starts at the page's top edge.
+  position: sticky;
+  top: calc(-1 * var(--appbar-inset, #{token("s-3")}));
+  z-index: token("z-sticky");
+  display: flex;
+  align-items: center;
+  gap: token("s-1");
+  min-height: 52px;
+  margin: calc(-1 * var(--appbar-inset, #{token("s-3")})) calc(-1 * var(--page-gutter, #{token("s-4")})) token("s-2");
+  padding: 0 calc(var(--page-gutter, #{token("s-4")}) - 10px);
+  background: token("bg-primary");
+  &[data-titled] { border-bottom: 1px solid token("border-color-light"); }
+  .procurement-back--words { min-height: 40px; margin-left: 0; }
+  &__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: token("fs-md");
+    font-weight: token("fw-semibold");
+  }
+  &__end { display: flex; flex: none; align-items: center; gap: 2px; margin-left: auto; }
+  .procurement-pager .btn { width: 40px; min-width: 40px; height: 40px; }
+}
+
+// The action bar: fixed above the bottom navigation (52px + the home indicator, which sit
+// at the screen's edge below 980px) and clear of the notch at the sides.
+.procurement-actionbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: token("z-bottom-nav");
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: token("s-2");
+  padding: token("s-2") max(#{token("s-4")}, env(safe-area-inset-right, 0px)) calc(#{token("s-2")} + env(safe-area-inset-bottom, 0px)) max(#{token("s-4")}, env(safe-area-inset-left, 0px));
+  background: token("bg-primary");
+  border-top: 1px solid token("border-color-light");
+  // Classify's words are short; the buyer's site takes the rest.
+  &[data-count="2"] { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  .select-trigger, &__open {
+    height: token("control-h-touch");
+    justify-content: center;
+    font-size: token("fs-md");
+    font-weight: token("fw-medium");
+  }
+  .select-trigger__label { flex: 0 1 auto; }
+  .select-trigger__placeholder { color: token("text-primary"); }
+  &__open {
+    gap: 6px;
+    min-width: 0;
+    > svg { flex: none; }
+  }
+  &__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 980px) {
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: token("s-2");
+  }
+  // Out of the way of the inspector and the navigation sheet, which cover the bottom bar too.
+  body:has(.inspector-host.is-open) &,
+  body:has(.app-shell.is-mobile-nav-open) & { display: none; }
+}
+// Toasts rise above the action bar rather than covering it.
+@media (max-width: 980px) {
+  body:has(.procurement-actionbar) .toast-stack {
+    bottom: calc(52px + 61px + env(safe-area-inset-bottom, 0px) + #{token("s-3")});
+  }
+}
