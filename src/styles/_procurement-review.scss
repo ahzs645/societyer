@@ -1,4 +1,5 @@
 @use "tokens" as *;
+@use "mixins" as *;
 
 // Procurement review: the page around the embedded Zoer review plugin.
 //
@@ -72,27 +73,49 @@ $zoer-theme: (
   max-width: 720px;
 }
 
-// The line under the title ("Updated today, 9:44 AM · read only") is short and says how fresh
-// the catalog is, so phones keep it (page subtitles are otherwise hidden there).
-@media (max-width: 768px) {
-  .procurement-reader__layer > .page__header .page__subtitle {
-    display: block;
-    font-size: token("fs-xs");
+// Beside the title: how fresh the catalog is (reader/CatalogFreshness.tsx), in place of an
+// "Updated …" line under it. The colour and the glyph both change, so the state doesn't rest on
+// colour alone; hovering or tapping it gives the time and what the state means.
+.procurement-freshness {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  vertical-align: middle;
+  &--fresh { color: token("success-text"); }
+  &--aging { color: token("warn-text"); }
+  &--stale { color: token("danger-text"); }
+  &:hover, &[aria-expanded="true"] { background: token("bg-hover"); }
+  &:focus-visible { outline: 2px solid token("accent"); outline-offset: 1px; }
+  @media (pointer: coarse), (max-width: 760px) {
+    position: relative;
+    @include tap-area;
   }
 }
-.procurement-review__summary {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 10px;
+.procurement-freshness__details {
+  display: grid;
+  gap: 2px;
+  max-width: 280px;
+  text-align: left;
 }
-.procurement-review__caveat {
+.procurement-freshness__state {
+  font-weight: token("fw-semibold");
+}
+.procurement-freshness__help {
+  opacity: 0.8;
+}
+.page__status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: token("orange-11");
-  font-weight: token("fw-medium");
-  white-space: nowrap;
+  flex: none;
 }
 // Behind the title's ⓘ: what the catalog is and when it was collected, published and put in service.
 .procurement-review__about {

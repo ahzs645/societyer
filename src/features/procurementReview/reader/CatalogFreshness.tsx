@@ -1,0 +1,103 @@
+/**
+ * How fresh the catalog is, as one small icon beside the page title in place
+ * of an "Updated …" line under it. Its colour and shape change with age:
+ * a check while it is current, a clock once it is a day or two old, a warning
+ * once Zoer seems to have stopped publishing. Hovering shows when it was
+ * updated; a click or tap opens the same words (so it works on touch), the
+ * way the title's ⓘ does. Unverified sources count as at least "getting old".
+ */
+import { useCallback, useRef, useState } from "react";
+import { CircleCheck, Clock, TriangleAlert } from "lucide-react";
+import { Tooltip } from "../../../components/Tooltip";
+import { ViewportPopover } from "../../../components/ViewportPopover";
+import { useProcurementClock } from "../lib/clock";
+import { exactWhen } from "./summary";
+
+export type Freshness = "fresh" | "aging" | "stale";
+
+/** Zoer publishes daily; a run that is a few hours late is still current. */
+const FRESH_FOR = 26 * 60 * 60 * 1000;
+/** After this the catalog has missed a few runs and may be missing new notices. */
+const STALE_AFTER = 72 * 60 * 60 * 1000;
+
+export function freshnessOf(publishedAt: string, now: number, unverified = false): Freshness | null {
+  const at = new Date(publishedAt).getTime();
+  if (Number.isNaN(at)) return null;
+  const age = now - at;
+  if (age > STALE_AFTER) return "stale";
+  if (age > FRESH_FOR || unverified) return "aging";
+  return "fresh";
+}
+
+/** "just now", "40 min ago", "7 h ago", "yesterday", "27 days ago": the catalog's age, always relative. */
+function ageOf(at: number, now: number): string {
+  const minutes = Math.max(0, Math.round((now - at) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.round(minutes / 60)} h ago`;
+  const days = Math.floor(minutes / (24 * 60));
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
+
+const ICONS = { fresh: CircleCheck, aging: Clock, stale: TriangleAlert };
+const STATE: Record<Freshness, string> = {
+  fresh: "Up to date",
+  aging: "A little behind",
+  stale: "Out of date",
+};
+const HELP: Record<Freshness, string> = {
+  fresh: "Zoer published this catalog within the last day.",
+  aging: "The catalog is a day or two old, so the newest notices may not be here yet.",
+  stale: "Zoer hasn't published for several days. New notices and changes are missing until it does.",
+};
+
+export function CatalogFreshness({
+  publishedAt,
+  readOnly = false,
+  unverified = false,
+}: {
+  publishedAt: string;
+  /** Says so in the details, for someone who can't record a triage here. */
+  readOnly?: boolean;
+  /** Some sources couldn't be verified in this publication. */
+  unverified?: boolean;
+}) {
+  const now = useProcurementClock();
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  const freshness = freshnessOf(publishedAt, now, unverified);
+  if (!freshness) return null;
+  const Icon = ICONS[freshness];
+  const since = ageOf(new Date(publishedAt).getTime(), now);
+  const label = `${STATE[freshness]}: catalog updated ${since}`;
+  const details = (
+    <div className="procurement-freshness__details">
+      <strong className="procurement-freshness__state">{STATE[freshness]}</strong>
+      <span>Updated {exactWhen(publishedAt)} ({since})</span>
+      <span className="procurement-freshness__help">{HELP[freshness]}</span>
+      {unverified && <span className="procurement-freshness__help">Some sources in this publication couldn't be verified.</span>}
+      {readOnly && <span className="procurement-freshness__help">Read only: you can't record a triage here.</span>}
+    </div>
+  );
+  return (
+    <>
+      <Tooltip content={details} disabled={open} delay={200} placement="bottom">
+        <button
+          ref={anchor}
+          type="button"
+          className={`procurement-freshness procurement-freshness--${freshness}`}
+          aria-label={label}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Icon size={15} aria-hidden="true" />
+        </button>
+      </Tooltip>
+      <ViewportPopover open={open} onClose={close} anchorRef={anchor} label="Catalog freshness" className="info-popover">
+        {details}
+      </ViewportPopover>
+    </>
+  );
+}

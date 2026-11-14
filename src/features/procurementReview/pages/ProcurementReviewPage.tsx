@@ -16,7 +16,8 @@ import { useConvexReaderSource } from "../reader/convexSource";
 import type { ReaderCatalog, ReaderSource } from "../reader/source";
 import { createHttpReaderSource, useCatalogAccess, type ServiceCatalog } from "../reader/httpSource";
 import { useWorkspaceTriage } from "../reader/triage";
-import { exactWhen, sinceWhen, updatedSummary } from "../reader/summary";
+import { exactWhen, sinceWhen } from "../reader/summary";
+import { CatalogFreshness } from "../reader/CatalogFreshness";
 import { useProcurementClock } from "../lib/clock";
 import { readLastCatalog, rememberCatalog } from "../lib/lastCatalog";
 
@@ -72,7 +73,8 @@ function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string;
   const canConfigure = loaded && can("settings:write");
   const header = <>
     <PageHeader title="Procurement review"
-      subtitle={<CatalogSummary catalog={source?.catalog} publication={publication} readOnly={loaded && !can("documents:write")} />}
+      subtitle={source ? undefined : NO_CATALOG_YET}
+      status={source && <CatalogStatus catalog={source.catalog} publication={publication} readOnly={loaded && !can("documents:write")} />}
       info={publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
       actions={canConfigure && !preview && !settings ? <button type="button" className="btn btn--ghost btn--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />
     {canConfigure && (preview || settings) && <CatalogSourceControls societyId={societyId} previewReady={Boolean(source) && !error} onClose={preview ? undefined : () => setSettings(false)} />}
@@ -102,7 +104,8 @@ function HostedProcurementReview() {
   const header = (
     <PageHeader
       title="Procurement review"
-      subtitle={<CatalogSummary catalog={catalog} publication={publication} readOnly={!can("documents:write")} />}
+      subtitle={catalog ? undefined : NO_CATALOG_YET}
+      status={catalog && <CatalogStatus catalog={catalog} publication={publication} readOnly={!can("documents:write")} />}
       info={publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
       actions={canConfigure && !settings && folder && (
         <Tooltip content="Snapshot folder">
@@ -128,13 +131,12 @@ function HostedProcurementReview() {
   );
 }
 
-/** Source coverage caveats are identical for Convex and the service reader. */
-function CatalogSummary({ catalog, publication, readOnly }: { catalog: ReaderCatalog | null | undefined; publication: PublicationStatus | undefined; readOnly: boolean }) {
-  if (!catalog) return <>Bid opportunities and awards published by Zoer.</>;
-  return <span className="procurement-review__summary">
-    <span>{updatedSummary(catalog.publishedAt, { readOnly })}</span>
-    {publication?.source && !publication.source.complete && <span className="procurement-review__caveat"><TriangleAlert size={12} aria-hidden="true" /> Some sources unverified</span>}
-  </span>;
+/** Under the title until a catalog is in service; after that the freshness icon beside the title says when it was updated. */
+const NO_CATALOG_YET = "Bid opportunities and awards published by Zoer.";
+
+/** The freshness icon beside the title; source coverage caveats are identical for Convex and the service reader. */
+function CatalogStatus({ catalog, publication, readOnly }: { catalog: ReaderCatalog; publication: PublicationStatus | undefined; readOnly: boolean }) {
+  return <CatalogFreshness publishedAt={catalog.publishedAt} readOnly={readOnly} unverified={Boolean(publication?.source && !publication.source.complete)} />;
 }
 
 /** When the catalog was collected, published and put in service: a short list, not a sentence of timestamps. */

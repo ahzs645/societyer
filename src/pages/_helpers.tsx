@@ -93,6 +93,7 @@ export function PageHeader({
   breadcrumbs,
   eyebrow,
   leading,
+  status,
 }: {
   /**
    * Breadcrumb trail. Omit to derive it from the route (detail pages get
@@ -115,6 +116,8 @@ export function PageHeader({
   eyebrow?: ReactNode;
   /** A control before the title, on its row, such as a detail page's Back arrow on phones. */
   leading?: ReactNode;
+  /** A small indicator after the title (and its ⓘ), on the same line, such as how fresh the page's data is. */
+  status?: ReactNode;
 }) {
   // Auto-resolve from the current location so every page reads its identity
   // from the registry, even ones that haven't been migrated. Registry wins
@@ -158,9 +161,9 @@ export function PageHeader({
         <div className="page__intro">
           {crumbs && crumbs.length > 0 && <Breadcrumbs items={crumbs} />}
           {eyebrow && <p className="page__eyebrow">{eyebrow}</p>}
-          {info ? (
-            // The ⓘ sits beside the heading, not inside it, so the heading's
-            // accessible name stays the page title.
+          {info || status ? (
+            // The ⓘ and any status sit beside the heading, not inside it, so
+            // the heading's accessible name stays the page title.
             <div className="page__title-row">
               <h1 className="page__title">
               {resolvedIcon && (
@@ -170,7 +173,8 @@ export function PageHeader({
               )}
               <span className="page__title-text">{displayTitle}</span>
             </h1>
-              <InfoPopover label={`About ${typeof displayTitle === "string" ? displayTitle : "this page"}`}>{info}</InfoPopover>
+              {info && <InfoPopover label={`About ${typeof displayTitle === "string" ? displayTitle : "this page"}`}>{info}</InfoPopover>}
+              {status && <span className="page__status">{status}</span>}
             </div>
           ) : (
             <h1 className="page__title">
