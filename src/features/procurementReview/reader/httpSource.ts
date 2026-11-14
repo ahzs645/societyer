@@ -6,7 +6,7 @@ import { readProcurementDocument, type StoredProcurementDocument } from "../lib/
 import { useProcurementClock, useProcurementDeadline } from "../lib/clock";
 import { analysisIdentity, normalizeAnalysisRequest, PROCUREMENT_METRIC_VERSION, PROCUREMENT_MAPPING_VERSION, type AnalysisRequest, type AnalysisResult, type AnalysisState } from "../../../../shared/procurementAnalytics";
 import { documentTipNames } from "../lib/notice";
-import { progressive, useProgressive, type CatalogReviewRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary } from "./source";
+import { progressive, useProgressive, type CatalogReviewRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary, type TaxonomyCodeList } from "./source";
 
 export type ServiceCatalog = ReaderCatalog & { publicationId: string };
 import { CatalogAccess } from "./catalogAccess";
@@ -28,6 +28,13 @@ export function createHttpReaderSource(access: CatalogAccess, catalog: ServiceCa
     return entry;
   };
   const reviews = progressive<{ rows: CatalogReviewRow[]; truncated: boolean }>(async emit => emit(await access.read(prefix + "/reviews")));
+  // A service from before the route answers 404: the picker falls back to the notices' own codes.
+  let taxonomy: Promise<TaxonomyCodeList | null> | null = null;
+  const loadTaxonomy = () => taxonomy ??= access.read<TaxonomyCodeList>(prefix + "/taxonomy/unspsc.json").catch((error: unknown) => {
+    if (error instanceof Error && error.message.includes("(404)")) return null;
+    taxonomy = null; // a passing failure can be retried by reopening the picker
+    throw error;
+  });
   return {
     catalog,
     warm: async kind => { await load(kind); },
@@ -46,6 +53,7 @@ export function createHttpReaderSource(access: CatalogAccess, catalog: ServiceCa
     prefetchRecord(key) { const store = notice(key); store.subscribe(() => {})(); },
     searchText: (query, kind, signal) => access.read(prefix + "/search?" + new URLSearchParams({ q: query, kind, limit: "100" }), { signal }),
     useAnalysis(request) { return useHttpAnalysis(access, prefix, request); },
+    loadTaxonomy,
     readDocument: (document, signal) => readProcurementDocument(access.societyId, document, signal),
     previewId: document => `procurement:${access.societyId}:${catalog.generation}:${document.documentKey}`,
   };

@@ -483,8 +483,9 @@ export function NoticeTable({
     () =>
       offersSourceFilters
         ? bcBidFilterChips(sourceFilters).map((chip) => ({
-            ...chip,
-            onRemove: () => update({ [chip.key]: null }),
+            key: chip.key,
+            label: chip.label,
+            onRemove: () => update(chip.patch),
           }))
         : [],
     [offersSourceFilters, sourceFilters, update],
@@ -592,6 +593,7 @@ export function NoticeTable({
                       setCodeInvalid(false);
                     }}
                     codeInvalid={codeInvalid}
+                    rows={rows}
                   />
                 ),
                 onApply: applySourceDraft,

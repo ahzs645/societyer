@@ -29,6 +29,14 @@ export type RecordList = { rows: ListRow[]; total: number; done: boolean };
 /** A published review row with the record it belongs to (for the catalog-wide insights). */
 export type CatalogReviewRow = ReviewRow & { recordKey: string };
 
+/**
+ * A commodity classification's full code list: [code, title] pairs, the
+ * parent implied by the code (UNSPSC 72101500 sits under 72100000, under
+ * 72000000). Licensed data: a signed-in reader's catalog service serves it;
+ * it is never bundled into the app.
+ */
+export type TaxonomyCodeList = { scheme: "UNSPSC"; version: string; terms: [code: string, title: string][] };
+
 export type ReaderSource = {
   catalog: ReaderCatalog;
   /** Publication metrics prepared once on the server; drill-downs return at most 50 records. */
@@ -56,6 +64,13 @@ export type ReaderSource = {
   useDocumentTip?: (recordKey: string) => DocumentTipNames | null | undefined;
   /** Every published review row for the record (bounded); `truncated` when there were more. */
   useReview(recordKey: string): { rows: ReviewRow[]; truncated: boolean } | undefined;
+  /**
+   * The full code list for the commodity code picker, read once when the
+   * picker first opens; null when this source has none (the demo, the older
+   * hosted reader, a service not yet serving it). The picker then lists the
+   * codes the loaded notices carry.
+   */
+  loadTaxonomy?: (scheme: "UNSPSC") => Promise<TaxonomyCodeList | null>;
   readDocument(document: StoredProcurementDocument, signal?: AbortSignal): Promise<ArrayBuffer>;
   /** Stable id for the shared file preview's cache. */
   previewId(document: StoredProcurementDocument): string;

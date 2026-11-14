@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { ALL_TABLES, canonical, validateExport } from "../../scripts/procurement/verify-export";
+import type { TaxonomyCodeList } from "../../src/features/procurementReview/reader/source";
 
 export const CATALOG_SCHEMA_VERSION = 1;
 export type CatalogTable = typeof ALL_TABLES[number];
@@ -79,6 +80,20 @@ export function readRows(db: DatabaseSync, table: CatalogTable, recordKey?: stri
 export function readRow(db: DatabaseSync, table: CatalogTable, key: string): { row: CatalogRow; removed: boolean } | null {
   const row = db.prepare(`SELECT source_json,active FROM ${tableNames[table]} WHERE key=?`).get(key);
   return row ? { row: JSON.parse(scopedLine(String(row.source_json), table, catalogMeta(db))), removed: row.active !== 1 } : null;
+}
+/**
+ * The newest UNSPSC release in the catalog as code/title pairs, for the
+ * commodity code picker; null when the publication carries none. Workspace
+ * scoped and served only to a signed-in reader: the code set is licensed
+ * data, never bundled into the app or the public demo.
+ */
+export function unspscCodeList(db: DatabaseSync): TaxonomyCodeList | null {
+  const latest = db.prepare("SELECT json_extract(source_json,'$.version') AS version FROM taxonomy_terms WHERE active=1 AND json_extract(source_json,'$.scheme')='UNSPSC' ORDER BY 1 DESC LIMIT 1").get();
+  if (!latest) return null;
+  const version = String(latest.version);
+  const rows = db.prepare("SELECT json_extract(source_json,'$.code') AS code, json_extract(source_json,'$.title') AS title FROM taxonomy_terms WHERE active=1 AND json_extract(source_json,'$.scheme')='UNSPSC' AND json_extract(source_json,'$.version')=? ORDER BY 1").all(version);
+  const terms = rows.filter(row => typeof row.code === "string" && /^\d{8}$/.test(row.code)).map((row): [string, string] => [String(row.code), String(row.title ?? "")]);
+  return terms.length ? { scheme: "UNSPSC", version, terms } : null;
 }
 export function boundedReviews(db: DatabaseSync, recordKey?: string) {
   const meta = catalogMeta(db), rows: CatalogRow[] = []; let bytes = 0, truncated = false;
