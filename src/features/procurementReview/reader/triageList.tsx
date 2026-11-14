@@ -42,7 +42,7 @@ export const TRIAGE_FIELDS: StaticFieldDefinition[] = [
     name: "reviewed",
     label: "Reviewed",
     fieldType: FIELD_TYPES.BOOLEAN,
-    size: 100,
+    size: 124,
     isReadOnly: false,
     config: { groupable: false, trueLabel: "Reviewed", falseLabel: "Not reviewed" },
   },
@@ -53,10 +53,12 @@ export type TriagedRow = NoticeRow & Triage & { archived: boolean };
 /** Untriaged copies keep their identity between triage changes, so the table's search text stays cached. */
 const untriaged = new WeakMap<NoticeRow, TriagedRow>();
 
-/** The rows with their triage; `archivedView` keeps only archived ones, any other view leaves them out. */
-export function joinTriage(rows: NoticeRow[], entries: ReadonlyMap<string, TriageEntry>, archivedView: boolean): TriagedRow[] {
-  const joined: TriagedRow[] = [];
-  for (const row of rows) {
+/**
+ * Every row with its triage and whether it is archived. The views choose
+ * among them (queue.ts `inNoticeView`): archived rows show only in Archived.
+ */
+export function joinTriage(rows: NoticeRow[], entries: ReadonlyMap<string, TriageEntry>): TriagedRow[] {
+  return rows.map((row) => {
     const entry = entries.get(row._id);
     let next = entry ? null : untriaged.get(row);
     if (!next) {
@@ -64,9 +66,8 @@ export function joinTriage(rows: NoticeRow[], entries: ReadonlyMap<string, Triag
       next = { ...row, ...triage, archived: isTriageArchived(triage) };
       if (!entry) untriaged.set(row, next);
     }
-    if (next.archived === archivedView) joined.push(next);
-  }
-  return joined;
+    return next;
+  });
 }
 
 const triageOf = (entries: ReadonlyMap<string, TriageEntry> | undefined, recordKey: string): Triage => {

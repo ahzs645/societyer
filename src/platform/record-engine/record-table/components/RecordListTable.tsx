@@ -206,8 +206,13 @@ export function RecordListTable<T extends { _id: string }>({
   );
 }
 
-/** Writes the list's state to the browser a moment after each change (and on leaving). */
-function RecordListTableMemory({ storageKey, fieldsHash, base }: { storageKey: string; fieldsHash: string; base: HydratedView }) {
+/**
+ * Writes the list's state to the browser a moment after each change (and on
+ * leaving). Exported for tables built from `RecordTableScope` directly (the
+ * procurement reader), which restore with `restoreListTableMemory` in the
+ * scope's `initialize`.
+ */
+export function RecordListTableMemory({ storageKey, fieldsHash, base }: { storageKey: string; fieldsHash: string; base: HydratedView }) {
   const handle = useRecordTableStoreHandle();
   useEffect(() => {
     let timer: number | undefined;

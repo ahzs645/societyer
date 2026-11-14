@@ -300,6 +300,7 @@ export function RecordTable({
   onEndReached,
   listFooter,
   fillViewport = true,
+  followHighlight = false,
 }: {
   onEndReached?: () => void;
   /**
@@ -307,6 +308,12 @@ export function RecordTable({
    * the last card), e.g. an endless list's "Loading more…" / "End of results".
    */
   listFooter?: ReactNode;
+  /**
+   * Keep the highlighted row (the scope's `highlightedRecordId`) in sight
+   * when it changes, scrolling only if it is out of view: a list beside a
+   * reading pane whose record steps on with the keyboard.
+   */
+  followHighlight?: boolean;
   /** Occupy the remaining viewport rather than a fixed 600px box. */
   fillViewport?: boolean;
   selectable?: boolean;
@@ -371,7 +378,7 @@ export function RecordTable({
   const calendarLayout = useRecordTableState((s) => s.calendarLayout);
   const filtered = useFilteredRecords();
   const rowModel = useRecordTableRowModel();
-  const { objectMetadata, onRecordClick, onUpdate, onCreate, onReorder } = useRecordTableContextOrThrow();
+  const { objectMetadata, onRecordClick, onUpdate, onCreate, onReorder, highlightedRecordId } = useRecordTableContextOrThrow();
   const { columns: visibleColumns, collapsed: collapsedColumns } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
   const tableId = useRecordTableState((s) => s.tableId);
   const viewId = useRecordTableState((s) => s.viewId);
@@ -753,6 +760,21 @@ export function RecordTable({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [focusedCell, getTableState, itemIndexByRowIndex]);
+
+  const reachable = rowModel.records;
+  useEffect(() => {
+    if (!followHighlight || !highlightedRecordId) return;
+    const rowIndex = reachable.findIndex((record) => String(record?._id) === highlightedRecordId);
+    if (rowIndex < 0) return;
+    if (virtuosoRef.current) {
+      virtuosoRef.current.scrollIntoView({ index: itemIndexByRowIndex[rowIndex] ?? rowIndex, behavior: "smooth" });
+      return;
+    }
+    tableRootRef.current
+      ?.querySelector<HTMLElement>(`[data-row-index="${rowIndex}"]`)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    // Only a newly highlighted record scrolls; rows arriving or re-sorting leave the list where it is.
+  }, [followHighlight, highlightedRecordId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {

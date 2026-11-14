@@ -113,6 +113,8 @@ export function RecordTableToolbar({
   extraFilterCount = 0,
   searchPlaceholder,
   hideTitle = false,
+  leading,
+  viewTypeNames,
 }: {
   icon?: ReactNode;
   label: string;
@@ -171,6 +173,19 @@ export function RecordTableToolbar({
    * in the filter editor's `extra`), counted on the Filter button with them.
    */
   extraFilterCount?: number;
+  /**
+   * The page's own view switcher, in place of the title and the views menu
+   * (a queue's states with their counts, say). It owns the row's left side on
+   * phones too, beside Search, Filter and View options.
+   */
+  leading?: ReactNode;
+  /**
+   * Names for the view-type switch (Table, Board, Calendar) shown beside its
+   * icons and used as their tooltips, for lists whose board and calendar mean
+   * something specific ("Board by classification"). Without them the switch
+   * shows icons only.
+   */
+  viewTypeNames?: { table?: string; kanban?: string; calendar?: string };
 }) {
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
@@ -373,9 +388,9 @@ export function RecordTableToolbar({
   };
   const viewTypeOptions = [
     ...(listView ? [{ id: "list" as const, Icon: List, label: t("recordTable.listView", "List view"), short: t("recordTable.listShort", "List"), active: listView.active, page: true }] : []),
-    { id: "table" as const, Icon: Table2, label: t("recordTable.tableView", "Table view"), short: t("recordTable.tableShort", "Table"), active: !listActive && viewType === "table" },
-    { id: "kanban" as const, Icon: Kanban, label: t("recordTable.kanbanView", "Kanban view"), short: t("recordTable.kanbanShort", "Board"), active: !listActive && isKanban },
-    { id: "calendar" as const, Icon: CalendarDays, label: t("recordTable.calendarView", "Calendar view"), short: t("recordTable.calendarShort", "Calendar"), active: !listActive && viewType === "calendar" },
+    { id: "table" as const, Icon: Table2, label: viewTypeNames?.table ?? t("recordTable.tableView", "Table view"), short: viewTypeNames?.table ?? t("recordTable.tableShort", "Table"), active: !listActive && viewType === "table" },
+    { id: "kanban" as const, Icon: Kanban, label: viewTypeNames?.kanban ?? t("recordTable.kanbanView", "Kanban view"), short: viewTypeNames?.kanban ?? t("recordTable.kanbanShort", "Board"), active: !listActive && isKanban },
+    { id: "calendar" as const, Icon: CalendarDays, label: viewTypeNames?.calendar ?? t("recordTable.calendarView", "Calendar view"), short: viewTypeNames?.calendar ?? t("recordTable.calendarShort", "Calendar"), active: !listActive && viewType === "calendar" },
     ...(pageViews ?? []).map(({ id, Icon, label, short, active }) => ({ id, Icon, label, short, active, page: true })),
   ];
   // Records still arriving in batches count toward the total straight away
@@ -439,8 +454,8 @@ export function RecordTableToolbar({
 
   return (
     <div className="record-table__toolbar" ref={toolbarRef}>
-      <div className="record-table__toolbar-left">
-        {isPhone && hideViewPickerOnPhone ? (
+      <div className={`record-table__toolbar-left${leading ? " record-table__toolbar-left--leading" : ""}`}>
+        {leading ? leading : isPhone && hideViewPickerOnPhone ? (
           <div className="record-table__title record-table__title--count" aria-live="polite">
             {resolvedIcon}
             <span>{viewCount} {lowerLabel(viewCount === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural)}</span>
@@ -733,7 +748,7 @@ export function RecordTableToolbar({
         </div>
 
         {!isPhone && (
-        <div className="record-table__segmented" aria-label="View type">
+        <div className={`record-table__segmented${viewTypeNames ? " record-table__segmented--named" : ""}`} aria-label="View type">
           {listView && (
             <button
               type="button"
@@ -757,9 +772,12 @@ export function RecordTableToolbar({
               handle.get().setType("table");
               resetScrollForViewSwitch();
             }}
-            title={t("recordTable.tableView", "Table view")}
+            title={viewTypeNames?.table ?? t("recordTable.tableView", "Table view")}
+            aria-label={viewTypeNames?.table ?? t("recordTable.tableView", "Table view")}
+            aria-pressed={!listActive && viewType === "table"}
           >
-            <Table2 size={12} />
+            <Table2 size={12} aria-hidden="true" />
+            {viewTypeNames?.table && <span>{viewTypeNames.table}</span>}
           </button>
           <button
             type="button"
@@ -772,9 +790,12 @@ export function RecordTableToolbar({
               if (firstField) handle.get().setKanbanFieldMetadataId(firstField);
               resetScrollForViewSwitch();
             }}
-            title={t("recordTable.kanbanView", "Kanban view")}
+            title={viewTypeNames?.kanban ?? t("recordTable.kanbanView", "Kanban view")}
+            aria-label={viewTypeNames?.kanban ?? t("recordTable.kanbanView", "Kanban view")}
+            aria-pressed={!listActive && (viewType === "kanban" || viewType === "board")}
           >
-            <Kanban size={12} />
+            <Kanban size={12} aria-hidden="true" />
+            {viewTypeNames?.kanban && <span>{viewTypeNames.kanban}</span>}
           </button>
           <button
             type="button"
@@ -787,9 +808,12 @@ export function RecordTableToolbar({
               if (firstField) handle.get().setCalendarFieldMetadataId(firstField);
               resetScrollForViewSwitch();
             }}
-            title={t("recordTable.calendarView", "Calendar view")}
+            title={viewTypeNames?.calendar ?? t("recordTable.calendarView", "Calendar view")}
+            aria-label={viewTypeNames?.calendar ?? t("recordTable.calendarView", "Calendar view")}
+            aria-pressed={!listActive && viewType === "calendar"}
           >
-            <CalendarDays size={12} />
+            <CalendarDays size={12} aria-hidden="true" />
+            {viewTypeNames?.calendar && <span>{viewTypeNames.calendar}</span>}
           </button>
           {pageViews?.map((view) => (
             <button

@@ -100,7 +100,7 @@ function listRow(row: SqlRow, files: StoredFile[]): ListRow {
     value: award ? projectedMoney(data) : null,
     currency: award ? text("currency").toUpperCase() : "",
     procurementType: award ? text("opportunityType", "type") : "",
-    analyticsJson: JSON.stringify(Object.fromEntries(Object.entries(data).filter(([key]) => /^(sourceId|industryCategories|industryCategoryCodes|sourceRegionCodes|sourceRegionPath|opportunityTypeGroupCode|opportunityTypeGroup|historicalTypeReferenceId|gsinTermIds|detailNeedsRefresh|detailCaptureVersion|identity|sourceRevision|contractValueParsed|contractValueText|contractNumber|justification|buyer|supplierId|mapping|parserVersion|observedAt|collectionRunId|taxonomyReleaseId|classificationCodes|commodityClassifications|urlExcluded|urlExclusionReason|closingAt|closingDate|datePrecision|dateTimezone|timezone)/.test(key)))),
+    analyticsJson: JSON.stringify(Object.fromEntries(Object.entries(data).filter(([key]) => /^(sourceId|industryCategories|industryCategoryCodes|sourceRegionCodes|sourceRegionPath|opportunityTypeGroupCode|opportunityTypeGroup|historicalTypeReferenceId|gsinTermIds|detailNeedsRefresh|detailCaptureVersion|identity|sourceRevision|contractValueParsed|contractValueText|contractNumber|justification|buyer|supplierId|mapping|parserVersion|observedAt|collectionRunId|taxonomyReleaseId|classificationCodes|commodityClassifications|urlExcluded|urlExclusionReason|closingAt|closingDate|awardDate|issueDate|publishedAt|postedDate|datePrecision|dateTimezone|timezone)/.test(key)))),
   };
 }
 
