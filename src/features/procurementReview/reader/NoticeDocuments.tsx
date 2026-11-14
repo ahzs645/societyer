@@ -2,9 +2,11 @@
  * The notice's files in one list: those Zoer downloaded first (previewed or
  * downloaded from the workspace's SharePoint folder, checked against their
  * SHA-256), then those it didn't download, which open on the source instead.
+ * The heading says how many there are; a notice with none gets one line
+ * rather than an empty card, pointing to the source, where they may be.
  */
 import { useCallback, useState } from "react";
-import { Download, ExternalLink, Eye, FileText } from "lucide-react";
+import { Download, ExternalLink, Eye, FileText, Paperclip } from "lucide-react";
 import { FilePreviewDialog, MAX_FILE_PREVIEW_BYTES } from "../../../components/FilePreviewDialog";
 import type { StoredProcurementDocument } from "../lib/documents";
 import { noticeDocumentRows, onDocumentSource, onSource, type NoticeModel } from "../lib/notice";
@@ -18,7 +20,8 @@ function kindOf(name: string, mediaType = "") {
   return extension ? extension.toUpperCase() : mediaType.split("/").pop()?.toUpperCase() ?? "";
 }
 
-export function NoticeDocuments({ recordKey, model }: { recordKey: string; model: NoticeModel }) {
+/** `id` is the section's anchor (`?tab=documents` scrolls to it). */
+export function NoticeDocuments({ recordKey, model, id }: { recordKey: string; model: NoticeModel; id: string }) {
   const source = useReaderSource();
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const documents = source.useDocuments(recordKey, cursors[cursors.length - 1]);
@@ -52,16 +55,33 @@ export function NoticeDocuments({ recordKey, model }: { recordKey: string; model
   const nothing = documents && rows.length === 0 && cursors.length === 1;
   const where = onSource(model.source);
 
+  if (nothing)
+    return (
+      <section className="procurement-notice__nodocs" id={id} aria-labelledby={`${id}-title`}>
+        <Paperclip size={14} aria-hidden="true" />
+        <h2 className="procurement-notice__nodocs-title" id={`${id}-title`}>No documents attached</h2>
+        {model.sourceUrl && (
+          <>
+            <span aria-hidden="true">·</span>
+            <a href={model.sourceUrl} target="_blank" rel="noopener noreferrer">
+              check {where.replace(/^on /, "")} <ExternalLink size={12} aria-hidden="true" />
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          </>
+        )}
+      </section>
+    );
+
   return (
-    <section className="card" aria-labelledby="procurement-notice-documents">
+    <section className="card" id={id} aria-labelledby={`${id}-title`}>
       <div className="card__head">
-        <h2 className="card__title" id="procurement-notice-documents">Documents</h2>
-        {count && count !== "0" && <span className="card__subtitle">{count}</span>}
+        <h2 className="card__title" id={`${id}-title`}>
+          Documents{count && count !== "0" && <> <span className="procurement-notice__count">{count}</span></>}
+        </h2>
       </div>
       <div className="card__body">
         {error && <p className="notice notice--danger" role="alert">{error}</p>}
         {!documents ? <p className="muted" role="status">Loading documents…</p>
-          : nothing ? <p className="muted">No documents came with this notice{model.sourceUrl ? `. They may be ${where}.` : "."}</p>
           : (
             <ul className="procurement-notice__docs">
               {rows.map((row) => {

@@ -1,11 +1,13 @@
 /**
- * The notice page's bar for the workspace's bid triage (triage.ts): the same
- * Reviewed and Classification the list edits, the action items
- * (actionItems.tsx), and who last changed them. Built from the shared
+ * The workspace's bid triage of one opportunity (triage.ts) on its notice
+ * page: the same Reviewed and Classification the list edits, the action
+ * items (actionItems.tsx), and who last changed them. Built from the shared
  * Checkbox, Select (a bottom sheet on phones), Button and Menu. It keeps its
- * place while the triage loads. Three rows: the heading with who last changed
- * it, the triage itself (Reviewed beside the classification), then the action
- * items; on phones the two action buttons share a row with shorter labels.
+ * place while the triage loads.
+ *
+ * `useNoticeTriage` is the one place a change is saved from, so the panel,
+ * the keyboard (1–4, R) and the phone's Classify bar all archive with the
+ * same undo and fail with the same toast.
  */
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -28,35 +30,35 @@ import {
   type Triage,
   type TriageTaskNotice,
 } from "../../../../shared/procurementTriage";
-import { taskHref, useReaderTriage, type ReaderTriage } from "./triage";
+import { taskHref, useReaderTriage, type ReaderTriage, type TriageEntry } from "./triage";
 import { actionItemMenuItems, actionItemsOf, useActionItemCommands } from "./actionItems";
 
-const OPTIONS = TRIAGE_CLASSIFICATIONS.map(({ value, label, color }) => ({ value, label, color }));
+export const TRIAGE_OPTIONS = TRIAGE_CLASSIFICATIONS.map(({ value, label, color }) => ({ value, label, color }));
 
-/** Nothing where the reader has no triage (the offline snapshot, the demo). */
-export function NoticeTriage({ recordKey, notice }: { recordKey: string; notice: TriageTaskNotice }) {
+/** One opportunity's triage and how to change it; null where the reader has no triage (the offline snapshot). */
+export type NoticeTriageControl = {
+  triage: ReaderTriage;
+  entry: TriageEntry | undefined;
+  current: Triage;
+  /** Loaded, and this person may change it. */
+  editable: boolean;
+  save: (next: Triage) => Promise<void>;
+};
+
+export function useNoticeTriage(recordKey: string, title: string): NoticeTriageControl | null {
   const triage = useReaderTriage();
-  return triage ? <NoticeTriageBar triage={triage} recordKey={recordKey} notice={notice} /> : null;
-}
-
-function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; recordKey: string; notice: TriageTaskNotice }) {
   const toast = useToast();
   const undoable = useUndoableAction();
-  const navigate = useNavigate();
-  const commands = useActionItemCommands(triage);
-  const [creating, setCreating] = useState(false);
-  const phone = useMediaQuery(mobileCardMediaQuery);
+  if (!triage) return null;
   const entry = triage.entries?.get(recordKey);
   const current: Triage = entry ? { reviewed: entry.reviewed, classification: entry.classification } : NO_TRIAGE;
-  const disabled = !triage.entries || !triage.canEdit;
-  const title = notice.title || "This opportunity";
-
+  const name = title || "This opportunity";
   const save = async (next: Triage) => {
     try {
       if (isTriageArchived(next) && !isTriageArchived(current))
         await undoable({
           message: "Archived",
-          description: `“${title}” is reviewed and not doable. The list shows it in its Archived view.`,
+          description: `“${name}” is reviewed and not doable. The list shows it in its Archived view.`,
           run: () => triage.set(recordKey, next),
           undo: () => triage.set(recordKey, current),
           dedupeKey: `procurement-triage-${recordKey}`,
@@ -66,6 +68,17 @@ function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; 
       toast.error("Couldn't save the triage", error instanceof Error ? error.message : "Try again in a moment.");
     }
   };
+  return { triage, entry, current, editable: Boolean(triage.entries && triage.canEdit), save };
+}
+
+/** Our triage, for the notice's decision panel. `hint` adds the keyboard shortcuts under it. */
+export function NoticeTriage({ control, recordKey, notice, hint = false }: { control: NoticeTriageControl; recordKey: string; notice: TriageTaskNotice; hint?: boolean }) {
+  const { triage, entry, current, editable, save } = control;
+  const navigate = useNavigate();
+  const commands = useActionItemCommands(triage);
+  const [creating, setCreating] = useState(false);
+  const phone = useMediaQuery(mobileCardMediaQuery);
+
   const createTask = async () => {
     setCreating(true);
     try {
@@ -80,24 +93,25 @@ function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; 
   const by = entry && [entry.updatedBy, formatSourceDate(new Date(entry.updatedAt).toISOString())].filter(Boolean).join(" · ");
 
   return (
-    <section className="procurement-triage" aria-label="Our bid triage" aria-busy={!triage.entries || undefined}>
+    <section className="procurement-triage" aria-labelledby="procurement-triage-title" aria-busy={!triage.entries || undefined}>
       <div className="procurement-triage__head">
-        <span className="procurement-triage__title">Our triage</span>
+        <h3 className="procurement-triage__title" id="procurement-triage-title">Our triage</h3>
         {by && <small className="muted procurement-triage__by">{by}</small>}
       </div>
       <div className="procurement-triage__state">
-        <Checkbox checked={current.reviewed} onChange={(reviewed) => void save({ ...current, reviewed })} label="Reviewed" disabled={disabled} />
+        <Checkbox checked={current.reviewed} onChange={(reviewed) => void save({ ...current, reviewed })} label="Reviewed" disabled={!editable} />
         <Select
           className="procurement-triage__select"
           value={current.classification}
           onChange={(value) => void save({ ...current, classification: triageClassification(value) })}
-          options={OPTIONS}
+          options={TRIAGE_OPTIONS}
           clearable
           clearLabel="Not classified"
           placeholder="Not classified"
           aria-label="Classification"
           sheetTitle="Classification"
-          disabled={disabled}
+          searchable={false}
+          disabled={!editable}
         />
       </div>
       {items?.length === 1 && !mayAct && (
@@ -134,6 +148,34 @@ function NoticeTriageBar({ triage, recordKey, notice }: { triage: ReaderTriage; 
       )}
       {commands.dialog}
       {isTriageArchived(current) && <span className="procurement-triage__archived">Archived: only in the list's Archived view</span>}
+      {hint && editable && (
+        <small className="muted procurement-triage__keys">
+          Keys: <kbd>1</kbd>–<kbd>4</kbd> classify · <kbd>R</kbd> reviewed
+        </small>
+      )}
     </section>
+  );
+}
+
+/**
+ * The phone's Classify: the classification Select (a bottom sheet there),
+ * dressed as the bottom bar's button. Shows the classification once there is one.
+ */
+export function ClassifyButton({ control }: { control: NoticeTriageControl }) {
+  const { current, editable, save } = control;
+  return (
+    <Select
+      className="procurement-notice__classify"
+      value={current.classification}
+      onChange={(value) => void save({ ...current, classification: triageClassification(value) })}
+      options={TRIAGE_OPTIONS}
+      clearable
+      clearLabel="Not classified"
+      placeholder="Classify"
+      aria-label="Classification"
+      sheetTitle="Classification"
+      searchable={false}
+      disabled={!editable}
+    />
   );
 }
