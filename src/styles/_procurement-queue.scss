@@ -139,10 +139,14 @@
     border: 0;
     background: none;
   }
-  // The first card starts right under the toolbar.
-  .procurement-reader__list > .tabs { margin-bottom: token('s-2'); }
-  .procurement-reader__list .procurement-reader { margin-top: 0; }
 }
+
+// The list's toolbar belongs to the catalog tabs above it, so it sits close
+// under them at every width: the tabs' usual 16px gap, plus the reader's own
+// top margin and the toolbar's padding, read as an empty band between the two
+// rows. The analytics, which follows the same tabs, keeps the usual gap.
+.procurement-reader__list > .tabs:has(+ .procurement-reader__layer:not(.is-covered)) { margin-bottom: token('s-2'); }
+.procurement-reader__list .procurement-reader { margin-top: 0; }
 
 // ---------------------------------------------------------------------------
 // Rows: the title on up to two lines, the buyer under it, the new dot.
