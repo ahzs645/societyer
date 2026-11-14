@@ -2,6 +2,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { ConvexProvider } from 'convex/react';
 import '/src/i18n';
 import '/src/theme/palette.css';
 import '/src/theme/tokens.css';
@@ -9,6 +10,9 @@ import '/src/styles/index.scss';
 import { ProcurementAnalytics } from '/src/features/procurementReview/reader/analytics/ProcurementAnalytics';
 import { ReaderSourceContext } from '/src/features/procurementReview/reader/source';
 import { buildAnalysis } from '/shared/procurementAnalytics';
+import { AuthProvider } from '/src/auth/AuthProvider';
+import { localDataClient } from '/src/lib/localDataClient';
+history.replaceState(null, '', `/demo/procurement-browse${location.search}`);
 const today = new Date().toISOString().slice(0,10);
 const base = {kind:'award', title:'Synthetic procurement award', organization:'Test City', issuedFor:'', status:'Awarded', date:'2026-01-15',dateText:'',reference:'', documents:1,listedDocuments:0,supplier:'Cedar',value:100,currency:'CAD',procurementType:'Goods'};
 const awards = Array.from({length:65},(_,i)=>({...base,recordKey:`award:${i}`,supplier:`Supplier ${String(i).padStart(2,'0')}`,value:(i+1)*100,date:i%2?'2026-02-15':'2026-01-15'}));
@@ -21,5 +25,12 @@ const source = {
   useList(){throw Error('Hosted charts must not load whole catalog lists');},
   useReviews(){throw Error('Hosted charts must not download raw review histories');},
 };
-createRoot(document.getElementById('root')).render(React.createElement(BrowserRouter,null,React.createElement(ReaderSourceContext.Provider,{value:source},React.createElement('main',{className:'page procurement-review'},React.createElement(ProcurementAnalytics)))));
+const h = React.createElement;
+createRoot(document.getElementById('root')).render(
+  h(ConvexProvider, { client: localDataClient }, h(AuthProvider, null, h(BrowserRouter, null,
+    h(ReaderSourceContext.Provider, { value: source },
+      h('main', { className: 'page procurement-review' }, h(ProcurementAnalytics)),
+    ),
+  ))),
+);
 </script></body></html>

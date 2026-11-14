@@ -10,7 +10,7 @@ test("service reader loads awards lazily, renders the complete list and reuses n
   await expect(page.getByText("Synthetic award 0", { exact: true }).first()).toBeVisible();
   await expect(page.locator(".record-table__view-count").first()).toHaveText("21877");
   console.log(`Synthetic 21,877-row list ready in ${Date.now() - start} ms (${test.info().project.name}); this is a local UI check, not a live network timing.`);
-  if (!isMobile) await page.getByRole("button", { name: "Synthetic award 0", exact: true }).focus();
+  if (!isMobile) await page.getByRole("button", { name: /^Synthetic award 0\b/ }).focus();
   // The list's own search also finds notices by their text: "zebra" is only in award 0's description.
   await page.getByRole("button", { name: /^Search awards/ }).click();
   await page.getByRole("textbox", { name: "Search awards" }).fill("zebra");
@@ -18,8 +18,7 @@ test("service reader loads awards lazily, renders the complete list and reuses n
   await page.getByText("Synthetic award 0", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Synthetic award 0", exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as any).__catalogRequests.filter((path: string) => { const url = new URL(path); return url.pathname.endsWith("/notice") && url.searchParams.get("key") === "award:00000"; }).length)).toBe(1);
-  await page.getByRole("tab", { name: /Documents/ }).click();
-  await expect(page.getByText("Addendum 12.pdf", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: /^Documents/ }).getByText("Addendum 12.pdf", { exact: true })).toBeVisible();
   expect(failures).toEqual([]);
 });
 
@@ -49,20 +48,20 @@ test("buyer and issued-for pages render both lists on the catalog service", asyn
   expect(failures).toEqual([]);
 });
 
-test("opportunity triage follows the notice layout and page overscroll is contained", async ({ page, isMobile }) => {
+test("the opportunity opens with its bid decision and contains page overscroll", async ({ page, isMobile }) => {
   await page.goto("/tests/fixtures/procurement-service.html?notice=opportunity%3Aroads&fixtureTriage=1");
-  const triage = page.getByRole("region", { name: "Our bid triage" });
+  const notice = page.locator(".procurement-notice");
+  const decision = notice.getByRole("region", { name: "Bid decision" });
+  const triage = decision.getByRole("region", { name: "Our triage" });
   await expect(triage).toBeVisible();
-  const details = page.getByRole("complementary", { name: "Notice details" });
-  if (isMobile) {
-    await expect(details).toHaveCount(0);
-    const card = await triage.boundingBox();
-    const tabs = await page.getByRole("tablist").first().boundingBox();
-    expect(card!.y + card!.height).toBeLessThanOrEqual(tabs!.y);
-  } else {
-    await expect(details.getByRole("region", { name: "Our bid triage" })).toBeVisible();
-    await expect(triage).toHaveCSS("flex-direction", "column");
-  }
+  await expect(triage.getByRole("checkbox", { name: "Reviewed" })).toBeEnabled();
+  await expect(triage.getByRole("button", { name: "Classification" })).toBeEnabled();
+  await expect(page.locator(".procurement-split")).toHaveClass(isMobile ? "procurement-split" : "procurement-split is-split");
+  const documents = notice.getByRole("region", { name: /^Documents/ });
+  await expect(documents).toBeVisible();
+  const decisionBox = await decision.boundingBox();
+  const documentsBox = await documents.boundingBox();
+  expect(decisionBox!.y + decisionBox!.height).toBeLessThanOrEqual(documentsBox!.y);
   await expect(page.locator("html")).toHaveCSS("overscroll-behavior-y", "none");
   await expect(page.locator("main.page")).toHaveCSS("overscroll-behavior-y", "none");
 });

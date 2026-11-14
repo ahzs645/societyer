@@ -79,10 +79,9 @@ test("the header stays on top of the rows scrolling under it", async ({ page, is
   await page.goto("/tests/fixtures/procurement-browse.html");
   await expect(page.getByText("Synthetic award 0", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
   const scroller = page.locator(".record-table__virtuoso");
-  // Every header cell must be what a click on it reaches, wherever the rows are: mid-list, then the end of a grown list.
-  const coveredHeaders = () => page.evaluate(() => [...document.querySelectorAll(".record-table__virtuoso thead th")].flatMap((cell) => {
+  // Each data-column header must receive clicks even when rows scroll beneath it.
+  const coveredHeaders = () => page.evaluate(() => [...document.querySelectorAll('.record-table__virtuoso thead th:not([aria-hidden="true"])')].flatMap((cell) => {
     const box = cell.getBoundingClientRect();
-    // An empty, click-through header (the row actions column's) is hit-tested past on purpose.
     if (box.width < 4 || getComputedStyle(cell).pointerEvents === "none") return [];
     const hit = document.elementFromPoint(box.left + Math.min(20, box.width / 2), box.top + box.height / 2);
     return hit && cell.contains(hit) ? [] : [`${cell.textContent?.trim() || "(blank)"} ← ${hit?.closest("td")?.textContent?.trim().slice(0, 30) ?? hit?.tagName}`];
