@@ -3,10 +3,12 @@
  * awards, and its notice and decision insights, computed here from the same
  * catalog so both interfaces show the same figures. Desktop lists the views
  * in a rail beside the content, as Zoer does; phones pick a view from a menu.
- * The view (`analysis=`) and its filters live in the URL.
+ * The view (`analysis=`) and its filters live in the URL. Data quality is for
+ * whoever runs the catalog (`settings:write`), not for reviewers.
  */
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Select } from "../../../../components/Select";
+import { usePermissions } from "../../../../hooks/usePermissions";
 import { useReaderNavigation } from "../routes";
 import { useReaderSource } from "../source";
 import { AwardAnalysis, type AwardView } from "./AwardAnalysis";
@@ -53,8 +55,10 @@ export function ProcurementAnalytics() {
 function LoadedProcurementAnalytics() {
   const source = useReaderSource();
   const nav = useReaderNavigation();
+  const { can } = usePermissions();
+  const operator = can("settings:write");
   const hasAwards = (source.catalog.counts.award ?? 0) > 0;
-  const views = VIEWS.filter((view) => (hasAwards || view.group !== "Awards") && (view.id !== "compare" || source.useAnalysis));
+  const views = VIEWS.filter((view) => (hasAwards || view.group !== "Awards") && (view.id !== "compare" || source.useAnalysis) && (view.id !== "quality" || operator));
   const requested = nav.params.get(ANALYSIS_PARAM);
   const view = views.find((item) => item.id === requested) ?? views[0];
   const choose = (next: View) =>

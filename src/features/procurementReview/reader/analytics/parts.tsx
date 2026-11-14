@@ -1,26 +1,72 @@
 /** Pieces the analytics views share: ranked bars that act, a heatmap, and the "still loading" line. */
-import type { ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { useState, type ComponentProps, type ReactNode } from "react";
+import { BarChart3, ChevronRight, Table2 } from "lucide-react";
+import { ChartCard, ChartDataTable, type ChartTable } from "../../../../components/charts";
 import { Progress } from "../../../../components/primitives";
 import { compact, count, counted, money, percent, type Slice } from "../../lib/market";
+import { plainClick } from "../ReaderHeader";
 import type { RecordList } from "../source";
 
-export type RankedRow = { key: string; label: string; value: number; share?: number; detail?: ReactNode };
+export type RankedRow = {
+  key: string;
+  label: string;
+  value: number;
+  share?: number;
+  detail?: ReactNode;
+  /** The row's own page (a buyer or supplier), so a middle-click opens it in a new tab. */
+  href?: string;
+  /** Beside the name, such as "Us" on the workspace's own organisation. */
+  badge?: ReactNode;
+};
 
 const width = (value: number, max: number) => (max <= 0 ? 0 : Math.max(0, Math.min(100, (value / max) * 100)));
 const shareText = (share: number) => (share > 0 && share < 0.01 ? "<1%" : `${Math.round(share * 100)}%`);
 
 /**
- * The chart kit's ranked bars (`RankedBars`, same classes and layout), with a
- * row that runs an action instead of following a link: open a buyer, focus
- * the analysis on a supplier, or list a slice's awards.
+ * An amount as every figure in the analytics shows one: compact ("$59.9M"),
+ * with the exact amount ("$59,944,140") as its tooltip, so prose, tiles and
+ * bars never mix the two styles.
  */
-export function RankedList({ rows, ariaLabel, formatValue, onSelect, selectLabel }: {
+export function Amount({ value, currency }: { value: number | null; currency: string }) {
+  return <span title={value === null ? undefined : money(value, currency)}>{money(value, currency, true)}</span>;
+}
+
+/** Rows below this share of the whole fold into one "+N more" row: their bars would be slivers. */
+const FOLD_SHARE = 0.02;
+/** The leaders always show, however small, so a fragmented market still lists someone. */
+const FOLD_KEEP = 3;
+export type FoldedRest = { count: number; value: number };
+
+/**
+ * The leading rows of a ranking, up to `limit`, without the ones too small to
+ * draw; whatever is left is counted and summed for the "+N more" row, so the
+ * list still accounts for the whole.
+ */
+export function foldRanked(rows: RankedRow[], limit: number): { rows: RankedRow[]; rest: FoldedRest | null } {
+  const shown = rows.slice(0, limit).filter((row, index) => index < FOLD_KEEP || row.share == null || row.share >= FOLD_SHARE);
+  const kept = new Set(shown.map((row) => row.key));
+  const left = rows.filter((row) => !kept.has(row.key));
+  return { rows: shown, rest: left.length ? { count: left.length, value: left.reduce((n, row) => n + row.value, 0) } : null };
+}
+
+/**
+ * The chart kit's ranked bars (`RankedBars`, same classes and layout), with a
+ * row that runs an action instead of following a link: open a buyer or a
+ * supplier, focus the analysis on a type, or list a slice's awards. A row
+ * with an `href` is a real link the reader handles itself on a plain click.
+ * `rest` adds the "+N more" row that `foldRanked` leaves, which opens `onMore`
+ * (the card's table, where every row is listed).
+ */
+export function RankedList({ rows, ariaLabel, formatValue, exactValue, onSelect, selectLabel, rest, onMore }: {
   rows: RankedRow[];
   ariaLabel: string;
   formatValue: (value: number) => string;
+  /** The exact figure, as the value's tooltip, when `formatValue` is compact. */
+  exactValue?: (value: number) => string;
   onSelect?: (row: RankedRow) => void;
   selectLabel?: (row: RankedRow) => string;
+  rest?: FoldedRest | null;
+  onMore?: () => void;
 }) {
   const max = Math.max(1, ...rows.map((row) => row.value));
   return (
@@ -30,24 +76,38 @@ export function RankedList({ rows, ariaLabel, formatValue, onSelect, selectLabel
           <>
             <span className="ranked-bars__head">
               <span className="ranked-bars__label">
-                <span className="ranked-bars__name">{row.label}</span>
+                <span className="ranked-bars__name">{row.label}{row.badge && <> {row.badge}</>}</span>
                 {row.detail && <span className="ranked-bars__detail">{row.detail}</span>}
               </span>
               <span className="ranked-bars__values">
-                <strong>{formatValue(row.value)}</strong>
+                <strong title={exactValue?.(row.value)}>{formatValue(row.value)}</strong>
                 {row.share != null && <span className="ranked-bars__share">{shareText(row.share)}</span>}
               </span>
               {onSelect && <ChevronRight size={14} className="ranked-bars__chevron" aria-hidden="true" />}
             </span>
             <span className="ranked-bars__track" aria-hidden="true">
-              <span className="ranked-bars__fill chart-grow-x" style={{ width: `${width(row.value, max)}%` }} />
+              <span className="ranked-bars__fill chart-grow-x" style={{ width: `${width(row.value, max)}%`, minWidth: row.value > 0 ? 3 : 0 }} />
             </span>
           </>
         );
+        const className = "ranked-bars__row ranked-bars__row--link procurement-analytics__bar-button";
         return (
           <li key={row.key} className="ranked-bars__item">
-            {onSelect ? (
-              <button type="button" className="ranked-bars__row ranked-bars__row--link procurement-analytics__bar-button" aria-label={selectLabel?.(row)} onClick={() => onSelect(row)}>
+            {onSelect && row.href ? (
+              <a
+                className={className}
+                href={row.href}
+                aria-label={selectLabel?.(row)}
+                onClick={(event) => {
+                  if (!plainClick(event)) return;
+                  event.preventDefault();
+                  onSelect(row);
+                }}
+              >
+                {content}
+              </a>
+            ) : onSelect ? (
+              <button type="button" className={className} aria-label={selectLabel?.(row)} onClick={() => onSelect(row)}>
                 {content}
               </button>
             ) : (
@@ -56,7 +116,50 @@ export function RankedList({ rows, ariaLabel, formatValue, onSelect, selectLabel
           </li>
         );
       })}
+      {rest && (
+        <li className="ranked-bars__item procurement-analytics__more-row">
+          {onMore ? (
+            <button type="button" className="ranked-bars__row ranked-bars__row--link procurement-analytics__bar-button" onClick={onMore} aria-label={`${count(rest.count)} more, ${formatValue(rest.value)}: view every row as a table`}>
+              <span className="ranked-bars__head">
+                <span className="ranked-bars__label"><span className="ranked-bars__name">+{count(rest.count)} more</span></span>
+                <span className="ranked-bars__values"><strong title={exactValue?.(rest.value)}>{formatValue(rest.value)}</strong></span>
+                <ChevronRight size={14} className="ranked-bars__chevron" aria-hidden="true" />
+              </span>
+            </button>
+          ) : (
+            <div className="ranked-bars__row">
+              <span className="ranked-bars__head">
+                <span className="ranked-bars__label"><span className="ranked-bars__name">+{count(rest.count)} more</span></span>
+                <span className="ranked-bars__values"><strong title={exactValue?.(rest.value)}>{formatValue(rest.value)}</strong></span>
+              </span>
+            </div>
+          )}
+        </li>
+      )}
     </ol>
+  );
+}
+
+/**
+ * A chart card whose "View as table" the content can open too: the folded
+ * "+N more" row of a ranking leads to the table, where every row is listed.
+ * The same toggle and table as `ChartCard`'s own.
+ */
+export function RankedCard({ table, actions, children, ...card }: Omit<ComponentProps<typeof ChartCard>, "table" | "children"> & {
+  table: ChartTable;
+  children: (showTable: () => void) => ReactNode;
+}) {
+  const [asTable, setAsTable] = useState(false);
+  const toggle = !card.empty && !card.loading && (
+    <button type="button" className="btn btn--ghost btn--sm chart-card__table-toggle" aria-pressed={asTable} onClick={() => setAsTable((value) => !value)}>
+      {asTable ? <BarChart3 size={14} aria-hidden="true" /> : <Table2 size={14} aria-hidden="true" />}
+      {asTable ? "View as chart" : "View as table"}
+    </button>
+  );
+  return (
+    <ChartCard {...card} actions={actions || toggle ? <>{actions}{toggle}</> : undefined}>
+      {asTable ? <ChartDataTable table={table} /> : children(() => setAsTable(true))}
+    </ChartCard>
   );
 }
 

@@ -4,11 +4,17 @@
  * procurement mix and data quality, with the same filters and defaults (CAD
  * only; placeholder suppliers and future-dated awards left out). Everything
  * is computed here from the award list (lib/market.ts), only for the view on
- * screen. Filters live in the URL; a buyer opens its buyer page, a supplier or
+ * screen. Filters live in the URL; a buyer or supplier opens its page, a
  * type focuses the analysis, and a cell or range lists its awards.
+ *
+ * Every amount shows compact ("$59.9M") with the exact figure as its tooltip;
+ * rankings fold their smallest rows into one "+N more" row that opens the
+ * card's table. Where the analysis runs here, "Our work" (OurWork.tsx) can
+ * narrow it to the work this organisation bids on; the server's analysis
+ * can't filter by keywords, so it always covers the whole market.
  */
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
-import { List, SlidersHorizontal } from "lucide-react";
+import { Crosshair, List, SlidersHorizontal } from "lucide-react";
 import { ChartCard, TimeSeriesChart, endOfMonth, formatMonthLong, type ChartSeries, type TimeRow } from "../../../../components/charts";
 import { Modal } from "../../../../components/Modal";
 import { Select } from "../../../../components/Select";
@@ -17,19 +23,24 @@ import { Segmented } from "../../../../components/primitives";
 import { Banner, Field, Pill } from "../../../../components/ui";
 import { FilterChips, FiltersDialog, activeCount, filterPatch, readFilters } from "./filters";
 import {
-  QUALITY_DETAILS, QUALITY_LABELS, count, counted, defaultFilters, distribution, filterAwards, matrix, metadata, money, normalizeAwards, overview, percent,
+  QUALITY_DETAILS, QUALITY_LABELS, count, counted, defaultFilters, distribution, filterAwards, isPlaceholderSupplier, matrix, metadata, money, normalizeAwards, overview, percent,
   rank, sliceAwards, trends, validateFilters, yearly, type Award, type MarketFilters, type QualityFlag, type Ranked, type Slice,
 } from "../../lib/market";
+import { useIsOurOrganisation } from "../../lib/ourOrganisation";
 import { formatSourceDate, zoneToday } from "../../lib/notice";
 import { useReaderNavigation } from "../routes";
 import { useReaderSource, type ListRow } from "../source";
 import { NoticeTable } from "../NoticeTable";
 import { useProcurementClock } from "../../lib/clock";
 import { ANALYSIS_PAGE_SIZE, type AnalysisRequest, type AwardAnalytics } from "../../../../../shared/procurementAnalytics";
-import { Heatmap, LoadingLine, RankedList, type RankedRow } from "./parts";
+import { Amount, Heatmap, LoadingLine, RankedCard, RankedList, foldRanked, type RankedRow } from "./parts";
+import { PartyLink, UsBadge } from "../party/parts";
+import { MARKET_PARAM, OurWorkBar, OurWorkDialog, type MarketScope } from "./OurWork";
+import { ourWorkMatcher, useOurWork } from "./ourWorkStore";
 
 export type AwardView = "overview" | "trends" | "buyers" | "suppliers" | "sizes" | "mix" | "quality" | "compare";
 const UNKNOWN_BUYER = "Unknown buyer";
+const UNKNOWN_SUPPLIER = "Unknown supplier";
 
 const INSPECT_PARAM = "inspect";
 
@@ -58,9 +69,12 @@ function ServerAwardAnalysis({ view, title }: { view: AwardView; title: string }
   const setFilters = (next: MarketFilters) => nav.update({ ...filterPatch(next), inspect: null, rankpage: null });
   const inspect = (slice: Slice, inspectTitle: string, everything = false) => nav.update({ inspect: JSON.stringify({ title: inspectTitle, slice, ...(everything ? { all: true } : {}) }) });
   const inspection = readInspection(nav.params.get(INSPECT_PARAM));
+  const ours = useIsOurOrganisation();
   const ctx: ViewContext = { rows: [], all: [], currency: filters.currency, filters, today, partial: false, setFilters,
     focus: (key, name) => setFilters({ ...filters, [key]: name }), inspect,
-    openBuyer: name => inspect({ buyer: name }, name), params: nav.params, update: nav.update, aggregate: data ?? undefined };
+    // Here a buyer lists its matching awards rather than opening its page.
+    openBuyer: name => inspect({ buyer: name }, name), buyerHref: () => undefined, ...supplierLinks(nav, ours, (name) => setFilters({ ...filters, supplier: name })),
+    params: nav.params, update: nav.update, aggregate: data ?? undefined };
   return <>
     <header className="procurement-analytics__header">
       <div className="procurement-analytics__heading"><h2>{title}</h2><p className="muted">{data ? `${counted(data.included, "award")} included; ${count(data.excluded)} excluded of ${count(data.published)} published.` : "Preparing publication metrics…"}</p></div>
@@ -104,8 +118,8 @@ function ComparisonView({ data, currency }: { data: AwardAnalytics; currency: st
   const comparison = data.comparison;
   if (!comparison) return null;
   return <ChartCard title="Equal-length period comparison" subtitle={`${comparison.current.from} to ${comparison.current.to}, compared with ${comparison.previous.from} to ${comparison.previous.to}. Same currency and inclusion rules; medians and distinct parties recomputed from each period.`} headingLevel={3}>
-    <div className="stat-grid procurement-analytics__stats"><StatTile label="Current recorded value" value={money(comparison.current.value, currency, true)} sub={counted(comparison.current.count, "award")} /><StatTile label="Previous recorded value" value={money(comparison.previous.value, currency, true)} sub={counted(comparison.previous.count, "award")} /><StatTile label="Value change" value={money(comparison.valueChange, currency, true)} sub={comparison.valuePercent === null ? "No positive comparison baseline" : percent(comparison.valuePercent)} /><StatTile label="Award count change" value={count(comparison.countChange)} /></div>
-    <p className="muted">Current median {money(comparison.current.median, currency)}; previous median {money(comparison.previous.median, currency)}. Collection coverage may differ between periods.</p>
+    <div className="stat-grid procurement-analytics__stats"><StatTile label="Current recorded value" value={<Amount value={comparison.current.value} currency={currency} />} sub={counted(comparison.current.count, "award")} /><StatTile label="Previous recorded value" value={<Amount value={comparison.previous.value} currency={currency} />} sub={counted(comparison.previous.count, "award")} /><StatTile label="Value change" value={<Amount value={comparison.valueChange} currency={currency} />} sub={comparison.valuePercent === null ? "No positive comparison baseline" : percent(comparison.valuePercent)} /><StatTile label="Award count change" value={count(comparison.countChange)} /></div>
+    <p className="muted">Current median <Amount value={comparison.current.median} currency={currency} />; previous median <Amount value={comparison.previous.median} currency={currency} />. Collection coverage may differ between periods.</p>
   </ChartCard>;
 }
 function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string }) {
@@ -115,15 +129,26 @@ function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string })
   // Chunks land while the list loads; the figures follow without blocking typing or scrolling.
   const loaded = useDeferredValue(list?.rows);
   const all = useMemo(() => normalizeAwards(loaded ?? []), [loaded]);
+  // "Our work" applies once it is set, unless the reader asked for the whole market.
+  const { work, save: saveWork } = useOurWork();
+  const [editingWork, setEditingWork] = useState(false);
+  const scope: MarketScope = work && nav.params.get(MARKET_PARAM) !== "all" ? "ours" : "all";
+  const narrowed = scope === "ours" && view !== "quality";
+  const ourRows = useMemo(() => {
+    if (!work || !loaded) return null;
+    const matches = ourWorkMatcher(work);
+    return normalizeAwards(loaded.filter(matches));
+  }, [work, loaded]);
+  const analysed = narrowed && ourRows ? ourRows : all;
   const byKey = useMemo(() => new Map((loaded ?? []).map((row) => [row.recordKey, row])), [loaded]);
   const now = useProcurementClock();
   const today = zoneToday(now);
   const filters = readFilters(nav.params);
   const filterKey = JSON.stringify(filters);
   const filtered = useMemo(() => {
-    try { return { rows: filterAwards(all, filters, today), error: "" }; }
+    try { return { rows: filterAwards(analysed, filters, today), error: "" }; }
     catch (error) { return { rows: [] as Award[], error: error instanceof Error ? error.message : "These filters can't be applied." }; }
-  }, [all, filterKey, today]); // eslint-disable-line react-hooks/exhaustive-deps -- `filterKey` names every filter
+  }, [analysed, filterKey, today]); // eslint-disable-line react-hooks/exhaustive-deps -- `filterKey` names every filter
   const [filtersOpen, setFiltersOpen] = useState(false);
   const meta = useMemo(() => (filtersOpen || view === "quality" ? metadata(all, today) : null), [all, filtersOpen, today, view]);
   const inspection = readInspection(nav.params.get(INSPECT_PARAM));
@@ -133,7 +158,10 @@ function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string })
   const focus = (key: "supplier" | "type", name: string) => setFilters({ ...filters, [key]: name });
   const inspect = (slice: Slice, inspectTitle: string, everything = false) => nav.update({ [INSPECT_PARAM]: JSON.stringify({ title: inspectTitle, slice, ...(everything ? { all: true } : {}) }) });
   const openBuyer = (name: string) => { if (name === UNKNOWN_BUYER) inspect({ buyer: name }, name); else nav.openParty("organization", name); };
-  const ctx: ViewContext = { rows: filtered.rows, all, currency: filters.currency, filters, today, partial, setFilters, focus, inspect, openBuyer, params: nav.params, update: nav.update };
+  const buyerHref = (name: string) => (name === UNKNOWN_BUYER ? undefined : nav.partyHref("organization", name));
+  const ours = useIsOurOrganisation();
+  const ctx: ViewContext = { rows: filtered.rows, all, currency: filters.currency, filters, today, partial, setFilters, focus, inspect, openBuyer, buyerHref,
+    ...supplierLinks(nav, ours, (name) => focus("supplier", name)), params: nav.params, update: nav.update };
 
   const active = activeCount(filters);
   const shown = filtered.rows.length;
@@ -145,10 +173,16 @@ function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string })
           <p className="muted">
             {!list ? "Reading the published awards…"
               : view === "quality" ? `${counted(all.length, "published award")}${partial ? " so far" : ""}, regardless of filters`
+              : narrowed ? `${counted(shown, "award")} matching our work, of ${count(all.length)} published${partial ? " so far" : ""}`
               : `${counted(shown, "award")} in this analysis, of ${count(all.length)} published${partial ? " so far" : ""}`}
           </p>
         </div>
         <div className="procurement-analytics__actions">
+          {view !== "quality" && !work && (
+            <button type="button" className="btn btn--sm" aria-haspopup="dialog" aria-label="Our work" onClick={() => setEditingWork(true)}>
+              <Crosshair size={14} aria-hidden="true" /> <span className="procurement-analytics__action-label">Our work</span>
+            </button>
+          )}
           {view !== "quality" && (
             <button type="button" className="btn btn--sm" aria-haspopup="dialog" aria-label={active ? `Filters, ${active} active` : "Filters"} onClick={() => setFiltersOpen(true)}>
               <SlidersHorizontal size={14} aria-hidden="true" /> <span className="procurement-analytics__action-label">Filters</span>
@@ -160,6 +194,9 @@ function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string })
           </button>
         </div>
       </header>
+      {view !== "quality" && work && (
+        <OurWorkBar work={work} scope={scope} onScope={(next) => nav.update({ [MARKET_PARAM]: next === "all" ? "all" : null, [INSPECT_PARAM]: null })} onEdit={() => setEditingWork(true)} />
+      )}
       {view !== "quality" && <FilterChips filters={filters} onChange={setFilters} />}
       <LoadingLine list={list} noun="awards" />
       {filtered.error && <Banner tone="danger">{filtered.error} <button type="button" className="btn btn--sm btn--ghost" onClick={() => setFilters(defaultFilters)}>Reset filters</button></Banner>}
@@ -174,6 +211,7 @@ function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string })
         </div>
       )}
       {filtersOpen && meta && <FiltersDialog value={filters} meta={meta} close={() => setFiltersOpen(false)} apply={(next) => { setFilters(next); setFiltersOpen(false); }} />}
+      {editingWork && <OurWorkDialog work={work} save={(next) => { saveWork(next); nav.update({ [MARKET_PARAM]: null, [INSPECT_PARAM]: null }); }} close={() => setEditingWork(false)} />}
       {inspection && (
         <Inspect
           inspection={inspection}
@@ -192,9 +230,27 @@ type ViewContext = {
   rows: Award[]; all: Award[]; currency: string; filters: MarketFilters; today: string; partial: boolean;
   setFilters: (next: MarketFilters) => void; focus: (key: "supplier" | "type", name: string) => void;
   inspect: (slice: Slice, title: string, everything?: boolean) => void; openBuyer: (name: string) => void;
+  /** A buyer's page, where a row opens it (not where it lists the buyer's awards instead). */
+  buyerHref: (name: string) => string | undefined;
+  openSupplier: (name: string) => void; supplierHref: (name: string) => string | undefined;
+  /** "Us" beside the workspace's own organisation. */
+  badge: (name: string) => ReactNode;
   params: URLSearchParams; update: (patch: Record<string, string | null>) => void;
   aggregate?: AwardAnalytics;
 };
+
+/**
+ * A supplier opens its page, where everything it won is; an unknown or
+ * migrated supplier name has no page, so it focuses the analysis instead.
+ */
+function supplierLinks(nav: ReturnType<typeof useReaderNavigation>, ours: (name: string) => boolean, focus: (name: string) => void) {
+  const real = (name: string) => !isPlaceholderSupplier(name) && name !== UNKNOWN_SUPPLIER;
+  return {
+    openSupplier: (name: string) => { if (real(name)) nav.openParty("supplier", name); else focus(name); },
+    supplierHref: (name: string) => (real(name) ? nav.partyHref("supplier", name) : undefined),
+    badge: (name: string) => (ours(name) ? <UsBadge /> : undefined),
+  };
+}
 
 function ViewSkeleton() {
   return (
@@ -208,56 +264,79 @@ function ViewSkeleton() {
 /** "so far" on a figure while the list is still loading: never shown as final. */
 const soFar = (partial: boolean, text?: string) => (partial ? [text, "so far"].filter(Boolean).join(" · ") : text);
 
-const rankedRows = (rows: Ranked[], detail: (row: Ranked) => ReactNode, limit: number): RankedRow[] =>
-  rows.slice(0, limit).map((row) => ({ key: row.name, label: row.name, value: Math.max(0, row.value), share: row.share, detail: detail(row) }));
+const rankedRows = (rows: Ranked[], detail: (row: Ranked) => ReactNode, limit: number, link?: Pick<RankedRow, "href" | "badge"> | ((row: Ranked) => Pick<RankedRow, "href" | "badge">)): RankedRow[] =>
+  rows.slice(0, limit).map((row) => ({ key: row.name, label: row.name, value: Math.max(0, row.value), share: row.share, detail: detail(row), ...(typeof link === "function" ? link(row) : link) }));
 
 function OverviewView({ ctx }: { ctx: ViewContext }) {
   const data = useMemo(() => ctx.aggregate?.overview ?? overview(ctx.rows), [ctx.rows, ctx.aggregate]);
   const { currency, partial } = ctx;
+  const compactOf = (v: number) => money(v, currency, true);
+  const exactOf = (v: number) => money(v, currency);
+  const buyers = foldRanked(rankedRows(data.buyers, (row) => counted(row.count, "award"), Infinity, (row) => ({ href: ctx.buyerHref(row.name) })), 8);
+  const suppliers = foldRanked(rankedRows(data.suppliers, (row) => counted(row.count, "award"), Infinity, (row) => ({ href: ctx.supplierHref(row.name), badge: ctx.badge(row.name) })), 8);
+  const types = foldRanked(rankedRows(data.types, (row) => counted(row.count, "award"), Infinity), 8);
+  const leader = data.suppliers[0];
   return (
     <>
       <div className="stat-grid stat-grid--3 procurement-analytics__stats">
-        <StatTile label="Award value" value={money(data.value, currency, true)} sub={soFar(partial, `${count(data.valuedCount)} valued records`)} />
+        <StatTile label="Award value" value={<Amount value={data.value} currency={currency} />} sub={soFar(partial, `${count(data.valuedCount)} valued records`)} />
         <StatTile label="Awards" value={count(data.count)} sub={soFar(partial)} />
-        <StatTile label="Median award" value={money(data.median, currency)} sub={soFar(partial)} />
+        <StatTile label="Median award" value={<Amount value={data.median} currency={currency} />} sub={soFar(partial)} />
         <StatTile label="Buyers" value={count(data.buyerCount)} sub={soFar(partial)} />
         <StatTile label="Suppliers" value={count(data.supplierCount)} sub={soFar(partial)} />
-        <StatTile label="Top 10 supplier share" value={data.positiveTotal > 0 ? percent(data.top10Share) : "—"} sub={soFar(partial, "Positive value only")} />
+        <StatTile
+          label="Suppliers holding 80% of value"
+          value={data.suppliersFor80 === null ? "—" : `${count(data.suppliersFor80)} of ${count(data.supplierCount)}`}
+          sub={soFar(partial, "Positive values only")}
+        />
       </div>
       <ChartCard title={`Market signals${partial ? " so far" : ""}`} headingLevel={3}>
           <ul className="procurement-analytics__signals">
-            <li>
-              <strong>{data.suppliersFor80 === null ? "No positive award value." : `${counted(data.suppliersFor80, "supplier")} ${data.suppliersFor80 === 1 ? "accounts" : "account"} for 80% of positive award value.`}</strong>
-              {data.suppliersFor80 !== null && ` That is ${percent(data.suppliersFor80 / Math.max(1, data.supplierCount))} of the suppliers here.`}
-            </li>
-            <li>{data.buyers[0] ? <><strong>{data.buyers[0].name}</strong> is the largest buyer by recorded award value: {money(data.buyers[0].value, currency)} across {counted(data.buyers[0].count, "award")}.</> : "No buyers match the current filters."}</li>
-            <li>{data.types[0] ? <><strong>{data.types[0].name}</strong> is the largest procurement type by recorded value.</> : "No procurement types match the current filters."}</li>
+            <li>{leader ? <><strong><Party field="supplier" name={leader.name} ctx={ctx} /></strong> won the most by recorded value: <Amount value={leader.value} currency={currency} /> across {counted(leader.count, "award")}, {percent(leader.share)} of the total.</> : "No suppliers match the current filters."}</li>
+            <li>{data.buyers[0] ? <><strong><Party field="organization" name={data.buyers[0].name} ctx={ctx} /></strong> is the largest buyer by recorded award value: <Amount value={data.buyers[0].value} currency={currency} /> across {counted(data.buyers[0].count, "award")}.</> : "No buyers match the current filters."}</li>
+            <li>{data.types[0] ? <><strong>{data.types[0].name}</strong> is the largest procurement type by recorded value: <Amount value={data.types[0].value} currency={currency} />.</> : "No procurement types match the current filters."}</li>
           </ul>
       </ChartCard>
       <div className="procurement-analytics__columns">
-        <ChartCard
+        <RankedCard
           title="Leading buyers"
-          subtitle={`Top ${Math.min(8, data.buyerCount)} of ${count(data.buyerCount)} by recorded value. ${ctx.aggregate ? "Choose one for awards matching these filters." : "Open one for its notices and awards."}`}
+          subtitle={`By recorded value. ${ctx.aggregate ? "Choose one for awards matching these filters." : "Open one for its notices and awards."}`}
           headingLevel={3}
           empty={!data.buyers.length}
           emptyMessage="No buyers match these filters."
           table={entityTable(data.buyers, "Buyer", "Suppliers", currency)}
         >
-          <RankedList rows={rankedRows(data.buyers, (row) => counted(row.count, "award"), 8)} ariaLabel="Leading buyers by award value" formatValue={(v) => money(v, currency, true)} onSelect={(row) => ctx.openBuyer(row.key)} selectLabel={(row) => `Open buyer ${row.label}`} />
-        </ChartCard>
-        <ChartCard
-          title="Leading procurement types"
-          subtitle="By recorded value. Choose one to focus the analysis on it."
+          {(showTable) => <RankedList rows={buyers.rows} rest={buyers.rest} onMore={showTable} ariaLabel="Leading buyers by award value" formatValue={compactOf} exactValue={exactOf} onSelect={(row) => ctx.openBuyer(row.key)} selectLabel={(row) => `Open buyer ${row.label}`} />}
+        </RankedCard>
+        <RankedCard
+          title="Leading suppliers"
+          subtitle="Recorded winners by value. Open one for everything it won, and from whom."
           headingLevel={3}
-          empty={!data.types.length}
-          emptyMessage="No procurement types match these filters."
-          table={entityTable(data.types, "Procurement type", "Suppliers", currency)}
+          empty={!data.suppliers.length}
+          emptyMessage="No suppliers match these filters."
+          table={entityTable(data.suppliers, "Supplier", "Buyers", currency)}
         >
-          <RankedList rows={rankedRows(data.types, (row) => counted(row.count, "award"), 8)} ariaLabel="Leading procurement types by award value" formatValue={(v) => money(v, currency, true)} onSelect={(row) => ctx.focus("type", row.key)} selectLabel={(row) => `Focus on ${row.label}`} />
-        </ChartCard>
+          {(showTable) => <RankedList rows={suppliers.rows} rest={suppliers.rest} onMore={showTable} ariaLabel="Leading suppliers by award value" formatValue={compactOf} exactValue={exactOf} onSelect={(row) => ctx.openSupplier(row.key)} selectLabel={(row) => `Open supplier ${row.label}`} />}
+        </RankedCard>
       </div>
+      <RankedCard
+        title="Leading procurement types"
+        subtitle="By recorded value. Choose one to focus the analysis on it."
+        headingLevel={3}
+        empty={!data.types.length}
+        emptyMessage="No procurement types match these filters."
+        table={entityTable(data.types, "Procurement type", "Suppliers", currency)}
+      >
+        {(showTable) => <RankedList rows={types.rows} rest={types.rest} onMore={showTable} ariaLabel="Leading procurement types by award value" formatValue={compactOf} exactValue={exactOf} onSelect={(row) => ctx.focus("type", row.key)} selectLabel={(row) => `Focus on ${row.label}`} />}
+      </RankedCard>
     </>
   );
+}
+
+/** A buyer or supplier named in a sentence: a link to its page where there is one, marked "Us" when it's ours. */
+function Party({ field, name, ctx }: { field: "organization" | "supplier"; name: string; ctx: ViewContext }) {
+  const href = field === "supplier" ? ctx.supplierHref(name) : ctx.buyerHref(name);
+  return href ? <PartyLink field={field} name={name} /> : <>{name}</>;
 }
 
 function entityTable(rows: Ranked[], name: string, counterparties: string, currency: string) {
@@ -332,6 +411,7 @@ function TrendsView({ ctx }: { ctx: ViewContext }) {
             rows={years.map((row) => ({ key: row.year, label: row.year, value: Math.max(0, row[metric]), detail: metric === "value" ? counted(row.count, "award") : money(row.value, currency, true) }))}
             ariaLabel="Awards by year"
             formatValue={axis}
+            exactValue={metric === "value" ? format : undefined}
             // The calendar follows the year chosen.
             onSelect={(row) => update({ ...filterPatch({ ...ctx.filters, from: `${row.key}-01-01`, to: `${row.key}-12-31` }), year: row.key, inspect: null })}
             selectLabel={(row) => `Focus on ${row.label}`}
@@ -372,16 +452,16 @@ function EntityView({ ctx, kind }: { ctx: ViewContext; kind: "buyer" | "supplier
     <>
       <div className="stat-grid stat-grid--3 procurement-analytics__stats">
         <StatTile label={kind === "buyer" ? "Buyers" : "Suppliers"} value={count(partyCount)} sub={soFar(partial)} />
-        <StatTile label={kind === "buyer" ? "Largest buyer" : "Largest supplier"} compact value={leader?.name ?? "—"} sub={leader ? soFar(partial, `${money(leader.value, currency, true)} · ${percent(leader.share)} of value`) : undefined} />
+        <StatTile label={kind === "buyer" ? "Largest buyer" : "Largest supplier"} compact value={leader ? <Party field={kind === "buyer" ? "organization" : "supplier"} name={leader.name} ctx={ctx} /> : "—"} sub={leader ? <><Amount value={leader.value} currency={currency} /> · {percent(leader.share)} of value{partial && " · so far"}</> : undefined} />
         {kind === "buyer"
           ? <StatTile label="Rely on one supplier" value={count(reliant)} sub={soFar(partial, "3+ awards, 80%+ of value to one supplier")} />
-          : <StatTile label="Suppliers for 80% of value" value={data.suppliersFor80 === null ? "—" : count(data.suppliersFor80)} sub={soFar(partial, `Top 10 hold ${data.positiveTotal > 0 ? percent(data.top10Share) : "—"}`)} />}
+          : <StatTile label="Suppliers holding 80% of value" value={data.suppliersFor80 === null ? "—" : `${count(data.suppliersFor80)} of ${count(data.supplierCount)}`} sub={soFar(partial, "Positive values only")} />}
       </div>
       <ChartCard
         title={kind === "buyer" ? "Buyer directory" : "Supplier directory"}
         subtitle={kind === "buyer"
           ? ctx.aggregate ? "By recorded award value. Choose a buyer for matching awards. Shares and dependence use positive values only." : "By recorded award value. Open a buyer for everything it has published. Shares and dependence use positive values only."
-          : "Recorded winners only, not every bidder. Choose a supplier to focus the analysis on it."}
+          : "Recorded winners only, not every bidder. Open a supplier for everything it won, and from whom."}
         headingLevel={3}
         table={entityTable(rows, kind === "buyer" ? "Buyer" : "Supplier", kind === "buyer" ? "Suppliers" : "Buyers", currency)}
       >
@@ -394,11 +474,13 @@ function EntityView({ ctx, kind }: { ctx: ViewContext; kind: "buyer" | "supplier
             rows={rankedRows(rows, (row) => [
               counted(row.count, "award"), counted(row.counterparties, other), `median ${money(row.median, currency, true)}`,
               row.leading && row.dependence !== null ? `top ${other} ${row.leading} (${percent(row.dependence)})` : "",
-            ].filter(Boolean).join(" · "), remote ? ANALYSIS_PAGE_SIZE : limit)}
+            ].filter(Boolean).join(" · "), remote ? ANALYSIS_PAGE_SIZE : limit,
+            (row) => (kind === "buyer" ? { href: ctx.buyerHref(row.name) } : { href: ctx.supplierHref(row.name), badge: ctx.badge(row.name) }))}
             ariaLabel={kind === "buyer" ? "Buyers by award value" : "Suppliers by award value"}
             formatValue={(v) => money(v, currency, true)}
-            onSelect={(row) => (kind === "buyer" ? ctx.openBuyer(row.key) : ctx.focus("supplier", row.key))}
-            selectLabel={(row) => (kind === "buyer" ? `Open buyer ${row.label}` : `Focus on ${row.label}`)}
+            exactValue={(v) => money(v, currency)}
+            onSelect={(row) => (kind === "buyer" ? ctx.openBuyer(row.key) : ctx.openSupplier(row.key))}
+            selectLabel={(row) => (kind === "buyer" ? `Open buyer ${row.label}` : `Open supplier ${row.label}`)}
           />
         )}
         {remote && <div className="btn-group"><button className="btn btn--sm" disabled={!remote.offset} onClick={() => ctx.update({ rankpage: String(Math.max(0, remote.offset - ANALYSIS_PAGE_SIZE)) })}>Previous</button><button className="btn btn--sm" disabled={remote.offset + rows.length >= remote.total} onClick={() => ctx.update({ rankpage: String(remote.offset + ANALYSIS_PAGE_SIZE) })}>Next</button></div>}
@@ -415,9 +497,9 @@ function SizesView({ ctx }: { ctx: ViewContext }) {
   return (
     <>
       <div className="stat-grid stat-grid--3 procurement-analytics__stats">
-        <StatTile label="Median award" value={money(data.median, currency)} sub={soFar(partial)} />
-        <StatTile label="Middle 50% of values" value={`${money(data.q1, currency, true)} – ${money(data.q3, currency, true)}`} sub={soFar(partial)} />
-        <StatTile label="Largest recorded award" value={money(data.max, currency, true)} sub={soFar(partial)} />
+        <StatTile label="Median award" value={<Amount value={data.median} currency={currency} />} sub={soFar(partial)} />
+        <StatTile label="Middle 50% of values" value={<><Amount value={data.q1} currency={currency} /> – <Amount value={data.q3} currency={currency} /></>} sub={soFar(partial)} />
+        <StatTile label="Largest recorded award" value={<Amount value={data.max} currency={currency} />} sub={soFar(partial)} />
       </div>
       <ChartCard
         title="Award-size distribution"
@@ -435,6 +517,7 @@ function SizesView({ ctx }: { ctx: ViewContext }) {
           rows={data.bins.map((bin) => ({ key: bin.label, label: bin.label, value: Math.abs(bin[metric]), detail: metric === "count" ? money(bin.value, currency, true) : counted(bin.count, "award") }))}
           ariaLabel="Awards by size"
           formatValue={(v) => (metric === "count" ? count(v) : money(v, currency, true))}
+          exactValue={metric === "count" ? undefined : (v) => money(v, currency)}
           onSelect={(row) => { const bin = data.bins.find((item) => item.label === row.key); if (bin) ctx.inspect(bin.slice, `Award sizes · ${bin.label}`); }}
           selectLabel={(row) => `Awards of ${row.label}`}
         />
@@ -451,7 +534,7 @@ function MixView({ ctx }: { ctx: ViewContext }) {
   const data = useMemo(() => ctx.aggregate?.mix ?? matrix(ctx.rows, "type"), [ctx.rows, ctx.aggregate]);
   return (
     <>
-      <ChartCard
+      <RankedCard
         title="Procurement types"
         subtitle="By recorded value. Choose one to focus the analysis on it."
         headingLevel={3}
@@ -459,8 +542,11 @@ function MixView({ ctx }: { ctx: ViewContext }) {
         emptyMessage="No awards match these filters."
         table={entityTable(types, "Procurement type", "Suppliers", currency)}
       >
-        <RankedList rows={rankedRows(types, (row) => `${counted(row.count, "award")} · ${counted(row.counterparties, "supplier")}`, 12)} ariaLabel="Procurement types by award value" formatValue={(v) => money(v, currency, true)} onSelect={(row) => ctx.focus("type", row.key)} selectLabel={(row) => `Focus on ${row.label}`} />
-      </ChartCard>
+        {(showTable) => {
+          const folded = foldRanked(rankedRows(types, (row) => `${counted(row.count, "award")} · ${counted(row.counterparties, "supplier")}`, Infinity), 12);
+          return <RankedList rows={folded.rows} rest={folded.rest} onMore={showTable} ariaLabel="Procurement types by award value" formatValue={(v) => money(v, currency, true)} exactValue={(v) => money(v, currency)} onSelect={(row) => ctx.focus("type", row.key)} selectLabel={(row) => `Focus on ${row.label}`} />;
+        }}
+      </RankedCard>
       <ChartCard
         title="Buyer × procurement type"
         subtitle={`Top ${data.rows.length} of ${count(data.buyerCount)} buyers × top ${data.columns.length} of ${count(data.columnCount)} types: ${count(data.shownCount)} of ${counted(data.totalCount, "award")}. Choose a cell for its awards.`}

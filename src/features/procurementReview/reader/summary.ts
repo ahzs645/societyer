@@ -9,12 +9,29 @@ function publishedWhen(published: Date): string {
 }
 
 /**
- * The line under the page title: "Updated today, 10:02 AM · read only". The
- * tabs under it count the opportunities and awards, so it doesn't repeat them.
+ * The line under the page title: "Updated today, 10:02 AM". The tabs under it
+ * count the opportunities and awards, so it doesn't repeat them. It adds
+ * "read only" only for someone who can't record a triage here; where the
+ * triage is editable (hosted readers with the permission, the demo's
+ * browser-kept one) the page isn't read only, so it doesn't say so.
  */
-export function updatedSummary(publishedAt: string): string {
+export function updatedSummary(publishedAt: string, { readOnly = false }: { readOnly?: boolean } = {}): string {
   const published = new Date(publishedAt);
-  return Number.isNaN(published.getTime()) ? "Read only" : `Updated ${publishedWhen(published)} · read only`;
+  const updated = Number.isNaN(published.getTime()) ? "" : `Updated ${publishedWhen(published)}`;
+  return [updated, readOnly ? (updated ? "read only" : "Read only") : ""].filter(Boolean).join(" · ");
+}
+
+/** "2 hours ago", "yesterday", "Nov 12": how long ago the catalog in service was put there, for the status line. */
+export function sinceWhen(value: string | number | null | undefined, now = Date.now()): string {
+  if (!value) return "";
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return "";
+  const minutes = Math.round((now - at.getTime()) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.round(minutes / 60)} h ago`;
+  if (isYesterday(at)) return "yesterday";
+  return format(at, isThisYear(at) ? "MMM d" : "MMM d, yyyy");
 }
 
 const exact = new Intl.DateTimeFormat("en-US", { timeZone: DEADLINE_ZONE, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });

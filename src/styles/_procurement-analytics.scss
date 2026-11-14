@@ -98,6 +98,16 @@
   overflow-wrap: anywhere;
   text-align: left;
 }
+// "Our work" or the whole market, and what "our work" means.
+.procurement-analytics__scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2') token('s-3');
+  min-width: 0;
+  p { display: flex; flex-wrap: wrap; align-items: center; gap: 0 token('s-1'); margin: 0; font-size: token('fs-sm'); overflow-wrap: anywhere; }
+}
+.procurement-analytics__keywords { min-height: 72px; }
 .procurement-analytics__loading {
   display: grid;
   gap: token('s-2');
@@ -347,6 +357,13 @@
   .procurement-analytics__action-label { display: none; }
   .procurement-analytics__actions { flex: 0 0 auto; flex-wrap: nowrap; }
   .procurement-analytics__skeleton { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  // Labels like "Suppliers holding 80% of value" wrap rather than lose their end.
+  .procurement-analytics__stats .stat-tile__label-text { white-space: normal; }
+  // The toggle and Edit share a row; what "our work" means goes under them.
+  .procurement-analytics__scope {
+    justify-content: space-between;
+    p { order: 3; flex-basis: 100%; }
+  }
 }
 
 // Buyer / issued-for page.

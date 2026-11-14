@@ -2,7 +2,8 @@
  * One organisation across the catalog, for a quick flow from a notice: as the
  * buyer (`?buyer=`), what else it is looking for and whom it has awarded; as
  * the organisation a notice is issued for (`?issuedFor=`), the same, and the
- * buyers who issue for it.
+ * buyers who issue for it. A supplier (`?supplier=`) has its own page
+ * (party/SupplierPage.tsx): what it won, and from whom.
  *
  * In tabs, so a buyer with hundreds of awards isn't one endless scroll:
  * Overview (the figures, what closes soonest, the latest awards, the top
@@ -10,154 +11,54 @@
  * Awards, each one table that fills the page. The tab is in the URL
  * (`partyTab`), so Back from a notice lands on the same one. Both lists load
  * progressively, so the figures say when they're partial. A notice opens over
- * this page, and Back returns here.
+ * this page, and Back returns here. The overview itself is
+ * party/BuyerSummary.tsx; it fits what the organisation has published.
  */
-import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
-import { BarChart3, Building2 } from "lucide-react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { BarChart3, Building2, ExternalLink } from "lucide-react";
 import { EmptyState, Skeleton } from "../../../components/ui";
 import { ChartCard } from "../../../components/charts";
 import { StatTile } from "../../../components/StatTile";
-import { Tabs } from "../../../components/primitives";
-import { count, counted, money, normalizeAwards, rank } from "../lib/market";
-import { isOpenOpportunity, opportunityInsights } from "../lib/insights";
-import { shortSourceDate } from "../lib/notice";
+import { count, counted, money } from "../lib/market";
+import { isOpenOpportunity } from "../lib/insights";
+import { safeHttpsUrl, sourceLabel } from "../lib/notice";
+import { useIsOurOrganisation } from "../lib/ourOrganisation";
 import { NoticeTable, type NoticeViewId } from "./NoticeTable";
 import { ReaderBackButton, ReaderHeader } from "./ReaderHeader";
-import {
-  PARTY_TAB_PARAM,
-  useReaderNavigation,
-  type PartyField,
-} from "./routes";
+import { useReaderNavigation, type PartyField } from "./routes";
 import { useReaderSource, type ListRow, type RecordList } from "./source";
-import { LoadingLine, RankedList } from "./analytics/parts";
+import { Amount, LoadingLine, RankedList, foldRanked } from "./analytics/parts";
+import { PARTY_ROUTE_KEY, PartyTabs, UsBadge, partyKey, progressOf, titleOf, usePartyTab, type NoticeTab } from "./party/parts";
+import { BuyerSummary, relation, type BuyerField } from "./party/BuyerSummary";
+import { SupplierPage } from "./party/SupplierPage";
 import { useProcurementClock } from "../lib/clock";
-import { procurementPartyKey } from "../../../../shared/procurementAnalytics";
-import { toNoticeRow, type NoticeRow } from "../../../../shared/procurementNoticeRow";
 
-/** Not a registered route: the header shows no icon tile beside a long organisation name. */
-const PARTY_ROUTE_KEY = "procurement-review/party";
-/** The notice page's rule for "the same organisation" (lib/notice.ts `partyCount`): case, spacing and punctuation don't matter. */
-const partyKey = procurementPartyKey;
-const eyebrowOf = (field: PartyField) =>
-  field === "organization" ? "Buyer" : field === "supplier" ? "Supplier" : "Issued for";
-const titleOf = (name: string) => name || "Unnamed organisation";
-/** "from" a buyer, "issued for" an organisation. */
-const relation = (field: PartyField) =>
-  field === "organization" ? "from" : field === "supplier" ? "awarded to" : "issued for";
-/** How many notices the overview's short lists show before "All …". */
-const PREVIEW = 5;
+const eyebrowOf = (field: BuyerField) => (field === "organization" ? "Buyer" : "Issued for");
+/** Sources whose notices sit on the buyer's own procurement site (a bids&tenders portal or its website). */
+const OWN_SITE_SOURCES = new Set(["bids&tenders", "Buyer's website"]);
 
-type PartyTab = "overview" | "opportunities" | "awards";
-type NoticeTab = Exclude<PartyTab, "overview">;
-const isPartyTab = (value: string | null): value is PartyTab =>
-  value === "overview" || value === "opportunities" || value === "awards";
-
-/** The tab showing, from the URL; changing it replaces the history entry rather than adding one. */
-function usePartyTab(fallback: PartyTab = "overview") {
-  const nav = useReaderNavigation();
-  const requested = nav.params.get(PARTY_TAB_PARAM);
-  const tab: PartyTab = isPartyTab(requested) ? requested : fallback;
-  const setTab = (next: PartyTab) =>
-    nav.update({ [PARTY_TAB_PARAM]: next === fallback ? null : next });
-  return [tab, setTab] as const;
-}
-
-/** The tab row and the panel it controls. */
-function PartyTabs<T extends PartyTab>({
-  tab,
-  onChange,
-  items,
-  trailing,
-  children,
-}: {
-  tab: T;
-  onChange: (tab: T) => void;
-  items: { id: T; label: string; count?: number | null }[];
-  trailing?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <>
-      <Tabs
-        value={tab}
-        onChange={onChange}
-        items={items}
-        trailing={trailing}
-        tabRoles
-        ariaLabel="Organisation sections"
-      />
-      <div
-        role="tabpanel"
-        aria-label={items.find((item) => item.id === tab)?.label}
-        className="procurement-party__panel"
-      >
-        {children}
-      </div>
-    </>
-  );
-}
-
-const progressOf = (list: RecordList) => ({
-  loaded: list.rows.length,
-  total: list.total,
-  done: list.done,
-});
-
-function mine(
-  list: RecordList | undefined,
-  field: PartyField,
-  key: string,
-): ListRow[] {
+function mine(list: RecordList | undefined, field: BuyerField, key: string): ListRow[] {
   return key && list
-    ? list.rows.filter(
-        (row) =>
-          partyKey(
-            field === "organization" ? row.organization : row.issuedFor,
-          ) === key,
-      )
+    ? list.rows.filter((row) => partyKey(field === "organization" ? row.organization : row.issuedFor) === key)
     : [];
 }
 
-export function BuyerPage({
-  field,
-  name,
-}: {
-  field: PartyField;
-  name: string;
-}) {
+export function BuyerPage({ field, name }: { field: PartyField; name: string }) {
   const source = useReaderSource();
   const [analysis, setAnalysis] = useState(false);
   // The summary needs the server's analysis and its table the server's pages; the
   // service reader offers analysis but only whole lists, so it reads the full page.
   // A supplier page reads the whole award list: the server's analysis and pages know buyers only.
-  if (field === "supplier") return <FullBuyerPage field={field} name={name} />;
-  if (source.useAnalysis && source.usePage)
-    return <ServerBuyerPage field={field} name={name} />;
-  if (!source.usePage || analysis)
-    return <FullBuyerPage field={field} name={name} />;
-  return (
-    <PagedBuyerPage
-      field={field}
-      name={name}
-      onAnalysis={() => setAnalysis(true)}
-    />
-  );
+  if (field === "supplier") return <SupplierPage name={name} />;
+  if (source.useAnalysis && source.usePage) return <ServerBuyerPage field={field} name={name} />;
+  if (!source.usePage || analysis) return <FullBuyerPage field={field} name={name} />;
+  return <PagedBuyerPage field={field} name={name} onAnalysis={() => setAnalysis(true)} />;
 }
 
 const EMPTY_PAGE: ListRow[] = [];
-/** The organisations the server can page and analyse by (not suppliers). */
-type ServerPartyField = Exclude<PartyField, "supplier">;
 
 /** A server-paged table of the organisation's notices of one kind. */
-function ServerNotices({
-  field,
-  name,
-  tab,
-}: {
-  field: ServerPartyField;
-  name: string;
-  tab: NoticeTab;
-}) {
+function ServerNotices({ field, name, tab }: { field: BuyerField; name: string; tab: NoticeTab }) {
   const kind = tab === "awards" ? "award" : "opportunity";
   return (
     <NoticeTable
@@ -173,15 +74,7 @@ function ServerNotices({
 }
 
 /** A server with pages but no analysis: the two lists, and the full page's figures on request. */
-function PagedBuyerPage({
-  field,
-  name,
-  onAnalysis,
-}: {
-  field: ServerPartyField;
-  name: string;
-  onAnalysis: () => void;
-}) {
+function PagedBuyerPage({ field, name, onAnalysis }: { field: BuyerField; name: string; onAnalysis: () => void }) {
   const [tab, setTab] = usePartyTab("opportunities");
   const shown: NoticeTab = tab === "awards" ? "awards" : "opportunities";
   return (
@@ -200,11 +93,7 @@ function PagedBuyerPage({
           { id: "awards", label: "Awards" },
         ]}
         trailing={
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={onAnalysis}
-          >
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onAnalysis}>
             <BarChart3 size={14} aria-hidden="true" /> Load buyer analysis
           </button>
         }
@@ -215,11 +104,29 @@ function PagedBuyerPage({
   );
 }
 
-function ServerBuyerPage({ field, name }: { field: ServerPartyField; name: string }) {
+function ServerBuyerPage({ field, name }: { field: BuyerField; name: string }) {
   const source = useReaderSource();
+  const nav = useReaderNavigation();
+  const ours = useIsOurOrganisation();
   const [tab, setTab] = usePartyTab();
   const result = source.useAnalysis!({ view: "party", party: { field, name } });
   const data = result.result?.type === "party" ? result.result.data : null;
+  const soon = data ? data.opportunities.windows.today + data.opportunities.windows.week : 0;
+  const cad = (value: number) => money(value, "CAD", true);
+  const suppliers = data
+    ? foldRanked(
+        data.awards.overview.suppliers.map((row) => ({
+          key: row.name,
+          label: row.name,
+          value: Math.max(0, row.value),
+          share: row.share,
+          detail: counted(row.count, "award"),
+          href: nav.partyHref("supplier", row.name),
+          badge: ours(row.name) ? <UsBadge /> : undefined,
+        })),
+        8,
+      )
+    : null;
   return (
     <div className="procurement-party">
       <ReaderHeader
@@ -233,11 +140,7 @@ function ServerBuyerPage({ field, name }: { field: ServerPartyField; name: strin
         onChange={setTab}
         items={[
           { id: "overview", label: "Overview" },
-          {
-            id: "opportunities",
-            label: "Opportunities",
-            count: data?.opportunities.total ?? null,
-          },
+          { id: "opportunities", label: "Opportunities", count: data?.opportunities.total ?? null },
           { id: "awards", label: "Awards", count: data?.awards.published ?? null },
         ]}
       >
@@ -250,50 +153,46 @@ function ServerBuyerPage({ field, name }: { field: ServerPartyField; name: strin
               Retry summary
             </button>
           </p>
-        ) : data ? (
+        ) : data && suppliers ? (
           <>
             <div className="stat-grid procurement-analytics__stats">
-              <StatTile
-                label="Open opportunities"
-                value={count(data.opportunities.open)}
-                sub={`of ${count(data.opportunities.total)} published`}
-                onClick={() => setTab("opportunities")}
-              />
-              <StatTile
-                label="Closing within 7 days"
-                value={count(
-                  data.opportunities.windows.today +
-                    data.opportunities.windows.week,
-                )}
-              />
-              <StatTile
-                label="Awards"
-                value={count(data.awards.published)}
-                onClick={() => setTab("awards")}
-              />
-              <StatTile
-                label="Recorded award value (CAD)"
-                value={money(data.awards.overview.value, "CAD", true)}
-                sub={`${count(data.awards.included)} included; ${count(data.awards.excluded)} excluded by currency, supplier and date rules`}
-              />
+              {data.opportunities.total > 0 && (
+                <StatTile
+                  label="Open opportunities"
+                  value={count(data.opportunities.open)}
+                  sub={`${count(data.opportunities.total)} published`}
+                  onClick={() => setTab("opportunities")}
+                />
+              )}
+              {soon > 0 && <StatTile label="Closing within 7 days" value={count(soon)} tone="warn" />}
+              {data.awards.published > 0 && (
+                <StatTile label="Awards" value={count(data.awards.published)} onClick={() => setTab("awards")} />
+              )}
+              {data.awards.included > 0 && (
+                <StatTile
+                  label="Recorded award value (CAD)"
+                  value={<Amount value={data.awards.overview.value} currency="CAD" />}
+                  sub={`${count(data.awards.included)} included; ${count(data.awards.excluded)} excluded by currency, supplier and date rules`}
+                />
+              )}
             </div>
-            <ChartCard
-              title="Top suppliers"
-              subtitle="CAD recorded values; placeholder suppliers and future awards excluded."
-              headingLevel={3}
-            >
-              <RankedList
-                rows={data.awards.overview.suppliers.slice(0, 8).map((row) => ({
-                  key: row.name,
-                  label: row.name,
-                  value: Math.max(0, row.value),
-                  share: row.share,
-                  detail: counted(row.count, "award"),
-                }))}
-                ariaLabel="Top suppliers"
-                formatValue={(v) => money(v, "CAD", true)}
-              />
-            </ChartCard>
+            {suppliers.rows.length > 0 && (
+              <ChartCard
+                title="Top suppliers"
+                subtitle="CAD recorded values; placeholder suppliers and future awards excluded. Open one for everything it won."
+                headingLevel={3}
+              >
+                <RankedList
+                  rows={suppliers.rows}
+                  rest={suppliers.rest}
+                  ariaLabel="Top suppliers"
+                  formatValue={cad}
+                  exactValue={(value) => money(value, "CAD")}
+                  onSelect={(row) => nav.openParty("supplier", row.key)}
+                  selectLabel={(row) => `Open supplier ${row.label}`}
+                />
+              </ChartCard>
+            )}
           </>
         ) : (
           <p className="muted" role="status">
@@ -305,7 +204,32 @@ function ServerBuyerPage({ field, name }: { field: ServerPartyField; name: strin
   );
 }
 
-function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
+/**
+ * The buyer's own procurement site, from the newest of its notices that came
+ * from there (a bids&tenders portal or its website). BC Bid and CanadaBuys
+ * notices name no site of the buyer's, so a buyer seen only there has none.
+ */
+function BuyerSiteLink({ recordKey }: { recordKey: string }) {
+  const source = useReaderSource();
+  const record = source.useRecord(recordKey);
+  const url = useMemo(() => {
+    if (!record) return undefined;
+    try {
+      const data: unknown = JSON.parse(record.dataJson);
+      return data && typeof data === "object" && "sourceUrl" in data ? safeHttpsUrl(data.sourceUrl) : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [record]);
+  if (!url) return null;
+  return (
+    <a className="btn btn--sm" href={url} target="_blank" rel="noreferrer noopener" title={url} aria-label="Procurement site, in a new tab">
+      <ExternalLink size={14} aria-hidden="true" /> Procurement site
+    </a>
+  );
+}
+
+function FullBuyerPage({ field, name }: { field: BuyerField; name: string }) {
   const source = useReaderSource();
   const now = useProcurementClock();
   const [tab, setTab] = usePartyTab();
@@ -314,17 +238,21 @@ function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
   const opportunityRows = useDeferredValue(opportunityList);
   const awardRows = useDeferredValue(awardList);
   const key = partyKey(name);
-  const opportunities = useMemo(
-    () => mine(opportunityRows, field, key),
-    [opportunityRows, field, key],
-  );
-  const awards = useMemo(
-    () => mine(awardRows, field, key),
-    [awardRows, field, key],
-  );
+  const opportunities = useMemo(() => mine(opportunityRows, field, key), [opportunityRows, field, key]);
+  const awards = useMemo(() => mine(awardRows, field, key), [awardRows, field, key]);
   const done = Boolean(opportunityList?.done && awardList?.done);
   const [view, setView] = useState<NoticeViewId | null>(null);
   const partial = !done;
+  // The newest notice from the buyer's own site, for the header's link to it.
+  const ownSite = useMemo(
+    () =>
+      field === "organization"
+        ? opportunities
+            .filter((row) => OWN_SITE_SOURCES.has(sourceLabel(row.recordKey)))
+            .reduce<ListRow | null>((newest, row) => (!newest || row.date > newest.date ? row : newest), null)
+        : null,
+    [opportunities, field],
+  );
 
   const header = (subtitle?: string) => (
     <ReaderHeader
@@ -332,6 +260,7 @@ function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
       routeKey={PARTY_ROUTE_KEY}
       eyebrow={eyebrowOf(field)}
       subtitle={subtitle}
+      actions={ownSite ? <BuyerSiteLink recordKey={ownSite.recordKey} /> : undefined}
     />
   );
 
@@ -365,16 +294,12 @@ function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
   const anyOpen = opportunities.some((row) => isOpenOpportunity(row, now));
   const none = (list: RecordList, noun: string) => (
     <p className="muted">
-      {list.done
-        ? `No published ${noun} ${relation(field)} ${titleOf(name)}.`
-        : "None found yet."}
+      {list.done ? `No published ${noun} ${relation(field)} ${titleOf(name)}.` : "None found yet."}
     </p>
   );
   return (
     <div className="procurement-party">
-      {header(
-        `${counted(total, "published notice")}${partial ? " so far" : ""}`,
-      )}
+      {header(`${counted(total, "published notice")}${partial ? " so far" : ""}`)}
       {partial && (
         <LoadingLine
           list={!opportunityList.done ? opportunityList : awardList}
@@ -386,22 +311,12 @@ function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
         onChange={setTab}
         items={[
           { id: "overview", label: "Overview" },
-          {
-            id: "opportunities",
-            label: "Opportunities",
-            count: opportunities.length,
-          },
+          { id: "opportunities", label: "Opportunities", count: opportunities.length },
           { id: "awards", label: "Awards", count: awards.length },
         ]}
       >
         {tab === "overview" && (
-          <PartySummary
-            field={field}
-            opportunities={opportunities}
-            awards={awards}
-            partial={partial}
-            onShow={setTab}
-          />
+          <BuyerSummary field={field} opportunities={opportunities} awards={awards} partial={partial} onShow={setTab} />
         )}
         {tab === "opportunities" &&
           (opportunities.length ? (
@@ -434,335 +349,5 @@ function FullBuyerPage({ field, name }: { field: PartyField; name: string }) {
           ))}
       </PartyTabs>
     </div>
-  );
-}
-
-/**
- * The overview: open and closing soon, how much it has awarded and to whom,
- * and when it last did; the few opportunities closing soonest and the latest
- * awards, each a way into its notice; and for an issued-for organisation the
- * buyers who issue for it (for a buyer, the organisations it issues for, when
- * there are any). The tiles for the two lists open their tabs.
- */
-function PartySummary({
-  field,
-  opportunities,
-  awards,
-  partial,
-  onShow,
-}: {
-  field: PartyField;
-  opportunities: ListRow[];
-  awards: ListRow[];
-  partial: boolean;
-  onShow: (tab: PartyTab) => void;
-}) {
-  const nav = useReaderNavigation();
-  const now = useProcurementClock();
-  const open = useMemo(
-    () => opportunityInsights(opportunities, now),
-    [opportunities, now],
-  );
-  // Open ones by closing date, undated last; the latest awards first.
-  const closing = useMemo(
-    () =>
-      opportunities
-        .filter((row) => open.openKeys.has(row.recordKey))
-        .map((row) => toNoticeRow(row, now))
-        .sort(
-          (a, b) =>
-            Number(!a.when) - Number(!b.when) || a.when.localeCompare(b.when),
-        ),
-    [opportunities, open, now],
-  );
-  const latest = useMemo(
-    () =>
-      awards
-        .map((row) => toNoticeRow(row, now))
-        .sort((a, b) => b.when.localeCompare(a.when))
-        .slice(0, PREVIEW),
-    [awards, now],
-  );
-  const awarded = useMemo(() => {
-    const normalized = normalizeAwards(awards);
-    // CAD unless the organisation awards in another currency only; currencies are never added together.
-    const currency = normalized.some((award) => award.currencyCode === "CAD")
-      ? "CAD"
-      : (normalized[0]?.currencyCode ?? "CAD");
-    const inCurrency = normalized.filter(
-      (award) => award.currencyCode === currency,
-    );
-    const positive = (rows: typeof inCurrency) =>
-      rows.reduce((n, award) => n + Math.max(0, award.value ?? 0), 0);
-    // Shares are of everything awarded, so they add up against the Total awarded tile;
-    // what went to unknown or migrated supplier names is said, not ranked.
-    const all = positive(inCurrency);
-    const unnamed = positive(inCurrency.filter((award) => award.placeholder));
-    const suppliers = rank(
-      inCurrency.filter((award) => !award.placeholder),
-      "supplier",
-    ).map((row) => ({ ...row, share: all > 0 ? row.positiveValue / all : 0 }));
-    const latestDate = normalized.reduce<string | null>(
-      (last, award) =>
-        award.date && (!last || award.date > last) ? award.date : last,
-      null,
-    );
-    return {
-      currency,
-      value: inCurrency.reduce((n, award) => n + (award.value ?? 0), 0),
-      valued: inCurrency.filter((award) => award.value !== null).length,
-      other: normalized.length - inCurrency.length,
-      all,
-      unnamed,
-      suppliers,
-      latest: latestDate,
-    };
-  }, [awards]);
-  const counterparts = useMemo(() => {
-    const names = new Map<string, number>();
-    for (const row of [...opportunities, ...awards]) {
-      const other = (
-        field === "issuedFor" ? row.organization : row.issuedFor
-      ).trim();
-      if (
-        other &&
-        partyKey(other) !==
-          partyKey(field === "issuedFor" ? row.issuedFor : row.organization)
-      )
-        names.set(other, (names.get(other) ?? 0) + 1);
-    }
-    return [...names]
-      .map(([label, n]) => ({ key: label, label, value: n }))
-      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
-  }, [opportunities, awards, field]);
-  const soon = open.windows.today + open.windows.week;
-  const so = (text?: string) =>
-    partial ? [text, "so far"].filter(Boolean).join(" · ") : text;
-  const money0 = (value: number) => money(value, awarded.currency, true);
-
-  return (
-    <>
-      <div className="stat-grid procurement-analytics__stats">
-        <StatTile
-          label="Open opportunities"
-          value={count(open.open)}
-          sub={so(
-            [
-              `of ${counted(opportunities.length, "opportunity", "opportunities")}`,
-              // The list's "Open, closing soonest" leaves these out; say so, or the counts disagree.
-              open.windows.undated
-                ? `${count(open.windows.undated)} with no closing date`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · "),
-          )}
-          onClick={opportunities.length ? () => onShow("opportunities") : undefined}
-          actionLabel="Show the opportunities"
-        />
-        <StatTile
-          label="Closing within 7 days"
-          value={count(soon)}
-          tone={soon ? "warn" : "neutral"}
-          sub={so(
-            open.windows.twoWeeks
-              ? `${count(open.windows.twoWeeks)} more in the week after`
-              : undefined,
-          )}
-        />
-        <StatTile
-          label="Awards"
-          value={count(awards.length)}
-          sub={so(
-            awarded.latest
-              ? `Latest ${shortSourceDate(awarded.latest)}`
-              : awards.length
-                ? "No readable award dates"
-                : undefined,
-          )}
-          onClick={awards.length ? () => onShow("awards") : undefined}
-          actionLabel="Show the awards"
-        />
-        <StatTile
-          label="Total awarded"
-          value={awarded.valued ? money0(awarded.value) : "—"}
-          sub={so(
-            [
-              awarded.valued
-                ? `${count(awarded.valued)} with values`
-                : awards.length
-                  ? "No values published"
-                  : "",
-              awarded.other
-                ? `${count(awarded.other)} in other currencies`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · ") || undefined,
-          )}
-        />
-      </div>
-      <div className="procurement-analytics__columns procurement-party__overview">
-        {closing.length > 0 && (
-          <ChartCard
-            title="Closing soonest"
-            subtitle={`Open opportunities ${relation(field)} this organisation${partial ? ", so far" : ""}.`}
-            headingLevel={3}
-            footer={
-              closing.length > PREVIEW && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => onShow("opportunities")}
-                >
-                  All {count(closing.length)} open opportunities
-                </button>
-              )
-            }
-          >
-            <NoticeLinks
-              rows={closing.slice(0, PREVIEW)}
-              onOpen={nav.openNotice}
-              meta={(row) => (
-                <span
-                  className="procurement-reader__when"
-                  data-state={row.state}
-                >
-                  {row.when ? `Closes ${row.whenText}` : row.whenText}
-                  {row.relative && <small> · {row.relative}</small>}
-                </span>
-              )}
-              aside={(row) =>
-                row.documents ? counted(row.documents, "document") : null
-              }
-            />
-          </ChartCard>
-        )}
-        {latest.length > 0 && (
-          <ChartCard
-            title="Latest awards"
-            subtitle={`Who won the most recent contracts${partial ? ", so far" : ""}.`}
-            headingLevel={3}
-            footer={
-              awards.length > PREVIEW && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => onShow("awards")}
-                >
-                  All {count(awards.length)} awards
-                </button>
-              )
-            }
-          >
-            <NoticeLinks
-              rows={latest}
-              onOpen={nav.openNotice}
-              meta={(row) =>
-                [row.supplier || "Supplier not named", row.whenText]
-                  .filter(Boolean)
-                  .join(" · ")
-              }
-              aside={(row) =>
-                row.value === null ? null : money(row.value, row.currency, true)
-              }
-            />
-          </ChartCard>
-        )}
-        {awarded.suppliers.length > 0 && (
-          <ChartCard
-            title="Top suppliers"
-            subtitle={[
-              `Who ${field === "organization" ? "this buyer" : "these notices"} awarded to, by recorded value in ${awarded.currency}${partial ? ", so far" : ""}. Shares are of all ${money0(awarded.all)} awarded.`,
-              awarded.unnamed > 0
-                ? `${money0(awarded.unnamed)} went to unnamed or migrated suppliers, not ranked here.`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            headingLevel={3}
-          >
-            <RankedList
-              rows={awarded.suppliers.slice(0, PREVIEW).map((row) => ({
-                key: row.name,
-                label: row.name,
-                value: Math.max(0, row.value),
-                share: row.share,
-                detail: counted(row.count, "award"),
-              }))}
-              ariaLabel="Top suppliers by award value"
-              formatValue={money0}
-            />
-          </ChartCard>
-        )}
-        {counterparts.length > 0 && (
-          <ChartCard
-            title={
-              field === "issuedFor"
-                ? "Buyers who issue for them"
-                : "Issues notices for"
-            }
-            subtitle={`${field === "issuedFor" ? "The buyers named on these notices." : "Organisations this buyer issued notices for."} Open one for its own page.`}
-            headingLevel={3}
-          >
-            <RankedList
-              rows={counterparts
-                .slice(0, 8)
-                .map((row) => ({ ...row, detail: undefined }))}
-              ariaLabel={
-                field === "issuedFor"
-                  ? "Buyers by notices"
-                  : "Organisations by notices"
-              }
-              formatValue={(value) => counted(value, "notice")}
-              onSelect={(row) =>
-                nav.openParty(
-                  field === "issuedFor" ? "organization" : "issuedFor",
-                  row.key,
-                )
-              }
-              selectLabel={(row) => `Open ${row.label}`}
-            />
-          </ChartCard>
-        )}
-      </div>
-    </>
-  );
-}
-
-/** A short list of notices, each opening its page: the title, a line under it, and a figure at the right. */
-function NoticeLinks({
-  rows,
-  onOpen,
-  meta,
-  aside,
-}: {
-  rows: NoticeRow[];
-  onOpen: (recordKey: string) => void;
-  meta: (row: NoticeRow) => ReactNode;
-  aside: (row: NoticeRow) => ReactNode;
-}) {
-  return (
-    <ul className="procurement-party__notices">
-      {rows.map((row) => (
-        <li key={row._id}>
-          <button
-            type="button"
-            className="procurement-analytics__award"
-            onClick={() => onOpen(row._id)}
-          >
-            <span className="procurement-analytics__award-title">
-              {row.title}
-            </span>
-            <span className="procurement-party__notice-aside">
-              {aside(row)}
-            </span>
-            <span className="procurement-analytics__award-meta muted">
-              {meta(row)}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }
