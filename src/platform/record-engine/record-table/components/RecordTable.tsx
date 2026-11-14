@@ -949,7 +949,8 @@ export function RecordTable({
           }}
           renderCard={(record) => {
             const detailColumns = boardDetailColumns
-              .filter((column) => !isEmptyValue(record[column.field.name]))
+              // A count that means "none" at zero (`config.hideZero`) says nothing on a card.
+              .filter((column) => !isEmptyValue(record[column.field.name]) && !(column.field.config?.hideZero === true && record[column.field.name] === 0))
               .slice(0, 3);
             const rawTitle = record[labelColumn?.field.name ?? "_id"];
             const title = String(rawTitle ?? "").trim() || "Untitled";

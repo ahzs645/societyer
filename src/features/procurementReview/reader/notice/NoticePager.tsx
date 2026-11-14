@@ -26,7 +26,8 @@ import type { NoticeTriageControl } from "../NoticeTriageBar";
 export type NoticeNeighbours = {
   previous: string | null;
   next: string | null;
-  position: number;
+  /** Null when the notice has just left the list (it was triaged out of the view) but keeps its neighbours. */
+  position: number | null;
   total: number;
   go: (recordKey: string) => void;
 };
@@ -36,7 +37,7 @@ export function useNoticeNeighbours(recordKey: string): NoticeNeighbours | null 
   const adjacent = useAdjacentNotices(recordKey);
   const { party, analytics } = readerPlaces(params);
   const go = useCallback((key: string) => update({ [NOTICE_PARAM]: key, tab: null }), [update]);
-  if (party || analytics || adjacent.position === null) return null;
+  if (party || analytics || (adjacent.position === null && !adjacent.previous && !adjacent.next)) return null;
   return { previous: adjacent.previous, next: adjacent.next, position: adjacent.position, total: adjacent.total, go };
 }
 
@@ -74,7 +75,7 @@ export function NoticePager({ neighbours, compact = false }: { neighbours: Notic
         </button>
       </Tooltip>
       <span className={compact ? "sr-only" : "procurement-pager__position"}>
-        {position} of {total}
+        {position === null ? `${total} left` : `${position} of ${total}`}
       </span>
       <Tooltip content={<>Next notice <ShortcutHint keys={["J"]} tone="inverse" /></>}>
         <button
@@ -101,8 +102,9 @@ const MODAL_OPEN = 'dialog[open], [role="dialog"][aria-modal="true"]';
  * While the notice is open and focus isn't in a field: J and K step to the
  * next and previous notice, 1–4 classify it (in TRIAGE_CLASSIFICATIONS
  * order: Doable, Possible, Needs a partner, Not doable) and R ticks or
- * unticks Reviewed, when the triage can be changed. Keys pressed in the list
- * beside the notice (the wide desktop's split) stay the list's. `announce`
+ * unticks Reviewed, when the triage can be changed. In the wide desktop's
+ * split, J and K pressed in the list beside the notice stay the list's, while
+ * 1–4 and R still act on the open notice. `announce`
  * says what a key did, for screen readers.
  */
 export function useNoticeShortcuts({
@@ -125,12 +127,16 @@ export function useNoticeShortcuts({
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       const target = event.target;
       if (isTypingTarget(target)) return;
-      if (target instanceof Element && target !== document.body && !root?.contains(target)) return;
+      // Focus on the notice, or on a container around it (clicking plain text focuses the app's
+      // <main>), counts as on the notice. In the split view the list beside it keeps J and K for
+      // its own rows, but the classify keys still act on the notice that's open.
+      const inSplitList = target instanceof Element && Boolean(target.closest(".procurement-split__list"));
+      if (target instanceof Element && !inSplitList && root && !root.contains(target) && !target.contains(root)) return;
       if (target instanceof Element && target.closest(ELSEWHERE)) return;
       if (document.querySelector(MODAL_OPEN)) return;
       const { neighbours: around, triage: control, announce: say } = latest.current;
       const key = event.key.toLowerCase();
-      if ((key === "j" || key === "k") && around) {
+      if ((key === "j" || key === "k") && around && !inSplitList) {
         const to = key === "j" ? around.next : around.previous;
         event.preventDefault();
         if (to) around.go(to);

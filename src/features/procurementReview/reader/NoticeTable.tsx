@@ -200,7 +200,7 @@ function tableFor(kind: NoticeKind, triage = false) {
           },
           {
             name: "documents",
-            config: { groupable: false },
+            config: { groupable: false, hideZero: true },
             label: "Documents",
             fieldType: FIELD_TYPES.NUMBER,
             size: 110,
