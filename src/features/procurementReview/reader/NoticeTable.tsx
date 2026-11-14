@@ -107,7 +107,7 @@ function tableFor(kind: NoticeKind, triage = false) {
             config: { groupable: false },
             label: "Award",
             fieldType: FIELD_TYPES.TEXT,
-            size: 440,
+            size: 320,
           },
           {
             name: "organization",
@@ -159,7 +159,7 @@ function tableFor(kind: NoticeKind, triage = false) {
             config: { groupable: false },
             label: "Opportunity",
             fieldType: FIELD_TYPES.TEXT,
-            size: 460,
+            size: 340,
           },
           {
             name: "organization",
