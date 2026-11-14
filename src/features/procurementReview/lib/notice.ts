@@ -481,8 +481,8 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
  * URL: the buyer (or issued-for organisation) page it was opened from, the
  * analytics, or the list of its kind.
  */
-export function backLabel(place: { buyer?: string | null; issuedFor?: string | null; section?: string | null; kind?: string | null }): string {
-  const party = text(place.buyer) || text(place.issuedFor);
+export function backLabel(place: { buyer?: string | null; issuedFor?: string | null; supplier?: string | null; section?: string | null; kind?: string | null }): string {
+  const party = text(place.buyer) || text(place.issuedFor) || text(place.supplier);
   if (party) return party;
   if (place.section === "analytics") return "Analytics";
   return place.kind === "award" ? "Awards" : "Opportunities";

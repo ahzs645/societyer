@@ -1,8 +1,8 @@
 /**
  * The reader's places, all in the URL so links and the browser's Back work:
  * the list (`kind`, `status`, `q`), the analytics (`section=analytics`), a
- * buyer (`buyer=<name>`) or the organisation a notice is issued for
- * (`issuedFor=<name>`), and a notice (`notice=<key>&tab=`). A notice shows
+ * buyer (`buyer=<name>`), the organisation a notice is issued for
+ * (`issuedFor=<name>`) or a supplier (`supplier=<name>`), and a notice (`notice=<key>&tab=`). A notice shows
  * over a buyer, a buyer over the list or analytics; what is under it stays
  * mounted, so returning lands on the same rows at the same scroll position.
  *
@@ -32,10 +32,12 @@ export function canonicalReaderParams(params: URLSearchParams): URLSearchParams 
 }
 export const BUYER_PARAM = "buyer";
 export const ISSUED_FOR_PARAM = "issuedFor";
+/** A supplier's page (`supplier=<name>`): the awards it won, from whom. */
+export const SUPPLIER_PARAM = "supplier";
 export const SECTION_PARAM = "section";
 /** A buyer page's tab (`overview` when absent): `opportunities` or `awards`. */
 export const PARTY_TAB_PARAM = "partyTab";
-export type PartyField = "organization" | "issuedFor";
+export type PartyField = "organization" | "issuedFor" | "supplier";
 export type ReaderSection = "analytics";
 
 /** Which place shows, by precedence: a notice, then a buyer or issued-for organisation, then the analytics or the list. */
@@ -49,7 +51,10 @@ export function readerPlaces(params: URLSearchParams) {
   const notice = params.get(NOTICE_PARAM) ?? params.get(LEGACY_NOTICE_PARAM);
   const buyer = params.get(BUYER_PARAM);
   const issuedFor = params.get(ISSUED_FOR_PARAM);
-  const party = buyer ? { field: "organization" as const, name: buyer } : issuedFor ? { field: "issuedFor" as const, name: issuedFor } : null;
+  const supplier = params.get(SUPPLIER_PARAM);
+  const party: { field: PartyField; name: string } | null = buyer ? { field: "organization", name: buyer }
+    : issuedFor ? { field: "issuedFor", name: issuedFor }
+    : supplier ? { field: "supplier", name: supplier } : null;
   const analytics = params.get(SECTION_PARAM) === "analytics";
   return { notice, party, analytics };
 }
@@ -81,7 +86,7 @@ const pushedState = (state: unknown): PushedState | null => {
 export const ReaderPlaceTitleContext = createContext<string | null>(null);
 const placeLabel = (params: URLSearchParams, title: string | null) =>
   (params.get(NOTICE_PARAM) || params.get(LEGACY_NOTICE_PARAM)) ? title || "Notice"
-    : placeLabelOf({ buyer: params.get(BUYER_PARAM), issuedFor: params.get(ISSUED_FOR_PARAM), section: params.get(SECTION_PARAM), kind: params.get("kind") });
+    : placeLabelOf({ buyer: params.get(BUYER_PARAM), issuedFor: params.get(ISSUED_FOR_PARAM), supplier: params.get(SUPPLIER_PARAM), section: params.get(SECTION_PARAM), kind: params.get("kind") });
 
 const patched = (params: URLSearchParams, patch: Record<string, string | null>) => {
   const next = new URLSearchParams(params);
@@ -94,6 +99,7 @@ const partyPatch = (field: PartyField, name: string): Record<string, string | nu
   [NOTICE_PARAM]: null, tab: null, [PARTY_TAB_PARAM]: null,
   [BUYER_PARAM]: field === "organization" ? name : null,
   [ISSUED_FOR_PARAM]: field === "issuedFor" ? name : null,
+  [SUPPLIER_PARAM]: field === "supplier" ? name : null,
 });
 
 export function useReaderNavigation() {
@@ -112,7 +118,7 @@ export function useReaderNavigation() {
   /** Where Back leads when the reader didn't push the current entry (a pasted link). */
   const parentPatch = (): Record<string, string | null> =>
     params.get(NOTICE_PARAM) || params.get(LEGACY_NOTICE_PARAM) ? { [NOTICE_PARAM]: null, tab: null }
-      : params.get(BUYER_PARAM) || params.get(ISSUED_FOR_PARAM) ? { [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null, [PARTY_TAB_PARAM]: null }
+      : params.get(BUYER_PARAM) || params.get(ISSUED_FOR_PARAM) || params.get(SUPPLIER_PARAM) ? { [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null, [SUPPLIER_PARAM]: null, [PARTY_TAB_PARAM]: null }
       : { [SECTION_PARAM]: null };
 
   const back = useCallback(() => { if (pushed) navigate(-1); else go(parentPatch(), true); }, [pushed, navigate, go]); // eslint-disable-line react-hooks/exhaustive-deps -- parentPatch reads `params`, which `go` follows

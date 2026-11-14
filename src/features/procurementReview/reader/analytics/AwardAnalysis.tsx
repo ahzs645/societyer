@@ -82,7 +82,7 @@ function ServerAwardAnalysis({ view, title }: { view: AwardView; title: string }
       {view === "quality" && <QualityView ctx={ctx} meta={data.meta} />}
     </div>}
     {filtersOpen && data && <FiltersDialog value={filters} meta={data.meta} close={() => setFiltersOpen(false)} apply={next => { setFilters(next); setFiltersOpen(false); }} />}
-    {inspection && <ServerInspect key={JSON.stringify([inspection, filters, buyerLevel])} inspection={inspection} filters={filters} buyerLevel={buyerLevel} close={() => nav.update({ inspect: null })} hidden={Boolean(nav.params.get("notice") || nav.params.get("buyer") || nav.params.get("issuedFor"))} />}
+    {inspection && <ServerInspect key={JSON.stringify([inspection, filters, buyerLevel])} inspection={inspection} filters={filters} buyerLevel={buyerLevel} close={() => nav.update({ inspect: null })} hidden={Boolean(nav.params.get("notice") || nav.params.get("buyer") || nav.params.get("issuedFor") || nav.params.get("supplier"))} />}
   </>;
 }
 
@@ -181,7 +181,7 @@ function LocalAwardAnalysis({ view, title }: { view: AwardView; title: string })
           byKey={byKey}
           partial={partial}
           close={() => nav.update({ [INSPECT_PARAM]: null })}
-          hidden={Boolean(nav.params.get("notice") || nav.params.get("buyer") || nav.params.get("issuedFor"))}
+          hidden={Boolean(nav.params.get("notice") || nav.params.get("buyer") || nav.params.get("issuedFor") || nav.params.get("supplier"))}
         />
       )}
     </>

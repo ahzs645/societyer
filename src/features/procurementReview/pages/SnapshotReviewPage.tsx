@@ -20,6 +20,7 @@ import type { BlobReader } from "../lib/blobs";
 import type { CatalogClient } from "../lib/catalogClient";
 import { ProcurementReader } from "../reader/ProcurementReader";
 import { useSnapshotReaderSource } from "../reader/snapshotSource";
+import { useLocalTriage } from "../reader/localTriage";
 import { updatedSummary } from "../reader/summary";
 
 const STAGE_LABELS: Record<SnapshotProgress["stage"], string> = {
@@ -256,5 +257,8 @@ export function SnapshotReviewPage() {
 
 function SnapshotReader({ manifest, catalog, read, header }: { manifest: SnapshotManifest; catalog: CatalogClient; read: BlobReader; header: ReactNode }) {
   const source = useSnapshotReaderSource(manifest, catalog, read);
-  return <ProcurementReader source={source} header={header} />;
+  const society = useSociety();
+  // The demo keeps its triage in this browser so it shows the hosted review queue.
+  const triage = useLocalTriage(society?._id ?? "demo", "You");
+  return <ProcurementReader source={source} header={header} triage={triage} />;
 }

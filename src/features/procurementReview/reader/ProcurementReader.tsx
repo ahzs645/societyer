@@ -7,7 +7,7 @@
  * The module header shows over the list and the analytics only; a buyer and
  * a notice bring their own.
  */
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { BarChart3 } from "lucide-react";
 import { Tabs } from "../../../components/primitives";
@@ -19,6 +19,7 @@ import type { NoticeKind } from "./NoticeTable";
 import { canonicalReaderParams, placeKey, readerPlaces, useReaderNavigation, type ReaderPlace } from "./routes";
 import { ReaderSourceContext, type ReaderSource } from "./source";
 import { ReaderTriageContext, type ReaderTriage } from "./triage";
+import { ListOrderContext, createListOrderStore } from "./listOrder";
 
 /** Reference data (taxonomy terms and the like) is published too, but isn't something a reviewer browses. */
 const KINDS: { id: NoticeKind; label: string }[] = [
@@ -30,12 +31,15 @@ const ANALYTICS = "analytics";
 /** `triage` is the workspace's bid triage, where it has one (the hosted readers). */
 export function ProcurementReader({ source, header, triage = null }: { source: ReaderSource; header: ReactNode; triage?: ReaderTriage | null }) {
   const location = useLocation();
+  const [listOrder] = useState(createListOrderStore);
   const canonical = canonicalReaderParams(new URLSearchParams(location.search));
   if (canonical) return <Navigate to={{ pathname: location.pathname, search: `?${canonical.toString()}` }} replace state={location.state} />;
   return (
     <ReaderSourceContext.Provider value={source}>
       <ReaderTriageContext.Provider value={triage}>
-        <ReaderLayers source={source} header={header} />
+        <ListOrderContext.Provider value={listOrder}>
+          <ReaderLayers source={source} header={header} />
+        </ListOrderContext.Provider>
       </ReaderTriageContext.Provider>
     </ReaderSourceContext.Provider>
   );

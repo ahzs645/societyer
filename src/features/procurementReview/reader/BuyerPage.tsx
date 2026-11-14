@@ -39,11 +39,11 @@ const PARTY_ROUTE_KEY = "procurement-review/party";
 /** The notice page's rule for "the same organisation" (lib/notice.ts `partyCount`): case, spacing and punctuation don't matter. */
 const partyKey = procurementPartyKey;
 const eyebrowOf = (field: PartyField) =>
-  field === "organization" ? "Buyer" : "Issued for";
+  field === "organization" ? "Buyer" : field === "supplier" ? "Supplier" : "Issued for";
 const titleOf = (name: string) => name || "Unnamed organisation";
 /** "from" a buyer, "issued for" an organisation. */
 const relation = (field: PartyField) =>
-  field === "organization" ? "from" : "issued for";
+  field === "organization" ? "from" : field === "supplier" ? "awarded to" : "issued for";
 /** How many notices the overview's short lists show before "All …". */
 const PREVIEW = 5;
 
@@ -129,6 +129,8 @@ export function BuyerPage({
   const [analysis, setAnalysis] = useState(false);
   // The summary needs the server's analysis and its table the server's pages; the
   // service reader offers analysis but only whole lists, so it reads the full page.
+  // A supplier page reads the whole award list: the server's analysis and pages know buyers only.
+  if (field === "supplier") return <FullBuyerPage field={field} name={name} />;
   if (source.useAnalysis && source.usePage)
     return <ServerBuyerPage field={field} name={name} />;
   if (!source.usePage || analysis)
@@ -143,6 +145,8 @@ export function BuyerPage({
 }
 
 const EMPTY_PAGE: ListRow[] = [];
+/** The organisations the server can page and analyse by (not suppliers). */
+type ServerPartyField = Exclude<PartyField, "supplier">;
 
 /** A server-paged table of the organisation's notices of one kind. */
 function ServerNotices({
@@ -150,7 +154,7 @@ function ServerNotices({
   name,
   tab,
 }: {
-  field: PartyField;
+  field: ServerPartyField;
   name: string;
   tab: NoticeTab;
 }) {
@@ -174,7 +178,7 @@ function PagedBuyerPage({
   name,
   onAnalysis,
 }: {
-  field: PartyField;
+  field: ServerPartyField;
   name: string;
   onAnalysis: () => void;
 }) {
@@ -211,7 +215,7 @@ function PagedBuyerPage({
   );
 }
 
-function ServerBuyerPage({ field, name }: { field: PartyField; name: string }) {
+function ServerBuyerPage({ field, name }: { field: ServerPartyField; name: string }) {
   const source = useReaderSource();
   const [tab, setTab] = usePartyTab();
   const result = source.useAnalysis!({ view: "party", party: { field, name } });
