@@ -50,12 +50,20 @@ export function useVisualViewportBottomInset(enabled = true): number {
 }
 
 /**
- * Style for a bottom sheet while the keyboard is open: sit on top of the
- * keyboard and fit the visible area, leaving a small gap at the top.
+ * Style for a bottom sheet while the keyboard is open. The sheet stays on the
+ * screen's bottom edge and pads its content up above the keyboard, so its
+ * contents (and footer) fit the visible area, leaving a small gap at the top,
+ * while its background runs on down behind the keyboard. Lifting the whole
+ * sheet instead left the page showing below it wherever the keyboard is see-
+ * through: iOS's floating AutoFill bar and the strip around it.
  */
-export function keyboardSheetStyle(frame: VisualViewportFrame, topGap = 12): { bottom: number; maxHeight: string } | null {
+export function keyboardSheetStyle(frame: VisualViewportFrame, topGap = 12): { bottom: number; paddingBottom: number; maxHeight: string } | null {
   if (frame.bottomInset <= 0 || frame.height <= 0) return null;
-  return { bottom: frame.bottomInset, maxHeight: `${Math.max(120, frame.height - topGap)}px` };
+  return {
+    bottom: 0,
+    paddingBottom: frame.bottomInset,
+    maxHeight: `${Math.max(120, frame.height - topGap) + frame.bottomInset}px`,
+  };
 }
 
 /** Devices with an on-screen keyboard (desktop pinch-zoom must not move dialogs). */

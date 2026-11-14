@@ -895,20 +895,22 @@ body.modal-resizing {
  * iOS (and Android without `interactive-widget=resizes-content`) leaves
  * the layout viewport full height, so `bottom: 0` overlays would keep their
  * footers, composers and lists behind the keyboard. Phone Modal and Select
- * sheets follow the same frame through inline styles. */
+ * sheets follow the same frame through inline styles (keyboardSheetStyle).
+ *
+ * Sheets stay on the screen's bottom edge and pad their content up by the
+ * keyboard's height rather than lifting off the edge: the keyboard is partly
+ * see-through on iOS (the floating AutoFill bar and the strip around it), and
+ * a lifted sheet left the page showing there. */
 :root[data-keyboard-open] {
   // Inspector drawers (forms in the record panel and every "New …" drawer):
-  // the host ends at the keyboard, so the footer sits on top of it and the
-  // body scrolls in the space left.
-  .app-shell.is-mobile .inspector-host.is-open {
-    bottom: var(--keyboard-inset);
-  }
+  // the panel's content ends at the keyboard, so the footer sits on top of
+  // it and the body scrolls in the space left.
   .app-shell.is-mobile .inspector-host.is-open .inspector {
-    padding-bottom: 0;
+    padding-bottom: var(--keyboard-inset);
   }
   // Drawers outside the app layout.
   .drawer {
-    bottom: var(--keyboard-inset);
+    padding-bottom: var(--keyboard-inset);
   }
   // AI assistant: the composer rides on the keyboard.
   .global-ai-drawer {
@@ -920,9 +922,8 @@ body.modal-resizing {
   }
   // Calendar sheets: the typed-date field raises the keyboard.
   .calendar.calendar--sheet {
-    bottom: var(--keyboard-inset);
-    max-height: calc(var(--visible-height) - 12px);
-    padding-bottom: 12px;
+    max-height: calc(var(--visible-height) + var(--keyboard-inset) - 12px);
+    padding-bottom: calc(var(--keyboard-inset) + 12px);
   }
   // Toasts stay readable above the keyboard instead of under it.
   .toast-stack {
@@ -933,6 +934,49 @@ body.modal-resizing {
   // and take a row from the form being typed into. iOS covers it anyway.
   .bottom-nav {
     visibility: hidden;
+  }
+}
+
+/* Phones: while a sheet or dialog is open over the page, the page behind it
+ * doesn't scroll. Without this, a drag on the backdrop, or a sheet's own list
+ * reaching its end, scrolled the page underneath. The page scrolls inside
+ * `.page`, so that is what stops (its scroll position is kept); the document
+ * stops too. Each selector is an open sheet: Modal and its confirms (the
+ * filter editor), Select, Menu, date and range pickers, notifications, the
+ * "More" navigation sheet, the record panel's page sheet and standalone
+ * drawers. Wider screens keep scrolling: there the record panel is a column
+ * beside a list that should still scroll. */
+@media (max-width: 768px) {
+  :root:has(
+    .modal-backdrop,
+    .menu.menu--sheet,
+    .calendar--sheet,
+    .date-range-picker__panel--sheet,
+    .notif-panel--sheet,
+    .drawer-backdrop,
+    .app-shell.is-mobile.is-mobile-nav-open,
+    .app-shell.is-mobile .inspector-host.is-open
+  ) {
+    overflow: hidden;
+    overscroll-behavior: none;
+
+    body {
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+    .page {
+      overflow: hidden;
+    }
+  }
+  // A sheet's own scroll stops at its ends instead of carrying on to the page.
+  .modal,
+  .modal__body,
+  .drawer__body,
+  .inspector-panel__body,
+  .calendar--sheet,
+  .notif-panel--sheet,
+  .app-shell.is-mobile .sidebar {
+    overscroll-behavior: contain;
   }
 }
 
