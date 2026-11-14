@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ListPlus, Plus, Trash2, X } from "lucide-react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
@@ -6,6 +6,8 @@ import { FIELD_TYPES, type RecordField, type ViewFilter, type ViewFilterGroup, t
 import { Select } from "@/components/Select";
 import { DatePicker } from "@/components/DatePicker";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { Modal } from "@/components/Modal";
+import { useIsBottomSheet } from "@/lib/useSheetDrag";
 import { isOutsidePointerEvent } from "@/lib/floatingLayer";
 import { isDateRangeValue, resolveDateRange, type DateRangeContext, type DateRangeValue } from "@/lib/dateRanges";
 import { operatorLabel, operatorsForField } from "../utils/filterLabels";
@@ -127,9 +129,18 @@ function hasOptions(column: RecordField | undefined) {
  * asks through the table store and focuses that condition.
  *
  * Pages render it next to their toolbar; while a toolbar is mounted the
- * editor portals into it and floats under the Filter button (an in-flow
- * panel on phones, see `_record-table-extras.scss`) instead of pushing the
- * table down.
+ * editor portals into it and floats under the Filter button instead of
+ * pushing the table down. However long the editor gets (a page's own
+ * filters in `extra` can be long), it stays on screen: the floating editor
+ * is held inside the viewport sideways and down to its foot, its body
+ * scrolls under a sticky "Filters" heading, and Cancel / Apply stay in view
+ * below it. Phones get a bottom sheet with the same body and the buttons in
+ * its footer.
+ *
+ * A page's `extra` section is a size container named
+ * `record-table-filter-extra`, so it can lay its fields out by the room the
+ * editor gives it (`@container record-table-filter-extra (max-width: 520px)`)
+ * rather than by the window.
  */
 export function RecordTableFilterPopover({
   open,
@@ -189,6 +200,8 @@ function FilterEditor({
   const dateContext = useRecordTableState((s) => s.dateContext);
   const handle = useRecordTableStoreHandle();
   const popoverRef = useRef<HTMLDivElement>(null);
+  // Phones: a bottom sheet (Modal), whose backdrop and Esc close it.
+  const sheet = useIsBottomSheet();
   const [draft, setDraft] = useState<Draft>(() => draftFromStore(handle.get().filters, handle.get().filterGroups, handle.get().columns));
   const [showErrors, setShowErrors] = useState(false);
   const focusId = focusIndex !== undefined ? draft.conditions[focusIndex]?.id : undefined;
@@ -196,6 +209,7 @@ function FilterEditor({
   onCloseRef.current = onClose;
 
   useEffect(() => {
+    if (sheet) return;
     const onPointerDown = (event: PointerEvent) => {
       // Field/operator Selects and the date pickers portal their menus to
       // <body>; picking an option there is not an outside click.
@@ -208,13 +222,13 @@ function FilterEditor({
     };
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [toolbarElement]);
+  }, [toolbarElement, sheet]);
 
-  // Bring the whole editor (down to Apply) into view: under a toolbar near
-  // the fold, or as the in-flow panel on a short phone screen.
+  useFloatingEditorPlacement(popoverRef, floating && !sheet);
+  // An editor in the page's flow (no toolbar): bring it, down to Apply, into view.
   useEffect(() => {
-    popoverRef.current?.scrollIntoView({ block: "nearest" });
-  }, []);
+    if (!floating && !sheet) popoverRef.current?.scrollIntoView({ block: "nearest" });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard: opened from the toolbar, focus moves into the editor (the Ask
   // box focuses itself when asked for), and closing returns it to where it
@@ -225,7 +239,7 @@ function FilterEditor({
     const opener = document.activeElement instanceof HTMLElement && !popover.contains(document.activeElement)
       ? document.activeElement
       : null;
-    if (focusIndex === undefined && floating && opener?.hasAttribute("data-record-table-filter-trigger")) {
+    if (focusIndex === undefined && floating && !sheet && opener?.hasAttribute("data-record-table-filter-trigger")) {
       popover.querySelector<HTMLElement>(".record-table__filter-conditions button, .record-table__filter-conditions input")?.focus({ preventScroll: true });
     }
     return () => {
@@ -391,17 +405,12 @@ function FilterEditor({
     </div>
   );
 
-  return (
-    <div
-      ref={popoverRef}
-      className={`record-table__filter-popover${floating ? " record-table__filter-popover--floating" : ""}`}
-      role={floating ? "dialog" : "group"}
-      aria-label="Filters"
-      onKeyDown={onKeyDown}
-    >
+  const body = (
+    <>
       <RecordTableAskFilter onApplied={onClose} onEditAsFilters={(tree) => setDraft(draftFromStore(tree.filters, tree.filterGroups, handle.get().columns))} />
       <div className="record-table__popover-head">
-        <strong>Filters</strong>
+        {/* The sheet's own title says "Filters". */}
+        <strong>{sheet ? "Conditions" : "Filters"}</strong>
         <LogicalOperatorSelect
           value={draft.root.logicalOperator}
           onChange={(value) => setGroupOperator(draft.root.id, value)}
@@ -432,27 +441,124 @@ function FilterEditor({
           </div>
         ))}
       </div>
-      {/* With a section of the page's own filters, the add buttons stay with the conditions above it. */}
-      {extra && addRow}
+      {/* With a section of the page's own filters (or in a sheet, whose footer has only the buttons), the add buttons stay with the conditions. */}
+      {(extra || sheet) && addRow}
       {extra && <div className="record-table__filter-extra">{extra}</div>}
-      <div className="record-table__filter-popover-actions">
-        {!extra && addRow}
-        {showErrors && incomplete.length > 0 && (
-          <span className="record-table__filter-error" role="alert">
-            Finish or remove the highlighted {incomplete.length === 1 ? "condition" : "conditions"}.
-          </span>
-        )}
-        <div className="record-table__filter-submit">
-          <button type="button" className="record-table__secondary-btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" className="record-table__primary-btn" onClick={apply}>
-            Apply
-          </button>
-        </div>
+    </>
+  );
+  const actions = (
+    <div className="record-table__filter-popover-actions">
+      {!extra && !sheet && addRow}
+      {showErrors && incomplete.length > 0 && (
+        <span className="record-table__filter-error" role="alert">
+          Finish or remove the highlighted {incomplete.length === 1 ? "condition" : "conditions"}.
+        </span>
+      )}
+      <div className="record-table__filter-submit">
+        <button type="button" className="record-table__secondary-btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="record-table__primary-btn" onClick={apply}>
+          Apply
+        </button>
       </div>
     </div>
   );
+
+  if (sheet) {
+    return (
+      <Modal open onClose={onClose} title="Filters" size="sm" className="record-table__filter-sheet" footer={actions}>
+        <div ref={popoverRef} className="record-table__filter-popover record-table__filter-popover--sheet" role="group" aria-label="Filters" onKeyDown={onKeyDown}>
+          {body}
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <div
+      ref={popoverRef}
+      className={`record-table__filter-popover${floating ? " record-table__filter-popover--floating" : ""}`}
+      role={floating ? "dialog" : "group"}
+      aria-label="Filters"
+      onKeyDown={onKeyDown}
+    >
+      <div className="record-table__filter-popover-body">{body}</div>
+      {actions}
+    </div>
+  );
+}
+
+const EDGE = 8;
+const MIN_FLOATING_HEIGHT = 240;
+/** Enough for the conditions and Apply without scrolling, in most lists. */
+const COMFORTABLE_HEIGHT = 420;
+
+/** Where the visible window ends: above the app's bottom navigation where it shows (tablets and phones). */
+function viewportFoot(): number {
+  const nav = document.querySelector<HTMLElement>(".bottom-nav");
+  const top = nav && nav.offsetHeight > 0 ? nav.getBoundingClientRect().top : Infinity;
+  return Math.min(window.innerHeight, top);
+}
+
+function scrollingAncestor(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const overflow = getComputedStyle(node).overflowY;
+    if ((overflow === "auto" || overflow === "scroll") && node.scrollHeight > node.clientHeight) return node;
+  }
+  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
+}
+
+/**
+ * Keeps the floating editor on screen. It hangs from the toolbar's right
+ * edge; where that would cross the window's left or right edge it slides
+ * back in, and its height stops short of the window's foot, or the bottom
+ * navigation above it (its body scrolls instead), so Apply is always in view. Too little room below (the
+ * toolbar low on a short screen) and the page scrolls up to make some, where
+ * it can. Kept up to date as the page scrolls or the window resizes.
+ */
+function useFloatingEditorPlacement(ref: RefObject<HTMLElement>, enabled: boolean) {
+  useLayoutEffect(() => {
+    const popover = ref.current;
+    if (!enabled || !popover) return;
+    const place = () => {
+      popover.style.removeProperty("--record-table-filter-shift");
+      const rect = popover.getBoundingClientRect();
+      const width = document.documentElement.clientWidth;
+      let shift = 0;
+      if (rect.left < EDGE) shift = EDGE - rect.left;
+      else if (rect.right > width - EDGE) shift = width - EDGE - rect.right;
+      popover.style.setProperty("--record-table-filter-shift", `${Math.round(shift)}px`);
+      const room = viewportFoot() - rect.top - EDGE;
+      popover.style.setProperty("--record-table-filter-max-height", `${Math.max(MIN_FLOATING_HEIGHT, Math.floor(room))}px`);
+    };
+    place();
+    // Short of room below (the toolbar low on a short screen): scroll the page
+    // up by what's missing, as far as it goes, rather than open a sliver.
+    const body = popover.querySelector<HTMLElement>(".record-table__filter-popover-body");
+    const foot = popover.querySelector<HTMLElement>(".record-table__filter-popover-actions");
+    const wanted = Math.min(COMFORTABLE_HEIGHT, (body?.scrollHeight ?? 0) + (foot?.offsetHeight ?? 0) + 2);
+    const room = viewportFoot() - popover.getBoundingClientRect().top - EDGE;
+    if (room < wanted) {
+      scrollingAncestor(popover)?.scrollBy({ top: wanted - room });
+      place();
+    }
+    let frame = 0;
+    const schedule = (event?: Event) => {
+      // The editor's own body scrolling moves nothing.
+      if (event?.target instanceof Node && popover.contains(event.target)) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(place);
+    };
+    window.addEventListener("resize", schedule);
+    // The page scrolls inside its own container; capture catches it.
+    document.addEventListener("scroll", schedule, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+      document.removeEventListener("scroll", schedule, true);
+    };
+  }, [ref, enabled]);
 }
 
 function LogicalOperatorSelect({

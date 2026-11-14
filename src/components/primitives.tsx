@@ -94,28 +94,74 @@ export function Progress({ value, tone }: { value: number; tone?: "success" | "w
   );
 }
 
+export type SegmentedItem<T extends string> = {
+  id: T;
+  label: string;
+  /**
+   * How many records the choice holds, after the label in quieter tabular
+   * figures with thousands separators, so a queue's states read the same
+   * wherever a list has them.
+   */
+  count?: number | null;
+  /** A note after the count ("12 new"). Decorative: say it in `ariaLabel` too. */
+  badge?: ReactNode;
+  /** The button's accessible name, where the visible text says less (a badge). */
+  ariaLabel?: string;
+};
+
+/**
+ * A row of mutually exclusive choices (a queue's states, a report's
+ * period). Each segment is a toggle button with its pressed state; a value
+ * none of them holds leaves all of them unpressed, as when a list shows a
+ * view chosen from a menu in `trailing`. `trailing` sits inside the row's
+ * frame, after the segments: give it the `segmented__btn` class to match.
+ */
 export function Segmented<T extends string>({
   value,
   onChange,
   items,
+  trailing,
+  className,
+  "aria-label": ariaLabel,
 }: {
   value: T;
   onChange: (v: T) => void;
-  items: { id: T; label: string }[];
+  items: SegmentedItem<T>[];
+  trailing?: ReactNode;
+  className?: string;
+  /** Names the row as a group ("Views"), for a row that isn't labelled by what's beside it. */
+  "aria-label"?: string;
 }) {
   return (
-    <div className="segmented">
-      {items.map((it) => (
-        <button
-          key={it.id}
-          type="button"
-          aria-pressed={value === it.id}
-          className={`segmented__btn${value === it.id ? " is-active" : ""}`}
-          onClick={() => onChange(it.id)}
-        >
-          {it.label}
-        </button>
-      ))}
+    <div
+      className={className ? `segmented ${className}` : "segmented"}
+      role={ariaLabel ? "group" : undefined}
+      aria-label={ariaLabel}
+    >
+      {items.map((it) => {
+        const counted = it.count != null || it.badge != null;
+        return (
+          <button
+            key={it.id}
+            type="button"
+            aria-pressed={value === it.id}
+            aria-label={it.ariaLabel}
+            className={`segmented__btn${counted ? " segmented__btn--counted" : ""}${value === it.id ? " is-active" : ""}`}
+            onClick={() => onChange(it.id)}
+          >
+            {counted ? (
+              <>
+                <span className="segmented__label">{it.label}</span>
+                {it.count != null && <span className="segmented__count">{it.count.toLocaleString("en-CA")}</span>}
+                {it.badge}
+              </>
+            ) : (
+              it.label
+            )}
+          </button>
+        );
+      })}
+      {trailing}
     </div>
   );
 }

@@ -94,6 +94,44 @@
   color: token('accent');
 }
 
+// Compact tools (RecordTableToolbar `compactTools`): the right-hand buttons
+// as icons, so a page's leading switcher keeps the row. Their words stay for
+// screen readers (and stay measurable, see QueueBar), tooltips name them, and
+// a filter or sort count shows as a badge. Phones have their own icon row.
+@media (min-width: 561px) {
+  .record-table__toolbar--compact-tools .record-table__toolbar-right {
+    > .record-table__toolbar-button,
+    > .record-table__view-switcher > .record-table__toolbar-button {
+      position: relative;
+      > span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    }
+    .record-table__segmented--named button > span { display: none; }
+    .record-table__toolbar-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      min-width: 15px;
+      height: 15px;
+      padding: 0 4px;
+      border-radius: token('r-pill');
+      background: token('accent');
+      color: token('accent-on');
+      font-size: token('fs-xxs');
+      font-weight: token('fw-semibold');
+      line-height: 15px;
+      text-align: center;
+      pointer-events: none;
+    }
+  }
+}
+
 // The view's filters or sort were changed since it loaded (choosing it
 // again resets them). Phones show a dot; the button's name says "edited".
 .record-table__view-edited {
@@ -730,7 +768,11 @@
 }
 
 // A page's own filters under the conditions (RecordTableFilterPopover `extra`).
+// A size container, so the section can lay out by the editor's width (720px
+// on desktop, the whole sheet on phones): `@container record-table-filter-extra
+// (max-width: 520px) { … }`.
 .record-table__filter-extra {
+  container: record-table-filter-extra / inline-size;
   margin-top: 10px;
   padding-top: 12px;
   border-top: 1px solid token('border');

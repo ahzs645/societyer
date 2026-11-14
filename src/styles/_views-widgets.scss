@@ -427,6 +427,19 @@
   color: token('text-primary');
   box-shadow: token('shadow-sm');
 }
+// A segment with a count (Segmented `count`): the label, then the count in
+// quieter tabular figures, then any badge ("12 new").
+.segmented__btn--counted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.segmented__count {
+  color: token('text-tertiary');
+  font-variant-numeric: tabular-nums;
+  .segmented__btn.is-active > & { color: token('text-secondary'); }
+}
 /* Coarse pointers: segments are 30px inside a 36px pill, with 44px hit
  * areas (_control-density.scss). */
 
