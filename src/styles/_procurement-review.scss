@@ -198,26 +198,6 @@ $zoer-theme: (
     > .tab__count { display: none; }
   }
 }
-// The BC Bid section of the list's filter editor (BcBidFilters.tsx).
-.procurement-source-filters {
-  &__head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 8px;
-    margin-bottom: token("s-3");
-    font-size: token("fs-sm");
-    > span { color: token("text-tertiary"); font-size: token("fs-xs"); }
-  }
-  &__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: token("s-3");
-    align-items: start;
-    > .field { margin-bottom: 0; }
-    .select-trigger, .input { width: 100%; }
-  }
-}
 .procurement-reader__when {
   display: inline-flex;
   flex-wrap: wrap;

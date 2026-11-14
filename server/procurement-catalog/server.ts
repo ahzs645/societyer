@@ -2,8 +2,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createReadStream, readFileSync, statSync, realpathSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
-import { gunzipSync } from "node:zlib";
-import { openCatalog, catalogMeta, readRow, readRows, boundedReviews, sqliteSelfTest } from "./database";
+import { gunzipSync, gzip } from "node:zlib";
+import { promisify } from "node:util";
+import { openCatalog, catalogMeta, readRow, readRows, boundedReviews, sqliteSelfTest, unspscCodeList } from "./database";
 import { CatalogHttpError, grantVerifier, safeIdentifier, type WorkspaceBinding } from "./grants";
 import { currentPath, previousPath, releasePath, switchCurrent, type ActivationReceipt, type ActivationRequest } from "./releases";
 import { AnalysisWorker, prepareInWorker, qualifyInWorker } from "./workers";
@@ -31,6 +32,12 @@ export async function createCatalogService(config: ServiceConfig) {
   const origins = new Set(config.origins);
   for (const origin of origins) if (new URL(origin).origin !== origin) throw new Error("CORS entries must be exact origins.");
   const runtimes = new Map<string, Runtime>(), activating = new Set<string>();
+  /**
+   * A publication's UNSPSC code list (90k terms: ~4 MB, ~0.8 MB gzipped),
+   * encoded once on first request and kept while the publication serves.
+   */
+  const codeLists = new WeakMap<Runtime, Promise<{ raw: Buffer; zipped: Buffer } | null>>();
+  const compress = promisify(gzip);
   const runtimeKey = (workspace: string, publication: string) => workspace + "/" + publication;
   async function load(directory: string): Promise<Runtime> {
     const receipt = JSON.parse(readFileSync(join(directory, "receipt.json"), "utf8")) as ActivationReceipt;
@@ -143,6 +150,21 @@ export async function createCatalogService(config: ServiceConfig) {
           const stream = createReadStream(file); stream.on("error", () => response.destroy()); response.on("close", () => stream.destroy()); stream.pipe(response);
         } else response.end(gunzipSync(readFileSync(file)));
         return;
+      }
+      // The commodity code picker's full UNSPSC list (code and title; the parent is implied by the code).
+      if (path.length === 6 && path[4] === "taxonomy" && path[5] === "unspsc.json") {
+        let encoding = codeLists.get(runtime);
+        if (!encoding) {
+          const list = unspscCodeList(db), raw = list && Buffer.from(JSON.stringify(list));
+          encoding = raw ? compress(raw, { level: 9 }).then(zipped => ({ raw, zipped })) : Promise.resolve(null);
+          codeLists.set(runtime, encoding);
+          encoding.catch(() => codeLists.delete(runtime));
+        }
+        const encoded = await encoding;
+        if (!encoded) fail(404, "This publication has no UNSPSC code list.");
+        const zipped = /\bgzip\b/.test(request.headers["accept-encoding"] ?? ""), bytes = zipped ? encoded!.zipped : encoded!.raw;
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff", "Content-Length": bytes.length, ...(zipped ? { "Content-Encoding": "gzip" } : {}) });
+        response.end(bytes); return;
       }
       const key = url.searchParams.get("key") ?? "";
       if (key.length > 500) fail(400, "Record key is too long.");

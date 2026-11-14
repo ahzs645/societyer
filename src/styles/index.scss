@@ -178,6 +178,7 @@
 @use "procurement-queue"; // procurement reader: the review queue, list rows and the desktop split view
 @use "procurement-notice"; // procurement reader: the notice and award pages
 @use "procurement-party"; // procurement reader: buyer, issued-for and supplier pages
+@use "procurement-filters"; // procurement reader: the list's BC Bid filters and commodity code picker
 @use "workspace-branding"; // shared Brandkit identity, previews and mobile workspace switcher
 @use "account"; // My workspaces, sign-in methods, account linking, workspace lock screens
 @use "task-structure"; // Tasks: sub-tasks, nested list rows and the board drop marker

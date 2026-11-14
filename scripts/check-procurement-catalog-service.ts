@@ -18,15 +18,21 @@ const grant = (workspace = societyId) => {
   const data = head + "." + claims;
   return data + "." + sign("sha256", Buffer.from(data), { key: privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url");
 };
+// A slice of the UNSPSC hierarchy: segment → family → class → commodity.
+const releaseId = "taxonomy-release:UNSPSC:UNv260801";
+const unspsc = [["72000000", "Building and Facility Construction and Maintenance Services", null], ["72100000", "Building and facility maintenance and repair services", "72000000"], ["72101500", "Building support services", "72100000"], ["72101507", "Building maintenance service", "72101500"]] as const;
 async function fixture(publicationId: string) {
   const directory = join(root, "export-" + publicationId); mkdirSync(directory);
   const scope = { societyId, generation: publicationId + "-reader-v2" }, recordKey = "opportunity:roads";
-  const rows: Record<string, any[]> = { procurementRecords: [{ ...scope, recordKey, kind: "opportunity", title: "Fictional road works", organization: "Example", status: "open", date: "2026-11-10", updatedAt: "2026-11-10T00:00:00Z", analyticsJson: JSON.stringify({ sourceId: "bcbid", closingAt: "2027-01-01T20:00:00Z", industryCategories: ["Construction"], privateUnusedAnalytics: "not in list" }) }], procurementDetails: [{ ...scope, recordKey, dataJson: '{"body":"Underground zebra conduits"}' }], procurementDocuments: [], procurementEvidence: [{ ...scope, recordKey, source: "fixture", dataJson: '{"id":"review","note":"Workspace-private evidence"}' }], procurementTaxonomyTerms: [] };
+  const rows: Record<string, any[]> = { procurementRecords: [{ ...scope, recordKey, kind: "opportunity", title: "Fictional road works", organization: "Example", status: "open", date: "2026-11-10", updatedAt: "2026-11-10T00:00:00Z", analyticsJson: JSON.stringify({ sourceId: "bcbid", closingAt: "2027-01-01T20:00:00Z", industryCategories: ["Construction"], privateUnusedAnalytics: "not in list" }) }], procurementDetails: [{ ...scope, recordKey, dataJson: '{"body":"Underground zebra conduits"}' }], procurementDocuments: [], procurementEvidence: [{ ...scope, recordKey, source: "fixture", dataJson: '{"id":"review","note":"Workspace-private evidence"}' }], procurementTaxonomyTerms: unspsc.map(([code, title, parent]) => ({ societyId, key: "taxonomy-term:UNSPSC:UNv260801:" + code, releaseId, scheme: "UNSPSC", version: "UNv260801", code, title, parentKey: parent ? "taxonomy-term:UNSPSC:UNv260801:" + parent : null })) };
   const tables: Record<string, any> = {}, zip = new JSZip();
   for (const table of ALL_TABLES) { const data = rows[table].map(row => canonical(row) + "\n").join(""); writeFileSync(join(directory, table + ".jsonl"), data); tables[table] = { path: table + ".jsonl", rowCount: rows[table].length, bytes: Buffer.byteLength(data), sha256: hash(data) }; if ((TABLES as readonly string[]).includes(table)) zip.file(table + "/documents.jsonl", data); }
   const archive = await zip.generateAsync({ type: "nodebuffer" }); writeFileSync(join(directory, "metadata.zip"), archive);
+  const terms = rows.procurementTaxonomyTerms, contentHash = hash(terms.map(({ societyId: _scope, ...row }) => canonical(row) + "\n").join("")), termZip = new JSZip();
+  termZip.file("procurementTaxonomyTerms/documents.jsonl", terms.map(row => canonical(row) + "\n").join(""));
+  const termArchive = await termZip.generateAsync({ type: "nodebuffer" }); writeFileSync(join(directory, `taxonomy-${contentHash}.zip`), termArchive);
   const inventoryHash = hash(canonical({ schemaVersion: 1, tables }));
-  writeFileSync(join(directory, "activation.json"), canonical({ schemaVersion: 1, profileVersion: 2, societyId, folder, publicationId, generation: scope.generation, publishedAt: new Date().toISOString(), sourceSnapshotId: "fixture-snapshot", sourceCatalogSha256: "a".repeat(64), contentHash: "b".repeat(64), expected: Object.fromEntries(TABLES.map(table => [table, rows[table].length])), counts: { opportunity: 1, award: 0 }, coverage: { complete: true, sources: [{ source: "fixture", complete: true }] }, tables, inventoryHash, archives: { "metadata.zip": { bytes: archive.length, sha256: hash(archive) } }, taxonomyCount: 0, taxonomyIndexes: [], taxonomyReleases: [] }) + "\n");
+  writeFileSync(join(directory, "activation.json"), canonical({ schemaVersion: 1, profileVersion: 2, societyId, folder, publicationId, generation: scope.generation, publishedAt: new Date().toISOString(), sourceSnapshotId: "fixture-snapshot", sourceCatalogSha256: "a".repeat(64), contentHash: "b".repeat(64), expected: Object.fromEntries(TABLES.map(table => [table, rows[table].length])), counts: { opportunity: 1, award: 0 }, coverage: { complete: true, sources: [{ source: "fixture", complete: true }] }, tables, inventoryHash, archives: { "metadata.zip": { bytes: archive.length, sha256: hash(archive) }, [`taxonomy-${contentHash}.zip`]: { bytes: termArchive.length, sha256: hash(termArchive) } }, taxonomyCount: terms.length, taxonomyIndexes: [{ releaseId, contentHash, count: terms.length }], taxonomyReleases: [releaseId] }) + "\n");
   const output = join(root, "staging", societyId, "catalog.sqlite"); await buildCatalog(directory, output);
   return { societyId, publicationId, inventoryHash, bytesReceived: readFileSync(output).length };
 }
@@ -52,6 +58,11 @@ try {
   const listResponse = await call(prefix + "/list/opportunity.json"), list = await listResponse.json();
   assert.equal(list.length, 1); assert.equal(JSON.parse(list[0].analyticsJson).closingAt, "2027-01-01T20:00:00Z"); assert(!list[0].analyticsJson.includes("privateUnused"));
   assert.match(listResponse.headers.get("cache-control")!, /private.*immutable/);
+  const codes = await call(prefix + "/taxonomy/unspsc.json", { headers: { "Accept-Encoding": "gzip" } });
+  assert.equal(codes.status, 200); assert.equal(codes.headers.get("content-encoding"), "gzip"); assert.match(codes.headers.get("cache-control")!, /private.*immutable/);
+  assert.deepEqual(await codes.json(), { scheme: "UNSPSC", version: "UNv260801", terms: unspsc.map(([code, title]) => [code, title]) }, "code and title only; the parent is implied by the code");
+  assert.equal((await fetch(base + prefix + "/taxonomy/unspsc.json")).status, 401, "the licensed code list needs a grant");
+  assert.equal((await call(prefix + "/taxonomy/gsin.json")).status, 404);
   const notice = await (await call(prefix + "/notice?key=opportunity%3Aroads")).json(); assert.equal(JSON.parse(notice.dataJson).body, "Underground zebra conduits"); assert.equal(notice.removed, false);
   const search = await (await call(prefix + "/search?q=zebra&kind=opportunity")).json(); assert.equal(search.matches[0].recordKey, "opportunity:roads");
   assert.equal((await call(prefix + "/search?q=%22%20OR%20*&kind=opportunity")).status, 200, "FTS expressions are treated literally");
@@ -65,5 +76,5 @@ try {
   assert.equal((await call(prefix + "/notice?key=opportunity%3Aroads")).status, 200);
   assert.equal((await call("/v1/" + societyId + "/p/missing/list/award.json")).status, 410);
   assert.equal((await fetch(base + "/healthz")).status, 200);
-  console.log("Catalog HTTP checks passed: grant/workspace/origin isolation, real activation workers, thin gzip lists, body search, private evidence, analytics and atomic failure recovery.");
+  console.log("Catalog HTTP checks passed: grant/workspace/origin isolation, real activation workers, thin gzip lists, the UNSPSC code list, body search, private evidence, analytics and atomic failure recovery.");
 } finally { await new Promise<void>(resolve => { server.close(resolve); server.closeAllConnections(); }); rmSync(root, { recursive: true, force: true }); }

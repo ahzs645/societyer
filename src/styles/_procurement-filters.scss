@@ -1,0 +1,305 @@
+@use "tokens" as *;
+
+// Procurement reader: the BC Bid section of the list's filter editor
+// (reader/BcBidFilters.tsx) and its commodity code picker
+// (reader/filters/CommodityField.tsx, CommodityPicker.tsx).
+
+// ---------------------------------------------------------------------------
+// The section: one column in a narrow editor (a phone, a slim window), two
+// once the editor itself is wide enough. It follows the editor's width, not
+// the window's, so it fits wherever the editor is drawn.
+// ---------------------------------------------------------------------------
+.procurement-source-filters {
+  container-type: inline-size;
+  min-width: 0;
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    margin-bottom: token("s-3");
+    font-size: token("fs-sm");
+    > span { color: token("text-tertiary"); font-size: token("fs-xs"); }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: token("s-3");
+    align-items: start;
+    > .field { margin-bottom: 0; min-width: 0; }
+    .select-trigger, .input { width: 100%; }
+  }
+}
+
+@container (min-width: 520px) {
+  .procurement-source-filters__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+// ---------------------------------------------------------------------------
+// The commodity field: the chosen code and title, opening the picker.
+// ---------------------------------------------------------------------------
+.procurement-commodity-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+
+  > .select-trigger { flex: 1 1 auto; min-width: 0; }
+
+  &__value {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__code { font-variant-numeric: tabular-nums; }
+  &__title { color: token("text-secondary"); }
+  &__clear { flex-shrink: 0; }
+}
+
+// ---------------------------------------------------------------------------
+// The picker dialog: tools and where-you-are pinned, the codes scrolling.
+// A steady height, so drilling in or searching doesn't resize the dialog;
+// a full-height sheet on phones.
+// ---------------------------------------------------------------------------
+.modal.procurement-commodity-picker {
+  height: min(680px, calc(100dvh - 48px));
+
+  .modal__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 560px) {
+  .modal.procurement-commodity-picker {
+    height: calc(100dvh - max(24px, env(safe-area-inset-top) + 12px));
+  }
+}
+
+.procurement-commodity-picker {
+  &__tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token("s-2") token("s-4");
+    padding: 12px 14px 0;
+    .check-row { flex: 0 0 auto; }
+  }
+
+  &__search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 260px;
+    min-width: 0;
+    > svg {
+      position: absolute;
+      left: 9px;
+      color: token("text-tertiary");
+      pointer-events: none;
+    }
+    > .input { width: 100%; padding-left: 28px; }
+  }
+
+  &__note {
+    margin: 6px 14px 0;
+    color: token("text-tertiary");
+    font-size: token("fs-xs");
+  }
+
+  &__crumbs {
+    padding: 10px 14px 0;
+    ol {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: token("fs-sm");
+    }
+    li {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+      max-width: 100%;
+      color: token("text-tertiary");
+    }
+    button, span[aria-current] {
+      overflow: hidden;
+      max-width: 28ch;
+      padding: 2px 4px;
+      border-radius: token("r-sm");
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    button {
+      border: 0;
+      background: none;
+      color: token("text-secondary");
+      font: inherit;
+      cursor: pointer;
+      &:hover { background: token("bg-hover"); color: token("text-primary"); }
+      &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: 1px; }
+    }
+    span[aria-current] { color: token("text-primary"); font-weight: token("fw-medium"); }
+  }
+
+  &__here {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: token("s-2") token("s-3");
+    margin: 8px 14px 0;
+    padding: 10px 12px;
+    border: 1px solid token("border");
+    border-radius: token("r-md");
+    background: token("bg-subtle");
+    > div {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1 1 240px;
+      min-width: 0;
+    }
+    strong { font-weight: token("fw-medium"); }
+    .btn { flex-shrink: 0; }
+  }
+  &__level {
+    color: token("text-tertiary");
+    font-size: token("fs-xs");
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  &__here-count { color: token("text-secondary"); font-size: token("fs-xs"); }
+
+  &__status {
+    min-height: 1lh;
+    margin: 8px 14px 4px;
+    color: token("text-tertiary");
+    font-size: token("fs-xs");
+  }
+
+  &__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  &__list {
+    margin: 0;
+    padding: 0 8px 12px;
+    list-style: none;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: token("r-md");
+    &:hover { background: token("bg-hover"); }
+    + .procurement-commodity-picker__row { margin-top: 1px; }
+  }
+
+  &__main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 36px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: token("r-md");
+    background: none;
+    color: token("text-primary");
+    font: inherit;
+    font-size: token("fs-sm");
+    text-align: left;
+    cursor: pointer;
+    &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: -2px; }
+    &[aria-current="true"] { background: token("accent-soft"); }
+  }
+
+  &__code {
+    flex-shrink: 0;
+    color: token("text-secondary");
+    font-variant-numeric: tabular-nums;
+  }
+  &__main &__code { width: 8.5ch; }
+
+  &__label {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    > span { overflow-wrap: anywhere; }
+    > small {
+      overflow: hidden;
+      color: token("text-tertiary");
+      font-size: token("fs-xs");
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+  &__untitled { color: token("text-tertiary"); font-style: italic; }
+
+  &__count {
+    flex-shrink: 0;
+    min-width: 3ch;
+    color: token("text-secondary");
+    font-size: token("fs-xs");
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  &__current { flex-shrink: 0; color: token("accent"); }
+  &__chev { display: inline-flex; flex: 0 0 14px; width: 14px; color: token("text-tertiary"); }
+  &__choose { flex: 0 0 68px; justify-content: center; margin-right: 4px; }
+
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 14px 16px;
+    color: token("text-secondary");
+    font-size: token("fs-sm");
+    p { margin: 0; }
+  }
+
+  &__clear { margin-right: auto; }
+}
+
+@media (max-width: 560px) {
+  .procurement-commodity-picker {
+    &__crumbs { button, span[aria-current] { max-width: 18ch; } }
+    // The code sits over the title, giving the title the row's width.
+    &__main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
+      grid-template-areas: "code count current chev" "label count current chev";
+      column-gap: 6px;
+      row-gap: 0;
+      min-height: 44px;
+    }
+    &__main &__code { grid-area: code; width: auto; font-size: token("fs-xs"); }
+    &__main &__label { grid-area: label; }
+    &__main &__count { grid-area: count; }
+    &__main &__current { grid-area: current; }
+    &__main &__chev { grid-area: chev; }
+    &__choose { flex-basis: 64px; }
+    &__clear { margin-right: 0; }
+  }
+}
