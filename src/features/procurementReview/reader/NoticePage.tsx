@@ -1,62 +1,55 @@
 /**
- * One published notice, as one scrolling page. The header answers "what,
- * who, still open?"; right under it, the decision panel answers "should we
- * bid?" (our triage beside Zoer's AI suggestion); then the buyer's
- * description, the documents (or one line saying there are none), Zoer's
- * review details, and the source's other fields. An award opens with what
- * was awarded, to whom and for how much, and ends with the supplier's and the
- * buyer's other awards.
+ * One published notice, as the content of the notice panel
+ * (notice/NoticePanel.tsx), which brings the chrome: the header with
+ * previous and next, Minimise, Full screen and Close, and the footer with
+ * Classify and the buyer's site. The page itself opens with the title, the
+ * buyer and the status ("what, who, still open?"); right under it, the
+ * decision panel answers "should we bid?" (our triage beside Zoer's AI
+ * suggestion); then the buyer's description, the documents (or one line
+ * saying there are none), Zoer's review details, and the source's other
+ * fields. An award opens with what was awarded, to whom and for how much,
+ * and ends with the supplier's and the buyer's other awards.
  *
  * The page lays itself out by its own width (notice/layout.ts), so it reads
- * the same at full width, in the list's pane beside the list, and on a phone:
- * wide, the facts and buyer contact sit in a rail that stays in view; stacked,
- * the key facts are a strip under the header and the rest follow the
- * documents; narrow (phones), an app bar keeps Back and the notice's title in
- * view, the details fold at the end, and Classify and the buyer's site sit in
- * a bar at the bottom of the screen.
+ * well in the panel at its usual 480px, as the panel is dragged wider, full
+ * screen, and in a phone's page sheet: wide, the facts and buyer contact sit
+ * in a rail that stays in view; stacked, the key facts are a strip under the
+ * header and the rest follow the documents; narrow, the same with the
+ * details folded at the end.
  *
  * `?tab=documents` and `?tab=review` (the list's paperclip, older links)
- * scroll to the documents and the decision panel. Back names the place it
- * returns to; previous and next step through the list the notice was opened
- * from (notice/NoticePager.tsx). The buyer, issued-for and supplier names open
- * that organisation's page, and its Back names this notice.
+ * scroll to the documents and the decision panel. The buyer, issued-for and
+ * supplier names open that organisation's page, and its Back names this
+ * notice.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ExternalLink, FileSearch } from "lucide-react";
+import { FileSearch } from "lucide-react";
 import { EmptyState, Skeleton } from "../../../components/ui";
-import { describeNotice } from "../lib/notice";
+import { mobileCardMediaQuery } from "../../../lib/breakpoints";
+import { useMediaQuery } from "../../../lib/useSheetDrag";
+import type { NoticeModel } from "../lib/notice";
 import { describeReview } from "../lib/review";
 import { NoticeDocuments } from "./NoticeDocuments";
 import { ReviewDetails } from "./NoticeReview";
-import { useNoticeTriage } from "./NoticeTriageBar";
+import type { NoticeTriageControl } from "./NoticeTriageBar";
 import { triageTaskNotice } from "./triage";
 import { ReaderPlaceTitleContext } from "./routes";
-import { ReaderBackButton, ReaderHeader } from "./ReaderHeader";
 import { useReaderSource } from "./source";
 import { useNoticeLayout } from "./notice/layout";
 import { DecisionPanel } from "./notice/DecisionPanel";
 import { AWARD_CARD_FACTS, AwardCard, RelatedAwards } from "./notice/AwardParts";
-import { NoticePager, useNoticeNeighbours, useNoticeShortcuts } from "./notice/NoticePager";
-import { NoticeActionBar, NoticeAppBar, shortSiteName } from "./notice/PhoneBars";
 import { AllDetails, Description, FactStrip, NoticeBadges, NoticeContacts, NoticeFacts, NoticeFields, PartyLink, SourceCapture } from "./notice/NoticeParts";
 
-/** Not a registered route, so the header shows no icon tile: beside a two-line notice title it wraps onto its own line. */
-const NOTICE_ROUTE_KEY = "procurement-review/notice";
 /** The sections `?tab=` scrolls to, and the verdict's link to the review details. */
 const DECISION_ID = "procurement-notice-decision";
 const DOCUMENTS_ID = "procurement-notice-documents";
 const REVIEW_DETAILS_ID = "procurement-notice-review";
 
-function parse(json: string): unknown {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return {};
-  }
-}
+/** A notice as the source published it (ReaderSource `useRecord`). */
+export type NoticeRecord = NonNullable<ReturnType<ReturnType<typeof useReaderSource>["useRecord"]>>;
 
-/** Runs `run` a few frames from now: after the reader has put the page at its top (ProcurementReader's scroll memory). */
+/** Runs `run` a few frames from now: after the panel's card has laid out. */
 function afterFrames(count: number, run: () => void): () => void {
   let frame = requestAnimationFrame(function next() {
     if (--count <= 0) run();
@@ -65,63 +58,86 @@ function afterFrames(count: number, run: () => void): () => void {
   return () => cancelAnimationFrame(frame);
 }
 
-export function NoticePage({ recordKey }: { recordKey: string }) {
+/** The title and the buyer, as the panel's content opens. */
+function NoticeHead({ title, buyer }: { title: string; buyer?: string }) {
+  return (
+    <header className="procurement-notice__head">
+      <h2 className="procurement-notice__title">{title}</h2>
+      {buyer && (
+        <p className="procurement-notice__buyer">
+          <PartyLink party="organization" name={buyer} />
+        </p>
+      )}
+    </header>
+  );
+}
+
+/** While the notice loads. */
+export function NoticeLoading({ rootRef }: { rootRef: (node: HTMLDivElement | null) => void }) {
+  return (
+    <div ref={rootRef} className="procurement-notice" aria-busy="true">
+      <NoticeHead title="Loading notice…" />
+      <div className="card">
+        <div className="card__body col">
+          <Skeleton variant="line" width="90%" />
+          <Skeleton variant="line" width="80%" />
+          <Skeleton variant="line" width="60%" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A key the catalog doesn't have (an old link, another workspace's). */
+export function NoticeMissing({ rootRef, action }: { rootRef: (node: HTMLDivElement | null) => void; action: ReactNode }) {
+  return (
+    <div ref={rootRef} className="procurement-notice">
+      <NoticeHead title="Notice not found" />
+      <EmptyState
+        icon={<FileSearch size={18} />}
+        title="This notice isn't in the published catalog"
+        description="Zoer may have published a newer catalog without it, or the link is from another workspace."
+        action={action}
+      />
+    </div>
+  );
+}
+
+export function NoticePage({
+  recordKey,
+  record,
+  data,
+  model,
+  triage,
+  root,
+  rootRef,
+}: {
+  recordKey: string;
+  record: NoticeRecord;
+  data: unknown;
+  model: NoticeModel;
+  /** Our triage of an opportunity; null for an award or where the reader has none. */
+  triage: NoticeTriageControl | null;
+  /** The page's root, measured for its layout; the panel keeps it for the notice's keys. */
+  root: HTMLElement | null;
+  rootRef: (node: HTMLDivElement | null) => void;
+}) {
   const source = useReaderSource();
-  const record = source.useRecord(recordKey);
   const documents = source.useDocuments(recordKey, null);
   const reviewRows = source.useReview(recordKey);
-  const data = useMemo(() => (record ? parse(record.dataJson) : null), [record]);
-  const model = useMemo(() => (record ? describeNotice(record.summary, data) : null), [record, data]);
   const review = useMemo(() => (reviewRows ? describeReview(reviewRows.rows) : null), [reviewRows]);
-  const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const layout = useNoticeLayout(root);
-  const neighbours = useNoticeNeighbours(recordKey);
-  const control = useNoticeTriage(recordKey, model?.title ?? "");
-  // Triage is for opportunities only.
-  const triage = model?.kind === "opportunity" ? control : null;
-  const [announcement, setAnnouncement] = useState("");
-  useNoticeShortcuts({ root, neighbours, triage, announce: setAnnouncement });
-
-  useEffect(() => {
-    root?.closest(".page")?.scrollTo({ top: 0 });
-  }, [root, recordKey]);
+  // The triage's key hints are for a keyboard, not a phone.
+  const phone = useMediaQuery(mobileCardMediaQuery);
 
   // `?tab=` names a section to scroll to, once what is above it has loaded.
   const [params] = useSearchParams();
   const requested = params.get("tab");
-  const ready = Boolean(model) && reviewRows !== undefined && documents !== undefined;
+  const ready = reviewRows !== undefined && documents !== undefined;
   useEffect(() => {
     if (!ready || (requested !== "documents" && requested !== "review")) return;
     return afterFrames(3, () => document.getElementById(requested === "documents" ? DOCUMENTS_ID : DECISION_ID)?.scrollIntoView({ block: "start" }));
   }, [ready, requested]);
-
-  if (record === undefined) {
-    return (
-      <div ref={setRoot} className="procurement-notice" aria-busy="true">
-        <ReaderHeader title="Loading notice…" routeKey={NOTICE_ROUTE_KEY} />
-        <div className="card">
-          <div className="card__body col">
-            <Skeleton variant="line" width="90%" />
-            <Skeleton variant="line" width="80%" />
-            <Skeleton variant="line" width="60%" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-  if (!record || !model) {
-    return (
-      <div ref={setRoot} className="procurement-notice">
-        <ReaderHeader title="Notice not found" routeKey={NOTICE_ROUTE_KEY} />
-        <EmptyState
-          icon={<FileSearch size={18} />}
-          title="This notice isn't in the published catalog"
-          description="Zoer may have published a newer catalog without it, or the link is from another workspace."
-          action={<ReaderBackButton />}
-        />
-      </div>
-    );
-  }
 
   const narrow = layout === "narrow";
   const wide = layout === "wide";
@@ -145,24 +161,8 @@ export function NoticePage({ recordKey }: { recordKey: string }) {
   return (
     // A buyer opened from here says "Back to <this notice>".
     <ReaderPlaceTitleContext.Provider value={model.title}>
-      <div ref={setRoot} className="procurement-notice" data-layout={layout}>
-        {narrow && <NoticeAppBar root={root} title={model.title} sourceUrl={model.sourceUrl} source={model.source} neighbours={neighbours} />}
-        <ReaderHeader
-          title={model.title}
-          routeKey={NOTICE_ROUTE_KEY}
-          back={narrow ? "none" : "words"}
-          trailing={neighbours && <NoticePager neighbours={neighbours} />}
-          subtitle={model.buyer ? <PartyLink party="organization" name={model.buyer} /> : undefined}
-          actions={
-            !narrow &&
-            model.sourceUrl && (
-              <a className="btn" href={model.sourceUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink size={14} aria-hidden="true" /> View on {shortSiteName(model.source)}
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
-            )
-          }
-        />
+      <div ref={rootRef} className="procurement-notice" data-layout={layout}>
+        <NoticeHead title={model.title} buyer={model.buyer} />
         <NoticeBadges model={model} />
         {record.removed && (
           <p className="card card__body" role="status">
@@ -181,7 +181,7 @@ export function NoticePage({ recordKey }: { recordKey: string }) {
               review={review}
               reviewLoading={reviewRows === undefined}
               detailsId={REVIEW_DETAILS_ID}
-              hint={!narrow}
+              hint={!phone}
             />
             {model.description ? (
               <Description text={model.description} />
@@ -200,10 +200,6 @@ export function NoticePage({ recordKey }: { recordKey: string }) {
             </aside>
           )}
         </div>
-        {narrow && <NoticeActionBar control={triage} sourceUrl={model.sourceUrl} source={model.source} />}
-        <p className="sr-only" role="status" aria-live="polite">
-          {announcement}
-        </p>
       </div>
     </ReaderPlaceTitleContext.Provider>
   );

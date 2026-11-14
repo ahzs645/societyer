@@ -1,7 +1,8 @@
 /**
- * Whether the list is showing beside an open notice (ProcurementReader's
- * split view) rather than on its own or covered by it. The list then keeps
- * the open notice's row in sight as the notice steps on.
+ * Whether a notice is open in the side panel over the list (ProcurementReader),
+ * so the list keeps the open notice's row in sight as the panel steps through
+ * it. Named for the desktop split view the panel replaced; NoticeTable reads
+ * it as `useSplitView`.
  */
 import { createContext, useContext } from "react";
 

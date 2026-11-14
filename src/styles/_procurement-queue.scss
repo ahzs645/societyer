@@ -1,7 +1,7 @@
 @use "tokens" as *;
 
-// Procurement reader: the review queue (QueueBar.tsx), the list's rows
-// (NoticeTable.tsx) and the desktop split view (ProcurementReader.tsx).
+// Procurement reader: the review queue (QueueBar.tsx) and the list's rows
+// (NoticeTable.tsx).
 
 // ---------------------------------------------------------------------------
 // Queue states: a segmented row with counts; phones scroll it sideways.
@@ -122,8 +122,8 @@
   }
   .procurement-queue__more { max-width: 200px; }
   // The first card starts right under the toolbar.
-  .procurement-split__list > .tabs { margin-bottom: token('s-2'); }
-  .procurement-split__list .procurement-reader { margin-top: 0; }
+  .procurement-reader__list > .tabs { margin-bottom: token('s-2'); }
+  .procurement-reader__list .procurement-reader { margin-top: 0; }
 }
 
 // ---------------------------------------------------------------------------
@@ -201,59 +201,3 @@
   &:hover { color: token('accent'); text-decoration-color: currentColor; }
 }
 .procurement-queue__us { flex: 0 0 auto; display: inline-flex; }
-
-// ---------------------------------------------------------------------------
-// Desktop split view: the list beside an open notice.
-// ---------------------------------------------------------------------------
-.procurement-split__notice {
-  container-type: inline-size;
-  min-width: 0;
-}
-
-.procurement-split.is-split {
-  display: grid;
-  grid-template-columns: minmax(380px, 420px) minmax(0, 1fr);
-  gap: token('s-5');
-  align-items: start;
-
-  > .procurement-split__list {
-    position: sticky;
-    top: var(--procurement-split-top, 0px);
-    height: var(--procurement-split-height, 80vh);
-    min-width: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: token('s-3');
-    border-right: 1px solid token('border-color-light');
-  }
-
-  // One column: the title cell carries the buyer, the closing date and the classification.
-  .procurement-split__list {
-    .record-table__header-cell:not(.record-table__header-cell--identifier),
-    .record-table__cell:not(.record-table__cell--identifier) {
-      display: none;
-    }
-    .record-table__cell--identifier,
-    .record-table__header-cell--identifier {
-      width: 100% !important;
-      min-width: 0 !important;
-      max-width: none;
-    }
-    .procurement-queue__split-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0 8px;
-      font-size: token('fs-xs');
-      font-weight: token('fw-regular');
-      color: token('text-tertiary');
-    }
-    .record-table__toolbar { flex-wrap: wrap; }
-    .record-table__toolbar-left--leading { flex: 1 1 100%; }
-    .record-table__segmented,
-    .record-table__toolbar-button--ask { display: none; }
-    // The kinds fit the narrow column without their counts, as on phones.
-    > .tabs .tab { padding-inline: 10px; }
-    > .tabs .tab__count { display: none; }
-    .procurement-queue { @include scroll-fade; }
-  }
-}

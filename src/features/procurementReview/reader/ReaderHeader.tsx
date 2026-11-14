@@ -1,15 +1,15 @@
 /**
- * The head of a notice or buyer page: Back, then the title. Back names the
+ * The head of a buyer or supplier page: Back, then the title. Back names the
  * place it returns to, which is the one the page was opened from (routes.ts
  * keeps it with the history entry), and steps back to it, so that place comes
- * back at the same rows. From a pasted link it goes to the parent place.
+ * back at the same rows (a notice comes back in its panel). From a pasted
+ * link it goes to the parent place.
  *
  * Back says where it leads in words ("← Opportunities", "← District of
- * Saanich") on a row of its own above the title, where a page can put more
- * of its own navigation (the notice's previous and next). On phones it is an
- * arrow on the title's row, so the header stays short; where it leads is the
- * arrow's tooltip and accessible label. A page with its own app bar (the
- * notice on a phone) leaves Back out here.
+ * Saanich") on a row of its own above the title. On phones it is an arrow on
+ * the title's row, so the header stays short; where it leads is the arrow's
+ * tooltip and accessible label. (A notice has no page header: it opens in
+ * the side panel, which brings its own.)
  */
 import type { MouseEvent, ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
@@ -29,7 +29,6 @@ export function ReaderHeader({
   subtitle,
   actions,
   back = "auto",
-  trailing,
 }: {
   title: ReactNode;
   /** Not a registered route, so the header shows no icon tile beside a long title. */
@@ -37,14 +36,8 @@ export function ReaderHeader({
   eyebrow?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
-  /**
-   * How Back shows: "words" on its own row, "icon" as an arrow beside the
-   * title, "none" when the page shows Back itself; "auto" (the default) is
-   * words, or the arrow on phones.
-   */
-  back?: "auto" | "words" | "icon" | "none";
-  /** More navigation on Back's row, at its end (the notice's previous and next). Shown with words only. */
-  trailing?: ReactNode;
+  /** How Back shows: "words" on its own row, "icon" as an arrow beside the title; "auto" (the default) is words, or the arrow on phones. */
+  back?: "auto" | "words" | "icon";
 }) {
   const phone = useMediaQuery(mobileCardMediaQuery);
   const style = back === "auto" ? (phone ? "icon" : "words") : back;
@@ -53,7 +46,6 @@ export function ReaderHeader({
       {style === "words" && (
         <div className="procurement-back-row">
           <ReaderBackLink words />
-          {trailing}
         </div>
       )}
       <PageHeader

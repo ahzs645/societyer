@@ -48,7 +48,7 @@ test("buyer and issued-for pages render both lists on the catalog service", asyn
   expect(failures).toEqual([]);
 });
 
-test("the opportunity opens with its bid decision and contains page overscroll", async ({ page, isMobile }) => {
+test("the opportunity opens with its bid decision and contains page overscroll", async ({ page }) => {
   await page.goto("/tests/fixtures/procurement-service.html?notice=opportunity%3Aroads&fixtureTriage=1");
   const notice = page.locator(".procurement-notice");
   const decision = notice.getByRole("region", { name: "Bid decision" });
@@ -56,7 +56,9 @@ test("the opportunity opens with its bid decision and contains page overscroll",
   await expect(triage).toBeVisible();
   await expect(triage.getByRole("checkbox", { name: "Reviewed" })).toBeEnabled();
   await expect(triage.getByRole("button", { name: "Classification" })).toBeEnabled();
-  await expect(page.locator(".procurement-split")).toHaveClass(isMobile ? "procurement-split" : "procurement-split is-split");
+  // The notice opens in the record side panel (an overlay drawer outside the app layout), as other records do.
+  await expect(page.getByRole("dialog", { name: /^Opportunity/ })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: /^Opportunity/ }).getByRole("button", { name: "Close", exact: true })).toBeVisible();
   const documents = notice.getByRole("region", { name: /^Documents/ });
   await expect(documents).toBeVisible();
   const decisionBox = await decision.boundingBox();

@@ -25,7 +25,7 @@ import { Menu } from "../../../../components/Menu";
 import { useInspectorPanel } from "../../../../components/InspectorPanel";
 import { Tooltip } from "../../../../components/Tooltip";
 import { sameEntity, type EntityRef } from "../../../../components/HoverCard/entityRefs";
-import { useDialogFocus } from "../../../../lib/useDialogFocus";
+import { getDialogFocusables, useDialogFocus } from "../../../../lib/useDialogFocus";
 
 /** Cards a panel can hold at once, the table record included. */
 export const MAX_PANEL_STACK_DEPTH = 5;
@@ -178,9 +178,13 @@ export type StackCardSummary = { key: string; title: string; kindLabel: string }
 /**
  * The panel's dialog shell. It renders into the page's inspector column (or
  * as an overlay drawer outside the app layout), with the earlier cards of a
- * stack peeking out behind the visible one.
+ * stack peeking out behind the visible one. A page with its own record
+ * content (a procurement notice) can use it on its own, with
+ * `useRecordPanelStack` for Minimise and Full screen and `className` for its
+ * content's styles; it then looks and closes like every other record panel.
  */
 export function RecordPanelShell({
+  className,
   onEscape,
   header,
   actions,
@@ -191,6 +195,8 @@ export function RecordPanelShell({
   footer,
   children,
 }: {
+  /** Extra classes on the panel, for a page's own content. */
+  className?: string;
   /** Esc and the inspector's own close gesture close the visible card. */
   onEscape: () => void;
   header: ReactNode;
@@ -215,6 +221,25 @@ export function RecordPanelShell({
     return () => inspector.deactivate(panelId);
   }, [inspector, panelId]);
 
+  // The inspector column stays inert until it has opened for this panel, so
+  // a panel whose content takes a while to render can mount before then and
+  // its opening focus (useDialogFocus) lands nowhere. Once the column is
+  // open, focus still on the control that opened the panel (or on nothing)
+  // moves into it, once.
+  const openedFrom = useRef<{ element: Element | null; moved: boolean } | null>(null);
+  if (openedFrom.current === null) openedFrom.current = { element: typeof document === "undefined" ? null : document.activeElement, moved: false };
+  const columnOpen = Boolean(inspector?.portalTarget) && inspector?.activePanelId === panelId;
+  useEffect(() => {
+    const opened = openedFrom.current;
+    const root = dialogRef.current;
+    if (!columnOpen || !opened || opened.moved || !root) return;
+    opened.moved = true;
+    const active = document.activeElement;
+    if (active && root.contains(active)) return;
+    if (active && active !== document.body && active !== opened.element) return;
+    (getDialogFocusables(root)[0] ?? root).focus({ preventScroll: true });
+  }, [columnOpen, dialogRef]);
+
   // Moving between cards keeps keyboard focus inside the panel.
   const lastCard = useRef(cardKey);
   useEffect(() => {
@@ -234,7 +259,8 @@ export function RecordPanelShell({
         "record-side-panel record-panel-stack" +
         (inspector?.portalTarget ? " inspector-panel" : " drawer") +
         (peeks ? ` record-panel-stack--peek-${peeks}` : "") +
-        (fullscreen ? " record-side-panel--fullscreen" : "")
+        (fullscreen ? " record-side-panel--fullscreen" : "") +
+        (className ? ` ${className}` : "")
       }
       role="dialog"
       aria-modal={inspector?.portalTarget ? undefined : "true"}

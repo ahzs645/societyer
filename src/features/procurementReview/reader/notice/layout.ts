@@ -1,14 +1,14 @@
 /**
  * How the notice page lays itself out, from its own width rather than the
- * window's: the same page shows at full width, in the list's right-hand pane
- * on a wide desktop (about 800px), and on a phone, and only its width says
- * which of those it is in.
+ * window's: the same page shows in the side panel at its usual 480px, as the
+ * panel is dragged wider, full screen, and in a phone's page sheet, and only
+ * its width says which of those it is in.
  *
  * - wide: the content beside a sticky rail of facts and the buyer contact;
  * - stacked: one column, the key facts in a strip under the header, every
  *   detail laid out after the documents;
- * - narrow (phones): as stacked, under a compact app bar, the details folded
- *   at the end, and Classify and the buyer's site in a bar at the bottom.
+ * - narrow (the panel's usual width, phones): as stacked, with the details
+ *   folded at the end.
  *
  * Measured before paint (a layout effect), so the page never shows in the
  * wrong layout first.
@@ -19,7 +19,7 @@ export type NoticeLayout = "wide" | "stacked" | "narrow";
 
 /** Room for a readable main column (~36rem) beside the 18rem rail. */
 const WIDE_MIN = 900;
-/** Phones; matches the reader's phone breakpoint (--bp-bottom-sheet). */
+/** The panel at its usual width, and phones (the reader's phone breakpoint, --bp-bottom-sheet). */
 const NARROW_MAX = 560;
 
 export const layoutFor = (width: number): NoticeLayout => (width >= WIDE_MIN ? "wide" : width <= NARROW_MAX ? "narrow" : "stacked");

@@ -6,7 +6,7 @@
  * place while the triage loads.
  *
  * `useNoticeTriage` is the one place a change is saved from, so the panel,
- * the keyboard (1–4, R) and the phone's Classify bar all archive with the
+ * the keyboard (1–4, R) and the notice panel's Classify all archive with the
  * same undo and fail with the same toast.
  */
 import { useState } from "react";
@@ -158,8 +158,9 @@ export function NoticeTriage({ control, recordKey, notice, hint = false }: { con
 }
 
 /**
- * The phone's Classify: the classification Select (a bottom sheet there),
- * dressed as the bottom bar's button. Shows the classification once there is one.
+ * Classify in the notice panel's footer: the classification Select (a
+ * bottom sheet on phones) as a footer button. Shows the classification once
+ * there is one.
  */
 export function ClassifyButton({ control }: { control: NoticeTriageControl }) {
   const { current, editable, save } = control;

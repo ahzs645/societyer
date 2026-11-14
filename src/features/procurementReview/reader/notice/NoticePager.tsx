@@ -4,17 +4,16 @@
  *
  * Stepping to a neighbour replaces the history entry rather than adding one
  * (routes.ts `update`), and the entry keeps the place it was opened from. So
- * Back, in the page or the browser, still returns to the list in one step,
- * at the rows it showed, however many notices were stepped through, and
- * still says "Opportunities". Stepping is reading the list in place, not
- * going somewhere new; a notice opened from inside another (a related award)
- * adds an entry as before.
+ * closing the panel, or Back in the browser, still returns to the list in one
+ * step, at the rows it showed, however many notices were stepped through.
+ * Stepping is reading the list in place, not going somewhere new; a notice
+ * opened from inside another (a related award) adds an entry as before.
  *
  * Only over the list: a notice opened from a buyer page or the analytics
  * isn't in the list's order, so it shows no previous and next.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Tooltip } from "../../../../components/Tooltip";
 import { ShortcutHint } from "../../../../components/ShortcutHint";
 import { isTypingTarget } from "../../../../lib/shortcutsRegistry";
@@ -41,12 +40,18 @@ export function useNoticeNeighbours(recordKey: string): NoticeNeighbours | null 
   return { previous: adjacent.previous, next: adjacent.next, position: adjacent.position, total: adjacent.total, go };
 }
 
-/** The arrow pressed last, so the next notice's arrow takes the focus back (the page is new, and focus would fall to the body). */
+/** "3 of 7", or "7 left" for a notice that has just left the list. */
+export const positionText = ({ position, total }: NoticeNeighbours) => (position === null ? `${total} left` : `${position} of ${total}`);
+
+/** The arrow used last, so the next notice's arrow takes the focus back (the panel's card is new, and focus would fall out of it). */
 let focusAfterStep: "previous" | "next" | null = null;
 
-/** ‹ 3 of 7 ›; `compact` leaves out the position (the phone's app bar). */
-export function NoticePager({ neighbours, compact = false }: { neighbours: NoticeNeighbours; compact?: boolean }) {
-  const { previous, next, position, total, go } = neighbours;
+/**
+ * ↑ and ↓ in the panel's header, as the transactions panel has them. J and K
+ * do the same (useNoticeShortcuts); the tooltips say so.
+ */
+export function NoticeStepper({ neighbours }: { neighbours: NoticeNeighbours }) {
+  const { previous, next, go } = neighbours;
   const previousButton = useRef<HTMLButtonElement>(null);
   const nextButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -60,60 +65,62 @@ export function NoticePager({ neighbours, compact = false }: { neighbours: Notic
     go(key);
   };
   return (
-    <nav className="procurement-pager" aria-label="Notices in this list">
-      <Tooltip content={<>Previous notice <ShortcutHint keys={["K"]} tone="inverse" /></>}>
+    <div className="procurement-stepper" role="group" aria-label={`Notices in this list, ${positionText(neighbours)}`}>
+      <Tooltip content={<>Previous notice <ShortcutHint keys={["↑"]} tone="inverse" /> <ShortcutHint keys={["K"]} tone="inverse" /></>} placement="bottom">
         <button
           ref={previousButton}
           type="button"
-          className="btn btn--ghost btn--icon btn--sm"
+          className="btn btn--ghost btn--icon"
           aria-label="Previous notice"
-          aria-keyshortcuts="K"
+          aria-keyshortcuts="ArrowUp K"
           disabled={!previous}
           onClick={() => step("previous", previous)}
         >
-          <ChevronLeft size={16} aria-hidden="true" />
+          <ChevronUp size={15} aria-hidden="true" />
         </button>
       </Tooltip>
-      <span className={compact ? "sr-only" : "procurement-pager__position"}>
-        {position === null ? `${total} left` : `${position} of ${total}`}
-      </span>
-      <Tooltip content={<>Next notice <ShortcutHint keys={["J"]} tone="inverse" /></>}>
+      <Tooltip content={<>Next notice <ShortcutHint keys={["↓"]} tone="inverse" /> <ShortcutHint keys={["J"]} tone="inverse" /></>} placement="bottom">
         <button
           ref={nextButton}
           type="button"
-          className="btn btn--ghost btn--icon btn--sm"
+          className="btn btn--ghost btn--icon"
           aria-label="Next notice"
-          aria-keyshortcuts="J"
+          aria-keyshortcuts="ArrowDown J"
           disabled={!next}
           onClick={() => step("next", next)}
         >
-          <ChevronRight size={16} aria-hidden="true" />
+          <ChevronDown size={15} aria-hidden="true" />
         </button>
       </Tooltip>
-    </nav>
+    </div>
   );
 }
 
-/** Open popups and dialogs own their keys. */
+/** Open popups and other dialogs own their keys. */
 const ELSEWHERE = '[role="menu"], [role="listbox"], [role="combobox"], [aria-haspopup][aria-expanded="true"], dialog, [role="dialog"]';
 const MODAL_OPEN = 'dialog[open], [role="dialog"][aria-modal="true"]';
+/** Where the arrows keep their own meaning: tabs, the table's cells and editors. */
+const OWN_ARROWS = '[role="tablist"], [role="grid"], .record-table__cell, .record-cell__editor, .record-table__cell-editor-popover';
 
 /**
- * While the notice is open and focus isn't in a field: J and K step to the
- * next and previous notice, 1–4 classify it (in TRIAGE_CLASSIFICATIONS
- * order: Doable, Possible, Needs a partner, Not doable) and R ticks or
- * unticks Reviewed, when the triage can be changed. In the wide desktop's
- * split, J and K pressed in the list beside the notice stay the list's, while
- * 1–4 and R still act on the open notice. `announce`
- * says what a key did, for screen readers.
+ * While the notice is open, and focus is on it or on the page around it (not
+ * in a field, a popup or another dialog): J and K step to the next and
+ * previous notice, ↑ and ↓ too from the panel itself (or with nothing
+ * focused; in the list they move its cells), 1–4 classify it (in
+ * TRIAGE_CLASSIFICATIONS order: Doable, Possible, Needs a partner, Not
+ * doable) and R ticks or unticks Reviewed, when the triage can be changed.
+ * `announce` says what a key did, for screen readers. `enabled` is false
+ * while the panel is minimised.
  */
 export function useNoticeShortcuts({
   root,
+  enabled,
   neighbours,
   triage,
   announce,
 }: {
   root: HTMLElement | null;
+  enabled: boolean;
   neighbours: NoticeNeighbours | null;
   triage: NoticeTriageControl | null;
   announce: (message: string) => void;
@@ -123,24 +130,29 @@ export function useNoticeShortcuts({
     latest.current = { neighbours, triage, announce };
   });
   useEffect(() => {
+    if (!enabled || !root) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      const target = event.target;
+      const target = event.target instanceof Element ? event.target : null;
       if (isTypingTarget(target)) return;
-      // Focus on the notice, or on a container around it (clicking plain text focuses the app's
-      // <main>), counts as on the notice. In the split view the list beside it keeps J and K for
-      // its own rows, but the classify keys still act on the notice that's open.
-      const inSplitList = target instanceof Element && Boolean(target.closest(".procurement-split__list"));
-      if (target instanceof Element && !inSplitList && root && !root.contains(target) && !target.contains(root)) return;
-      if (target instanceof Element && target.closest(ELSEWHERE)) return;
-      if (document.querySelector(MODAL_OPEN)) return;
+      // The panel is a dialog itself; only a popup or dialog other than the one holding the notice takes the keys.
+      const popup = target?.closest(ELSEWHERE);
+      if (popup && !popup.contains(root)) return;
+      if ([...document.querySelectorAll(MODAL_OPEN)].some((modal) => !modal.contains(root))) return;
       const { neighbours: around, triage: control, announce: say } = latest.current;
       const key = event.key.toLowerCase();
-      if ((key === "j" || key === "k") && around && !inSplitList) {
-        const to = key === "j" ? around.next : around.previous;
+      const arrow = key === "arrowdown" || key === "arrowup";
+      if (arrow) {
+        const panel = root.closest('[role="dialog"]') ?? root;
+        const fromPanel = Boolean(target && panel.contains(target));
+        const fromNowhere = !target || target === document.body || target === document.documentElement;
+        if ((!fromPanel && !fromNowhere) || target?.closest(OWN_ARROWS)) return;
+      }
+      if ((key === "j" || key === "k" || arrow) && around) {
+        const to = key === "j" || key === "arrowdown" ? around.next : around.previous;
         event.preventDefault();
         if (to) around.go(to);
-        else say(key === "j" ? "This is the last notice in the list." : "This is the first notice in the list.");
+        else say(key === "j" || key === "arrowdown" ? "This is the last notice in the list." : "This is the first notice in the list.");
         return;
       }
       if (event.repeat || !control?.editable) return;
@@ -159,5 +171,5 @@ export function useNoticeShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [root]);
+  }, [root, enabled]);
 }
