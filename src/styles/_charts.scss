@@ -74,6 +74,26 @@
 .chart-table {
   margin: 0;
 }
+// A row heading that opens the records behind the row: reads as a link, sized for a finger.
+.chart-table__row-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: token('accent');
+  text-align: left;
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+    border-radius: token('r-sm');
+  }
+  @media (pointer: coarse) { min-height: 44px; }
+}
 
 // ---------- Plot ----------
 .chart {

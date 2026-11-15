@@ -2,8 +2,8 @@
 import type { ListRow } from "./procurementListRow";
 import { decodeHtmlEntities } from "./htmlEntities";
 import {
-  analyticalFields, defaultFilters, distribution, filterAwards, matrix, metadata, normalizeAwards, overview,
-  sliceAwards, trends, validateFilters, type MarketFilters, type Slice,
+  analyticalFields, defaultFilters, distribution, filterAwards, leftOut, matrix, metadata, normalizeAwards, normalizeExclusions, overview,
+  partyKey, sliceAwards, trends, validateFilters, type LeftOutReason, type MarketFilters, type Slice,
 } from "../src/features/procurementReview/lib/market";
 import { decisionInsights, opportunityInsights, type Readiness, type Relevance } from "../src/features/procurementReview/lib/insights";
 import { zoneToday } from "../src/features/procurementReview/lib/notice";
@@ -20,8 +20,10 @@ export type AnalysisRequest = {
 };
 const VIEWS = new Set<AnalysisView>(["overview", "trends", "buyers", "suppliers", "sizes", "mix", "quality", "opportunities", "decisions", "party", "awards", "compare"]);
 const FLAGS = new Set(["future", "undated", "currency", "placeholder", "value", "negative", "zero", "contract", "justification", "mapping"]);
+const LEFT_OUT_REASONS = new Set<LeftOutReason>(["currency", "url", "placeholder", "future", "excluded"]);
 // Decoded first, so a name a source published with entities (`A &amp; B`) is the same party as `A & B`.
-export const procurementPartyKey = (value: string) => decodeHtmlEntities(value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// The same key leaves a party out of the analysis (market.ts `exclude`).
+export const procurementPartyKey = partyKey;
 
 /** Whitespace/case variants share a party; original source labels remain on each notice. */
 export function canonicalProcurementRows(rows: ListRow[], level: AnalysisRequest["buyerLevel"] = "organization"): ListRow[] {
@@ -36,6 +38,17 @@ export function canonicalProcurementRows(rows: ListRow[], level: AnalysisRequest
     const mapped = typeof extra[field] === "string" ? decodeHtmlEntities(extra[field]).trim() : "";
     return { ...row, organization: mapped || names.get(procurementPartyKey(row.organization)) || "", issuedFor: names.get(procurementPartyKey(row.issuedFor)) ?? "", supplier: names.get(procurementPartyKey(row.supplier)) ?? "" };
   });
+}
+/** Which buyer-mapping versions the rows follow, and whether any are proposals from source labels rather than a verified register. */
+export function buyerMappings(rows: ListRow[]) {
+  const versions = new Set<string>();
+  let proposed = false;
+  for (const row of rows) {
+    const extra = analyticalFields(row);
+    if (typeof extra.mappingVersion === "string") versions.add(extra.mappingVersion);
+    if (extra.mappingProvenance?.authority === "proposed-source-label-mapping") proposed = true;
+  }
+  return { versions: [...versions], proposed };
 }
 export function matchesProcurementParty(row: ListRow, field: "organization" | "issuedFor", name: string) {
   const extra = analyticalFields(row), key = procurementPartyKey(name);
@@ -63,7 +76,7 @@ export function normalizeAnalysisRequest(input: string | AnalysisRequest): Analy
       if (typeof r.slice[key] !== "string" || r.slice[key].length > 500) throw new Error("Invalid drill-down scope.");
       slice[key] = r.slice[key];
     }
-    for (const key of ["min", "max", "exact"] as const) if (r.slice[key] !== undefined) {
+    for (const key of ["min", "max", "atMost", "exact"] as const) if (r.slice[key] !== undefined) {
       if (typeof r.slice[key] !== "number" || !Number.isFinite(r.slice[key])) throw new Error("Invalid drill-down value.");
       slice[key] = r.slice[key];
     }
@@ -71,8 +84,16 @@ export function normalizeAnalysisRequest(input: string | AnalysisRequest): Analy
       if (!FLAGS.has(r.slice.quality)) throw new Error("Unknown quality rule.");
       slice.quality = r.slice.quality;
     }
+    if (r.slice.left !== undefined) {
+      if (!LEFT_OUT_REASONS.has(r.slice.left)) throw new Error("Unknown drill-down reason.");
+      slice.left = r.slice.left;
+    }
   }
-  return { view: r.view, filters: validateFilters(f), year: r.year ?? "", scope: r.scope ?? "open", search: (r.search ?? "").trim(), offset: r.offset ?? 0, slice, all: r.all === true, buyerLevel: r.buyerLevel ?? "organization", ...(r.party ? { party: { field: r.party.field, name: r.party.name.trim() } } : {}) };
+  // Exclusions are checked and put in a stable order; none at all leaves the key out, so the
+  // identity of every request without them (and the precomputed defaults) is unchanged.
+  const { exclude, ...rest } = validateFilters(f), exclusions = normalizeExclusions(exclude);
+  const filters: MarketFilters = exclusions.length ? { ...rest, exclude: exclusions } : rest;
+  return { view: r.view, filters, year: r.year ?? "", scope: r.scope ?? "open", search: (r.search ?? "").trim(), offset: r.offset ?? 0, slice, all: r.all === true, buyerLevel: r.buyerLevel ?? "organization", ...(r.party ? { party: { field: r.party.field, name: r.party.name.trim() } } : {}) };
 }
 export function analysisIdentity(request: AnalysisRequest, asOf: number) {
   const r = normalizeAnalysisRequest(request);
@@ -102,18 +123,14 @@ export function buildAwardAnalytics(input: ListRow[], request: AnalysisRequest, 
     published: all.length, included: rows.length, excluded: all.length - rows.length,
     overview: { ...totals, buyers: buyers.slice(0, 25), suppliers: suppliers.slice(0, 25), types: types.slice(0, 25) },
     meta: boundMeta(metadata(all, today)),
-    mappings: { versions: [...new Set(input.map(row => analyticalFields(row).mappingVersion).filter((v): v is string => typeof v === "string"))], supplied: all.filter(row => !!row.buyerId).length, published: all.length, proposed: input.some(row => analyticalFields(row).mappingProvenance?.authority === "proposed-source-label-mapping") },
+    mappings: { ...buyerMappings(input), supplied: all.filter(row => !!row.buyerId).length, published: all.length },
     trends: r.view === "trends" ? trends(rows, r.year ?? "", today) : null,
     sizes: r.view === "sizes" ? distribution(rows) : null,
     mix: r.view === "mix" ? matrix(rows, "type") : null,
     comparison: r.view === "compare" ? comparePeriods(all, validateFilters(r.filters!), today) : null,
     directory: { rows: directory.slice(r.offset, r.offset! + ANALYSIS_PAGE_SIZE), total: directory.length, offset: r.offset!, reliant: ranked.filter(row => row.count >= 3 && (row.dependence ?? 0) >= .8).length },
-    exclusions: [
-      { label: `Not in ${r.filters!.currency}`, count: all.filter(row => row.currencyCode !== r.filters!.currency).length, note: "Currencies are never converted or combined." },
-      { label: "Excluded source URLs", count: all.filter(row => row.urlExcluded).length, note: "The publication’s versioned URL exclusion policy." },
-      { label: "Placeholder supplier", count: r.filters!.includePlaceholders ? 0 : all.filter(row => row.placeholder).length, note: "Missing or migration supplier labels." },
-      { label: "Dated after today", count: r.filters!.includeFuture ? 0 : all.filter(row => !!row.date && row.date > today).length, note: "Source dates that require verification." },
-    ],
+    // Each reason drills down by its `reason` (a `left` slice over every published award).
+    exclusions: leftOut(all, r.filters!, today),
   };
 }
 function comparePeriods(all: ReturnType<typeof normalizeAwards>, filters: MarketFilters, today: string) {
@@ -132,7 +149,7 @@ export function buildAnalysis(input: ListRow[], evidence: CatalogReviewRow[], re
   const r = normalizeAnalysisRequest(request), rows = canonicalProcurementRows(input, r.buyerLevel);
   if (r.view === "awards") {
     const all = normalizeAwards(rows), today = zoneToday(asOf);
-    const selected = sliceAwards(r.all ? all : filterAwards(all, r.filters!, today), r.slice, today);
+    const selected = sliceAwards(r.all ? all : filterAwards(all, r.filters!, today), r.slice, today, r.filters);
     const keys = new Set(selected.slice(r.offset, r.offset! + ANALYSIS_PAGE_SIZE).map(row => row.id));
     return { type: "awards" as const, data: { rows: input.filter(row => keys.has(row.recordKey)), total: selected.length, offset: r.offset! } };
   }

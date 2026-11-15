@@ -12,21 +12,50 @@
  * and justification quality flags, and the period comparison.
  */
 import type { ListRow } from "../reader/source";
+import { decodeHtmlEntities } from "../../../../shared/htmlEntities";
+
+/**
+ * A buyer, supplier or procurement type someone chose to leave out of the
+ * analysis: one huge contract, an internal transfer, their own organisation.
+ * Matched by name the way parties are everywhere (entities decoded, case and
+ * punctuation ignored); a buyer matches on any of its mapped labels, so
+ * leaving out an organisation still holds when buyers are grouped by office.
+ */
+export type ExclusionField = "buyer" | "supplier" | "type";
+export type Exclusion = { field: ExclusionField; name: string };
+/** Enough for any real analysis, and small enough that the request stays under the service's 8 KB body. */
+export const MAX_EXCLUSIONS = 50;
+const MAX_EXCLUSION_NAME = 300;
+const MAX_EXCLUSION_TEXT = 4000;
 
 export type MarketFilters = {
   from: string; to: string; buyer: string; supplier: string; type: string;
   currency: string; includePlaceholders: boolean; includeFuture: boolean; minValue: string;
+  /** Absent rather than empty, so a request without exclusions keeps the identity (and cached results) it always had. */
+  exclude?: Exclusion[];
 };
 /** CAD only, placeholder suppliers and future-dated awards left out: Zoer's defaults. */
 export const defaultFilters: MarketFilters = { from: "", to: "", buyer: "", supplier: "", type: "", currency: "CAD", includePlaceholders: false, includeFuture: false, minValue: "" };
 
 export type QualityFlag = "future" | "undated" | "currency" | "placeholder" | "value" | "negative" | "zero" | "contract" | "justification" | "mapping";
-export type Slice = { buyer?: string; supplier?: string; type?: string; month?: string; from?: string; to?: string; min?: number; max?: number; exact?: number; quality?: QualityFlag };
+/** Why the filters leave an award out of the figures (`leftOut`), as a drill-down over every published award. */
+export type LeftOutReason = "currency" | "url" | "placeholder" | "future" | "excluded";
+/**
+ * The awards behind one figure: a party, a type, a month or date range, a
+ * size band (`min` inclusive, `max` exclusive, `atMost` inclusive), an exact
+ * value, a quality flag, or a reason the filters leave awards out.
+ */
+export type Slice = {
+  buyer?: string; supplier?: string; type?: string; month?: string; from?: string; to?: string;
+  min?: number; max?: number; atMost?: number; exact?: number; quality?: QualityFlag; left?: LeftOutReason;
+};
 
 export type Award = {
   id: string; title: string; buyer: string; supplier: string; type: string; currencyCode: string;
   date: string | null; value: number | null; placeholder: boolean;
   contractNumber?: string | null; justification?: string | null; buyerId?: string; hierarchy?: string[]; mappingStatus?: string; urlExcluded?: boolean;
+  /** Every name the buyer goes by (source label, office, organisation, group, type, aliases), for exclusions. */
+  buyerLabels?: string[];
 };
 export function analyticalFields(row: ListRow): Record<string, any> {
   if (!row.analyticsJson) return {};
@@ -72,7 +101,60 @@ export function normalizeAwards(rows: ListRow[]): Award[] {
     hierarchy: Array.isArray(extra.buyerHierarchy) ? extra.buyerHierarchy.filter((v: unknown) => typeof v === "string") : [],
     mappingStatus: String(extra.buyerMappingStatus ?? extra.mappingProvenance?.status ?? "Not supplied"),
     urlExcluded: extra.urlExcluded === true,
+    buyerLabels: [extra.buyerOriginal, extra.buyerDisplayName, extra.buyerOrganization, extra.buyerGroup, extra.buyerType, ...(Array.isArray(extra.buyerAliases) ? extra.buyerAliases : [])]
+      .filter((v: unknown): v is string => typeof v === "string" && v.trim() !== ""),
   }); });
+}
+
+/** A name as parties compare: entities decoded, Unicode forms unified, case and punctuation ignored. */
+export const partyKey = (value: string) => decodeHtmlEntities(value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+const EXCLUSION_FIELDS: ExclusionField[] = ["buyer", "supplier", "type"];
+/**
+ * Exclusions checked, each party once, in a stable order (by kind, then
+ * name), so two requests that leave out the same parties share one result.
+ * Throws on anything malformed or over the limits; `[]` when there are none.
+ */
+export function normalizeExclusions(value: unknown): Exclusion[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error("Invalid analysis exclusions.");
+  if (value.length > MAX_EXCLUSIONS) throw new Error(`Leave out at most ${MAX_EXCLUSIONS} buyers, suppliers or types.`);
+  const seen = new Map<string, Exclusion>();
+  let text = 0;
+  for (const item of value) {
+    if (!item || typeof item !== "object") throw new Error("Invalid analysis exclusion.");
+    const { field, name } = item as Record<string, unknown>;
+    if (!EXCLUSION_FIELDS.includes(field as ExclusionField) || typeof name !== "string") throw new Error("Invalid analysis exclusion.");
+    const trimmed = name.replace(/\s+/g, " ").trim();
+    if (!trimmed || trimmed.length > MAX_EXCLUSION_NAME || !partyKey(trimmed)) throw new Error("Invalid analysis exclusion.");
+    text += trimmed.length;
+    const key = `${field}\u0000${partyKey(trimmed)}`;
+    if (!seen.has(key)) seen.set(key, { field: field as ExclusionField, name: trimmed });
+  }
+  if (text > MAX_EXCLUSION_TEXT) throw new Error("The exclusions are too long; leave out fewer names.");
+  return [...seen.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, item]) => item);
+}
+
+// Each award's names as keys, worked out once per award however often the exclusions change.
+const awardKeys = new WeakMap<Award, Record<ExclusionField, string[]>>();
+function keysOf(award: Award) {
+  let keys = awardKeys.get(award);
+  if (!keys) {
+    keys = { buyer: [award.buyer, ...(award.buyerLabels ?? [])].map(partyKey), supplier: [partyKey(award.supplier)], type: [partyKey(award.type)] };
+    awardKeys.set(award, keys);
+  }
+  return keys;
+}
+/** A test for "left out by the person", or null when nothing is, so the common case costs nothing. */
+export function exclusionTest(exclusions: Exclusion[] | undefined): ((award: Award) => boolean) | null {
+  if (!exclusions?.length) return null;
+  const wanted: Record<ExclusionField, Set<string>> = { buyer: new Set(), supplier: new Set(), type: new Set() };
+  for (const item of exclusions) wanted[item.field].add(partyKey(item.name));
+  const fields = EXCLUSION_FIELDS.filter((field) => wanted[field].size);
+  return (award) => {
+    const keys = keysOf(award);
+    return fields.some((field) => keys[field].some((key) => wanted[field].has(key)));
+  };
 }
 
 export function validateFilters(input: Partial<MarketFilters>): MarketFilters {
@@ -84,8 +166,8 @@ export function validateFilters(input: Partial<MarketFilters>): MarketFilters {
 }
 
 export function filterAwards(rows: Award[], input: Partial<MarketFilters>, today: string): Award[] {
-  const f = validateFilters(input);
-  return rows.filter((r) => !r.urlExcluded && (!f.buyer || r.buyer === f.buyer) && (!f.supplier || r.supplier === f.supplier) && (!f.type || r.type === f.type)
+  const f = validateFilters(input), excluded = exclusionTest(f.exclude);
+  return rows.filter((r) => !r.urlExcluded && !excluded?.(r) && (!f.buyer || r.buyer === f.buyer) && (!f.supplier || r.supplier === f.supplier) && (!f.type || r.type === f.type)
     && r.currencyCode === f.currency && (f.includePlaceholders || !r.placeholder) && (f.includeFuture || !r.date || r.date <= today)
     && (!f.from || (!!r.date && r.date >= f.from)) && (!f.to || (!!r.date && r.date <= f.to))
     && (!f.minValue || (r.value !== null && r.value >= Number(f.minValue))));
@@ -106,13 +188,46 @@ export function qualityMatch(r: Award, flag: QualityFlag, today: string): boolea
   }
 }
 
-export function sliceAwards(rows: Award[], slice: Slice = {}, today: string): Award[] {
+/** `filters` only matters to a `left` slice: which currency and exclusions the figures use. */
+export function sliceAwards(rows: Award[], slice: Slice = {}, today: string, filters: Partial<MarketFilters> = {}): Award[] {
+  const left = slice.left ? leftOutTest(slice.left, { ...defaultFilters, ...filters }, today) : null;
   return rows.filter((r) => (!slice.buyer || r.buyer === slice.buyer) && (!slice.supplier || r.supplier === slice.supplier)
     && (!slice.type || r.type === slice.type) && (!slice.month || r.date?.slice(0, 7) === slice.month)
     && (!slice.from || (!!r.date && r.date >= slice.from)) && (!slice.to || (!!r.date && r.date <= slice.to))
     && (slice.min === undefined || (r.value !== null && r.value >= slice.min))
     && (slice.max === undefined || (r.value !== null && r.value < slice.max))
-    && (slice.exact === undefined || r.value === slice.exact) && (!slice.quality || qualityMatch(r, slice.quality, today)));
+    && (slice.atMost === undefined || (r.value !== null && r.value <= slice.atMost))
+    && (slice.exact === undefined || r.value === slice.exact) && (!slice.quality || qualityMatch(r, slice.quality, today))
+    && (!left || left(r)));
+}
+
+function leftOutTest(reason: LeftOutReason, f: MarketFilters, today: string): (r: Award) => boolean {
+  switch (reason) {
+    case "currency": return (r) => r.currencyCode !== f.currency;
+    case "url": return (r) => r.urlExcluded === true;
+    case "placeholder": return (r) => !f.includePlaceholders && r.placeholder;
+    case "future": return (r) => !f.includeFuture && !!r.date && r.date > today;
+    case "excluded": { const test = exclusionTest(f.exclude); return (r) => !!test?.(r); }
+  }
+}
+const LEFT_OUT: { reason: LeftOutReason; label: (f: MarketFilters) => string; note: string }[] = [
+  { reason: "currency", label: (f) => `Not in ${f.currency === "UNSPECIFIED" ? "a stated currency" : f.currency}`, note: "Currencies are never converted or combined." },
+  { reason: "url", label: () => "Excluded source URLs", note: "The publication’s versioned URL exclusion policy." },
+  { reason: "placeholder", label: () => "Placeholder supplier", note: "Missing or “Migrated supplier” names." },
+  { reason: "future", label: () => "Dated after today", note: "Future award dates usually need checking at the source." },
+  { reason: "excluded", label: () => "Left out by you", note: "Buyers, suppliers or types chosen in Filters." },
+];
+/**
+ * Why the filters leave awards out, each counted over every published award
+ * (an award can be left out for more than one reason). The row for the
+ * person's own exclusions shows only while there are some.
+ */
+export function leftOut(all: Award[], input: Partial<MarketFilters>, today: string) {
+  const filters = { ...defaultFilters, ...input };
+  return LEFT_OUT.filter((item) => item.reason !== "excluded" || !!filters.exclude?.length).map((item) => {
+    const test = leftOutTest(item.reason, filters, today);
+    return { reason: item.reason, label: item.label(filters), count: all.filter(test).length, note: item.note };
+  });
 }
 
 const sum = (rows: Award[]) => rows.reduce((n, r) => n + (r.value ?? 0), 0);
@@ -217,6 +332,35 @@ export function yearly(series: ReturnType<typeof trends>["series"]) {
     years.set(year, bucket);
   }
   return [...years.values()];
+}
+
+type MonthRow = { month: string; value: number; count: number };
+/**
+ * The monthly series as a table reads best: recent months one by one, and a
+ * long, mostly empty stretch at the start (a source's first scattered
+ * records, years of zeros) folded into one "earlier" row that still counts
+ * and sums every award in it. At least `keep` months always show; nothing
+ * folds unless a year or more of it is at least half empty and holds at
+ * most a fifth of the awards; and the fold stops where the busy months
+ * begin rather than taking the first of them.
+ */
+export function foldEarlyMonths<T extends MonthRow>(series: T[], keep = 24): { shown: T[]; earlier: { from: string; to: string; months: number; count: number; value: number } | null } {
+  const total = series.reduce((n, row) => n + row.count, 0);
+  let fold = 0;
+  for (let k = series.length - keep, prefix = series.slice(0, Math.max(0, k)), empty = prefix.filter((row) => !row.count).length, awards = prefix.reduce((n, row) => n + row.count, 0); k >= 12; k--) {
+    if (empty / k >= 0.5 && awards <= total / 5) { fold = k; break; }
+    if (!series[k - 1].count) empty--;
+    awards -= series[k - 1].count;
+  }
+  // Back out of a busy stretch (five of six months with awards), then off any months with awards at its edge.
+  while (fold >= 12 && series.slice(fold - 6, fold).filter((row) => row.count).length >= 5) fold--;
+  while (fold >= 12 && series[fold - 1].count) fold--;
+  if (fold < 12) return { shown: series, earlier: null };
+  const folded = series.slice(0, fold);
+  return {
+    shown: series.slice(fold),
+    earlier: { from: folded[0].month, to: folded[fold - 1].month, months: fold, count: folded.reduce((n, row) => n + row.count, 0), value: folded.reduce((n, row) => n + row.value, 0) },
+  };
 }
 
 export function distribution(rows: Award[]) {

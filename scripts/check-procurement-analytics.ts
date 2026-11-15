@@ -5,7 +5,7 @@ import schema from "../convex/schema";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import { defaultIntegrationSettings } from "../shared/integrationSettings";
 import { analysisIdentity, buildAnalysis, currentReviewProjection, matchesProcurementParty, normalizeAnalysisRequest, type AnalysisRequest } from "../shared/procurementAnalytics";
-import { filterAwards, normalizeAwards, overview } from "../src/features/procurementReview/lib/market";
+import { MAX_EXCLUSIONS, filterAwards, normalizeAwards, overview } from "../src/features/procurementReview/lib/market";
 import type { ListRow } from "../shared/procurementListRow";
 import { isOpenOpportunity } from "../src/features/procurementReview/lib/insights";
 import { zoneToday } from "../src/features/procurementReview/lib/notice";
@@ -101,6 +101,48 @@ assert.equal(isOpenOpportunity(precise, lifecycleAt + 31_000), false, "The exact
 const aliasDirectory = buildAnalysis([mapped], [], { view: "buyers", search: "source alias" }, now);
 assert.equal(aliasDirectory.type === "award" && aliasDirectory.data.directory.total, 1, "Directory alias search and buyer drill-down use the same party membership");
 
+// Exclusions: the same awards leave every figure, the drill-downs and the counts of what's left out.
+const skewed: ListRow[] = [...awards, { ...base, recordKey: "award:huge", supplier: "Mega Contractor", value: 50_000_000 }, { ...base, recordKey: "award:transfer", organization: "Internal Fund", supplier: "Ourselves", value: 2_000_000 }];
+const plain = buildAnalysis(skewed, [], { view: "overview" }, now), trimmed = buildAnalysis(skewed, [], { view: "overview", filters: { exclude: [{ field: "supplier", name: "MEGA contractor" }, { field: "buyer", name: "internal fund" }] } }, now);
+assert.ok(plain.type === "award" && trimmed.type === "award");
+if (plain.type !== "award" || trimmed.type !== "award") throw new Error("Expected award analysis");
+assert.equal(trimmed.data.included, plain.data.included - 2, "Exclusions match parties by name, ignoring case");
+assert.equal(trimmed.data.excluded, plain.data.excluded + 2);
+assert.equal(trimmed.data.overview.value, plain.data.overview.value - 52_000_000);
+assert.equal(trimmed.data.exclusions.find(row => row.reason === "excluded")?.count, 2, "The person's exclusions are counted among the reasons");
+assert.equal(plain.data.exclusions.some(row => row.reason === "excluded"), false, "No exclusions, no row");
+assert.equal(normalizeAnalysisRequest({ view: "overview", filters: { exclude: [] } }).filters!.exclude, undefined, "An empty list leaves the request as it was");
+assert.equal(analysisIdentity({ view: "overview", filters: { exclude: [] } }, now), analysisIdentity({ view: "overview" }, now), "Default requests keep their identity and precomputed results");
+assert.equal(
+  analysisIdentity({ view: "overview", filters: { exclude: [{ field: "supplier", name: "B" }, { field: "buyer", name: "A" }] } }, now),
+  analysisIdentity({ view: "overview", filters: { exclude: [{ field: "buyer", name: " A " }, { field: "supplier", name: "B" }, { field: "supplier", name: "b" }] } }, now),
+  "Order, spacing and repeats don't change the cache key",
+);
+assert.notEqual(analysisIdentity({ view: "overview", filters: { exclude: [{ field: "supplier", name: "B" }] } }, now), analysisIdentity({ view: "overview" }, now));
+assert.throws(() => normalizeAnalysisRequest({ view: "overview", filters: { exclude: Array.from({ length: MAX_EXCLUSIONS + 1 }, (_, i) => ({ field: "supplier" as const, name: `S${i}` })) } }), /at most/);
+assert.throws(() => normalizeAnalysisRequest({ view: "overview", filters: { exclude: [{ field: "region", name: "North" }] } } as unknown as AnalysisRequest), /exclusion/);
+assert.throws(() => normalizeAnalysisRequest({ view: "overview", filters: { exclude: [{ field: "buyer", name: "" }] } }), /exclusion/);
+assert.throws(() => normalizeAnalysisRequest({ view: "overview", filters: { exclude: "Mega" } } as unknown as AnalysisRequest), /exclusions/);
+const leftDrill = buildAnalysis(skewed, [], { view: "awards", all: true, slice: { left: "excluded" }, filters: { exclude: [{ field: "supplier", name: "Mega Contractor" }] } }, now);
+assert.equal(leftDrill.type === "awards" && leftDrill.data.total, 1, "The excluded-by-you reason lists exactly what the exclusions leave out");
+const trimmedDrill = buildAnalysis(skewed, [], { view: "awards", filters: { exclude: [{ field: "supplier", name: "Mega Contractor" }] } }, now);
+assert.equal(trimmedDrill.type === "awards" && trimmedDrill.data.total, 141, "Drill-downs honour exclusions");
+const currencyDrill = buildAnalysis(mixed, [], { view: "awards", all: true, slice: { left: "currency" } }, now);
+assert.equal(currencyDrill.type === "awards" && currencyDrill.data.total, 1);
+assert.throws(() => normalizeAnalysisRequest({ view: "awards", slice: { left: "whim" } } as unknown as AnalysisRequest), /reason/);
+const middle = buildAnalysis(mixed, [], { view: "awards", slice: { min: 10, atMost: 20 } }, now);
+assert.equal(middle.type === "awards" && middle.data.total, 11, "`atMost` includes its bound");
+const month = buildAnalysis(mixed, [], { view: "awards", slice: { month: today.slice(0, 7) } }, now);
+assert.equal(month.type === "awards" && month.data.total, 140, "A month row lists that month's awards");
+// A buyer left out under its organisation is left out under every grouping, by any of its names.
+const office: ListRow = { ...mapped, recordKey: "award:office", analyticsJson: JSON.stringify({ buyerDisplayName: "Unit office", buyerOrganization: "Parent organization", buyerOriginal: "Source unit", mappingVersion: "v1" }) };
+for (const buyerLevel of ["source", "office", "organization", "group", "type"] as const) {
+  const result = buildAnalysis([office, { ...base, recordKey: "award:other", organization: "Other buyer" }], [], { view: "overview", buyerLevel, filters: { exclude: [{ field: "buyer", name: "Parent organization" }] } }, now);
+  assert.equal(result.type === "award" && result.data.included, 1, `Excluded at ${buyerLevel} level`);
+}
+const bySource = buildAnalysis([office], [], { view: "overview", buyerLevel: "organization", filters: { exclude: [{ field: "buyer", name: "Source unit" }] } }, now);
+assert.equal(bySource.type === "award" && bySource.data.included, 0, "The source's own label leaves out the mapped buyer too");
+
 for (const key of ["TENANT_ID", "CLIENT_ID", "CLIENT_SECRET", "SITE_ID", "DRIVE_ID", "TRANSFER_HOSTS"]) process.env[`PROCUREMENT_SHAREPOINT_${key}`] = "synthetic";
 const t = convexTest(schema, {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
@@ -151,6 +193,9 @@ assert.equal(decisions.result.data.coverage.reviewed, 5101);
 const drill = await analyze({ view: "awards", offset: 50 });
 assert.equal(drill.result.data.rows.length, 50);
 assert.equal(drill.result.data.total, 140);
+const convexExcluded = await analyze({ view: "overview", filters: { exclude: [{ field: "supplier", name: "Supplier 139" }] } });
+assert.equal(convexExcluded.result.data.included, 139, "The Convex reader's analysis honours exclusions");
+assert.equal(convexExcluded.result.data.overview.value, 9870 - 140);
 await t.run(async ctx => {
   const active = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", ids.societyId)).unique();
   await ctx.db.patch(active!._id, { expected: { procurementRecords: mixed.length + 5101, procurementDetails: 0, procurementDocuments: 0, procurementEvidence: 5102 } });

@@ -35,6 +35,7 @@ import {
   useRecordTableState,
   useRecordTableStoreHandle,
 } from "../../../platform/record-engine/record-table";
+import type { MenuSection } from "../../../components/Menu";
 import { FIELD_TYPES } from "../../../platform/record-engine/types";
 import type {
   HydratedView,
@@ -325,6 +326,7 @@ export function NoticeTable({
   emptyState,
   publishOrder = false,
   keyboardShortcuts = false,
+  rowMenuSections: extraRowMenu,
 }: {
   kind: NoticeKind;
   rows: ListRow[];
@@ -345,6 +347,8 @@ export function NoticeTable({
   publishOrder?: boolean;
   /** J/K/Enter while the list shows (the reader's main list). */
   keyboardShortcuts?: boolean;
+  /** More of a row's "⋯" actions, after the triage's (the analytics' "Exclude from analysis"). */
+  rowMenuSections?: (record: Record<string, unknown>) => MenuSection[];
 }) {
   const nav = useReaderNavigation();
   const source = useReaderSource();
@@ -424,7 +428,11 @@ export function NoticeTable({
     () => (offersViews && inMemory && (!triage || entries) ? countNoticeViews([...primary, ...more], joinedRows, today, actionItems, fresh) : null),
     [offersViews, inMemory, triage, entries, primary, more, joinedRows, today, actionItems, fresh],
   );
-  const { onUpdate, rowMenuSections, dialog: actionItemDialog } = useTriageEditing(triage, rows);
+  const { onUpdate, rowMenuSections: triageRowMenu, dialog: actionItemDialog } = useTriageEditing(triage, rows);
+  const rowMenuSections = useMemo(
+    () => (triageRowMenu && extraRowMenu ? (record: Record<string, unknown>) => [...triageRowMenu(record), ...extraRowMenu(record)] : triageRowMenu ?? extraRowMenu),
+    [triageRowMenu, extraRowMenu],
+  );
   const { openNotice } = nav;
   const isOurOrganisation = useIsOurOrganisation();
   const isOurs = useCallback((name: string) => isOurOrganisation(name), [isOurOrganisation]);
