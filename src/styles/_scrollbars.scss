@@ -1,0 +1,43 @@
+@use "tokens" as *;
+
+// Scrollbars, in one place. Two rules keep content from jumping when
+// something grows enough to scroll (a section expanded in a side panel, a
+// long list loading):
+//
+// 1. The standard `scrollbar-width` / `scrollbar-color`, not the old
+//    `::-webkit-scrollbar` rules. Styling those pseudo-elements turns the
+//    Mac's overlay scrollbars into ones that take room (10px), so every area
+//    that started to scroll got narrower and rewrapped. With the standard
+//    properties, macOS keeps its overlay scrollbars, which take no room.
+//    Phones always overlay.
+// 2. `scrollbar-gutter: stable` on the app's vertical scroll areas, for
+//    where scrollbars do take room (Windows, a mouse, or macOS set to always
+//    show them): the room is kept whether or not the area scrolls, so a
+//    scrollbar appearing can't narrow what's inside.
+//
+// scripts/check-scroll-containers.mjs lists scroll areas that scroll
+// without keeping that room; add new ones to the list below.
+
+:root {
+  // Inherited: every scrollbar draws in the theme's quiet border colour.
+  scrollbar-color: token('border-strong') transparent;
+}
+
+// Not inherited, so set on every element; any rule that hides a scrollbar
+// (`scrollbar-width: none`, on a class) still wins over this.
+* {
+  scrollbar-width: thin;
+}
+
+.page,
+.sidebar__nav,
+.drawer__body,
+.inspector-panel__body,
+.modal__body,
+.record-table__scroll,
+.record-table__virtuoso,
+.report-table__scroll--capped,
+.research-file-list,
+.markdown-editor__body {
+  scrollbar-gutter: stable;
+}

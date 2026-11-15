@@ -125,11 +125,8 @@
   overflow-y: auto;
   overscroll-behavior: none;
   overflow-x: hidden;
-  /* Hairline scrollbar so it doesn't distract — uses the existing global
-   * scrollbar rules plus a narrower width just here. */
-  scrollbar-width: thin;
+  /* A thin scrollbar that keeps its room (_scrollbars.scss). */
 }
-.sidebar__nav::-webkit-scrollbar { width: 6px; }
 .sidebar__label {
   flex: 1;
   min-width: 0;

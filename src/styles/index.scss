@@ -11,6 +11,7 @@
 
 // Base reset, typography, scrollbar, focus.
 @use "base";
+@use "scrollbars"; // standard scrollbar styling, and the scroll areas that keep their room
 
 // App shell (split from the former monolithic _layout.scss — original order).
 @use "layout-sidebar"; // sidebar nav, brand, organization logo preview

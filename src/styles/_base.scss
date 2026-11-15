@@ -72,17 +72,5 @@ select {
   color: token('accent');
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: token('border-strong');
-  border-radius: token('r-sm');
-  border: 2px solid token('bg-app');
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* Scrollbars: see _scrollbars.scss. */
 
