@@ -104,7 +104,7 @@ export function ChartDataTable({ table }: { table: ChartTable }) {
             <tr key={index}>
               {table.columns.map((column, columnIndex) =>
                 columnIndex === 0 ? (
-                  <th key={column.key} scope="row">{row[column.key]}</th>
+                  <th key={column.key} scope="row"><RowHeading table={table} index={index} text={row[column.key]} /></th>
                 ) : (
                   <td key={column.key} className={column.numeric ? "num" : undefined}>{row[column.key]}</td>
                 ),
@@ -114,5 +114,15 @@ export function ChartDataTable({ table }: { table: ChartTable }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function RowHeading({ table, index, text }: { table: ChartTable; index: number; text: string | number }) {
+  const action = table.rowAction?.(index);
+  if (!action) return <>{text}</>;
+  return (
+    <button type="button" className="chart-table__row-action" onClick={action.onSelect} aria-label={action.label}>
+      {text}
+    </button>
   );
 }

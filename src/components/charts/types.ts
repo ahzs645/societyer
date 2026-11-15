@@ -33,4 +33,9 @@ export type ChartTable = {
   caption: string;
   columns: TableColumn[];
   rows: Array<Record<string, string | number>>;
+  /**
+   * What a row's heading opens (the records behind it), as a button in the
+   * first cell; null leaves that row as text, such as a month with nothing in it.
+   */
+  rowAction?: (index: number) => { label: string; onSelect: () => void } | null;
 };

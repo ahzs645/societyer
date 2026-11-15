@@ -98,6 +98,11 @@
   overflow-wrap: anywhere;
   text-align: left;
 }
+// "Excluding 3 organisations" opens the list rather than clearing a filter.
+.procurement-analytics__chip--exclusions {
+  border-color: token('accent');
+  color: token('accent');
+}
 // "Our work" or the whole market, and what "our work" means.
 .procurement-analytics__scope {
   display: flex;
@@ -163,6 +168,35 @@
 }
 .procurement-analytics__reset { margin-right: auto; }
 
+// Filters dialog: what's left out of the analysis, and the search to add one.
+.procurement-analytics__exclude {
+  display: grid;
+  gap: token('s-2');
+  margin-top: token('s-4');
+  padding-top: token('s-4');
+  border-top: 1px solid token('border');
+  h3 { margin: 0; font-size: token('fs-sm'); font-weight: 600; }
+  .procurement-analytics__caption { margin: 0; }
+}
+.procurement-analytics__exclusions {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: token('s-2');
+    min-height: 36px;
+    font-size: token('fs-sm');
+  }
+  li + li { border-top: 1px solid token('border-color-light'); }
+  .btn { flex: 0 0 auto; }
+}
+.procurement-analytics__exclusion-name { min-width: 0; overflow-wrap: anywhere; }
+.procurement-analytics__pager { align-items: center; margin-top: token('s-3'); }
+
 .procurement-analytics__signals,
 .procurement-analytics__reasons {
   display: grid;
@@ -181,6 +215,31 @@
   gap: 0 token('s-2');
   strong { font-variant-numeric: tabular-nums; }
 }
+// A name or count that lists its awards: underlined like a party named in a sentence (procurement-party__link).
+.procurement-analytics__reason,
+.procurement-analytics__inline-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: token('border-strong');
+  text-underline-offset: 2px;
+  cursor: pointer;
+  &:hover { color: token('text-primary'); text-decoration-color: currentColor; }
+}
+.procurement-analytics__reason { display: inline-flex; gap: token('s-2'); align-items: baseline; }
+// Under the monthly chart: the folded early months and the way to show them all.
+.procurement-analytics__earlier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-1') token('s-2');
+  font-size: token('fs-sm');
+}
 
 // Ranked rows that act (open a buyer, focus a supplier): the chart kit's link row, as a button.
 .procurement-analytics__bar-button {
@@ -194,6 +253,19 @@
 .procurement-analytics .ranked-bars__name {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+// A ranked row with a "⋯" beside it: the row keeps its hover area, the menu sits outside it.
+.procurement-analytics__ranked-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: token('s-1');
+  > .ranked-bars__row { width: auto; margin-right: 0; }
+}
+.procurement-analytics__row-menu {
+  color: token('text-tertiary');
+  &:hover, &[aria-expanded="true"] { color: token('text-primary'); }
+  @media (pointer: coarse) { width: 44px; height: 44px; }
 }
 
 // Heatmap: scrolls sideways inside its card, never the page.

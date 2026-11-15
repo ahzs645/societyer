@@ -1,7 +1,8 @@
 /** Pieces the analytics views share: ranked bars that act, a heatmap, and the "still loading" line. */
 import { useState, type ComponentProps, type ReactNode } from "react";
-import { BarChart3, ChevronRight, Table2 } from "lucide-react";
+import { BarChart3, ChevronRight, MoreHorizontal, Table2 } from "lucide-react";
 import { ChartCard, ChartDataTable, type ChartTable } from "../../../../components/charts";
+import { Menu, type MenuSection } from "../../../../components/Menu";
 import { Progress } from "../../../../components/primitives";
 import { compact, count, counted, money, percent, type Slice } from "../../lib/market";
 import { plainClick } from "../ReaderHeader";
@@ -55,9 +56,11 @@ export function foldRanked(rows: RankedRow[], limit: number): { rows: RankedRow[
  * supplier, focus the analysis on a type, or list a slice's awards. A row
  * with an `href` is a real link the reader handles itself on a plain click.
  * `rest` adds the "+N more" row that `foldRanked` leaves, which opens `onMore`
- * (the card's table, where every row is listed).
+ * (the card's table, where every row is listed). `menu` puts a "⋯" beside a
+ * row for what else it can do (its awards, its page, leaving it out of the
+ * analysis); it sits beside the row's own button, never inside it.
  */
-export function RankedList({ rows, ariaLabel, formatValue, exactValue, onSelect, selectLabel, rest, onMore }: {
+export function RankedList({ rows, ariaLabel, formatValue, exactValue, onSelect, selectLabel, rest, onMore, menu }: {
   rows: RankedRow[];
   ariaLabel: string;
   formatValue: (value: number) => string;
@@ -67,6 +70,7 @@ export function RankedList({ rows, ariaLabel, formatValue, exactValue, onSelect,
   selectLabel?: (row: RankedRow) => string;
   rest?: FoldedRest | null;
   onMore?: () => void;
+  menu?: (row: RankedRow) => MenuSection[];
 }) {
   const max = Math.max(1, ...rows.map((row) => row.value));
   return (
@@ -91,8 +95,9 @@ export function RankedList({ rows, ariaLabel, formatValue, exactValue, onSelect,
           </>
         );
         const className = "ranked-bars__row ranked-bars__row--link procurement-analytics__bar-button";
+        const sections = menu?.(row).filter((section) => section.items.length) ?? [];
         return (
-          <li key={row.key} className="ranked-bars__item">
+          <li key={row.key} className={`ranked-bars__item${sections.length ? " procurement-analytics__ranked-item" : ""}`}>
             {onSelect && row.href ? (
               <a
                 className={className}
@@ -112,6 +117,19 @@ export function RankedList({ rows, ariaLabel, formatValue, exactValue, onSelect,
               </button>
             ) : (
               <div className="ranked-bars__row">{content}</div>
+            )}
+            {sections.length > 0 && (
+              <Menu
+                align="right"
+                label={row.label}
+                sheetTitle={row.label}
+                sections={sections}
+                trigger={
+                  <button type="button" className="btn btn--ghost btn--sm btn--icon procurement-analytics__row-menu" aria-label={`More for ${row.label}`}>
+                    <MoreHorizontal size={14} aria-hidden="true" />
+                  </button>
+                }
+              />
             )}
           </li>
         );

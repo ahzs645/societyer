@@ -10,6 +10,7 @@ import { estimateTextWidth, linearScale, nearestIndex, niceDomain } from "./scal
 import { timeTicks } from "./timeAxis";
 import type { ChartSeries, DateRange, TimeRow, TooltipRow, ValueFormatter } from "./types";
 import { useRangeSelection } from "./useRangeSelection";
+import { usePointSelect } from "./usePointSelect";
 
 const MARGIN = { top: 14, right: 16, bottom: 28 };
 const defaultValue: ValueFormatter = (value) => formatMoney(value);
@@ -41,6 +42,14 @@ export type TimeSeriesChartProps = {
   tooltipTotal?: (row: TimeRow) => { label: string; value: string } | null;
   /** Whole-number axis (counts): ticks never fall between integers. */
   integerAxis?: boolean;
+  /**
+   * Opens the records behind one point (a month's awards, say): a click
+   * that isn't a drag, or Enter on the point the arrow keys reached. On
+   * touch the first tap shows the point's values and a second tap opens it.
+   * Return false from `canSelectPoint` for points with nothing behind them.
+   */
+  onPointSelect?: (row: TimeRow, index: number) => void;
+  canSelectPoint?: (row: TimeRow, index: number) => boolean;
 };
 
 function numeric(value: unknown): number | null {
@@ -78,7 +87,7 @@ function useGeometry(data: TimeRow[], visible: ChartSeries[], width: number, hei
 }
 
 export function TimeSeriesChart(props: TimeSeriesChartProps) {
-  const { data, series, ariaLabel, height = 240, curve = "linear", formatValue = defaultValue, formatAxis = defaultAxis, formatDate = formatDay, includeZero = false, average, legend, selection, onRangeChange, minSelectionDays = 7, allowSelectOnCoarsePointer = false, tooltipTotal, integerAxis = false } = props;
+  const { data, series, ariaLabel, height = 240, curve = "linear", formatValue = defaultValue, formatAxis = defaultAxis, formatDate = formatDay, includeZero = false, average, legend, selection, onRangeChange, minSelectionDays = 7, allowSelectOnCoarsePointer = false, tooltipTotal, integerAxis = false, onPointSelect, canSelectPoint } = props;
   const [containerRef, width] = useElementWidth<HTMLDivElement>();
   const keys = useMemo(() => series.map((s) => s.key), [series]);
   const { hidden, toggle } = useSeriesVisibility(keys);
@@ -108,9 +117,11 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
     setCursor(sel.dragging ? "grabbing" : sel.cursorAt(px));
   };
 
+  const point = usePointSelect({ data, xs: geo.xs, active, setActive, coarse, onSelect: onPointSelect, canSelect: canSelectPoint });
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const n = data.length;
-    if (n === 0) return;
+    if (n === 0 || point.onKeyDown(event)) return;
     const current = active ?? n - 1;
     let next = current;
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
@@ -134,7 +145,8 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
   const tooltipRows: TooltipRow[] = activeRow
     ? visible.map((s) => ({ key: s.key, label: s.label, color: s.color, swatch: s.comparison ? "dashed" : "line", value: numeric(activeRow[s.key]) == null ? "—" : formatValue(numeric(activeRow[s.key])!) }))
     : [];
-  const hint = selectable ? " Use arrow keys to read values. Shift with arrow keys selects a date range; Escape clears it." : " Use arrow keys to read values.";
+  const hint = (selectable ? " Use arrow keys to read values. Shift with arrow keys selects a date range; Escape clears it." : " Use arrow keys to read values.")
+    + (point.enabled ? " Enter opens the records behind the value." : "");
   const plotBottom = MARGIN.top + geo.plotH;
 
   return (
@@ -156,8 +168,12 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
             height={height}
             role="img"
             aria-label={ariaLabel}
-            style={{ cursor }}
-            onPointerDown={sel.handlers.onPointerDown}
+            style={{ cursor: cursor ?? (point.activeSelects ? "pointer" : undefined) }}
+            onClick={point.onClick}
+            onPointerDown={(event) => {
+              point.onPointerDown(event);
+              sel.handlers.onPointerDown(event);
+            }}
             onPointerMove={onPointerMove}
             onPointerUp={sel.handlers.onPointerUp}
             onPointerCancel={sel.handlers.onPointerCancel}

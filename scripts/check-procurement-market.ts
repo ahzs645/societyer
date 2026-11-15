@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  distribution, filterAwards, isPlaceholderSupplier, matrix, metadata, money, normalizeAwards, normalizeLabel, overview, quantile, rank, trends, validateFilters, yearly,
+  distribution, filterAwards, foldEarlyMonths, isPlaceholderSupplier, leftOut, matrix, metadata, money, normalizeAwards, normalizeLabel, overview, quantile, rank, sliceAwards, trends, validateFilters, yearly,
 } from "../src/features/procurementReview/lib/market";
 import { decisionInsights, isOpenOpportunity, opportunityInsights } from "../src/features/procurementReview/lib/insights";
 import type { CatalogReviewRow, ListRow } from "../src/features/procurementReview/reader/source";
@@ -212,5 +212,35 @@ assert.equal(navParentForPath(`${READER}/opportunities/x`), null);
 assert.equal(ROUTE_IDENTITY[READER].module, "procurementReview");
 assert.notEqual(ROUTE_IDENTITY[READER].group, "finance", "a finance group would pull it back under Finance");
 assert.equal(navEntryInArea({ kind: "item" }, "all"), true);
+
+// Exclusions in the in-browser analysis, and the drill-downs behind every reason and band.
+const keptCount = filterAwards(all, {}, TODAY).length;
+assert.equal(filterAwards(all, { exclude: [{ field: "supplier", name: "acme  paving" }] }, TODAY).length, keptCount - 3, "A supplier is left out by name, whatever its spacing and case");
+assert.equal(filterAwards(all, { exclude: [{ field: "type", name: "Goods" }] }, TODAY).length, keptCount - 2);
+assert.equal(filterAwards(all, { exclude: [{ field: "buyer", name: "UNBC" }] }, TODAY).length, keptCount - 2);
+const reasons = leftOut(all, { exclude: [{ field: "buyer", name: "UNBC" }] }, TODAY);
+assert.deepEqual(reasons.map((row) => row.reason), ["currency", "url", "placeholder", "future", "excluded"]);
+assert.equal(reasons.find((row) => row.reason === "excluded")!.count, 6, "Counted over every published award, like the other reasons");
+assert.equal(sliceAwards(all, { left: "excluded" }, TODAY, { exclude: [{ field: "buyer", name: "UNBC" }] }).length, 6);
+assert.equal(sliceAwards(all, { left: "currency" }, TODAY).length, reasons.find((row) => row.reason === "currency")!.count);
+assert.equal(sliceAwards(all, { left: "future" }, TODAY).length, 1);
+assert.equal(sliceAwards(all, { min: 20000, atMost: 50000 }, TODAY).length, 3, "`atMost` keeps the upper quartile's own award");
+assert.equal(sliceAwards(all, { min: 20000, max: 50000 }, TODAY).length, 2);
+// Long empty early history folds into one row; a busy series shows every month.
+const month = (i: number) => new Date(Date.UTC(2017, 4 + i, 1)).toISOString().slice(0, 7);
+const sparse = Array.from({ length: 110 }, (_, i) => ({ month: month(i), value: i >= 60 || i % 9 === 0 ? 1000 : 0, count: i >= 60 || i % 9 === 0 ? 1 : 0 }));
+const fold = foldEarlyMonths(sparse);
+assert.ok(fold.earlier, "Five years of mostly empty months fold");
+assert.equal(fold.earlier!.from, "2017-05");
+assert.equal(fold.earlier!.count + fold.shown.reduce((n, row) => n + row.count, 0), sparse.reduce((n, row) => n + row.count, 0), "Folding never loses an award");
+assert.equal(fold.shown[0].month, month(60), "The fold stops where the busy months begin");
+// Awards every other month for years, then every month: the early stretch is "mostly zeros" too.
+const alternating = Array.from({ length: 115 }, (_, i) => ({ month: month(i), value: 1, count: i >= 56 ? 3 : i % 2 === 0 ? 1 : 0 }));
+assert.equal(foldEarlyMonths(alternating).earlier?.count, 28);
+assert.equal(foldEarlyMonths(alternating).shown[0].month, month(56));
+// A busy history with the odd quiet month is never folded.
+assert.equal(foldEarlyMonths(Array.from({ length: 115 }, (_, i) => ({ month: month(i), value: 1, count: i % 7 === 3 ? 0 : 2 }))).earlier, null);
+assert.equal(foldEarlyMonths(sparse.slice(60)).earlier, null, "A busy series shows every month");
+assert.equal(foldEarlyMonths(sparse.slice(0, 30)).earlier, null, "A short series is never folded");
 
 console.log("procurement market, insights and navigation: ok");

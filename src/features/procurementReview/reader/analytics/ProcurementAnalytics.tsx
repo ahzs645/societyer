@@ -13,6 +13,7 @@ import { useReaderNavigation } from "../routes";
 import { useReaderSource } from "../source";
 import { AwardAnalysis, type AwardView } from "./AwardAnalysis";
 import { DecisionAnalysis, OpportunityAnalysis } from "./NoticeInsights";
+import { ANALYSIS_PARAM, viewPatch } from "./analysisParam";
 
 type View = AwardView | "opportunities" | "decisions";
 const VIEWS: { id: View; label: string; group: "Awards" | "Notices" }[] = [
@@ -27,9 +28,7 @@ const VIEWS: { id: View; label: string; group: "Awards" | "Notices" }[] = [
   { id: "opportunities", label: "Opportunities", group: "Notices" },
   { id: "decisions", label: "Decision insights", group: "Notices" },
 ];
-export const ANALYSIS_PARAM = "analysis";
-/** Parameters that belong to one view; switching views drops them. */
-const VIEW_STATE = ["metric", "year", "scope", "inspect", "rankq", "rankpage"];
+export { ANALYSIS_PARAM } from "./analysisParam";
 
 export function ProcurementAnalytics() {
   const source = useReaderSource();
@@ -61,11 +60,7 @@ function LoadedProcurementAnalytics() {
   const views = VIEWS.filter((view) => (hasAwards || view.group !== "Awards") && (view.id !== "compare" || source.useAnalysis) && (view.id !== "quality" || operator));
   const requested = nav.params.get(ANALYSIS_PARAM);
   const view = views.find((item) => item.id === requested) ?? views[0];
-  const choose = (next: View) =>
-    nav.update({
-      [ANALYSIS_PARAM]: next === views[0].id ? null : next,
-      ...Object.fromEntries(VIEW_STATE.map((key) => [key, null])),
-    });
+  const choose = (next: View) => nav.update(viewPatch(next, views[0].id));
   // Every view starts at the top, where its header and filters are.
   const top = useRef<HTMLDivElement>(null);
   const first = useRef(true);
