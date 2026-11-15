@@ -11,7 +11,7 @@ import { Segmented } from "../../../../components/primitives";
 import { Field } from "../../../../components/ui";
 import { describeOurWork, parseTerms, type OurWork } from "./ourWorkStore";
 
-export const MARKET_PARAM = "market";
+export { MARKET_PARAM } from "./analysisParam";
 export type MarketScope = "ours" | "all";
 
 /** The toggle and what "our work" means, under the analysis header. Shown once a set is saved. */

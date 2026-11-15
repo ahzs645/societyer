@@ -13,6 +13,7 @@
  * follow, marked as such. The commodity code is picked from the UNSPSC
  * hierarchy in a dialog (filters/CommodityField.tsx).
  */
+import { useMemo } from "react";
 import { Select } from "../../../components/Select";
 import { Field } from "../../../components/ui";
 import current from "../data/bc-bid-current-types.json";
@@ -20,8 +21,11 @@ import reference from "../data/bc-bid-filter-reference.json";
 import historical from "../data/bc-bid-historical-types.json";
 import { BC_FILTER_KEYS, type BcBidFilterKey, type BcBidSourceFilters } from "../../../../shared/bcBidSourceFilters";
 import { HISTORICAL_TYPE_PREFIX, currentTypeOf, historicalTypeCode, historicalTypesOf } from "../../../../shared/bcBidTypeCrosswalk";
+import type { RecordTableExtraChip } from "../../../platform/record-engine/record-table/components/RecordTableFilterChips";
 import type { ListRow } from "./source";
+import { useReaderNavigation } from "./routes";
 import { CommodityField } from "./filters/CommodityField";
+import { useCommodityTitle } from "./commodity/titles";
 
 type Option = { value: string; label: string; hint?: string; keywords?: string };
 
@@ -73,7 +77,14 @@ const labelOf = (options: Option[], value: string) => options.find((option) => o
 
 export const isCommodityCode = (value: string) => /^\d{8}$/.test(value);
 
-type Chip = { key: BcBidFilterKey; label: string; /** The URL change that removes it. */ patch: Record<string, null> };
+type Chip = {
+  key: BcBidFilterKey;
+  label: string;
+  /** The URL change that removes it. */
+  patch: Record<string, null>;
+  /** The commodity filter's code, whose chip also opens the commodity's page. */
+  commodity?: string;
+};
 
 /** The filters in force, worded like the table's own pills ("Status is Open"). */
 export function bcBidFilterChips(filters: BcBidSourceFilters): Chip[] {
@@ -88,12 +99,34 @@ export function bcBidFilterChips(filters: BcBidSourceFilters): Chip[] {
   }
   if (filters.industryCategory) chips.push({ key: "industryCategory", label: `Industry is ${filters.industryCategory}`, patch: { industryCategory: null } });
   if (filters.officialRegion) chips.push({ key: "officialRegion", label: `Region is ${labelOf(REGION_OPTIONS, filters.officialRegion)}`, patch: { officialRegion: null } });
-  if (filters.commodityCode) chips.push({ key: "commodityCode", label: `Commodity is ${filters.commodityCode}`, patch: { commodityCode: null } });
+  if (filters.commodityCode) chips.push({ key: "commodityCode", label: `Commodity is ${filters.commodityCode}`, patch: { commodityCode: null }, commodity: filters.commodityCode });
   if (filters.historicalType) {
     const code = historicalTypeCode(filters.historicalType) ?? filters.historicalType;
     chips.push({ key: "historicalType", label: `Type is ${HISTORICAL_TITLES.get(code) ?? code} (pre-2023)`, patch: { historicalType: null } });
   }
   return chips;
+}
+
+/**
+ * The pills for the filters in force, for the table's chip row: each removes
+ * its filter; the commodity's names the code's title (where the loaded rows,
+ * the visit or the source's code list give it) and opens the commodity's page.
+ */
+export function useBcBidFilterChips(filters: BcBidSourceFilters, rows: readonly ListRow[]): RecordTableExtraChip[] {
+  const { update, openCommodity, commodityHref } = useReaderNavigation();
+  const code = filters.commodityCode ?? "";
+  const title = useCommodityTitle(code, rows);
+  const page = code ? commodityHref(code) : "";
+  return useMemo(
+    () =>
+      bcBidFilterChips(filters).map(({ key, label, patch, commodity }) => ({
+        key,
+        label: commodity && title ? `${label} ${title}` : label,
+        onRemove: () => update(patch),
+        ...(commodity ? { link: { href: page, label: `Open the commodity page for ${commodity}`, onOpen: () => openCommodity(commodity) } } : {}),
+      })),
+    [filters, title, page, update, openCommodity],
+  );
 }
 
 /** The URL change that puts a draft in force; `null` clears a filter. Give no draft to clear them all. */
@@ -138,6 +171,7 @@ export function BcBidFilterFields({
       />
     </Field>
   );
+  const counting = useMemo(() => ({ of: "notices" as const, filters: value }), [value]);
   const historicalCode = historicalTypeCode(value.historicalType);
   const type = value.currentType ?? (historicalCode ? PRE_2023 + historicalCode : "");
   return (
@@ -170,7 +204,7 @@ export function BcBidFilterFields({
           onChange={(code) => set({ commodityCode: code })}
           invalid={codeInvalid}
           rows={rows}
-          filters={value}
+          counting={counting}
         />
       </div>
     </section>

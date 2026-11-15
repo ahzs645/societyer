@@ -55,9 +55,9 @@ import {
 } from "../../../../shared/bcBidSourceFilters";
 import {
   BcBidFilterFields,
-  bcBidFilterChips,
   bcBidFilterPatch,
   isCommodityCode,
+  useBcBidFilterChips,
 } from "./BcBidFilters";
 import { readerPlaces, useReaderNavigation } from "./routes";
 import { useReaderSource, type ListRow } from "./source";
@@ -82,6 +82,7 @@ import {
 } from "./queue";
 
 export type NoticeKind = "opportunity" | "award";
+const NO_SOURCE_FILTERS: BcBidSourceFilters = {};
 
 export { NOTICE_VIEWS, isNoticeView, type NoticeViewId } from "./queue";
 
@@ -489,17 +490,7 @@ export function NoticeTable({
     return true;
   };
   const { update } = nav;
-  const sourceChips = useMemo(
-    () =>
-      offersSourceFilters
-        ? bcBidFilterChips(sourceFilters).map((chip) => ({
-            key: chip.key,
-            label: chip.label,
-            onRemove: () => update(chip.patch),
-          }))
-        : [],
-    [offersSourceFilters, sourceFilters, update],
-  );
+  const sourceChips = useBcBidFilterChips(offersSourceFilters ? sourceFilters : NO_SOURCE_FILTERS, rows);
   const clearSourceFilters = useCallback(() => update(bcBidFilterPatch()), [update]);
 
   const renderTable = (onEndReached?: () => void, serverLoading = false, hasMore = false, footer?: ReactNode) => (
@@ -568,7 +559,7 @@ export function NoticeTable({
         {memoryKey && <RecordListTableMemory storageKey={memoryKey} fieldsHash={fieldsHash} base={hydratedView} />}
         {onSearch && <SearchSync search={search ?? ""} onSearch={onSearch} />}
         {publishOrder && <PublishListOrder />}
-        <ListShortcuts enabled={keyboardShortcuts && !places.notice && !places.party && !places.analytics} />
+        <ListShortcuts enabled={keyboardShortcuts && !places.notice && !places.party && !places.commodity && !places.analytics} />
         <RecordTableToolbar
           label={label ?? objectMetadata.labelPlural}
           icon={<FileSearch size={14} />}

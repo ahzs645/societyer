@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {bcBidSourceFilters,matchesBcBidSourceFilters} from '../shared/bcBidSourceFilters';
+import {underUnspsc,unspscAncestors,unspscCodesOf,unspscCounts,unspscLevel,unspscParent,unspscPrefix} from '../shared/unspsc';
 import {BC_BID_TYPE_CROSSWALK,HISTORICAL_TYPE_PREFIX,currentTypeOf,historicalTypesOf} from '../shared/bcBidTypeCrosswalk';
 import current from '../src/features/procurementReview/data/bc-bid-current-types.json';
 import historical from '../src/features/procurementReview/data/bc-bid-historical-types.json';
@@ -54,4 +55,20 @@ assert(matchesBcBidSourceFilters(historic,{historicalType:'old'}));
 assert(!matchesBcBidSourceFilters(historic,{historicalType:'different'}));
 assert(!matchesBcBidSourceFilters(historic,{historicalType:'old',commodityCode:'25000000'}));
 assert(!matchesBcBidSourceFilters({analyticsJson:JSON.stringify({...facts,historicalTypeReferenceId:HISTORICAL_TYPE_PREFIX+'RFQ'})},{currentType:'itq',commodityCode:'25000000'}));
-console.log('BC Bid filters: AND, hierarchy, type crosswalk (both eras, older links), historical separation, unknown facts and validation passed');
+
+// The UNSPSC rules the list filter, the commodity pages and the analytics share (shared/unspsc.ts).
+assert.equal(unspscPrefix('43000000'),'43'); assert.equal(unspscPrefix('10100000'),'1010'); assert.equal(unspscPrefix('43231501'),'43231501');
+assert.deepEqual(['43000000','43230000','43231500','43231501'].map(unspscLevel),[0,1,2,3]);
+assert.equal(unspscParent('43231501'),'43231500'); assert.equal(unspscParent('43000000'),null);
+assert.deepEqual(unspscAncestors('43231501'),['43000000','43230000','43231500']);
+assert(underUnspsc(['43231501'],'43230000')); assert(!underUnspsc(['43230000'],'43231500'),'A family-level notice is not under the family\'s classes');
+assert(!underUnspsc(['43231501'],'00000000'),'An all-zero code covers nothing');
+assert.deepEqual(unspscCodesOf(facts),['25101507']);
+assert.deepEqual(unspscCodesOf({...facts,taxonomyReleaseId:'taxonomy-release:GSIN:1'}),[],'GSIN codes are never read as UNSPSC');
+assert.deepEqual(unspscCodesOf({...facts,historicalTypeReferenceId:HISTORICAL_TYPE_PREFIX+'RFQ'}),[],'Pre-2023 notices carry none');
+assert.deepEqual(unspscCodesOf({...facts,classificationCodes:['25101507',{scheme:'GSIN',code:'R019BF'},'2510']}),['25101507']);
+const counts=unspscCounts([['43231501','43231502'],['43230000'],['80101504']]);
+assert.equal(counts.get('43000000'),2,'A notice counts once under each ancestor, however many of its codes sit there');
+assert.equal(counts.get('43231500'),1); assert.equal(counts.get('43230000'),2); assert.equal(counts.get('43231502'),1); assert.equal(counts.has('43231600'),false);
+
+console.log('BC Bid filters: AND, hierarchy, type crosswalk (both eras, older links), historical separation, unknown facts, validation and the shared UNSPSC rules passed');

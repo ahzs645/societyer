@@ -1,17 +1,20 @@
 /**
- * Picks a UNSPSC commodity code for the BC Bid filters, from a dialog: search
+ * Picks a UNSPSC commodity code, for the BC Bid filters or the award
+ * analysis's commodity filter, from a dialog: search
  * by title words or code, or browse the hierarchy (segment → family → class
  * → commodity) with breadcrumbs, choosing any level. A segment, family or
  * class includes everything under it, as the filter matches by prefix.
  *
- * Each code shows how many notices in the loaded list fall under it (those
- * that match the editor's other BC Bid filters, of any status). Most of the
- * ~90k codes have none, so by default only codes with notices are listed.
+ * Each code shows how many notices fall under it (`counting`): for the BC
+ * Bid filters, those in the loaded list that match the editor's other BC Bid
+ * filters, of any status; for the analysis, the published awards, counted
+ * where the analysis runs. Most of the ~90k codes have none, so by default
+ * only codes with notices are listed.
  *
  * The full code list comes from the source (`loadTaxonomy`, the catalog
  * service). Where there is none (the demo, the older hosted reader, a
  * service not yet serving it), the picker lists the codes the loaded notices
- * carry, titled where the notices name them.
+ * (or the counted awards) carry, titled where the notices name them.
  *
  * It opens from inside the filter editor, which closes on an outside press
  * and applies on Enter; the dialog lives in a portal, so its presses and
@@ -30,6 +33,7 @@ import { Check, ChevronRight, Search } from "lucide-react";
 import { Modal } from "../../../../components/Modal";
 import { Checkbox } from "../../../../components/Controls";
 import type { BcBidSourceFilters } from "../../../../../shared/bcBidSourceFilters";
+import { rememberCommodityTitles } from "../commodity/titles";
 import { useReaderSource, type ListRow, type TaxonomyCodeList } from "../source";
 import {
   LEVEL_NAMES,
@@ -56,21 +60,29 @@ function treeOf(list: TaxonomyCodeList) {
 
 type Loaded = { tree: CommodityTree | null; failed: boolean };
 
+/**
+ * What the counts beside each code are: the loaded notices that match the
+ * BC Bid editor's other filters, or awards per code as the analysis counted
+ * them (where it runs on the server, the awards themselves aren't loaded).
+ */
+export type CommodityCounting =
+  | { of: "notices"; filters: BcBidSourceFilters }
+  | { of: "awards"; codes: readonly (readonly [string, number])[] };
+
 export default function CommodityPicker({
   value,
   rows,
-  filters,
+  counting,
   onClose,
   onChoose,
-  onTitle,
 }: {
   value: string;
+  /** The loaded notices: counted for the BC Bid filters, and where there's no full code list, the titles. */
   rows: readonly ListRow[];
-  filters: BcBidSourceFilters;
+  counting: CommodityCounting;
   onClose: () => void;
   /** `code` is "" to clear the filter. */
   onChoose: (code: string, title: string) => void;
-  onTitle: (code: string, title: string) => void;
 }) {
   const source = useReaderSource();
   const [loaded, setLoaded] = useState<Loaded | null>(source.loadTaxonomy ? null : { tree: null, failed: false });
@@ -85,9 +97,13 @@ export default function CommodityPicker({
       live = false;
     };
   }, [source]);
-  const fallback = useMemo(() => treeFromRows(rows), [rows]);
+  const counts = useMemo(
+    () => (counting.of === "notices" ? noticeCounts(rows, counting.filters) : new Map(counting.codes)),
+    [rows, counting],
+  );
+  const fallback = useMemo(() => treeFromRows(rows, counting.of === "awards" ? counts.keys() : []), [rows, counting.of, counts]);
   const tree = loaded?.tree ?? fallback;
-  const counts = useMemo(() => noticeCounts(rows, filters), [rows, filters]);
+  const noun = counting.of === "awards" ? "award" : "notice";
 
   // A chosen code without notices (from a link, or picked with the toggle off) stays in sight.
   const [only, setOnly] = useState(() => !value || (counts.get(value) ?? 0) > 0);
@@ -100,11 +116,10 @@ export default function CommodityPicker({
   const [at, setAt] = useState<string | null>(() => (/^\d{8}$/.test(value) ? unspscParent(value) : null));
   const here = at && tree.nodes.has(at) ? tree.nodes.get(at)! : null;
 
+  // The chosen code's title, kept for the field (and anything else naming it) once the picker closes.
   const valueTitle = tree.nodes.get(value)?.title;
-  const onTitleRef = useRef(onTitle);
-  onTitleRef.current = onTitle;
   useEffect(() => {
-    if (valueTitle) onTitleRef.current(value, valueTitle);
+    if (valueTitle) rememberCommodityTitles([[value, valueTitle]]);
   }, [value, valueTitle]);
 
   const listed: CommodityNode[] = useMemo(() => {
@@ -140,7 +155,10 @@ export default function CommodityPicker({
     listRef.current?.querySelector(`[data-row-main="${value}"]`)?.scrollIntoView({ block: "center" });
   }, [loaded, value]);
 
-  const choose = (node: CommodityNode) => onChoose(node.code, node.title);
+  const choose = (node: CommodityNode) => {
+    if (node.title) rememberCommodityTitles([[node.code, node.title]]);
+    onChoose(node.code, node.title);
+  };
 
   /** Arrow keys move between rows; right opens a level, left goes back up. */
   const onListKey = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -200,11 +218,11 @@ export default function CommodityPicker({
   const note = loaded === null
     ? "Loading the UNSPSC code list…"
     : !fullList
-      ? `${loaded.failed ? "The full UNSPSC list couldn't be loaded" : "The full UNSPSC list isn't available here"}, so this lists the codes the loaded notices carry.`
+      ? `${loaded.failed ? "The full UNSPSC list couldn't be loaded" : "The full UNSPSC list isn't available here"}, so this lists the codes the ${noun === "award" ? "published awards" : "loaded notices"} carry.`
       : searching
         ? `${listed.length.toLocaleString()} ${listed.length === 1 ? "code matches" : "codes match"}${listed.length > RESULT_LIMIT ? `; the first ${RESULT_LIMIT} are shown. Add words to narrow it.` : "."}`
         : listed.length
-          ? `${listed.length.toLocaleString()} ${listed.length === 1 ? LEVEL_NAMES[here ? here.level + 1 : 0].toLowerCase() : PLURALS[here ? here.level + 1 : 0]}${only ? " with notices" : ""}`
+          ? `${listed.length.toLocaleString()} ${listed.length === 1 ? LEVEL_NAMES[here ? here.level + 1 : 0].toLowerCase() : PLURALS[here ? here.level + 1 : 0]}${only ? ` with ${noun}s` : ""}`
           : "";
 
   return (
@@ -246,10 +264,12 @@ export default function CommodityPicker({
               onKeyDown={onSearchKey}
             />
           </label>
-          <Checkbox checked={only} onChange={setOnly} label="Only codes that have notices" />
+          <Checkbox checked={only} onChange={setOnly} label={`Only codes that have ${noun}s`} />
         </div>
         <p className="procurement-commodity-picker__note">
-          Counts are notices in this list that match your other BC Bid filters, of any status.
+          {counting.of === "awards"
+            ? "Counts are published awards classified under each code, before the analysis's other filters."
+            : "Counts are notices in this list that match your other BC Bid filters, of any status."}
         </p>
         {!searching && <Crumbs tree={tree} here={here} go={go} />}
         {!searching && here && (
@@ -260,7 +280,7 @@ export default function CommodityPicker({
                 <span className="procurement-commodity-picker__code">{here.code}</span> {titleOf(here)}
               </strong>
               <span className="procurement-commodity-picker__here-count">
-                {count(here.code).toLocaleString()} {count(here.code) === 1 ? "notice" : "notices"}, everything under it included
+                {count(here.code).toLocaleString()} {count(here.code) === 1 ? noun : `${noun}s`}, everything under it included
               </span>
             </div>
             <button type="button" className="btn btn--primary btn--sm" onClick={() => choose(here)}>
@@ -278,6 +298,7 @@ export default function CommodityPicker({
                     key={node.code}
                     node={node}
                     count={count(node.code)}
+                    noun={noun}
                     current={node.code === value}
                     // A level with codes under it opens (from a search too, leaving the search); its Choose picks it.
                     opens={node.children.some(keep)}
@@ -291,11 +312,13 @@ export default function CommodityPicker({
               <div className="procurement-commodity-picker__empty">
                 <p>
                   {searching
-                    ? `No ${only ? "codes with notices" : "codes"} match “${deferredQuery}”.`
+                    ? `No ${only ? `codes with ${noun}s` : "codes"} match “${deferredQuery}”.`
                     : only
                       ? here
-                        ? "No notices in this list fall under this code."
-                        : "No notices in this list carry a commodity code that matches your other BC Bid filters."
+                        ? `No ${noun}s ${noun === "award" ? "published" : "in this list"} fall under this code.`
+                        : noun === "award"
+                          ? "No published awards carry a commodity code."
+                          : "No notices in this list carry a commodity code that matches your other BC Bid filters."
                       : "No codes here."}
                 </p>
                 {only && fullList && (
@@ -353,6 +376,7 @@ function Crumbs({ tree, here, go }: { tree: CommodityTree; here: CommodityNode |
 function CodeRow({
   node,
   count,
+  noun,
   current,
   opens,
   path,
@@ -361,13 +385,14 @@ function CodeRow({
 }: {
   node: CommodityNode;
   count: number;
+  noun: string;
   current: boolean;
   opens: boolean;
   path: string[] | null;
   onOpen: () => void;
   onChoose: () => void;
 }) {
-  const notices = `${count.toLocaleString()} ${count === 1 ? "notice" : "notices"}`;
+  const notices = `${count.toLocaleString()} ${count === 1 ? noun : `${noun}s`}`;
   return (
     <li data-row={node.code} data-branch={opens ? "" : undefined} className="procurement-commodity-picker__row">
       <button

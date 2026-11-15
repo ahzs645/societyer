@@ -71,6 +71,25 @@ assert.deepEqual(notice.facts.map((fact) => fact.label), ["Closes", "Buyer", "Ty
 assert.equal(notice.facts[0].value.includes("3:00"), true, "The closing time comes from the page fields when the stored date is a bare day");
 assert.equal(notice.status?.label, "Closed");
 assert.equal(notice.source, "BC Bid");
+assert.deepEqual(notice.commodities, [{ label: "Engineering Services", code: "", title: "", ancestors: [], main: true }], "A label with no classification is plain text");
+
+// Classified commodities: main first, each label with the code its classification names, then any classification no label names.
+const software = { code: "43230000", title: "Software", level: "family", ancestors: [{ code: "43000000", title: "Information Technology Broadcasting and Telecommunications", level: "segment" }] };
+const erp = { sourceLabel: "Finance accounting and enterprise resource planning ERP software", code: "43231600", title: "Finance accounting and enterprise resource planning ERP software", level: "class", ancestors: [{ code: "43230000", title: "Software", level: "family" }, { code: "43000000", title: "Information Technology Broadcasting and Telecommunications", level: "segment" }] };
+const classified = describeNotice({ recordKey: "opportunity:1", kind: "opportunity", title: "ERP replacement" }, {
+  taxonomyReleaseId: "taxonomy-release:UNSPSC:UNv260801", mainCommodity: "Finance accounting and enterprise resource planning ERP software",
+  commodities: ["Software", "Finance accounting and enterprise resource planning ERP software", "Hosting"],
+  commodityClassifications: [{ ...software, sourceLabel: "Software" }, erp, { sourceLabel: "Data services", code: "81112000", title: "Data services", level: "family", ancestors: [] }, { code: "nonsense" }],
+}, now);
+assert.deepEqual(classified.commodities.map((item) => [item.label, item.code, item.main]), [
+  ["Finance accounting and enterprise resource planning ERP software", "43231600", true],
+  ["Software", "43230000", false],
+  ["Hosting", "", false],
+  ["Data services", "81112000", false],
+]);
+assert.deepEqual(classified.commodities[0].ancestors.map((item) => item.code), ["43000000", "43230000"], "Ancestors run from the segment down");
+assert.deepEqual(describeNotice({ recordKey: "opportunity:2", kind: "opportunity", title: "Old" }, { taxonomyReleaseId: "taxonomy-release:UNSPSC:UNv260801", historicalTypeReferenceId: "historical:RFQ", commodities: ["Software"], commodityClassifications: [{ ...software, sourceLabel: "Software" }] }, now).commodities.map((item) => item.code), [""], "Pre-2023 notices link no UNSPSC code");
+assert.deepEqual(describeNotice({ recordKey: "opportunity:3", kind: "opportunity", title: "GSIN" }, { taxonomyReleaseId: "taxonomy-release:GSIN:1", commodities: ["Software"], commodityClassifications: [{ ...software, sourceLabel: "Software" }] }, now).commodities.map((item) => item.code), [""], "Only a UNSPSC release's codes link");
 
 // BC Bid also publishes the contact a second time, an office address in five fields, and map coordinates.
 const tidy = describeNotice({ recordKey: "opportunity:234294", kind: "opportunity", title: "Laboratory Equipment" }, {
@@ -128,6 +147,8 @@ assert.equal(backLabel({ kind: "award" }), "Awards");
 assert.equal(backLabel({ kind: "award", buyer: " City of Burnaby " }), "City of Burnaby", "A buyer page under the notice wins over the list");
 assert.equal(backLabel({ issuedFor: "Metro Vancouver Housing" }), "Metro Vancouver Housing");
 assert.equal(backLabel({ section: "analytics", kind: "award" }), "Analytics");
+assert.equal(backLabel({ commodity: "43230000", kind: "award" }), "Commodity 43230000", "A commodity page under the notice wins over the list");
+assert.equal(backLabel({ commodity: "43230000", buyer: "City" }), "City");
 assert.equal(onSource("BC Bid"), "on BC Bid");
 assert.equal(onSource("Buyer's website"), "on the buyer's site");
 
@@ -259,4 +280,4 @@ const drawn = toNoticeRow(listRow, now);
 assert.deepEqual([drawn.title, drawn.organization, drawn.supplier, drawn._searchText], ["Café", "A & B", "L’Atelier", "R&D-1"]);
 assert.equal(procurementPartyKey("A &amp; B"), procurementPartyKey("A & B"), "An encoded buyer name is the same party");
 
-console.log("OK: source dates, deadlines in the source zone, status wording, BC Bid field de-duplication, safe links, review rows, Back labels, party links and counts, one documents list, entities decoded.");
+console.log("OK: source dates, deadlines in the source zone, status wording, BC Bid field de-duplication, safe links, review rows, Back labels, party links and counts, commodities and their codes, one documents list, entities decoded.");

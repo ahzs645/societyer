@@ -14,7 +14,7 @@
 import { useMemo } from "react";
 import { ChartCard } from "../../../../components/charts";
 import { StatTile } from "../../../../components/StatTile";
-import { count, counted, money, normalizeAwards, rank } from "../../lib/market";
+import { count, counted, money, normalizeAwards, quantile, rank } from "../../lib/market";
 import { opportunityInsights, type OpportunityInsights } from "../../lib/insights";
 import { shortSourceDate } from "../../lib/notice";
 import { useIsOurOrganisation } from "../../lib/ourOrganisation";
@@ -31,8 +31,11 @@ export const relation = (field: BuyerField) => (field === "organization" ? "from
 /** At most this many notices in all, the overview leads with a sentence instead of tiles. */
 const SMALL = 3;
 
-/** What it awarded, in one currency (CAD unless it awards in another only; currencies are never added together). */
-function useAwarded(awards: ListRow[]) {
+/**
+ * What it awarded, in one currency (CAD unless it awards in another only;
+ * currencies are never added together). The commodity page reads the same.
+ */
+export function useAwarded(awards: ListRow[]) {
   return useMemo(() => {
     const normalized = normalizeAwards(awards);
     const currency = normalized.some((award) => award.currencyCode === "CAD") ? "CAD" : (normalized[0]?.currencyCode ?? "CAD");
@@ -45,10 +48,12 @@ function useAwarded(awards: ListRow[]) {
     const suppliers = rank(inCurrency.filter((award) => !award.placeholder), "supplier")
       .map((row) => ({ ...row, share: all > 0 ? row.positiveValue / all : 0 }));
     const latest = normalized.reduce<string | null>((last, award) => (award.date && (!last || award.date > last) ? award.date : last), null);
+    const values = inCurrency.flatMap((award) => (award.value === null ? [] : [award.value]));
     return {
       currency,
-      value: inCurrency.reduce((n, award) => n + (award.value ?? 0), 0),
-      valued: inCurrency.filter((award) => award.value !== null).length,
+      value: values.reduce((n, value) => n + value, 0),
+      valued: values.length,
+      median: quantile(values, 0.5),
       other: normalized.length - inCurrency.length,
       all,
       unnamed,
@@ -57,7 +62,7 @@ function useAwarded(awards: ListRow[]) {
     };
   }, [awards]);
 }
-type Awarded = ReturnType<typeof useAwarded>;
+export type Awarded = ReturnType<typeof useAwarded>;
 
 /** The other organisations named on these notices: the ones a buyer issues for, or the buyers issuing for this one. */
 function useCounterparts(field: BuyerField, opportunities: ListRow[], awards: ListRow[]) {
@@ -146,8 +151,12 @@ function BuyerTiles({ open, opportunities, awards, awarded, partial, onShow }: {
   return <div className="stat-grid procurement-analytics__stats" data-count={tiles.length}>{tiles}</div>;
 }
 
-/** Whom it awarded to, by value, each opening the supplier's page; the smallest fold into "+N more", which opens the table. */
-function TopSuppliers({ field, awarded, partial }: { field: BuyerField; awarded: Awarded; partial: boolean }) {
+/**
+ * Whom it awarded to, by value, each opening the supplier's page; the
+ * smallest fold into "+N more", which opens the table. `who` names whose
+ * awards these are ("this buyer", "these notices").
+ */
+export function TopSuppliers({ who, awarded, partial, title = "Top suppliers" }: { who: string; awarded: Awarded; partial: boolean; title?: string }) {
   const nav = useReaderNavigation();
   const ours = useIsOurOrganisation();
   const compactOf = (value: number) => money(value, awarded.currency, true);
@@ -166,9 +175,9 @@ function TopSuppliers({ field, awarded, partial }: { field: BuyerField; awarded:
   );
   return (
     <RankedCard
-      title="Top suppliers"
+      title={title}
       subtitle={[
-        `Who ${field === "organization" ? "this buyer" : "these notices"} awarded to, by recorded value in ${awarded.currency}${partial ? ", so far" : ""}. Shares are of all ${compactOf(awarded.all)} awarded.`,
+        `Who ${who} awarded to, by recorded value in ${awarded.currency}${partial ? ", so far" : ""}. Shares are of all ${compactOf(awarded.all)} awarded.`,
         awarded.unnamed > 0 ? `${compactOf(awarded.unnamed)} went to unnamed or migrated suppliers, not ranked here.` : "",
       ].filter(Boolean).join(" ")}
       headingLevel={3}
@@ -291,7 +300,7 @@ export function BuyerSummary({ field, opportunities, awards, partial, onShow }: 
             />
           </ChartCard>
         )}
-        {awarded.suppliers.length > 0 && <TopSuppliers field={field} awarded={awarded} partial={partial} />}
+        {awarded.suppliers.length > 0 && <TopSuppliers who={field === "organization" ? "this buyer" : "these notices"} awarded={awarded} partial={partial} />}
         {counterparts.length > 1 && (
           <ChartCard
             title={field === "issuedFor" ? "Buyers who issue for them" : "Issues notices for"}

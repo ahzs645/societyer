@@ -243,4 +243,32 @@ assert.equal(foldEarlyMonths(Array.from({ length: 115 }, (_, i) => ({ month: mon
 assert.equal(foldEarlyMonths(sparse.slice(60)).earlier, null, "A busy series shows every month");
 assert.equal(foldEarlyMonths(sparse.slice(0, 30)).earlier, null, "A short series is never folded");
 
+// A commodity narrows the awards to those classified under its UNSPSC code, a segment, family or class including
+// everything below it; an award the source gave no code (or a GSIN one) is under none.
+const unspsc = (codes: unknown[], release = "taxonomy-release:UNSPSC:UNv260801") => JSON.stringify({ taxonomyReleaseId: release, classificationCodes: codes });
+const coded = normalizeAwards([
+  award("c1", { organization: "City", supplier: "Acme", value: 10, date: "2026-01-01", analyticsJson: unspsc(["43231501"]) }),
+  award("c2", { organization: "City", supplier: "Acme", value: 20, date: "2026-01-01", analyticsJson: unspsc(["43230000", "80101504"]) }),
+  award("c3", { organization: "City", supplier: "Acme", value: 30, date: "2026-01-01", analyticsJson: unspsc(["80101504"]) }),
+  award("c4", { organization: "City", supplier: "Acme", value: 40, date: "2026-01-01" }),
+  award("c5", { organization: "City", supplier: "Acme", value: 50, date: "2026-01-01", analyticsJson: unspsc(["43231501"], "taxonomy-release:GSIN:1") }),
+]);
+const keysOf = (rows: { id: string }[]) => rows.map((row) => row.id.replace("bc-bid:", ""));
+assert.deepEqual(keysOf(filterAwards(coded, {}, TODAY)), ["c1", "c2", "c3", "c4", "c5"], "No commodity, every award");
+assert.deepEqual(keysOf(filterAwards(coded, { commodity: "43000000" }, TODAY)), ["c1", "c2"]);
+assert.deepEqual(keysOf(filterAwards(coded, { commodity: "43231500" }, TODAY)), ["c1"], "A family-level award isn't under the family's classes");
+assert.deepEqual(keysOf(filterAwards(coded, { commodity: "80101504" }, TODAY)), ["c2", "c3"]);
+assert.deepEqual(keysOf(filterAwards(coded, { commodity: "43231600" }, TODAY)), []);
+assert.deepEqual(keysOf(filterAwards(coded, { commodity: "" }, TODAY)), ["c1", "c2", "c3", "c4", "c5"], "An empty commodity is no filter");
+assert.throws(() => validateFilters({ commodity: "4323" }), /eight-digit/);
+const choices = metadata(coded, TODAY).commodities;
+assert.equal(choices.classified, 3, "GSIN and unclassified awards carry no UNSPSC code");
+assert.deepEqual(choices.codes.find(([code]) => code === "43000000"), ["43000000", 2]);
+assert.deepEqual(choices.codes.map(([code]) => code), [...choices.codes.map(([code]) => code)].sort(), "Choices are in code order");
+
+// A commodity's page is a place of its own; an organisation's wins where a hand-edited link names both.
+assert.equal(readerPlaces(new URLSearchParams("commodity=43230000")).commodity, "43230000");
+assert.equal(readerPlaces(new URLSearchParams("commodity=4323")).commodity, null, "Only an eight-digit code opens a page");
+assert.equal(readerPlaces(new URLSearchParams("commodity=43230000&buyer=City")).commodity, null);
+
 console.log("procurement market, insights and navigation: ok");

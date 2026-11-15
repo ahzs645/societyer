@@ -8,6 +8,7 @@
  */
 
 import { decodeHtmlEntities } from "../../../../shared/htmlEntities";
+import { isUnspscCode, unspscLevel } from "../../../../shared/unspsc";
 
 export type Tone = "neutral" | "success" | "warn" | "danger" | "info";
 /** Whose page a fact opens: the buyer, or the organisation the notice is issued for. */
@@ -36,7 +37,22 @@ export type NoticeModel = {
   /** The buyer's office address on one line, when the source gives one (BC Bid publishes it as five fields). */
   contactAddress: string;
   attachments: NoticeAttachment[];
-  commodities: string[];
+  commodities: NoticeCommodity[];
+};
+
+/**
+ * One of the notice's commodities: the source's label, and where the notice
+ * classifies it, its UNSPSC code and the code's ancestors (root first), each
+ * with its title. `code` is "" for a label with no classification (a
+ * pre-2023 notice, another source's category).
+ */
+export type NoticeCommodity = {
+  label: string;
+  code: string;
+  title: string;
+  ancestors: { code: string; title: string }[];
+  /** The notice's main commodity; listed first. */
+  main: boolean;
 };
 
 export const DEADLINE_ZONE = "America/Vancouver";
@@ -362,10 +378,43 @@ function attachmentsOf(data: Data): NoticeAttachment[] {
   return [...files(data.attachments), ...files(data.addenda, true)];
 }
 
-function commoditiesOf(data: Data): string[] {
+/**
+ * The commodities, main first: each source label with the UNSPSC code the
+ * notice classifies it under (matched by the classification's `sourceLabel`,
+ * else its title), then any classification no label names. Only codes from a
+ * UNSPSC release count; pre-2023 BC Bid notices used GSIN.
+ */
+function commoditiesOf(data: Data): NoticeCommodity[] {
   const list = Array.isArray(data.commodities) ? data.commodities.map(text).filter(Boolean) : [];
   const main = text(data.mainCommodity);
-  return [...new Set(main ? [main, ...list] : list)];
+  const labels = [...new Set(main ? [main, ...list] : list)];
+  const unspsc = !data.historicalTypeReferenceId && text(data.taxonomyReleaseId).startsWith("taxonomy-release:UNSPSC:");
+  const classified = (unspsc && Array.isArray(data.commodityClassifications) ? data.commodityClassifications : []).flatMap((raw) => {
+    const item = asData(raw);
+    const code = text(item.code);
+    if (!isUnspscCode(code)) return [];
+    const ancestors = (Array.isArray(item.ancestors) ? item.ancestors : []).map(asData)
+      .map((ancestor) => ({ code: text(ancestor.code), title: text(ancestor.title) }))
+      .filter((ancestor) => isUnspscCode(ancestor.code) && ancestor.code !== code)
+      .sort((a, b) => unspscLevel(a.code) - unspscLevel(b.code));
+    return [{ code, title: text(item.title), source: squash(text(item.sourceLabel)), ancestors }];
+  });
+  const used = new Set<number>();
+  const match = (label: string) => {
+    const key = squash(label);
+    const at = [classified.findIndex((item, i) => !used.has(i) && item.source === key), classified.findIndex((item, i) => !used.has(i) && squash(item.title) === key)].find((i) => i >= 0);
+    if (at === undefined) return null;
+    used.add(at);
+    return classified[at];
+  };
+  const result: NoticeCommodity[] = labels.map((label) => {
+    const found = match(label);
+    return { label, code: found?.code ?? "", title: found?.title ?? "", ancestors: found?.ancestors ?? [], main: !!main && label === main };
+  });
+  classified.forEach((item, i) => {
+    if (!used.has(i) && !result.some((other) => other.code === item.code)) result.push({ label: item.title || item.code, code: item.code, title: item.title, ancestors: item.ancestors, main: false });
+  });
+  return result;
 }
 
 /** A reference the source published, not one of Zoer's synthetic catalog keys. */
@@ -459,7 +508,7 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
   if (squash(location) !== squash(buyer)) push("Location", location);
 
   // The description is compared first, so a field that only restates it is dropped.
-  const shown = [description, title, buyer, issuedFor, type, reference, closing, issued, enquiries.raw, text(data.status), ...commodities, ...facts.map((f) => f.value)];
+  const shown = [description, title, buyer, issuedFor, type, reference, closing, issued, enquiries.raw, text(data.status), ...commodities.map((item) => item.label), ...facts.map((f) => f.value)];
   const { fields, address } = withoutAddress(sourceFields(data, shown, contacts));
   return {
     kind: input.kind,
@@ -487,12 +536,14 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
 
 /**
  * What the notice's Back button says, from the place under it in the reader's
- * URL: the buyer (or issued-for organisation) page it was opened from, the
- * analytics, or the list of its kind.
+ * URL: the buyer (or issued-for organisation) page it was opened from, a
+ * commodity's page (by its code: the page names itself by title where it
+ * knows it), the analytics, or the list of its kind.
  */
-export function backLabel(place: { buyer?: string | null; issuedFor?: string | null; supplier?: string | null; section?: string | null; kind?: string | null }): string {
+export function backLabel(place: { buyer?: string | null; issuedFor?: string | null; supplier?: string | null; commodity?: string | null; section?: string | null; kind?: string | null }): string {
   const party = text(place.buyer) || text(place.issuedFor) || text(place.supplier);
   if (party) return party;
+  if (place.commodity) return `Commodity ${place.commodity}`;
   if (place.section === "analytics") return "Analytics";
   return place.kind === "award" ? "Awards" : "Opportunities";
 }

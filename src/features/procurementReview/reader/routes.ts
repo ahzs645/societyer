@@ -2,8 +2,9 @@
  * The reader's places, all in the URL so links and the browser's Back work:
  * the list (`kind`, `status`, `q`), the analytics (`section=analytics`), a
  * buyer (`buyer=<name>`), the organisation a notice is issued for
- * (`issuedFor=<name>`) or a supplier (`supplier=<name>`), and a notice
- * (`notice=<key>&tab=`). A buyer shows over the list or analytics, and a
+ * (`issuedFor=<name>`) or a supplier (`supplier=<name>`), a UNSPSC commodity
+ * (`commodity=<code>`), and a notice (`notice=<key>&tab=`). A buyer or a
+ * commodity shows over the list or analytics, and a
  * notice opens in the side panel over whatever shows; what is under it stays
  * mounted, so returning lands on the same rows at the same scroll position.
  *
@@ -27,6 +28,7 @@
 import { createContext, useCallback, useContext, useEffect } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { backLabel as placeLabelOf } from "../lib/notice";
+import { COMMODITY_FILTER_PARAM, MARKET_PARAM, viewPatch } from "./analytics/analysisParam";
 
 /** `?notice=<record key>` (the shared table keeps `record` for its side panel). */
 export const NOTICE_PARAM = "notice";
@@ -45,14 +47,17 @@ export const ISSUED_FOR_PARAM = "issuedFor";
 /** A supplier's page (`supplier=<name>`): the awards it won, from whom. */
 export const SUPPLIER_PARAM = "supplier";
 export const SECTION_PARAM = "section";
-/** A buyer page's tab (`overview` when absent): `opportunities` or `awards`. */
+/** A commodity's page (`commodity=<eight-digit UNSPSC code>`): its notices, buyers and suppliers. */
+export const COMMODITY_PARAM = "commodity";
+/** A buyer or commodity page's tab (`overview` when absent): `opportunities` or `awards`. */
 export const PARTY_TAB_PARAM = "partyTab";
 export type PartyField = "organization" | "issuedFor" | "supplier";
 export type ReaderSection = "analytics";
 
-/** The place under the notice panel, by precedence: a buyer or issued-for organisation, then the analytics or the list. */
+/** The place under the notice panel, by precedence: an organisation, then a commodity, then the analytics or the list. */
 export type ReaderPlace =
   | { layer: "party"; field: PartyField; name: string }
+  | { layer: "commodity"; code: string }
   | { layer: "analytics" }
   | { layer: "list"; kind: string };
 
@@ -64,14 +69,18 @@ export function readerPlaces(params: URLSearchParams) {
   const party: { field: PartyField; name: string } | null = buyer ? { field: "organization", name: buyer }
     : issuedFor ? { field: "issuedFor", name: issuedFor }
     : supplier ? { field: "supplier", name: supplier } : null;
+  const requested = params.get(COMMODITY_PARAM);
+  // A hand-edited code that isn't eight digits leaves the place under it showing.
+  const commodity = !party && requested && /^\d{8}$/.test(requested) ? requested : null;
   const analytics = params.get(SECTION_PARAM) === "analytics";
-  return { notice, party, analytics };
+  return { notice, party, commodity, analytics };
 }
 
 /** A stable key per place, for its saved scroll position. */
 export function placeKey(place: ReaderPlace): string {
   switch (place.layer) {
     case "party": return `party:${place.field}:${place.name}`;
+    case "commodity": return `commodity:${place.code}`;
     case "analytics": return "analytics";
     case "list": return `list:${place.kind}`;
   }
@@ -111,13 +120,14 @@ const sameParams = (a: URLSearchParams, b: URLSearchParams) =>
 
 /**
  * What the place showing is called, for the Back of whatever opens over it. A
- * notice provides its title (NoticePage); the list, the analytics and a buyer
- * are named from the URL.
+ * notice provides its title (NoticePage), a commodity its code's title
+ * (CommodityPage); the list, the analytics and a buyer are named from the URL.
  */
 export const ReaderPlaceTitleContext = createContext<string | null>(null);
 const placeLabel = (params: URLSearchParams, title: string | null) =>
   (params.get(NOTICE_PARAM) || params.get(LEGACY_NOTICE_PARAM)) ? title || "Notice"
-    : placeLabelOf({ buyer: params.get(BUYER_PARAM), issuedFor: params.get(ISSUED_FOR_PARAM), supplier: params.get(SUPPLIER_PARAM), section: params.get(SECTION_PARAM), kind: params.get("kind") });
+    : readerPlaces(params).commodity && title ? title
+    : placeLabelOf({ buyer: params.get(BUYER_PARAM), issuedFor: params.get(ISSUED_FOR_PARAM), supplier: params.get(SUPPLIER_PARAM), commodity: readerPlaces(params).commodity, section: params.get(SECTION_PARAM), kind: params.get("kind") });
 
 const patched = (params: URLSearchParams, patch: Record<string, string | null>) => {
   const next = new URLSearchParams(params);
@@ -127,10 +137,25 @@ const patched = (params: URLSearchParams, patch: Record<string, string | null>) 
   return next;
 };
 const partyPatch = (field: PartyField, name: string): Record<string, string | null> => ({
-  [NOTICE_PARAM]: null, tab: null, [PARTY_TAB_PARAM]: null,
+  [NOTICE_PARAM]: null, tab: null, [PARTY_TAB_PARAM]: null, [COMMODITY_PARAM]: null,
   [BUYER_PARAM]: field === "organization" ? name : null,
   [ISSUED_FOR_PARAM]: field === "issuedFor" ? name : null,
   [SUPPLIER_PARAM]: field === "supplier" ? name : null,
+});
+/** A commodity's page takes the place of an organisation's or a notice, as an organisation's takes a commodity's. */
+const commodityPatch = (code: string): Record<string, string | null> => ({
+  [NOTICE_PARAM]: null, tab: null, [PARTY_TAB_PARAM]: null,
+  [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null, [SUPPLIER_PARAM]: null,
+  [COMMODITY_PARAM]: code,
+});
+/**
+ * The award analytics' overview narrowed to a commodity, in place of the page
+ * over it: the whole market's awards in it, not just "Our work", so the
+ * figures follow the commodity page's.
+ */
+const commodityAnalyticsPatch = (code: string): Record<string, string | null> => ({
+  ...commodityPatch(code), [COMMODITY_PARAM]: null,
+  [SECTION_PARAM]: "analytics", ...viewPatch("overview"), [MARKET_PARAM]: "all", [COMMODITY_FILTER_PARAM]: code,
 });
 
 export function useReaderNavigation() {
@@ -154,7 +179,8 @@ export function useReaderNavigation() {
   /** Where Back leads when the reader didn't push the current entry (a pasted link). */
   const parentPatch = (): Record<string, string | null> =>
     params.get(NOTICE_PARAM) || params.get(LEGACY_NOTICE_PARAM) ? { [NOTICE_PARAM]: null, tab: null }
-      : params.get(BUYER_PARAM) || params.get(ISSUED_FOR_PARAM) || params.get(SUPPLIER_PARAM) ? { [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null, [SUPPLIER_PARAM]: null, [PARTY_TAB_PARAM]: null }
+      : params.get(BUYER_PARAM) || params.get(ISSUED_FOR_PARAM) || params.get(SUPPLIER_PARAM) || params.get(COMMODITY_PARAM)
+        ? { [BUYER_PARAM]: null, [ISSUED_FOR_PARAM]: null, [SUPPLIER_PARAM]: null, [COMMODITY_PARAM]: null, [PARTY_TAB_PARAM]: null }
       : { [SECTION_PARAM]: null };
 
   const back = useCallback(() => { if (pushed) navigate(-1); else go(parentPatch(), true); }, [pushed, navigate, go]); // eslint-disable-line react-hooks/exhaustive-deps -- parentPatch reads `params`, which `go` follows
@@ -190,6 +216,13 @@ export function useReaderNavigation() {
     openParty: useCallback((field: PartyField, name: string) => go(partyPatch(field, name)), [go]),
     /** The href of a buyer (or issued-for organisation) page, for links. */
     partyHref: (field: PartyField, name: string) => `?${patched(params, partyPatch(field, name)).toString()}`,
+    /** A commodity's page (an eight-digit UNSPSC code); opened from a notice, it takes the notice's place, as a buyer does. */
+    openCommodity: useCallback((code: string) => go(commodityPatch(code)), [go]),
+    /** The href of a commodity's page, for links. */
+    commodityHref: (code: string) => `?${patched(params, commodityPatch(code)).toString()}`,
+    /** The award analytics narrowed to a commodity (Back returns to where it was opened from). */
+    openCommodityAnalytics: useCallback((code: string) => go(commodityAnalyticsPatch(code)), [go]),
+    commodityAnalyticsHref: (code: string) => `?${patched(params, commodityAnalyticsPatch(code)).toString()}`,
     /** The catalog's analytics, over the list. */
     openAnalytics: useCallback(() => go({ [SECTION_PARAM]: "analytics" }), [go]),
     back,

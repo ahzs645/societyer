@@ -13,6 +13,7 @@
  */
 import type { ListRow } from "../reader/source";
 import { decodeHtmlEntities } from "../../../../shared/htmlEntities";
+import { isUnspscCode, underUnspsc, unspscCodesOf, unspscCounts } from "../../../../shared/unspsc";
 
 /**
  * A buyer, supplier or procurement type someone chose to leave out of the
@@ -31,6 +32,12 @@ const MAX_EXCLUSION_TEXT = 4000;
 export type MarketFilters = {
   from: string; to: string; buyer: string; supplier: string; type: string;
   currency: string; includePlaceholders: boolean; includeFuture: boolean; minValue: string;
+  /**
+   * A UNSPSC code (eight digits): only awards classified under it, a segment,
+   * family or class including everything below it (shared/unspsc.ts). Absent
+   * rather than empty, as `exclude` is.
+   */
+  commodity?: string;
   /** Absent rather than empty, so a request without exclusions keeps the identity (and cached results) it always had. */
   exclude?: Exclusion[];
 };
@@ -56,6 +63,8 @@ export type Award = {
   contractNumber?: string | null; justification?: string | null; buyerId?: string; hierarchy?: string[]; mappingStatus?: string; urlExcluded?: boolean;
   /** Every name the buyer goes by (source label, office, organisation, group, type, aliases), for exclusions. */
   buyerLabels?: string[];
+  /** The UNSPSC codes the award is classified under; none when the source gave none. */
+  commodities?: string[];
 };
 export function analyticalFields(row: ListRow): Record<string, any> {
   if (!row.analyticsJson) return {};
@@ -103,6 +112,7 @@ export function normalizeAwards(rows: ListRow[]): Award[] {
     urlExcluded: extra.urlExcluded === true,
     buyerLabels: [extra.buyerOriginal, extra.buyerDisplayName, extra.buyerOrganization, extra.buyerGroup, extra.buyerType, ...(Array.isArray(extra.buyerAliases) ? extra.buyerAliases : [])]
       .filter((v: unknown): v is string => typeof v === "string" && v.trim() !== ""),
+    commodities: unspscCodesOf(extra),
   }); });
 }
 
@@ -162,6 +172,7 @@ export function validateFilters(input: Partial<MarketFilters>): MarketFilters {
   if ((f.from && !isoDate(f.from)) || (f.to && !isoDate(f.to))) throw new Error("Choose valid start and end dates.");
   if (f.from && f.to && f.from > f.to) throw new Error("Start date must be on or before end date.");
   if (f.minValue && (!Number.isFinite(Number(f.minValue)) || Number(f.minValue) < 0)) throw new Error("Minimum award value must be zero or a positive number.");
+  if (f.commodity !== undefined && f.commodity !== "" && !isUnspscCode(f.commodity)) throw new Error("Use an eight-digit UNSPSC commodity code.");
   return f;
 }
 
@@ -170,7 +181,8 @@ export function filterAwards(rows: Award[], input: Partial<MarketFilters>, today
   return rows.filter((r) => !r.urlExcluded && !excluded?.(r) && (!f.buyer || r.buyer === f.buyer) && (!f.supplier || r.supplier === f.supplier) && (!f.type || r.type === f.type)
     && r.currencyCode === f.currency && (f.includePlaceholders || !r.placeholder) && (f.includeFuture || !r.date || r.date <= today)
     && (!f.from || (!!r.date && r.date >= f.from)) && (!f.to || (!!r.date && r.date <= f.to))
-    && (!f.minValue || (r.value !== null && r.value >= Number(f.minValue))));
+    && (!f.minValue || (r.value !== null && r.value >= Number(f.minValue)))
+    && (!f.commodity || underUnspsc(r.commodities ?? [], f.commodity)));
 }
 
 export function qualityMatch(r: Award, flag: QualityFlag, today: string): boolean {
@@ -283,6 +295,17 @@ export function overview(rows: Award[]) {
   };
 }
 
+/**
+ * The commodity codes the awards are classified under, for the analysis's
+ * commodity filter: how many awards carry any (`classified`; none means the
+ * filter has nothing to narrow) and how many fall under each code and its
+ * ancestors, as [code, awards] pairs in code order.
+ */
+export function commodityChoices(rows: Award[]) {
+  const classified = rows.flatMap((row) => (row.commodities?.length ? [row.commodities] : []));
+  return { classified: classified.length, codes: [...unspscCounts(classified)].sort(([a], [b]) => (a < b ? -1 : 1)) };
+}
+
 const QUALITY_FLAGS: QualityFlag[] = ["currency", "future", "undated", "placeholder", "value", "negative", "zero", "contract", "justification", "mapping"];
 /** The choices for the filters and the data-quality counts, over every award regardless of filters. */
 export function metadata(rows: Award[], today: string) {
@@ -293,6 +316,7 @@ export function metadata(rows: Award[], today: string) {
     firstDate: dates[0] ?? null, lastDate: dates.at(-1) ?? null, years: [...new Set(dates.map((d) => d.slice(0, 4)))].reverse(),
     quality: QUALITY_FLAGS.map((flag) => ({ flag, count: rows.filter((r) => qualityMatch(r, flag, today)).length })),
     unavailable: { contractNumber: rows.filter(row => row.contractNumber === null).length, justification: rows.filter(row => row.justification === null).length },
+    commodities: commodityChoices(rows),
   };
 }
 

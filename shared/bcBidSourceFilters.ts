@@ -8,6 +8,9 @@
  * links: one naming a crosswalked pre-2023 type reads as its current type.
  */
 import { currentTypeOf } from "./bcBidTypeCrosswalk";
+import { underUnspsc, unspscCodesOf, type UnspscFacts } from "./unspsc";
+
+export { unspscPrefix } from "./unspsc";
 
 export const BC_FILTER_KEYS = ['currentType','industryCategory','officialRegion','historicalType','commodityCode'] as const;
 export type BcBidFilterKey = typeof BC_FILTER_KEYS[number];
@@ -33,13 +36,7 @@ export function bcBidSourceFilters(input: unknown): BcBidSourceFilters {
   return result;
 }
 
-/** What a UNSPSC code covers: its digits without the zero-filled pairs (10000000 → segment 10). */
-export const unspscPrefix = (code: string) => code.replace(/(?:00)+$/, '');
-
-type Facts = {
-  sourceId?: unknown; opportunityTypeGroupCode?: unknown; industryCategories?: unknown; sourceRegionPath?: unknown;
-  historicalTypeReferenceId?: unknown; taxonomyReleaseId?: unknown; classificationCodes?: unknown;
-};
+type Facts = UnspscFacts & { sourceId?: unknown; opportunityTypeGroupCode?: unknown; industryCategories?: unknown; sourceRegionPath?: unknown };
 
 export function matchesBcBidSourceFilters(row: {analyticsJson?: string}, filters: BcBidSourceFilters) {
   if (!Object.keys(filters).length) return true;
@@ -54,12 +51,7 @@ export function matchesBcBidSourceFilters(row: {analyticsJson?: string}, filters
   if (filters.industryCategory && !(Array.isArray(data.industryCategories) && data.industryCategories.includes(filters.industryCategory))) return false;
   if (filters.officialRegion && !String(data.sourceRegionPath ?? '').includes(`|${filters.officialRegion}|`)) return false;
   if (filters.historicalType && data.historicalTypeReferenceId !== filters.historicalType) return false;
-  if (filters.commodityCode) {
-    // Pre-2023 notices used GSIN commodity codes, not UNSPSC.
-    if (data.historicalTypeReferenceId || !String(data.taxonomyReleaseId ?? '').startsWith('taxonomy-release:UNSPSC:')) return false;
-    const prefix=unspscPrefix(filters.commodityCode);
-    const codes = data.classificationCodes;
-    if (!prefix || !Array.isArray(codes) || !codes.some((code:unknown)=>typeof code === 'string' && code.startsWith(prefix))) return false;
-  }
+  // Pre-2023 notices used GSIN commodity codes, not UNSPSC (unspscCodesOf reads none from them).
+  if (filters.commodityCode && !underUnspsc(unspscCodesOf(data), filters.commodityCode)) return false;
   return true;
 }

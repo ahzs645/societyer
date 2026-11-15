@@ -1,10 +1,10 @@
 /**
  * The reader inside a page, in layers (routes.ts): the list or the analytics,
- * and a buyer over them. A covered layer stays mounted but hidden, so its
+ * and a buyer or a commodity over them. A covered layer stays mounted but hidden, so its
  * loaded rows and table state (filters, sort, page) survive, and each place's
  * scroll position in the `.page` scroller is saved and put back, so Back
  * lands on the same rows. The module header shows over the list and the
- * analytics only; a buyer brings its own.
+ * analytics only; a buyer or a commodity brings its own.
  *
  * A notice opens in the app's record side panel over whatever shows
  * (notice/NoticePanel.tsx), as a meeting or a task does from its list: the
@@ -18,6 +18,7 @@ import { Tabs } from "../../../components/primitives";
 import { useRecordPanelStack } from "../../../platform/record-engine/record-table/components/RecordTableSidePanelStack";
 import { CatalogBrowser } from "./CatalogBrowser";
 import { BuyerPage } from "./BuyerPage";
+import { CommodityPage } from "./commodity/CommodityPage";
 import { NoticePanel } from "./notice/NoticePanel";
 import { ProcurementAnalytics } from "./analytics/ProcurementAnalytics";
 import type { NoticeKind } from "./NoticeTable";
@@ -54,10 +55,11 @@ export function ProcurementReader({ source, header, triage = null }: { source: R
 function ReaderLayers({ source, header }: { source: ReaderSource; header: ReactNode }) {
   const nav = useReaderNavigation();
   const { params, update } = nav;
-  const { notice, party, analytics } = readerPlaces(params);
+  const { notice, party, commodity, analytics } = readerPlaces(params);
   const kinds = KINDS.filter((kind) => (source.catalog.counts[kind.id] ?? 0) > 0);
   const kind: NoticeKind = kinds.find((item) => item.id === params.get("kind"))?.id ?? kinds[0]?.id ?? "opportunity";
-  const place: ReaderPlace = party ? { layer: "party", ...party } : analytics ? { layer: "analytics" } : { layer: "list", kind };
+  const place: ReaderPlace = party ? { layer: "party", ...party } : commodity ? { layer: "commodity", code: commodity } : analytics ? { layer: "analytics" } : { layer: "list", kind };
+  const over = Boolean(party || commodity);
   const marker = useScrollMemory(placeKey(place));
   useSettleClosedNotice();
 
@@ -67,8 +69,8 @@ function ReaderLayers({ source, header }: { source: ReaderSource; header: ReactN
   const panel = useRecordPanelStack(notice);
   const { reset, setMinimised } = panel;
   useEffect(() => {
-    if (!notice && !party) reset();
-  }, [notice, party, reset]);
+    if (!notice && !over) reset();
+  }, [notice, over, reset]);
   const panelScope = useMemo(() => ({ inside: false, restore: () => setMinimised(false) }), [setMinimised]);
   const closeNotice = nav.closeNotice;
 
@@ -90,7 +92,7 @@ function ReaderLayers({ source, header }: { source: ReaderSource; header: ReactN
     <NoticePanelContext.Provider value={panelScope}>
       <div className="procurement-reader__layers">
         <span ref={marker} hidden />
-        <Layer covered={Boolean(party)} className="procurement-reader__list">
+        <Layer covered={over} className="procurement-reader__list">
           {header}
           <Tabs
             value={analytics ? ANALYTICS : kind}
@@ -104,7 +106,7 @@ function ReaderLayers({ source, header }: { source: ReaderSource; header: ReactN
           />
           {/* The list stays mounted under the analytics too, so going back keeps its rows and place. */}
           <Layer covered={analytics}>
-            <NoticePanelOpenContext.Provider value={Boolean(notice) && !party && !analytics}>
+            <NoticePanelOpenContext.Provider value={Boolean(notice) && !over && !analytics}>
               <CatalogBrowser key={kind} kind={kind} />
             </NoticePanelOpenContext.Provider>
           </Layer>
@@ -113,6 +115,11 @@ function ReaderLayers({ source, header }: { source: ReaderSource; header: ReactN
         {party && (
           <Layer covered={false}>
             <BuyerPage key={`${party.field}:${party.name}`} field={party.field} name={party.name} />
+          </Layer>
+        )}
+        {commodity && (
+          <Layer covered={false}>
+            <CommodityPage key={commodity} code={commodity} />
           </Layer>
         )}
         {/* One panel across previous and next, so closing returns focus to where it was opened from. */}

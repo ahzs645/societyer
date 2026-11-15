@@ -2,7 +2,8 @@
  * The notice page's smaller pieces: the status badges, the facts (as the
  * side rail's card, or as the three-fact strip phones and narrow panes open
  * with), the buyer contacts, the description, the source's other fields and
- * its capture receipt, and the links that open an organisation's page.
+ * its capture receipt, and the links that open an organisation's page. The
+ * commodities under the facts are NoticeCommodities.tsx.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Mail, MapPin, Phone } from "lucide-react";
@@ -13,6 +14,7 @@ import { partyCount, type NoticeContact, type NoticeModel, type NoticeParty } fr
 import { BUYER_PARAM, ISSUED_FOR_PARAM, SUPPLIER_PARAM, useReaderNavigation, type PartyField } from "../routes";
 import { plainClick } from "../ReaderHeader";
 import { useReaderSource } from "../source";
+import { NoticeCommodities } from "./NoticeCommodities";
 
 /** Status and how long is left, with the source's own wording when the two disagree. */
 export function NoticeBadges({ model }: { model: NoticeModel }) {
@@ -77,18 +79,7 @@ export function NoticeFacts({ model, omit = [] }: { model: NoticeModel; omit?: r
           </div>
         </dl>
       </div>
-      {/* Its own section of the card, so the rule above it runs edge to edge. */}
-      {model.commodities.length > 0 && (
-        <div className="card__body procurement-notice__commodities">
-          <span className="procurement-notice__kv-label">{model.commodities.length === 1 ? "Commodity" : "Commodities"}</span>
-          <ul>
-            {model.commodities.slice(0, 6).map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-          {model.commodities.length > 6 && <span className="muted">and {model.commodities.length - 6} more</span>}
-        </div>
-      )}
+      {model.commodities.length > 0 && <NoticeCommodities commodities={model.commodities} />}
     </section>
   );
 }

@@ -3,16 +3,24 @@
  * edited in Zoer's Filters dialog. How buyers are grouped (`buyerLevel`) and
  * what's left out of the analysis (`exclude`) are filters too, so the dialog
  * holds every choice that changes the figures and a link carries all of them.
+ *
+ * The commodity filter (a UNSPSC code, `awardCommodity`) is offered only
+ * where the analysis can apply it: the awards carry codes and the analysis
+ * says so (`meta.commodities`, which an older catalog service or Convex
+ * deployment doesn't return).
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { Modal } from "../../../../components/Modal";
 import { Select } from "../../../../components/Select";
 import { DatePicker } from "../../../../components/DatePicker";
 import { Field } from "../../../../components/ui";
-import { defaultFilters, money, validateFilters, type MarketFilters, type metadata } from "../../lib/market";
+import { count, defaultFilters, money, validateFilters, type MarketFilters, type metadata } from "../../lib/market";
 import { shortSourceDate } from "../../lib/notice";
 import type { AnalysisRequest } from "../../../../../shared/procurementAnalytics";
+import type { ListRow } from "../source";
+import { CommodityField } from "../filters/CommodityField";
+import { COMMODITY_FILTER_PARAM } from "./analysisParam";
 import { parseExclusions } from "./exclusionStore";
 import { ExclusionList, ExclusionPicker, describeExclusions, withExclusion, withoutExclusion } from "./exclusions";
 
@@ -32,20 +40,24 @@ export const readBuyerLevel = (params: URLSearchParams): BuyerLevel =>
 /** Filters in the URL, named apart from the list's and the buyer page's own parameters. */
 const FILTER_PARAMS: Record<keyof MarketFilters, string> = {
   from: "awardFrom", to: "awardTo", buyer: "awardBuyer", supplier: "awardSupplier", type: "awardType",
-  currency: "currency", includePlaceholders: "placeholders", includeFuture: "future", minValue: "minValue", exclude: "exclude",
+  currency: "currency", includePlaceholders: "placeholders", includeFuture: "future", minValue: "minValue",
+  commodity: COMMODITY_FILTER_PARAM, exclude: "exclude",
 };
 export const EXCLUDE_PARAM = FILTER_PARAMS.exclude;
 const FILTER_KEYS = Object.keys(FILTER_PARAMS) as (keyof MarketFilters)[];
 export function readFilters(params: URLSearchParams): MarketFilters {
   const read = (key: keyof MarketFilters) => params.get(FILTER_PARAMS[key]);
   const exclude = parseExclusions(read("exclude"));
+  const commodity = read("commodity");
   return {
     from: read("from") ?? "", to: read("to") ?? "", buyer: read("buyer") ?? "", supplier: read("supplier") ?? "", type: read("type") ?? "",
     currency: read("currency") || defaultFilters.currency, includePlaceholders: read("includePlaceholders") === "1", includeFuture: read("includeFuture") === "1", minValue: read("minValue") ?? "",
+    ...(commodity ? { commodity } : {}),
     ...(exclude.length ? { exclude } : {}),
   };
 }
-const isDefault = (filters: MarketFilters, key: keyof MarketFilters) => (key === "exclude" ? !filters.exclude?.length : filters[key] === defaultFilters[key]);
+const isDefault = (filters: MarketFilters, key: keyof MarketFilters) =>
+  key === "exclude" ? !filters.exclude?.length : key === "commodity" ? !filters.commodity : filters[key] === defaultFilters[key];
 export function filterPatch(filters: MarketFilters): Record<string, string | null> {
   const patch: Record<string, string | null> = {};
   for (const key of FILTER_KEYS) {
@@ -58,8 +70,10 @@ export function filterPatch(filters: MarketFilters): Record<string, string | nul
 export const activeCount = (filters: MarketFilters, buyerLevel: BuyerLevel = DEFAULT_BUYER_LEVEL) =>
   FILTER_KEYS.filter((key) => !isDefault(filters, key)).length + (buyerLevel === DEFAULT_BUYER_LEVEL ? 0 : 1);
 
-export function FilterChips({ filters, onChange, buyerLevel = DEFAULT_BUYER_LEVEL, onBuyerLevel, onShowExclusions }: {
+export function FilterChips({ filters, onChange, buyerLevel = DEFAULT_BUYER_LEVEL, onBuyerLevel, onShowExclusions, commodityTitle = "" }: {
   filters: MarketFilters;
+  /** The commodity filter's code title, for its chip ("Commodity: 43230000 Software"). */
+  commodityTitle?: string;
   /** With `buyerLevel`, the grouping changes in the same step (Clear all). */
   onChange: (next: MarketFilters, buyerLevel?: BuyerLevel) => void;
   buyerLevel?: BuyerLevel;
@@ -72,6 +86,7 @@ export function FilterChips({ filters, onChange, buyerLevel = DEFAULT_BUYER_LEVE
   if (filters.buyer) chips.push({ key: "buyer", label: `Buyer: ${filters.buyer}` });
   if (filters.supplier) chips.push({ key: "supplier", label: `Supplier: ${filters.supplier}` });
   if (filters.type) chips.push({ key: "type", label: `Type: ${filters.type}` });
+  if (filters.commodity) chips.push({ key: "commodity", label: `Commodity: ${[filters.commodity, commodityTitle].filter(Boolean).join(" ")}` });
   if (filters.currency !== defaultFilters.currency) chips.push({ key: "currency", label: filters.currency === "UNSPECIFIED" ? "Currency not stated" : filters.currency });
   if (filters.minValue) chips.push({ key: "minValue", label: `At least ${money(Number(filters.minValue), filters.currency)}` });
   if (filters.includePlaceholders) chips.push({ key: "includePlaceholders", label: "With placeholder suppliers" });
@@ -81,7 +96,10 @@ export function FilterChips({ filters, onChange, buyerLevel = DEFAULT_BUYER_LEVE
   if (!chips.length && !exclusions.length) return null;
   const clear = (key: keyof MarketFilters | "buyerLevel") => {
     if (key === "buyerLevel") onBuyerLevel?.(DEFAULT_BUYER_LEVEL);
-    else onChange({ ...filters, [key]: defaultFilters[key], ...(key === "from" ? { to: "" } : {}) });
+    else if (key === "commodity") {
+      const { commodity: _cleared, ...rest } = filters;
+      onChange(rest);
+    } else onChange({ ...filters, [key]: defaultFilters[key], ...(key === "from" ? { to: "" } : {}) });
   };
   return (
     <div className="procurement-analytics__chips" aria-label="Active filters">
@@ -102,17 +120,25 @@ export function FilterChips({ filters, onChange, buyerLevel = DEFAULT_BUYER_LEVE
   );
 }
 
+type Metadata = ReturnType<typeof metadata>;
+/** The analysis's choices; `commodities` is absent from an analysis that can't filter by commodity (an older server). */
+export type FilterChoices = Omit<Metadata, "commodities"> & { commodities?: Metadata["commodities"]; choicesTruncated?: boolean };
+const NO_ROWS: readonly ListRow[] = [];
+
 /**
  * Zoer's Filters dialog: a draft until Apply. `buyerLevel` is offered where
- * the analysis can regroup buyers; the exclusions section lists what's left
- * out and searches every buyer, supplier and type to add one.
+ * the analysis can regroup buyers; the commodity code where the awards carry
+ * codes the analysis can filter by; the exclusions section lists what's left
+ * out and searches every buyer, supplier and type to add one. `rows` are the
+ * loaded awards, where the analysis runs here, for the titles they give codes.
  */
-export function FiltersDialog({ value, meta, apply, close, buyerLevel = DEFAULT_BUYER_LEVEL }: {
+export function FiltersDialog({ value, meta, apply, close, buyerLevel = DEFAULT_BUYER_LEVEL, rows = NO_ROWS }: {
   value: MarketFilters;
-  meta: ReturnType<typeof metadata> & { choicesTruncated?: boolean };
+  meta: FilterChoices;
   apply: (next: MarketFilters, buyerLevel: BuyerLevel) => void;
   close: () => void;
   buyerLevel?: BuyerLevel;
+  rows?: readonly ListRow[];
 }) {
   const [draft, setDraft] = useState(value);
   const [level, setLevel] = useState(buyerLevel);
@@ -124,6 +150,12 @@ export function FiltersDialog({ value, meta, apply, close, buyerLevel = DEFAULT_
   const setExclusions = (next: typeof exclusions) => {
     const { exclude: _dropped, ...rest } = draft;
     setDraft(next.length ? { ...rest, exclude: next } : rest);
+  };
+  const commodities = meta.commodities;
+  const counting = useMemo(() => (commodities ? { of: "awards" as const, codes: commodities.codes } : null), [commodities]);
+  const setCommodity = (code: string) => {
+    const { commodity: _dropped, ...rest } = draft;
+    setDraft(code ? { ...rest, commodity: code } : rest);
   };
   return (
     <Modal
@@ -142,6 +174,15 @@ export function FiltersDialog({ value, meta, apply, close, buyerLevel = DEFAULT_
         <Field label="Buyer"><Select<string> value={draft.buyer} onChange={(next) => set("buyer", next)} options={options(meta.buyers)} searchable clearable clearLabel="All buyers" placeholder="All buyers" /></Field>
         <Field label="Supplier"><Select<string> value={draft.supplier} onChange={(next) => set("supplier", next)} options={options(meta.suppliers)} searchable clearable clearLabel="All suppliers" placeholder="All suppliers" /></Field>
         <Field label="Procurement type"><Select<string> value={draft.type} onChange={(next) => set("type", next)} options={options(meta.types)} searchable clearable clearLabel="All types" placeholder="All types" /></Field>
+        {counting && commodities && (commodities.classified > 0 || draft.commodity) && (
+          <CommodityField
+            value={draft.commodity ?? ""}
+            onChange={setCommodity}
+            rows={rows}
+            counting={counting}
+            hint={`${commodities.classified === meta.count ? "Every published award carries a code" : `${count(commodities.classified)} of ${count(meta.count)} published awards carry a code`}. A segment, family or class includes everything under it.`}
+          />
+        )}
         <Field label="Currency">
           <Select<string> value={draft.currency} onChange={(next) => set("currency", next || defaultFilters.currency)} options={(meta.currencies.length ? meta.currencies : ["CAD"]).map((code) => ({ value: code, label: code === "UNSPECIFIED" ? "Not stated (not converted)" : code }))} />
         </Field>

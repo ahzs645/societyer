@@ -7,3 +7,10 @@ export const viewPatch = (view: string, first = "overview"): Record<string, stri
   [ANALYSIS_PARAM]: view === first ? null : view,
   ...Object.fromEntries(VIEW_STATE.map((key) => [key, null])),
 });
+/** `market=all`: the whole market rather than "Our work" (OurWork.tsx). */
+export const MARKET_PARAM = "market";
+/**
+ * The award analysis's commodity filter (`awardCommodity=<UNSPSC code>`),
+ * named apart from a commodity page's own `commodity=`, which can sit under it.
+ */
+export const COMMODITY_FILTER_PARAM = "awardCommodity";

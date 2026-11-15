@@ -5,29 +5,14 @@
  * list (the catalog service's, ~90k terms) or, where there is none, from the
  * codes the loaded notices carry, titled where the notices name them.
  *
- * Loaded only with the picker (CommodityPicker.tsx), never with the list.
+ * Loaded with the picker (CommodityPicker.tsx) and the commodity pages
+ * (reader/commodity/), never with the list.
  */
-import { matchesBcBidSourceFilters, unspscPrefix, type BcBidSourceFilters } from "../../../../../shared/bcBidSourceFilters";
+import { matchesBcBidSourceFilters, type BcBidSourceFilters } from "../../../../../shared/bcBidSourceFilters";
+import { isUnspscCode as isCode, unspscAncestors, unspscCodesOf, unspscCounts, unspscLevel, unspscParent, unspscPrefix, type UnspscFacts } from "../../../../../shared/unspsc";
 import type { ListRow, TaxonomyCodeList } from "../source";
 
-export const LEVEL_NAMES = ["Segment", "Family", "Class", "Commodity"] as const;
-
-/** 0 segment, 1 family, 2 class, 3 commodity. */
-export function unspscLevel(code: string): number {
-  return code.endsWith("000000") ? 0 : code.endsWith("0000") ? 1 : code.endsWith("00") ? 2 : 3;
-}
-
-export function unspscParent(code: string): string | null {
-  const level = unspscLevel(code);
-  return level === 0 ? null : code.slice(0, 2 * level).padEnd(8, "0");
-}
-
-/** Root first, without the code itself. */
-export function unspscAncestors(code: string): string[] {
-  const chain: string[] = [];
-  for (let parent = unspscParent(code); parent; parent = unspscParent(parent)) chain.unshift(parent);
-  return chain;
-}
+export { unspscAncestors, unspscLevel, unspscParent, UNSPSC_LEVELS as LEVEL_NAMES } from "../../../../../shared/unspsc";
 
 export type CommodityNode = { code: string; title: string; level: number; children: string[] };
 export type CommodityTree = {
@@ -37,8 +22,6 @@ export type CommodityTree = {
   complete: boolean;
   version?: string;
 };
-
-const isCode = (value: unknown): value is string => typeof value === "string" && /^\d{8}$/.test(value);
 
 function link(nodes: Map<string, CommodityNode>, complete: boolean, version?: string): CommodityTree {
   // Any code whose parent is missing gets an untitled parent, so every code sits on a path from a segment.
@@ -63,7 +46,7 @@ export function treeFromList(list: TaxonomyCodeList): CommodityTree {
 }
 
 type Classification = { code?: unknown; title?: unknown; ancestors?: { code?: unknown; title?: unknown }[] };
-type CommodityFacts = { classificationCodes?: unknown; commodityClassifications?: unknown };
+type CommodityFacts = UnspscFacts & { commodityClassifications?: unknown };
 
 function facts(row: ListRow): CommodityFacts {
   try {
@@ -93,15 +76,22 @@ export function titlesFromRows(rows: readonly ListRow[], only?: string): Map<str
   return titles;
 }
 
-/** The fallback tree: the codes the loaded notices carry, with their ancestors. */
-export function treeFromRows(rows: readonly ListRow[]): CommodityTree {
+/**
+ * The fallback tree: the codes the loaded notices carry, with their
+ * ancestors, and any `more` codes (the ones an analysis counted on the
+ * server, where the notices themselves aren't loaded here).
+ */
+export function treeFromRows(rows: readonly ListRow[], more: Iterable<string> = []): CommodityTree {
   const titles = titlesFromRows(rows);
   const nodes = new Map<string, CommodityNode>();
+  const add = (code: unknown) => {
+    if (isCode(code) && !nodes.has(code)) nodes.set(code, { code, title: "", level: unspscLevel(code), children: [] });
+  };
   for (const row of rows) {
     const codes = facts(row).classificationCodes;
-    if (!Array.isArray(codes)) continue;
-    for (const code of codes) if (isCode(code) && !nodes.has(code)) nodes.set(code, { code, title: "", level: unspscLevel(code), children: [] });
+    if (Array.isArray(codes)) codes.forEach(add);
   }
+  for (const code of more) add(code);
   const tree = link(nodes, false);
   for (const node of tree.nodes.values()) node.title = titles.get(node.code) ?? "";
   return tree;
@@ -115,22 +105,14 @@ export function treeFromRows(rows: readonly ListRow[]): CommodityTree {
 export function noticeCounts(rows: readonly ListRow[], filters: BcBidSourceFilters): Map<string, number> {
   const others: BcBidSourceFilters = { ...filters };
   delete others.commodityCode;
-  const counts = new Map<string, number>();
+  const classified: string[][] = [];
   for (const row of rows) {
     if (!row.analyticsJson?.includes("classificationCodes") || !matchesBcBidSourceFilters(row, others)) continue;
-    const data = facts(row) as CommodityFacts & { historicalTypeReferenceId?: unknown; taxonomyReleaseId?: unknown };
     // As the matcher: only UNSPSC-classified notices (pre-2023 ones used GSIN).
-    if (data.historicalTypeReferenceId || !String(data.taxonomyReleaseId ?? "").startsWith("taxonomy-release:UNSPSC:")) continue;
-    const under = new Set<string>();
-    for (const code of Array.isArray(data.classificationCodes) ? data.classificationCodes : []) {
-      if (!isCode(code)) continue;
-      // A family-level code (72100000) is under its segment and itself, not under the classes below it.
-      under.add(code);
-      for (const ancestor of unspscAncestors(code)) under.add(ancestor);
-    }
-    for (const code of under) counts.set(code, (counts.get(code) ?? 0) + 1);
+    const codes = unspscCodesOf(facts(row));
+    if (codes.length) classified.push(codes);
   }
-  return counts;
+  return unspscCounts(classified);
 }
 
 /**

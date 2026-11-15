@@ -42,6 +42,24 @@ assert.throws(() => normalizeAnalysisRequest({ view: "overview", filters: { from
 assert.throws(() => normalizeAnalysisRequest({ view: "awards", slice: { min: NaN } }), /value/);
 assert.throws(() => normalizeAnalysisRequest({ view: "suppliers", offset: -1 }), /page/);
 assert.equal(analysisIdentity({ view: "overview" }, now), analysisIdentity({ view: "overview", filters: {} }, now));
+// The commodity filter: absent and empty read the same (so precomputed defaults still match), it is checked, and it
+// narrows the awards on every path that runs this shared analysis (the browser, the catalog service, Convex).
+assert.equal(analysisIdentity({ view: "overview", filters: { commodity: "" } }, now), analysisIdentity({ view: "overview" }, now));
+assert.equal("commodity" in normalizeAnalysisRequest({ view: "overview", filters: { commodity: "" } }).filters!, false);
+assert.notEqual(analysisIdentity({ view: "overview", filters: { commodity: "43230000" } }, now), analysisIdentity({ view: "overview" }, now));
+assert.throws(() => normalizeAnalysisRequest({ view: "overview", filters: { commodity: "4323" } }), /eight-digit/);
+assert.throws(() => normalizeAnalysisRequest(JSON.stringify({ view: "overview", filters: { commodity: 43230000 } })), /filter/);
+assert.deepEqual(Object.keys(normalizeAnalysisRequest({ view: "overview", filters: { commodity: "43230000", exclude: [{ field: "buyer", name: "City" }] } }).filters!).slice(-2), ["commodity", "exclude"]);
+const classifiedAward = (key: string, codes: string[], value: number): ListRow => ({ ...base, recordKey: `award:${key}`, value, analyticsJson: JSON.stringify({ taxonomyReleaseId: "taxonomy-release:UNSPSC:UNv260801", classificationCodes: codes }) });
+const coded = [classifiedAward("software", ["43231501"], 1000), classifiedAward("consulting", ["80101504"], 300), { ...base, recordKey: "award:plain", value: 50 }];
+const software = buildAnalysis(coded, [], { view: "overview", filters: { commodity: "43000000" } }, now);
+assert.ok(software.type === "award");
+if (software.type !== "award") throw new Error("Unexpected view");
+assert.equal(software.data.included, 1);
+assert.equal(software.data.overview.value, 1000);
+assert.equal(software.data.meta.commodities.classified, 2, "The choices count every classified award, whatever the filters");
+const softwareAwards = buildAnalysis(coded, [], { view: "awards", filters: { commodity: "43230000" } }, now);
+assert.deepEqual(softwareAwards.type === "awards" && softwareAwards.data.rows.map((row) => row.recordKey), ["award:software"], "Drill-downs follow the commodity too");
 assert.notEqual(analysisIdentity({ view: "overview" }, now), analysisIdentity({ view: "overview", filters: { currency: "USD" } }, now));
 const tied = [{ recordKey: "opportunity:x", source: "reviews", dataJson: JSON.stringify({ id: "a", prompt_id: "p", created_at: today, status: "succeeded" }) }, { recordKey: "opportunity:x", source: "reviews", dataJson: JSON.stringify({ id: "b", prompt_id: "p", created_at: today, status: "failed" }) }];
 assert.equal(JSON.parse(currentReviewProjection(tied)[0].dataJson).id, "b");
@@ -239,4 +257,4 @@ await assert.rejects(reader.query(api.procurementAnalytics.get, { ...server.args
 await assert.rejects(t.query(api.procurementAnalytics.get, server.args), /sign|auth/i);
 await t.run(async ctx => { const active = await ctx.db.query("procurementCatalogs").withIndex("by_society", q => q.eq("societyId", ids.societyId)).unique(); await ctx.db.patch(active!._id, { generation: "new-publication" }); });
 await assert.rejects(reader.query(api.procurementAnalytics.get, server.args), /publication changed/i);
-console.log("OK: publication analytics, exact currency/median/filter parity, bounded directories and drill-downs, mapping provenance, complete 5,101-review coverage, deterministic ties, request deduplication, workspace authorization and generation invalidation.");
+console.log("OK: publication analytics, exact currency/median/filter parity, bounded directories and drill-downs, mapping provenance, complete 5,101-review coverage, deterministic ties, request deduplication, the commodity filter, workspace authorization and generation invalidation.");

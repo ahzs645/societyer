@@ -34,9 +34,9 @@ export type NoticeNeighbours = {
 export function useNoticeNeighbours(recordKey: string): NoticeNeighbours | null {
   const { params, update } = useReaderNavigation();
   const adjacent = useAdjacentNotices(recordKey);
-  const { party, analytics } = readerPlaces(params);
+  const { party, commodity, analytics } = readerPlaces(params);
   const go = useCallback((key: string) => update({ [NOTICE_PARAM]: key, tab: null }), [update]);
-  if (party || analytics || (adjacent.position === null && !adjacent.previous && !adjacent.next)) return null;
+  if (party || commodity || analytics || (adjacent.position === null && !adjacent.previous && !adjacent.next)) return null;
   return { previous: adjacent.previous, next: adjacent.next, position: adjacent.position, total: adjacent.total, go };
 }
 

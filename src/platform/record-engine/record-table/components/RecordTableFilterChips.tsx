@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownUp, X } from "lucide-react";
+import { ArrowDownUp, ArrowUpRight, X } from "lucide-react";
 import { computeIsSortEdited, useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { RecordField, ViewFilter, ViewFilterGroup } from "../../types";
 import { describeFilter } from "../utils/filterLabels";
@@ -17,13 +17,39 @@ type Chip = {
   /** Index in `filters` of the condition the editor should focus. */
   focusIndex: number;
   remove: () => void;
+  link?: RecordTableChipLink;
 };
 
-export type RecordTableExtraChip = { key: string; label: string; onRemove: () => void };
+/**
+ * A page the filtered-by value has, opened from its pill (a commodity code's
+ * page, say): a real link, so a middle-click opens it in a new tab; a plain
+ * click calls `onOpen`.
+ */
+export type RecordTableChipLink = { href: string; label: string; onOpen: () => void };
+export type RecordTableExtraChip = { key: string; label: string; onRemove: () => void; link?: RecordTableChipLink };
 const NO_EXTRA_CHIPS: readonly RecordTableExtraChip[] = [];
 
 const MORE_BUTTON_RESERVE = 84;
 const CHIP_GAP = 6;
+
+/** A pill's link to the page its value has; a modified click or a middle-click is the browser's (a new tab). */
+function ChipLink({ link }: { link: RecordTableChipLink }) {
+  return (
+    <a
+      className="record-table__chip-remove record-table__chip-link"
+      href={link.href}
+      title={link.label}
+      aria-label={link.label}
+      onClick={(event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        link.onOpen();
+      }}
+    >
+      <ArrowUpRight size={11} aria-hidden="true" />
+    </a>
+  );
+}
 
 function groupChipLabel(group: ViewFilterGroup, filters: ViewFilter[], filterGroups: ViewFilterGroup[], columns: RecordField[]): string {
   const columnFor = (id: string) => columns.find((column) => column.fieldMetadataId === id);
@@ -102,7 +128,7 @@ export function RecordTableFilterChips({
       }
     }
     for (const extra of extraChips) {
-      result.push({ key: `extra:${extra.key}`, label: extra.label, extra: true, focusIndex: -1, remove: extra.onRemove });
+      result.push({ key: `extra:${extra.key}`, label: extra.label, extra: true, focusIndex: -1, remove: extra.onRemove, link: extra.link });
     }
     // A view's own sort needs no row of its own on a phone.
     if (isPhone && sortEdited && sorts.length > 0) {
@@ -176,6 +202,7 @@ export function RecordTableFilterChips({
               {chip.sort && <ArrowDownUp size={11} aria-hidden="true" />}
               {chip.label}
             </button>
+            {chip.link && <ChipLink link={chip.link} />}
             <button
               type="button"
               className="record-table__chip-remove"
@@ -215,6 +242,7 @@ export function RecordTableFilterChips({
         {chips.map((chip) => (
           <span key={chip.key} className="record-table__chip">
             <span className="record-table__chip-label">{chip.sort && <ArrowDownUp size={11} />}{chip.label}</span>
+            {chip.link && <span className="record-table__chip-remove"><ArrowUpRight size={11} /></span>}
             <span className="record-table__chip-remove"><X size={11} /></span>
           </span>
         ))}

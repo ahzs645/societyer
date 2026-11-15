@@ -64,6 +64,7 @@ export function normalizeAnalysisRequest(input: string | AnalysisRequest): Analy
   for (const key of ["from", "to", "buyer", "supplier", "type", "currency", "minValue"] as const)
     if (typeof f[key] !== "string" || f[key].length > 500) throw new Error("Invalid analysis filter.");
   if (typeof f.includePlaceholders !== "boolean" || typeof f.includeFuture !== "boolean") throw new Error("Invalid analysis flag.");
+  if (f.commodity !== undefined && typeof f.commodity !== "string") throw new Error("Invalid analysis filter.");
   if (r.offset !== undefined && (!Number.isSafeInteger(r.offset) || r.offset < 0 || r.offset > 1_000_000)) throw new Error("Invalid analysis page.");
   if (r.year && !/^(19|20|21)\d{2}$/.test(r.year)) throw new Error("Choose a valid analysis year.");
   if (r.scope !== undefined && r.scope !== "all" && r.scope !== "open") throw new Error("Unknown decision scope.");
@@ -89,10 +90,10 @@ export function normalizeAnalysisRequest(input: string | AnalysisRequest): Analy
       slice.left = r.slice.left;
     }
   }
-  // Exclusions are checked and put in a stable order; none at all leaves the key out, so the
-  // identity of every request without them (and the precomputed defaults) is unchanged.
-  const { exclude, ...rest } = validateFilters(f), exclusions = normalizeExclusions(exclude);
-  const filters: MarketFilters = exclusions.length ? { ...rest, exclude: exclusions } : rest;
+  // Exclusions are checked and put in a stable order; none at all (and no commodity) leaves the key
+  // out, so the identity of every request without them (and the precomputed defaults) is unchanged.
+  const { exclude, commodity, ...rest } = validateFilters(f), exclusions = normalizeExclusions(exclude);
+  const filters: MarketFilters = { ...rest, ...(commodity ? { commodity } : {}), ...(exclusions.length ? { exclude: exclusions } : {}) };
   return { view: r.view, filters, year: r.year ?? "", scope: r.scope ?? "open", search: (r.search ?? "").trim(), offset: r.offset ?? 0, slice, all: r.all === true, buyerLevel: r.buyerLevel ?? "organization", ...(r.party ? { party: { field: r.party.field, name: r.party.name.trim() } } : {}) };
 }
 export function analysisIdentity(request: AnalysisRequest, asOf: number) {
@@ -101,7 +102,9 @@ export function analysisIdentity(request: AnalysisRequest, asOf: number) {
   const time = ["opportunities", "decisions", "party"].includes(r.view) ? Math.floor(asOf / 60_000) : zoneToday(asOf);
   return JSON.stringify([PROCUREMENT_METRIC_VERSION, PROCUREMENT_MAPPING_VERSION, time, r]);
 }
-const boundMeta = (m: ReturnType<typeof metadata>) => ({ ...m, typeCount: m.types.length, buyers: m.buyers.slice(0, 200), suppliers: m.suppliers.slice(0, 200), types: m.types.slice(0, 200), choicesTruncated: m.buyers.length > 200 || m.suppliers.length > 200 || m.types.length > 200 });
+/** Commodity codes the filter offers from the server, at most; a catalog's awards carry far fewer distinct codes. */
+const COMMODITY_CHOICES = 5000;
+const boundMeta = (m: ReturnType<typeof metadata>) => ({ ...m, typeCount: m.types.length, buyers: m.buyers.slice(0, 200), suppliers: m.suppliers.slice(0, 200), types: m.types.slice(0, 200), commodities: { ...m.commodities, codes: m.commodities.codes.slice(0, COMMODITY_CHOICES) }, choicesTruncated: m.buyers.length > 200 || m.suppliers.length > 200 || m.types.length > 200 });
 
 export function buildAwardAnalytics(input: ListRow[], request: AnalysisRequest, asOf: number) {
   const r = normalizeAnalysisRequest(request), today = zoneToday(asOf), all = normalizeAwards(canonicalProcurementRows(input, r.buyerLevel));

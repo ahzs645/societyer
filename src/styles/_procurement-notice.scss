@@ -238,8 +238,25 @@
   &__commodities {
     border-top: 1px solid token("border");
     font-size: token("fs-sm");
-    ul { margin: 0; padding-left: 1.1em; display: grid; gap: 2px; }
+    ul { margin: 0; padding-left: 1.1em; display: grid; gap: 2px; overflow-wrap: anywhere; }
   }
+  // A classified commodity opens its page; the code beside it, quieter.
+  &__commodity {
+    color: inherit;
+    text-decoration: none;
+    border-radius: token("r-xs");
+    &:hover { color: token("accent"); }
+    &:focus-visible { outline: 2px solid token("accent"); outline-offset: 2px; }
+  }
+  &__commodity-name {
+    text-decoration: underline;
+    text-decoration-color: token("border-strong");
+    text-underline-offset: 2px;
+    .procurement-notice__commodity:hover & { text-decoration-color: currentColor; }
+  }
+  &__commodity-code { color: token("text-tertiary"); font-size: token("fs-xs"); font-variant-numeric: tabular-nums; }
+  &__commodity-main { vertical-align: 1px; }
+  &__commodities-toggle { margin-top: token("s-1"); margin-left: calc(-1 * #{token("s-2")}); }
 
   &__description {
     margin: 0;
