@@ -6,7 +6,8 @@ import { readProcurementDocument, type StoredProcurementDocument } from "../lib/
 import { useProcurementClock, useProcurementDeadline } from "../lib/clock";
 import { analysisIdentity, normalizeAnalysisRequest, PROCUREMENT_METRIC_VERSION, PROCUREMENT_MAPPING_VERSION, type AnalysisRequest, type AnalysisResult, type AnalysisState } from "../../../../shared/procurementAnalytics";
 import { documentTipNames } from "../lib/notice";
-import { progressive, useProgressive, type CatalogReviewRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary, type TaxonomyCodeList } from "./source";
+import { readableListRow } from "../../../../shared/procurementListRow";
+import { progressive, useProgressive, type CatalogReviewRow, type ListRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary, type TaxonomyCodeList } from "./source";
 
 export type ServiceCatalog = ReaderCatalog & { publicationId: string };
 import { CatalogAccess } from "./catalogAccess";
@@ -17,7 +18,7 @@ export function createHttpReaderSource(access: CatalogAccess, catalog: ServiceCa
   const loads = new Map<string, Promise<RecordList>>(), lists = new Map<string, Progressive<RecordList>>(), notices = new Map<string, Progressive<Notice>>();
   const load = (kind: string) => {
     if (!["opportunity", "award"].includes(kind)) return Promise.reject(new Error("Unknown procurement kind."));
-    if (!loads.has(kind)) loads.set(kind, access.read<any[]>(prefix + "/list/" + kind + ".json").then(rows => ({ rows, total: rows.length, done: true })));
+    if (!loads.has(kind)) loads.set(kind, access.read<ListRow[]>(prefix + "/list/" + kind + ".json").then(rows => ({ rows: rows.map(readableListRow), total: rows.length, done: true })));
     return loads.get(kind)!;
   };
   const notice = (key: string) => {

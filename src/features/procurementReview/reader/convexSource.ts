@@ -13,6 +13,7 @@ import type { ReviewRow } from "../lib/review";
 import { useProcurementClock, useProcurementDeadline } from "../lib/clock";
 import { deadlineInstant, procurementDeadlineValue, type DocumentTipNames } from "../lib/notice";
 import { analysisIdentity, normalizeAnalysisRequest, type AnalysisRequest, type AnalysisResult } from "../../../../shared/procurementAnalytics";
+import { readableListRow } from "../../../../shared/procurementListRow";
 import { progressive, useProgressive, type CatalogReviewRow, type DocumentPage, type ListRow, type Progressive, type ReaderCatalog, type ReaderSource, type RecordList, type RecordSummary } from "./source";
 
 /** procurementReview:list reads at most this many rows a page (fewer when it reaches its bytes bound). */
@@ -48,7 +49,7 @@ export function useConvexReaderSource(societyId: string, catalog: ReaderCatalog,
           let rows: ListRow[] = [];
           for (let cursor: string | null = null; ;) {
             const result = await client.query(api.procurementReview.list, { societyId, generation, kind, paginationOpts: { numItems: LIST_PAGE, cursor } }) as Page<ListRow>;
-            rows = rows.concat(result.page);
+            rows = rows.concat(result.page.map(readableListRow));
             emit({ rows, total: result.isDone ? rows.length : Math.max(total, rows.length), done: result.isDone });
             if (result.isDone) return;
             cursor = result.continueCursor;

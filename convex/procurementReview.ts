@@ -15,6 +15,7 @@ import { matchesProcurementParty } from "../shared/procurementAnalytics";
 import { documentTipNames } from "../src/features/procurementReview/lib/notice";
 import { procurementPredicate } from "../shared/procurementBrowseFilters";
 import { toNoticeRow } from "../shared/procurementNoticeRow";
+import { readableListRow } from "../shared/procurementListRow";
 import { v } from "convex/values";
 import {
   paginationOptsValidator,
@@ -258,7 +259,7 @@ export const listRowFields = {
 };
 /** `ListRow` in src/features/procurementReview/reader/source.ts. Columns an older import lacks read as empty. */
 export function listRow(row: Doc<"procurementRecords">) {
-  return {
+  return readableListRow({
     recordKey: row.recordKey,
     kind: row.kind,
     title: row.title,
@@ -275,7 +276,7 @@ export function listRow(row: Doc<"procurementRecords">) {
     currency: row.currency ?? "",
     procurementType: row.procurementType ?? "",
     ...(row.analyticsJson ? { analyticsJson: row.analyticsJson } : {}),
-  };
+  });
 }
 
 /** The only `analyticsJson` keys the interactive list reads (procurementDeadlineValue in lib/notice.ts). */

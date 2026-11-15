@@ -1,5 +1,6 @@
 /** Versioned analytical reader contract. Results contain summaries or one bounded drill-down page. */
 import type { ListRow } from "./procurementListRow";
+import { decodeHtmlEntities } from "./htmlEntities";
 import {
   analyticalFields, defaultFilters, distribution, filterAwards, matrix, metadata, normalizeAwards, overview,
   sliceAwards, trends, validateFilters, type MarketFilters, type Slice,
@@ -19,19 +20,20 @@ export type AnalysisRequest = {
 };
 const VIEWS = new Set<AnalysisView>(["overview", "trends", "buyers", "suppliers", "sizes", "mix", "quality", "opportunities", "decisions", "party", "awards", "compare"]);
 const FLAGS = new Set(["future", "undated", "currency", "placeholder", "value", "negative", "zero", "contract", "justification", "mapping"]);
-export const procurementPartyKey = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// Decoded first, so a name a source published with entities (`A &amp; B`) is the same party as `A & B`.
+export const procurementPartyKey = (value: string) => decodeHtmlEntities(value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /** Whitespace/case variants share a party; original source labels remain on each notice. */
 export function canonicalProcurementRows(rows: ListRow[], level: AnalysisRequest["buyerLevel"] = "organization"): ListRow[] {
   const names = new Map<string, string>();
   for (const row of rows) for (const label of [row.organization, row.issuedFor, row.supplier]) {
-    const name = label.replace(/\s+/g, " ").trim(), key = procurementPartyKey(name);
+    const name = decodeHtmlEntities(label).replace(/\s+/g, " ").trim(), key = procurementPartyKey(name);
     if (key && (!names.has(key) || name.localeCompare(names.get(key)!, "en") < 0)) names.set(key, name);
   }
   return rows.map(row => {
     const extra = analyticalFields(row);
     const field = level === "office" ? "buyerDisplayName" : level === "organization" ? "buyerOrganization" : level === "group" ? "buyerGroup" : level === "type" ? "buyerType" : "buyerOriginal";
-    const mapped = typeof extra[field] === "string" ? extra[field].trim() : "";
+    const mapped = typeof extra[field] === "string" ? decodeHtmlEntities(extra[field]).trim() : "";
     return { ...row, organization: mapped || names.get(procurementPartyKey(row.organization)) || "", issuedFor: names.get(procurementPartyKey(row.issuedFor)) ?? "", supplier: names.get(procurementPartyKey(row.supplier)) ?? "" };
   });
 }

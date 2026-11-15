@@ -4,11 +4,16 @@
  * formats, deadlines judged in the source zone, BC Bid's repeated page fields
  * dropped, published review rows read into a decision, suggestion and
  * requirements, and the page around the record: Back's label, the buyer's
- * other notices, and the documents as one list.
+ * other notices, and the documents as one list. Text published with HTML
+ * entities still in it (shared/htmlEntities.ts) reads as plain text.
  */
 import assert from "node:assert/strict";
 import { backLabel, deadlineOf, describeNotice, documentTipNames, formatSourceDate, noticeDocumentRows, onDocumentSource, onSource, parseSourceDate, partyCount, sortableDate, sourceLabel, statusOf } from "../src/features/procurementReview/lib/notice";
 import { describeReview } from "../src/features/procurementReview/lib/review";
+import { decodeHtmlEntities } from "../shared/htmlEntities";
+import { readableListRow, type ListRow } from "../shared/procurementListRow";
+import { toNoticeRow } from "../shared/procurementNoticeRow";
+import { procurementPartyKey } from "../shared/procurementAnalytics";
 
 // Noon UTC on October 18, 2026 is 5 AM in Vancouver.
 const now = Date.parse("2026-10-18T12:00:00Z");
@@ -215,4 +220,43 @@ assert.equal(review.summary?.text, "Strong fit");
 assert.equal(review.empty, false);
 assert.equal(describeReview([]).empty, true);
 
-console.log("OK: source dates, deadlines in the source zone, status wording, BC Bid field de-duplication, safe links, review rows, Back labels, party links and counts, one documents list.");
+// A CanadaBuys notice as Zoer published it before decoding source text (opportunity:canadabuys:tender:MX-444188030829:000).
+const tungsten = "The purpose of this call for tenders is to solicit proposals for the Tungsten Total Agility (TTA) (formerly Kofax, &ldquo;KTA&rdquo;) managed services, as further detailed in section&nbsp;2 of tender document. The requirement combines three related activities: (i) authorized reseller and licensing management for TTA licenses and subscriptions; (ii) first-line application support and maintenance; and (iii) professional services for development, integration and continuous evolution of the existing Platform.Bidding and Documents are available on http://www.merx.com.  Fees may apply; See https://www.merx.com/public/pricing for more information.";
+const encoded = describeNotice(
+  { recordKey: "opportunity:canadabuys:tender:MX-444188030829:000", kind: "opportunity", title: "Caf&eacute; &amp; kitchen services" },
+  { sourceId: "canadabuys", issuedBy: "Soci&eacute;t&eacute; &laquo;A&raquo;", sourceDescriptionText: tungsten, detailFields: [{ label: "Delivery terms", value: "Rock &amp; gravel &ndash; 5&nbsp;m&sup3;" }] },
+  now,
+);
+assert.equal(encoded.title, "Café & kitchen services");
+assert.equal(encoded.buyer, "Société «A»");
+assert.ok(encoded.description.startsWith("The purpose of this call for tenders is to solicit proposals for the Tungsten Total Agility (TTA) (formerly Kofax, “KTA”) managed services, as further detailed in section 2 of tender document."));
+assert.ok(encoded.description.includes("existing Platform.\n\nBidding and Documents are available on http://www.merx.com."), "The MERX footer starts its own paragraph");
+assert.ok(!/&[a-z]+;|&#/i.test(encoded.description), "No entity is left in the description");
+assert.equal(encoded.fields.find((field) => field.label === "Delivery terms")?.value, "Rock & gravel – 5 m³");
+assert.equal(describeNotice({ recordKey: "opportunity:canadabuys:tender:X:", kind: "opportunity", title: "T" }, { sourceDescriptionText: "Line one.\r\nRFEOI.Bidding and Documents are available on x" }, now).description, "Line one.\r\nRFEOI.\n\nBidding and Documents are available on x");
+assert.equal(describeNotice({ recordKey: "opportunity:canadabuys:tender:X:", kind: "opportunity", title: "T" }, { sourceDescriptionText: "Ends with a link.\r\n&nbsp;Bidding and Documents are available on x" }, now).description, "Ends with a link.\r\n Bidding and Documents are available on x", "A footer already on its own line stays put");
+
+const decodes: [string, string][] = [
+  ["&ldquo;KTA&rdquo; &rsquo;s &ndash; &eacute; &Eacute; &oelig; &sup2; &#39; &#233; &#xE9; &#146;", "“KTA” ’s – é É œ ² ' é é ’"],
+  ["section&nbsp;2 and section&#160;3", "section 2 and section 3"],
+  ["Twice: &amp;ldquo;quoted&amp;rdquo; &amp;amp;", "Twice: “quoted” &"],
+  ["Three times stays at two: &amp;amp;amp;", "Three times stays at two: &amp;"],
+  ["&lt;script&gt;alert(1)&lt;/script&gt;", "<script>alert(1)</script>"],
+  ["AT&T, R&D, a&b; &unknown; &valueOf; &nbsp no semicolon &#0; &#xD800;", "AT&T, R&D, a&b; &unknown; &valueOf; &nbsp no semicolon &#0; &#xD800;"],
+  ["Plain text, no ampersand", "Plain text, no ampersand"],
+];
+for (const [raw, expected] of decodes) assert.equal(decodeHtmlEntities(raw), expected, raw);
+for (const [raw] of decodes.slice(0, 3)) assert.equal(decodeHtmlEntities(decodeHtmlEntities(raw)), decodeHtmlEntities(raw), `Decoding twice changes nothing: ${raw}`);
+
+const listRow: ListRow = { recordKey: "award:1", kind: "award", title: "Caf&eacute;", organization: "A &amp; B", issuedFor: "", status: "", date: "2026-10-01", dateText: "", reference: "R&amp;D-1", documents: 0, listedDocuments: 0, supplier: "L&rsquo;Atelier", value: null, currency: "", procurementType: "RFQ" };
+assert.deepEqual(
+  (({ title, organization, reference, supplier }) => ({ title, organization, reference, supplier }))(readableListRow(listRow)),
+  { title: "Café", organization: "A & B", reference: "R&D-1", supplier: "L’Atelier" },
+);
+const plainRow = { ...listRow, title: "Plain", organization: "Plain", reference: "", supplier: "" };
+assert.equal(readableListRow(plainRow), plainRow, "A row with nothing to decode is passed through as it is");
+const drawn = toNoticeRow(listRow, now);
+assert.deepEqual([drawn.title, drawn.organization, drawn.supplier, drawn._searchText], ["Café", "A & B", "L’Atelier", "R&D-1"]);
+assert.equal(procurementPartyKey("A &amp; B"), procurementPartyKey("A & B"), "An encoded buyer name is the same party");
+
+console.log("OK: source dates, deadlines in the source zone, status wording, BC Bid field de-duplication, safe links, review rows, Back labels, party links and counts, one documents list, entities decoded.");

@@ -7,6 +7,8 @@
  * source fields that say something the facts do not.
  */
 
+import { decodeHtmlEntities } from "../../../../shared/htmlEntities";
+
 export type Tone = "neutral" | "success" | "warn" | "danger" | "info";
 /** Whose page a fact opens: the buyer, or the organisation the notice is issued for. */
 export type NoticeParty = "organization" | "issuedFor";
@@ -41,7 +43,8 @@ export const DEADLINE_ZONE = "America/Vancouver";
 
 type Data = Record<string, unknown>;
 const asData = (value: unknown): Data => (value && typeof value === "object" && !Array.isArray(value) ? value as Data : {});
-const text = (value: unknown): string => (typeof value === "string" ? value.trim() : typeof value === "number" && Number.isFinite(value) ? String(value) : "");
+// Catalogs Zoer published before it decoded source text still hold HTML entities (`&ldquo;KTA&rdquo;`), so every string read here is decoded.
+const text = (value: unknown): string => (typeof value === "string" ? decodeHtmlEntities(value).trim() : typeof value === "number" && Number.isFinite(value) ? String(value) : "");
 const first = (data: Data, ...keys: string[]): string => {
   for (const key of keys) { const value = text(data[key]); if (value) return value; }
   return "";
@@ -407,11 +410,17 @@ function closingOf(data: Data, fallback: string): string {
   return stored;
 }
 
+// MERX notices end with this sentence, which CanadaBuys appends with no space
+// or line break (`…Platform.Bidding and Documents…`, or glued to a link's last
+// digits). Zoer now starts it on its own paragraph; older catalogs need it here.
+const MERX_FOOTER = /(?<=\S)[ \t]*(?=Bidding and Documents are available on )/g;
+const withMerxFooterApart = (description: string) => description.replace(MERX_FOOTER, "\n\n");
+
 /** The page model for one record. `data` is the parsed catalog JSON; `summary` is the list projection's text. */
 export function describeNotice(input: { recordKey: string; kind: string; title: string; organization?: string; status?: string; date?: string }, rawData: unknown, now = Date.now()): NoticeModel {
   const data = asData(rawData);
   const award = input.kind === "award";
-  const title = input.title || first(data, "description", "opportunityDescription", "title") || "Untitled notice";
+  const title = text(input.title) || first(data, "description", "opportunityDescription", "title") || "Untitled notice";
   const buyer = first(data, "issuedBy", "issuingOrganization", "buyer") || text(input.organization);
   const issuedFor = first(data, "issuedFor");
   const type = first(data, "type", "opportunityType", "solicitationType");
@@ -420,7 +429,7 @@ export function describeNotice(input: { recordKey: string; kind: string; title: 
   const deadline = award ? null : deadlineOf(closing, now);
   const source = sourceLabel(input.recordKey, data);
   const status = statusOf(input.kind, first(data, "status") || text(input.status), deadline, source === "Buyer's website" ? "the buyer's site" : source);
-  let description = first(data, "sourceDescriptionText", "descriptionText", "summary", "summaryDetails");
+  let description = withMerxFooterApart(first(data, "sourceDescriptionText", "descriptionText", "summary", "summaryDetails"));
   if (squash(description) === squash(title)) description = "";
   const commodities = commoditiesOf(data);
   const issued = first(data, "issueDate", "publishedAt", "postedDate");

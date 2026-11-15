@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import type { SnapshotManifest } from "../../../../shared/procurementReview/manifest";
+import { readableListRow } from "../../../../shared/procurementListRow";
 import type { BlobReader } from "../lib/blobs";
 import type { CatalogClient } from "../lib/catalogClient";
 import { readVerifiedDocument, type StoredProcurementDocument } from "../lib/documents";
@@ -133,7 +134,7 @@ export function useSnapshotReaderSource(manifest: SnapshotManifest, catalog: Cat
           let loaded: ListRow[] = [];
           for (let after = ""; ;) {
             const batch = await rows("SELECT id, kind, title, data FROM records WHERE kind = ? AND id > ? ORDER BY id LIMIT 200", [kind, after]);
-            loaded = loaded.concat(batch.map((row) => listRow(row, stored.get(str(row.id)) ?? [])));
+            loaded = loaded.concat(batch.map((row) => readableListRow(listRow(row, stored.get(str(row.id)) ?? []))));
             const done = batch.length < BATCH;
             emit({ rows: loaded, total: done ? loaded.length : Math.max(total, loaded.length), done });
             if (done) return;
