@@ -1,4 +1,5 @@
 import type { ListRow } from "./procurementListRow";
+import { decodeHtmlEntities } from "./htmlEntities";
 import {
   deadlineOf,
   shortSourceDate,
@@ -42,6 +43,8 @@ function statusLabel(row: ListRow, deadline: NoticeDeadline | null): string {
   return label;
 }
 
+// Rows from the sources are already decoded (readableListRow), but the server's
+// filtered pages come straight from Convex, so the drawn text is decoded here too.
 export function toNoticeRow(row: ListRow, now = Date.now()): NoticeRow {
   // Imports before October 18, 2026 kept the source's own text in `date`.
   const sortable = sortableDate(row.date) || sortableDate(row.dateText);
@@ -51,9 +54,9 @@ export function toNoticeRow(row: ListRow, now = Date.now()): NoticeRow {
   return {
     _id: row.recordKey,
     kind: row.kind,
-    title: row.title || "Untitled notice",
-    organization: row.organization,
-    issuedFor: row.issuedFor,
+    title: decodeHtmlEntities(row.title) || "Untitled notice",
+    organization: decodeHtmlEntities(row.organization),
+    issuedFor: decodeHtmlEntities(row.issuedFor),
     source: sourceLabel(row.recordKey),
     status: statusLabel(row, deadline),
     when: !sortable
@@ -71,10 +74,10 @@ export function toNoticeRow(row: ListRow, now = Date.now()): NoticeRow {
     relative: deadline && deadline.state !== "closed" ? deadline.relative : "",
     state: deadline?.state ?? (sortable ? "closed" : "unknown"),
     documents: row.documents,
-    supplier: row.supplier,
+    supplier: decodeHtmlEntities(row.supplier),
     value: row.value,
     currency: row.currency,
-    procurementType: row.procurementType,
-    _searchText: row.reference,
+    procurementType: decodeHtmlEntities(row.procurementType),
+    _searchText: decodeHtmlEntities(row.reference),
   };
 }
