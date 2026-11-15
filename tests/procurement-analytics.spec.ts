@@ -10,7 +10,7 @@ test("hosted summary views render without downloading whole lists or review hist
     expect(errors).toEqual([]);
   }
   await page.goto("/tests/fixtures/procurement-analytics.html?section=analytics&analysis=overview");
-  await expect(page.getByText("65 awards included", { exact: false })).toBeVisible();
+  await expect(page.getByText("65 awards in this analysis, of 65 published.")).toBeVisible();
   await page.screenshot({ path: `tmp/procurement-browser-results/${info.project.name}-overview.png`, fullPage: true });
 });
 
@@ -34,7 +34,12 @@ test("filters and quality show their inclusion rules", async ({ page }) => {
   await page.getByLabel("Include placeholder suppliers").check();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(page).toHaveURL(/placeholders=1/);
-  await page.goto("/tests/fixtures/procurement-analytics.html?section=analytics&analysis=quality");
+  const exclude = encodeURIComponent(JSON.stringify([{ field: "supplier", name: "Supplier 64" }]));
+  await page.goto(`/tests/fixtures/procurement-analytics.html?section=analytics&analysis=quality&exclude=${exclude}`);
   await expect(page.getByText("Unavailable inputs are not counted as confirmed missing fields.", { exact: false })).toBeVisible();
   expect(await page.locator("body").evaluate(body => body.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.getByRole("button", { name: /1 award left out: Left out by you/ }).click();
+  const awards = page.getByRole("dialog", { name: "Awards · Left out by you" });
+  await expect(awards.getByText("1 matching award", { exact: false })).toBeVisible();
+  await expect(awards.getByText("Supplier 64", { exact: true })).toBeVisible();
 });

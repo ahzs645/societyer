@@ -1,18 +1,23 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Procurement analytical contract fixture</title></head><body><div id="root"></div><script type="module">
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import { ConvexProvider } from 'convex/react';
-import '/src/i18n';
-import '/src/theme/palette.css';
-import '/src/theme/tokens.css';
-import '/src/styles/index.scss';
-import { ProcurementAnalytics } from '/src/features/procurementReview/reader/analytics/ProcurementAnalytics';
-import { ReaderSourceContext } from '/src/features/procurementReview/reader/source';
-import { buildAnalysis } from '/shared/procurementAnalytics';
-import { AuthProvider } from '/src/auth/AuthProvider';
-import { localDataClient } from '/src/lib/localDataClient';
+// Pick the demo runtime before importing modules that read the current path.
 history.replaceState(null, '', `/demo/procurement-browse${location.search}`);
+const React = (await import('react')).default;
+const { createRoot } = await import('react-dom/client');
+const { BrowserRouter } = await import('react-router-dom');
+const { ConvexProvider } = await import('convex/react');
+await import('/src/i18n');
+await import('/src/theme/palette.css');
+await import('/src/theme/tokens.css');
+await import('/src/styles/index.scss');
+const { ProcurementAnalytics } = await import('/src/features/procurementReview/reader/analytics/ProcurementAnalytics');
+const { ReaderSourceContext } = await import('/src/features/procurementReview/reader/source');
+const { buildAnalysis } = await import('/shared/procurementAnalytics');
+const { AuthProvider } = await import('/src/auth/AuthProvider');
+const { localDataClient } = await import('/src/lib/localDataClient');
+const { ToastProvider } = await import('/src/components/Toast');
+const { ConfirmProvider, PromptProvider } = await import('/src/components/Modal');
+const { useSociety } = await import('/src/hooks/useSociety');
+function WorkspaceReady({ children }) { return useSociety() ? children : null; }
 const today = new Date().toISOString().slice(0,10);
 const base = {kind:'award', title:'Synthetic procurement award', organization:'Test City', issuedFor:'', status:'Awarded', date:'2026-01-15',dateText:'',reference:'', documents:1,listedDocuments:0,supplier:'Cedar',value:100,currency:'CAD',procurementType:'Goods'};
 const awards = Array.from({length:65},(_,i)=>({...base,recordKey:`award:${i}`,supplier:`Supplier ${String(i).padStart(2,'0')}`,value:(i+1)*100,date:i%2?'2026-02-15':'2026-01-15'}));
@@ -27,10 +32,10 @@ const source = {
 };
 const h = React.createElement;
 createRoot(document.getElementById('root')).render(
-  h(ConvexProvider, { client: localDataClient }, h(AuthProvider, null, h(BrowserRouter, null,
+  h(ConvexProvider, { client: localDataClient }, h(AuthProvider, null, h(ToastProvider, null, h(ConfirmProvider, null, h(PromptProvider, null, h(BrowserRouter, null, h(WorkspaceReady, null,
     h(ReaderSourceContext.Provider, { value: source },
       h('main', { className: 'page procurement-review' }, h(ProcurementAnalytics)),
     ),
-  ))),
+  ))))))),
 );
 </script></body></html>

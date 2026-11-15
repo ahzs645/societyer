@@ -2,7 +2,7 @@ import { parentPort, workerData } from "node:worker_threads";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { analysisIdentity, buildAnalysis, normalizeAnalysisRequest } from "../../shared/procurementAnalytics";
-import { analyticsValidUntil, projectedListRow, type SummaryEntry } from "../../shared/procurementAnalyticsArtifacts";
+import { analyticsValidUntil, hasCurrentAwardExclusions, projectedListRow, type SummaryEntry } from "../../shared/procurementAnalyticsArtifacts";
 import { openCatalog, readRows } from "./database";
 
 try {
@@ -12,7 +12,9 @@ try {
   db.close();
   const cache = new Map<string, SummaryEntry>();
   const summaries = JSON.parse(readFileSync(join(workerData.directory, "summaries.json"), "utf8")) as SummaryEntry[];
-  for (const entry of summaries) cache.set(analysisIdentity(normalizeAnalysisRequest(entry.request), entry.asOf), entry);
+  for (const entry of summaries) {
+    if (hasCurrentAwardExclusions(entry.resultJson)) cache.set(analysisIdentity(normalizeAnalysisRequest(entry.request), entry.asOf), entry);
+  }
   parentPort!.on("message", (message: { id: number; request: unknown; asOf: number }) => {
     try {
       if (!Number.isSafeInteger(message.asOf) || message.asOf < Date.now() - 31 * 86400_000 || message.asOf > Date.now() + 60_000) throw new Error("Choose an analysis time within the last 31 days.");

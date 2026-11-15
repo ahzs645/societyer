@@ -10,6 +10,7 @@ import { zoneToday } from "../src/features/procurementReview/lib/notice";
 import type { CatalogReviewRow } from "../src/features/procurementReview/reader/source";
 
 export const PROCUREMENT_METRIC_VERSION = "procurement-metrics-v2";
+const ANALYSIS_CACHE_VERSION = 2;
 export const PROCUREMENT_MAPPING_VERSION = "source-party-normalization-v1";
 export const ANALYSIS_PAGE_SIZE = 50;
 export type AnalysisView = "overview" | "trends" | "buyers" | "suppliers" | "sizes" | "mix" | "quality" | "opportunities" | "decisions" | "party" | "awards" | "compare";
@@ -89,8 +90,8 @@ export function normalizeAnalysisRequest(input: string | AnalysisRequest): Analy
       slice.left = r.slice.left;
     }
   }
-  // Exclusions are checked and put in a stable order; none at all leaves the key out, so the
-  // identity of every request without them (and the precomputed defaults) is unchanged.
+  // Keep exclusions in a stable order and omit the key when there are none so
+  // existing precomputed default requests still match.
   const { exclude, ...rest } = validateFilters(f), exclusions = normalizeExclusions(exclude);
   const filters: MarketFilters = exclusions.length ? { ...rest, exclude: exclusions } : rest;
   return { view: r.view, filters, year: r.year ?? "", scope: r.scope ?? "open", search: (r.search ?? "").trim(), offset: r.offset ?? 0, slice, all: r.all === true, buyerLevel: r.buyerLevel ?? "organization", ...(r.party ? { party: { field: r.party.field, name: r.party.name.trim() } } : {}) };
@@ -99,7 +100,7 @@ export function analysisIdentity(request: AnalysisRequest, asOf: number) {
   const r = normalizeAnalysisRequest(request);
   // Deadline results share minute buckets and expire at the next precise source instant.
   const time = ["opportunities", "decisions", "party"].includes(r.view) ? Math.floor(asOf / 60_000) : zoneToday(asOf);
-  return JSON.stringify([PROCUREMENT_METRIC_VERSION, PROCUREMENT_MAPPING_VERSION, time, r]);
+  return JSON.stringify([PROCUREMENT_METRIC_VERSION, PROCUREMENT_MAPPING_VERSION, ANALYSIS_CACHE_VERSION, time, r]);
 }
 const boundMeta = (m: ReturnType<typeof metadata>) => ({ ...m, typeCount: m.types.length, buyers: m.buyers.slice(0, 200), suppliers: m.suppliers.slice(0, 200), types: m.types.slice(0, 200), choicesTruncated: m.buyers.length > 200 || m.suppliers.length > 200 || m.types.length > 200 });
 
