@@ -9,25 +9,13 @@
 // in the panel at 480px, dragged wider, full screen, and in a phone's page sheet.
 
 // ---------------------------------------------------------------------------
-// Back, with words on its own row above the title ("← Opportunities"). Phones keep the arrow
-// on the title's row.
+// Back on a buyer or supplier page: an arrow on the title's row, named by its tooltip
+// (ReaderHeader.tsx).
 
-.procurement-back-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: token("s-2");
-  min-width: 0;
-  // The arrow lines up with the title's left edge.
-  margin: -6px 0 token("s-1") -8px;
-}
 .procurement-back {
   color: token("text-secondary");
   &:hover { color: token("text-primary"); }
   &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: 1px; }
-}
-// The arrow alone, beside the title (phones; buyer pages).
-.procurement-back:not(.procurement-back--words) {
   width: 32px;
   min-width: 32px;
   height: 32px;
@@ -47,14 +35,6 @@
     color: token("text-primary");
   }
 }
-.procurement-back--words {
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-  font-weight: token("fw-medium");
-  > svg { flex: none; }
-}
-.procurement-back__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 // ---------------------------------------------------------------------------
 // The panel (notice/NoticePanel.tsx): the shared record panel's shell, with the notice's
