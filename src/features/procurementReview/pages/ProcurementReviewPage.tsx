@@ -74,9 +74,10 @@ function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string;
   const header = <>
     <PageHeader title="Procurement review"
       subtitle={source ? undefined : NO_CATALOG_YET}
-      status={source && <CatalogStatus catalog={source.catalog} publication={publication} readOnly={loaded && !can("documents:write")} />}
-      info={publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
-      actions={canConfigure && !preview && !settings ? <button type="button" className="btn btn--ghost btn--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />
+      status={source && <CatalogStatus catalog={source.catalog} publication={publication} readOnly={loaded && !can("documents:write")} operator={canConfigure}
+        onSettings={canConfigure && !preview && !settings ? () => setSettings(true) : undefined} settingsLabel="Catalog source settings" />}
+      info={!source && publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
+      actions={!source && canConfigure && !preview && !settings ? <button type="button" className="btn btn--ghost btn--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />
     {canConfigure && (preview || settings) && <CatalogSourceControls societyId={societyId} previewReady={Boolean(source) && !error} onClose={preview ? undefined : () => setSettings(false)} />}
     {source && <PublicationState status={publication} whileReading operator={canConfigure} />}
     {error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}
@@ -105,9 +106,10 @@ function HostedProcurementReview() {
     <PageHeader
       title="Procurement review"
       subtitle={catalog ? undefined : NO_CATALOG_YET}
-      status={catalog && <CatalogStatus catalog={catalog} publication={publication} readOnly={!can("documents:write")} />}
-      info={publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
-      actions={canConfigure && !settings && folder && (
+      status={catalog && <CatalogStatus catalog={catalog} publication={publication} readOnly={!can("documents:write")} operator={canConfigure}
+        onSettings={canConfigure && !settings && folder ? () => setSettings(true) : undefined} settingsLabel="Snapshot folder settings" />}
+      info={!catalog && publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
+      actions={!catalog && canConfigure && !settings && folder && (
         <Tooltip content="Snapshot folder">
           <button type="button" className="btn btn--ghost btn--icon" aria-label="Snapshot folder settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button>
         </Tooltip>
@@ -134,9 +136,29 @@ function HostedProcurementReview() {
 /** Under the title until a catalog is in service; after that the freshness icon beside the title says when it was updated. */
 const NO_CATALOG_YET = "Bid opportunities and awards published by Zoer.";
 
-/** The freshness icon beside the title; source coverage caveats are identical for Convex and the service reader. */
-function CatalogStatus({ catalog, publication, readOnly }: { catalog: ReaderCatalog; publication: PublicationStatus | undefined; readOnly: boolean }) {
-  return <CatalogFreshness publishedAt={catalog.publishedAt} readOnly={readOnly} unverified={Boolean(publication?.source && !publication.source.complete)} />;
+/**
+ * The status control beside the title (CatalogFreshness): freshness on hover;
+ * on click, the publication's details, which used to sit behind the title's
+ * ⓘ, and the source settings for whoever may change them. Source coverage
+ * caveats are identical for Convex and the service reader.
+ */
+function CatalogStatus({ catalog, publication, readOnly, operator, onSettings, settingsLabel }: {
+  catalog: ReaderCatalog;
+  publication: PublicationStatus | undefined;
+  readOnly: boolean;
+  operator: boolean;
+  onSettings?: () => void;
+  settingsLabel: string;
+}) {
+  return (
+    <CatalogFreshness
+      publishedAt={catalog.publishedAt}
+      readOnly={readOnly}
+      unverified={Boolean(publication?.source && !publication.source.complete)}
+      details={publication ? <PublicationDetails status={publication} operator={operator} /> : undefined}
+      actions={onSettings ? [{ label: settingsLabel, icon: <Settings2 size={14} aria-hidden="true" />, onSelect: onSettings }] : []}
+    />
+  );
 }
 
 /** When the catalog was collected, published and put in service: a short list, not a sentence of timestamps. */

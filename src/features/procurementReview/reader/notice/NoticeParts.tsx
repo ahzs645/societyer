@@ -291,7 +291,22 @@ export function NoticeFields({ model }: { model: NoticeModel }) {
   );
 }
 
-/** Preserve unlabelled source-tab content alongside structured notice fields. */
+/**
+ * Where the scraper ran a page's separate fields together ("…General
+ * InformationOpportunity Type…"), start the next one on its own line. Only
+ * after a run of lower-case letters or closing punctuation, so names like
+ * "McDonald" and "iPhone" stay whole.
+ */
+export function readableCapture(text: string): string {
+  return text.replace(/([a-z]{3}|[).:])(?=[A-Z][a-z])/g, "$1\n");
+}
+
+/**
+ * The page text the scraper captured from each of the source's tabs, kept
+ * for what the structured fields above don't carry (amendment history, the
+ * list of addenda, delivery instructions). Folded away at the end of the
+ * notice; the coverage receipt shows only when a tab couldn't be read.
+ */
 export function SourceCapture({ data }: { data: unknown }) {
   if (!data || typeof data !== "object") return null;
   const source = data as {
@@ -299,28 +314,27 @@ export function SourceCapture({ data }: { data: unknown }) {
     sourceTabs?: { label: string; text: string; truncated?: boolean }[];
     detailNeedsRefresh?: boolean;
   };
-  if (!source.tabCoverage && !source.detailNeedsRefresh) return null;
+  const tabs = source.sourceTabs?.filter((tab) => tab.text.trim()) ?? [];
+  const incomplete = Boolean(source.detailNeedsRefresh || (source.tabCoverage && !source.tabCoverage.complete) || source.tabCoverage?.failures?.length);
+  if (!tabs.length && !incomplete) return null;
   return (
-    <section className="card">
+    <section className="card procurement-notice__capture">
       <div className="card__body">
         <details>
-          <summary>Source capture: {source.tabCoverage?.complete ? "all public tabs visited" : "incomplete / refresh needed"}</summary>
-          <p className="small muted">
-            {source.tabCoverage?.visited?.length ? `Visited: ${source.tabCoverage.visited.join(", ")}.` : "No tab coverage receipt was published."} Attachment
-            links and downloaded files are tracked separately.
-          </p>
-          {source.tabCoverage?.failures?.map((failure, i) => (
-            <p key={i}>
-              {failure.label}: {failure.message}
+          <summary>Original page text</summary>
+          {incomplete && (
+            <p className="small muted">
+              Some of the source's tabs couldn't be read in full, so this may be missing parts.
+              {source.tabCoverage?.failures?.map((failure) => ` ${failure.label}: ${failure.message}.`).join("")}
             </p>
-          ))}
-          {source.sourceTabs?.map((tab, i) => (
+          )}
+          {tabs.map((tab, i) => (
             <details key={i}>
               <summary>
                 {tab.label}
                 {tab.truncated ? " (partial)" : ""}
               </summary>
-              <p style={{ whiteSpace: "pre-wrap" }}>{tab.text}</p>
+              <p className="procurement-notice__capture-text">{readableCapture(tab.text)}</p>
             </details>
           ))}
         </details>

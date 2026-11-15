@@ -151,6 +151,16 @@
 .procurement-reader__list .procurement-reader { margin-top: 0; }
 .procurement-reader__list .procurement-reader > .record-table__toolbar { padding-top: 0; }
 
+// The list beside an open side panel can be a few hundred pixels wide on a
+// small laptop. There the page's icon tile gives way and the title steps
+// down a size, so the title and its status control keep to one line instead
+// of the tile sitting alone above the title.
+.procurement-reader__list { container: reader-list / inline-size; }
+@container reader-list (max-width: 380px) {
+  .page__header .page__icon { display: none; }
+  .page__header .page__title { font-size: token('fs-lg'); flex-wrap: nowrap; }
+}
+
 // ---------------------------------------------------------------------------
 // Rows: the title on up to two lines, the buyer under it, the new dot.
 // ---------------------------------------------------------------------------

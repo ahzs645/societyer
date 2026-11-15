@@ -107,7 +107,29 @@ $zoer-theme: (
   text-align: left;
 }
 .procurement-freshness__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: token("fw-semibold");
+  &--fresh { color: token("success-text"); }
+  &--aging { color: token("warn-text"); }
+  &--stale { color: token("danger-text"); }
+}
+// The status popover: freshness, then what the catalog is, then what can be done with it.
+.procurement-freshness__popover {
+  display: grid;
+  gap: token("s-3");
+}
+.procurement-freshness__about {
+  padding-top: token("s-3");
+  border-top: 1px solid token("border");
+}
+.procurement-freshness__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token("s-2");
+  padding-top: token("s-3");
+  border-top: 1px solid token("border");
 }
 .procurement-freshness__help {
   opacity: 0.8;

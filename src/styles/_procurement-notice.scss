@@ -553,3 +553,23 @@
   }
   &__foot { padding-block: token("s-2"); .btn { margin-left: -8px; } }
 }
+
+// The panel's previous / next tooltips: the name and both keys ("↓ or J") on one line.
+.procurement-pager__tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+// The scraper's page text, folded away at the end of a notice (NoticeParts.tsx SourceCapture).
+.procurement-notice__capture {
+  summary { cursor: pointer; color: token("text-secondary"); }
+  details details { margin-top: token("s-2"); padding-left: token("s-3"); }
+}
+.procurement-notice__capture-text {
+  white-space: pre-line;
+  font-size: token("fs-sm");
+  color: token("text-secondary");
+  overflow-wrap: anywhere;
+}

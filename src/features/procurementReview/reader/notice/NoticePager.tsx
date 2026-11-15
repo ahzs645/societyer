@@ -66,7 +66,7 @@ export function NoticeStepper({ neighbours }: { neighbours: NoticeNeighbours }) 
   };
   return (
     <div className="procurement-stepper" role="group" aria-label={`Notices in this list, ${positionText(neighbours)}`}>
-      <Tooltip content={<>Previous notice <ShortcutHint keys={["↑"]} tone="inverse" /> <ShortcutHint keys={["K"]} tone="inverse" /></>} placement="bottom">
+      <Tooltip content={<span className="procurement-pager__tip">Previous notice <ShortcutHint keys={["↑"]} tone="inverse" /> or <ShortcutHint keys={["K"]} tone="inverse" /></span>} placement="bottom">
         <button
           ref={previousButton}
           type="button"
@@ -79,7 +79,7 @@ export function NoticeStepper({ neighbours }: { neighbours: NoticeNeighbours }) 
           <ChevronUp size={15} aria-hidden="true" />
         </button>
       </Tooltip>
-      <Tooltip content={<>Next notice <ShortcutHint keys={["↓"]} tone="inverse" /> <ShortcutHint keys={["J"]} tone="inverse" /></>} placement="bottom">
+      <Tooltip content={<span className="procurement-pager__tip">Next notice <ShortcutHint keys={["↓"]} tone="inverse" /> or <ShortcutHint keys={["J"]} tone="inverse" /></span>} placement="bottom">
         <button
           ref={nextButton}
           type="button"

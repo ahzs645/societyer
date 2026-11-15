@@ -222,7 +222,30 @@ export function SnapshotReviewPage() {
   } else if (readerView && snapshot.status === "ready") {
     return (
       <div className="page procurement-review">
-        <SnapshotReader key={snapshot.manifest.snapshotId} manifest={snapshot.manifest} catalog={snapshot.catalog} read={snapshot.read} header={<PageHeader title="Procurement review" status={<CatalogFreshness publishedAt={snapshot.manifest.publishedAt} />} actions={actions} />} />
+        <SnapshotReader
+          key={snapshot.manifest.snapshotId}
+          manifest={snapshot.manifest}
+          catalog={snapshot.catalog}
+          read={snapshot.read}
+          // Refresh and the folder setting live in the status control, so the title's row holds only
+          // the title and it, and stays on one line beside an open side panel.
+          header={(
+            <PageHeader
+              title="Procurement review"
+              status={(
+                <CatalogFreshness
+                  publishedAt={snapshot.manifest.publishedAt}
+                  actions={[
+                    { label: refreshing ? "Checking…" : "Check for a newer snapshot", icon: <RefreshCw size={14} aria-hidden="true" />, onSelect: () => void refresh(), disabled: refreshing },
+                    ...(canConfigure && !editingFolder
+                      ? [{ label: "Snapshot folder settings", icon: <Settings2 size={14} aria-hidden="true" />, onSelect: () => setEditingFolder(true) }]
+                      : []),
+                  ]}
+                />
+              )}
+            />
+          )}
+        />
       </div>
     );
   } else if (mountError) {
