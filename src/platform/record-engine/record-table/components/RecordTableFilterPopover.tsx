@@ -510,9 +510,32 @@ function scrollingAncestor(element: HTMLElement): HTMLElement | null {
 }
 
 /**
+ * The left and right edges the editor must stay within: the nearest area
+ * around it that clips what overflows (the page, which a side panel can make
+ * narrow), inside its scrollbar, and the window.
+ */
+function horizontalBounds(element: HTMLElement): { left: number; right: number } {
+  let left = 0;
+  let right = document.documentElement.clientWidth;
+  let node = element.parentElement;
+  while (node && node !== document.body) {
+    const style = getComputedStyle(node);
+    if (style.overflowX !== "visible" || style.overflowY !== "visible") {
+      const rect = node.getBoundingClientRect();
+      left = Math.max(left, rect.left + node.clientLeft);
+      right = Math.min(right, rect.left + node.clientLeft + node.clientWidth);
+      break;
+    }
+    node = node.parentElement;
+  }
+  return { left, right };
+}
+
+/**
  * Keeps the floating editor on screen. It hangs from the toolbar's right
- * edge; where that would cross the window's left or right edge it slides
- * back in, and its height stops short of the window's foot, or the bottom
+ * edge, no wider than the area that would clip it (the page, narrowed by an
+ * open side panel, or the window); where it would cross that area's left or
+ * right edge it slides back in, and its height stops short of the window's foot, or the bottom
  * navigation above it (its body scrolls instead), so Apply is always in view. Too little room below (the
  * toolbar low on a short screen) and the page scrolls up to make some, where
  * it can. Kept up to date as the page scrolls or the window resizes.
@@ -523,11 +546,12 @@ function useFloatingEditorPlacement(ref: RefObject<HTMLElement>, enabled: boolea
     if (!enabled || !popover) return;
     const place = () => {
       popover.style.removeProperty("--record-table-filter-shift");
+      const bounds = horizontalBounds(popover);
+      popover.style.setProperty("--record-table-filter-width", `${Math.max(0, Math.floor(bounds.right - bounds.left - EDGE * 2))}px`);
       const rect = popover.getBoundingClientRect();
-      const width = document.documentElement.clientWidth;
       let shift = 0;
-      if (rect.left < EDGE) shift = EDGE - rect.left;
-      else if (rect.right > width - EDGE) shift = width - EDGE - rect.right;
+      if (rect.left < bounds.left + EDGE) shift = bounds.left + EDGE - rect.left;
+      else if (rect.right > bounds.right - EDGE) shift = bounds.right - EDGE - rect.right;
       popover.style.setProperty("--record-table-filter-shift", `${Math.round(shift)}px`);
       const room = viewportFoot() - rect.top - EDGE;
       popover.style.setProperty("--record-table-filter-max-height", `${Math.max(MIN_FLOATING_HEIGHT, Math.floor(room))}px`);

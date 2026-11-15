@@ -328,7 +328,9 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  width: min(720px, calc(100vw - 32px));
+  // No wider than the area that would clip it (RecordTableFilterPopover
+  // measures it: the page, narrowed by an open side panel, or the window).
+  width: min(720px, var(--record-table-filter-width, 720px), calc(100vw - 32px));
   // RecordTableFilterPopover measures the room down to the window's foot and
   // how far to slide back inside its edges; the body scrolls, the heading
   // sticks and the buttons stay in view below it.

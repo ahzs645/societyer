@@ -29,6 +29,12 @@
 .page {
   overflow: auto;
   overscroll-behavior: none;
+  /* The scrollbar's room is always kept, so content growing past the window
+   * can't narrow the page. Where scrollbars take room (a mouse, Windows),
+   * that narrowing re-wrapped toolbars and re-fitted tables, which could then
+   * shrink the content back under the window and loop. Overlay scrollbars
+   * (macOS with a trackpad, phones) take no room either way. */
+  scrollbar-gutter: stable;
   padding: 22px 24px 24px;
   background: transparent;
   flex: 1;

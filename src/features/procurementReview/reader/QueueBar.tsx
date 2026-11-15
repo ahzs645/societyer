@@ -15,6 +15,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Menu, type MenuItem } from "../../../components/Menu";
+import { createFitLatch } from "../../../lib/settledLayout";
 import { Segmented, type SegmentedItem } from "../../../components/primitives";
 import { noticeViewName, noticeViewShortName, type NoticeViewId } from "./queue";
 
@@ -100,7 +101,7 @@ export function QueueBar({
 
   return (
     <div ref={slot} className="procurement-queue" data-fit={fit}>
-      {fit !== "menu" ? (
+      {fit === "row" || fit === "row-compact" ? (
         row(
           more.length > 0 && (
             <Menu sheetTitle="More views" label="More views" align="right" sections={[{ id: "more", items: moreItems }]} trigger={moreButton()} />
@@ -150,18 +151,27 @@ export function QueueBar({
   );
 }
 
-type QueueFit = "row" | "row-compact" | "menu";
+type QueueFit = "row" | "row-compact" | "menu" | "menu-compact";
+/** About the picker's width ("To review 1,644 ▾") before it has shown and can be measured. */
+const PICKER_WIDTH = 150;
 
 /**
  * How the switcher fits in the toolbar: the segmented row (measured at its
  * natural width in `measure`) beside the toolbar's labelled buttons, beside
  * the same buttons as icons ("row-compact", reported through
- * `onCompactTools`), or not at all ("menu"). The toolbar's other groups are
+ * `onCompactTools`), or not at all: the picker beside labelled buttons
+ * ("menu"), or beside icons where even that won't fit ("menu-compact"). The toolbar's other groups are
  * counted at the width they ask for (a growing search field at its basis,
  * filter chips at their minimum, buttons with their words), not the width
  * they were squeezed to, so the answer doesn't depend on which form is
  * showing. A toolbar stacked into a column (tablets) gives the row a line of
  * its own.
+ *
+ * Where that estimate still comes out differently in each form (the view
+ * type buttons, say, hide their names in the icon form), a fit latch keeps
+ * the choice from flipping back and forth on every frame: it may always get
+ * more compact, but gets roomier only once the toolbar has more room than
+ * when it last shrank, or its other contents change.
  */
 function useQueueFit(
   slot: RefObject<HTMLElement>,
@@ -169,17 +179,34 @@ function useQueueFit(
   onCompactTools: ((compact: boolean) => void) | undefined,
 ): QueueFit {
   const [fit, setFit] = useState<QueueFit>("row");
+  const latch = useRef(createFitLatch<QueueFit>(["row", "row-compact", "menu", "menu-compact"]));
   useLayoutEffect(() => {
     const element = slot.current;
     const measured = measure.current?.firstElementChild;
     const toolbar = element?.closest<HTMLElement>(".record-table__toolbar");
     const leading = element?.closest<HTMLElement>(".record-table__toolbar-left");
     if (!element || !(measured instanceof HTMLElement) || !toolbar || !leading) return;
+    let contents = "";
     const check = () => {
       // A few pixels' slack, so a row that only just fits doesn't flicker as counts change.
       const needed = measured.getBoundingClientRect().width + 4;
       const room = toolbarRoom(toolbar, leading);
-      setFit(needed <= room.labelled ? "row" : onCompactTools && needed <= room.compact ? "row-compact" : "menu");
+      // The picker as it shows, or about its usual width before it has shown.
+      const picker = element.querySelector<HTMLElement>(".procurement-queue__picker");
+      const pickerNeeded = (picker ? picker.getBoundingClientRect().width : PICKER_WIDTH) + 4;
+      const wanted: QueueFit = needed <= room.labelled ? "row"
+        : onCompactTools && needed <= room.compact ? "row-compact"
+        : !onCompactTools || pickerNeeded <= room.labelled ? "menu"
+        : "menu-compact";
+      // The toolbar's other groups and how many items each lays out, which the
+      // form shown doesn't change; a change there (search opened) is news.
+      const next = Array.from(toolbar.children)
+        .filter((child): child is HTMLElement => child !== leading && child instanceof HTMLElement)
+        .map((child) => `${child.className}:${flexItems(child).length}`)
+        .join("|");
+      if (next !== contents) latch.current.reset();
+      contents = next;
+      setFit(latch.current.decide(wanted, toolbar.clientWidth - needed));
     };
     check();
     if (typeof ResizeObserver === "undefined") return;
@@ -191,7 +218,7 @@ function useQueueFit(
   }, [slot, measure, onCompactTools]);
   const report = useRef(onCompactTools);
   report.current = onCompactTools;
-  useLayoutEffect(() => report.current?.(fit === "row-compact"), [fit]);
+  useLayoutEffect(() => report.current?.(fit === "row-compact" || fit === "menu-compact"), [fit]);
   useLayoutEffect(() => () => report.current?.(false), []);
   return fit;
 }
