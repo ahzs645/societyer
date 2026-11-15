@@ -5,7 +5,7 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
 import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
-import { columnWidthStyle } from "../utils/columnWidth";
+import { columnSpanWidthStyle, columnToken, columnWidthStyle } from "../utils/columnWidth";
 import {
   aggregateNumericValue,
   formatAggregateNumber,
@@ -69,6 +69,8 @@ export function RecordTableGroupRowCells({
   const aggregateIndex = columns.findIndex((column) => groupAggregateOperation(column) !== null);
   const span = Math.max(1, aggregateIndex < 0 ? columns.length : aggregateIndex);
   const spanned = columns.slice(0, span);
+  // Its width follows the spanned columns that are not folded beside the panel.
+  const spannedOpen = spanned.filter((column) => !collapsedColumns.has(column.viewFieldId));
   const rest = columns.slice(span);
   const toggle = () => handle.get().toggleGroupCollapsed(group.key);
   const count = group.records.length;
@@ -99,7 +101,8 @@ export function RecordTableGroupRowCells({
       <td
         className="record-table__group-cell record-table__group-cell--label"
         colSpan={spanned.length}
-        style={columnWidthStyle(spanned.reduce((sum, column) => sum + (collapsedColumns.has(column.viewFieldId) ? 0 : column.size), 0))}
+        style={columnSpanWidthStyle(spannedOpen)}
+        data-rt-col={spannedOpen.map((column) => columnToken(column.viewFieldId)).join(" ") || undefined}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest("button, a, input")) return;
           toggle();
@@ -135,7 +138,8 @@ export function RecordTableGroupRowCells({
               (operation ? " record-table__group-cell--aggregate" : "") +
               (isCollapsed ? " record-table__group-cell--collapsed" : "")
             }
-            style={columnWidthStyle(isCollapsed ? 0 : column.size)}
+            style={isCollapsed ? columnWidthStyle(0) : columnWidthStyle(column.size, column.viewFieldId)}
+            data-rt-col={isCollapsed ? undefined : columnToken(column.viewFieldId)}
             aria-hidden={isCollapsed || undefined}
           >
             {operation && value !== null ? (

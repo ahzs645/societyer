@@ -1,5 +1,5 @@
 import { isValidElement, useCallback, useMemo, useRef, type HTMLAttributes, type ReactNode, type RefObject } from "react";
-import { columnWidthStyle } from "../utils/columnWidth";
+import { columnToken, columnWidthStyle } from "../utils/columnWidth";
 import { Copy, ExternalLink, Mail, Pencil } from "lucide-react";
 import type { RecordField } from "../../types";
 import { FIELD_TYPES } from "../../types";
@@ -204,7 +204,8 @@ export function RecordTableCell({
         pressHandlers?.onPointerDown?.(event);
       }}
       aria-hidden={collapsed || undefined}
-      style={columnWidthStyle(collapsed ? 0 : recordField.size)}
+      style={collapsed ? columnWidthStyle(0) : columnWidthStyle(recordField.size, recordField.viewFieldId)}
+      data-rt-col={collapsed ? undefined : columnToken(recordField.viewFieldId)}
       onMouseDown={(event) => {
         // Shift+click extends a cell range; keep the browser from also
         // selecting text across the rows.

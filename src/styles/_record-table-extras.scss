@@ -225,6 +225,13 @@
     opacity token('motion-fade') token('ease-fade');
 }
 
+// A column edge being dragged follows the pointer: easing each frame's width
+// left the edge trailing it and restyled the column all through the ease
+// (RecordTableColumnResizeContext sets the attribute for the drag).
+[data-column-resizing] :is(.record-table__cell, .record-table__header-cell, .record-table__footer-cell, .record-table__group-cell) {
+  transition: none;
+}
+
 .record-table__cell--collapsed,
 .record-table__header-cell--collapsed,
 .record-table__footer-cell--collapsed,

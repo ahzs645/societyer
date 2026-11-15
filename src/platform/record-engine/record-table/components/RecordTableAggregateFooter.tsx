@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { columnWidthStyle } from "../utils/columnWidth";
+import { columnToken, columnWidthStyle } from "../utils/columnWidth";
 import { ChevronDown } from "lucide-react";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { pluralize } from "../../../../lib/format";
@@ -129,7 +129,8 @@ function RecordTableAggregateFooterCell({
           : "") +
         (collapsed ? " record-table__footer-cell--collapsed" : "")
       }
-      style={columnWidthStyle(collapsed ? 0 : column.size)}
+      style={collapsed ? columnWidthStyle(0) : columnWidthStyle(column.size, column.viewFieldId)}
+      data-rt-col={collapsed ? undefined : columnToken(column.viewFieldId)}
       aria-hidden={collapsed || undefined}
     >
       <div ref={menuRef} className="record-table__aggregate">

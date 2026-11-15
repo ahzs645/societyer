@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { columnWidthStyle } from "../utils/columnWidth";
+import { clampColumnWidth, columnToken, columnWidthStyle, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from "../utils/columnWidth";
+import { useRecordTableColumnResize } from "../contexts/RecordTableColumnResizeContext";
 import {
   ArrowDown,
   ArrowLeft,
@@ -52,7 +53,7 @@ export function RecordTableHeaderCell({
   );
   const handle = useRecordTableStoreHandle();
   const isMobile = useIsMobile();
-  const resizing = useRef<{ startX: number; startSize: number } | null>(null);
+  const columnResize = useRecordTableColumnResize();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
@@ -149,6 +150,9 @@ export function RecordTableHeaderCell({
   // Pointer events, so a finger or pen resizes a column as a mouse does.
   // Capturing the pointer keeps the drag on the handle even when the finger
   // runs ahead of it, and stops the table scroller from panning meanwhile.
+  // The width shows through the table's preview once a frame and reaches the
+  // store (list memory, saved view) once, on release; see
+  // RecordTableColumnResizeContext.
   const onResizePointerDown = (e: React.PointerEvent<HTMLElement>) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
@@ -160,19 +164,34 @@ export function RecordTableHeaderCell({
     } catch {
       // Capture is a nicety: window listeners below still follow the drag.
     }
-    resizing.current = { startX: e.clientX, startSize: recordField.size };
+    const viewFieldId = recordField.viewFieldId;
+    const startX = e.clientX;
+    const startSize = recordField.size;
+    const preview = columnResize;
+    let size = startSize;
+    let frame = 0;
+    const show = () => {
+      frame = 0;
+      if (preview) preview.preview(viewFieldId, size);
+      else handle.get().resizeColumn(viewFieldId, size);
+      target.setAttribute("aria-valuenow", String(Math.round(size)));
+    };
     const onMove = (ev: PointerEvent) => {
-      if (!resizing.current || ev.pointerId !== pointerId) return;
-      const delta = ev.clientX - resizing.current.startX;
-      const next = Math.max(80, resizing.current.startSize + delta);
-      handle.get().resizeColumn(recordField.viewFieldId, next);
+      if (ev.pointerId !== pointerId) return;
+      size = clampColumnWidth(startSize + ev.clientX - startX);
+      if (!frame) frame = requestAnimationFrame(show);
     };
     const onUp = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
-      resizing.current = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      const committed = size !== handle.get().columns.find((column) => column.viewFieldId === viewFieldId)?.size;
+      if (committed) handle.get().resizeColumn(viewFieldId, size);
+      preview?.end(committed);
+      target.setAttribute("aria-valuenow", String(Math.round(size)));
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -189,8 +208,11 @@ export function RecordTableHeaderCell({
   const resizeWithKeyboard = (event: React.KeyboardEvent) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
+    // The table's grid keys would also take the arrow and pull focus into
+    // the cells, so a second press no longer reached the handle.
+    event.stopPropagation();
     const delta = event.key === "ArrowRight" ? 10 : -10;
-    handle.get().resizeColumn(recordField.viewFieldId, Math.max(80, recordField.size + delta));
+    handle.get().resizeColumn(recordField.viewFieldId, clampColumnWidth(recordField.size + delta));
   };
 
   return (
@@ -204,7 +226,8 @@ export function RecordTableHeaderCell({
         (collapsed ? " record-table__header-cell--collapsed" : "") +
         (isFiltered ? " record-table__header-cell--filtered" : "")
       }
-      style={columnWidthStyle(collapsed ? 0 : recordField.size)}
+      style={collapsed ? columnWidthStyle(0) : columnWidthStyle(recordField.size, recordField.viewFieldId)}
+      data-rt-col={collapsed ? undefined : columnToken(recordField.viewFieldId)}
       aria-hidden={collapsed || undefined}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
     >
@@ -319,8 +342,9 @@ export function RecordTableHeaderCell({
           style={{ touchAction: "none" }}
           aria-label="Resize column"
           aria-orientation="vertical"
-          aria-valuemin={80}
-          aria-valuenow={recordField.size}
+          aria-valuemin={MIN_COLUMN_WIDTH}
+          aria-valuemax={MAX_COLUMN_WIDTH}
+          aria-valuenow={Math.round(recordField.size)}
           role="separator"
           tabIndex={0}
           onKeyDown={resizeWithKeyboard}
