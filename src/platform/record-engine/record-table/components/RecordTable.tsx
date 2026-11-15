@@ -37,6 +37,8 @@ import { RecordTablePager } from "./RecordTablePager";
 import { RecordTableInlineEditContext, type RecordTableInlineEdit } from "../contexts/RecordTableInlineEditContext";
 import { useRecordTableInlineEditController } from "../hooks/useRecordTableInlineEditController";
 import { RecordTableGridChrome } from "./RecordTableGridChrome";
+import { RecordTableColumnResizeContext, type RecordTableColumnResize } from "../contexts/RecordTableColumnResizeContext";
+import { columnToken, columnWidthVar } from "../utils/columnWidth";
 
 const INTERACTIVE_BOARD_FIELD_TYPES: ReadonlySet<FieldMetadata["fieldType"]> = new Set([
   FIELD_TYPES.EMAIL,
@@ -249,12 +251,43 @@ const ROW_ACTIONS_CELL_PADDING = 12;
  * the scroller. Independent of the current layout (the buttons keep their
  * width while hidden in the pinned cell), so switching never oscillates.
  */
-function rowActionsFitInline(root: HTMLElement, scroller: HTMLElement, fixedWidth: number) {
+function rowActionsFitInline(frame: TableFrame, fixedWidth: number) {
+  return fixedWidth + frame.actionsWidth + ROW_ACTIONS_CELL_PADDING + FILL_COLUMN_MIN + 2 <= frame.scrollerWidth;
+}
+
+function widestRowActions(root: HTMLElement) {
   let actionsWidth = 0;
   root.querySelectorAll<HTMLElement>(".record-table__row .record-table__row-actions").forEach((actions) => {
     actionsWidth = Math.max(actionsWidth, actions.offsetWidth);
   });
-  return fixedWidth + actionsWidth + ROW_ACTIONS_CELL_PADDING + FILL_COLUMN_MIN + 2 <= scroller.clientWidth;
+  return actionsWidth;
+}
+
+/** What the layout reads from the table's frame (see `layoutRef` in RecordTable). */
+type TableFrame = {
+  root: HTMLElement;
+  scroller: HTMLElement;
+  /** The row-actions layout when read (`data-row-actions`). */
+  rowActions: string | undefined;
+  scrollerWidth: number;
+  /** Selection and drag-handle columns. */
+  fixed: number;
+  /** The widest row's action buttons; 0 without row actions or on touch. */
+  actionsWidth: number;
+  actionsHead: number;
+};
+
+/** A column drag in progress: the frame read when it began and the styles it wrote. */
+type ColumnPreview = { frame: TableFrame; cells: Set<HTMLElement>; properties: Set<string> };
+
+/**
+ * Drops a column drag's previewed widths and stretch, and lets the cells ease
+ * their widths again (`data-column-resizing`, see _record-table-extras.scss).
+ */
+function clearColumnPreview({ frame, cells, properties }: ColumnPreview) {
+  for (const cell of cells) for (const property of properties) cell.style.removeProperty(property);
+  frame.scroller.style.removeProperty("--rt-stretch");
+  delete frame.root.dataset.columnResizing;
 }
 
 /**
@@ -491,47 +524,75 @@ export function RecordTable({
   // sideways they collapse into a narrow cell pinned to the right edge
   // (`data-row-actions="pinned"`, see _record-table.scss), so they stay in
   // reach without covering more than 40px of the scrolling columns.
+  //
+  // Reading the frame and laying out from it are apart so a column drag can
+  // read once, when it starts, and lay out every frame without forcing a
+  // layout in between (`live` writes the stretch to the scroller instead of
+  // rendering; see the column preview below).
+  const layoutRef = useRef<{
+    read: () => TableFrame;
+    apply: (frame: TableFrame, sizeTotal: number, live: boolean) => void;
+  } | null>(null);
   const measureLayoutRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     if (!stretchRoot || typeof ResizeObserver === "undefined") {
+      layoutRef.current = null;
       measureLayoutRef.current = () => {};
       setColumnStretch(1);
       return;
     }
     const touch = window.matchMedia(TOUCH_MEDIA_QUERY);
-    const measure = () => {
+    const read = (): TableFrame => {
       const scroller = stretchRoot.querySelector<HTMLElement>(".record-table__scroll, .record-table__virtuoso") ?? stretchRoot;
       const fixed = Array.from(
         stretchRoot.querySelectorAll<HTMLElement>(".record-table__header-row > :is(.record-table__checkbox-cell, .record-table__drag-head)"),
       ).reduce((sum, cell) => sum + cell.offsetWidth, 0);
+      return {
+        root: stretchRoot,
+        scroller,
+        rowActions: stretchRoot.dataset.rowActions,
+        scrollerWidth: scroller.clientWidth,
+        fixed,
+        actionsWidth: hasRowActions && !touch.matches ? widestRowActions(stretchRoot) : 0,
+        actionsHead: stretchRoot.querySelector<HTMLElement>(".record-table__header-row > .record-table__row-actions-head")?.offsetWidth ?? 0,
+      };
+    };
+    const apply = (frame: TableFrame, sizeTotal: number, live: boolean) => {
       const actionsLayout = !hasRowActions
         ? null
-        : !touch.matches && !rowActionsFitInline(stretchRoot, scroller, columnSizeTotal + fixed) ? "pinned" : "inline";
+        : !touch.matches && !rowActionsFitInline(frame, sizeTotal + frame.fixed) ? "pinned" : "inline";
       if (actionsLayout === null) delete stretchRoot.dataset.rowActions;
       else if (stretchRoot.dataset.rowActions !== actionsLayout) stretchRoot.dataset.rowActions = actionsLayout;
       // Phones: the capped table (identifier + a couple of columns) shrinks
       // its columns, frozen identifier included, to share the frame instead
       // of panning (`data-phone-fit`, see _record-table.scss). Trailing row
       // actions stay in the scroller, a short swipe away.
-      if (isMobile && columnSizeTotal) stretchRoot.dataset.phoneFit = "";
+      if (isMobile && sizeTotal) stretchRoot.dataset.phoneFit = "";
       else delete stretchRoot.dataset.phoneFit;
-      if (!columnSizeTotal) {
-        setColumnStretch(1);
+      const applyStretch = (next: number) => {
+        if (!live) setColumnStretch((current) => (Math.abs(current - next) < 0.005 ? current : next));
+        else {
+          // Rewriting an unchanged stretch would still restyle every cell.
+          const shown = frame.scroller.style.getPropertyValue("--rt-stretch") || stretchRoot.style.getPropertyValue("--rt-stretch");
+          if (shown !== String(next)) frame.scroller.style.setProperty("--rt-stretch", String(next));
+        }
+      };
+      if (!sizeTotal) {
+        applyStretch(1);
         return;
       }
       if (isMobile) {
-        const room = scroller.clientWidth - FILL_COLUMN_MIN - 2;
-        const next = Math.min(1, Math.max(MIN_PHONE_COLUMN_STRETCH, room / columnSizeTotal));
-        setColumnStretch((current) => (Math.abs(current - next) < 0.005 ? current : next));
+        const room = frame.scrollerWidth - FILL_COLUMN_MIN - 2;
+        applyStretch(Math.min(1, Math.max(MIN_PHONE_COLUMN_STRETCH, room / sizeTotal)));
         return;
       }
-      const actionsHead = stretchRoot.querySelector<HTMLElement>(".record-table__header-row > .record-table__row-actions-head")?.offsetWidth ?? 0;
       // The trailing fill column keeps a 24px floor (see _record-table.scss);
       // leaving it out made a stretched table overflow by exactly that much.
       // The scroller's width leaves out a capped table's vertical scrollbar.
-      const next = Math.min(MAX_COLUMN_STRETCH, Math.max(1, (scroller.clientWidth - fixed - actionsHead - FILL_COLUMN_MIN - 2) / columnSizeTotal));
-      setColumnStretch((current) => (Math.abs(current - next) < 0.005 ? current : next));
+      applyStretch(Math.min(MAX_COLUMN_STRETCH, Math.max(1, (frame.scrollerWidth - frame.fixed - frame.actionsHead - FILL_COLUMN_MIN - 2) / sizeTotal)));
     };
+    const measure = () => apply(read(), columnSizeTotal, false);
+    layoutRef.current = { read, apply };
     measureLayoutRef.current = measure;
     measure();
     const observer = new ResizeObserver(measure);
@@ -546,6 +607,57 @@ export function RecordTable({
   useLayoutEffect(() => {
     measureLayoutRef.current();
   }, [rowModel.items, visibleColumns, renderRowActions]);
+  // A column edge being dragged (RecordTableColumnResizeContext): the
+  // column's cells, the stretch and the row-actions layout follow the pointer
+  // through styles, and the header cell commits the final width on release.
+  // The width property goes on the column's own cells (`data-rt-col`), not on
+  // the scroller, so a frame restyles one column rather than every cell; only
+  // a stretch that changes restyles them all, as their widths all change.
+  // The frame is read once per drag, so frames lay out without a forced
+  // layout. Stable, so handing it down re-renders nothing.
+  const resizeColumnsRef = useRef({ visibleColumns, collapsedColumns, columnSizeTotal });
+  resizeColumnsRef.current = { visibleColumns, collapsedColumns, columnSizeTotal };
+  const columnPreviewRef = useRef<ColumnPreview | null>(null);
+  const columnResize = useMemo<RecordTableColumnResize>(() => ({
+    preview: (viewFieldId, size) => {
+      const layout = layoutRef.current;
+      const { visibleColumns: shown, collapsedColumns: folded, columnSizeTotal: total } = resizeColumnsRef.current;
+      const column = shown.find((entry) => entry.viewFieldId === viewFieldId);
+      if (!layout || !column || folded.has(viewFieldId)) return;
+      let preview = columnPreviewRef.current;
+      if (!preview) {
+        preview = { frame: layout.read(), cells: new Set(), properties: new Set() };
+        preview.frame.root.dataset.columnResizing = "";
+        columnPreviewRef.current = preview;
+      } else if (!preview.frame.scroller.isConnected) {
+        // The table switched layouts mid-drag: a new scroller to read and write.
+        clearColumnPreview(preview);
+        preview = { frame: layout.read(), cells: new Set(), properties: new Set() };
+        preview.frame.root.dataset.columnResizing = "";
+        columnPreviewRef.current = preview;
+      } else if (preview.frame.root.dataset.rowActions !== preview.frame.rowActions) {
+        // The row actions folded or unfolded last frame, which resized their
+        // header: read the frame again (one layout, only on the switch).
+        preview.frame = layout.read();
+      }
+      layout.apply(preview.frame, total - column.size + size, true);
+      const property = columnWidthVar(viewFieldId);
+      preview.properties.add(property);
+      // Queried each frame, so rows the list renders mid-drag follow too.
+      preview.frame.scroller.querySelectorAll<HTMLElement>(`[data-rt-col~="${columnToken(viewFieldId)}"]`).forEach((cell) => {
+        cell.style.setProperty(property, `${size}px`);
+        preview.cells.add(cell);
+      });
+    },
+    end: (committed) => {
+      const preview = columnPreviewRef.current;
+      columnPreviewRef.current = null;
+      if (preview) clearColumnPreview(preview);
+      // A commit renders and measures again; a drag back to where it began
+      // only has the previewed row-actions layout to undo.
+      if (!committed) measureLayoutRef.current();
+    },
+  }), []);
   const onRowContextMenu: RowContextMenuHandler | undefined = rowMenuSections
     ? (event, record) => {
         // A row with nothing in its menu keeps the browser's own.
@@ -670,7 +782,9 @@ export function RecordTable({
   // Rows and cells read the grid controller (null when not opted in). Both
   // table bodies are always wrapped, so turning grid mode on never remounts.
   const withGridMode = (table: ReactNode) => (
-    <RecordTableInlineEditContext.Provider value={gridController}>{table}</RecordTableInlineEditContext.Provider>
+    <RecordTableInlineEditContext.Provider value={gridController}>
+      <RecordTableColumnResizeContext.Provider value={columnResize}>{table}</RecordTableColumnResizeContext.Provider>
+    </RecordTableInlineEditContext.Provider>
   );
 
   // The focused/editing cell follows its record, not its row number: when an

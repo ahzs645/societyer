@@ -23,7 +23,7 @@ export function listViewStateFromTable(
       .map((column, position) => ({
         fieldMetadataId: column.fieldMetadataId,
         position,
-        // A saved width is 20–2000px (shared/listViewState.ts); a drag can go wider.
+        // A saved width is 20–2000px (shared/listViewState.ts); a drag keeps to 80–2000 (columnWidth.ts).
         size: Math.min(2000, Math.max(20, Math.round(column.size) || 160)),
         isVisible: column.isVisible,
         aggregateOperation: column.aggregateOperation ?? null,
