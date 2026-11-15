@@ -8,7 +8,7 @@ import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { activeCatalog, listRow, listRowFields } from "./procurementReview";
 import { analysisIdentity, normalizeAnalysisRequest, PROCUREMENT_MAPPING_VERSION, PROCUREMENT_METRIC_VERSION } from "../shared/procurementAnalytics";
 import { PROCUREMENT_REVIEW_UNAVAILABLE_MESSAGE } from "../shared/deploymentCapabilities";
-import { ANALYTICS_BUNDLE_LIMIT, DEFAULT_ANALYTICS_VIEWS, assertSummariesFresh, canonicalSummary, defaultAnalyticsRequest, summaryVersions, validateSummaryEntries, type SummaryEntry, type SummaryManifest } from "../shared/procurementAnalyticsArtifacts";
+import { ANALYTICS_BUNDLE_LIMIT, DEFAULT_ANALYTICS_VIEWS, assertSummariesFresh, canonicalSummary, defaultAnalyticsRequest, hasCurrentAwardExclusions, summaryVersions, validateSummaryEntries, type SummaryEntry, type SummaryManifest } from "../shared/procurementAnalyticsArtifacts";
 import { validateWorkspaceProcurementReviewFolder } from "../shared/procurementReview/paths";
 import { requireConvexCatalogWritable } from "./procurementCatalog";
 
@@ -34,7 +34,7 @@ async function artifactFor(ctx: QueryCtx | MutationCtx, active: Doc<"procurement
   if (!normalized) return null;
   const row = await ctx.db.query("procurementAnalyticsArtifacts").withIndex("by_society_generation_request", q => q.eq("societyId", active.societyId).eq("generation", active.generation).eq("request", normalized)).unique();
   if (!row || row.folder !== active.folder || row.contentHash !== active.contentHash || row.inventoryHash !== active.inventoryHash || Object.entries(summaryVersions).some(([key, version]) => row[key as "metricVersion" | "mappingVersion" | "engineVersion"] !== version) || asOf < row.asOf || asOf >= row.validUntil) return null;
-  return row;
+  return hasCurrentAwardExclusions(row.resultJson) ? row : null;
 }
 async function reserve(ctx: MutationCtx, societyId: Id<"societies">, generation: string, request: string, asOf: number, active: Doc<"procurementCatalogs">) {
   const n = normalized(request, asOf);

@@ -10,6 +10,7 @@ import { zoneToday } from "../src/features/procurementReview/lib/notice";
 import type { CatalogReviewRow } from "../src/features/procurementReview/reader/source";
 
 export const PROCUREMENT_METRIC_VERSION = "procurement-metrics-v2";
+const ANALYSIS_CACHE_VERSION = 2;
 export const PROCUREMENT_MAPPING_VERSION = "source-party-normalization-v1";
 export const ANALYSIS_PAGE_SIZE = 50;
 export type AnalysisView = "overview" | "trends" | "buyers" | "suppliers" | "sizes" | "mix" | "quality" | "opportunities" | "decisions" | "party" | "awards" | "compare";
@@ -90,8 +91,8 @@ export function normalizeAnalysisRequest(input: string | AnalysisRequest): Analy
       slice.left = r.slice.left;
     }
   }
-  // Exclusions are checked and put in a stable order; none at all (and no commodity) leaves the key
-  // out, so the identity of every request without them (and the precomputed defaults) is unchanged.
+  // Keep exclusions in a stable order and omit the key (and the commodity) when there are none so
+  // existing precomputed default requests still match.
   const { exclude, commodity, ...rest } = validateFilters(f), exclusions = normalizeExclusions(exclude);
   const filters: MarketFilters = { ...rest, ...(commodity ? { commodity } : {}), ...(exclusions.length ? { exclude: exclusions } : {}) };
   return { view: r.view, filters, year: r.year ?? "", scope: r.scope ?? "open", search: (r.search ?? "").trim(), offset: r.offset ?? 0, slice, all: r.all === true, buyerLevel: r.buyerLevel ?? "organization", ...(r.party ? { party: { field: r.party.field, name: r.party.name.trim() } } : {}) };
@@ -100,7 +101,7 @@ export function analysisIdentity(request: AnalysisRequest, asOf: number) {
   const r = normalizeAnalysisRequest(request);
   // Deadline results share minute buckets and expire at the next precise source instant.
   const time = ["opportunities", "decisions", "party"].includes(r.view) ? Math.floor(asOf / 60_000) : zoneToday(asOf);
-  return JSON.stringify([PROCUREMENT_METRIC_VERSION, PROCUREMENT_MAPPING_VERSION, time, r]);
+  return JSON.stringify([PROCUREMENT_METRIC_VERSION, PROCUREMENT_MAPPING_VERSION, ANALYSIS_CACHE_VERSION, time, r]);
 }
 /** Commodity codes the filter offers from the server, at most; a catalog's awards carry far fewer distinct codes. */
 const COMMODITY_CHOICES = 5000;

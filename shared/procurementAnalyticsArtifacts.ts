@@ -24,6 +24,11 @@ export function analyticsValidUntil(result: AnalysisResult, asOf: number): numbe
   return Math.min(nextAnalyticsDay(asOf), asOf + 2 * 86_400_000, boundary ?? Infinity);
 }
 export type SummaryEntry = { request: string; asOf: number; validUntil: number; resultJson: string };
+/** Existing publications may have award summaries from before exclusion counts linked to their rows. */
+export function hasCurrentAwardExclusions(resultJson: string): boolean {
+  const result = JSON.parse(resultJson) as AnalysisResult;
+  return result.type !== "award" || result.data.exclusions.some(item => item.reason === "currency");
+}
 export function assertSummariesFresh(entries: SummaryEntry[], now = Date.now()) {
   if (entries.some(entry => now >= entry.validUntil)) throw new Error("Analytical sidecar expired; regenerate it for the same verified publication and resume the exact import.");
 }

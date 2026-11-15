@@ -8,7 +8,7 @@ import { anyApi } from "convex/server";
 import schema from "../convex/schema";
 import { defaultIntegrationSettings } from "../shared/integrationSettings";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
-import { DEFAULT_ANALYTICS_VIEWS, analyticsValidUntil, buildDefaultSummaries, canonicalSummary, nextAnalyticsDay, summaryVersions, type SummaryManifest } from "../shared/procurementAnalyticsArtifacts";
+import { DEFAULT_ANALYTICS_VIEWS, analyticsValidUntil, buildDefaultSummaries, canonicalSummary, hasCurrentAwardExclusions, nextAnalyticsDay, summaryVersions, type SummaryManifest } from "../shared/procurementAnalyticsArtifacts";
 import { buildAnalysis } from "../shared/procurementAnalytics";
 import { validateExport } from "./procurement/verify-export";
 import { summarySha, writeAnalyticsArtifacts } from "./procurement/analytics-artifacts";
@@ -31,6 +31,11 @@ for (const view of DEFAULT_ANALYTICS_VIEWS) {
   assert.deepEqual(JSON.parse(entry.resultJson), expected, "Producer uses the exact existing engine and current review projection");
 }
 const closing = entries.find(entry => JSON.parse(entry.request).view === "opportunities")!;
+const quality = JSON.parse(entries.find(entry => JSON.parse(entry.request).view === "quality")!.resultJson);
+assert(hasCurrentAwardExclusions(JSON.stringify(quality)));
+quality.data.exclusions = quality.data.exclusions.map(({ reason: _reason, ...item }: Record<string, unknown>) => item);
+assert(!hasCurrentAwardExclusions(JSON.stringify(quality)), "Existing summaries without drill-down keys must be recomputed");
+assert(hasCurrentAwardExclusions(closing.resultJson), "Opportunity summaries remain usable");
 assert.equal(closing.validUntil, boundary + 1);
 // Use historical transitions: current tzdata reflects B.C.'s permanent daylight
 // time from 2026, so November 2026 no longer has a 25-hour Vancouver day.
