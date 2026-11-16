@@ -71,19 +71,21 @@ export function NotesSurfaceBar({
   );
 }
 
-/** Record, Join & record, or the running recording's timer and Stop. */
+/** Record, Join & record, or the running recording's timer and Stop. `compact` (phones): a mic icon. */
 export function RecordControl({
   meetingId,
   meetingTitle,
   joinUrl,
   canWrite,
   onStarted,
+  compact = false,
 }: {
   meetingId: string;
   meetingTitle: string;
   joinUrl?: string;
   canWrite: boolean;
   onStarted: () => void;
+  compact?: boolean;
 }) {
   const recorder = useMeetingRecorder();
   const toast = useToast();
@@ -91,13 +93,23 @@ export function RecordControl({
   const active = recorder.phase === "recording" || recorder.phase === "starting" || recorder.phase === "stopping";
   if (active && recorder.meetingId === meetingId) {
     return (
-      <button type="button" className="btn-action notes-record is-recording" onClick={() => { void stopMeetingRecording().catch(() => undefined); }} disabled={recorder.phase !== "recording"}>
-        <Square size={12} aria-hidden="true" /> {recorder.phase === "starting" ? "Starting…" : `Stop · ${formatElapsed(recorder.elapsed)}`}
+      <button
+        type="button"
+        className={`btn-action notes-record is-recording${compact ? " btn-action--icon" : ""}`}
+        onClick={() => { void stopMeetingRecording().catch(() => undefined); }}
+        disabled={recorder.phase !== "recording"}
+        // Phones: a stop square; the floating recording bar shows the time.
+        {...(compact ? { "aria-label": recorder.phase === "starting" ? "Starting recording" : `Stop · ${formatElapsed(recorder.elapsed)}`, title: "Stop recording" } : {})}
+      >
+        <Square size={12} aria-hidden="true" fill={compact ? "currentColor" : "none"} />
+        {!compact && (recorder.phase === "starting" ? " Starting…" : ` Stop · ${formatElapsed(recorder.elapsed)}`)}
       </button>
     );
   }
   if (active) {
-    return <span className="notes-record__elsewhere" title={`Recording ${recorder.meetingTitle}`}>Recording another meeting</span>;
+    return compact
+      ? <span className="notes-record__elsewhere" title={`Recording ${recorder.meetingTitle}`} aria-label="Recording another meeting" role="img"><Mic size={14} aria-hidden="true" /></span>
+      : <span className="notes-record__elsewhere" title={`Recording ${recorder.meetingTitle}`}>Recording another meeting</span>;
   }
   const start = async (sharedAudio: boolean, join?: string) => {
     if (join) window.open(join, "_blank", "noopener,noreferrer");
@@ -121,9 +133,15 @@ export function RecordControl({
       described
       sheetTitle="Record this meeting"
       trigger={
-        <button type="button" className="btn-action notes-record">
-          <Mic size={12} aria-hidden="true" /> Record <ChevronDown size={12} aria-hidden="true" />
-        </button>
+        compact ? (
+          <button type="button" className="btn-action btn-action--icon notes-record" aria-label="Record" title="Record">
+            <Mic size={14} aria-hidden="true" />
+          </button>
+        ) : (
+          <button type="button" className="btn-action notes-record">
+            <Mic size={12} aria-hidden="true" /> Record <ChevronDown size={12} aria-hidden="true" />
+          </button>
+        )
       }
       sections={[{ id: "record", items }]}
     />

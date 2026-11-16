@@ -824,16 +824,31 @@
   &:hover { color: token("text-primary"); }
 }
 @media (max-width: 640px) {
+  /* One row: the view switch takes the room left by the mic and ••• icons. */
   .notes-surface__bar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: token("s-1");
   }
   .notes-surface__views {
-    width: 100%;
-    .segmented__btn { flex: 1 1 0; }
+    flex: 1 1 auto;
+    min-width: 0;
+    .segmented__btn {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-inline: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
   }
   .notes-surface__tools {
-    justify-content: flex-end;
+    flex: 0 0 auto;
+    gap: token("s-1");
+  }
+  @media (max-width: 380px) {
+    .notes-surface__views .segmented__btn {
+      padding-inline: 4px;
+      font-size: token("fs-xs");
+    }
   }
   .notes-ask {
     /* Above the bottom navigation and the recording bar. */

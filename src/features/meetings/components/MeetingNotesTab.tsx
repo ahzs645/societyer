@@ -230,7 +230,7 @@ export function MeetingNotesTab({
         phone={phone}
         actionCount={actionItems.filter((item) => !item.done).length}
         hasDraft={Boolean(meeting.notesDraft)}
-        record={<RecordControl meetingId={meetingId} meetingTitle={meeting.title} joinUrl={meeting.remoteUrl} canWrite={canWrite} onStarted={() => setView("notes")} />}
+        record={<RecordControl meetingId={meetingId} meetingTitle={meeting.title} joinUrl={meeting.remoteUrl} canWrite={canWrite} onStarted={() => setView("notes")} compact={phone} />}
         more={<NotesMoreMenu exportInput={exportInput} onOpenDetails={phone ? onOpenDetails : undefined} />}
       />
       <div className="notes-surface__view" hidden={view !== "notes"}>
