@@ -55,7 +55,7 @@ export function NotesSurfaceBar({
   more: ReactNode;
 }) {
   const items = [
-    { id: "notes" as const, label: phone ? "Notes" : "My notes" },
+    { id: "notes" as const, label: "Notes" },
     { id: "ai" as const, label: "AI notes", ...(hasDraft ? {} : { ariaLabel: "AI notes (not drafted yet)" }) },
     { id: "transcript" as const, label: "Transcript" },
     ...(phone ? [{ id: "actions" as const, label: "Actions", count: actionCount }] : []),

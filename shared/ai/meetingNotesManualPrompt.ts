@@ -28,7 +28,7 @@ export type ManualPromptSection = { id: ManualPromptSectionId; label: string; de
 
 export const MANUAL_PROMPT_SECTIONS: readonly ManualPromptSection[] = [
   { id: "transcript", label: "Transcript", description: "The meeting transcript, with times and speakers. Off if you attach the file to your AI yourself." },
-  { id: "notes", label: "Your notes", description: "What you wrote in My notes. The AI builds on them and never contradicts them." },
+  { id: "notes", label: "Notes", description: "The team notes and any notes people shared. The AI builds on them and never contradicts them." },
   { id: "people", label: "People and roles", description: "Directors, staff, volunteers, members and attendees with their ids, so action items get real owners." },
   { id: "goals", label: "Goals and committees", description: "Open goals and committees, so action items can be linked to them." },
   { id: "speakers", label: "Name the speakers", description: "Lets the AI say who each unnamed transcript speaker is, with the words that show it." },

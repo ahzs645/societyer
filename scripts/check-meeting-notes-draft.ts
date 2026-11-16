@@ -292,6 +292,7 @@ const t = convexTest(schema, {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
   "./_generated/server.js": () => import("../convex/_generated/server.js"),
   "./meetings.js": () => import("../convex/meetings"),
+  "./meetingPersonalNotes.js": () => import("../convex/meetingPersonalNotes"),
   "./transcripts.js": () => import("../convex/transcripts"),
   "./aiSettings.js": () => import("../convex/aiSettings"),
   "./authorization.js": () => import("../convex/authorization"),
@@ -359,3 +360,32 @@ const formalId = await t.run((ctx) => ctx.db.insert("meetings", {
 }) as any);
 await assert.rejects(() => owner.action(api.meetings.generateNotesDraft, { id: formalId, template: "general" }), /meetings that keep notes/);
 console.log("✓ privacy: AI notes from the transcript withheld from readers without transcript access; lists only flag them; formal meetings refused");
+
+// Personal notes: created only when asked, private until shared, never someone else's.
+assert.equal(await owner.query(api.meetingPersonalNotes.mine, { meetingId: hostedMeetingId }), null, "nobody has personal notes until they add them");
+await owner.mutation(api.meetingPersonalNotes.save, { meetingId: hostedMeetingId, body: "", expected: null });
+await owner.mutation(api.meetingPersonalNotes.save, { meetingId: hostedMeetingId, body: "- We agreed to keep the secret plan", expected: "" });
+await assert.rejects(
+  () => owner.mutation(api.meetingPersonalNotes.save, { meetingId: hostedMeetingId, body: "stale", expected: "an older copy" }),
+  /changed in another window/,
+);
+assert.deepEqual(await viewer.query(api.meetingPersonalNotes.shared, { meetingId: hostedMeetingId }), [], "private notes aren't shared");
+assert.equal(await viewer.query(api.meetingPersonalNotes.mine, { meetingId: hostedMeetingId }), null, "a viewer only ever gets their own row");
+// A viewer can keep and share notes too (they're their own).
+await viewer.mutation(api.meetingPersonalNotes.save, { meetingId: hostedMeetingId, body: "- We agreed to a second pilot", expected: null });
+await viewer.mutation(api.meetingPersonalNotes.setShared, { meetingId: hostedMeetingId, shared: true });
+const seenByOwner = await owner.query(api.meetingPersonalNotes.shared, { meetingId: hostedMeetingId }) as any[];
+assert.deepEqual(seenByOwner.map((row) => [row.authorName, row.body, row.mine]), [["Viewer", "- We agreed to a second pilot", false]]);
+assert.equal((await owner.query(api.meetingPersonalNotes.mine, { meetingId: hostedMeetingId }) as any).body, "- We agreed to keep the secret plan", "the owner's own notes are still theirs");
+// Drafting reads the team notes and shared notes, never private ones.
+await owner.action(api.meetings.generateNotesDraft, { id: hostedMeetingId, template: "general" });
+const drafted = (await t.run((ctx) => ctx.db.get(hostedMeetingId)))!.notesDraft!;
+assert.ok(drafted.decisions.includes("We agreed to a second pilot"), "a shared person's notes feed the AI notes");
+assert.ok(!JSON.stringify(drafted).includes("secret plan"), "private notes never do");
+// Unsharing and deleting act on your own notes only.
+await viewer.mutation(api.meetingPersonalNotes.setShared, { meetingId: hostedMeetingId, shared: false });
+assert.deepEqual(await owner.query(api.meetingPersonalNotes.shared, { meetingId: hostedMeetingId }), []);
+await viewer.mutation(api.meetingPersonalNotes.remove, { meetingId: hostedMeetingId });
+assert.equal(await viewer.query(api.meetingPersonalNotes.mine, { meetingId: hostedMeetingId }), null);
+assert.ok(await owner.query(api.meetingPersonalNotes.mine, { meetingId: hostedMeetingId }), "deleting yours leaves others' alone");
+console.log("✓ personal notes: added on request, private until shared, only your own; shared notes feed the AI notes, private ones never");

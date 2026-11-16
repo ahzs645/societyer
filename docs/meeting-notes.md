@@ -184,6 +184,25 @@ a recording on the server (up to 25 MB with OpenAI, 200 MB with a self-hosted
 `WHISPER_ENDPOINT`); never with the demo provider. Desktop backups don't
 include recordings.
 
+## Team notes and your own notes
+
+The Notes view holds the **team notes** (`meetings.workingNotes`): one shared
+document anyone who can edit the meeting writes in. Beside it, anyone who can
+read the meeting can choose **My notes** (`meetingPersonalNotes`,
+`shared/functions/meetingPersonalNotes.ts`):
+
+- Created only when chosen; private ("Only you") until the toggle shares them
+  ("Shared with the team"). **Delete my notes** removes them.
+- Shared notes appear for others in the card's switcher ("Sam's notes",
+  read-only). With nothing else to pick, the card is just "Team notes" and a
+  **My notes** button.
+- Every handler acts on the caller's own row: nobody can read someone's
+  private notes or change anyone else's. Shared notes follow the team notes'
+  in-camera rule on formal-minutes meetings.
+- The AI notes (built-in, "Use your own AI" and the Ask bar) read the team
+  notes plus every shared person's notes, each under "Notes from <name>";
+  private notes never.
+
 ## The notes surface (Notes tab)
 
 A notes meeting opens on its Notes tab. One bar switches between **My notes**,
@@ -261,7 +280,7 @@ recording or transcript**, which opens the Transcript view.
   program" can't stand in for "I don't think we should cut the program".
   Saving a draft checks every quote again against the transcript the saver
   may read (in-camera parts aside) and drops any that aren't there. Each
-  quote's time opens the Transcript view there; "Add to my notes", Copy and
+  quote's time opens the Transcript view there; "Add to team notes", Copy and
   the Markdown export include them.
 - A selection across speakers is quoted with each speaker's own words. Quote
   links are app paths (`/app/meetings/…`), so they work on the web and in the

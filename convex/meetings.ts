@@ -19,6 +19,7 @@ import {
 } from "../shared/ai/notesDraft";
 import { meetingRecordKind } from "../shared/meetingRecordKind";
 import { transcriptWithoutInCamera } from "../shared/minutesPrivacy";
+import { sharedNotesForDraft } from "../shared/functions/meetingPersonalNotes";
 import { completeStructuredJson, endpointLabel, resolveMinutesEndpoint, ToolsUnsupportedError, toolStep, type MinutesModelEndpoint } from "./providers/llm";
 import {
   applySkillCalls,
@@ -300,7 +301,9 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
     const meeting = await ctx.runQuery(api.meetings.get, { id });
     if (!meeting) throw new Error("Meeting not found.");
     if (meetingRecordKind(meeting) !== "notes") throw new Error("AI notes are for meetings that keep notes. This meeting keeps formal minutes.");
-    const notes = String(meeting.workingNotes ?? "");
+    // The team notes and every shared person's notes; private notes never.
+    const shared = (await ctx.runQuery(api.meetingPersonalNotes.shared, { meetingId: id }).catch(() => [])) as Array<{ authorName: string; body: string }>;
+    const notes = sharedNotesForDraft(String(meeting.workingNotes ?? ""), shared);
     let transcript = "";
     try {
       // Only someone who may read the transcript gets it in their draft, and

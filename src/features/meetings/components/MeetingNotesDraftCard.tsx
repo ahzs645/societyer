@@ -3,7 +3,7 @@
  * a summary, sections shaped by a template, decisions and open questions
  * (shared/ai/notesDraft.ts). Suggested action items land in the Action items
  * card below. The person's own notes are never changed, except when they
- * choose "Add to my notes".
+ * choose "Add to team notes".
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -270,7 +270,7 @@ function NotesDraftView({
       <div className="meeting-ai-notes__actions">
         {canWrite && (
           <button type="button" className="btn-action" onClick={onAddToNotes}>
-            <NotebookPen size={12} aria-hidden="true" /> Add to my notes
+            <NotebookPen size={12} aria-hidden="true" /> Add to team notes
           </button>
         )}
         <button type="button" className="btn-action" onClick={onCopy}>

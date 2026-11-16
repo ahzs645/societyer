@@ -51,7 +51,7 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
   const meetingId = new URL(page.url()).pathname.split("/").pop()!;
   // A notes meeting opens on its notes: My notes, with action items below and the Ask bar.
   const views = page.getByRole("group", { name: "Notes view" });
-  await expect(views.getByRole("button", { name: "My notes" })).toHaveAttribute("aria-pressed", "true");
+  await expect(views.getByRole("button", { name: "Notes", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("heading", { name: "Action items" })).toBeVisible();
   // AI agents are off in this workspace, so the Ask bar says how to turn them on.
   await expect(page.getByRole("link", { name: "turn on AI agents in Settings" })).toBeVisible();
@@ -118,9 +118,9 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
   expect(task.committeeId).toBeTruthy();
   expect(task.transcriptRef).toEqual({ startSec: 125, endSec: 140 });
 
-  // "Add to my notes" appends the draft under the person's own notes.
-  await aiNotes.getByRole("button", { name: "Add to my notes" }).click();
-  await views.getByRole("button", { name: "My notes" }).click();
+  // "Add to team notes" appends the draft under the team notes.
+  await aiNotes.getByRole("button", { name: "Add to team notes" }).click();
+  await views.getByRole("button", { name: "Notes", exact: true }).click();
   await expect(notesEditor).toContainText("Foundation wants a pilot report");
   await expect(notesEditor.getByRole("heading", { name: "Summary" })).toBeVisible();
   await expect(notesEditor).toContainText("Example Foundation is open to a pilot");
@@ -414,8 +414,8 @@ test("quotes: Quote in notes from a transcript selection, and the AI notes' key 
     document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
   await page.getByRole("toolbar", { name: "Selected transcript text" }).getByRole("button", { name: "Quote in notes" }).click();
-  await expect(page.getByText("Quoted in your notes.")).toBeVisible();
-  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "My notes" }).click();
+  await expect(page.getByText("Quoted in the team notes.")).toBeVisible();
+  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "Notes", exact: true }).click();
   const editor = page.locator(".meeting-notes-doc [contenteditable=\"true\"]");
   await expect(editor.locator("blockquote")).toContainText("“Small pilots are where we learn the most.”");
   await expect(editor.locator("blockquote")).toContainText("— SPEAKER_01, 0:12");
@@ -571,5 +571,60 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
   const actions = page.getByRole("region", { name: "Action items" });
   await expect(actions.locator("[aria-label='Action item']").first()).toHaveValue("Thank the funder");
   await expect(actions.getByRole("button", { name: "Owner: Sam Rivera" }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("team notes and my own notes: add, keep private, share, delete", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await seed(page);
+  const meetingId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    return client.mutation("meetings:create", {
+      societyId: getStoredSocietyId(), type: "Working", title: "Planning", scheduledAt: "2026-11-16T17:00:00.000Z",
+      electronic: true, status: "Held", attendeeIds: [], recordKind: "notes", workingNotes: "- Shared agenda",
+    });
+  });
+  await page.goto(`/app/meetings/${meetingId}?tab=notes&view=notes`);
+  const team = page.getByRole("region", { name: "Team notes" });
+  await expect(team.getByRole("heading", { name: "Team notes" })).toBeVisible({ timeout: 60_000 });
+  // Nothing else to pick yet: no switcher, just "My notes".
+  await expect(page.getByRole("button", { name: "Which notes" })).toHaveCount(0);
+  await team.getByRole("button", { name: "My notes" }).click();
+
+  const mine = page.getByRole("region", { name: "My notes" });
+  await expect(mine.getByText("Only you", { exact: true })).toBeVisible();
+  const editor = mine.locator("[contenteditable=\"true\"]");
+  await editor.click();
+  await page.keyboard.type("Ask about the venue budget");
+  const readMine = () => page.evaluate(async (id) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    return client.query("meetingPersonalNotes:mine", { meetingId: id });
+  }, meetingId) as Promise<any>;
+  await expect.poll(async () => (await readMine())?.body ?? "", { timeout: 15_000 }).toContain("Ask about the venue budget");
+  expect((await readMine()).shared).toBe(false);
+
+  // Share them; the switcher now offers Team notes and My notes.
+  await mine.getByText("Only you", { exact: true }).click();
+  await expect(mine.getByText("Shared with the team", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Which notes" }).click();
+  await page.getByRole("option", { name: /Team notes/ }).click();
+  await expect(team.getByText("Shared agenda")).toBeVisible();
+  const shared = await page.evaluate(async (id) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    return client.query("meetingPersonalNotes:shared", { meetingId: id });
+  }, meetingId) as any[];
+  expect(shared.map((row) => [row.body.includes("venue budget"), row.mine])).toEqual([[true, true]]);
+  if (SHOTS) await team.screenshot({ path: `${SHOTS}/team-notes.png` });
+
+  // Delete them: back to just the team notes.
+  await page.getByRole("button", { name: "Which notes" }).click();
+  await page.getByRole("option", { name: /My notes/ }).click();
+  if (SHOTS) await mine.screenshot({ path: `${SHOTS}/my-notes.png` });
+  await mine.getByRole("button", { name: "Delete my notes" }).click();
+  await page.getByRole("dialog", { name: "Delete your notes?" }).getByRole("button", { name: "Delete" }).click();
+  await expect(team.getByRole("heading", { name: "Team notes" })).toBeVisible();
+  await expect(team.getByRole("button", { name: "My notes" })).toBeVisible();
   expect(errors).toEqual([]);
 });

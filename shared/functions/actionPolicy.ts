@@ -11,7 +11,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm", "organizationSetup"],
   members: ["members", "memberHistory", "memberGovernance", "personHistory", "peopleDirectory", "roleHolderHistory", "registerHistory", "orgChartAssignments"],
   directors: ["directors"], employees: ["employees", "remuneration"], committees: ["committees"],
-  meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts", "meetingSources", "meetingSourceSpeech", "meetingTranscription", "meetingRecordings"],
+  meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts", "meetingSources", "meetingSourceSpeech", "meetingTranscription", "meetingRecordings", "meetingPersonalNotes"],
   minutes: ["minutes", "minuteBook", "minutesReview"], agendas: ["agendas"], motions: ["motions", "motionBacklog", "motionTemplates", "writtenResolutions", "memberProposals"],
   proxies: ["proxies"], conflicts: ["conflicts"], attestations: ["attestations", "pipaTraining"], auditors: ["auditors"], courtOrders: ["courtOrders"],
   filings: ["filings", "annualFilings", "filingExports", "filingBot"],
@@ -169,6 +169,9 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   // Keeping recordings at all is a workspace setting; reading it is for members.
   if (name === "meetingRecordings:setPreference") return "settings:write";
   if (name === "meetingRecordings:settings") return "society:read";
+  // A person's own notes: anyone who can read the meeting keeps them. The
+  // handlers act only on the caller's own row.
+  if (domain === "meetingPersonalNotes") return "meetings:read";
   if (domain === "meetingTranscription" && kind === "query") return TRANSCRIPT_READ_SCOPE;
   if (domain === "meetingSources" || domain === "meetingSourceSpeech") return "meetings:write";
   if (["society:updateModules", "society:updateComplianceSettings", "society:updateInventorySettings", "society:updateNotificationSettings"].includes(name)) return "settings:write";

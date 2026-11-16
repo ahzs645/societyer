@@ -1290,3 +1290,24 @@ a.notes-meta-item {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ---------- Team notes, my notes, shared notes (PersonalNotesCards) ---------- */
+.notes-doc-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  min-width: 0;
+  .card__title { margin: 0; }
+}
+.notes-doc-switch__select {
+  min-width: 12rem;
+  max-width: 18rem;
+}
+.personal-notes__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+}

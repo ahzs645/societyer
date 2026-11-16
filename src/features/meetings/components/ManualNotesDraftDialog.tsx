@@ -195,7 +195,7 @@ export function ManualNotesDraftDialog({
 
 const CHIP_LABELS: Record<ManualPromptSectionId, string> = {
   transcript: "Transcript",
-  notes: "My notes",
+  notes: "Notes",
   people: "People",
   goals: "Goals & committees",
   speakers: "Speaker names",

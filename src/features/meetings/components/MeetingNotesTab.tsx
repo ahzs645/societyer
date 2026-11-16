@@ -5,7 +5,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { FileText } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
@@ -26,6 +25,9 @@ import { useMeetingRecorder } from "../recorder/meetingRecorder";
 import { notesDraftTranscriptFromRow, type NotesDraftTemplateId } from "../../../../shared/ai/notesDraft";
 import type { NotesExportInput } from "../../../../shared/meetingNotesExport";
 import { notesTranscriptLink, transcriptQuoteMarkdown, TranscriptQuoteContext, type TranscriptQuotePick } from "../transcript/transcriptQuote";
+import { useMutation, useQuery } from "convex/react";
+import { MyNotesCard, NotesDocSwitcher, SharedNotesCard, type NotesDocId } from "./PersonalNotesCards";
+import { sharedNotesForDraft, type PersonalNotes } from "../../../../shared/functions/meetingPersonalNotes";
 
 /** Typing must pause this long before the notes save. */
 const NOTES_SAVE_DELAY_MS = 800;
@@ -193,9 +195,42 @@ export function MeetingNotesTab({
   const [preferredTemplate, setPreferredTemplate] = useState<NotesDraftTemplateId | undefined>();
   const actionItems = meeting.noteActionItems ?? [];
 
+  // Team notes, plus your own (once you add them) and notes others shared.
+  const myNotes = useQuery(api.meetingPersonalNotes.mine, { meetingId }) as PersonalNotes | null | undefined;
+  const sharedNotes = useQuery(api.meetingPersonalNotes.shared, { meetingId }) as PersonalNotes[] | undefined;
+  const addMine = useMutation(api.meetingPersonalNotes.save);
+  const [doc, setDoc] = useState<NotesDocId>("team");
+  const [addingMine, setAddingMine] = useState(false);
+  const othersShared = useMemo(() => (sharedNotes ?? []).filter((row) => !row.mine), [sharedNotes]);
+  const shownShared = doc.startsWith("shared:") ? othersShared.find((row) => `shared:${row._id}` === doc) : undefined;
+  const shownDoc: NotesDocId = doc === "mine" ? (myNotes ? "mine" : "team") : doc.startsWith("shared:") ? (shownShared ? doc : "team") : "team";
+  // What the AI reads: the team notes and every shared person's notes; private notes never.
+  const notesForAi = useMemo(() => sharedNotesForDraft(notes.value, sharedNotes ?? []), [notes.value, sharedNotes]);
+  const startMine = async () => {
+    setAddingMine(true);
+    try {
+      await addMine({ meetingId, body: "", expected: null });
+      setDoc("mine");
+    } catch (error) {
+      toast.error("Could not add your notes", error instanceof Error ? error.message : String(error));
+    } finally {
+      setAddingMine(false);
+    }
+  };
+  const switcher = (
+    <NotesDocSwitcher
+      doc={shownDoc}
+      onDoc={setDoc}
+      mine={myNotes}
+      others={othersShared}
+      onAddMine={myNotes === null ? () => { void startMine(); } : undefined}
+      adding={addingMine}
+    />
+  );
+
   const exportInput = (): NotesExportInput => ({
     meeting: { title: meeting.title, scheduledAt: meeting.scheduledAt, location: meeting.location, attendeeIds: meeting.attendeeIds },
-    notes: notes.value,
+    notes: notesForAi,
     draft: meeting.notesDraft ?? null,
     actionItems,
     transcript: notesDraftTranscriptFromRow(transcriptRow),
@@ -205,7 +240,7 @@ export function MeetingNotesTab({
   const quoteInNotes = canWrite && !converting
     ? (quote: TranscriptQuotePick) => {
         notes.onChange(appendMarkdown(notes.value, transcriptQuoteMarkdown(quote, notesTranscriptLink(quote.start, quote.end, location))));
-        toast.success("Quoted in your notes.", { action: { label: "Show notes", onClick: () => setView("notes") } });
+        toast.success("Quoted in the team notes.", { action: { label: "Show notes", onClick: () => { setDoc("team"); setView("notes"); } } });
       }
     : null;
 
@@ -234,7 +269,11 @@ export function MeetingNotesTab({
         more={<NotesMoreMenu exportInput={exportInput} onOpenDetails={phone ? onOpenDetails : undefined} />}
       />
       <div className="notes-surface__view" hidden={view !== "notes"}>
+        {shownDoc === "mine" && myNotes && <MyNotesCard key={myNotes._id} meetingId={meetingId} row={myNotes} title={switcher} onDeleted={() => setDoc("team")} />}
+        {shownShared && <SharedNotesCard row={shownShared} title={switcher} />}
+        <div hidden={shownDoc !== "team"}>
         <NotesDocCard
+          title={switcher}
           notes={notes}
           canWrite={canWrite}
           converting={converting}
@@ -244,13 +283,14 @@ export function MeetingNotesTab({
             setPreferredTemplate(template);
           }}
         />
+        </div>
       </div>
       {visited.has("ai") && (
         <div className="notes-surface__view" hidden={view !== "ai"}>
           <MeetingNotesDraftCard
             meeting={meeting}
             draft={meeting.notesDraft}
-            notes={notes.value}
+            notes={notesForAi}
             transcriptRow={transcriptRow}
             hasTranscript={hasTranscript}
             canReadTranscript={canReadTranscript}
@@ -258,7 +298,7 @@ export function MeetingNotesTab({
             flushNotes={notes.flush}
             preferredTemplate={preferredTemplate}
             onOpenTranscript={() => setView("transcript")}
-            onAddToNotes={(markdown) => { notes.onChange(appendMarkdown(notes.value, markdown)); toast.success("Added to your notes."); }}
+            onAddToNotes={(markdown) => { notes.onChange(appendMarkdown(notes.value, markdown)); toast.success("Added to the team notes."); }}
           />
         </div>
       )}
@@ -280,7 +320,8 @@ export function MeetingNotesTab({
 
 type NotesController = ReturnType<typeof useAutosavedNotes>;
 
-function NotesDocCard({ notes, canWrite, converting, tooLong, onPickTemplate }: {
+function NotesDocCard({ title, notes, canWrite, converting, tooLong, onPickTemplate }: {
+  title: ReactNode;
   notes: NotesController;
   canWrite: boolean;
   converting: boolean;
@@ -289,11 +330,9 @@ function NotesDocCard({ notes, canWrite, converting, tooLong, onPickTemplate }: 
 }) {
   const confirm = useConfirm();
   return (
-    <section className="card meeting-notes-doc" aria-labelledby="meeting-notes-doc-title">
+    <section className="card meeting-notes-doc" aria-label="Team notes">
       <div className="card__head meeting-notes-doc__head">
-        <h2 className="card__title" id="meeting-notes-doc-title">
-          <FileText size={14} aria-hidden="true" /> Meeting notes
-        </h2>
+        {title}
         {canWrite && (
           <span className={`meeting-notes-doc__status is-${notes.saveState}`} role="status" aria-live="polite">
             {SAVE_STATE_LABELS[notes.saveState]}

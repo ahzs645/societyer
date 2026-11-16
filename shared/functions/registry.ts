@@ -125,6 +125,7 @@ const organizationHistoryFns = lazyHandlers(() => import("./organizationHistory"
 import * as meetingsFns from "./meetings";
 import * as meetingNotesFns from "./meetingNotes";
 import * as meetingRecordingsFns from "./meetingRecordings";
+import * as meetingPersonalNotesFns from "./meetingPersonalNotes";
 import * as agendasFns from "./agendas";
 import * as motionsFns from "./motions";
 const evidenceRegistersFns = lazyHandlers(() => import("./evidenceRegisters"), "evidenceRegisters");
@@ -326,6 +327,11 @@ const MEETING_NOTES_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "meetings:discardNotesDraft", handler: meetingNotesFns.discardNotesDraftPortable }),
   definePortableMutation({ name: "meetings:setNoteActionItems", handler: meetingNotesFns.setNoteActionItemsPortable }),
   definePortableMutation({ name: "meetings:createTaskFromNoteAction", handler: meetingNotesFns.createTaskFromNoteActionPortable }),
+  definePortableQuery({ name: "meetingPersonalNotes:mine", handler: meetingPersonalNotesFns.minePortable }),
+  definePortableQuery({ name: "meetingPersonalNotes:shared", handler: meetingPersonalNotesFns.sharedPortable }),
+  definePortableMutation({ name: "meetingPersonalNotes:save", handler: meetingPersonalNotesFns.savePortable }),
+  definePortableMutation({ name: "meetingPersonalNotes:setShared", handler: meetingPersonalNotesFns.setSharedPortable }),
+  definePortableMutation({ name: "meetingPersonalNotes:remove", handler: meetingPersonalNotesFns.removePortable }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [

@@ -30,6 +30,19 @@ export const meetingSourceTables = {
     uploadedByUserId: v.optional(v.id("users")),
     createdAtISO: v.string(),
   }).index("by_meeting", ["meetingId"]).index("by_society", ["societyId"]),
+  // A person's own notes on a meeting (shared/functions/meetingPersonalNotes.ts):
+  // private until shared. userId is a string: local workspaces have an owner
+  // with no users row.
+  meetingPersonalNotes: defineTable({
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    userId: v.string(),
+    authorName: v.string(),
+    body: v.string(),
+    shared: v.boolean(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  }).index("by_meeting", ["meetingId"]).index("by_meeting_user", ["meetingId", "userId"]),
   meetingSourceText: defineTable({ sourceId: v.id("meetingSources"), index: v.number(), text: v.string() })
     .index("by_source_index", ["sourceId", "index"]),
 };
