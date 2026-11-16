@@ -18,6 +18,7 @@ import {
   type DeviceAiState,
 } from "./config";
 import { deviceToolSupport, subscribeDeviceToolSupport, type DeviceToolSupport } from "./toolSupport";
+import { deviceAiModelLabel, isCliKind } from "./models";
 
 /** Where the On-device AI card lives (Settings scrolls to it). */
 export const DEVICE_AI_SETTINGS_HREF = "/app/settings?section=on-device-ai";
@@ -58,7 +59,7 @@ export function useAiDraftAvailability() {
     server,
     device: device.ready,
     available: server || device.ready,
-    deviceModel: device.ready ? device.config.model : undefined,
+    deviceModel: device.ready ? deviceAiModelLabel(device.config.kind, device.config.model) : undefined,
     /** Offer the Settings link: on-device AI could be set up here. */
     canSetUpDevice: device.supported && !device.ready,
   };
@@ -70,9 +71,10 @@ export function useAiDraftAvailability() {
  * refuse tools (an untested model is tried; a refusal is remembered and the
  * assistant falls back to working from pasted text). The assistant's
  * suggestions, placeholder and notices follow (src/features/ai/assistantSuggestions.ts).
+ * Claude Code and Codex always take tools (their own loop runs them).
  */
 export function deviceAssistantToolsAvailable(config: DeviceAiConfig, support: DeviceToolSupport = deviceToolSupport(config)): boolean {
-  return config.kind !== "none" && config.features.assistant && config.assistantTools.lookUpRecords && support !== "unsupported";
+  return config.kind !== "none" && config.features.assistant && config.assistantTools.lookUpRecords && (isCliKind(config.kind) || support !== "unsupported");
 }
 
 /** What this device's model is known to do with tools, kept current. */

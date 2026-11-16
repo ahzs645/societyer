@@ -51,6 +51,7 @@ import { todayDateOnly } from "../../../shared/dateOnly";
 import { DEVICE_AI_SETTINGS_HREF, useDeviceAi, useDeviceToolSupport } from "../../lib/localAi/useDeviceAi";
 import { deviceAiClient } from "../../lib/localAi/client";
 import { rememberDeviceToolSupport } from "../../lib/localAi/toolSupport";
+import { CLI_KIND_INFO, deviceAiModelLabel, isCliKind } from "../../lib/localAi/models";
 import { dismissedChange, runApprovedChange, runDeviceAssistantTurn, type DeviceAssistantEvent } from "../../lib/localAi/assistantToolLoop";
 import { DEVICE_TOOL_RECORD_LIMITS, parseDeviceToolRecords, type DeviceToolRecord } from "../../../shared/ai/deviceToolRecords";
 import { findAgentTool } from "../../../shared/agentTools";
@@ -102,7 +103,8 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   // with the shared agent tools when they are turned on and the model takes them.
   const deviceAi = useDeviceAi("assistant");
   const deviceChat = localOnly && deviceAi.ready;
-  const deviceModel = deviceAi.config.model;
+  const deviceModel = deviceAiModelLabel(deviceAi.config.kind, deviceAi.config.model);
+  const deviceCli = isCliKind(deviceAi.config.kind) ? CLI_KIND_INFO[deviceAi.config.kind] : null;
   const deviceToolSupport = useDeviceToolSupport(deviceAi.config);
   // Suggestions, placeholder and notices follow what the assistant can do here.
   const capabilities = assistantCapabilities({ localOnly, deviceChat, deviceConfig: deviceAi.config, deviceToolSupport });
@@ -780,9 +782,13 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                   {!canWrite && <p className="muted" role="status">Private AI conversations require current AI chat write permission and belong to their creator.</p>}
                   {deviceChat && (
                     <p className="muted" role="status">
-                      Replies come from {deviceModel} at the address in Settings.
+                      {deviceCli
+                        ? `Replies come from ${deviceModel} under your ${deviceCli.signIn} sign-in; your messages go to ${deviceCli.vendor}.`
+                        : `Replies come from ${deviceModel} at the address in Settings.`}
                       {capabilities.toolsAvailable
-                        ? " It looks up records you can see, here on this device; what it reads goes only to that address."
+                        ? deviceCli
+                          ? ` It looks up records you can see, here on this device; what it reads goes to ${deviceCli.vendor} too.`
+                          : " It looks up records you can see, here on this device; what it reads goes only to that address."
                         : " This model cannot see or change workspace records; paste or attach what it needs."}
                       {!capabilities.toolsAvailable && deviceAi.config.assistantTools.lookUpRecords && deviceToolSupport === "unsupported" && (
                         <> {deviceModel} doesn't accept tools, so it can't look anything up. Settings suggests models that do.</>

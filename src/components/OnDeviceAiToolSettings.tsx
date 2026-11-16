@@ -8,23 +8,28 @@ import { Toggle } from "./Controls";
 import type { DeviceAssistantToolSettings } from "../lib/localAi/config";
 import type { ToolProbeResult } from "../lib/localAi/client";
 import type { DeviceToolSupport } from "../lib/localAi/toolSupport";
+import { CLI_KIND_INFO, type DeviceAiCliKind } from "../lib/localAi/models";
 
 export type ToolProbe = ToolProbeResult & { model: string };
 
 /**
  * What the on-device assistant may do with workspace records. Lookups are
  * read-only and run here as the signed-in person; proposals need approval.
+ * With Claude Code or Codex, what the assistant reads goes to Anthropic or OpenAI.
  */
 export function AssistantToolToggles({
   value,
   disabled,
   onChange,
+  cliKind = null,
 }: {
   value: DeviceAssistantToolSettings;
   disabled: boolean;
   onChange: (value: DeviceAssistantToolSettings) => void;
+  cliKind?: DeviceAiCliKind | null;
 }) {
   const { t } = useTranslation();
+  const cli = cliKind ? CLI_KIND_INFO[cliKind] : null;
   return (
     <fieldset className="col" style={{ gap: 12, border: 0, padding: 0, margin: 0 }}>
       <legend className="muted" style={{ marginBottom: 8 }}>{t("onDeviceAi.toolsLegend", "The assistant and workspace records")}</legend>
@@ -33,7 +38,9 @@ export function AssistantToolToggles({
         disabled={disabled}
         onChange={(lookUpRecords) => onChange({ lookUpRecords, proposeChanges: lookUpRecords && value.proposeChanges })}
         label={t("onDeviceAi.toolsLookUp", "Let the assistant look up workspace records")}
-        hint={t("onDeviceAi.toolsLookUpHint", "Read-only: meetings, minutes, transcripts, documents, tasks, deadlines and commitments, limited to what you can see (in-camera content stays withheld as usual). Lookups run on this device; what the assistant reads is sent only to the model server above.")}
+        hint={cli
+          ? t("onDeviceAi.toolsLookUpHintCli", { defaultValue: "Read-only: meetings, minutes, transcripts, documents, tasks, deadlines and commitments, limited to what you can see (in-camera content stays withheld as usual). Lookups run on this device; what the assistant reads is sent to {{vendor}} through {{name}}.", vendor: cli.vendor, name: cli.name })
+          : t("onDeviceAi.toolsLookUpHint", "Read-only: meetings, minutes, transcripts, documents, tasks, deadlines and commitments, limited to what you can see (in-camera content stays withheld as usual). Lookups run on this device; what the assistant reads is sent only to the model server above.")}
       />
       <Toggle
         checked={value.proposeChanges}
@@ -46,9 +53,15 @@ export function AssistantToolToggles({
   );
 }
 
-/** Whether the chosen model calls tools: from the last Test connection, or what this device learned. */
-export function ToolSupportNotice({ probe, support, model }: { probe: ToolProbe | null; support: DeviceToolSupport; model: string }) {
+/**
+ * Whether the chosen model calls tools: from the last Test connection, or what
+ * this device learned. Claude Code and Codex always do (they aren't tested).
+ */
+export function ToolSupportNotice({ probe, support, model, cliKind = null }: { probe: ToolProbe | null; support: DeviceToolSupport; model: string; cliKind?: DeviceAiCliKind | null }) {
   const { t } = useTranslation();
+  if (cliKind) {
+    return <div className="notice notice--success" role="status" aria-live="polite">{t("onDeviceAi.toolsCli", { defaultValue: "{{name}} looks up records with tools. Each lookup runs here, as you; the CLI's own tools stay off.", name: CLI_KIND_INFO[cliKind].name })}</div>;
+  }
   const recommend = t("onDeviceAi.toolsModels", "Models that call tools well include Qwen 2.5 or Qwen 3 (7B and up), Llama 3.1 or 3.2, Mistral Small 3 and Mistral Nemo. With llama.cpp, start llama-server with --jinja.");
   const outcome = probe?.outcome ?? (support === "supported" ? "supported" : support === "unsupported" ? "unsupported" : null);
   const name = probe?.model || model || t("onDeviceAi.toolsThisModel", "This model");

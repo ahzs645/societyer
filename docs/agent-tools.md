@@ -208,6 +208,14 @@ what people see. The pieces:
   Results go back to the model as JSON with the `{ untrusted }` wrappers kept, and
   the system prompt carries `UNTRUSTED_DATA_RULE`.
 - Writes made by the device surface are tagged `device-agent` and `agent-created`.
+- Hosted by a CLI: in the desktop app the model can be Claude Code or Codex
+  ([local-ai.md](local-ai.md#claude-code-and-codex-desktop-app)). The CLI runs
+  the loop and calls the same device tools, with its own tools turned off; each
+  call is sent to the renderer, which runs it through the same
+  `runDeviceAssistantTurn` policy (offered tools, zod validation, budgets,
+  proposals) and returns the result. The tool list, adapter and principal are
+  unchanged; only the model provider differs, and tool results go to Anthropic
+  or OpenAI.
 
 ## Tests
 

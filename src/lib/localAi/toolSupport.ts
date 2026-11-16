@@ -5,6 +5,7 @@
  * Unknown means "try": the assistant offers tools and falls back without them.
  */
 import type { DeviceAiConfig } from "./config";
+import { isCliKind } from "./models";
 
 export type DeviceToolSupport = "unknown" | "supported" | "unsupported";
 
@@ -14,8 +15,11 @@ const MAX_ENTRIES = 40;
 let entries: Record<string, Exclude<DeviceToolSupport, "unknown">> | null = null;
 const listeners = new Set<() => void>();
 
-function keyFor(config: Pick<DeviceAiConfig, "baseUrl" | "model">): string {
-  return `${config.baseUrl}|${config.model}`;
+type ToolSupportKey = Pick<DeviceAiConfig, "baseUrl" | "model"> & { kind?: DeviceAiConfig["kind"] };
+
+/** Per address and model; the CLIs have no address, so per CLI and model. */
+function keyFor(config: ToolSupportKey): string {
+  return isCliKind(config.kind) ? `${config.kind}|${config.model}` : `${config.baseUrl}|${config.model}`;
 }
 
 function load(): Record<string, Exclude<DeviceToolSupport, "unknown">> {
@@ -34,11 +38,11 @@ function load(): Record<string, Exclude<DeviceToolSupport, "unknown">> {
   return entries;
 }
 
-export function deviceToolSupport(config: Pick<DeviceAiConfig, "baseUrl" | "model">): DeviceToolSupport {
+export function deviceToolSupport(config: ToolSupportKey): DeviceToolSupport {
   return load()[keyFor(config)] ?? "unknown";
 }
 
-export function rememberDeviceToolSupport(config: Pick<DeviceAiConfig, "baseUrl" | "model">, support: DeviceToolSupport) {
+export function rememberDeviceToolSupport(config: ToolSupportKey, support: DeviceToolSupport) {
   const current = { ...load() };
   const key = keyFor(config);
   // Re-inserted last, so the oldest entries are the ones dropped.

@@ -6,6 +6,10 @@
  * "Transcribe on this device". Everything here is stored on this device only (see
  * src/lib/localAi/config.ts); nothing is written to the workspace.
  *
+ * The desktop app also offers Claude Code and Codex: the CLI already signed in
+ * on this computer, with no address or key. Their data goes to Anthropic or
+ * OpenAI under the person's own sign-in, which the card says plainly.
+ *
  * The public demo shows the card disabled: it never contacts a network service.
  */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -16,11 +20,11 @@ import { Select } from "./Select";
 import { Toggle } from "./Controls";
 import { useToast } from "./Toast";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
-import { DEVICE_AI_PRESETS, deviceAiKeyRequired, effectiveBaseUrl, presetInfo, type DeviceAiPreset } from "../lib/localAi/models";
-import { saveDeviceAiConfig, storeDeviceAiKey, type DeviceAiConfig, type DeviceAiFeature, type DeviceAssistantToolSettings, type DeviceSpeechConfig } from "../lib/localAi/config";
+import { CLI_KIND_INFO, deviceAiKeyRequired, devicePresetsFor, effectiveBaseUrl, isCliKind, presetInfo, type DeviceAiCliKind, type DeviceAiPreset } from "../lib/localAi/models";
+import { isAbsoluteCliPath, saveDeviceAiConfig, storeDeviceAiKey, type DeviceAiConfig, type DeviceAiFeature, type DeviceAssistantToolSettings, type DeviceCliPaths, type DeviceSpeechConfig } from "../lib/localAi/config";
 import { SPEECH_TO_TEXT_KINDS, speechKindInfo, type SpeechToTextKind } from "../../shared/ai/speechRequest";
 import { testSpeechToText, type SpeechTestResult } from "../lib/localAi/transcription";
-import { ApiKeyField, ChunkSizeField, ConnectionNotice, FeatureToggles, SpeechNotice } from "./OnDeviceAiFields";
+import { ApiKeyField, ChunkSizeField, CliPathField, CliPrivacyNote, ConnectionNotice, FeatureToggles, SpeechNotice } from "./OnDeviceAiFields";
 import { checkDeviceAiBaseUrl } from "../../shared/ai/endpointPolicy";
 import { deviceAiClient, type ConnectionTestResult } from "../lib/localAi/client";
 import { useDeviceAi, useDeviceToolSupport } from "../lib/localAi/useDeviceAi";
@@ -36,7 +40,11 @@ type Form = {
   features: Record<DeviceAiFeature, boolean>;
   assistantTools: DeviceAssistantToolSettings;
   minutesChunkChars: number;
+  cli: DeviceCliPaths;
 };
+
+/** The form field holding this CLI's location. */
+const cliPathKey = (kind: DeviceAiCliKind): keyof DeviceCliPaths => (kind === "claude-cli" ? "claudePath" : "codexPath");
 
 function formFrom(config: DeviceAiConfig): Form {
   return {
@@ -47,6 +55,7 @@ function formFrom(config: DeviceAiConfig): Form {
     features: { ...config.features },
     assistantTools: { ...config.assistantTools },
     minutesChunkChars: config.minutesChunkChars,
+    cli: { ...config.cli },
   };
 }
 
@@ -61,12 +70,17 @@ function configFrom(form: Form, previous: DeviceAiConfig): DeviceAiConfig {
     features: { ...form.features },
     assistantTools: { lookUpRecords: form.assistantTools.lookUpRecords, proposeChanges: form.assistantTools.lookUpRecords && form.assistantTools.proposeChanges },
     minutesChunkChars: form.minutesChunkChars,
+    cli: { claudePath: form.cli.claudePath.trim(), codexPath: form.cli.codexPath.trim() },
   };
 }
 
-/** Record lookups need a model that calls tools: check with one short request and remember the answer. */
+/**
+ * Record lookups need a model that calls tools: check with one short request
+ * and remember the answer. Claude Code and Codex always do (their own loop
+ * runs the tools), so they are not tested.
+ */
 async function probeAssistantTools(saved: DeviceAiConfig, model: string): Promise<ToolProbe | null> {
-  if (!model || !saved.features.assistant || !saved.assistantTools.lookUpRecords) return null;
+  if (isCliKind(saved.kind) || !model || !saved.features.assistant || !saved.assistantTools.lookUpRecords) return null;
   const probe = await deviceAiClient({ model }).probeToolCalling();
   if (probe.outcome !== "failed") rememberDeviceToolSupport({ baseUrl: saved.baseUrl, model }, probe.outcome === "supported" ? "supported" : "unsupported");
   return { ...probe, model };
@@ -100,8 +114,16 @@ export function OnDeviceAiSettingsCard() {
   }, [searchParams]);
 
   const info = presetInfo(form.preset);
+  const cliKind = isCliKind(info.kind) ? info.kind : null;
   const address = effectiveBaseUrl(info.kind, form.baseUrl);
-  const addressCheck = useMemo(() => checkDeviceAiBaseUrl(address), [address]);
+  // The CLIs have no address to check.
+  const addressCheck = useMemo(() => (cliKind ? null : checkDeviceAiBaseUrl(address)), [address, cliKind]);
+  const cliPath = cliKind ? form.cli[cliPathKey(cliKind)].trim() : "";
+  const addressProblem = addressCheck && !addressCheck.ok
+    ? addressCheck.message
+    : cliPath && !isAbsoluteCliPath(cliPath)
+      ? t("onDeviceAi.cliPathAbsolute", "Use a full path, starting with / (or a drive letter on Windows).")
+      : undefined;
   const keyRequired = deviceAiKeyRequired(info.kind, address);
   const disabled = demo || saving || testing;
 
@@ -130,8 +152,8 @@ export function OnDeviceAiSettingsCard() {
 
   const save = async () => {
     if (demo) return;
-    if (form.enabled && !addressCheck.ok) {
-      toast.error(t("onDeviceAi.invalidAddress", "Check the server address"), addressCheck.message);
+    if (form.enabled && addressProblem) {
+      toast.error(cliKind ? t("onDeviceAi.invalidCliPath", "Check the CLI location") : t("onDeviceAi.invalidAddress", "Check the server address"), addressProblem);
       return;
     }
     setSaving(true);
@@ -145,11 +167,11 @@ export function OnDeviceAiSettingsCard() {
     }
   };
 
-  // Saves first: the desktop app's main process tests the saved address.
+  // Saves first: the desktop app's main process tests the saved address (or finds the saved CLI).
   const test = async () => {
     if (demo) return;
-    if (!addressCheck.ok) {
-      setResult({ ok: false, message: addressCheck.message });
+    if (addressProblem) {
+      setResult({ ok: false, message: addressProblem });
       return;
     }
     setTesting(true);
@@ -162,7 +184,8 @@ export function OnDeviceAiSettingsCard() {
       if (outcome.ok) {
         setModels(outcome.models);
         // No model chosen yet: take the server's first one, so drafting works straight away.
-        if (!saved.model && outcome.models[0]) await saveDeviceAiConfig({ ...saved, model: outcome.models[0] });
+        // A CLI with no model uses its own default, so it stays empty.
+        if (!saved.model && outcome.models[0] && !isCliKind(saved.kind)) await saveDeviceAiConfig({ ...saved, model: outcome.models[0] });
       }
       setResult(outcome);
       if (outcome.ok) setToolProbe(await probeAssistantTools(saved, model));
@@ -180,7 +203,7 @@ export function OnDeviceAiSettingsCard() {
 
   return (
     <div ref={cardRef} id="on-device-ai" className="card" style={{ marginBottom: 16 }}>
-      <CardHead demo={demo} ready={device.ready} off={device.config.kind === "none"} />
+      <CardHead demo={demo} desktop={desktop} ready={device.ready} off={device.config.kind === "none"} />
       <div className="card__body col" style={{ gap: 16 }}>
         {demo && (
           <div className="notice notice--info" role="status">
@@ -197,22 +220,24 @@ export function OnDeviceAiSettingsCard() {
         <ModelServerFields
           form={form}
           models={models}
-          addressError={form.enabled && !addressCheck.ok ? addressCheck.message : undefined}
+          desktop={desktop}
+          addressError={form.enabled ? addressProblem : undefined}
           disabled={disabled}
           onPreset={choosePreset}
           onChange={change}
         />
-        <ApiKeyField value={apiKey} onChange={setApiKey} required={keyRequired} stored={device.keyStored} desktop={desktop} disabled={disabled} />
+        {!cliKind && <ApiKeyField value={apiKey} onChange={setApiKey} required={keyRequired} stored={device.keyStored} desktop={desktop} disabled={disabled} />}
         <FeatureToggles features={form.features} disabled={disabled} onChange={(features) => change({ features })} />
         <AssistantToolToggles
           value={form.assistantTools}
           disabled={disabled || !form.features.assistant}
           onChange={(assistantTools) => change({ assistantTools })}
+          cliKind={cliKind}
         />
         <ChunkSizeField value={form.minutesChunkChars} disabled={disabled} onChange={(minutesChunkChars) => change({ minutesChunkChars })} />
         {result && <ConnectionNotice result={result} showCorsHint={!desktop} />}
         {form.features.assistant && form.assistantTools.lookUpRecords && (
-          <ToolSupportNotice probe={toolProbe} support={dirty ? "unknown" : toolSupport} model={form.model} />
+          <ToolSupportNotice probe={toolProbe} support={cliKind ? "supported" : dirty ? "unknown" : toolSupport} model={form.model} cliKind={cliKind} />
         )}
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <button type="button" className="btn btn--accent" disabled={disabled || !dirty && !apiKey.trim()} onClick={() => void save()}>
@@ -221,7 +246,7 @@ export function OnDeviceAiSettingsCard() {
           <button type="button" className="btn" disabled={disabled || !form.enabled} onClick={() => void test()}>
             {testing ? t("onDeviceAi.testing", "Testing…") : t("onDeviceAi.test", "Test connection")}
           </button>
-          {device.keyStored && !demo && (
+          {device.keyStored && !demo && !cliKind && (
             <button type="button" className="btn" disabled={disabled} onClick={() => void forgetKey()}>
               {t("onDeviceAi.forgetKey", "Forget stored key")}
             </button>
@@ -233,10 +258,15 @@ export function OnDeviceAiSettingsCard() {
   );
 }
 
-/** The model server: which one, its address, and the model to use. */
+/**
+ * The model server: which one, its address, and the model to use. For Claude
+ * Code and Codex (desktop app only): where the CLI is instead of an address,
+ * and what leaves the computer.
+ */
 function ModelServerFields({
   form,
   models,
+  desktop,
   addressError,
   disabled,
   onPreset,
@@ -245,6 +275,8 @@ function ModelServerFields({
   form: Form;
   /** The server's models, once Test connection has listed them. */
   models: readonly string[];
+  /** The CLIs are offered only in the desktop app. */
+  desktop: boolean;
   addressError?: string;
   disabled: boolean;
   onPreset: (preset: DeviceAiPreset) => void;
@@ -253,16 +285,46 @@ function ModelServerFields({
   const { t } = useTranslation();
   const modelListId = `${useId()}-models`;
   const info = presetInfo(form.preset);
+  const cliKind = isCliKind(info.kind) ? info.kind : null;
+  const modelField = (
+    <>
+      <Field
+        label={t("onDeviceAi.model", "Model")}
+        hint={cliKind
+          ? t("onDeviceAi.modelCli", { defaultValue: "Leave empty to use {{name}}'s default model. Test the connection to list the models it offers.", name: CLI_KIND_INFO[cliKind].name })
+          : models.length ? t("onDeviceAi.modelPick", "Pick one of the server's models or type a name.") : t("onDeviceAi.modelHint", "Test the connection to list the server's models, or type a name such as llama3.1:8b.")}
+      >
+        <input className="input" list={modelListId} autoComplete="off" spellCheck={false} value={form.model} disabled={disabled} onChange={(event) => onChange({ model: event.target.value })} />
+      </Field>
+      <datalist id={modelListId}>
+        {models.map((model) => <option key={model} value={model} />)}
+      </datalist>
+    </>
+  );
+  const select = (
+    <Field label={t("onDeviceAi.server", "Model server")}>
+      <Select
+        value={form.preset}
+        disabled={disabled}
+        onChange={(value) => onPreset(value as DeviceAiPreset)}
+        options={devicePresetsFor(desktop).map((entry) => ({ value: entry.preset, label: entry.label }))}
+      />
+    </Field>
+  );
+  if (cliKind) {
+    const key = cliPathKey(cliKind);
+    return (
+      <>
+        {select}
+        <CliPathField kind={cliKind} value={form.cli[key]} disabled={disabled} onChange={(path) => onChange({ cli: { ...form.cli, [key]: path } })} />
+        <CliPrivacyNote kind={cliKind} />
+        {modelField}
+      </>
+    );
+  }
   return (
     <>
-      <Field label={t("onDeviceAi.server", "Model server")}>
-        <Select
-          value={form.preset}
-          disabled={disabled}
-          onChange={(value) => onPreset(value as DeviceAiPreset)}
-          options={DEVICE_AI_PRESETS.map((entry) => ({ value: entry.preset, label: entry.label }))}
-        />
-      </Field>
+      {select}
       <Field
         label={t("onDeviceAi.address", "Server address")}
         hint={info.fixedBaseUrl
@@ -287,12 +349,7 @@ function ModelServerFields({
         {t("onDeviceAi.privacy", "Requests go only to the address above. With a local server, meeting data stays on this computer.")}{" "}
         {t("onDeviceAi.notSynced", "These settings stay on this device and are not part of the workspace or its exports.")}
       </p>
-      <Field label={t("onDeviceAi.model", "Model")} hint={models.length ? t("onDeviceAi.modelPick", "Pick one of the server's models or type a name.") : t("onDeviceAi.modelHint", "Test the connection to list the server's models, or type a name such as llama3.1:8b.")}>
-        <input className="input" list={modelListId} autoComplete="off" spellCheck={false} value={form.model} disabled={disabled} onChange={(event) => onChange({ model: event.target.value })} />
-      </Field>
-      <datalist id={modelListId}>
-        {models.map((model) => <option key={model} value={model} />)}
-      </datalist>
+      {modelField}
     </>
   );
 }
@@ -465,12 +522,16 @@ function SpeechToTextSection({ config, keyStored, demo, desktop }: { config: Dev
   );
 }
 
-function CardHead({ demo, ready, off }: { demo: boolean; ready: boolean; off: boolean }) {
+function CardHead({ demo, desktop, ready, off }: { demo: boolean; desktop: boolean; ready: boolean; off: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="card__head">
       <h2 className="card__title">{t("onDeviceAi.title", "On-device AI")}</h2>
-      <span className="card__subtitle">{t("onDeviceAi.subtitle", "Use model servers on this computer for minutes drafts, the assistant, AI intake and transcription.")}</span>
+      <span className="card__subtitle">
+        {desktop
+          ? t("onDeviceAi.subtitleDesktop", "Use model servers on this computer for minutes drafts, the assistant, AI intake and transcription. Claude Code or Codex, signed in here, can stand in for the chat model.")
+          : t("onDeviceAi.subtitle", "Use model servers on this computer for minutes drafts, the assistant, AI intake and transcription.")}
+      </span>
       <StatusBadge demo={demo} ready={ready} off={off} />
     </div>
   );

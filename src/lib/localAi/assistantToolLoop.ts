@@ -18,6 +18,13 @@
  * - At most `maxSteps` model requests; the last one offers no tools, so the
  *   model has to answer. Abort stops between and during steps.
  * - A server that refuses `tools` gets the turn again without them.
+ *
+ * Claude Code and Codex (desktop app) run the tool loop themselves
+ * (`client.hostsToolLoop`): one streamed request offers the tools, and each
+ * call the CLI makes arrives mid-stream and goes through the same
+ * `executeCall` policy here. The step limit becomes a call limit,
+ * `(maxSteps - 1) * DEVICE_TOOL_CALLS_PER_STEP`; calls past it are answered
+ * with an error telling the model to answer now.
  */
 import { z } from "zod";
 import {
@@ -32,7 +39,7 @@ import {
 import type { ChatToolDefinition, ChatWireMessage, RawToolCall } from "../../../shared/ai/openAiCompatible";
 import { clip, DEVICE_TOOL_RECORD_LIMITS, type DeviceToolRecord } from "../../../shared/ai/deviceToolRecords";
 import type { ChatStepResult, DeviceAiClient } from "./client";
-import { DeviceAiError } from "./transport";
+import { DeviceAiError, type DeviceAiToolAnswer, type DeviceAiToolCall } from "./transport";
 import { decodeToolArguments, toolCallsFromText, type ToolArguments } from "./toolCalls";
 
 export type { DeviceToolRecord } from "../../../shared/ai/deviceToolRecords";
@@ -48,6 +55,10 @@ const MIN_USEFUL_RESULT_CHARS = 400;
 
 export const OUT_OF_STEPS_ANSWER =
   "I couldn't finish looking this up in the steps I'm allowed for one question. Try a narrower question, for example about one meeting or a date range.";
+
+/** Told to a CLI that keeps calling tools after the turn's call limit. */
+export const CALL_LIMIT_MESSAGE =
+  "You have used all the lookups allowed for one question. Don't call any more tools: answer now with what you have, and say if something couldn't be looked up.";
 
 const PROPOSAL_NOTE =
   "Shown to the person as a proposed change with Approve and Dismiss. Nothing has been changed. Tell them what you proposed and that it is waiting for their approval.";
@@ -170,6 +181,22 @@ function describeChange(tool: AgentTool, result: unknown): string {
   return `${tool.title}: done`;
 }
 
+/** A call that failed or was refused: the record for the chip, and a structured error for the model. */
+function failedOutcome(call: Call, status: "error" | "refused", code: string, message: string, argsJson: string): Outcome {
+  const tool = findAgentTool(call.name);
+  const base = { id: call.recordId, name: clip(call.name, DEVICE_TOOL_RECORD_LIMITS.name), kind: tool?.kind ?? ("unknown" as const) };
+  return {
+    record: { ...base, status, summary: clip(`${call.name}: ${status === "refused" ? "not allowed" : code.replace(/_/g, " ")}`, DEVICE_TOOL_RECORD_LIMITS.summary), argsJson: clip(argsJson, DEVICE_TOOL_RECORD_LIMITS.argsJson), resultPreview: clip(message, DEVICE_TOOL_RECORD_LIMITS.resultPreview) },
+    content: JSON.stringify({ error: { code, message } }),
+  };
+}
+
+/** The chip shown while a call runs. */
+function runningRecord(call: Call): DeviceToolRecord {
+  const tool = findAgentTool(call.name);
+  return { id: call.recordId, name: clip(call.name, DEVICE_TOOL_RECORD_LIMITS.name), kind: tool?.kind ?? "unknown", status: "running", summary: tool?.title ?? call.name, argsJson: clip(argumentsText(call.arguments), 2_000) };
+}
+
 /** Runs (or, for a change, proposes) one call. Never throws except on abort. */
 async function executeCall(
   call: Call,
@@ -177,10 +204,7 @@ async function executeCall(
 ): Promise<Outcome> {
   const tool = findAgentTool(call.name);
   const base = { id: call.recordId, name: clip(call.name, DEVICE_TOOL_RECORD_LIMITS.name), kind: tool?.kind ?? ("unknown" as const) };
-  const fail = (status: "error" | "refused", code: string, message: string, argsJson: string): Outcome => ({
-    record: { ...base, status, summary: clip(`${call.name}: ${status === "refused" ? "not allowed" : code.replace(/_/g, " ")}`, DEVICE_TOOL_RECORD_LIMITS.summary), argsJson: clip(argsJson, DEVICE_TOOL_RECORD_LIMITS.argsJson), resultPreview: clip(message, DEVICE_TOOL_RECORD_LIMITS.resultPreview) },
-    content: JSON.stringify({ error: { code, message } }),
-  });
+  const fail = (status: "error" | "refused", code: string, message: string, argsJson: string): Outcome => failedOutcome(call, status, code, message, argsJson);
   const rawArgs = clip(argumentsText(call.arguments), 2_000);
 
   if (!tool || !scope.offered.has(tool.name)) {
@@ -220,7 +244,8 @@ async function executeCall(
 }
 
 export async function runDeviceAssistantTurn(input: {
-  client: Pick<DeviceAiClient, "chatStep">;
+  /** `hostsToolLoop`: the provider runs the tool loop itself (Claude Code, Codex). */
+  client: Pick<DeviceAiClient, "chatStep"> & { hostsToolLoop?: boolean };
   adapter: AgentToolAdapter;
   /** System prompt (with the tool rules) and history, oldest first. */
   messages: readonly ChatWireMessage[];
@@ -268,6 +293,75 @@ export async function runDeviceAssistantTurn(input: {
     }
   };
 
+  /**
+   * The provider hosts the loop: one request, and each call it makes runs
+   * here through `executeCall` (offered tools only, validated arguments,
+   * budgets, changes only proposed). Its answer goes back to the provider.
+   */
+  const askHosted = async (): Promise<DeviceAssistantTurn> => {
+    const maxCalls = (maxSteps - 1) * DEVICE_TOOL_CALLS_PER_STEP;
+    let calls = 0;
+    // What the model wrote since its last tool call: preamble until the next call, the answer after the last.
+    let sinceLastCall = "";
+    // After a call the CLI's text starts with blank lines; drop them until real text arrives.
+    let trimLeading = false;
+    const onToolCall = async (raw: DeviceAiToolCall): Promise<DeviceAiToolAnswer> => {
+      throwIfAborted(input.signal);
+      calls += 1;
+      if (sinceLastCall) emit({ type: "discard_text" });
+      sinceLastCall = "";
+      trimLeading = true;
+      const id = raw.callId || `call_${calls}`;
+      const call: Call = { id, recordId: clip(`${turnId}-${id}`, DEVICE_TOOL_RECORD_LIMITS.id), name: raw.name, arguments: raw.arguments };
+      emit({ type: "tool", record: runningRecord(call) });
+      const outcome = calls > maxCalls
+        ? failedOutcome(call, "error", "call_limit", CALL_LIMIT_MESSAGE, clip(argumentsText(call.arguments), 2_000))
+        : await executeCall(call, { offered, adapter: input.adapter, signal: input.signal, maxChars: Math.min(maxResultChars, budget) });
+      throwIfAborted(input.signal);
+      if (outcome.record.status === "complete") budget -= outcome.content.length;
+      records.push(outcome.record);
+      emit({ type: "tool", record: outcome.record });
+      return { content: outcome.content, isError: outcome.record.status === "error" || outcome.record.status === "refused" };
+    };
+    await input.client.chatStep({
+      messages,
+      tools: definitions,
+      onToken: (token) => {
+        const text = trimLeading ? token.replace(/^\s+/, "") : token;
+        if (!text) return;
+        trimLeading = false;
+        sinceLastCall += text;
+        emit({ type: "token", text });
+      },
+      onToolCall,
+      signal: input.signal,
+    });
+    throwIfAborted(input.signal);
+    steps = 1;
+    if (!sinceLastCall.trim()) {
+      // It ended on its tool calls without an answer.
+      if (calls > maxCalls) {
+        emit({ type: "token", text: OUT_OF_STEPS_ANSWER });
+        return { text: OUT_OF_STEPS_ANSWER, records, toolsUnavailable, steps };
+      }
+      throw new DeviceAiError("bad_reply", "The on-device model returned an empty reply.");
+    }
+    return { text: sinceLastCall, records, toolsUnavailable, steps };
+  };
+
+  if (toolsOn && input.client.hostsToolLoop) {
+    try {
+      return await askHosted();
+    } catch (error) {
+      const refused = error instanceof DeviceAiError && error.code === "tools_unsupported";
+      if (!refused || records.length) throw error;
+      toolsOn = false;
+      toolsUnavailable = true;
+      messages = [...(input.messagesWithoutTools ?? input.messages)];
+      emit({ type: "tools_unavailable" });
+    }
+  }
+
   for (;;) {
     throwIfAborted(input.signal);
     // The last request offers no tools, so the model has to answer.
@@ -300,8 +394,7 @@ export async function runDeviceAssistantTurn(input: {
     });
     for (const call of batch) {
       throwIfAborted(input.signal);
-      const tool = findAgentTool(call.name);
-      emit({ type: "tool", record: { id: call.recordId, name: clip(call.name, DEVICE_TOOL_RECORD_LIMITS.name), kind: tool?.kind ?? "unknown", status: "running", summary: tool?.title ?? call.name, argsJson: clip(argumentsText(call.arguments), 2_000) } });
+      emit({ type: "tool", record: runningRecord(call) });
       const outcome = await executeCall(call, { offered, adapter: input.adapter, signal: input.signal, maxChars: Math.min(maxResultChars, budget) });
       if (outcome.record.status === "complete") budget -= outcome.content.length;
       records.push(outcome.record);

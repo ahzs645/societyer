@@ -6,6 +6,10 @@
  * - Desktop app: the main process makes the request (no CORS, and the API key
  *   stays in the main process). The renderer only names an allow-listed path.
  *
+ * Claude Code and Codex (desktop app only) run their own tool loop: a stream
+ * may deliver `tool_call` events, which `onToolCall` answers through
+ * `localAiToolResult` before the stream carries on.
+ *
  * Both return a standard `Response`, so the client and the AI SDK (through
  * `deviceAiSdkFetch`) read replies the same way in either runtime.
  */
@@ -31,11 +35,20 @@ export class DeviceAiError extends Error {
   }
 }
 
+/** A tool the model called mid-stream (Claude Code, Codex). `arguments` is JSON text. */
+export type DeviceAiToolCall = { callId: string; name: string; arguments: string };
+export type DeviceAiToolAnswer = { content: string; isError?: boolean };
+
 export type DeviceAiRequestInit = {
   method: "GET" | "POST";
   body?: string;
   signal?: AbortSignal;
   stream?: boolean;
+  /**
+   * Runs a tool the provider's own loop called (desktop CLI kinds). Its answer
+   * goes back to the model; the stream then carries on with more text.
+   */
+  onToolCall?: (call: DeviceAiToolCall) => Promise<DeviceAiToolAnswer>;
 };
 
 export type DeviceAiTransport = {
@@ -152,17 +165,28 @@ function responseFor(body: BodyInit | null, status: number, contentType?: string
   return new Response(noBody ? null : body, { status, headers: { "content-type": contentType ?? "application/json" } });
 }
 
-/** Electron prefixes invoke failures with the channel name; keep the reason. */
-function invokeMessage(error: unknown, fallback: string) {
+/**
+ * Electron prefixes invoke failures with the channel name and the error's
+ * class ("Error:", "LocalAiProxyError:"); keep only the reason.
+ */
+export function invokeMessage(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : "";
-  return message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "") || fallback;
+  return message.replace(/^Error invoking remote method '[^']+':\s*(?:\w*Error:\s*)?/, "") || fallback;
 }
 
 function desktopError(event: Extract<DesktopLocalAiStreamEvent, { type: "error" }>) {
   return new DeviceAiError(event.code === "refused" ? "refused" : event.code, event.message);
 }
 
-export function desktopTransport(bridge: SocietyerDesktopBridge): DeviceAiTransport {
+/** What the model is told when a tool call can't be answered here. */
+function toolErrorContent(code: string, message: string) {
+  return JSON.stringify({ error: { code, message } });
+}
+
+/** The bridge methods the desktop transport uses. */
+export type DesktopAiBridge = Pick<SocietyerDesktopBridge, "localAiRequest" | "localAiStream" | "localAiAbort" | "localAiToolResult">;
+
+export function desktopTransport(bridge: DesktopAiBridge): DeviceAiTransport {
   return {
     kind: "desktop",
     async send(path, init) {
@@ -186,24 +210,96 @@ export function desktopTransport(bridge: SocietyerDesktopBridge): DeviceAiTransp
       }
       return new Promise<Response>((resolve, reject) => {
         const encoder = new TextEncoder();
+        /**
+         * What the main process sent, handed to the reader in order. A tool
+         * call runs only when the reader asks for more, so every chunk before
+         * it (the model's preamble) has been read by then.
+         */
+        const items: Array<{ text: string } | { call: DeviceAiToolCall }> = [];
         let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
         let headed = false;
+        /** Nothing more will come from the main process. */
         let finished = false;
-        const body = new ReadableStream<Uint8Array>({
-          start(next) {
-            controller = next;
-          },
-          cancel() {
-            abort();
-          },
-        });
+        let ended = false;
+        let failed = false;
+        let wake: (() => void) | null = null;
+        const notify = () => {
+          const next = wake;
+          wake = null;
+          next?.();
+        };
         const fail = (error: DeviceAiError) => {
           if (finished) return;
           finished = true;
+          failed = true;
           init.signal?.removeEventListener("abort", abort);
           if (!headed) reject(abortReason(init.signal) ?? error);
           else controller?.error(abortReason(init.signal) ?? error);
+          notify();
         };
+        /**
+         * The provider's own loop called a tool: run it and answer, always.
+         * A handler that fails answers with an error; a stop aborts the whole
+         * stream instead (the abort listener tells the main process), so the
+         * main process never waits on a call nobody will answer.
+         */
+        const answerToolCall = async (call: DeviceAiToolCall) => {
+          let answer: DeviceAiToolAnswer;
+          if (!init.onToolCall) {
+            answer = { content: toolErrorContent("not_available", `${call.name} can't run here. Answer without tools.`), isError: true };
+          } else {
+            try {
+              answer = await init.onToolCall(call);
+            } catch (error) {
+              if (init.signal?.aborted) return;
+              const message = error instanceof Error && error.message ? error.message.slice(0, 300) : "The tool failed.";
+              answer = { content: toolErrorContent("failed", message), isError: true };
+            }
+          }
+          if (failed || init.signal?.aborted) return;
+          try {
+            await bridge.localAiToolResult({ requestId, callId: call.callId, content: answer.content, isError: answer.isError });
+          } catch (error) {
+            // The main process can't take the answer: end the request rather than leave it waiting.
+            abort();
+            fail(new DeviceAiError("network", invokeMessage(error, "Could not send the tool's result to the desktop app.")));
+          }
+        };
+        const body = new ReadableStream<Uint8Array>(
+          {
+            start(next) {
+              controller = next;
+            },
+            async pull(next) {
+              for (;;) {
+                if (failed) return;
+                const item = items.shift();
+                if (item && "text" in item) {
+                  next.enqueue(encoder.encode(item.text));
+                  return;
+                }
+                if (item) {
+                  await answerToolCall(item.call);
+                  continue;
+                }
+                if (ended) {
+                  next.close();
+                  return;
+                }
+                await new Promise<void>((resume) => {
+                  wake = resume;
+                });
+              }
+            },
+            cancel() {
+              failed = true;
+              abort();
+              notify();
+            },
+          },
+          // Nothing is read ahead: `pull` runs only when the reader wants more.
+          { highWaterMark: 0 },
+        );
         bridge
           .localAiStream(request, (event) => {
             if (finished) return;
@@ -211,11 +307,16 @@ export function desktopTransport(bridge: SocietyerDesktopBridge): DeviceAiTransp
               headed = true;
               resolve(responseFor(body, event.status, event.contentType ?? "text/event-stream"));
             } else if (event.type === "chunk") {
-              controller?.enqueue(encoder.encode(event.text));
+              items.push({ text: event.text });
+              notify();
+            } else if (event.type === "tool_call") {
+              items.push({ call: { callId: event.callId, name: event.name, arguments: event.arguments } });
+              notify();
             } else if (event.type === "end") {
               finished = true;
+              ended = true;
               init.signal?.removeEventListener("abort", abort);
-              controller?.close();
+              notify();
             } else {
               fail(desktopError(event));
             }
@@ -253,6 +354,7 @@ export function deviceAiSdkFetch(transport: DeviceAiTransport): typeof fetch {
     const path = new URL(raw).pathname.replace(/^\/v1(?=\/)/, "");
     if (!isDeviceAiPath(path)) throw new DeviceAiError("refused", "This AI request path is not allowed.");
     const body = typeof init?.body === "string" ? init.body : undefined;
+    // The AI SDK never offers tools here, so a provider's tool call is answered with an error.
     return transport.send(path, {
       method: (init?.method ?? "GET").toUpperCase() === "POST" ? "POST" : "GET",
       body,

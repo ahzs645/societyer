@@ -6,13 +6,13 @@
  * Requests go through the device transport: a direct fetch in a browser, the
  * desktop main process in the app (which holds the key). */
 import { deviceAiReadiness, deviceAiSnapshot, keyStorageLabel as deviceKeyStorageLabel } from "../../lib/localAi/config";
-import type { DeviceAiKind } from "../../lib/localAi/models";
+import { deviceAiDestinationLabel, type DeviceAiKind } from "../../lib/localAi/models";
 
 export type LocalLlmProvider = Exclude<DeviceAiKind, "none">;
 export type LocalLlmConfig = {
   provider: LocalLlmProvider;
   modelId: string;
-  /** Host shown in the confirmation and the processing log. */
+  /** Where the text goes, shown in the confirmation and the processing log: the server's host, or the CLI's service. */
   host: string;
   budgetTokens: number;
   concurrency: number;
@@ -58,14 +58,6 @@ export function keyStorageLabel(): string {
   return deviceKeyStorageLabel();
 }
 
-function hostOf(baseUrl: string) {
-  try {
-    return new URL(baseUrl).host;
-  } catch {
-    return baseUrl;
-  }
-}
-
 /** The on-device model for this intake run, or why there is none. */
 export function deviceIntakeLlm(prefs: IntakeLlmPrefs): { ok: true; config: LocalLlmConfig } | { ok: false; reason: string } {
   const current = deviceAiSnapshot();
@@ -78,7 +70,7 @@ export function deviceIntakeLlm(prefs: IntakeLlmPrefs): { ok: true; config: Loca
     config: {
       provider: config.kind,
       modelId: config.model,
-      host: hostOf(config.baseUrl),
+      host: deviceAiDestinationLabel(config.kind, config.baseUrl),
       budgetTokens: prefs.budgetTokens,
       concurrency: prefs.concurrency,
     },

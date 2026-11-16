@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -224,6 +224,8 @@ assert.equal(
     "LOCAL_AI_REQUEST_CHANNEL",
     "LOCAL_AI_STREAM_CHANNEL",
     "LOCAL_AI_ABORT_CHANNEL",
+    "LOCAL_AI_TOOL_RESULT_CHANNEL",
+    "LOCAL_AI_CLI_STATUS_CHANNEL",
     "LOCAL_AI_TRANSCRIPTION_UPLOAD_CHANNEL",
     "LOCAL_AI_TRANSCRIBE_CHANNEL",
   ]) {
@@ -233,8 +235,17 @@ assert.equal(
   assert.match(aiHandlers, /getDesktopSecret\("stt-api-key"\)/, "the speech-to-text key is read in the main process");
   assert.match(aiHandlers, /removeDesktopSecret\("stt-api-key"\)/, "the speech key is forgotten when its server changes");
   assert.match(aiHandlers, /payload: uploadInput/, "recording pieces are validated (size-bounded)");
+  assert.match(aiHandlers, /payload: toolResultInput/, "tool results are validated (size-bounded)");
+  assert.match(aiHandlers, /toolBridges\.get\(`\$\{event\.sender\.id\}:\$\{input\.requestId\}`\)/, "a tool result only reaches the sender's own stream");
+  assert.match(aiHandlers, /will-quit/, "CLI children stop when the app quits");
   const preload = readFileSync("electron/preload.ts", "utf8");
   assert.doesNotMatch(preload, /ai-api-key|stt-api-key/, "the preload never names the AI keys");
+  assert.match(preload, /localAiToolResult: \(input\) => ipcRenderer\.invoke\(IpcChannels\.LOCAL_AI_TOOL_RESULT_CHANNEL/);
+  assert.match(preload, /localAiCliStatus: \(kind\) => ipcRenderer\.invoke\(IpcChannels\.LOCAL_AI_CLI_STATUS_CHANNEL/);
+  // The CLI modules stay free of Electron so they run under Node in scripts/check-cli-ai.ts.
+  for (const file of readdirSync("electron/cliAi")) {
+    assert.doesNotMatch(readFileSync(path.join("electron/cliAi", file), "utf8"), /from "electron"/, `electron/cliAi/${file} has no Electron import`);
+  }
   assert.match(readFileSync("electron/ipc.ts", "utf8"), /registerAiHandlers\(\)/);
 }
 

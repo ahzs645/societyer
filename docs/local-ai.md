@@ -3,7 +3,9 @@
 Societyer can use a model server on your own computer for AI features in the
 **browser-local workspace** and the **desktop app**. With a local server such as
 Ollama, LM Studio or llama.cpp, meeting transcripts and chat messages never leave
-the computer.
+the computer. The desktop app can also use **Claude Code** or **Codex** already
+signed in on the computer; then data goes to Anthropic or OpenAI (see
+[Claude Code and Codex](#claude-code-and-codex-desktop-app)).
 
 On-device AI covers:
 
@@ -50,6 +52,8 @@ model is chosen, the first one listed is used; you can type any model name.
 | llama.cpp server | `http://127.0.0.1:8080/v1` | `llama-server -m model.gguf --port 8080 -c 8192` |
 | Other OpenAI-compatible | Type it | vLLM, LocalAI, a LAN box, and so on. |
 | OpenAI / OpenRouter | Fixed | Hosted services: an API key is required and data leaves the computer. |
+| Claude Code (your Claude sign-in) | None | Desktop app only. Runs the `claude` CLI signed in on this computer; data goes to Anthropic. |
+| Codex (your ChatGPT sign-in) | None | Desktop app only. Runs the `codex` CLI signed in on this computer; data goes to OpenAI. |
 
 An API key is optional for a server on this computer or your local network. If you
 set one it is sent as `Authorization: Bearer …`. A key is bound to the server it was
@@ -57,6 +61,64 @@ entered for: changing the address to another server forgets it.
 
 Addresses on this computer or the local network may use `http://`. Anything else
 must use `https://`.
+
+### Claude Code and Codex (desktop app)
+
+In the desktop app, **Model server** also offers **Claude Code (your Claude
+sign-in)** and **Codex (your ChatGPT sign-in)**. The desktop app's main process
+runs the CLI that is already installed and signed in on this computer and
+translates to and from the OpenAI format, so minutes drafting, the assistant
+(with record lookups), AI intake and Ask AI work as with a model server. The
+browser-local workspace never offers them; a saved CLI choice read in a browser
+is turned off.
+
+**Set up.**
+
+1. Install the CLI and sign in once in Terminal: `claude auth login` for
+   Claude Code, `codex login` for Codex.
+2. In **Settings → On-device AI**, pick Claude Code or Codex. There is no
+   address or API key.
+3. **Claude Code location** / **Codex location** is optional. Empty finds the
+   CLI on the login shell's PATH and the usual install folders; otherwise give
+   the full path to the program (an absolute path, at most 1,000 characters).
+4. **Model** is optional: empty uses the CLI's default. Test connection lists
+   the models (Claude Code: `sonnet`, `opus`, `haiku`; Codex: your Codex models).
+5. **Test connection** shows whether the CLI was found, its version, whether it
+   is signed in and the account ("Claude Max · name@example.com"), or a plain
+   reason with what to do ("Run `claude auth login` in Terminal."). It doesn't
+   send the tool test: the CLI always takes tools.
+
+**What is sent where.** Everything the feature sends (meeting title and
+transcript, chat messages, the system prompt, what record lookups return, intake
+text after masking, the Ask AI column schema) goes to Anthropic (Claude Code) or
+OpenAI (Codex) under your own account and plan, with its terms and usage
+limits. Settings, the chat and the intake confirmation say so. Nothing goes to
+Societyer.
+
+**What is turned off.** The CLI runs with its own tools off: no shell, no file
+reading or writing, no web search or fetch. Record lookups are Societyer's
+tools: the CLI asks for one, and the app runs it on this device, as you, under
+the same rules as with any other model (see [Assistant tools](#assistant-tools)).
+Each run uses an empty private folder that is deleted afterwards.
+
+- **Claude Code** runs with no built-in tools, no settings files, CLAUDE.md,
+  hooks, plugins, skills, slash commands or auto-memory, no MCP servers except
+  Societyer's (on 127.0.0.1, with a token for that one request) and no saved
+  session.
+- **Codex** runs one background `codex app-server` (stopped after 10 idle
+  minutes and when the app quits) with shell, file-editing, image, browser,
+  plugin, app, skill, memory, sub-agent and web-search features off, every MCP
+  server you configured turned off, a read-only sandbox, no approvals and no
+  execution environment, so the few tools Codex still lists can't reach files
+  or the network. Threads are not saved. Codex still reads your global
+  `~/.codex/AGENTS.md` (Codex has no setting to skip it), so keep anything you
+  don't want in Societyer's prompts out of that file. If Codex can't list your
+  MCP servers, Societyer refuses to run it rather than run it with them on.
+- Codex takes about 20 seconds to start answering the first time; Claude Code
+  about 3 seconds.
+
+**Sign-in.** Societyer never sees or stores the CLI's credentials; the CLI uses
+its own sign-in. Sign out with the CLI to stop it working here.
 
 ### Browser-local workspace: allow this page (CORS)
 
@@ -94,7 +156,8 @@ The desktop app sends requests from its main process, so none of this applies th
 
 Requests go only to the address in Settings. With a local server, meeting data
 stays on this computer. With OpenAI or OpenRouter selected, transcripts and
-messages are sent to that service.
+messages are sent to that service; with Claude Code or Codex, to Anthropic or
+OpenAI under your own sign-in.
 
 - Minutes drafting sends the meeting title, type and the transcript text (with
   assigned speaker names).
@@ -137,7 +200,15 @@ function-calling format. When the model calls a tool, the page runs it on the
 local data, as you, and sends the result back; this repeats until the model
 answers. At most 6 model requests per reply (the last one offers no tools, so the
 model has to answer), at most 4 calls per request, 12,000 characters per result
-and 40,000 for the whole reply; a longer result is cut and says so. **Stop** works
+and 40,000 for the whole reply; a longer result is cut and says so.
+
+With **Claude Code or Codex** the CLI runs the loop itself in one request: each
+call it makes arrives mid-stream, the page runs it under the same rules (offered
+tools only, checked arguments, the same budgets, changes only proposed) and
+sends the result back (`localAiToolResult`). Up to 20 calls per reply (5 × 4);
+later calls get an error telling the model to answer now. Text written before a
+call is cleared; the answer is what comes after the last call. The 90-second
+silence limit pauses while a lookup runs. **Stop** works
 at any point, including between lookups. A reply stopped before any answer text
 saves nothing.
 
@@ -169,7 +240,8 @@ offered, gets an error result the model can correct, never an exception.
   only what you could open yourself.
 - Nothing leaves the device except the model request, to the address in
   Settings. With a local server, records stay on this computer. With OpenAI or
-  OpenRouter selected, what the tools return is sent to that service.
+  OpenRouter selected, what the tools return is sent to that service; with
+  Claude Code or Codex, to Anthropic or OpenAI.
 - Text written by workspace users (minutes, transcript lines, document text,
   task descriptions, and short fields such as meeting and task titles,
   locations, names, tags and file names) reaches the model wrapped as
@@ -329,6 +401,13 @@ back to the rule-based draft, exactly as on the server.
 - Device client: `src/lib/localAi/` (`config.ts`, `client.ts`, `transport.ts`,
   `models.ts`, `useDeviceAi.ts`). Intake's worker and Ask AI reach the AI SDK
   through `deviceAiSdkFetch`, so they use the same transport.
+- Claude Code and Codex: `isCliKind`, the presets and labels in `models.ts`; the
+  `cli` paths and browser sanitising in `config.ts`; `tool_call` stream events
+  answered in `desktopTransport` (`onToolCall`, ordered after the text before
+  them); `hostsToolLoop`, the held stall timer and the CLI status in
+  `client.ts`; the hosted branch of `runDeviceAssistantTurn`. The bridge
+  contract is in `src/lib/desktopBridge.ts` (`localAiToolResult`,
+  `localAiCliStatus`).
 - Desktop proxy: `electron/localAiProxy.ts` (chat paths `/models`,
   `/chat/completions`, `/api/tags`; speech paths `/audio/transcriptions` and
   `/inference` only to the speech-to-text server, only the one its kind uses;

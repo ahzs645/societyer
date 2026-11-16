@@ -154,8 +154,9 @@ export type DesktopSecretStatus = {
  * process reads these to build every model request itself.
  */
 export type DesktopLocalAiConfig = {
-  kind: "ollama" | "lmstudio" | "openai-compatible" | "openai" | "openrouter" | "none";
-  preset: "ollama" | "lmstudio" | "llamacpp" | "openai-compatible" | "openai" | "openrouter";
+  kind: "ollama" | "lmstudio" | "openai-compatible" | "openai" | "openrouter" | DesktopLocalAiCliKind | "none";
+  preset: "ollama" | "lmstudio" | "llamacpp" | "openai-compatible" | "openai" | "openrouter" | DesktopLocalAiCliKind;
+  /** Unused by the CLI kinds (they have no server address). */
   baseUrl: string;
   model: string;
   features: { minutes: boolean; assistant: boolean; intake: boolean };
@@ -163,7 +164,45 @@ export type DesktopLocalAiConfig = {
   speechToText: { kind: "none" | "openai-compatible" | "whisper-cpp" | "whisperx"; baseUrl: string; model: string };
   /** The on-device assistant's record tools (read by the renderer only). */
   assistantTools: { lookUpRecords: boolean; proposeChanges: boolean };
+  /** The CLI kinds: where each CLI is. Empty finds it on the login shell's PATH and the usual install folders. */
+  cli: { claudePath: string; codexPath: string };
   updatedAtISO?: string;
+};
+
+/**
+ * AI through a command-line agent already signed in on this computer (Claude
+ * Code, Codex), desktop app only. The main process runs the CLI with its own
+ * tools turned off; the conversation goes to Anthropic or OpenAI under the
+ * person's own sign-in.
+ */
+export type DesktopLocalAiCliKind = "claude-cli" | "codex-cli";
+
+/** What "Test connection" shows for a CLI kind. */
+export type DesktopLocalAiCliStatus = {
+  kind: DesktopLocalAiCliKind;
+  /** The binary was found and answered `--version`. */
+  found: boolean;
+  binaryPath?: string;
+  version?: string;
+  /** null when the sign-in could not be checked. */
+  signedIn: boolean | null;
+  /** Shown to the person, e.g. "Claude Max · name@example.com" or "ChatGPT Plus". */
+  account?: string;
+  /** One plain sentence: ready, not found, or not signed in. */
+  message: string;
+  /** What to do next, e.g. "Run `claude auth login` in Terminal." */
+  hint?: string;
+};
+
+/**
+ * The renderer's answer to a `tool_call` stream event: the tool's result as
+ * the model should see it (JSON text), or an error message.
+ */
+export type DesktopLocalAiToolResult = {
+  requestId: string;
+  callId: string;
+  content: string;
+  isError?: boolean;
 };
 
 /** Paths the desktop AI proxy forwards; the main process enforces this list. */
@@ -189,6 +228,12 @@ export type DesktopLocalAiResponse = {
 export type DesktopLocalAiStreamEvent =
   | { type: "head"; status: number; ok: boolean; contentType?: string }
   | { type: "chunk"; text: string }
+  /**
+   * CLI kinds only: the CLI runs the tool loop itself, so a tool call arrives
+   * mid-stream. The renderer runs it and answers with `localAiToolResult`;
+   * the stream carries on with the model's next text. `arguments` is JSON text.
+   */
+  | { type: "tool_call"; callId: string; name: string; arguments: string }
   | { type: "end" }
   | { type: "error"; code: "network" | "timeout" | "aborted" | "refused"; message: string };
 
@@ -295,6 +340,10 @@ export type SocietyerDesktopBridge = {
   localAiStream(input: DesktopLocalAiRequest, onEvent: (event: DesktopLocalAiStreamEvent) => void): Promise<void>;
   /** Also stops a transcription and deletes its temporary file. */
   localAiAbort(requestId: string): Promise<void>;
+  /** Answers a `tool_call` event of a running stream. */
+  localAiToolResult(input: DesktopLocalAiToolResult): Promise<void>;
+  /** Finds a CLI, its version and its sign-in; never runs a model. */
+  localAiCliStatus(kind: DesktopLocalAiCliKind): Promise<DesktopLocalAiCliStatus>;
   localAiTranscriptionUpload(input: DesktopTranscriptionUpload): Promise<{ received: number }>;
   /** Progress events arrive while it runs; settles with the server's replies or a failure. */
   localAiTranscribe(input: DesktopTranscriptionRequest, onEvent: (event: DesktopTranscriptionEvent) => void): Promise<DesktopTranscriptionResult>;

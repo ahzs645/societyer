@@ -508,7 +508,7 @@ function MeetingDetailWorkspace() {
     try {
       await draftMinutes(sourceTranscript);
       setTranscript("");
-      toast.success(isLocalDataRuntime() ? `Minutes drafted on this device with ${localDraft.model}.` : "Minutes drafted from transcript.");
+      toast.success(isLocalDataRuntime() ? `Minutes drafted with ${localDraft.model}.` : "Minutes drafted from transcript.");
       return true;
     } catch (err: unknown) {
       toastDraftError(err);
@@ -605,7 +605,7 @@ function MeetingDetailWorkspace() {
         provider: "manual",
       });
       await draftMinutes(trimmed);
-      toast.success(isLocalDataRuntime() ? `Minutes drafted on this device with ${localDraft.model}.` : "Minutes drafted from pasted transcript.");
+      toast.success(isLocalDataRuntime() ? `Minutes drafted with ${localDraft.model}.` : "Minutes drafted from pasted transcript.");
     } catch (err: unknown) {
       toastDraftError(err, "Draft cancelled. The pasted transcript was saved; the minutes were not changed.");
     } finally {

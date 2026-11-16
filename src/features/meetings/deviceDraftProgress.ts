@@ -62,5 +62,6 @@ export function useDeviceDraftProgress(meetingId: string | undefined): DeviceDra
 export function deviceDraftLabel(progress: DeviceDraftProgress): string {
   if (progress.done >= progress.total) return "Saving the draft…";
   if (progress.total > 1) return `Drafting part ${progress.done + 1} of ${progress.total}…`;
-  return "Drafting on this device…";
+  // Not "on this device": Claude Code, Codex and hosted services draft elsewhere.
+  return "Drafting the minutes…";
 }

@@ -22,8 +22,10 @@ export const SPEECH_PROXY_PATHS = SPEECH_PATHS;
 export const LOCAL_AI_MAX_RESPONSE_BYTES = 8_000_000;
 export const LOCAL_AI_DEFAULT_TIMEOUT_MS = 5 * 60_000;
 
-const KINDS = ["ollama", "lmstudio", "openai-compatible", "openai", "openrouter", "none"] as const;
-const PRESETS = ["ollama", "lmstudio", "llamacpp", "openai-compatible", "openai", "openrouter"] as const;
+const KINDS = ["ollama", "lmstudio", "openai-compatible", "openai", "openrouter", "claude-cli", "codex-cli", "none"] as const;
+const PRESETS = ["ollama", "lmstudio", "llamacpp", "openai-compatible", "openai", "openrouter", "claude-cli", "codex-cli"] as const;
+/** Kinds that run a signed-in command-line agent (electron/cliAi/) instead of calling a server. */
+const CLI_KINDS: readonly string[] = ["claude-cli", "codex-cli"];
 
 export const DEFAULT_DESKTOP_LOCAL_AI_CONFIG: DesktopLocalAiConfig = {
   kind: "none",
@@ -34,6 +36,7 @@ export const DEFAULT_DESKTOP_LOCAL_AI_CONFIG: DesktopLocalAiConfig = {
   minutesChunkChars: 8000,
   speechToText: { kind: "none", baseUrl: "", model: "" },
   assistantTools: { lookUpRecords: false, proposeChanges: false },
+  cli: { claudePath: "", codexPath: "" },
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -42,6 +45,20 @@ function record(value: unknown): Record<string, unknown> {
 
 function text(value: unknown, max = 2000) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+/**
+ * A CLI path: empty (look it up), or absolute (POSIX `/…`, a Windows drive
+ * `C:\…` or a UNC `\\server\…` path), at most 1000 characters, with no
+ * control characters. Anything else is dropped. The same rule as the
+ * renderer's `sanitizeCliPath` (src/lib/localAi/config.ts).
+ */
+export function sanitizeCliPath(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const path = value.trim();
+  const control = [...path].some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f);
+  if (!path || path.length > 1000 || control) return "";
+  return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\") ? path : "";
 }
 
 function fixedBaseUrl(kind: DesktopLocalAiConfig["kind"]) {
@@ -59,6 +76,7 @@ export function sanitizeLocalAiConfig(raw: unknown): DesktopLocalAiConfig {
   const chunk = Number(row.minutesChunkChars);
   const tools = record(row.assistantTools);
   const lookUpRecords = tools.lookUpRecords === true;
+  const cli = record(row.cli);
   return {
     kind,
     preset,
@@ -72,6 +90,7 @@ export function sanitizeLocalAiConfig(raw: unknown): DesktopLocalAiConfig {
       model: text(speech.model, 300),
     },
     assistantTools: { lookUpRecords, proposeChanges: lookUpRecords && tools.proposeChanges === true },
+    cli: { claudePath: sanitizeCliPath(cli.claudePath), codexPath: sanitizeCliPath(cli.codexPath) },
     updatedAtISO: text(row.updatedAtISO, 40) || undefined,
   };
 }
@@ -116,6 +135,7 @@ export function proxyTargetUrl(config: Pick<DesktopLocalAiConfig, "kind" | "base
   }
   if (!(LOCAL_AI_PROXY_PATHS as readonly string[]).includes(path)) throw new LocalAiProxyError("refused", "This AI request path is not allowed.");
   if (config.kind === "none") throw new LocalAiProxyError("refused", "On-device AI is off.");
+  if (CLI_KINDS.includes(config.kind)) throw new LocalAiProxyError("refused", "A command-line agent has no server address; its requests run through the CLI.");
   const base = (fixedBaseUrl(config.kind) ?? config.baseUrl).replace(/\/+$/, "");
   const problem = localAiBaseUrlProblem(base);
   if (problem) throw new LocalAiProxyError("refused", problem);

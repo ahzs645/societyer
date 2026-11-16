@@ -12,6 +12,10 @@
  *   keychain (Electron safeStorage). The main process reads both and makes the
  *   requests itself, so the key never reaches this renderer.
  *
+ * Claude Code and Codex (`claude-cli`, `codex-cli`) exist only in the desktop
+ * app: its main process runs the CLI. The browser-local workspace never offers
+ * or keeps them (`parseDeviceAiConfig` turns them off there).
+ *
  * Older builds kept intake-only preferences under `societyer:intake:llm-prefs`;
  * they are migrated once, with only the intake toggle carried over so meeting
  * data is never sent anywhere the person had not chosen.
@@ -24,6 +28,7 @@ import {
   defaultPresetForKind,
   deviceAiKeyRequired,
   effectiveBaseUrl,
+  isCliKind,
   isDeviceAiKind,
   isDeviceAiPreset,
   presetInfo,
@@ -46,8 +51,16 @@ export type DeviceAiConfig = {
   speechToText: DeviceSpeechConfig;
   /** What the on-device assistant may do with workspace records (both off by default). */
   assistantTools: DeviceAssistantToolSettings;
+  /** Where the Claude Code and Codex CLIs are (desktop app); empty finds them automatically. */
+  cli: DeviceCliPaths;
   updatedAtISO?: string;
 };
+
+/** Absolute paths, or empty to look on the login shell's PATH and the usual install folders. */
+export type DeviceCliPaths = { claudePath: string; codexPath: string };
+
+/** Same limit as the desktop app's main process. */
+export const CLI_PATH_MAX_CHARS = 1000;
 
 /**
  * `lookUpRecords`: offer the read-only agent tools to the model.
@@ -78,6 +91,7 @@ export const DEFAULT_DEVICE_AI_CONFIG: DeviceAiConfig = {
   minutesChunkChars: DEFAULT_MINUTES_CHUNK_CHARS,
   speechToText: { kind: "none", baseUrl: "", model: "" },
   assistantTools: { lookUpRecords: false, proposeChanges: false },
+  cli: { claudePath: "", codexPath: "" },
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -88,11 +102,42 @@ function text(value: unknown, max = 2000): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-/** Sanitises anything read from storage (or sent by the desktop host). */
-export function parseDeviceAiConfig(raw: unknown): DeviceAiConfig {
+/**
+ * A CLI location: empty, or an absolute path (POSIX, or a Windows drive or UNC
+ * path) of at most 1000 characters with no control characters. Anything else
+ * is dropped, never cut, so a wrong path is never run.
+ */
+export function sanitizeCliPath(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const path = value.trim();
+  const control = [...path].some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f);
+  if (!path || path.length > CLI_PATH_MAX_CHARS || control) return "";
+  return isAbsoluteCliPath(path) ? path : "";
+}
+
+/** POSIX `/…`, a Windows drive path `C:\…`, or a UNC path `\\server\…`. */
+export function isAbsoluteCliPath(path: string): boolean {
+  return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\");
+}
+
+/**
+ * Sanitises anything read from storage (or sent by the desktop host). Outside
+ * the desktop app, a CLI kind or preset is turned off: only the desktop app
+ * can run them.
+ */
+export function parseDeviceAiConfig(raw: unknown, options: { desktop?: boolean } = {}): DeviceAiConfig {
+  const desktop = options.desktop ?? Boolean(getDesktopBridge());
   const row = record(raw);
-  const kind: DeviceAiKind = isDeviceAiKind(row.kind) ? row.kind : "none";
-  const preset: DeviceAiPreset = isDeviceAiPreset(row.preset) ? row.preset : defaultPresetForKind(kind);
+  const storedKind: DeviceAiKind = isDeviceAiKind(row.kind) ? row.kind : "none";
+  const kind: DeviceAiKind = isCliKind(storedKind) && !desktop ? "none" : storedKind;
+  const storedPreset: DeviceAiPreset = isDeviceAiPreset(row.preset) ? row.preset : defaultPresetForKind(kind);
+  // A CLI kind always shows its own preset; a CLI preset needs the desktop app and its own kind (or off).
+  const preset: DeviceAiPreset = isCliKind(kind)
+    ? kind
+    : isCliKind(storedPreset) && (!desktop || kind !== "none")
+      ? defaultPresetForKind(kind)
+      : storedPreset;
+  const cli = record(row.cli);
   const features = record(row.features);
   const speech = record(row.speechToText);
   const speechKind = isSpeechToTextKind(speech.kind) ? speech.kind : "none";
@@ -111,6 +156,7 @@ export function parseDeviceAiConfig(raw: unknown): DeviceAiConfig {
     minutesChunkChars: clampChunkChars(row.minutesChunkChars ?? DEFAULT_MINUTES_CHUNK_CHARS),
     speechToText: { kind: speechKind, baseUrl: text(speech.baseUrl).replace(/\/+$/, ""), model: text(speech.model, 300) },
     assistantTools: { lookUpRecords, proposeChanges: lookUpRecords && tools.proposeChanges === true },
+    cli: { claudePath: sanitizeCliPath(cli.claudePath), codexPath: sanitizeCliPath(cli.codexPath) },
     updatedAtISO: text(row.updatedAtISO, 40) || undefined,
   };
 }
@@ -156,6 +202,7 @@ function toDesktop(config: DeviceAiConfig): DesktopLocalAiConfig {
     minutesChunkChars: config.minutesChunkChars,
     speechToText: { ...config.speechToText },
     assistantTools: { ...config.assistantTools },
+    cli: { ...config.cli },
     updatedAtISO: config.updatedAtISO,
   };
 }
@@ -299,6 +346,10 @@ export function deviceAiReadiness(current: DeviceAiState, feature?: DeviceAiFeat
   const { config, keyStored } = current;
   if (config.kind === "none") return { ready: false, reason: "On-device AI is off." };
   if (feature && !config.features[feature]) return { ready: false, reason: "On-device AI is turned off for this feature." };
+  // The CLIs need no address or key: the desktop app runs them with their own sign-in. No model means the CLI's default.
+  if (isCliKind(config.kind)) {
+    return getDesktopBridge() ? { ready: true } : { ready: false, reason: "Claude Code and Codex work only in the desktop app." };
+  }
   const address = checkDeviceAiBaseUrl(config.baseUrl);
   if (!address.ok) return { ready: false, reason: address.message };
   if (!config.model) return { ready: false, reason: "Choose a model in Settings." };

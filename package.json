@@ -91,6 +91,7 @@
     "test:local-ai-client": "tsx scripts/check-local-ai-client.ts",
     "test:device-assistant-tools": "tsx scripts/check-device-assistant-tools.ts",
     "test:local-transcription": "tsx scripts/check-local-transcription.ts",
+    "test:cli-ai": "tsx scripts/check-cli-ai.ts",
     "test:minutes-draft-shared": "tsx scripts/check-minutes-draft-shared.ts",
     "test:ai-endpoint-policy": "tsx scripts/check-ai-endpoint-policy.ts",
     "test:stage2-enforced": "tsx scripts/check-stage2-enforced.ts",

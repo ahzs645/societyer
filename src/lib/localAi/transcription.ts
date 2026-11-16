@@ -135,7 +135,7 @@ function newRequestId() {
 /** Electron prefixes invoke failures with the channel name; keep the reason. */
 function invokeMessage(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : "";
-  return message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "") || fallback;
+  return message.replace(/^Error invoking remote method '[^']+':\s*(?:\w*Error:\s*)?/, "") || fallback;
 }
 
 function desktopProgress(event: DesktopTranscriptionEvent): SpeechProgress {

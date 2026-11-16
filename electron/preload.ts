@@ -90,6 +90,8 @@ const bridge: SocietyerDesktopBridgeWithSnapshot = {
       });
     }),
   localAiAbort: (requestId) => ipcRenderer.invoke(IpcChannels.LOCAL_AI_ABORT_CHANNEL, requestId),
+  localAiToolResult: (input) => ipcRenderer.invoke(IpcChannels.LOCAL_AI_TOOL_RESULT_CHANNEL, input),
+  localAiCliStatus: (kind) => ipcRenderer.invoke(IpcChannels.LOCAL_AI_CLI_STATUS_CHANNEL, kind),
   localAiTranscriptionUpload: (input) => ipcRenderer.invoke(IpcChannels.LOCAL_AI_TRANSCRIPTION_UPLOAD_CHANNEL, input),
   localAiTranscribe: (input, onEvent) => {
     // Progress events for this request only, until the result arrives.

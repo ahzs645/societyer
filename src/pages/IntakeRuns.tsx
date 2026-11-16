@@ -24,6 +24,7 @@ import { cacheRunOriginals, importPipelineOutput, pipelineOutputFiles, type Impo
 import { clearOriginals, originalsUsage } from "../features/intake/originalsCache";
 import { deviceIntakeLlm, providerHost, readLlmPrefs, writeLlmPrefs } from "../features/intake/localLlm";
 import { DEVICE_AI_SETTINGS_HREF, useDeviceAi } from "../lib/localAi/useDeviceAi";
+import { deviceAiDestinationLabel, deviceAiModelLabel } from "../lib/localAi/models";
 import { CompactRunPanel } from "../features/intake/CompactRunPanel";
 import "../features/intake/intake.css";
 import { StatTile } from "../components/StatTile";
@@ -363,7 +364,7 @@ export function IntakeRunsPage() {
       writeLlmPrefs({ enabled: true, budgetTokens, concurrency: 2 });
       const ok = await confirm({
         title: "Send redacted text to an AI provider?",
-        message: `Extracted text of up to ${summary.extract} files will be sent to ${providerHost(llm)} (${llm.modelId}) with phone numbers, emails, SIN, account and card numbers and postal codes masked. Restricted files (payroll, banking, contact lists, consent forms) are never sent. Every call is listed in the run's processing log. Budget: ${budgetTokens.toLocaleString()} tokens.`,
+        message: `Extracted text of up to ${summary.extract} files will be sent to ${providerHost(llm)}${llm.modelId ? ` (${llm.modelId})` : ""} with phone numbers, emails, SIN, account and card numbers and postal codes masked. Restricted files (payroll, banking, contact lists, consent forms) are never sent. Every call is listed in the run's processing log. Budget: ${budgetTokens.toLocaleString()} tokens.`,
         confirmLabel: "Start run",
         tone: "warn",
       });
@@ -504,7 +505,7 @@ export function IntakeRunsPage() {
                   <div className="intake-llm__grid">
                     <p className="muted" style={{ margin: 0 }} role="status">
                       {deviceAi.ready
-                        ? <>On-device AI: {deviceAi.config.model} at {providerHost({ host: hostLabel(deviceAi.config.baseUrl) })}. </>
+                        ? <>On-device AI: {deviceAiModelLabel(deviceAi.config.kind, deviceAi.config.model)}, sent to {deviceAiDestinationLabel(deviceAi.config.kind, deviceAi.config.baseUrl)}. </>
                         : <>{deviceAi.reason ?? "On-device AI is not set up."} </>}
                       <Link to={DEVICE_AI_SETTINGS_HREF}>{deviceAi.ready ? "Change in Settings" : "Set up on-device AI in Settings"}</Link>
                     </p>
@@ -836,13 +837,5 @@ function writeOcrPrefs(prefs: { enabled: boolean; pageBudget: number }) {
     localStorage.setItem(OCR_PREFS_KEY, JSON.stringify(prefs));
   } catch {
     // not remembered
-  }
-}
-
-function hostLabel(baseUrl: string) {
-  try {
-    return new URL(baseUrl).host;
-  } catch {
-    return baseUrl;
   }
 }

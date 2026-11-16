@@ -14,7 +14,12 @@
  *   - a server that refuses tools: the turn continues without them, and the
  *     capability probe and suggestions follow;
  *   - in-camera redaction and the transcript permission through the loop;
- *   - tool records saved with the reply (aiChat:appendDeviceMessage).
+ *   - tool records saved with the reply (aiChat:appendDeviceMessage);
+ *   - Claude Code / Codex hosting the loop (a fake desktop bridge): calls
+ *     arrive mid-stream and go through the same policy, results go back
+ *     through localAiToolResult, proposals stay proposals, refusals, budgets,
+ *     the call limit, abort mid-tool, and only the text after the last call
+ *     is the answer.
  *
  * Run: node --import tsx scripts/check-device-assistant-tools.ts
  */
@@ -26,10 +31,13 @@ import { IN_CAMERA_PLACEHOLDER } from "../shared/minutesPrivacy";
 import { buildLocalAssistantMessages, UNTRUSTED_DATA_RULE } from "../shared/ai/localAssistantPrompt";
 import { chatCompletionToolCalls, createToolCallAccumulator, isToolsRejection } from "../shared/ai/openAiCompatible";
 import { createDeviceAiClient, type ChatStepResult } from "../src/lib/localAi/client";
-import { DeviceAiError, directTransport } from "../src/lib/localAi/transport";
+import { DeviceAiError, desktopTransport, directTransport, type DesktopAiBridge } from "../src/lib/localAi/transport";
+import type { DesktopLocalAiToolResult } from "../src/lib/desktopBridge";
 import { decodeToolArguments, toolCallsFromText } from "../src/lib/localAi/toolCalls";
 import {
+  CALL_LIMIT_MESSAGE,
   chatToolDefinition,
+  DEVICE_TOOL_CALLS_PER_STEP,
   deviceAssistantTools,
   dismissedChange,
   OUT_OF_STEPS_ANSWER,
@@ -112,6 +120,91 @@ async function turn(options: {
   });
   return { ...result, events, streamed, tools, bodies: chatBodies() };
 }
+
+/** One CLI turn: text it streams and tools it calls, like the desktop main process with a CLI kind. */
+type CliScript = (cli: { say(text: string): void; call(name: string, args: unknown): Promise<DesktopLocalAiToolResult> }) => Promise<void>;
+
+class CliStopped extends Error {}
+
+function fakeCliBridge(script: CliScript) {
+  const pending = new Map<string, (result: DesktopLocalAiToolResult) => void>();
+  const stops = new Map<string, () => void>();
+  const results: DesktopLocalAiToolResult[] = [];
+  const bodies: ChatBody[] = [];
+  const aborts: string[] = [];
+  const bridge: DesktopAiBridge = {
+    async localAiRequest() {
+      return { status: 404, ok: false, body: "" };
+    },
+    async localAiStream(input, onEvent) {
+      bodies.push(JSON.parse(input.body ?? "{}") as ChatBody);
+      const stop = new Promise<"stopped">((resolve) => stops.set(input.requestId, () => resolve("stopped")));
+      let calls = 0;
+      let stopped = false;
+      void stop.then(() => (stopped = true));
+      onEvent({ type: "head", status: 200, ok: true, contentType: "text/event-stream" });
+      try {
+        await script({
+          say(text) {
+            if (stopped) throw new CliStopped();
+            onEvent({ type: "chunk", text: `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: text } }] })}\n\n` });
+          },
+          async call(name, args) {
+            if (stopped) throw new CliStopped();
+            calls += 1;
+            const callId = `toolu_${calls}`;
+            const answer = new Promise<DesktopLocalAiToolResult>((resolve) => pending.set(`${input.requestId}:${callId}`, resolve));
+            onEvent({ type: "tool_call", callId, name, arguments: JSON.stringify(args) });
+            const outcome = await Promise.race([answer, stop]);
+            if (outcome === "stopped") throw new CliStopped();
+            return outcome;
+          },
+        });
+        onEvent({ type: "chunk", text: "data: [DONE]\n\n" });
+        onEvent({ type: "end" });
+      } catch {
+        onEvent({ type: "error", code: "aborted", message: "The AI request was stopped." });
+      }
+    },
+    async localAiAbort(requestId) {
+      aborts.push(requestId);
+      stops.get(requestId)?.();
+    },
+    async localAiToolResult(input) {
+      results.push(input);
+      pending.get(`${input.requestId}:${input.callId}`)?.(input);
+    },
+  };
+  const cliClient = createDeviceAiClient({ transport: desktopTransport(bridge), kind: "claude-cli", model: "", serverKey: "claude-cli" });
+  return { client: cliClient, results, bodies, aborts };
+}
+
+async function cliTurn(script: CliScript, options: { role?: FixtureRole; proposeChanges?: boolean; maxSteps?: number; maxTurnChars?: number; signal?: AbortSignal; adapter?: AgentToolAdapter; cli?: ReturnType<typeof fakeCliBridge> } = {}) {
+  const role = options.role ?? "Owner";
+  const cli = options.cli ?? fakeCliBridge(script);
+  const tools = deviceAssistantTools({ permissions: listPermissionsForRole(role), proposeChanges: options.proposeChanges ?? false });
+  const history = [{ role: "user", content: "What happened at our meetings?" }];
+  const events: DeviceAssistantEvent[] = [];
+  let streamed = "";
+  const result = await runDeviceAssistantTurn({
+    client: cli.client,
+    adapter: options.adapter ?? adapterFor(role),
+    messages: buildLocalAssistantMessages(promptContext, history, { canProposeChanges: tools.some((tool) => tool.kind !== "read") }),
+    messagesWithoutTools: buildLocalAssistantMessages(promptContext, history),
+    tools,
+    signal: options.signal,
+    maxSteps: options.maxSteps,
+    maxTurnChars: options.maxTurnChars,
+    onEvent: (event) => {
+      events.push(event);
+      if (event.type === "token") streamed += event.text;
+      if (event.type === "discard_text") streamed = "";
+    },
+  });
+  return { ...result, events, streamed, cli };
+}
+
+const resultJson = (result: DesktopLocalAiToolResult) => JSON.parse(result.content) as Row & { error?: { code: string; message: string } };
 
 const toolMessages = (body: ChatBody) => body.messages.filter((message) => message.role === "tool");
 const openTaskCount = async () => {
@@ -336,6 +429,8 @@ try {
   assert.equal(deviceAssistantToolsAvailable(DEFAULT_DEVICE_AI_CONFIG, "unknown"), false);
   assert.equal(deviceAssistantToolsAvailable(toolsOn, "unknown"), true, "an untested model is tried");
   assert.equal(deviceAssistantToolsAvailable(toolsOn, "unsupported"), false, "a model known to refuse tools isn't");
+  const cliToolsOn = parseDeviceAiConfig({ ...toolsOn, kind: "claude-cli", preset: "claude-cli", model: "" }, { desktop: true });
+  assert.equal(deviceAssistantToolsAvailable(cliToolsOn, "unsupported"), true, "Claude Code and Codex always take tools");
   assert.equal(deviceAssistantToolsAvailable({ ...toolsOn, features: { ...toolsOn.features, assistant: false } }, "supported"), false);
   const labels = (support: "supported" | "unsupported", config = toolsOn) =>
     assistantSuggestions(assistantCapabilities({ localOnly: true, deviceChat: true, deviceConfig: config, deviceToolSupport: support })).map((prompt) => prompt.label);
@@ -366,6 +461,105 @@ try {
   const windowed = await turn({ script: [[{ name: "get_transcript", arguments: { meetingId: "meeting_public", fromSec: 0, toSec: 300, limit: 200 } }]] });
   assert.equal(windowed.records[0].summary, "transcript 0:00–4:00", "the chip names the time range read");
 
+  // --- Claude Code / Codex host the loop: one request, calls answered mid-stream ------------------------
+  const hosted = await cliTurn(async (cli) => {
+    cli.say("Let me check the meetings. ");
+    const listedMeetings = await cli.call("list_meetings", { limit: 5 });
+    cli.say("Still looking. ");
+    await cli.call("list_tasks", {});
+    cli.say(`There are ${String(resultJson(listedMeetings).total)} meetings.`);
+  });
+  assert.equal(hosted.cli.bodies.length, 1, "one request: the CLI runs the loop");
+  assert.deepEqual(hosted.cli.bodies[0].tools?.map((tool) => tool.function.name), expectedReads.Owner, "the CLI is offered exactly the role's tools");
+  assert.ok(hosted.cli.bodies[0].messages[0].content?.includes(UNTRUSTED_DATA_RULE));
+  assert.equal(hosted.text, "There are 6 meetings.", "the answer is only what came after the last call");
+  assert.equal(hosted.streamed, hosted.text, "the preambles were cleared from the chat");
+  assert.equal(hosted.events.filter((event) => event.type === "discard_text").length, 2, "one clear per call after streamed text");
+  assert.deepEqual(hosted.records.map((record) => [record.name, record.status]), [["list_meetings", "complete"], ["list_tasks", "complete"]]);
+  assert.deepEqual(hosted.events.filter((event) => event.type === "tool").map((event) => event.type === "tool" && event.record.status), ["running", "complete", "running", "complete"]);
+  assert.deepEqual(hosted.cli.results.map((result) => [result.callId, result.isError]), [["toolu_1", false], ["toolu_2", false]], "each result goes back through localAiToolResult");
+  const hostedList = resultJson(hosted.cli.results[0]) as { meetings: Row[] };
+  assert.deepEqual(hostedList.meetings[0].title, { untrusted: "Committee check-in" }, "results keep the { untrusted } wrappers");
+  assert.ok(hosted.records[0].id.endsWith("-toolu_1"), "record ids come from the CLI's call ids");
+
+  // The CLI starts its text after a call with blank lines: they don't reach the chat or the answer.
+  const padded = await cliTurn(async (cli) => {
+    cli.say("Checking. ");
+    await cli.call("list_meetings", { limit: 1 });
+    cli.say("\n\n");
+    cli.say("  \nThere are 6 meetings.\n\nThe latest is Committee check-in.");
+  });
+  assert.equal(padded.text, "There are 6 meetings.\n\nThe latest is Committee check-in.", "leading blank lines are dropped; inner ones kept");
+  assert.equal(padded.streamed, padded.text, "the chat shows the same text after the discard");
+  assert.ok(!padded.events.some((event) => event.type === "token" && !event.text), "no empty tokens are emitted");
+
+  const hostedBefore = await openTaskCount();
+  const hostedProposal = await cliTurn(async (cli) => {
+    const answer = await cli.call("create_governance_tasks", MOCK_TOOL_SCRIPTS.proposeTask[0][0].arguments);
+    cli.say(resultJson(answer).status === "awaiting_approval" ? "Proposed; waiting for your approval." : "Done.");
+  }, { proposeChanges: true });
+  assert.equal(await openTaskCount(), hostedBefore, "a CLI's change is only proposed");
+  assert.deepEqual(hostedProposal.records.map((record) => [record.status, record.summary]), [["proposed", "Create 1 task: “Send the approved budget to members” due 2026-10-31"]]);
+  assert.equal(hostedProposal.text, "Proposed; waiting for your approval.");
+  await runApprovedChange(adapterFor("Owner"), hostedProposal.records[0], deviceAssistantTools({ permissions: listPermissionsForRole("Owner"), proposeChanges: true }));
+  assert.equal(await openTaskCount(), hostedBefore + 1, "and runs only on Approve");
+
+  const hostedRefusals = await cliTurn(async (cli) => {
+    const codes: string[] = [];
+    for (const [name, args] of [["delete_workspace", {}], ["create_governance_tasks", { tasks: [{ title: "Sneaky" }] }], ["list_meetings", { limit: "lots" }]] as const) {
+      codes.push(resultJson(await cli.call(name, args)).error?.code ?? "none");
+    }
+    cli.say(codes.join(" "));
+  });
+  assert.equal(hostedRefusals.text, "not_available not_available invalid_input", "unoffered tools and bad arguments get structured errors");
+  assert.deepEqual(hostedRefusals.records.map((record) => record.status), ["refused", "refused", "error"]);
+  assert.ok(hostedRefusals.cli.results.every((result) => result.isError), "and are marked as errors for the CLI");
+  const hostedViewer = await cliTurn(async (cli) => {
+    cli.say(resultJson(await cli.call("get_transcript", { meetingId: "meeting_board" })).error?.code ?? "read");
+  }, { role: "Viewer" });
+  assert.equal(hostedViewer.text, "not_available", "the role's tool list holds for the CLI too");
+
+  const hostedBudget = await cliTurn(async (cli) => {
+    cli.say(resultJson(await cli.call("list_meetings", {})).error?.code ?? "ok");
+  }, { maxTurnChars: 200 });
+  assert.equal(hostedBudget.text, "budget_exhausted", "the turn budget applies");
+
+  const limit = (2 - 1) * DEVICE_TOOL_CALLS_PER_STEP;
+  const hostedLimit = await cliTurn(async (cli) => {
+    const codes: string[] = [];
+    for (let index = 0; index < limit + 2; index += 1) codes.push(resultJson(await cli.call("list_meetings", { limit: 1 })).error?.code ?? "ok");
+    cli.say(codes.join(" "));
+  }, { maxSteps: 2 });
+  assert.equal(hostedLimit.text, [...Array<string>(limit).fill("ok"), "call_limit", "call_limit"].join(" "), "calls past (maxSteps - 1) × per-step are refused");
+  assert.equal(resultJson(hostedLimit.cli.results[limit]).error?.message, CALL_LIMIT_MESSAGE, "telling the model to answer now");
+  const silentAfterLimit = await cliTurn(async (cli) => {
+    for (let index = 0; index < limit + 1; index += 1) await cli.call("list_meetings", { limit: 1 });
+  }, { maxSteps: 2 });
+  assert.equal(silentAfterLimit.text, OUT_OF_STEPS_ANSWER, "a CLI that ends on calls past the limit gets the honest answer");
+  await assert.rejects(
+    cliTurn(async (cli) => {
+      await cli.call("list_meetings", {});
+    }),
+    (error: unknown) => error instanceof DeviceAiError && error.code === "bad_reply",
+    "a CLI that ends on its calls without an answer is an empty reply",
+  );
+
+  const hostedStop = new AbortController();
+  const hostedOwner = adapterFor("Owner");
+  const stoppingAdapter: AgentToolAdapter = { ...hostedOwner, query: (name, args) => { hostedStop.abort(); return hostedOwner.query(name, args); } };
+  const stoppedScript: CliScript = async (cli) => {
+    await cli.call("list_meetings", {});
+    cli.say("never");
+  };
+  const stoppedCli = fakeCliBridge(stoppedScript);
+  await assert.rejects(
+    cliTurn(stoppedScript, { signal: hostedStop.signal, adapter: stoppingAdapter, cli: stoppedCli }),
+    (error: unknown) => error instanceof DeviceAiError && error.code === "aborted",
+    "stop while the CLI's tool runs",
+  );
+  assert.equal(stoppedCli.aborts.length, 1, "the CLI's request is aborted");
+  assert.deepEqual(stoppedCli.results, [], "the stopped tool's result is never sent");
+
   // --- Tool records are saved with the reply ------------------------------------------------------------
   fixture.as(rolePrincipal("Owner"));
   const threadId = await fixture.runtime.runMutation<string>("aiChat:createThread", { societyId: SOCIETY_ID, title: "Tools", modelId: "mock-llm" });
@@ -385,7 +579,7 @@ try {
     "questions carry no records",
   );
 
-  console.log("Device assistant tool checks passed: per-role tool lists, read tools with untrusted wrappers, argument encodings and text calls, proposals that run only on approval, refusals, invalid arguments, step and size caps, abort mid-loop, the no-tools fallback and probe, in-camera redaction and the transcript permission, saved tool records.");
+  console.log("Device assistant tool checks passed: per-role tool lists, read tools with untrusted wrappers, argument encodings and text calls, proposals that run only on approval, refusals, invalid arguments, step and size caps, abort mid-loop, the no-tools fallback and probe, in-camera redaction and the transcript permission, saved tool records, and the loop hosted by Claude Code / Codex (results through localAiToolResult, proposals, refusals, budgets, call limit, abort mid-tool, answer after the last call).");
 } finally {
   await server.close();
 }

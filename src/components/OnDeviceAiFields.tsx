@@ -2,7 +2,8 @@
 import { useTranslation } from "react-i18next";
 import { Field } from "./ui";
 import { Toggle } from "./Controls";
-import type { DeviceAiFeature } from "../lib/localAi/config";
+import { CLI_PATH_MAX_CHARS, isAbsoluteCliPath, type DeviceAiFeature } from "../lib/localAi/config";
+import { CLI_KIND_INFO, type DeviceAiCliKind } from "../lib/localAi/models";
 import type { SpeechTestResult } from "../lib/localAi/transcription";
 import type { ConnectionTestResult } from "../lib/localAi/client";
 import { MAX_MINUTES_CHUNK_CHARS, MIN_MINUTES_CHUNK_CHARS } from "../../shared/ai/minutesDraftChunks";
@@ -44,19 +45,88 @@ export function FeatureToggles({
   );
 }
 
-/** The Test connection outcome. The CORS hint only applies to browser requests. */
+/**
+ * The Test connection outcome. The CORS hint only applies to browser requests.
+ * For Claude Code and Codex: whether the CLI was found, its version and sign-in,
+ * or the plain reason and what to do.
+ */
 export function ConnectionNotice({ result, showCorsHint }: { result: ConnectionTestResult; showCorsHint: boolean }) {
   const { t } = useTranslation();
+  const cli = result.cli;
+  const cliDetails = cli && [
+    cli.found
+      ? t("onDeviceAi.cliFound", { defaultValue: "Found {{name}}{{version}}.", name: CLI_KIND_INFO[cli.kind].name, version: cli.version ? ` ${cli.version}` : "" })
+      : t("onDeviceAi.cliNotFound", { defaultValue: "{{name}} was not found.", name: CLI_KIND_INFO[cli.kind].name }),
+    cli.signedIn === true
+      ? cli.account
+        ? t("onDeviceAi.cliSignedInAs", { defaultValue: "Signed in: {{account}}.", account: cli.account })
+        : t("onDeviceAi.cliSignedIn", "Signed in.")
+      : cli.signedIn === false
+        ? t("onDeviceAi.cliSignedOut", "Not signed in.")
+        : cli.found ? t("onDeviceAi.cliSignInUnknown", "The sign-in couldn't be checked.") : "",
+  ].filter(Boolean).join(" ");
   return (
     <div className={`notice ${result.ok ? "notice--success" : "notice--warn"}`} role="status" aria-live="polite">
       {result.ok ? (
-        t("onDeviceAi.testOk", { defaultValue: "Connected in {{ms}} ms. The server offers {{models}} model(s).", ms: result.latencyMs, models: result.models.length })
+        cli ? (
+          <>
+            <strong>{cliDetails}</strong>
+            <div>{t("onDeviceAi.cliTestOk", { defaultValue: "Answered in {{ms}} ms with {{models}} model(s).", ms: result.latencyMs, models: result.models.length })}</div>
+          </>
+        ) : (
+          t("onDeviceAi.testOk", { defaultValue: "Connected in {{ms}} ms. The server offers {{models}} model(s).", ms: result.latencyMs, models: result.models.length })
+        )
       ) : (
         <>
           <strong>{result.message}</strong>
-          {result.hint && showCorsHint && <div>{result.hint}</div>}
+          {cli && cliDetails && <div>{cliDetails}</div>}
+          {result.hint && (showCorsHint || cli) && <div>{result.hint}</div>}
         </>
       )}
+    </div>
+  );
+}
+
+/** Where Claude Code or Codex is; empty finds it on the PATH and the usual install folders. */
+export function CliPathField({ kind, value, disabled, onChange }: { kind: DeviceAiCliKind; value: string; disabled: boolean; onChange: (value: string) => void }) {
+  const { t } = useTranslation();
+  const info = CLI_KIND_INFO[kind];
+  const trimmed = value.trim();
+  const absolute = !trimmed || isAbsoluteCliPath(trimmed);
+  return (
+    <Field
+      label={t("onDeviceAi.cliPath", { defaultValue: "{{label}} (optional)", label: info.pathLabel })}
+      hint={t("onDeviceAi.cliPathHint", { defaultValue: "Leave empty to find {{name}} automatically. Otherwise, the full path to the {{name}} program.", name: info.name })}
+      error={absolute ? undefined : t("onDeviceAi.cliPathAbsolute", "Use a full path, starting with / (or a drive letter on Windows).")}
+    >
+      <input
+        className="input"
+        autoComplete="off"
+        spellCheck={false}
+        maxLength={CLI_PATH_MAX_CHARS}
+        value={value}
+        disabled={disabled}
+        placeholder={t("onDeviceAi.cliPathPlaceholder", "Found automatically")}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  );
+}
+
+/** What Claude Code and Codex send where, and what is turned off. */
+export function CliPrivacyNote({ kind }: { kind: DeviceAiCliKind }) {
+  const { t } = useTranslation();
+  const info = CLI_KIND_INFO[kind];
+  return (
+    <div className="notice notice--info" role="note">
+      <strong>{t("onDeviceAi.cliPrivacyTitle", { defaultValue: "Uses your {{signIn}} sign-in on this computer.", signIn: info.signIn })}</strong>
+      <div>
+        {t("onDeviceAi.cliPrivacy", {
+          defaultValue: "Meeting text, chat messages and what the assistant looks up leave this computer: they go to {{vendor}} under your account, with its terms and usage limits. The CLI's own tools (shell, files, web) are turned off; it only sees what Societyer sends it.",
+          vendor: info.vendor,
+        })}
+      </div>
+      <div>{t("onDeviceAi.notSynced", "These settings stay on this device and are not part of the workspace or its exports.")}</div>
     </div>
   );
 }

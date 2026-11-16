@@ -12,6 +12,9 @@
  *   turn with tools offered and returns its text and tool calls; a server
  *   that refuses `tools` raises `tools_unsupported`. `probeToolCalling`
  *   checks whether a model calls tools at all.
+ * - Claude Code and Codex (desktop app) host the tool loop themselves
+ *   (`hostsToolLoop`): `chatStep` passes `onToolCall` to the transport, which
+ *   runs each call mid-stream; the stall timer is held while a tool runs.
  *
  * Errors are DeviceAiError with a plain message; provider bodies are never
  * shown.
@@ -34,9 +37,10 @@ import {
   type RawToolCall,
 } from "../../../shared/ai/openAiCompatible";
 import type { ChatMessage } from "../../../shared/ai/minutesDraft";
+import { getDesktopBridge, type DesktopLocalAiCliStatus } from "../desktopBridge";
 import { deviceAiSnapshot } from "./config";
-import { modelListPaths, type DeviceAiKind, type DeviceAiPath } from "./models";
-import { DeviceAiError, deviceAiTransport, type DeviceAiTransport } from "./transport";
+import { isCliKind, modelListPaths, type DeviceAiCliKind, type DeviceAiKind, type DeviceAiPath } from "./models";
+import { DeviceAiError, deviceAiTransport, invokeMessage, type DeviceAiToolAnswer, type DeviceAiToolCall, type DeviceAiTransport } from "./transport";
 
 /** Local models can be slow to load and answer; a stall is no data at all for this long. */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 5 * 60_000;
@@ -51,6 +55,8 @@ export type DeviceAiClientOptions = {
   serverKey?: string;
   requestTimeoutMs?: number;
   stallTimeoutMs?: number;
+  /** CLI kinds: finds the CLI, its version and sign-in (the desktop bridge's `localAiCliStatus`). */
+  cliStatus?: (kind: DeviceAiCliKind) => Promise<DesktopLocalAiCliStatus>;
 };
 
 /** One streamed model turn: the text it wrote and the tools it called. */
@@ -63,9 +69,10 @@ export const TOOL_PROBE_NAME = "get_current_date";
 /** Long enough for a local server to load the model first. */
 export const TOOL_PROBE_TIMEOUT_MS = 120_000;
 
+/** `cli`: for Claude Code and Codex, whether the CLI was found, its version and sign-in. */
 export type ConnectionTestResult =
-  | { ok: true; models: string[]; latencyMs: number }
-  | { ok: false; message: string; hint?: string };
+  | { ok: true; models: string[]; latencyMs: number; cli?: DesktopLocalAiCliStatus }
+  | { ok: false; message: string; hint?: string; cli?: DesktopLocalAiCliStatus };
 
 const acceptedJsonMode = new Map<string, JsonMode>();
 
@@ -81,11 +88,28 @@ function deadline(ms: number, outer?: AbortSignal, message = "The on-device mode
     timer = setTimeout(() => controller.abort(new DeviceAiError("timeout", message)), ms);
   };
   arm();
+  let held = 0;
   return {
     signal: controller.signal,
-    /** Restart the timer (a streamed chunk arrived). */
-    touch: arm,
+    /** Restart the timer (a streamed chunk arrived). Not while held. */
+    touch() {
+      if (!held) arm();
+    },
+    /** Stop the timer until the returned release is called (a tool is running); it restarts then. */
+    hold() {
+      held += 1;
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        held -= 1;
+        if (!held && !controller.signal.aborted) arm();
+      };
+    },
     clear() {
+      held = 0;
       if (timer) clearTimeout(timer);
       outer?.removeEventListener("abort", onOuter);
     },
@@ -147,7 +171,7 @@ async function listServerModels(transport: DeviceAiTransport, kind: DeviceAiKind
  * Read one chat turn: a stream, or one JSON body from a server that ignores
  * `stream`. Each streamed chunk calls `touch` to restart the stall timer.
  */
-async function readChatStep(response: Response, touch: () => void, onToken?: (token: string) => void): Promise<ChatStepResult> {
+async function readChatStep(response: Response, touch: () => void, onToken?: (token: string) => void, hostedCalls = () => 0): Promise<ChatStepResult> {
   let text = "";
   let toolCalls: RawToolCall[] = [];
   if (/json/i.test(response.headers.get("content-type") ?? "") || !response.body) {
@@ -177,7 +201,8 @@ async function readChatStep(response: Response, touch: () => void, onToken?: (to
     await reader.cancel().catch(() => undefined);
     toolCalls = calls.calls();
   }
-  if (!text.trim() && !toolCalls.length) throw new DeviceAiError("bad_reply", "The on-device model returned an empty reply.");
+  // A provider that ran tools itself may end on them; the caller decides what that means.
+  if (!text.trim() && !toolCalls.length && !hostedCalls()) throw new DeviceAiError("bad_reply", "The on-device model returned an empty reply.");
   return { text, toolCalls };
 }
 
@@ -199,25 +224,46 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
   const modeKey = `${options.serverKey ?? ""}|${options.model}`;
+  /** Claude Code and Codex run the tool loop themselves; tool calls arrive through `onToolCall`. */
+  const hostsToolLoop = isCliKind(options.kind);
 
   /** Model ids the server offers, from the first list endpoint that answers. */
   async function listModels(signal?: AbortSignal): Promise<string[]> {
     return listServerModels(options.transport, options.kind, signal);
   }
 
-  async function testConnection(signal?: AbortSignal): Promise<ConnectionTestResult> {
-    const started = Date.now();
+  /** Claude Code and Codex: is the CLI there, which version, signed in as whom. */
+  async function cliStatus(kind: DeviceAiCliKind): Promise<DesktopLocalAiCliStatus> {
+    if (!options.cliStatus) {
+      return { kind, found: false, signedIn: null, message: "Claude Code and Codex work only in the desktop app." };
+    }
     try {
-      const models = await listModels(signal);
-      return { ok: true, models, latencyMs: Date.now() - started };
+      return await options.cliStatus(kind);
     } catch (error) {
-      if (error instanceof DeviceAiError) return { ok: false, message: error.message, hint: error.hint };
-      return { ok: false, message: "Could not reach the on-device AI server." };
+      return { kind, found: false, signedIn: null, message: invokeMessage(error, "Couldn't check the CLI on this computer.") };
     }
   }
 
-  async function postChat(body: Record<string, unknown>, signal: AbortSignal, stream = false) {
-    return options.transport.send("/chat/completions", { method: "POST", body: JSON.stringify(body), signal, stream });
+  async function testConnection(signal?: AbortSignal): Promise<ConnectionTestResult> {
+    const started = Date.now();
+    const cli = isCliKind(options.kind) ? await cliStatus(options.kind) : undefined;
+    if (cli && (!cli.found || cli.signedIn === false)) return { ok: false, message: cli.message, hint: cli.hint, cli };
+    try {
+      const models = await listModels(signal);
+      return { ok: true, models, latencyMs: Date.now() - started, ...(cli ? { cli } : {}) };
+    } catch (error) {
+      if (error instanceof DeviceAiError) return { ok: false, message: error.message, hint: error.hint ?? cli?.hint, ...(cli ? { cli } : {}) };
+      return { ok: false, message: "Could not reach the on-device AI server.", ...(cli ? { cli } : {}) };
+    }
+  }
+
+  async function postChat(
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+    stream = false,
+    onToolCall?: (call: DeviceAiToolCall) => Promise<DeviceAiToolAnswer>,
+  ) {
+    return options.transport.send("/chat/completions", { method: "POST", body: JSON.stringify(body), signal, stream, ...(onToolCall ? { onToolCall } : {}) });
   }
 
   /**
@@ -288,11 +334,16 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
    * tool-call fragments are joined and returned with the full text. A server
    * that ignores `stream` and answers in one JSON body works too. With tools
    * offered, a refusal the server blames on them raises `tools_unsupported`.
+   *
+   * When the provider hosts the tool loop (`hostsToolLoop`), `onToolCall`
+   * runs each call mid-stream and `toolCalls` stays empty; the stall timer is
+   * held while a tool runs, since a running tool produces no chunks.
    */
   async function chatStep(input: {
     messages: readonly ChatWireMessage[];
     tools?: readonly ChatToolDefinition[];
     onToken?: (token: string) => void;
+    onToolCall?: (call: DeviceAiToolCall) => Promise<DeviceAiToolAnswer>;
     signal?: AbortSignal;
     maxTokens?: number;
     temperature?: number;
@@ -300,6 +351,19 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
     // A stream may run as long as it keeps producing; silence ends it.
     const limit = deadline(stallTimeoutMs, input.signal, "The on-device model stopped responding.");
     const offersTools = Boolean(input.tools?.length);
+    const handler = input.onToolCall;
+    let hostedCalls = 0;
+    const onToolCall = handler
+      ? async (call: DeviceAiToolCall) => {
+          hostedCalls += 1;
+          const release = limit.hold();
+          try {
+            return await handler(call);
+          } finally {
+            release();
+          }
+        }
+      : undefined;
     try {
       const response = await postChat(
         chatCompletionBody({
@@ -312,6 +376,7 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
         }),
         limit.signal,
         true,
+        onToolCall,
       );
       if (!response.ok) {
         const detail = offersTools ? await response.text().catch(() => "") : "";
@@ -320,7 +385,7 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
         }
         throw statusError(response.status);
       }
-      return await readChatStep(response, limit.touch, input.onToken);
+      return await readChatStep(response, limit.touch, input.onToken, () => hostedCalls);
     } catch (error) {
       rethrow(error, limit.signal);
     } finally {
@@ -347,6 +412,8 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
    * it would never look anything up.
    */
   async function probeToolCalling(signal?: AbortSignal): Promise<ToolProbeResult> {
+    // Claude Code and Codex always take tools: their own loop runs them.
+    if (hostsToolLoop) return { outcome: "supported" };
     const limit = deadline(Math.min(requestTimeoutMs, TOOL_PROBE_TIMEOUT_MS), signal, "The on-device model took too long to answer the tool test.");
     try {
       const response = await postChat(toolProbeBody(options.model), limit.signal);
@@ -366,7 +433,7 @@ export function createDeviceAiClient(options: DeviceAiClientOptions) {
     }
   }
 
-  return { listModels, testConnection, completeJson, completeText, streamChat, chatStep, probeToolCalling };
+  return { hostsToolLoop, listModels, testConnection, completeJson, completeText, streamChat, chatStep, probeToolCalling };
 }
 
 export type DeviceAiClient = ReturnType<typeof createDeviceAiClient>;
@@ -374,11 +441,13 @@ export type DeviceAiClient = ReturnType<typeof createDeviceAiClient>;
 /** A client for the settings this device has saved. */
 export function deviceAiClient(overrides: { model?: string } = {}): DeviceAiClient {
   const { config } = deviceAiSnapshot();
+  const bridge = getDesktopBridge();
   return createDeviceAiClient({
     transport: deviceAiTransport(),
     kind: config.kind,
     model: overrides.model ?? config.model,
-    serverKey: config.baseUrl,
+    serverKey: isCliKind(config.kind) ? config.kind : config.baseUrl,
+    ...(bridge ? { cliStatus: (kind: DeviceAiCliKind) => bridge.localAiCliStatus(kind) } : {}),
   });
 }
 

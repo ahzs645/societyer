@@ -16,6 +16,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { deviceAiClient } from "../../lib/localAi/client";
 import { useDeviceAi } from "../../lib/localAi/useDeviceAi";
+import { deviceAiModelLabel } from "../../lib/localAi/models";
 import { DeviceAiError } from "../../lib/localAi/transport";
 import { draftMinutesOnDevice, type LocalDraftMeeting } from "./localMinutesDraft";
 import { beginDeviceDraft, DRAFT_CANCELLED } from "./deviceDraftProgress";
@@ -55,5 +56,6 @@ export function useLocalMinutesDraft() {
     },
     [chunkChars, upsertFromDraft],
   );
-  return { ready: deviceAi.ready, model: deviceAi.config.model, reason: deviceAi.reason, run };
+  // The model as people see it ("Claude Code's default model" when a CLI uses its own).
+  return { ready: deviceAi.ready, model: deviceAiModelLabel(deviceAi.config.kind, deviceAi.config.model), reason: deviceAi.reason, run };
 }
