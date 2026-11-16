@@ -977,3 +977,96 @@
     padding-inline: token("s-2");
   }
 }
+
+.meeting-ai-notes__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ---------- Recordings and transcripts (MeetingSourcesCard) ---------- */
+.meeting-files {
+  margin-bottom: token("s-3");
+}
+.meeting-files__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  .card__title {
+    display: inline-flex;
+    align-items: center;
+    gap: token("s-2");
+    margin: 0;
+  }
+}
+.meeting-files__head-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: token("s-2");
+}
+.meeting-files__body {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-2");
+  p { margin: 0; }
+}
+.meeting-files__intro {
+  font-size: token("fs-sm");
+}
+.meeting-files__progress {
+  display: flex;
+  align-items: center;
+  gap: token("s-2");
+  font-size: token("fs-sm");
+  progress { flex: 1 1 auto; max-width: 320px; }
+}
+.meeting-files__offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+}
+.meeting-files__error {
+  color: token("danger");
+}
+.meeting-files__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.meeting-files__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  padding: token("s-2") 0;
+  border-top: 1px solid token("border");
+}
+.meeting-files__meta {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  progress { width: 100%; max-width: 320px; }
+}
+.meeting-files__name {
+  overflow-wrap: anywhere;
+}
+.meeting-files__status {
+  font-size: token("fs-xs");
+  color: token("text-secondary");
+  &.is-busy { color: token("accent-text"); }
+  &.is-done { color: token("success-text"); }
+  &.is-error { color: token("danger"); }
+}
+.meeting-files__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token("s-1");
+}

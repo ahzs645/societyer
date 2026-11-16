@@ -2568,7 +2568,8 @@ function MeetingDetailWorkspace() {
           />
         )}
         {activeTab === "transcript" && !transcriptAccess && transcriptWorkspace}
-        {(activeTab === "overview" || activeTab === "minutes" || activeTab === "sources") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} canReadTranscript={canReadTranscript} />}
+        {/* Also in the Transcript view, where its recordings play. */}
+        {activeTab === "sources" && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} canReadTranscript={canReadTranscript} />}
         {(activeTab === "overview" || activeTab === "sources") && (
           <MeetingRecordingsCard
             societyId={meeting.societyId}

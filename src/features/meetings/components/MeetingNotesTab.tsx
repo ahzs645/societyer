@@ -257,6 +257,7 @@ export function MeetingNotesTab({
             canWrite={canWrite && !converting}
             flushNotes={notes.flush}
             preferredTemplate={preferredTemplate}
+            onOpenTranscript={() => setView("transcript")}
             onAddToNotes={(markdown) => { notes.onChange(appendMarkdown(notes.value, markdown)); toast.success("Added to your notes."); }}
           />
         </div>

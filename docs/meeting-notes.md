@@ -187,6 +187,27 @@ keeps your place; a hidden view pauses its media.
 - **Phones.** One view at a time, with a fourth **Actions** view for action
   items; the Record and ••• buttons sit under the view switch.
 
+## Recordings and transcripts (connected workspaces)
+
+On a deployment with private Microsoft storage, one card, **Recordings and
+transcripts** (`MeetingSourcesCard`), brings a meeting's files in. It sits above
+the transcript (the Transcript tab and the notes surface's Transcript view) and
+on the Sources tab. Drop or add a recording or a transcript file (VTT, SRT, SBV,
+Whisper JSON/ZIP, TXT); each file's row then offers what fits
+(`meetingFileRows.ts`):
+
+- a recording: **Play** (loads it into the player here; one added from this
+  device plays at once), **Transcribe** (the connected WhisperX processor, or
+  the speech provider), and the transcription's progress on the same row, then
+  **Review** and **Use transcript**, **Retry** or **Cancel**;
+- a timed transcript file: **Use as the meeting transcript**;
+- text: **Read** and **Use for minutes**; any file: **Preview** and **Download**.
+
+Processor settings open from the card. This replaces the separate WhisperX
+queue ("Upload a recording in Sources, then refresh") and the SharePoint
+"Attached recordings" list. Without a transcript, the AI notes offer **Add a
+recording or transcript**, which opens the Transcript view.
+
 ## Quotes
 
 - **Quote in notes.** In the notes surface's Transcript view, select words

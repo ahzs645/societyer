@@ -155,6 +155,7 @@
     "test:meeting-notes-draft": "node --import tsx scripts/check-meeting-notes-draft.ts",
     "test:meeting-notes-skill": "node --import tsx scripts/check-meeting-notes-skill.ts",
     "test:meeting-notes-surface": "node --import tsx scripts/check-meeting-notes-surface.ts",
+    "test:meeting-files": "node --import tsx scripts/check-meeting-files.ts",
     "test:meeting-recordings": "node --import tsx scripts/check-meeting-recordings.ts",
     "test:ai-agent-contract": "tsx scripts/check-ai-agent-contract.ts",
     "test:webmcp": "npx playwright test tests/webmcp.spec.ts --config playwright.webmcp.config.ts",

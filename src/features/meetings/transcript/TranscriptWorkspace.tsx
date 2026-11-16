@@ -1,7 +1,8 @@
 import { useConvex, useQuery } from "convex/react";
 import { takeFinishedRecording, useMeetingRecorder } from "../recorder/meetingRecorder";
 import { api as hostedApi } from "@/lib/convexApi";
-import { WhisperXQueue } from "./WhisperXQueue";
+import { MeetingSourcesCard } from "../components/MeetingSourcesCard";
+import { useAttachedSharePointRecording } from "./useAttachedSharePointRecording";
 import { PagedTranscriptToolbar } from "./PagedTranscriptToolbar";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -127,6 +128,9 @@ export function TranscriptWorkspace({
     const file = takeFinishedRecording(meetingId);
     if (file) setRecording(file, "device");
   }, [meetingId, setRecording, recorder.phase, recorder.file]);
+  // "Recordings and transcripts" plays a stored recording right here.
+  const storedRecording = useAttachedSharePointRecording(meetingId, useCallback((file: File) => setRecording(file, "attached"), [setRecording]));
+  const filesPlayer = useMemo(() => ({ attached: storedRecording, openLocal: (file: File) => setRecording(file, "device") }), [storedRecording, setRecording]);
   const links = useMinutesLinks({ societyId, meetingId, minutes, motions });
   const inCamera = useInCameraMarks({ societyId, meetingId, minutes, markingAllowed: inCameraMarking });
   const feedback = useTranscriptFeedback({ status, linkStatus: links.status, markStatus: inCamera.status, waveformNote, undo });
@@ -177,7 +181,15 @@ export function TranscriptWorkspace({
       aria-label="Transcript workspace"
       onKeyDown={(event) => handleWorkspaceKeyDown(event, Boolean(source), clock.toggle, skip)}
     >
-      <WhisperXQueue societyId={societyId} meetingId={meetingId} transcript={headerTranscript} />
+      <MeetingSourcesCard
+        societyId={societyId}
+        meetingId={meetingId}
+        canWrite={canWrite}
+        canDraft={can("minutes:write")}
+        canReadTranscript={can("minutes:write")}
+        transcript={headerTranscript}
+        player={filesPlayer}
+      />
       {jobId && <PagedTranscriptToolbar key={jobId} meetingId={meetingId} minutes={minutes} sourceRevision={headerTranscript?.contentRevision} onExported={announce} jobId={jobId} page={pageIndex} pageCount={headerTranscript?.pageCount ?? 1} segmentCount={headerTranscript?.segmentCount ?? 0} onPage={setPageIndex} speakers={speakers} />}
       {jobId && !page && <p role="status">Loading transcript page…</p>}
       <TranscriptWorkspaceHeader

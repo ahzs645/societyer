@@ -14,8 +14,8 @@ export type AttachedRecordings<T extends { id: string; fileName: string; size: n
 };
 
 const SHAREPOINT_COPY = {
-  intro: "Recordings attached under Meeting source files. Playing one downloads it from private meeting storage into this browser; nothing is saved to the device.",
-  empty: "No recordings are attached to this meeting yet. Attach one under Meeting source files on the Overview tab.",
+  intro: "Recordings added under Recordings and transcripts. Playing one downloads it from private meeting storage into this browser; nothing is saved to the device.",
+  empty: "No recordings are attached to this meeting yet. Add one under Recordings and transcripts above the transcript.",
 };
 import { WAVEFORM_FILE_LIMIT } from "./waveform";
 

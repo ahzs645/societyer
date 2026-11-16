@@ -2,8 +2,6 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { Link, useSearchParams } from "react-router-dom";
 import { AudioLines, Captions, CloudDownload, FolderOpen, Loader2, Sparkles, Upload, X } from "lucide-react";
 import { Badge } from "../../../components/ui";
-import { meetingSourceBroker } from "../../../lib/meetingSourceUpload";
-import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { AttachedRecordingsPanel, formatRecordingSize, type AttachedRecordings } from "./AttachedRecordingsPanel";
 import { useAttachedWorkspaceRecording } from "./useAttachedWorkspaceRecording";
 import { useMeetingRecordingStore } from "../recordings/workspaceRecordings";
@@ -89,8 +87,10 @@ export function TranscriptWorkspaceHeader({
   // app) list through Convex instead; the workspace's settings choose which.
   const recordingStore = useMeetingRecordingStore(societyId)?.store;
   const workspaceStore = recordingStore === "workspace" || recordingStore === "device";
-  const sharePointAvailable = Boolean(meetingSourceBroker) && !isLocalDataRuntime() && canWrite && recordingStore !== "workspace";
-  const attachedAvailable = canWrite && (sharePointAvailable || workspaceStore);
+  // Recordings in private Microsoft storage are listed, played and transcribed in
+  // "Recordings and transcripts" above the transcript; this header lists only
+  // recordings kept in workspace file storage or on this computer.
+  const attachedAvailable = canWrite && workspaceStore;
   const onAttachedLoaded = useCallback(
     (file: File) => {
       setRecording(file, "attached");

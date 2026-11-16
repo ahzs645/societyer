@@ -55,6 +55,7 @@ export function MeetingNotesDraftCard({
   flushNotes,
   onAddToNotes,
   preferredTemplate,
+  onOpenTranscript,
 }: {
   meeting: NotesDraftMeeting & { societyId: Id<"societies"> };
   draft: StoredNotesDraft | undefined;
@@ -69,6 +70,8 @@ export function MeetingNotesDraftCard({
   onAddToNotes: (markdown: string) => void;
   /** The template the notes were started from, for the first draft. */
   preferredTemplate?: NotesDraftTemplateId;
+  /** The notes surface's Transcript view, where a recording or transcript is added. */
+  onOpenTranscript?: () => void;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -95,7 +98,9 @@ export function MeetingNotesDraftCard({
     ? "Drafts from your notes. Transcripts are only read for people who keep the minutes."
     : hasTranscript
       ? "Drafts from your notes and the transcript."
-      : "No transcript yet: drafts from your notes. Add a recording or transcript on the Transcript tab.";
+      : onOpenTranscript
+        ? "No transcript yet: drafts from your notes."
+        : "No transcript yet: drafts from your notes. Add a recording or transcript on the Transcript tab.";
 
   const runDraft = async () => {
     if (!canDraft) return;
@@ -163,6 +168,14 @@ export function MeetingNotesDraftCard({
         {canWrite && !draft && !withheld && (
           <p className="muted">
             {notesDraftTemplate(template).hint} {sourceHint} Your own notes stay exactly as you wrote them.
+            {canReadTranscript && !hasTranscript && onOpenTranscript && (
+              <>
+                {" "}
+                <button type="button" className="text-link meeting-ai-notes__link" onClick={onOpenTranscript}>
+                  Add a recording or transcript
+                </button>
+              </>
+            )}
           </p>
         )}
         {canWrite && !withheld && !draft && !notesDraft.available && (
