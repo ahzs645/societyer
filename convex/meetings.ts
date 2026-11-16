@@ -345,7 +345,7 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
 async function runNotesSkillHosted(endpoint: MinutesModelEndpoint, input: MeetingNotesSkillInput): Promise<MeetingNotesSkillResult> {
   const results: MeetingNotesSkillResult[] = [];
   for (const messages of planMeetingNotesSkill(input, HOSTED_NOTES_DRAFT_BUDGET_CHARS)) {
-    const session = createMeetingNotesSkillSession(input.context, input.template);
+    const session = createMeetingNotesSkillSession(input.context, input.template, { transcript: input.transcript });
     try {
       results.push(await runMeetingNotesSkillLoop(toolStep(endpoint), messages, session));
     } catch (error) {

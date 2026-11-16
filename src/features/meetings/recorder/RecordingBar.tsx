@@ -35,6 +35,23 @@ export function RecordingBar() {
   const [save, setSave] = useState<SaveState>({ status: "idle" });
   const [lastFile, setLastFile] = useState<File | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const shown = recorder.phase !== "idle" && recorder.phase !== "starting";
+
+  // Floating things at the bottom of a page (the Ask bar) sit above this bar.
+  useEffect(() => {
+    const node = bar.current;
+    const root = document.documentElement;
+    if (!shown || !node) return;
+    const measure = () => root.style.setProperty("--recording-bar-space", `${Math.ceil(node.getBoundingClientRect().height) + 16}px`);
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(node);
+    return () => {
+      observer?.disconnect();
+      root.style.removeProperty("--recording-bar-space");
+    };
+  }, [shown]);
 
   // Leaving or reloading the page would end the recording: ask first.
   useEffect(() => {
@@ -44,7 +61,7 @@ export function RecordingBar() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [recorder.phase]);
 
-  if (recorder.phase === "idle" || recorder.phase === "starting") return null;
+  if (!shown) return null;
   const meetingId = recorder.meetingId!;
   const transcriptHref = `/app/meetings/${meetingId}?tab=notes&view=transcript`;
 
@@ -92,7 +109,7 @@ export function RecordingBar() {
 
   const recording = recorder.phase === "recording";
   return (
-    <div className={`recording-bar${recording ? " is-recording" : ""}`} role="region" aria-label="Meeting recording">
+    <div ref={bar} className={`recording-bar${recording ? " is-recording" : ""}`} role="region" aria-label="Meeting recording">
       {recording ? (
         <>
           <span className="recording-bar__dot" aria-hidden="true" />

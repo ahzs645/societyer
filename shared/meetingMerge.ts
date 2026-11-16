@@ -11,7 +11,7 @@
  *
  * Pure module: the portable mutation applies the plan.
  */
-import { bodyKeyForMeeting } from "./meetingBody";
+import { bodyKeyForMeeting, isWorkingMeeting } from "./meetingBody";
 import { meetingCalendarDate } from "./meetingDates";
 import { normalizePersonKey } from "./meetingAttendanceGrid";
 
@@ -33,12 +33,20 @@ export type MergeMeetingLike = {
 
 export type MergeCommitteeLike = { _id: string; name?: string; bodyKey?: string | null };
 
-/** "2013-05-14|committee:executive" — or "" when the meeting has no date. */
+/**
+ * "2013-05-14|committee:executive" — or "" when the meeting has no date.
+ * Working meetings often happen several times a day, so one is only a
+ * duplicate of a working meeting with the same title.
+ */
 export function meetingDuplicateKey(meeting: MergeMeetingLike, committees: readonly MergeCommitteeLike[] = []): string {
   const day = meetingCalendarDate(meeting as any);
   if (!day) return "";
   const committee = meeting.committeeId ? committees.find((row) => String(row._id) === String(meeting.committeeId)) ?? null : null;
   const body = bodyKeyForMeeting(meeting as any, committee as any);
+  if (isWorkingMeeting(meeting)) {
+    const title = String(meeting.title ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return `${day}|${body}:title:${title}`;
+  }
   return `${day}|${body}${meeting.special ? ":special" : ""}`;
 }
 

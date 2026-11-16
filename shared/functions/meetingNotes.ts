@@ -74,6 +74,7 @@ export async function saveNotesDraftPortable(
       sections: draft.sections,
       decisions: draft.decisions,
       openQuestions: draft.openQuestions,
+      ...(draft.quotes?.length ? { quotes: draft.quotes } : {}),
       generatedAtISO: new Date().toISOString(),
       generatedBy: String(args.generatedBy ?? "").trim().slice(0, GENERATED_BY_MAX) || "AI",
       usedNotes: Boolean(args.usedNotes),

@@ -6,8 +6,8 @@
  * choose "Add to my notes".
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { Copy, NotebookPen, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Copy, NotebookPen, Play, Quote, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/Modal";
@@ -19,8 +19,11 @@ import {
   notesDraftMarkdown,
   notesDraftTemplate,
   isNotesDraftTemplateId,
+  formatClock,
+  type NotesDraftQuote,
   type NotesDraftTemplateId,
 } from "../../../../shared/ai/notesDraft";
+import { notesTranscriptSearch } from "../transcript/transcriptQuote";
 import { isDraftCancelled, useDeviceDraftProgress, deviceDraftLabel } from "../deviceDraftProgress";
 import { useNotesDraft, type NotesDraftMeeting } from "../useNotesDraft";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -33,6 +36,7 @@ export type StoredNotesDraft = {
   sections: { heading: string; points: string[] }[];
   decisions: string[];
   openQuestions: string[];
+  quotes?: NotesDraftQuote[];
   generatedAtISO: string;
   generatedBy: string;
   usedNotes: boolean;
@@ -223,6 +227,7 @@ function NotesDraftView({
       ))}
       <DraftList heading="Decisions" items={draft.decisions} />
       <DraftList heading="Open questions" items={draft.openQuestions} />
+      <DraftQuotes quotes={draft.quotes ?? []} />
       {suggestions}
       <p className="meeting-ai-notes__meta">
         {notesDraftTemplate(draft.template).label} · drafted {formatDateTime(draft.generatedAtISO)} by {draft.generatedBy}
@@ -250,6 +255,35 @@ function NotesDraftView({
         )}
       </div>
     </article>
+  );
+}
+
+/** Words kept as said, each with who said it and a link to that moment in the transcript. */
+function DraftQuotes({ quotes }: { quotes: readonly NotesDraftQuote[] }) {
+  const location = useLocation();
+  if (!quotes.length) return null;
+  return (
+    <section className="meeting-ai-notes__section meeting-ai-notes__quotes" aria-label="Key quotes">
+      <h3><Quote size={12} aria-hidden="true" /> Key quotes</h3>
+      {quotes.map((quote) => (
+        <figure key={quote.text} className="meeting-ai-notes__quote">
+          <blockquote>“{quote.text}”</blockquote>
+          <figcaption>
+            {quote.speaker && <span>— {quote.speaker}</span>}
+            {quote.atSec !== undefined && (
+              <Link
+                className="transcript-time-chip"
+                to={{ pathname: location.pathname, search: notesTranscriptSearch(location.search, quote.atSec) }}
+                aria-label={`Open the transcript at ${formatClock(quote.atSec)}`}
+              >
+                <Play size={10} aria-hidden="true" />
+                {formatClock(quote.atSec)}
+              </Link>
+            )}
+          </figcaption>
+        </figure>
+      ))}
+    </section>
   );
 }
 

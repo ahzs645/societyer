@@ -114,6 +114,12 @@ const groups = duplicateMeetingGroups(meetings, committees);
 assert.equal(groups.length, 1, "AGM and an executive meeting on one evening are not duplicates");
 assert.deepEqual(groups[0].meetings.map((row) => row._id), ["a", "b"]);
 assert.equal(meetingDuplicateKey(meetings[0], committees), "2013-05-14|committee:executive");
+const working = [
+  { _id: "w1", type: "Working", scheduledAt: "2026-11-16T17:00:00.000Z", title: "Partner call" },
+  { _id: "w2", type: "Working", scheduledAt: "2026-11-16T18:00:00.000Z", title: "Weekly check-in" },
+  { _id: "w3", type: "Working", scheduledAt: "2026-11-16T19:00:00.000Z", title: "Partner call!" },
+];
+assert.deepEqual(duplicateMeetingGroups(working).map((group) => group.meetings.map((row) => row._id)), [["w1", "w3"]], "working meetings on one day are duplicates only with the same title");
 const plan = planMeetingMerge({
   target: meetings[1], duplicate: meetings[0], committees,
   targetMinutes: { attendees: ["Alex Example"], sourceExternalIds: ["drive:pdf"] },

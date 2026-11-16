@@ -61,6 +61,7 @@ to use them, and the model calls tools:
 | `write_summary` | Summary and sections (per template) |
 | `add_decision` / `add_open_question` | One decision or open question per call |
 | `add_action_item` | Text, `owner_person_id` / `owner_name` / `owner_speaker_label`, `due_date`, `at_seconds`, `goal_id`, `committee_id` |
+| `add_quote` | Words kept as said, checked word for word against one transcript line (see Quotes) |
 | `identify_speaker` | Who a diarization label (`SPEAKER_01`) is, with the quoted evidence |
 | `mark_attendee` | Someone who took part |
 | `finish` | Done |
@@ -176,6 +177,29 @@ keeps your place; a hidden view pauses its media.
 - **Phones.** One view at a time, with a fourth **Actions** view for action
   items; the Record and ••• buttons sit under the view switch.
 
+## Quotes
+
+- **Quote in notes.** In the notes surface's Transcript view, select words
+  (with a mouse, or a long-press on a phone) and choose **Quote in notes**.
+  The words go under your notes as a quote with the speaker and a time that
+  links back to that moment (`?tab=notes&view=transcript&t=…`). The toolbar
+  also offers Copy quote and Copy link, as on the Transcript tab.
+- **Key quotes in the AI notes.** The skill has an `add_quote` tool for up to
+  three short quotes worth keeping word for word: a commitment, a decision in
+  someone's own words, a point to remember. The session accepts a quote only
+  if its words appear in one transcript line (ignoring case, punctuation and
+  quote marks), and takes the speaker and time from that line, not from the
+  model. A speaker label the skill identifies is replaced by the person's
+  name. Each quote's time opens the Transcript view there; "Add to my notes",
+  Copy and the Markdown export include them.
+
+## Working meetings: progress and duplicates
+
+A general / working meeting's progress reads Transcript → Notes → AI notes →
+Follow-ups (done when no action items are open), not minutes and approval,
+until its notes are turned into minutes. Several working meetings on one day
+are not flagged as duplicates unless they have the same title.
+
 ## Meetings page: Timeline
 
 The Meetings page has a **Table / Timeline** switch (remembered per browser).
@@ -191,7 +215,7 @@ meetings with a link.
 - `npm run test:timed-transcript` — transcript formats.
 - `npm run test:meeting-record-kind` — working meetings.
 - `npm run test:meeting-notes-draft` — AI notes, action items, tasks, hosted permissions.
-- `npm run test:meeting-notes-skill` — the skill: tools, context, checks, tool loop, adapters, replays.
+- `npm run test:meeting-notes-skill` — the skill: tools, context, checks, quotes, tool loop, adapters, replays.
 - `npm run test:meeting-recordings` — recording storage choice, local and hosted.
-- `npm run test:meeting-notes-surface` — timeline grouping, export and recap, Ask bar context, recorder file names.
+- `npm run test:meeting-notes-surface` — timeline grouping, export and recap, Ask bar context, recorder file names, quote Markdown.
 - `npm run test:meeting-notes-ui`, `npm run test:meeting-recordings-ui` — Playwright on the local runtime.

@@ -119,6 +119,7 @@ export function RecordControl({
   return (
     <Menu
       align="right"
+      described
       sheetTitle="Record this meeting"
       trigger={
         <button type="button" className="btn-action notes-record">
@@ -153,6 +154,7 @@ export function NotesMoreMenu({ exportInput, onOpenDetails }: { exportInput: () 
   return (
     <Menu
       align="right"
+      described
       sheetTitle="Meeting notes"
       trigger={
         <button type="button" className="btn-action btn-action--icon" aria-label="More: export and recap">

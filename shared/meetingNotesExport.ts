@@ -3,7 +3,7 @@
  * items, transcript), a short recap to copy or email, and the context the
  * meeting's Ask bar attaches for the assistant. Pure module.
  */
-import { notesDraftMarkdown, notesDraftTemplate } from "./ai/notesDraft";
+import { notesDraftMarkdown, notesDraftTemplate, type NotesDraftQuote } from "./ai/notesDraft";
 import { AI_ATTACHMENT_MAX_BYTES, type AiTextAttachment } from "./aiAttachments";
 
 export type NotesExportMeeting = {
@@ -19,6 +19,7 @@ export type NotesExportDraft = {
   sections: Array<{ heading: string; points: string[] }>;
   decisions: string[];
   openQuestions: string[];
+  quotes?: NotesDraftQuote[];
   generatedBy?: string;
 };
 

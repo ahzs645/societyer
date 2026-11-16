@@ -761,7 +761,9 @@ button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
   background: token("bg-floating");
   border-radius: token("r-card");
   box-shadow: token("elevation-2");
+  flex-wrap: wrap;
   button {
+    white-space: nowrap;
     color: inherit;
     background: transparent;
     border: 0;
@@ -772,6 +774,9 @@ button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
     font-size: token("fs-xs");
     &:hover {
       background: token("bg-hover-alpha");
+    }
+    &.is-primary {
+      font-weight: 600;
     }
   }
 }

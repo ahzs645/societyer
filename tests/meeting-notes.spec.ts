@@ -371,3 +371,63 @@ test("notes surface on a phone: one view at a time, ••• holds the rest", a
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("quotes: Quote in notes from a transcript selection, and the AI notes' key quotes", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await seed(page);
+  const meetingId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    const societyId = getStoredSocietyId();
+    const id = await client.mutation("meetings:create", {
+      societyId, type: "Working", title: "Partner call", scheduledAt: "2026-11-12T17:00:00.000Z",
+      electronic: true, status: "Held", attendeeIds: [], recordKind: "notes", workingNotes: "- Pilot",
+    });
+    await client.mutation("transcripts:importTimed", {
+      societyId, meetingId: id, provider: "vtt", durationSeconds: 30,
+      segments: [
+        { speaker: "SPEAKER_00", text: "Hi, Sam Rivera here.", startSec: 0, endSec: 5 },
+        { speaker: "SPEAKER_01", text: "Small pilots are where we learn the most.", startSec: 12, endSec: 18 },
+      ],
+    });
+    await client.mutation("meetings:saveNotesDraft", {
+      id, template: "external_call",
+      draft: { summary: "They'll fund a pilot.", quotes: [{ text: "Small pilots are where we learn the most.", speaker: "SPEAKER_01", atSec: 12 }] },
+      generatedBy: "On-device: test model", usedNotes: true, usedTranscript: true,
+    });
+    return id;
+  });
+  await page.goto(`/app/meetings/${meetingId}?tab=notes&view=ai`);
+  const keyQuotes = page.getByRole("region", { name: "Key quotes" });
+  await expect(keyQuotes.getByText("“Small pilots are where we learn the most.”")).toBeVisible({ timeout: 60_000 });
+  // A quote's time opens the Transcript view at that moment.
+  await keyQuotes.getByRole("link", { name: "Open the transcript at 0:12" }).click();
+  await expect(page).toHaveURL(/view=transcript/);
+  await expect(page).toHaveURL(/t=12/);
+  const line = page.locator("[data-segment]", { hasText: "Small pilots are where we learn the most." });
+  await expect(line).toBeVisible({ timeout: 15_000 });
+
+  // Select the line and quote it into the notes.
+  await line.evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  });
+  await page.getByRole("toolbar", { name: "Selected transcript text" }).getByRole("button", { name: "Quote in notes" }).click();
+  await expect(page.getByText("Quoted in your notes.")).toBeVisible();
+  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "My notes" }).click();
+  const editor = page.locator(".meeting-notes-doc [contenteditable=\"true\"]");
+  await expect(editor.locator("blockquote")).toContainText("“Small pilots are where we learn the most.”");
+  await expect(editor.locator("blockquote")).toContainText("— SPEAKER_01, 0:12");
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible({ timeout: 15_000 });
+  const saved = await page.evaluate(async (id) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    return ((await client.query("meetings:get", { id })) as any)?.workingNotes as string;
+  }, meetingId);
+  // The editor saves standard Markdown escapes (SPEAKER\_01, \& in the link); the link still opens that moment.
+  expect(saved).toMatch(/> “Small pilots are where we learn the most\.”\n>\n> — SPEAKER\\?_01, \[0:12\]\(http[^)]*tab=notes\\?&view=transcript\\?&t=12-18\)/);
+  expect(errors).toEqual([]);
+});

@@ -57,9 +57,11 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
   /** Non-interactive content above the first section (an account's name and email). */
   header?: ReactNode;
+  /** Items have sentence-length hints: wrap each hint under its label instead of cutting it off. */
+  described?: boolean;
 };
 
-export function Menu({ trigger, sections, minWidth, align = "left", label, sheetTitle, onOpenChange, header }: Props) {
+export function Menu({ trigger, sections, minWidth, align = "left", label, sheetTitle, onOpenChange, header, described = false }: Props) {
   const [open, setOpen] = useState(false);
   const openChange = useRef(onOpenChange);
   openChange.current = onOpenChange;
@@ -311,7 +313,7 @@ export function Menu({ trigger, sections, minWidth, align = "left", label, sheet
               )}
               <div
                 ref={menuRef}
-                className={`menu menu--actions${isBottomSheet ? " menu--sheet" : ""}`}
+                className={`menu menu--actions${isBottomSheet ? " menu--sheet" : ""}${described ? " menu--described" : ""}`}
                 // Phones: a titled dialog around the menu. Desktop: the
                 // anchored popover is the menu.
                 role={isBottomSheet ? "dialog" : "menu"}

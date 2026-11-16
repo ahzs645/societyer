@@ -761,6 +761,9 @@ function MeetingDetailWorkspace() {
     hasNotes: String(meeting.workingNotes ?? "").trim().length > 0,
     minutesStarted: hasStartedMinutesDraft(minutes),
     minutesApproved: Boolean(minutes?.approvedAt),
+    working: isWorkingMeeting(meeting),
+    hasAiNotes: Boolean((meeting as any).notesDraft),
+    openActionItems: ((meeting as any).noteActionItems ?? []).filter((item: { done?: boolean }) => !item.done).length,
   });
   // A transcript pasted or imported as plain text lives on the minutes
   // (minutes.draftTranscript), not in the transcripts table. Show it on the

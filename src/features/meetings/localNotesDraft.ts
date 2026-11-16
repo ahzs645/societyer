@@ -76,7 +76,7 @@ export async function draftNotesWithSkillOnDevice(input: {
   const results: MeetingNotesSkillResult[] = [];
   for (const [index, messages] of plan.entries()) {
     input.onProgress?.(index, plan.length);
-    const session = createMeetingNotesSkillSession(input.skill.context, input.skill.template);
+    const session = createMeetingNotesSkillSession(input.skill.context, input.skill.template, { transcript: input.skill.transcript });
     const step: SkillStep = async (conversation, tools) => {
       const reply = await input.client.chatStep({
         messages: conversation,

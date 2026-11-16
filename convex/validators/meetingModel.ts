@@ -52,6 +52,8 @@ export const meetingNotesDraftValidator = v.object({
   sections: v.array(v.object({ heading: v.string(), points: v.array(v.string()) })),
   decisions: v.array(v.string()),
   openQuestions: v.array(v.string()),
+  // Words kept as said, checked against the transcript by the skill.
+  quotes: v.optional(v.array(v.object({ text: v.string(), speaker: v.optional(v.string()), atSec: v.optional(v.number()) }))),
   generatedAtISO: v.string(),
   // "Workspace AI", "On-device: <model>" or "Rule-based".
   generatedBy: v.string(),

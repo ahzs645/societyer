@@ -1,102 +1,204 @@
-{"calls": [
-{"tool": "write_summary", "arguments": {
-"summary": "Priya led the operations check-in on Thursday 12 November 2026, with Dana absent. The group agreed to go with the Elm Street site, with the lease letter to be drafted by 1 December. Whether the board or the executive director signs the lease was left open.",
-"sections": [
-{"heading": "Elm Street site", "points": [
-"Elm Street is the only one of the three options with a loading dock.",
-"Marcus is comfortable with the rent if the Foundation grant comes through.",
-"The group agreed to go with Elm Street."]},
-{"heading": "Foundation budget", "points": [
-"Marcus has the revised budget numbers, and the Foundation wants them by 20 November."]},
-{"heading": "Hamper drive", "points": [
-"About ten more volunteers are needed for the hamper drive.",
-"Li Wei will put out a call and recruit them over the next two weeks.",
-"Samuel Cho will run the raffle again this year."]},
-{"heading": "Zoning", "points": [
-"Gabe confirmed Elm Street is zoned for warehouse use.",
-"Gabe will email the zoning letter this week."]},
-{"heading": "Lease signing", "points": [
-"Whether the board or the executive director signs the lease is unsettled, pending a bylaws check."]},
-{"heading": "Walk-in freezer", "points": [
-"The walk-in freezer warranty expires soon, and nobody has checked what it covers.",
-"The switch to Northern Cold as freezer supplier was approved last month and is done."]}
-]
-}},
-{"tool": "add_decision", "arguments": {
-"text": "Go with the Elm Street site for the second distribution site (rent works if the Foundation grant comes through)."
-}},
-{"tool": "add_open_question", "arguments": {
-"text": "Does the board sign the lease, or can the executive director sign it?"
-}},
-{"tool": "add_open_question", "arguments": {
-"text": "What does the walk-in freezer warranty cover? It expires soon and nobody has been asked to check."
-}},
-{"tool": "add_action_item", "arguments": {
-"text": "Draft the lease letter for the Elm Street site.",
-"owner_person_id": "pd_priya",
-"due_date": "2026-12-01",
-"at_seconds": 40,
-"goal_id": "goal_site"
-}},
-{"tool": "add_action_item", "arguments": {
-"text": "Send the revised budget to the Foundation.",
-"owner_person_id": "pd_marcus",
-"due_date": "2026-11-20",
-"at_seconds": 70,
-"goal_id": "goal_grants"
-}},
-{"tool": "add_action_item", "arguments": {
-"text": "Put out a call and recruit about ten volunteers for the hamper drive within the next two weeks.",
-"owner_person_id": "pd_li",
-"at_seconds": 104
-}},
-{"tool": "add_action_item", "arguments": {
-"text": "Run the raffle again this year.",
-"owner_person_id": "pd_samuel",
-"at_seconds": 130,
-"committee_id": "com_events"
-}},
-{"tool": "add_action_item", "arguments": {
-"text": "Email the zoning letter for the Elm Street site this week.",
-"owner_name": "Gabe",
-"at_seconds": 146,
-"goal_id": "goal_site"
-}},
-{"tool": "add_action_item", "arguments": {
-"text": "Jo-Anne to check the bylaws on whether the board or the executive director signs the Elm Street lease.",
-"at_seconds": 188
-}},
-{"tool": "identify_speaker", "arguments": {
-"speaker_label": "SPEAKER_00",
-"person_id": "pd_priya",
-"evidence": "\"Hi everyone, Priya here, thanks for making time.\""
-}},
-{"tool": "identify_speaker", "arguments": {
-"speaker_label": "SPEAKER_01",
-"person_id": "pd_marcus",
-"evidence": "Asked by name: \"Marcus, can you walk us through where the Foundation budget is?\" Answered: \"As treasurer I've got the revised numbers.\""
-}},
-{"tool": "identify_speaker", "arguments": {
-"speaker_label": "SPEAKER_02",
-"person_id": "pd_li",
-"evidence": "\"From the volunteer side we're short about ten people for the hamper drive.\" Li Wei is the only listed Volunteer Coordinator."
-}},
-{"tool": "identify_speaker", "arguments": {
-"speaker_label": "SPEAKER_03",
-"name": "Gabe",
-"evidence": "\"Gabe from the City's parks department, I can speak to the zoning question.\""
-}},
-{"tool": "mark_attendee", "arguments": {
-"person_id": "pd_priya"
-}},
-{"tool": "mark_attendee", "arguments": {
-"person_id": "pd_marcus"
-}},
-{"tool": "mark_attendee", "arguments": {
-"person_id": "pd_li"
-}},
-{"tool": "mark_attendee", "arguments": {
-"name": "Gabe"
-}},
-{"tool": "finish", "arguments": {}}
-]}
+{
+ "calls": [
+  {
+   "tool": "write_summary",
+   "arguments": {
+    "summary": "Priya Raman led an operations check-in on the Elm Street site, the Foundation budget, the hamper drive, zoning and lease signing. The team agreed to go with Elm Street, and Priya will draft the lease letter by December 1. Who signs the lease is still open, pending a bylaws check.",
+    "sections": [
+     {
+      "heading": "Elm Street site",
+      "points": [
+       "Elm Street was the only one of three options with a loading dock.",
+       "The rent works if the Foundation grant comes through."
+      ]
+     },
+     {
+      "heading": "Foundation budget",
+      "points": [
+       "Marcus, as treasurer, has the revised numbers the Foundation wants by next Friday."
+      ]
+     },
+     {
+      "heading": "Hamper drive",
+      "points": [
+       "About ten more volunteers are needed for the hamper drive.",
+       "Sam said he will run the raffle again this year."
+      ]
+     },
+     {
+      "heading": "Zoning",
+      "points": [
+       "Gabe from the City's parks department said Elm Street is zoned for warehouse use.",
+       "Gabe will email the zoning letter this week."
+      ]
+     },
+     {
+      "heading": "Lease signing",
+      "points": [
+       "Whether the board or the executive director signs the lease is unsettled."
+      ]
+     },
+     {
+      "heading": "Walk-in freezer",
+      "points": [
+       "The walk-in freezer warranty expires soon and its coverage is unchecked.",
+       "The switch to Northern Cold as freezer supplier was approved last month."
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "tool": "add_decision",
+   "arguments": {
+    "text": "Go with the Elm Street site."
+   }
+  },
+  {
+   "tool": "add_open_question",
+   "arguments": {
+    "text": "Does the board sign the Elm Street lease, or can the executive director sign it?"
+   }
+  },
+  {
+   "tool": "add_action_item",
+   "arguments": {
+    "text": "Draft the lease letter for Elm Street",
+    "owner_person_id": "pd_priya",
+    "due_date": "2026-12-01",
+    "at_seconds": 40,
+    "goal_id": "goal_site"
+   }
+  },
+  {
+   "tool": "add_action_item",
+   "arguments": {
+    "text": "Send the revised budget to the Foundation",
+    "owner_person_id": "pd_marcus",
+    "due_date": "2026-11-20",
+    "at_seconds": 70,
+    "goal_id": "goal_grants"
+   }
+  },
+  {
+   "tool": "add_action_item",
+   "arguments": {
+    "text": "Put out a call to recruit about ten volunteers for the hamper drive",
+    "owner_person_id": "pd_li",
+    "at_seconds": 104
+   }
+  },
+  {
+   "tool": "add_action_item",
+   "arguments": {
+    "text": "Run the raffle again this year",
+    "owner_person_id": "pd_samuel",
+    "committee_id": "com_events",
+    "at_seconds": 130
+   }
+  },
+  {
+   "tool": "add_action_item",
+   "arguments": {
+    "text": "Email the zoning letter for Elm Street",
+    "owner_name": "Gabe",
+    "at_seconds": 146
+   }
+  },
+  {
+   "tool": "add_action_item",
+   "arguments": {
+    "text": "Ask Jo-Anne Mackenzie to check the bylaws on who signs the lease",
+    "at_seconds": 188
+   }
+  },
+  {
+   "tool": "add_action_item",
+   "arguments": {
+    "text": "Check what the walk-in freezer warranty covers",
+    "at_seconds": 200
+   }
+  },
+  {
+   "tool": "identify_speaker",
+   "arguments": {
+    "speaker_label": "SPEAKER_00",
+    "person_id": "pd_priya",
+    "evidence": "Hi everyone, Priya here, thanks for making time."
+   }
+  },
+  {
+   "tool": "identify_speaker",
+   "arguments": {
+    "speaker_label": "SPEAKER_01",
+    "person_id": "pd_marcus",
+    "evidence": "As treasurer I've got the revised numbers"
+   }
+  },
+  {
+   "tool": "identify_speaker",
+   "arguments": {
+    "speaker_label": "SPEAKER_02",
+    "person_id": "pd_li",
+    "evidence": "From the volunteer side we're short about ten people for the hamper drive."
+   }
+  },
+  {
+   "tool": "identify_speaker",
+   "arguments": {
+    "speaker_label": "SPEAKER_03",
+    "name": "Gabe",
+    "evidence": "Gabe from the City's parks department, I can speak to the zoning question."
+   }
+  },
+  {
+   "tool": "mark_attendee",
+   "arguments": {
+    "person_id": "pd_priya"
+   }
+  },
+  {
+   "tool": "mark_attendee",
+   "arguments": {
+    "person_id": "pd_marcus"
+   }
+  },
+  {
+   "tool": "mark_attendee",
+   "arguments": {
+    "person_id": "pd_li"
+   }
+  },
+  {
+   "tool": "mark_attendee",
+   "arguments": {
+    "name": "Gabe"
+   }
+  },
+  {
+   "tool": "add_quote",
+   "arguments": {
+    "text": "Okay, so we agree we go with Elm Street. I'll draft the lease letter by December 1st.",
+    "at_seconds": 40
+   }
+  },
+  {
+   "tool": "add_quote",
+   "arguments": {
+    "text": "I'll send the revised budget to them before then.",
+    "at_seconds": 70
+   }
+  },
+  {
+   "tool": "add_quote",
+   "arguments": {
+    "text": "I can put out a call and recruit them over the next two weeks.",
+    "at_seconds": 104
+   }
+  },
+  {
+   "tool": "finish",
+   "arguments": {}
+  }
+ ]
+}

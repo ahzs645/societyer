@@ -29,7 +29,7 @@ import { DeviceAiError } from "../src/lib/localAi/transport";
 // ---------- tools and prompt -------------------------------------------------------
 assert.deepEqual(
   MEETING_NOTES_TOOLS.map((tool) => tool.function.name),
-  ["write_summary", "add_decision", "add_open_question", "add_action_item", "identify_speaker", "mark_attendee", "finish"],
+  ["write_summary", "add_decision", "add_open_question", "add_action_item", "add_quote", "identify_speaker", "mark_attendee", "finish"],
 );
 for (const tool of MEETING_NOTES_TOOLS) assert.equal((tool.function.parameters as { type: string }).type, "object", `${tool.function.name} takes an object`);
 const block = meetingNotesSkillContextBlock(CONTEXT);
@@ -117,6 +117,30 @@ assert.deepEqual(result.speakers.map((speaker) => [speaker.label, speaker.person
 assert.deepEqual(result.attendees, [{ name: "Marcus Oyelaran", personId: "pd_marcus" }], "one attendee, however named");
 assert.equal(result.refused.length, 10);
 console.log("✓ session: ids checked, names matched, bad calls refused with a reason, speaker-label owners resolved");
+
+// ---------- quotes are checked against the transcript ---------------------------------
+{
+  const quoting = createMeetingNotesSkillSession(CONTEXT, "general", { transcript: SKILL_FIXTURE_TRANSCRIPT });
+  const say = (args: Record<string, unknown>) => quoting.handle({ name: "add_quote", arguments: args });
+  assert.equal(say({ text: "Elm Street is zoned for warehouse use, so you're fine." }).isError, undefined);
+  assert.equal(say({ text: "“I'll send the revised budget to them before then”" }).isError, undefined, "curly quotes and a missing full stop don't matter");
+  assert.match(say({ text: "Elm Street is zoned for warehouse use so you are fine" }).content, /not in the transcript exactly/, "a paraphrase is refused");
+  assert.match(say({ text: "I'll draft the lease letter. The rent works." }).content, /not in the transcript exactly/, "words joined from two lines are refused");
+  assert.match(say({ text: "sounds good" }).content, /at least three words/);
+  assert.equal(say({ text: "Elm Street is zoned for warehouse use, so you're fine" }).content, "Already recorded.");
+  quoting.handle({ name: "identify_speaker", arguments: { speaker_label: "SPEAKER_01", person_id: "pd_marcus", evidence: "As treasurer" } });
+  const { quotes } = quoting.result().draft;
+  assert.deepEqual(quotes?.slice(0, 2), [
+    { text: "Elm Street is zoned for warehouse use, so you're fine.", speaker: "SPEAKER_03", atSec: 146 },
+    { text: "I'll send the revised budget to them before then", speaker: "Marcus Oyelaran", atSec: 70 },
+  ], "speaker and time come from the line; an identified label takes the person's name");
+  const none = createMeetingNotesSkillSession(CONTEXT, "general");
+  assert.match(none.handle({ name: "add_quote", arguments: { text: "Elm Street is zoned for warehouse use" } }).content, /no transcript/);
+  assert.equal(none.result().draft.quotes, undefined, "no quotes key without quotes");
+  const merged = mergeSkillResults([quoting.result(), quoting.result()]);
+  assert.equal(merged.draft.quotes?.length, quotes?.length, "merged parts keep each quote once");
+}
+console.log("✓ quotes: word for word from one line, speaker and time taken from it, paraphrases refused");
 
 // ---------- the tool loop ----------------------------------------------------------
 // A model that makes a mistake, reads the refusal, fixes it, then finishes.
@@ -264,7 +288,7 @@ await client.mutation("meetings:saveNotesDraft", {
   draft: { summary: "Ops.", actionItems: [
     { text: "Send budget", assignee: "Marcus Oyelaran", assigneePersonId: "pd_marcus", goalId: "goal_1", committeeId: "com_fin" },
     { text: "Forged links", assigneePersonId: "pd_nobody", goalId: "goal_other_ws", committeeId: "bad id with spaces" },
-  ] },
+  ], quotes: [{ text: "“I'll send the revised budget.”", speaker: "Marcus Oyelaran", atSec: 70.4 }, { text: "  " }, { text: "No time", atSec: -3 }] },
   speakers: [
     { label: "SPEAKER_01", name: "Marcus Oyelaran", personId: "pd_marcus", evidence: "As treasurer" },
     { label: "SPEAKER_02", name: "Nobody", personId: "pd_nobody", evidence: "x" },
@@ -286,6 +310,7 @@ assert.deepEqual(saved.notesDraft.speakerSuggestions, [
   { label: "SPEAKER_01", name: "Marcus Oyelaran", personId: "pd_marcus", evidence: "As treasurer" },
   { label: "SPEAKER_02", name: "Nobody", evidence: "x" },
 ]);
+assert.deepEqual(saved.notesDraft.quotes, [{ text: "I'll send the revised budget.", speaker: "Marcus Oyelaran", atSec: 70 }, { text: "No time" }], "quotes saved without quote marks, bad times dropped");
 assert.deepEqual(saved.notesDraft.attendeeSuggestions, [{ name: "Marcus Oyelaran", personId: "pd_marcus" }, { name: "Guest Person" }]);
 // Applying a suggestion goes through the existing speaker assignment.
 await client.mutation("transcripts:assignSpeaker", { societyId, meetingId: "m_skill", label: "SPEAKER_01", name: "Marcus Oyelaran", personId: "pd_marcus" });
@@ -302,7 +327,8 @@ for (const [fixture, model] of [["a", "default"], ["a", "small"], ["b", "default
   const spec: any = fixture === "a"
     ? { context: CONTEXT, template: "general", expected: SKILL_FIXTURE_EXPECTED }
     : { context: SKILL_FIXTURE_B.context, template: SKILL_FIXTURE_B.template, expected: SKILL_FIXTURE_B.expected };
-  const run = applySkillCalls(createMeetingNotesSkillSession(spec.context, spec.template), skillCallsFromText(replay));
+  const transcript = fixture === "a" ? SKILL_FIXTURE_TRANSCRIPT : SKILL_FIXTURE_B.transcript;
+  const run = applySkillCalls(createMeetingNotesSkillSession(spec.context, spec.template, { transcript }), skillCallsFromText(replay));
   const where = `${fixture}-${model}`;
   assert.equal(run.refused.length, 0, `${where}: no refused calls`);
   assert.ok(run.finished && run.draft.summary, `${where}: summary and finish`);
@@ -324,8 +350,13 @@ for (const [fixture, model] of [["a", "default"], ["a", "small"], ["b", "default
   for (const pattern of spec.expected.decisions) assert.ok(run.draft.decisions.some((item: string) => pattern.test(item)), `${where}: decision ${pattern}`);
   for (const pattern of spec.expected.notDecisions ?? []) assert.ok(!run.draft.decisions.some((item: string) => pattern.test(item)), `${where}: not a decision ${pattern}`);
   for (const id of spec.expected.attendeesNever) assert.ok(!run.attendees.some((item) => item.personId === id), `${where}: ${id} not an attendee`);
+  // Quotes: a few, every one word for word from the transcript (none refused).
+  const quotes = run.draft.quotes ?? [];
+  assert.ok(quotes.length >= 1 && quotes.length <= 3, `${where}: one to three quotes`);
+  assert.ok(!run.refused.some((item) => item.tool === "add_quote"), `${where}: every quote is in the transcript`);
+  for (const quote of quotes) assert.ok(quote.atSec !== undefined && quote.speaker, `${where}: quote has speaker and time`);
 }
-console.log("✓ replays: four recorded model runs meet every expectation (owners, dates, goals, speakers, no over-assignment)");
+console.log("✓ replays: four recorded model runs meet every expectation (owners, dates, goals, speakers, verbatim quotes, no over-assignment)");
 
 // ---------- hosted provider adapter -----------------------------------------------
 const realFetch = globalThis.fetch;

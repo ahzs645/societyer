@@ -90,6 +90,15 @@ export type NotesDraftActionItem = {
 const RECORD_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const recordId = (value: unknown) => (typeof value === "string" && RECORD_ID.test(value) ? value : undefined);
 
+/** Words worth keeping as said: checked against the transcript by the skill. */
+export type NotesDraftQuote = {
+  text: string;
+  /** Who said it, as the transcript names them. */
+  speaker?: string;
+  /** Seconds into the recording. */
+  atSec?: number;
+};
+
 export type NotesDraft = {
   template: NotesDraftTemplateId;
   summary: string;
@@ -97,6 +106,8 @@ export type NotesDraft = {
   decisions: string[];
   openQuestions: string[];
   actionItems: NotesDraftActionItem[];
+  /** Absent when there are none, so drafts without quotes keep their shape. */
+  quotes?: NotesDraftQuote[];
 };
 
 export type NotesDraftInput = {
@@ -121,6 +132,8 @@ export const NOTES_DRAFT_LIMITS = {
   actionItems: 60,
   actionText: 500,
   assignee: 120,
+  quotes: 5,
+  quoteText: 400,
 } as const;
 const MAX_REF_SEC = 24 * 60 * 60;
 
@@ -326,6 +339,7 @@ function normalizeSections(value: unknown): NotesDraftSection[] | undefined {
 export function normalizeNotesDraft(raw: unknown, fallback: NotesDraft): NotesDraft {
   const row = asRow(raw);
   if (!row) return fallback;
+  const quotes = normalizeNotesQuotes(row.quotes) ?? fallback.quotes;
   return {
     template: fallback.template,
     summary: clean(row.summary, NOTES_DRAFT_LIMITS.summary) ?? fallback.summary,
@@ -333,7 +347,28 @@ export function normalizeNotesDraft(raw: unknown, fallback: NotesDraft): NotesDr
     decisions: stringList(row.decisions, NOTES_DRAFT_LIMITS.point, NOTES_DRAFT_LIMITS.listItems) ?? fallback.decisions,
     openQuestions: stringList(row.openQuestions, NOTES_DRAFT_LIMITS.point, NOTES_DRAFT_LIMITS.listItems) ?? fallback.openQuestions,
     actionItems: normalizeNotesActionItems(row.actionItems) ?? fallback.actionItems,
+    ...(quotes?.length ? { quotes } : {}),
   };
+}
+
+/** Quotes as stored: words without surrounding quote marks, a speaker, a time. */
+export function normalizeNotesQuotes(value: unknown): NotesDraftQuote[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: NotesDraftQuote[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    const row = asRow(entry);
+    const text = clean(typeof row?.text === "string" ? row.text.replace(/^\s*["“”']+|["“”']+\s*$/g, "") : undefined, NOTES_DRAFT_LIMITS.quoteText);
+    if (!row || !text) continue;
+    const key = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const speaker = clean(row.speaker, NOTES_DRAFT_LIMITS.assignee);
+    const at = typeof row.atSec === "number" && Number.isFinite(row.atSec) && row.atSec >= 0 && row.atSec <= MAX_REF_SEC ? Math.round(row.atSec) : undefined;
+    out.push({ text, ...(speaker ? { speaker } : {}), ...(at !== undefined ? { atSec: at } : {}) });
+    if (out.length >= NOTES_DRAFT_LIMITS.quotes) break;
+  }
+  return out;
 }
 
 export function parseNotesDraft(text: string, fallback: NotesDraft): NotesDraft {
@@ -469,6 +504,7 @@ export function mergeNotesDrafts(parts: readonly NotesDraft[]): NotesDraft {
       decisions: parts.flatMap((part) => part.decisions),
       openQuestions: parts.flatMap((part) => part.openQuestions),
       actionItems: parts.flatMap((part) => part.actionItems),
+      quotes: parts.flatMap((part) => part.quotes ?? []),
     },
     { ...parts[0], actionItems: [] },
   );
@@ -479,7 +515,7 @@ export function mergeNotesDrafts(parts: readonly NotesDraft[]): NotesDraft {
 // ---------------------------------------------------------------------------
 
 /** The draft as Markdown, for "Add to my notes" and copying. */
-export function notesDraftMarkdown(draft: Pick<NotesDraft, "summary" | "sections" | "decisions" | "openQuestions"> & { actionItems?: ReadonlyArray<{ text: string; assignee?: string; dueDate?: string }> }): string {
+export function notesDraftMarkdown(draft: Pick<NotesDraft, "summary" | "sections" | "decisions" | "openQuestions" | "quotes"> & { actionItems?: ReadonlyArray<{ text: string; assignee?: string; dueDate?: string }> }): string {
   const blocks: string[] = [];
   if (draft.summary) blocks.push(`## Summary\n\n${draft.summary}`);
   for (const section of draft.sections) blocks.push(`## ${section.heading}\n\n${section.points.map((point) => `- ${point}`).join("\n")}`);
@@ -488,5 +524,12 @@ export function notesDraftMarkdown(draft: Pick<NotesDraft, "summary" | "sections
     blocks.push(`## Action items\n\n${draft.actionItems.map((item) => `- [ ] ${item.text}${item.dueDate ? ` (due ${item.dueDate})` : ""}`).join("\n")}`);
   }
   if (draft.openQuestions.length) blocks.push(`## Open questions\n\n${draft.openQuestions.map((item) => `- ${item}`).join("\n")}`);
+  if (draft.quotes?.length) blocks.push(`## Key quotes\n\n${draft.quotes.map(quoteMarkdownLine).join("\n\n")}`);
   return blocks.join("\n\n");
+}
+
+/** `> “Words.” — Priya Raman, 0:54` */
+export function quoteMarkdownLine(quote: NotesDraftQuote): string {
+  const who = [quote.speaker, quote.atSec !== undefined ? formatClock(quote.atSec) : ""].filter(Boolean).join(", ");
+  return `> “${quote.text}”${who ? ` — ${who}` : ""}`;
 }

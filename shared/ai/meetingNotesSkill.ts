@@ -28,6 +28,7 @@ import {
   notesDraftTemplate,
   normalizeNotesDraft,
   type NotesDraft,
+  type NotesDraftQuote,
   type NotesDraftTemplateId,
 } from "./notesDraft";
 import { splitTranscript } from "./minutesDraftChunks";
@@ -176,6 +177,21 @@ export const MEETING_NOTES_TOOLS: readonly ChatToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "add_quote",
+      description: "Keep a few words exactly as someone said them: a commitment, a decision in their own words, or a point worth remembering. Copy the words from one transcript line without changing them. The speaker and time come from that line.",
+      parameters: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "The exact words from one transcript line, without its [m:ss] prefix or speaker. One or two sentences." },
+          at_seconds: { type: "number", description: "The line's time in seconds, when the same words appear more than once." },
+        },
+        required: ["text"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "identify_speaker",
       description: "Say who a transcript speaker label is, only with evidence in the transcript (they introduce themselves, are addressed by name, or state a role only one person holds).",
       parameters: {
@@ -229,7 +245,8 @@ export function meetingNotesSkillSystemPrompt(template: NotesDraftTemplateId): s
     "   Due dates: only when a date or deadline was stated. Resolve relative dates from the meeting's date and weekday: \"this Friday\" is the next Friday after the meeting, \"next Friday\" is the Friday of the following week, \"end of the month\" is that month's last day. A vague span (\"this week\", \"over the next two weeks\", \"soon\") is not a due date: leave due_date out and keep the wording in the text. Add at_seconds from the line where it was agreed, and goal_id or committee_id only when the link is clear.",
     "5. Call identify_speaker for a speaker label only with evidence: a self-introduction; being greeted or asked a question by name and answering it; or speaking plainly from a role that exactly one listed person holds (\"as treasurer…\", \"from the volunteer side…\" when only one person coordinates volunteers). A role two listed people share is not evidence. Skip labels you can't support, and never guess from speaking order.",
     "6. Call mark_attendee for each person who clearly took part. Someone mentioned as absent did not.",
-    "7. Call finish.",
+    "7. When there is a transcript, call add_quote for up to three short quotes worth keeping word for word: someone taking on a commitment, a decision in their own words, or a point the team will want to remember. Copy the words exactly from one line. Skip it when nothing stands out; never quote small talk.",
+    "8. Call finish.",
     "",
     "Rules: use only ids that appear in the context, exactly as written. Never invent people, dates or commitments. If a tool answers with an error, fix that call and try again. You may call several tools in one turn.",
   ].join("\n");
@@ -283,6 +300,28 @@ export type SkillActionItem = {
 type PendingAction = SkillActionItem & { speakerLabel?: string };
 
 export type SkillSpeakerSuggestion = { label: string; name: string; personId?: string; evidence: string };
+
+type PendingQuote = NotesDraftQuote & { speakerLabel?: string };
+
+/** One transcript line: "[m:ss] Speaker: words", or plain words. */
+type TranscriptLine = { atSec?: number; speaker?: string; text: string; key: string };
+
+/** Lowercase letters and digits only, so curly quotes, dashes and spacing don't matter. */
+const quoteKey = (value: string) =>
+  value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+function transcriptLines(transcript: string): TranscriptLine[] {
+  return transcript.split(/\r?\n/).flatMap((raw) => {
+    const line = raw.trim();
+    if (!line) return [];
+    const timed = /^\[(\d{1,2}(?::\d{2}){1,2})\]\s*(?:([^:\n]{1,80}):\s+)?(.*)$/.exec(line);
+    if (!timed) return [{ text: line, key: quoteKey(line) }];
+    const parts = timed[1].split(":").map(Number);
+    const atSec = parts.reduce((total, part) => total * 60 + part, 0);
+    const text = timed[3] ?? "";
+    return [{ atSec, ...(timed[2] ? { speaker: timed[2].trim() } : {}), text, key: quoteKey(text) }];
+  });
+}
 export type SkillAttendee = { name: string; personId?: string };
 
 export type MeetingNotesSkillResult = {
@@ -327,7 +366,14 @@ export function decodeSkillArguments(raw: unknown): Record<string, unknown> | nu
 const MAX_REF_SEC = 24 * 60 * 60;
 const str = (value: unknown, max: number) => clip(value, max) || undefined;
 
-export function createMeetingNotesSkillSession(context: MeetingNotesSkillContext, template: NotesDraftTemplateId) {
+export function createMeetingNotesSkillSession(
+  context: MeetingNotesSkillContext,
+  template: NotesDraftTemplateId,
+  /** The whole transcript: quotes must appear in it word for word. */
+  options: { transcript?: string } = {},
+) {
+  const lines = transcriptLines(options.transcript ?? "");
+  const quotes: PendingQuote[] = [];
   const peopleById = new Map(context.people.filter((person) => person.id).map((person) => [person.id!, person]));
   const goalIds = new Set(context.goals.map((goal) => goal.id));
   const committeeIds = new Set(context.committees.map((committee) => committee.id));
@@ -415,6 +461,27 @@ export function createMeetingNotesSkillSession(context: MeetingNotesSkillContext
         if (!owner.name && ownerLabel) return { content: `Recorded; the owner is ${ownerLabel} until that speaker is identified.` };
         return { content: owner.personId ? `Recorded for ${owner.name}.` : owner.name ? `Recorded for ${owner.name} (not in the People list).` : "Recorded with no owner." };
       }
+      case "add_quote": {
+        const words = str(typeof args.text === "string" ? args.text.replace(/^\s*["“”']+|["“”']+\s*$/g, "") : undefined, NOTES_DRAFT_LIMITS.quoteText);
+        if (!words) return refuse(tool, "text is empty.");
+        if (!lines.length) return refuse(tool, "there is no transcript to quote.");
+        const key = quoteKey(words);
+        if (key.split(" ").length < 3) return refuse(tool, "a quote needs at least three words.");
+        const matches = lines.filter((line) => line.key.includes(key));
+        if (!matches.length) return refuse(tool, "those words are not in the transcript exactly. Copy them from one line without changing or joining them.");
+        const near = typeof args.at_seconds === "number" && Number.isFinite(args.at_seconds) ? args.at_seconds : undefined;
+        const line = near === undefined ? matches[0] : [...matches].sort((a, b) => Math.abs((a.atSec ?? 0) - near) - Math.abs((b.atSec ?? 0) - near))[0];
+        if (quotes.some((quote) => quoteKey(quote.text) === key)) return { content: "Already recorded." };
+        if (quotes.length >= NOTES_DRAFT_LIMITS.quotes) return refuse(tool, `keep at most ${NOTES_DRAFT_LIMITS.quotes} quotes.`);
+        const label = line.speaker && speakerLabels.has(line.speaker) ? line.speaker : undefined;
+        quotes.push({
+          text: words,
+          ...(line.speaker ? { speaker: line.speaker } : {}),
+          ...(line.atSec !== undefined ? { atSec: line.atSec } : {}),
+          ...(label ? { speakerLabel: label } : {}),
+        });
+        return { content: `Quote recorded${line.speaker ? ` from ${line.speaker}` : ""}.` };
+      }
       case "identify_speaker": {
         const label = typeof args.speaker_label === "string" ? args.speaker_label.trim() : "";
         if (!speakerLabels.has(label)) return refuse(tool, `speaker_label "${clip(label, 40)}" is not in the Transcript speakers list.`);
@@ -446,8 +513,16 @@ export function createMeetingNotesSkillSession(context: MeetingNotesSkillContext
       const speaker = speakerLabel ? speakers.get(speakerLabel) : undefined;
       return speaker ? { ...item, assignee: speaker.name, ...(speaker.personId ? { assigneePersonId: speaker.personId } : {}) } : item;
     });
+    // A quote from an unnamed speaker label takes the name that label was identified as.
+    const keptQuotes = quotes.map(({ speakerLabel, ...quote }) => {
+      const speaker = speakerLabel ? speakers.get(speakerLabel) : undefined;
+      return speaker ? { ...quote, speaker: speaker.name } : quote;
+    });
     return {
-      draft: { template, summary, sections, decisions: [...decisions], openQuestions: [...questions], actionItems },
+      draft: {
+        template, summary, sections, decisions: [...decisions], openQuestions: [...questions], actionItems,
+        ...(keptQuotes.length ? { quotes: keptQuotes } : {}),
+      },
       speakers: [...speakers.values()],
       attendees: [...attendees.values()],
       refused: [...refused],
@@ -480,6 +555,9 @@ export function mergeSkillResults(results: readonly MeetingNotesSkillResult[]): 
       decisions: byKey(results.flatMap((result) => result.draft.decisions), normalizeName),
       openQuestions: byKey(results.flatMap((result) => result.draft.openQuestions), normalizeName),
       actionItems: byKey(results.flatMap((result) => result.draft.actionItems), (item) => normalizeName(item.text)),
+      ...(results.some((result) => result.draft.quotes?.length)
+        ? { quotes: byKey(results.flatMap((result) => result.draft.quotes ?? []), (item) => normalizeName(item.text)).slice(0, NOTES_DRAFT_LIMITS.quotes) }
+        : {}),
     },
     speakers: byKey(results.flatMap((result) => result.speakers), (item) => item.label),
     attendees: byKey(results.flatMap((result) => result.attendees), (item) => item.personId ?? normalizeName(item.name)),

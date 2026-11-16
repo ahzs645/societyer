@@ -270,6 +270,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   white-space: nowrap;
 }
 .menu--described .menu__item-right { padding-top: 3px; }
+.menu--actions.menu--described:not(.menu--sheet) { max-width: min(340px, calc(100vw - 16px)); }
 .menu__item-right {
   @include inline-flex-center;
   gap: 6px;

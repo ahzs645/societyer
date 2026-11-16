@@ -14,6 +14,7 @@ import {
   type NotesExportInput,
 } from "../shared/meetingNotesExport";
 import { formatElapsed, recordingFileName } from "../src/features/meetings/recorder/meetingRecorder";
+import { notesTranscriptLink, transcriptQuoteMarkdown } from "../src/features/meetings/transcript/transcriptQuote";
 
 // ---------- timeline ----------------------------------------------------------------
 const now = new Date(2026, 10, 12, 10, 0); // Thursday 12 November 2026, 10:00 local
@@ -63,6 +64,8 @@ const input: NotesExportInput = {
   ],
   transcript: "[0:00] Sam: Hello\n[0:05] Priya: Hi",
 };
+const withQuotes = notesMeetingMarkdown({ ...input, draft: { ...input.draft!, quotes: [{ text: "We'd like to fund a pilot.", speaker: "Dana Lee", atSec: 9 }, { text: "No speaker" }] } });
+assert.match(withQuotes, /### Key quotes\n\n> “We'd like to fund a pilot\.” — Dana Lee, 0:09\n\n> “No speaker”/, "key quotes in the export");
 const markdown = notesMeetingMarkdown(input);
 assert.ok(markdown.startsWith("# Partner call / Example\n\n2026-11-12 · Online\n\n**Attendees:** Sam Rivera, Priya Raman"));
 assert.match(markdown, /## AI notes \(External call\)\n\n### Summary\n\nThey'll fund a pilot\./);
@@ -110,3 +113,19 @@ assert.equal(recordingFileName("", new Date(2026, 0, 2, 9, 0).getTime(), "m4a"),
 assert.equal(formatElapsed(65), "1:05");
 assert.equal(formatElapsed(3725), "1:02:05");
 console.log("✓ recorder: safe file names and elapsed time");
+
+// ---------- quote in notes -------------------------------------------------------------
+const quoteHref = notesTranscriptLink(54, 61.5, { pathname: "/app/meetings/m1", search: "?tab=notes&view=transcript" }, { locationHref: "https://app.example.org/app/meetings/m1" });
+assert.equal(quoteHref, "https://app.example.org/app/meetings/m1?tab=notes&view=transcript&t=54-61.5");
+assert.equal(
+  notesTranscriptLink(3, 4, { pathname: "/app/meetings/m1", search: "?tab=transcript&t=1-2" }, { locationHref: "https://app.example.org/" }),
+  "https://app.example.org/app/meetings/m1?tab=notes&view=transcript&t=3-4",
+  "from the Transcript tab it still opens the notes surface at that moment",
+);
+assert.equal(
+  transcriptQuoteMarkdown({ text: "  \"Small pilots are\n where we learn.\" ", speaker: "Priya Raman", start: 54, end: 61.5 }, quoteHref),
+  `> “Small pilots are where we learn.”\n>\n> — Priya Raman, [0:54](${quoteHref})`,
+  "one line of words, existing quote marks dropped, then who and when",
+);
+assert.match(transcriptQuoteMarkdown({ text: "Hi", speaker: " ", start: 0, end: 1 }, "x"), /— Unknown speaker, \[0:00\]\(x\)$/);
+console.log("✓ quote in notes: blockquote with speaker and a link back to that moment");

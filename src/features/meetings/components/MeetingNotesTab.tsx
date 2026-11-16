@@ -26,6 +26,7 @@ import { isNotesView, MeetingAskBar, NotesMoreMenu, NotesSurfaceBar, NotesTempla
 import { useMeetingRecorder } from "../recorder/meetingRecorder";
 import { notesDraftTranscriptFromRow, type NotesDraftTemplateId } from "../../../../shared/ai/notesDraft";
 import type { NotesExportInput } from "../../../../shared/meetingNotesExport";
+import { notesTranscriptLink, transcriptQuoteMarkdown, TranscriptQuoteContext, type TranscriptQuotePick } from "../transcript/transcriptQuote";
 
 /** Typing must pause this long before the notes save. */
 const NOTES_SAVE_DELAY_MS = 800;
@@ -202,6 +203,14 @@ export function MeetingNotesTab({
     transcript: notesDraftTranscriptFromRow(transcriptRow),
   });
 
+  // Quote in notes: the selection goes under the notes as a quote linked back to that moment.
+  const quoteInNotes = canWrite && !converting
+    ? (quote: TranscriptQuotePick) => {
+        notes.onChange(appendMarkdown(notes.value, transcriptQuoteMarkdown(quote, notesTranscriptLink(quote.start, quote.end, window.location))));
+        toast.success("Quoted in your notes.", { action: { label: "Show notes", onClick: () => setView("notes") } });
+      }
+    : null;
+
   const actionsCard = (
     <MeetingNoteActionsCard
       societyId={meeting.societyId}
@@ -257,7 +266,7 @@ export function MeetingNotesTab({
       )}
       {visited.has("transcript") && (
         <div className="notes-surface__view notes-surface__view--transcript" hidden={view !== "transcript"}>
-          {transcriptView}
+          <TranscriptQuoteContext.Provider value={quoteInNotes}>{transcriptView}</TranscriptQuoteContext.Provider>
         </div>
       )}
       {phone ? (

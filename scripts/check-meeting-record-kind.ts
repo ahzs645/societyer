@@ -77,6 +77,21 @@ assert.deepEqual(
   ["transcript:done", "notes:done", "minutesDraft:done", "approved:done"],
   "nothing is current once the minutes are approved",
 );
+const workingSteps = { kind: "notes" as const, working: true, hasTranscript: true, minutesStarted: false, minutesApproved: false };
+assert.deepEqual(
+  states(meetingRecordSteps({ ...workingSteps, hasNotes: true, hasAiNotes: true, openActionItems: 2 })),
+  ["transcript:done", "notes:done", "aiNotes:done", "followUps:current"],
+  "a working meeting ends with its follow-ups, not minutes",
+);
+assert.deepEqual(
+  states(meetingRecordSteps({ ...workingSteps, hasNotes: true, hasAiNotes: false, openActionItems: 0 })),
+  ["transcript:done", "notes:done", "aiNotes:upcoming", "followUps:done"],
+);
+assert.deepEqual(
+  states(meetingRecordSteps({ ...workingSteps, hasNotes: true, minutesStarted: true })),
+  ["transcript:done", "notes:done", "minutesDraft:done", "approved:current"],
+  "once its notes became minutes, the minutes path shows",
+);
 
 assert.equal(discussionSeededWithNotes("", "  Budget passed.  "), "Budget passed.");
 assert.equal(discussionSeededWithNotes("Opened at 7.", "Budget passed."), "Opened at 7.\n\nBudget passed.");

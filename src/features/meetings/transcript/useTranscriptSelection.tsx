@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { speakerName } from "../../../../shared/transcriptModel";
 import { Menu, type MenuSection } from "../../../components/Menu";
@@ -14,6 +14,7 @@ import {
 } from "./transcriptLinks";
 import type { LinkMinutesItem } from "./useMinutesLinks";
 import { inCameraMenuSections, type InCameraProps } from "./InCameraTranscript";
+import { TranscriptQuoteContext, type TranscriptQuotePick } from "./transcriptQuote";
 
 type SelectedQuote = { text: string; speaker: string; start: number; end: number; left: number; top: number };
 
@@ -37,7 +38,11 @@ export function useTranscriptSelection({
   inCamera?: Pick<InCameraProps, "choices" | "canMark" | "onMark">;
 }) {
   const location = useLocation();
+  const quoteInNotes = useContext(TranscriptQuoteContext);
   const [selected, setSelected] = useState<SelectedQuote | null>(null);
+  // Touch selection fires no mouseup: inspect once the selection settles, and
+  // put the toolbar under it, clear of the phone's own copy menu.
+  const touch = useRef(false);
   // While the "Link to…" menu is open, choosing an item may collapse the text
   // selection; keep the toolbar (and the menu it anchors) until the menu closes.
   const pinned = useRef(false);
@@ -70,15 +75,18 @@ export function useTranscriptSelection({
       .flatMap((segment) => [...segment.querySelectorAll<HTMLElement>("[data-word]")])
       .filter((word) => selectedText(range, word).trim());
     const bounds = range.getBoundingClientRect();
+    const width = (quoteInNotes ? 130 : 0) + (linkTargets.length || inCamera?.canMark ? 420 : 232);
     setSelected({
       text,
       speaker: speakerName(segments[Number(first.dataset.segment)].speaker, speakers),
       start: Number(words.find((word) => first.contains(word))?.dataset.start ?? first.dataset.start),
       end: Number(words.filter((word) => last.contains(word)).at(-1)?.dataset.end ?? last.dataset.end),
-      left: Math.max(8, Math.min(bounds.left, window.innerWidth - (linkTargets.length || inCamera?.canMark ? 420 : 232))),
-      top: Math.max(8, Math.min(bounds.top - 48, window.innerHeight - 56)),
+      left: Math.max(8, Math.min(bounds.left, window.innerWidth - width)),
+      top: touch.current
+        ? Math.max(8, Math.min(bounds.bottom + 16, window.innerHeight - 120))
+        : Math.max(8, Math.min(bounds.top - 48, window.innerHeight - 56)),
     });
-  }, [root, segments, speakers, linkTargets.length, inCamera?.canMark]);
+  }, [root, segments, speakers, linkTargets.length, inCamera?.canMark, quoteInNotes]);
   useEffect(() => {
     const hide = () => {
       if (!pinned.current) setSelected(null);
@@ -86,6 +94,8 @@ export function useTranscriptSelection({
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") hide();
     };
+    let settle: number | undefined;
+    const pointer = (event: PointerEvent) => { touch.current = event.pointerType === "touch" || event.pointerType === "pen"; };
     const change = () => {
       const selection = window.getSelection();
       if (
@@ -93,12 +103,19 @@ export function useTranscriptSelection({
         selection.isCollapsed ||
         !root.current?.contains(selection.anchorNode) ||
         !root.current?.contains(selection.focusNode)
-      )
+      ) {
         hide();
+        return;
+      }
+      if (touch.current) {
+        window.clearTimeout(settle);
+        settle = window.setTimeout(inspect, 350);
+      }
     };
     const keyup = (event: KeyboardEvent) => {
       if (event.key !== "Escape") inspect();
     };
+    document.addEventListener("pointerdown", pointer, true);
     window.addEventListener("scroll", hide, true);
     window.addEventListener("resize", hide);
     document.addEventListener("keydown", key);
@@ -106,6 +123,8 @@ export function useTranscriptSelection({
     document.addEventListener("mouseup", inspect);
     document.addEventListener("keyup", keyup);
     return () => {
+      window.clearTimeout(settle);
+      document.removeEventListener("pointerdown", pointer, true);
       window.removeEventListener("scroll", hide, true);
       window.removeEventListener("resize", hide);
       document.removeEventListener("keydown", key);
@@ -144,6 +163,10 @@ export function useTranscriptSelection({
   return selected ? (
     <SelectionToolbar
       selected={selected}
+      onQuote={quoteInNotes ? (quote) => {
+        window.getSelection()?.removeAllRanges();
+        quoteInNotes(quote);
+      } : undefined}
       onCopy={onCopy}
       linkSections={linkTargets.length > 0 ? linkSections(selected) : null}
       inCamera={inCamera}
@@ -155,12 +178,15 @@ export function useTranscriptSelection({
 /** Copy, link and in-camera actions over the selected text, in a portal above it. */
 function SelectionToolbar({
   selected,
+  onQuote,
   onCopy,
   linkSections,
   inCamera,
   onMenuOpenChange,
 }: {
   selected: SelectedQuote;
+  /** The notes surface: add the selection to the notes as a quote. */
+  onQuote?: (quote: TranscriptQuotePick) => void;
   onCopy: (text: string) => void;
   /** Null hides "Link to…". */
   linkSections: MenuSection[] | null;
@@ -175,6 +201,15 @@ function SelectionToolbar({
       style={{ left: selected.left, top: selected.top }}
       onPointerDown={(event) => event.preventDefault()}
     >
+      {onQuote && (
+        <button
+          type="button"
+          className="is-primary"
+          onClick={() => onQuote({ text: selected.text, speaker: selected.speaker, start: selected.start, end: selected.end })}
+        >
+          Quote in notes
+        </button>
+      )}
       <button
         type="button"
         onClick={() => onCopy(transcriptQuote(selected.text, selected.speaker, selected.start))}

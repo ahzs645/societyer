@@ -69,7 +69,7 @@ export function MeetingRecordingSettingsCard() {
             {
               value: "keep",
               label: "Keep recordings",
-              hint: ifKept.store === "none" ? `Not available here: ${ifKept.detail}` : `Saved to ${ifKept.label === "SharePoint" ? "SharePoint" : ifKept.label.toLowerCase()}. Meeting editors can play, download and transcribe them.`,
+              hint: ifKept.store === "none" ? "Kept wherever this workspace can hold them, such as the desktop app or connected file storage. This browser can't, so here they're opened from the device." : `Saved to ${ifKept.label === "SharePoint" ? "SharePoint" : ifKept.label.toLowerCase()}. Meeting editors can play, download and transcribe them.`,
               disabled: !canEdit || saving,
             },
             {
