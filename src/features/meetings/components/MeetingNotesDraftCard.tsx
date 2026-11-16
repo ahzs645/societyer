@@ -51,6 +51,7 @@ export function MeetingNotesDraftCard({
   canWrite,
   flushNotes,
   onAddToNotes,
+  preferredTemplate,
 }: {
   meeting: NotesDraftMeeting & { societyId: Id<"societies"> };
   draft: StoredNotesDraft | undefined;
@@ -63,6 +64,8 @@ export function MeetingNotesDraftCard({
   /** Saves pending note edits first, so the server drafts from what is on screen. */
   flushNotes: () => Promise<unknown>;
   onAddToNotes: (markdown: string) => void;
+  /** The template the notes were started from, for the first draft. */
+  preferredTemplate?: NotesDraftTemplateId;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -70,8 +73,11 @@ export function MeetingNotesDraftCard({
   const discard = usePermissionedMutation(api.meetings.discardNotesDraft, canWrite);
   const progress = useDeviceDraftProgress(meeting._id);
   const [template, setTemplate] = useState<NotesDraftTemplateId>(
-    isNotesDraftTemplateId(draft?.template) ? draft!.template : "general",
+    isNotesDraftTemplateId(draft?.template) ? draft!.template : preferredTemplate ?? "general",
   );
+  useEffect(() => {
+    if (!draft && preferredTemplate) setTemplate(preferredTemplate);
+  }, [draft, preferredTemplate]);
   // Follow the stored draft's template (another tab, or a draft saved after this mounted).
   useEffect(() => {
     if (isNotesDraftTemplateId(draft?.template)) setTemplate(draft.template);

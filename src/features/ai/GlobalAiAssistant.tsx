@@ -64,7 +64,7 @@ import { Skeleton } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/Modal";
 
-import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT, takePendingAiAssistantOpen } from "./aiAssistantEvents";
+import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT, takePendingAiAssistantOpen, takePendingAiAssistantRequest, type AiAssistantRequest } from "./aiAssistantEvents";
 import { Tooltip } from "../../components/Tooltip";
 import { useDialogFocus } from "../../lib/useDialogFocus";
 import { useKeyboardInsetTracking } from "../../lib/useVisualViewportBottomInset";
@@ -263,15 +263,28 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     };
   }, [canRead, canListModels, open, catalogLoaded, effectiveProvider?.provider, society?._id, actingUserId, listProviderModels]);
 
+  // A question and context sent with the open (the meeting Ask bar): fill the
+  // composer, attach the context, and send when asked to once ready.
+  // Queued here and applied once the assistant has settled (see the effect
+  // after the workspace reset below), so its start-up never wipes them.
+  const [autoSendPrompt, setAutoSendPrompt] = useState<string | null>(null);
+  const [incomingRequest, setIncomingRequest] = useState<AiAssistantRequest | null>(null);
   useEffect(() => {
     const onOpen = () => {
       if (!canRead) return;
       takePendingAiAssistantOpen();
+      setIncomingRequest(takePendingAiAssistantRequest());
       setOpen(true);
     };
     // A click made while this component was still loading (or before the
     // viewer's permissions resolved) opens it now instead of being lost.
     if (canRead && takePendingAiAssistantOpen()) setOpen(true);
+    // The deferred loader (DeferredShellOverlays) may already have taken the
+    // open and mounted this open; a question sent with it is still waiting.
+    if (canRead) {
+      const waiting = takePendingAiAssistantRequest();
+      if (waiting) setIncomingRequest(waiting);
+    }
     window.addEventListener(OPEN_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
   }, [canRead]);
@@ -297,6 +310,18 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     if (!localOnly || !canWrite) setInput("");
     return () => deviceAbortRef.current?.abort();
   }, [society?._id, actingUserId, localOnly, canWrite]);
+
+  // Apply a queued question once the workspace, its saved draft and the
+  // viewer's permissions are in place (each of those resets the composer).
+  useEffect(() => {
+    // Filled in even when nothing can send yet (no model set up): the question waits.
+    if (!incomingRequest || !society?._id || !canWrite) return;
+    if (localOnly && loadedDraftKey !== `societyer:ai-draft:${society._id}`) return;
+    if (incomingRequest.prompt !== undefined) setInput(incomingRequest.prompt);
+    if (incomingRequest.attachments?.length) setAttachedFiles(incomingRequest.attachments.slice(0, AI_ATTACHMENT_MAX_FILES));
+    setAutoSendPrompt(incomingRequest.send && incomingRequest.prompt?.trim() ? incomingRequest.prompt : null);
+    setIncomingRequest(null);
+  }, [incomingRequest, society?._id, canWrite, localOnly, loadedDraftKey]);
 
   useEffect(() => {
     if (canWrite && !creatingNewThread && !selectedThreadId && threads?.[0]?._id) setSelectedThreadId(threads[0]._id);
@@ -394,6 +419,15 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
       if (authorityRef.current === submissionAuthority) setBusy(false);
     }
   };
+
+  // Send a question that came with the open, once the composer holds it.
+  useEffect(() => {
+    if (!autoSendPrompt || !open || !canSend || busy || filesLoading || !society || input !== autoSendPrompt) return;
+    setAutoSendPrompt(null);
+    void submit();
+    // submit reads the current composer state; run when that state is ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSendPrompt, open, canSend, busy, filesLoading, society, input]);
 
   /**
    * On-device turn: stream the reply from this device's model, then save the

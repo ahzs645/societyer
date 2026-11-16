@@ -62,6 +62,8 @@ export function resolveMeetingTab(requested: string | null | undefined, kind: Me
   const visible = visibleMeetingTabs(kind);
   if (requested === "minutes" && kind === "notes") return "notes";
   if (requested === "notes" && kind === "minutes") return "minutes";
+  // A notes meeting opens on its notes, the way a notepad does.
+  if (!requested && kind === "notes") return "notes";
   const match = visible.find((tab) => tab === requested);
   return match ?? "overview";
 }

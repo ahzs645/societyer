@@ -1,4 +1,5 @@
 import { useConvex, useQuery } from "convex/react";
+import { takeFinishedRecording } from "../recorder/meetingRecorder";
 import { api as hostedApi } from "@/lib/convexApi";
 import { WhisperXQueue } from "./WhisperXQueue";
 import { PagedTranscriptToolbar } from "./PagedTranscriptToolbar";
@@ -116,6 +117,11 @@ export function TranscriptWorkspace({
   const clock = useMediaClock();
   const { recording, recordingOrigin, setRecording, lastRecording, source, peaks, waveformNote } =
     useTranscriptRecording(meetingId);
+  // A recording just made in the app (RecordingBar) opens here, ready to play and transcribe.
+  useEffect(() => {
+    const file = takeFinishedRecording(meetingId);
+    if (file) setRecording(file, "device");
+  }, [meetingId, setRecording]);
   const links = useMinutesLinks({ societyId, meetingId, minutes, motions });
   const inCamera = useInCameraMarks({ societyId, meetingId, minutes });
   const feedback = useTranscriptFeedback({ status, linkStatus: links.status, markStatus: inCamera.status, waveformNote, undo });

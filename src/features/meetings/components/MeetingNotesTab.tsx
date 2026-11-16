@@ -3,7 +3,8 @@
  * "notes"`): one calm document that autosaves into `meetings.workingNotes`,
  * the progress stepper, and "Turn notes into minutes".
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -21,6 +22,10 @@ import { MeetingNoteActionsCard } from "./MeetingNoteActionsCard";
 import type { NotesDraftMeeting } from "../useNotesDraft";
 import type { NoteActionItem } from "../../../../shared/meetingNoteActions";
 import type { DirectoryPerson } from "../../../components/PersonNameLinkField";
+import { isNotesView, MeetingAskBar, NotesMoreMenu, NotesSurfaceBar, NotesTemplateStarter, RecordControl, templateHeadings, type NotesView } from "./NotesSurface";
+import { useMeetingRecorder } from "../recorder/meetingRecorder";
+import { notesDraftTranscriptFromRow, type NotesDraftTemplateId } from "../../../../shared/ai/notesDraft";
+import type { NotesExportInput } from "../../../../shared/meetingNotesExport";
 
 /** Typing must pause this long before the notes save. */
 const NOTES_SAVE_DELAY_MS = 800;
@@ -102,11 +107,19 @@ export function MeetingNotesTab({
   people,
   committees,
   tasks,
+  transcriptView,
+  phone = false,
+  onOpenDetails,
 }: {
   meetingId: Id<"meetings">;
+  /** The Transcript view: the transcript workspace, or why it can't be read. */
+  transcriptView?: ReactNode;
+  phone?: boolean;
+  /** Phone: the ••• menu's "Meeting details" (the Overview tab). */
+  onOpenDetails?: () => void;
   workingNotes: string | undefined;
   /** The meeting row: AI notes draft and action items live on it. */
-  meeting: NotesDraftMeeting & { societyId: Id<"societies">; notesDraft?: StoredNotesDraft; noteActionItems?: NoteActionItem[] };
+  meeting: NotesDraftMeeting & { societyId: Id<"societies">; notesDraft?: StoredNotesDraft; noteActionItems?: NoteActionItem[]; location?: string; remoteUrl?: string };
   /** The working transcript as this person may read it (undefined while loading or not readable). */
   transcriptRow: unknown;
   hasTranscript: boolean;
@@ -158,86 +171,172 @@ export function MeetingNotesTab({
     }
   };
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const recorder = useMeetingRecorder();
+  const recordingHere = recorder.meetingId === meetingId && (recorder.phase === "recording" || recorder.phase === "starting");
+  const requested = searchParams.get("view");
+  // While recording you write notes; afterwards the AI notes come first once drafted.
+  // Chosen once when the tab opens, so a draft arriving never pulls you away from your notes.
+  const [fallbackView] = useState<NotesView>(() => (recordingHere ? "notes" : meeting.notesDraft ? "ai" : "notes"));
+  const view: NotesView = isNotesView(requested) && (requested !== "actions" || phone) ? requested : fallbackView;
+  const setView = (next: NotesView) => setSearchParams((previous) => {
+    const params = new URLSearchParams(previous);
+    params.set("view", next);
+    return params;
+  }, { replace: true });
+  // Views stay mounted once opened (the editor's undo, a loaded recording); hidden ones pause their media.
+  const [visited, setVisited] = useState<ReadonlySet<NotesView>>(() => new Set([view]));
+  useEffect(() => setVisited((current) => (current.has(view) ? current : new Set([...current, view]))), [view]);
+  const surface = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    surface.current?.querySelectorAll<HTMLMediaElement>(".notes-surface__view[hidden] audio, .notes-surface__view[hidden] video").forEach((media) => media.pause());
+  }, [view]);
+  const [preferredTemplate, setPreferredTemplate] = useState<NotesDraftTemplateId | undefined>();
+  const actionItems = meeting.noteActionItems ?? [];
+
+  const exportInput = (): NotesExportInput => ({
+    meeting: { title: meeting.title, scheduledAt: meeting.scheduledAt, location: meeting.location, attendeeIds: meeting.attendeeIds },
+    notes: notes.value,
+    draft: meeting.notesDraft ?? null,
+    actionItems,
+    transcript: notesDraftTranscriptFromRow(transcriptRow),
+  });
+
+  const actionsCard = (
+    <MeetingNoteActionsCard
+      societyId={meeting.societyId}
+      meetingId={meetingId}
+      items={actionItems}
+      people={people}
+      committees={committees}
+      tasks={tasks}
+      canWrite={canWrite && !converting}
+      canCreateTasks={canCreateTasks}
+    />
+  );
+
   return (
-    <div className="meeting-notes-tab">
-      <MeetingRecordStepper steps={steps} />
-      <section className="card meeting-notes-doc" aria-labelledby="meeting-notes-doc-title">
-        <div className="card__head meeting-notes-doc__head">
-          <h2 className="card__title" id="meeting-notes-doc-title">
-            <FileText size={14} aria-hidden="true" /> Meeting notes
-          </h2>
-          {canWrite && (
-            <span className={`meeting-notes-doc__status is-${notes.saveState}`} role="status" aria-live="polite">
-              {SAVE_STATE_LABELS[notes.saveState]}
-            </span>
-          )}
-        </div>
-        <div className="card__body meeting-notes-doc__body" onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) notes.flushInBackground();
-        }}>
-          <MeetingDraftRecovery draft={notes.recovery} label="notes" onRestore={notes.restore} disabled={!canWrite || notes.saveState !== "saved"} />
-          {notes.recovered && <div className="flag flag--warn" role="status">
-            <p>Recovered notes are ready to review. Saving uses their original server version, so newer work by someone else will cause a conflict.</p>
-            <button type="button" className="btn-action" disabled={!canWrite} onClick={() => { void notes.saveRecovered().catch(() => undefined); }}>Save recovered draft</button>
-            <button type="button" className="btn-action" onClick={notes.useLatestServer}>Discard restored notes</button>
-          </div>}
-          <MarkdownEditor
-            value={notes.value}
-            onChange={notes.onChange}
-            readOnly={!canWrite || converting}
-            rows={14}
-            aria-label="Meeting notes"
-            placeholder="Who came, what was discussed, what was decided, who is following up."
-            aria-invalid={tooLong || undefined}
+    <div className="meeting-notes-tab notes-surface" ref={surface}>
+      {!phone && <MeetingRecordStepper steps={steps} />}
+      <NotesSurfaceBar
+        view={view}
+        onView={setView}
+        phone={phone}
+        actionCount={actionItems.filter((item) => !item.done).length}
+        hasDraft={Boolean(meeting.notesDraft)}
+        record={<RecordControl meetingId={meetingId} meetingTitle={meeting.title} joinUrl={meeting.remoteUrl} canWrite={canWrite} onStarted={() => setView("notes")} />}
+        more={<NotesMoreMenu exportInput={exportInput} onOpenDetails={phone ? onOpenDetails : undefined} />}
+      />
+      <div className="notes-surface__view" hidden={view !== "notes"}>
+        <NotesDocCard
+          notes={notes}
+          canWrite={canWrite}
+          converting={converting}
+          tooLong={tooLong}
+          onPickTemplate={(template) => {
+            notes.onChange(templateHeadings(template));
+            setPreferredTemplate(template);
+          }}
+        />
+      </div>
+      {visited.has("ai") && (
+        <div className="notes-surface__view" hidden={view !== "ai"}>
+          <MeetingNotesDraftCard
+            meeting={meeting}
+            draft={meeting.notesDraft}
+            notes={notes.value}
+            transcriptRow={transcriptRow}
+            hasTranscript={hasTranscript}
+            canReadTranscript={canReadTranscript}
+            canWrite={canWrite && !converting}
+            flushNotes={notes.flush}
+            preferredTemplate={preferredTemplate}
+            onAddToNotes={(markdown) => { notes.onChange(appendMarkdown(notes.value, markdown)); toast.success("Added to your notes."); }}
           />
-          {tooLong && (
-            <p className="flag flag--warn" role="alert">
-              These notes are too long to save. Move long material into a document or the transcript.
-            </p>
-          )}
-          {notes.saveState === "error" && (
-            <div className="flag flag--warn" role="alert">
-              <p>{notes.error || "The notes could not be saved."} Your draft is still in the editor.</p>
-              <div className="row" style={{ gap: 8 }}>
-                <button type="button" className="btn-action" onClick={notes.flushInBackground} disabled={!canWrite}>Retry save</button>
-                <button type="button" className="btn-action" onClick={async () => {
-                  const discard = await confirm({
-                    title: "Load the latest saved notes?",
-                    message: "This replaces your unsaved draft with the latest saved notes. Copy any text you want to keep before continuing.",
-                    confirmLabel: "Load saved notes",
-                    tone: "warn",
-                  });
-                  if (discard) notes.useLatestServer();
-                }}>Load saved notes</button>
-              </div>
-            </div>
-          )}
-          {!canWrite && <p className="muted">You can read these notes. Editing needs meeting edit access.</p>}
         </div>
-      </section>
-      <MeetingNotesDraftCard
-        meeting={meeting}
-        draft={meeting.notesDraft}
-        notes={notes.value}
-        transcriptRow={transcriptRow}
-        hasTranscript={hasTranscript}
-        canReadTranscript={canReadTranscript}
-        canWrite={canWrite && !converting}
-        flushNotes={notes.flush}
-        onAddToNotes={(markdown) => { notes.onChange(appendMarkdown(notes.value, markdown)); toast.success("Added to your notes."); }}
-      />
-      <MeetingNoteActionsCard
-        societyId={meeting.societyId}
-        meetingId={meetingId}
-        items={meeting.noteActionItems ?? []}
-        people={people}
-        committees={committees}
-        tasks={tasks}
-        canWrite={canWrite && !converting}
-        canCreateTasks={canCreateTasks}
-      />
-      {canStartMinutes && <TurnIntoMinutesBar converting={converting} disabled={tooLong} onTurn={() => { void turnIntoMinutes(); }} />}
+      )}
+      {visited.has("transcript") && (
+        <div className="notes-surface__view notes-surface__view--transcript" hidden={view !== "transcript"}>
+          {transcriptView}
+        </div>
+      )}
+      {phone ? (
+        visited.has("actions") && <div className="notes-surface__view" hidden={view !== "actions"}>{actionsCard}</div>
+      ) : (
+        view !== "transcript" && actionsCard
+      )}
+      {canStartMinutes && view !== "transcript" && <TurnIntoMinutesBar converting={converting} disabled={tooLong} onTurn={() => { void turnIntoMinutes(); }} />}
+      <MeetingAskBar context={() => ({ ...exportInput(), people: meeting.attendeeIds })} />
     </div>
+  );
+}
+
+type NotesController = ReturnType<typeof useAutosavedNotes>;
+
+function NotesDocCard({ notes, canWrite, converting, tooLong, onPickTemplate }: {
+  notes: NotesController;
+  canWrite: boolean;
+  converting: boolean;
+  tooLong: boolean;
+  onPickTemplate: (template: NotesDraftTemplateId) => void;
+}) {
+  const confirm = useConfirm();
+  return (
+    <section className="card meeting-notes-doc" aria-labelledby="meeting-notes-doc-title">
+      <div className="card__head meeting-notes-doc__head">
+        <h2 className="card__title" id="meeting-notes-doc-title">
+          <FileText size={14} aria-hidden="true" /> Meeting notes
+        </h2>
+        {canWrite && (
+          <span className={`meeting-notes-doc__status is-${notes.saveState}`} role="status" aria-live="polite">
+            {SAVE_STATE_LABELS[notes.saveState]}
+          </span>
+        )}
+      </div>
+      <div className="card__body meeting-notes-doc__body" onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) notes.flushInBackground();
+      }}>
+        <MeetingDraftRecovery draft={notes.recovery} label="notes" onRestore={notes.restore} disabled={!canWrite || notes.saveState !== "saved"} />
+        {notes.recovered && <div className="flag flag--warn" role="status">
+          <p>Recovered notes are ready to review. Saving uses their original server version, so newer work by someone else will cause a conflict.</p>
+          <button type="button" className="btn-action" disabled={!canWrite} onClick={() => { void notes.saveRecovered().catch(() => undefined); }}>Save recovered draft</button>
+          <button type="button" className="btn-action" onClick={notes.useLatestServer}>Discard restored notes</button>
+        </div>}
+        {canWrite && !notes.value.trim() && <NotesTemplateStarter onPick={onPickTemplate} />}
+        <MarkdownEditor
+          value={notes.value}
+          onChange={notes.onChange}
+          readOnly={!canWrite || converting}
+          rows={14}
+          aria-label="Meeting notes"
+          placeholder="Who came, what was discussed, what was decided, who is following up."
+          aria-invalid={tooLong || undefined}
+        />
+        {tooLong && (
+          <p className="flag flag--warn" role="alert">
+            These notes are too long to save. Move long material into a document or the transcript.
+          </p>
+        )}
+        {notes.saveState === "error" && (
+          <div className="flag flag--warn" role="alert">
+            <p>{notes.error || "The notes could not be saved."} Your draft is still in the editor.</p>
+            <div className="row" style={{ gap: 8 }}>
+              <button type="button" className="btn-action" onClick={notes.flushInBackground} disabled={!canWrite}>Retry save</button>
+              <button type="button" className="btn-action" onClick={async () => {
+                const discard = await confirm({
+                  title: "Load the latest saved notes?",
+                  message: "This replaces your unsaved draft with the latest saved notes. Copy any text you want to keep before continuing.",
+                  confirmLabel: "Load saved notes",
+                  tone: "warn",
+                });
+                if (discard) notes.useLatestServer();
+              }}>Load saved notes</button>
+            </div>
+          </div>
+        )}
+        {!canWrite && <p className="muted">You can read these notes. Editing needs meeting edit access.</p>}
+      </div>
+    </section>
   );
 }
 

@@ -92,6 +92,7 @@ import { GlobalCommitmentCreate } from "@/features/commitments/GlobalCommitmentC
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
 import { openGlobalAiAssistant } from "../features/ai/aiAssistantEvents";
+import { RecordingBar } from "../features/meetings/recorder/RecordingBar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { useSocietySelection } from "../hooks/useSociety";
@@ -2067,6 +2068,7 @@ export function Layout() {
           </div>
         </div>
         {!aiChatHidden && <GlobalAiAssistantSafe />}
+        <RecordingBar />
         {isMobileNav && (
           <nav
             className="bottom-nav"

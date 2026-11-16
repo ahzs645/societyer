@@ -46,6 +46,8 @@ assert.equal(resolveMeetingTab("motions", "notes"), "overview", "hidden tabs fal
 assert.equal(resolveMeetingTab("minutes", "meeting"), "overview");
 assert.equal(resolveMeetingTab("export", "minutes"), "export", "minutes meetings keep every deep link");
 assert.equal(resolveMeetingTab(null, "minutes"), "overview");
+assert.equal(resolveMeetingTab(null, "notes"), "notes", "a notes meeting opens on its notes");
+assert.equal(resolveMeetingTab("bogus", "notes"), "overview", "an unknown tab still lands on Overview");
 assert.equal(resolveMeetingTab("bogus", "minutes"), "overview");
 
 assert.equal(defaultRecordKindForType("Board"), "minutes");

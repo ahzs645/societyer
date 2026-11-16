@@ -62,7 +62,8 @@ test("keep a recording on this computer, play it in the Transcript tab, switch t
     });
   });
 
-  await page.goto(`/app/meetings/${meetingId}`);
+  // A notes meeting opens on Notes; recordings are kept on the Overview.
+  await page.goto(`/app/meetings/${meetingId}?tab=overview`);
   const card = page.getByRole("region", { name: "Recordings" });
   await expect(card).toBeVisible({ timeout: 60_000 });
   await expect(card.getByText("This computer")).toBeVisible();
@@ -93,7 +94,7 @@ test("keep a recording on this computer, play it in the Transcript tab, switch t
   await expect(settings.getByText("Transcripts only").first()).toBeVisible();
   await expect(settings.getByText(/never saved/)).toBeVisible();
 
-  await page.goto(`/app/meetings/${meetingId}`);
+  await page.goto(`/app/meetings/${meetingId}?tab=overview`);
   await expect(page.getByRole("heading", { name: /Staff check-in/ })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("region", { name: "Recordings" })).toHaveCount(0);
   expect(errors).toEqual([]);

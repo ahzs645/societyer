@@ -2266,6 +2266,8 @@ function MeetingDetailWorkspace() {
     : [];
   const duplicateIds = duplicateIndex((allMeetings ?? []) as any[], (committees ?? []) as any[]).get(String(meeting._id)) ?? [];
   // Phones fold the stat cells into the header's one line (see the subtitle).
+  // One transcript workspace, shown on the Transcript tab and inside the Notes view switch.
+  const transcriptWorkspace = <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} />;
   const phoneMeetingFacts: string[] = !isPhone || minutesLoading ? [] : recordKind === "minutes"
     ? [
         `${minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0} ${meetingNotYetHeld(meeting) ? "expected" : "present"}`,
@@ -2564,7 +2566,7 @@ function MeetingDetailWorkspace() {
             onReadMinutes={recordKind === "minutes" ? () => setActiveTab("minutes") : recordKind === "notes" ? () => setActiveTab("notes") : undefined}
           />
         )}
-        {activeTab === "transcript" && !transcriptAccess && <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} />}
+        {activeTab === "transcript" && !transcriptAccess && transcriptWorkspace}
         {(activeTab === "overview" || activeTab === "minutes" || activeTab === "sources") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} canReadTranscript={canReadTranscript} />}
         {(activeTab === "overview" || activeTab === "sources") && (
           <MeetingRecordingsCard
@@ -2601,6 +2603,16 @@ function MeetingDetailWorkspace() {
             people={directoryPeople as any}
             committees={(committees ?? []) as any}
             tasks={linkedTasks as any}
+            phone={isPhone}
+            onOpenDetails={() => setActiveTab("overview")}
+            transcriptView={transcriptAccess ? (
+              <TranscriptAccessNotice reason={transcriptAccess} onReadMinutes={() => setActiveTab("notes")} />
+            ) : (
+              <>
+                <TeamsSpeakerLinks societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} />
+                {transcriptWorkspace}
+              </>
+            )}
           />
         )}
         {activeTab === "overview" && (
