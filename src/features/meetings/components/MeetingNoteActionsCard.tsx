@@ -5,10 +5,10 @@
  * Each can link a person, a goal and a committee, and "Create task" turns it
  * into a task that carries those links and the moment in the recording.
  */
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { CalendarDays, ListChecks, Plus, Sparkles, Target, User, Users, X } from "lucide-react";
+import { CalendarDays, CheckSquare, ChevronUp, ListChecks, Play, Plus, SlidersHorizontal, Sparkles, Target, User, Users, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
@@ -18,7 +18,8 @@ import { PersonNameLinkField, type DirectoryPerson } from "../../../components/P
 import { taskStatusLabel } from "../../../../shared/taskStatus";
 import { newNoteActionId, type NoteActionItem } from "../../../../shared/meetingNoteActions";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { TranscriptTimeChip } from "../transcript/TranscriptTimeChip";
+import { notesTranscriptSearch } from "../transcript/transcriptQuote";
+import { formatClock } from "../../../../shared/ai/notesDraft";
 
 type LinkedTask = { _id: string; title: string; status: string };
 
@@ -184,6 +185,7 @@ function NoteActionRow({
   onCreateTask: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const location = useLocation();
   const due = item.dueDate ? new Date(`${item.dueDate}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
   const goal = item.goalId ? goalOptions.find((option) => option.value === item.goalId)?.label : undefined;
   const committee = item.committeeId ? committeeOptions.find((option) => option.value === item.committeeId)?.label : undefined;
@@ -215,36 +217,55 @@ function NoteActionRow({
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}
         />
         {canWrite && (
-          <button
-            type="button"
-            className="btn-action btn-action--icon meeting-note-action__remove"
-            aria-label={`Remove: ${item.text}`}
-            title={item.taskId ? "Remove from the notes. Its task stays on the task board." : "Remove"}
-            onClick={onRemove}
-          >
-            <X size={12} aria-hidden="true" />
-          </button>
+          <span className="meeting-note-action__tools">
+            <button
+              type="button"
+              className="meeting-note-action__tool"
+              aria-label="Details"
+              aria-expanded={open}
+              title={open ? "Close details" : "Owner, due date, goal, committee, task"}
+              onClick={() => setOpen((value) => !value)}
+            >
+              {open ? <ChevronUp size={14} aria-hidden="true" /> : <SlidersHorizontal size={14} aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              className="meeting-note-action__tool"
+              aria-label={`Remove: ${item.text}`}
+              title={item.taskId ? "Remove from the notes. Its task stays on the task board." : "Remove"}
+              onClick={onRemove}
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          </span>
         )}
       </div>
-      {/* At a glance: who, when, where it came from; Details edits them. */}
-      <div className="meeting-note-action__chips">
-        <button type="button" className={`meeting-note-action__chip${item.assignee ? "" : " is-empty"}`} onClick={() => setOpen(true)} aria-label={item.assignee ? `Owner: ${item.assignee}` : "No owner: choose one"}>
-          <User size={11} aria-hidden="true" /> {item.assignee || "No owner"}
-        </button>
-        {due && <button type="button" className="meeting-note-action__chip" onClick={() => setOpen(true)} aria-label={`Due ${due}`}><CalendarDays size={11} aria-hidden="true" /> {due}</button>}
-        {goal && <span className="meeting-note-action__chip" title="Goal"><Target size={11} aria-hidden="true" /> {goal}</span>}
-        {committee && <span className="meeting-note-action__chip" title="Committee"><Users size={11} aria-hidden="true" /> {committee}</span>}
-        <TranscriptTimeChip transcriptRef={item.transcriptRef} label={item.text} />
-        {item.origin === "ai" && <span className="meeting-note-action__ai" title="Suggested by the AI notes; any edit makes it yours"><Sparkles size={11} aria-hidden="true" /><span className="sr-only">Suggested</span></span>}
+      {/* At a glance, all in one style: who, when, what it's linked to, where it was said. */}
+      <div className="notes-meta meeting-note-action__meta">
+        <MetaItem icon={<User size={12} aria-hidden="true" />} empty={!item.assignee} onClick={canWrite ? () => setOpen(true) : undefined} label={item.assignee ? `Owner: ${item.assignee}` : "No owner: choose one"}>
+          {item.assignee || "No owner"}
+        </MetaItem>
+        {due && <MetaItem icon={<CalendarDays size={12} aria-hidden="true" />} onClick={canWrite ? () => setOpen(true) : undefined} label={`Due ${due}`}>{due}</MetaItem>}
+        {goal && <MetaItem icon={<Target size={12} aria-hidden="true" />} label={`Goal: ${goal}`}>{goal}</MetaItem>}
+        {committee && <MetaItem icon={<Users size={12} aria-hidden="true" />} label={`Committee: ${committee}`}>{committee}</MetaItem>}
+        {item.transcriptRef && (
+          <Link
+            className="notes-meta-item is-link"
+            to={{ pathname: location.pathname, search: notesTranscriptSearch(location.search, item.transcriptRef.startSec, item.transcriptRef.endSec) }}
+            aria-label={`Open the transcript at ${formatClock(item.transcriptRef.startSec)}: ${item.text}`}
+          >
+            <Play size={12} aria-hidden="true" /> {formatClock(item.transcriptRef.startSec)}
+          </Link>
+        )}
         {task ? (
-          <Link className="meeting-note-action__chip is-task" to="/app/tasks" title={`Task: ${task.title}`}>Task · {taskStatusLabel(task.status)}</Link>
+          <Link className="notes-meta-item is-link" to="/app/tasks" title={`Task: ${task.title}`}>
+            <CheckSquare size={12} aria-hidden="true" /> Task · {taskStatusLabel(task.status)}
+          </Link>
         ) : item.taskId ? (
-          <span className="meeting-note-action__chip is-task">Task created</span>
+          <MetaItem icon={<CheckSquare size={12} aria-hidden="true" />}>Task created</MetaItem>
         ) : null}
-        {canWrite && (
-          <button type="button" className="meeting-note-action__details" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-            {open ? "Done" : "Details"}
-          </button>
+        {item.origin === "ai" && (
+          <MetaItem icon={<Sparkles size={12} aria-hidden="true" />} label="Suggested by the AI notes; any edit makes it yours">Suggested</MetaItem>
         )}
       </div>
       {open && canWrite && (
@@ -291,4 +312,12 @@ function fitToText(node: HTMLTextAreaElement | null) {
   if (!node) return;
   node.style.height = "auto";
   node.style.height = `${node.scrollHeight + 2}px`;
+}
+
+/** One detail under an action item's wording: an icon and a word, all alike. */
+function MetaItem({ icon, children, label, empty = false, onClick }: { icon: ReactNode; children: ReactNode; label?: string; empty?: boolean; onClick?: () => void }) {
+  const className = `notes-meta-item${empty ? " is-empty" : ""}`;
+  return onClick
+    ? <button type="button" className={className} aria-label={label} title={label} onClick={onClick}>{icon} {children}</button>
+    : <span className={className} title={label}>{icon} {children}</span>;
 }

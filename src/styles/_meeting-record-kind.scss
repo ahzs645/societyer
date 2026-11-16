@@ -293,15 +293,7 @@
     font-style: italic;
     overflow-wrap: anywhere;
   }
-  figcaption {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: token("s-2");
-    margin-top: 2px;
-    font-size: token("fs-xs");
-    color: token("text-secondary");
-  }
+  figcaption { margin-top: 2px; }
 }
 .meeting-ai-notes__meta {
   margin: 0;
@@ -449,51 +441,66 @@
   &:hover { border-color: token("border"); }
   &:focus { border-color: token("accent"); background: token("bg-panel"); }
 }
-.meeting-note-action__remove {
-  opacity: 0.5;
-  .meeting-note-action:hover &,
-  &:focus-visible { opacity: 1; }
+/* Details and Remove: two matching ghost icon buttons beside the wording. */
+.meeting-note-action__tools {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  align-self: flex-start;
 }
-.meeting-note-action__chips {
+.meeting-note-action__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: token("r-sm");
+  background: transparent;
+  color: token("text-tertiary");
+  cursor: pointer;
+  &:hover,
+  &[aria-expanded="true"] {
+    background: token("bg-subtle");
+    color: token("text-primary");
+  }
+}
+.meeting-note-action__meta {
+  padding-left: calc(16px + #{token("s-2")} + 4px);
+}
+
+/* Small details under a line (action items, quotes): an icon and a word, all alike. */
+.notes-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px token("s-2");
-  padding-left: calc(16px + #{token("s-2")} + 4px);
+  gap: 2px token("s-3");
   font-size: token("fs-xs");
+  line-height: 1.5;
+  color: token("text-secondary");
 }
-.meeting-note-action__chip {
+.notes-meta-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 0;
   border: 0;
   background: none;
-  color: token("text-secondary");
+  color: inherit;
   font: inherit;
+  font-variant-numeric: tabular-nums;
   text-decoration: none;
+  white-space: nowrap;
+  svg { flex: 0 0 auto; color: token("text-tertiary"); }
+  &.is-empty { color: token("text-tertiary"); }
+}
+button.notes-meta-item,
+a.notes-meta-item {
   cursor: pointer;
-  &.is-empty { color: token("text-tertiary"); font-style: italic; }
-  &.is-task { color: token("accent-text"); }
-  &:hover { color: token("text-primary"); }
+  &:hover { color: token("text-primary"); svg { color: currentColor; } }
 }
-span.meeting-note-action__chip { cursor: default; }
-.meeting-note-action__ai {
-  display: inline-flex;
-  color: token("accent-text");
-}
-.meeting-note-action__details {
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: token("text-tertiary");
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  &:hover { color: token("text-primary"); }
-}
+.notes-meta-item.is-link { color: token("accent-text"); svg { color: currentColor; } }
 .meeting-note-action__links {
   display: flex;
   flex-wrap: wrap;

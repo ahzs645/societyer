@@ -7,7 +7,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Bot, CheckCircle2, Copy, NotebookPen, Play, Quote, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, Copy, NotebookPen, Play, Quote, RefreshCw, Sparkles, Trash2, User } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/Modal";
@@ -300,16 +300,15 @@ function DraftQuotes({ quotes }: { quotes: readonly NotesDraftQuote[] }) {
       {quotes.map((quote) => (
         <figure key={quote.text} className="meeting-ai-notes__quote">
           <blockquote>“{quote.text}”</blockquote>
-          <figcaption>
-            {quote.speaker && <span>— {quote.speaker}</span>}
+          <figcaption className="notes-meta">
+            {quote.speaker && <span className="notes-meta-item"><User size={12} aria-hidden="true" /> {quote.speaker}</span>}
             {quote.atSec !== undefined && (
               <Link
-                className="transcript-time-chip"
+                className="notes-meta-item is-link"
                 to={{ pathname: location.pathname, search: notesTranscriptSearch(location.search, quote.atSec) }}
                 aria-label={`Open the transcript at ${formatClock(quote.atSec)}`}
               >
-                <Play size={10} aria-hidden="true" />
-                {formatClock(quote.atSec)}
+                <Play size={12} aria-hidden="true" /> {formatClock(quote.atSec)}
               </Link>
             )}
           </figcaption>

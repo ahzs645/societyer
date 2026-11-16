@@ -397,6 +397,7 @@ test("quotes: Quote in notes from a transcript selection, and the AI notes' key 
   await page.goto(`/app/meetings/${meetingId}?tab=notes&view=ai`);
   const keyQuotes = page.getByRole("region", { name: "Key quotes" });
   await expect(keyQuotes.getByText("“Small pilots are where we learn the most.”")).toBeVisible({ timeout: 60_000 });
+  if (SHOTS) await keyQuotes.screenshot({ path: `${SHOTS}/key-quotes.png` });
   // A quote's time opens the Transcript view at that moment.
   await keyQuotes.getByRole("link", { name: "Open the transcript at 0:12" }).click();
   await expect(page).toHaveURL(/view=transcript/);
