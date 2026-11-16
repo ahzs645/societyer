@@ -530,6 +530,28 @@ for (const local of [false, true]) {
     true,
     "long mixed lists are grouped",
   );
+
+  // A transcript that names its speakers (a Teams VTT) matches the People directory:
+  // expected attendees listed by name get their record, and anyone listed can be chosen.
+  const directory = [
+    { _id: "pd_ahmad", fullName: "Ahmad Jalil" },
+    { _id: "pd_fred", fullName: "Fryderyk Paczkowski", aliases: ["Fred"] },
+    { _id: "pd_old", fullName: "Gone Person", archivedAtISO: "2025-01-01" },
+    { _id: "pd_dup1", fullName: "Sam Lee" },
+    { _id: "pd_dup2", fullName: "Sam Lee" },
+  ];
+  const teams = speakerCandidates({ attendeeIds: ["Ahmad Jalil", "Sam Lee"], directory });
+  assert.deepEqual(
+    teams.map((row) => [row.name, row.group, row.personId ?? null]),
+    [["Ahmad Jalil", "Expected", "pd_ahmad"], ["Sam Lee", "Expected", null], ["Fryderyk Paczkowski", "People", "pd_fred"]],
+    "a named attendee takes their record; an ambiguous name doesn't; archived people are left out",
+  );
+  const linked = speakerSuggestions({ labels: ["Ahmad Jalil", "Fryderyk Paczkowski"], speakers: [], attendees: teams });
+  assert.deepEqual(
+    linked.filter((item) => item.kind === "assign").map((item) => [item.label, (item as { personId?: string }).personId]),
+    [["Ahmad Jalil", "pd_ahmad"], ["Fryderyk Paczkowski", "pd_fred"]],
+    "Review speakers links named speakers to their People records",
+  );
 }
 
 console.log(

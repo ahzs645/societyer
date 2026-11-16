@@ -5,12 +5,15 @@
 // agendas, elections, bylaws, committees).
 
 // ---- Meeting detail ---------------------------------------------------
-// Status chips live in the subtitle, under the body · date · place line.
+// Status chips follow the body · date · place line on the same line, and
+// wrap under it only when the line is full.
 .meeting-detail-subtitle__status {
-  @include flex-center;
+  display: inline-flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: token('s-1');
-  margin-top: token('s-1');
+  margin-left: token('s-2');
+  vertical-align: middle;
 }
 .meeting-detail-subtitle__status:empty {
   display: none;

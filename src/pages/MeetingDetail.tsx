@@ -699,8 +699,9 @@ function MeetingDetailWorkspace() {
         directors,
         members,
         todayISO: todayDateOnly(),
+        directory: directoryPeople,
       }),
-    [minutes, meeting?.attendeeIds, meeting?.committeeId, meetingCommitteeDetail?.members, directors, members],
+    [minutes, meeting?.attendeeIds, meeting?.committeeId, meetingCommitteeDetail?.members, directors, members, directoryPeople],
   );
 
   if (society === undefined) return <PageLoading />;

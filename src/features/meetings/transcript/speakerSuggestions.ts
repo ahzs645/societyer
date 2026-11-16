@@ -3,7 +3,7 @@ import type { TranscriptSegment, TranscriptSpeaker } from "../../../../shared/tr
 import { isUnnamedSpeaker } from "./transcriptLinks";
 
 /** The parts of an attendee a suggestion needs (see `Attendee` in SpeakerPanel). */
-export type SuggestionAttendee = { name: string; personId?: string };
+export type SuggestionAttendee = { name: string; personId?: string; group?: string };
 
 export type SpeakerSuggestion =
   | { kind: "combine"; id: string; label: string; into: string; reason: string }
@@ -149,10 +149,11 @@ export function speakerSuggestions({
       label: target,
       name: attendee.name,
       ...(attendee.personId ? { personId: attendee.personId } : {}),
-      reason:
-        normalizeSpeakerKey(target) === normalizeSpeakerKey(attendee.name)
-          ? "Label is an attendee's name"
-          : "Label is an attendee's first name",
+      reason: (() => {
+        // Say where the match came from: the meeting's people, or the People list.
+        const who = attendee.group === "People" ? "someone in People" : "an attendee";
+        return normalizeSpeakerKey(target) === normalizeSpeakerKey(attendee.name) ? `Label is the name of ${who}` : `Label is the first name of ${who}`;
+      })(),
     });
   }
   return suggestions;

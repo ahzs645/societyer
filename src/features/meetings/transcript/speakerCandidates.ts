@@ -34,10 +34,19 @@ export type SpeakerCandidateSources = {
   members?: readonly PersonRow[];
   /** `YYYY-MM-DD`; directors whose term ended before it are left out. */
   todayISO?: string;
+  /**
+   * The People directory: a name above without a record is linked to the
+   * person it names, and everyone listed can be chosen ("People"), so a
+   * transcript that already names its speakers (Teams, Zoom) matches them.
+   */
+  directory?: ReadonlyArray<{ _id: string; fullName: string; aliases?: readonly string[] | null; archivedAtISO?: string | null }>;
 };
 
 /** Group labels, in list order. */
-export const SPEAKER_CANDIDATE_GROUPS = ["Attended", "Expected", "Committee", "Directors"] as const;
+export const SPEAKER_CANDIDATE_GROUPS = ["Attended", "Expected", "Committee", "Directors", "People"] as const;
+
+/** A bound on the "People" group so a large register keeps the picker usable. */
+export const SPEAKER_CANDIDATE_PEOPLE_MAX = 300;
 
 /**
  * Candidates in order: minutes detailed attendance, minutes attendees, the
@@ -86,6 +95,30 @@ export function speakerCandidates(sources: SpeakerCandidateSources): Attendee[] 
 
   for (const director of directors) {
     if (isCurrentDirector(director, sources.todayISO)) add({ ...personCandidate(director), group: "Directors" });
+  }
+
+  const directory = (sources.directory ?? []).filter((person) => person.fullName?.trim() && !person.archivedAtISO);
+  if (directory.length) {
+    // A name with no record takes the one person it names (full name or alias).
+    const key = (name: string) => name.normalize("NFKC").toLocaleLowerCase().replace(/[\s_]+/g, " ").trim();
+    const byName = new Map<string, string[]>();
+    for (const person of directory) {
+      for (const name of [person.fullName, ...(person.aliases ?? [])]) {
+        const k = key(name);
+        if (k) byName.set(k, [...new Set([...(byName.get(k) ?? []), String(person._id)])]);
+      }
+    }
+    for (const row of rows) {
+      if (row.personId) continue;
+      const ids = byName.get(key(row.name));
+      if (ids?.length === 1) row.personId = ids[0];
+    }
+    // Everyone else listed, without touching a name already offered (an
+    // ambiguous name stays unlinked rather than taking the first match).
+    const offered = new Set(rows.map((row) => key(row.name)));
+    for (const person of directory.slice(0, SPEAKER_CANDIDATE_PEOPLE_MAX)) {
+      if (!offered.has(key(person.fullName))) add({ name: person.fullName, personId: String(person._id), group: "People" });
+    }
   }
   return rows;
 }

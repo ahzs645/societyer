@@ -531,6 +531,14 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
   ].join("\n");
   await page.locator(".transcript-workspace input[type=file]").last().setInputFiles({ name: "Funder call.vtt", mimeType: "text/vtt", buffer: Buffer.from(vtt) });
   await expect(page.locator("[data-segment]", { hasText: "Great. I'll send the budget by Friday." })).toBeVisible({ timeout: 60_000 });
+  // Speakers named in the file are matched to People: one click links them.
+  await page.getByRole("button", { name: "Apply all suggestions" }).click();
+  await expect.poll(async () => page.evaluate(async (id) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const transcript = await client.query("transcripts:getByMeeting", { meetingId: id }) as any;
+    return transcript.speakers.filter((speaker: any) => speaker.personId).map((speaker: any) => speaker.name);
+  }, meetingId), { timeout: 15_000 }).toEqual(["Sam Rivera"]);
+  await page.getByRole("button", { name: "Done", exact: true }).last().click();
 
   // AI notes: built-in AI is off here, so draft with your own.
   await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "AI notes" }).click();
