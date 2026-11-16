@@ -507,3 +507,67 @@ test("recorder: Stop on the Notes tab keeps the file, closing asks first, an int
   await expect(bar).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save the AI notes", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await seed(page);
+  const meetingId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    return client.mutation("meetings:create", {
+      societyId: getStoredSocietyId(), type: "Working", title: "Funder call", scheduledAt: "2026-11-16T17:00:00.000Z",
+      electronic: true, status: "Held", attendeeIds: ["Sam Rivera"], recordKind: "notes",
+    });
+  });
+  // A Teams-style VTT export, imported in the Transcript view.
+  await page.goto(`/app/meetings/${meetingId}?tab=notes&view=transcript`);
+  const vtt = [
+    "WEBVTT", "",
+    "a/1-0", "00:00:01.000 --> 00:00:05.000", "<v Sam Rivera>Thanks for joining. We'd like to fund a pilot in the spring.</v>", "",
+    "a/2-0", "00:00:06.000 --> 00:00:10.000", "<v Priya Raman>Great. I'll send the budget by Friday.</v>", "",
+  ].join("\n");
+  await page.locator(".transcript-workspace input[type=file]").last().setInputFiles({ name: "Funder call.vtt", mimeType: "text/vtt", buffer: Buffer.from(vtt) });
+  await expect(page.locator("[data-segment]", { hasText: "Great. I'll send the budget by Friday." })).toBeVisible({ timeout: 60_000 });
+
+  // AI notes: built-in AI is off here, so draft with your own.
+  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "AI notes" }).click();
+  await page.getByRole("button", { name: "Use your own AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Draft the AI notes with your own AI" });
+  await expect(dialog.getByText(/(person|people) the AI can assign work to/)).toBeVisible({ timeout: 15_000 });
+  await dialog.getByRole("button", { name: "Copy prompt" }).click();
+  await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/own-ai-copy.png`, fullPage: false });
+  const prompt = await page.evaluate(() => navigator.clipboard.readText());
+  expect(prompt).toContain("Return ONLY one JSON object");
+  expect(prompt).toContain("Great. I'll send the budget by Friday.");
+  const sam = prompt.match(/(\S+) \| Sam Rivera \|/)?.[1];
+  expect(sam, "Sam Rivera is in the People list with an id").toBeTruthy();
+
+  // What the other AI returned, pasted back (wrapped in a code fence, as chats often do).
+  const reply = { calls: [
+    { tool: "write_summary", arguments: { summary: "The funder will back a spring pilot; a budget follows.", sections: [{ heading: "Pilot", points: ["Spring start"] }] } },
+    { tool: "add_decision", arguments: { text: "Go ahead with the spring pilot" } },
+    { tool: "add_action_item", arguments: { text: "Thank the funder", owner_person_id: sam } },
+    { tool: "add_action_item", arguments: { text: "Send the budget", owner_name: "Priya Raman", due_date: "2026-11-20", at_seconds: 6 } },
+    { tool: "add_quote", arguments: { text: "We'd like to fund a pilot in the spring." } },
+    { tool: "add_quote", arguments: { text: "We will triple the grant." } },
+    { tool: "finish", arguments: {} },
+  ] };
+  await dialog.getByRole("textbox", { name: "The JSON your AI returned" }).fill("```json\n" + JSON.stringify(reply, null, 2) + "\n```");
+  await dialog.getByRole("button", { name: "Check" }).click();
+  await expect(dialog.locator(".manual-draft__result p").first()).toContainText("2 action items (1 with an owner from People)");
+  await expect(dialog.getByText("1 call was left out")).toBeVisible();
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/own-ai-dialog.png`, fullPage: false });
+  await dialog.getByRole("button", { name: "Save as AI notes" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  const aiNotes = page.getByRole("region", { name: "AI notes" });
+  await expect(aiNotes.getByText("The funder will back a spring pilot; a budget follows.")).toBeVisible();
+  await expect(aiNotes.getByText(/by Your own AI \(pasted\)/)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Key quotes" }).getByText("“We'd like to fund a pilot in the spring.”")).toBeVisible();
+  const actions = page.getByRole("region", { name: "Action items" });
+  await expect(actions.locator("input[aria-label='Action item']").first()).toHaveValue("Thank the funder");
+  await expect(actions.getByRole("combobox", { name: "Who" }).first()).toHaveValue("Sam Rivera");
+  expect(errors).toEqual([]);
+});

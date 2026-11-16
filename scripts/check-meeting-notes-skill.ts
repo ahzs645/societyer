@@ -23,6 +23,7 @@ import {
 } from "../shared/ai/meetingNotesSkill";
 import { SKILL_FIXTURE_B, SKILL_FIXTURE_CONTEXT as CONTEXT, SKILL_FIXTURE_EXPECTED, SKILL_FIXTURE_NOTES, SKILL_FIXTURE_TRANSCRIPT } from "./fixtures/meetingNotesSkillFixture";
 import { toolStep, ToolsUnsupportedError } from "../convex/providers/llm";
+import { buildManualNotesPrompt, importManualNotesReply, manualPromptSectionState } from "../shared/ai/meetingNotesManualPrompt";
 import { draftNotesWithSkillOnDevice } from "../src/features/meetings/localNotesDraft";
 import { DeviceAiError } from "../src/lib/localAi/transport";
 
@@ -362,6 +363,51 @@ for (const [fixture, model] of [["a", "default"], ["a", "small"], ["b", "default
   for (const quote of quotes) assert.ok(quote.atSec !== undefined && quote.speaker, `${where}: quote has speaker and time`);
 }
 console.log("✓ replays: four recorded model runs meet every expectation (owners, dates, goals, speakers, verbatim quotes, no over-assignment)");
+
+// ---------- "Use your own AI": copy a prompt, paste the JSON back -------------------------
+{
+  const input = { template: "general" as const, notes: SKILL_FIXTURE_NOTES, transcript: SKILL_FIXTURE_TRANSCRIPT, context: CONTEXT };
+  const full = buildManualNotesPrompt({ ...input, sections: manualPromptSectionState(), requirements: "Keep the summary short." });
+  assert.match(full, /Return ONLY one JSON object/);
+  assert.match(full, /"calls": \[\{"tool": "<tool name>"/);
+  for (const tool of ["write_summary", "add_decision", "add_open_question", "add_action_item", "add_quote", "identify_speaker", "finish"]) assert.match(full, new RegExp(`- ${tool}: `), `${tool} is described`);
+  assert.match(full, /pd_marcus \| Marcus Oyelaran \| Director: Treasurer/, "the people, with their ids and roles");
+  assert.match(full, /goal_grants \| Raise \$150k/);
+  assert.match(full, /Note-taker's notes:\n/);
+  assert.match(full, /Transcript:\n\[0:00\] SPEAKER_00: Hi everyone, Priya here/);
+  assert.ok(full.trimEnd().endsWith("Additional requirements from the person:\nKeep the summary short."), "their requirements come last");
+  const core = buildManualNotesPrompt({ ...input, sections: manualPromptSectionState(["transcript", "notes"]) });
+  assert.ok(!/- identify_speaker: /.test(core) && !/- add_quote: /.test(core), "switched-off tools aren't offered");
+  assert.match(core, /Don't call identify_speaker\./);
+  assert.match(core, /No People list is given: use owner_name/);
+  assert.ok(!core.includes("pd_marcus"), "no people when People is off");
+  const attached = buildManualNotesPrompt({ ...input, sections: manualPromptSectionState(["notes", "people"]) });
+  assert.match(attached, /Transcript: attached separately/);
+  assert.ok(!attached.includes("Elm Street is the only one"), "the transcript stays out when it's attached instead");
+
+  // A reply pasted back runs through the same checks as the built-in AI's.
+  const replay = readFileSync(new URL("./fixtures/meeting-notes-skill-replays/a-default.json", import.meta.url), "utf8");
+  const pasted = importManualNotesReply(`Here you go:\n\`\`\`json\n${replay}\n\`\`\``, { template: "general", context: CONTEXT, transcript: SKILL_FIXTURE_TRANSCRIPT });
+  assert.ok(pasted.ok, "a reply wrapped in prose and a code fence still imports");
+  if (pasted.ok) {
+    assert.ok(pasted.result.draft.actionItems.some((item) => item.assigneePersonId === "pd_marcus"));
+    assert.ok((pasted.result.draft.quotes ?? []).length > 0);
+  }
+  const forged = importManualNotesReply(JSON.stringify({ calls: [
+    { tool: "write_summary", arguments: { summary: "Ops.", sections: [] } },
+    { tool: "add_action_item", arguments: { text: "Do it", owner_person_id: "pd_nobody" } },
+    { tool: "add_quote", arguments: { text: "We will triple the budget next year." } },
+  ] }), { template: "general", context: CONTEXT, transcript: SKILL_FIXTURE_TRANSCRIPT });
+  assert.ok(forged.ok);
+  if (forged.ok) {
+    assert.deepEqual(forged.result.refused.map((item) => item.tool), ["add_action_item", "add_quote"], "unknown people and made-up quotes are left out, with reasons");
+    assert.equal(forged.result.draft.actionItems.length, 0);
+  }
+  assert.deepEqual(importManualNotesReply("", { template: "general", context: CONTEXT, transcript: "" }), { ok: false, error: "Paste the JSON your AI returned." });
+  assert.match((importManualNotesReply("Sorry, I can't help with that.", { template: "general", context: CONTEXT, transcript: "" }) as { error: string }).error, /isn't JSON/);
+  assert.match((importManualNotesReply('{"summary": "x"}', { template: "general", context: CONTEXT, transcript: "" }) as { error: string }).error, /No tool calls were found/);
+}
+console.log("✓ your own AI: prompt with rules, tools, people and transcript, blocks switch off; pasted replies checked like the built-in AI's");
 
 // ---------- hosted provider adapter -----------------------------------------------
 const realFetch = globalThis.fetch;

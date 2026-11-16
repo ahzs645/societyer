@@ -1070,3 +1070,91 @@
   flex-wrap: wrap;
   gap: token("s-1");
 }
+
+/* ---------- Use your own AI (ManualNotesDraftDialog) ---------- */
+.manual-draft {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-4");
+  font-size: token("fs-sm");
+  p { margin: 0; }
+}
+.manual-draft__step {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-2");
+  h3 { margin: 0; font-size: token("fs-md"); }
+}
+.manual-draft__step-head,
+.manual-draft__blocks-head,
+.manual-draft__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+}
+.manual-draft__actions { justify-content: flex-start; }
+.manual-draft__presets { display: inline-flex; gap: token("s-1"); }
+.manual-draft__blocks {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-2");
+  padding: token("s-2") token("s-3");
+  border: 1px solid token("border");
+  border-radius: token("r-md");
+  background: token("bg-subtle");
+}
+.manual-draft__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: token("s-2");
+}
+.manual-draft__block {
+  display: flex;
+  align-items: flex-start;
+  gap: token("s-2");
+  padding: token("s-2");
+  border: 1px solid token("border");
+  border-radius: token("r-sm");
+  background: token("bg-panel");
+  cursor: pointer;
+  input { margin-top: 3px; }
+  > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .muted { font-size: token("fs-xs"); }
+  &.is-disabled { opacity: 0.6; cursor: default; }
+}
+.manual-draft__requirements {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-1");
+}
+.manual-draft__toggle { align-self: flex-start; }
+.manual-draft__prompt {
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0;
+  padding: token("s-2") token("s-3");
+  border-radius: token("r-sm");
+  background: token("bg-subtle");
+  font-size: token("fs-xs");
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.manual-draft__reply {
+  min-height: 9rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: token("fs-xs");
+}
+.manual-draft__requirements textarea {
+  min-height: 3.5rem;
+}
+.manual-draft__result {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-1");
+  padding: token("s-2") token("s-3");
+  border-left: 3px solid token("success-text");
+  background: token("bg-subtle");
+  ul { margin: token("s-1") 0 0; padding-left: token("s-4"); }
+}

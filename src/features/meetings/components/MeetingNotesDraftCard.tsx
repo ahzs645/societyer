@@ -7,7 +7,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Copy, NotebookPen, Play, Quote, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Bot, Copy, NotebookPen, Play, Quote, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/Modal";
@@ -24,6 +24,7 @@ import {
   type NotesDraftTemplateId,
 } from "../../../../shared/ai/notesDraft";
 import { notesTranscriptSearch } from "../transcript/transcriptQuote";
+import { ManualNotesDraftDialog } from "./ManualNotesDraftDialog";
 import { isDraftCancelled, useDeviceDraftProgress, deviceDraftLabel } from "../deviceDraftProgress";
 import { useNotesDraft, type NotesDraftMeeting } from "../useNotesDraft";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -89,6 +90,7 @@ export function MeetingNotesDraftCard({
     if (isNotesDraftTemplateId(draft?.template)) setTemplate(draft.template);
   }, [draft?.template]);
   const [running, setRunning] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   // AI notes made from the transcript are only sent to people who may read it.
   const withheld = !draft && Boolean((meeting as { notesDraftWithheld?: boolean }).notesDraftWithheld);
   const hasNotes = notes.trim().length > 0;
@@ -156,7 +158,23 @@ export function MeetingNotesDraftCard({
               {draft ? <RefreshCw size={12} aria-hidden="true" /> : <Sparkles size={12} aria-hidden="true" />}
               {running ? (progress ? deviceDraftLabel(progress) : "Drafting…") : draft ? "Redraft" : "Draft notes"}
             </button>
+            <button type="button" className="btn-action" onClick={() => setManualOpen(true)} disabled={running} title="Copy a prompt into ChatGPT, Claude or another AI, then paste back what it returns">
+              <Bot size={12} aria-hidden="true" /> Use your own AI
+            </button>
           </div>
+        )}
+        {manualOpen && (
+          <ManualNotesDraftDialog
+            open
+            onClose={() => setManualOpen(false)}
+            meetingId={meeting._id}
+            template={template}
+            notes={notes}
+            transcriptRow={transcriptRow}
+            canReadTranscript={canReadTranscript}
+            hasDraft={Boolean(draft)}
+            flushNotes={flushNotes}
+          />
         )}
       </div>
       <div className="card__body meeting-ai-notes__body">
@@ -181,7 +199,7 @@ export function MeetingNotesDraftCard({
         {canWrite && !withheld && !draft && !notesDraft.available && (
           <p className="flag flag--warn" role="note">
             Drafting notes here uses on-device AI. {notesDraft.unavailableReason}{" "}
-            <Link to={DEVICE_AI_SETTINGS_HREF}>Set up on-device AI</Link>
+            <Link to={DEVICE_AI_SETTINGS_HREF}>Set up on-device AI</Link>, or choose <strong>Use your own AI</strong> to draft them with ChatGPT, Claude or another AI.
           </p>
         )}
         {canWrite && !withheld && notesDraft.available && !hasNotes && !(hasTranscript && canReadTranscript) && (

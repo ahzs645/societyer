@@ -106,6 +106,32 @@ context; their calls are kept in `scripts/fixtures/meeting-notes-skill-replays/`
 and checked by `npm run test:meeting-notes-skill` (all expectations met: owners,
 due dates, goals, speakers, and no over-assignment).
 
+## Use your own AI (copy a prompt, paste the JSON back)
+
+**Use your own AI** on the AI notes card (`ManualNotesDraftDialog`, prompt and
+import in `shared/ai/meetingNotesManualPrompt.ts`) drafts the AI notes with
+any AI chat, which works when no AI model is connected to the workspace:
+
+1. **Copy the prompt.** It carries the skill's rules (the same as the built-in
+   AI's), each tool with its JSON Schema, an example of the JSON to return,
+   the template, and the meeting's context. Blocks can be switched off:
+   Transcript (off when you attach the file to the chat instead), Your notes,
+   People and roles (ids, roles, attending), Goals and committees, Name the
+   speakers, Key quotes. Anything typed in the box is added at the end. A
+   prompt over 120k characters says to attach the transcript instead.
+2. **Paste what it returns** (`{"calls": [...]}`, also inside a code fence or
+   with text around it), **Check**, then **Save as AI notes**. The calls run
+   through the same session as the built-in AI's: an id that isn't listed, a
+   bad date or a quote that isn't word for word in the transcript is left out,
+   and the dialog lists what was left out and why. Saving goes through
+   `meetings:saveNotesDraft` (quotes re-checked there) and is labelled "Your
+   own AI (pasted)".
+
+Tested with a 57-minute Teams VTT (1,031 cues, three speakers; prompt about
+80k characters): a larger and a smaller model, given only the prompt, each
+returned JSON that imported with nothing left out, owners matched to the
+People list, relative dates resolved and quotes found word for word.
+
 ## Action items (Notes tab)
 
 `meetings.noteActionItems`, `shared/meetingNoteActions.ts`. Suggested items
