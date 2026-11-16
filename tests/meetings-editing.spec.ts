@@ -58,7 +58,12 @@ test("edit meeting, attendance grid and motion person pickers", async ({ page })
   const drawer = page.getByRole("dialog", { name: "Edit meeting" });
   await expect(drawer).toBeVisible();
   await drawer.getByRole("textbox", { name: "Meeting title" }).fill("Executive meeting — 2013-05-14");
-  // Escape must not silently discard the edit.
+  // Escape must not silently discard the edit. The first Escape only leaves
+  // the text field (Drawer's escapeLeavesTextField); the second asks.
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("textbox", { name: "Meeting title" })).not.toBeFocused();
+  await expect(drawer.getByRole("textbox", { name: "Meeting title" })).toHaveValue("Executive meeting — 2013-05-14");
   await page.keyboard.press("Escape");
   const discard = page.getByRole("dialog", { name: "Discard unsaved changes?" });
   await expect(discard).toBeVisible();
