@@ -59,7 +59,6 @@ export function useNotesDraft(canWrite: boolean) {
           template: input.template,
           draft: result.draft,
           speakers: result.speakers,
-          attendees: result.attendees,
           generatedBy: `On-device: ${model}`,
           usedNotes: Boolean(input.notes.trim()),
           usedTranscript: Boolean(transcript.trim()),

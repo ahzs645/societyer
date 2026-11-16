@@ -761,9 +761,6 @@ function MeetingDetailWorkspace() {
     hasNotes: String(meeting.workingNotes ?? "").trim().length > 0,
     minutesStarted: hasStartedMinutesDraft(minutes),
     minutesApproved: Boolean(minutes?.approvedAt),
-    working: isWorkingMeeting(meeting),
-    hasAiNotes: Boolean((meeting as any).notesDraft || (meeting as any).notesDraftWithheld),
-    openActionItems: ((meeting as any).noteActionItems ?? []).filter((item: { done?: boolean }) => !item.done).length,
   });
   // A transcript pasted or imported as plain text lives on the minutes
   // (minutes.draftTranscript), not in the transcripts table. Show it on the
@@ -2597,7 +2594,6 @@ function MeetingDetailWorkspace() {
             canWrite={canMeetingsWrite}
             canStartMinutes={canMeetingsWrite && canMinutesWrite}
             minutesApproved={Boolean(minutes?.approvedAt)}
-            steps={recordSteps}
             onMinutesStarted={() => setActiveTab("minutes")}
             meeting={meeting as any}
             // In-camera parts never reach the AI notes, the Ask bar or the notes export.

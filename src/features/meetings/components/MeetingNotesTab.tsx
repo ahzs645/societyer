@@ -1,7 +1,7 @@
 /**
  * The Notes tab for a meeting that keeps informal notes (`recordKind:
  * "notes"`): one calm document that autosaves into `meetings.workingNotes`,
- * the progress stepper, and "Turn notes into minutes".
+ * and "Turn notes into minutes".
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -12,8 +12,7 @@ import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { useConfirm } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
-import { MEETING_WORKING_NOTES_MAX_LENGTH, type MeetingRecordStep } from "../../../../shared/meetingRecordKind";
-import { MeetingRecordStepper } from "./MeetingRecordStepper";
+import { MEETING_WORKING_NOTES_MAX_LENGTH } from "../../../../shared/meetingRecordKind";
 import { MeetingDraftRecovery, useMeetingDraft } from "../useMeetingDraft";
 import type { AutosaveDraft } from "../lib/meetingDraftStore";
 import { createNotesAutosave, type NotesSaveState } from "../lib/notesAutosave";
@@ -98,7 +97,6 @@ export function MeetingNotesTab({
   canWrite,
   canStartMinutes,
   minutesApproved,
-  steps,
   onMinutesStarted,
   meeting,
   transcriptRow,
@@ -134,7 +132,6 @@ export function MeetingNotesTab({
   /** meetings:write and minutes:write: turn the notes into minutes. */
   canStartMinutes: boolean;
   minutesApproved: boolean;
-  steps: MeetingRecordStep[];
   onMinutesStarted: () => void;
 }) {
   const confirm = useConfirm();
@@ -227,7 +224,6 @@ export function MeetingNotesTab({
 
   return (
     <div className="meeting-notes-tab notes-surface" ref={surface}>
-      {!phone && <MeetingRecordStepper steps={steps} />}
       <NotesSurfaceBar
         view={view}
         onView={setView}

@@ -84,7 +84,6 @@ export const SKILL_FIXTURE_EXPECTED = {
   /** Labels that have no evidence and must stay unnamed. */
   unidentifiable: ["SPEAKER_04"],
   decisions: [/elm/i],
-  attendeesNever: ["pd_dana"],
 };
 
 /**
@@ -132,6 +131,5 @@ export const SKILL_FIXTURE_B = {
     unidentifiable: ["SPEAKER_00"],
     decisions: [/january/i],
     notDecisions: [/drop-in/i],
-    attendeesNever: ["pd_ana", "pd_ben"],
   },
 };

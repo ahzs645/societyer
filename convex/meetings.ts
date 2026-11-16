@@ -32,7 +32,6 @@ import {
   type MeetingNotesSkillContext,
   type MeetingNotesSkillInput,
   type MeetingNotesSkillResult,
-  type SkillAttendee,
   type SkillSpeakerSuggestion,
 } from "../shared/ai/meetingNotesSkill";
 import type { ChatMessage } from "../shared/ai/minutesDraft";
@@ -245,7 +244,6 @@ export const saveNotesDraft = authorizedMutation("meetings:saveNotesDraft", muta
     usedTranscript: v.boolean(),
     // Untrusted, like draft: checked and bounded by the handler.
     speakers: v.optional(v.any()),
-    attendees: v.optional(v.any()),
   },
   returns: v.any(),
   handler: async (ctx, args) => saveNotesDraftPortable(await toPortableMutationCtx(ctx), args),
@@ -325,7 +323,6 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
     const endpoint = await resolveMinutesEndpoint(ctx, String(meeting.societyId));
     let draft: NotesDraft = heuristicNotesDraft(input);
     let speakers: SkillSpeakerSuggestion[] = [];
-    let attendees: SkillAttendee[] = [];
     let generatedBy = "Rule-based (no AI model connected)";
     if (endpoint) {
       try {
@@ -334,7 +331,6 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
         const result = await runNotesSkillHosted(endpoint, { template, notes, transcript, context });
         draft = { ...result.draft, summary: result.draft.summary || draft.summary };
         speakers = result.speakers;
-        attendees = result.attendees;
         generatedBy = endpointLabel(endpoint);
       } catch (error) {
         throw new Error(`${aiProviderErrorMessage(error)} Nothing was changed.`);
@@ -345,7 +341,6 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
       template,
       draft,
       speakers,
-      attendees,
       generatedBy,
       usedNotes: Boolean(notes.trim()),
       usedTranscript: Boolean(transcript.trim()),

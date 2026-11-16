@@ -63,7 +63,6 @@ to use them, and the model calls tools:
 | `add_action_item` | Text, `owner_person_id` / `owner_name` / `owner_speaker_label`, `due_date`, `at_seconds`, `goal_id`, `committee_id` |
 | `add_quote` | Words kept as said, checked word for word against one transcript line (see Quotes) |
 | `identify_speaker` | Who a diarization label (`SPEAKER_01`) is, with the quoted evidence |
-| `mark_attendee` | Someone who took part |
 | `finish` | Done |
 
 **Context** (`meetings:notesSkillContext`): the organization's people with
@@ -89,7 +88,7 @@ for models that refuse tools.
 
 **Suggestions are applied by people**: the AI notes card lists **Who's
 speaking** (each label, the person, the quoted evidence; **Name speaker** uses
-`transcripts:assignSpeaker`) and **Took part** (**Add to attendees**).
+`transcripts:assignSpeaker`).
 **People the AI knows** shows the roster the model gets.
 
 **Agent tools** (`shared/agentTools/tools/meetingNotes.ts`) expose the same
@@ -177,10 +176,10 @@ keeps your place; a hidden view pauses its media.
   offered. The bar warns when the microphone stops (unplugged, or taken by
   another app), a recorder error stops and keeps what was recorded, and the
   screen is kept awake while recording where the browser allows.
-- **•••** downloads Markdown or PDF, prints, copies a plain-text recap
-  (summary, decisions, open next steps, open questions) or opens it in your
-  mail app (`shared/meetingNotesExport.ts`). On a phone it also leads to the
-  meeting details.
+- **•••** downloads Markdown, prints (or saves as PDF from the print dialog),
+  or copies a plain-text recap (summary, decisions, open next steps, open
+  questions) to paste into an email or chat (`shared/meetingNotesExport.ts`).
+  On a phone it also leads to the meeting details.
 - **Ask anything.** The bar under the notes opens the AI assistant with the
   meeting attached (notes, AI notes, action items, people, then as much of the
   transcript as fits in 32 KiB) and sends the question. With the AI agents
@@ -239,12 +238,11 @@ keeps your place; a hidden view pauses its media.
   editor offers **Keep both** (their notes, then your changed lines) or
   **Load saved notes**.
 
-## Working meetings: progress and duplicates
+## Working meetings: duplicates
 
-A general / working meeting's progress reads Transcript → Notes → AI notes →
-Follow-ups (done when no action items are open), not minutes and approval,
-until its notes are turned into minutes. Several working meetings on one day
-are not flagged as duplicates unless they have the same title.
+The Notes tab has no progress steps; the minutes path's steps show on the
+Minutes tab of meetings that keep formal minutes. Several working meetings on
+one day are not flagged as duplicates unless they have the same title.
 
 ## Meetings page: Timeline
 

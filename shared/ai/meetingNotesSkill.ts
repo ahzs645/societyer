@@ -209,18 +209,6 @@ export const MEETING_NOTES_TOOLS: readonly ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "mark_attendee",
-      description: "Record someone who took part in the meeting (spoke, was addressed as present, or is in the notes as attending).",
-      parameters: {
-        type: "object",
-        properties: { person_id: PERSON_ID, name: { type: "string" } },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "finish",
       description: "Call last, once everything is recorded.",
       parameters: { type: "object", properties: {}, required: [] },
@@ -244,9 +232,8 @@ export function meetingNotesSkillSystemPrompt(template: NotesDraftTemplateId): s
     "4. Call add_action_item for each concrete next step someone took on. Owner: owner_person_id when they are in the People list (match first names, nicknames and roles such as \"the treasurer\" to the person who holds them); otherwise owner_name; or owner_speaker_label when the person who took it on is a speaker you couldn't identify. When the meeting asks someone who isn't present to do something, leave the owner out and name them in the text. Leave the owner out when nobody took it on. A next step nobody took on is an action item only, not also an open question.",
     "   Due dates: only when a date or deadline was stated. Resolve relative dates from the meeting's date and weekday: \"this Friday\" is the next Friday after the meeting, \"next Friday\" is the Friday of the following week, \"end of the month\" is that month's last day. A vague span (\"this week\", \"over the next two weeks\", \"soon\") is not a due date: leave due_date out and keep the wording in the text. Add at_seconds from the line where it was agreed, and goal_id or committee_id only when the link is clear.",
     "5. Call identify_speaker for a speaker label only with evidence: a self-introduction; being greeted or asked a question by name and answering it; or speaking plainly from a role that exactly one listed person holds (\"as treasurer…\", \"from the volunteer side…\" when only one person coordinates volunteers). A role two listed people share is not evidence. Skip labels you can't support, and never guess from speaking order.",
-    "6. Call mark_attendee for each person who clearly took part. Someone mentioned as absent did not.",
-    "7. When there is a transcript, call add_quote for up to three short quotes worth keeping word for word: someone taking on a commitment, a decision in their own words, or a point the team will want to remember. Copy the words exactly from one line. Skip it when nothing stands out; never quote small talk.",
-    "8. Call finish.",
+    "6. When there is a transcript, call add_quote for up to three short quotes worth keeping word for word: someone taking on a commitment, a decision in their own words, or a point the team will want to remember. Copy the words exactly from one line. Skip it when nothing stands out; never quote small talk.",
+    "7. Call finish.",
     "",
     "Rules: use only ids that appear in the context, exactly as written. Never invent people, dates or commitments. If a tool answers with an error, fix that call and try again. You may call several tools in one turn.",
   ].join("\n");
@@ -351,12 +338,10 @@ export function transcriptLines(transcript: string): TranscriptLine[] {
     return [{ atSec, ...(timed[2] ? { speaker: timed[2].trim() } : {}), text, key: quoteKey(text) }];
   });
 }
-export type SkillAttendee = { name: string; personId?: string };
 
 export type MeetingNotesSkillResult = {
   draft: NotesDraft & { actionItems: SkillActionItem[] };
   speakers: SkillSpeakerSuggestion[];
-  attendees: SkillAttendee[];
   /** Calls refused, for diagnostics and tests. */
   refused: Array<{ tool: string; reason: string }>;
   calls: number;
@@ -413,7 +398,6 @@ export function createMeetingNotesSkillSession(
   const questions: string[] = [];
   const actions: PendingAction[] = [];
   const speakers = new Map<string, SkillSpeakerSuggestion>();
-  const attendees = new Map<string, SkillAttendee>();
   const refused: Array<{ tool: string; reason: string }> = [];
   let calls = 0;
   let finished = false;
@@ -521,13 +505,6 @@ export function createMeetingNotesSkillSession(
         speakers.set(label, { label, name: who.name, ...(who.personId ? { personId: who.personId } : {}), evidence });
         return { content: `${label} recorded as ${who.name}.` };
       }
-      case "mark_attendee": {
-        const who = person(args.person_id, args.name);
-        if (!who.ok) return refuse(tool, who.reason);
-        if (!who.name) return refuse(tool, "give person_id or name.");
-        attendees.set(who.personId ?? normalizeName(who.name), { name: who.name, ...(who.personId ? { personId: who.personId } : {}) });
-        return { content: "Recorded." };
-      }
       case "finish":
         finished = true;
         return { content: "Done." };
@@ -552,7 +529,6 @@ export function createMeetingNotesSkillSession(
         ...(keptQuotes.length ? { quotes: keptQuotes } : {}),
       },
       speakers: [...speakers.values()],
-      attendees: [...attendees.values()],
       refused: [...refused],
       calls,
       finished,
@@ -588,7 +564,6 @@ export function mergeSkillResults(results: readonly MeetingNotesSkillResult[]): 
         : {}),
     },
     speakers: byKey(results.flatMap((result) => result.speakers), (item) => item.label),
-    attendees: byKey(results.flatMap((result) => result.attendees), (item) => item.personId ?? normalizeName(item.name)),
     refused: results.flatMap((result) => result.refused),
     calls: results.reduce((sum, result) => sum + result.calls, 0),
     finished: results.every((result) => result.finished),

@@ -42,8 +42,6 @@ export async function saveNotesDraftPortable(
     usedTranscript: boolean;
     /** From the tool-calling skill: who each speaker label is, with the words that show it. */
     speakers?: unknown;
-    /** From the tool-calling skill: people who took part. */
-    attendees?: unknown;
   },
 ) {
   const meeting = await requireOwnedRow(ctx, "meetings", args.id);
@@ -66,7 +64,6 @@ export async function saveNotesDraftPortable(
   // read (in-camera parts aside), with the speaker and time of that line.
   const quotes = draft.quotes?.length ? await verifiedQuotes(ctx, args.id, meeting.societyId, draft.quotes) : [];
   const speakerSuggestions = await normalizeSpeakerSuggestions(args.speakers, owned);
-  const attendeeSuggestions = await normalizeAttendeeSuggestions(args.attendees, owned);
   if (!draft.summary && !draft.sections.length && !draft.decisions.length && !suggestions.length) {
     throw new Error("The draft came back empty. Add some notes or a transcript, then try again.");
   }
@@ -85,7 +82,6 @@ export async function saveNotesDraftPortable(
       usedNotes: Boolean(args.usedNotes),
       usedTranscript: Boolean(args.usedTranscript),
       ...(speakerSuggestions.length ? { speakerSuggestions } : {}),
-      ...(attendeeSuggestions.length ? { attendeeSuggestions } : {}),
     },
     noteActionItems: items.map(withoutUndefined),
   });
@@ -139,19 +135,6 @@ async function normalizeSpeakerSuggestions(value: unknown, owned: OwnedCheck) {
     if (!label || !name || !evidence || out.some((item) => item.label === label)) continue;
     const personId = await owned("peopleDirectory", typeof row.personId === "string" ? row.personId : undefined);
     out.push({ label, name, ...(personId ? { personId } : {}), evidence });
-  }
-  return out;
-}
-
-async function normalizeAttendeeSuggestions(value: unknown, owned: OwnedCheck) {
-  if (!Array.isArray(value)) return [];
-  const out: Array<{ name: string; personId?: string }> = [];
-  for (const entry of value.slice(0, 200)) {
-    const row = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
-    const name = text(row.name, 120);
-    if (!name || out.some((item) => item.name.toLowerCase() === name.toLowerCase())) continue;
-    const personId = await owned("peopleDirectory", typeof row.personId === "string" ? row.personId : undefined);
-    out.push({ name, ...(personId ? { personId } : {}) });
   }
   return out;
 }

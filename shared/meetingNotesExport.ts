@@ -85,15 +85,6 @@ export function notesRecapText(input: NotesExportInput): string {
   return lines.join("\n").trim();
 }
 
-/** mailto: with the recap as the body; recipients are left for the person to add. */
-export function notesRecapMailto(input: NotesExportInput): string {
-  const subject = `Recap: ${input.meeting.title}`;
-  // Mail clients cap URL length; a long recap is cut with a note.
-  let body = notesRecapText(input);
-  if (body.length > 1800) body = `${body.slice(0, 1780).trimEnd()}\n…`;
-  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
-
 /** File name for an export: "2026-11-12 Partner call.md". */
 export function notesExportFileName(meeting: NotesExportMeeting, extension: string): string {
   const base = `${dateLabel(meeting.scheduledAt)} ${meeting.title}`.replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "Meeting notes";

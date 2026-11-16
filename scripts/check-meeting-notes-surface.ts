@@ -1,5 +1,5 @@
 // The meeting notes surface's pure parts: the Meetings timeline grouping,
-// the Markdown export / recap / mailto, the Ask bar's meeting context, and
+// the Markdown export and recap, the Ask bar's meeting context, and
 // the recorder's file naming.
 //
 //   node --import tsx scripts/check-meeting-notes-surface.ts
@@ -9,7 +9,6 @@ import {
   meetingAskContextAttachment,
   notesExportFileName,
   notesMeetingMarkdown,
-  notesRecapMailto,
   notesRecapText,
   type NotesExportInput,
 } from "../shared/meetingNotesExport";
@@ -47,7 +46,7 @@ assert.equal(meetingDay({ scheduledAt: "2026-11-10T12:00:00.000Z", scheduledAtPr
 assert.equal(groupMeetingsByDay(meetings, now, { pastDays: 1000 }).hasEarlier, false);
 console.log("✓ timeline: coming up, today, earlier days; date-only meetings; later and earlier counts");
 
-// ---------- export, recap, mailto ----------------------------------------------------
+// ---------- export and recap -----------------------------------------------------------
 const input: NotesExportInput = {
   meeting: { title: "Partner call / Example", scheduledAt: "2026-11-12T17:00:00.000Z", location: "Online", attendeeIds: ["Sam Rivera", "Priya Raman"] },
   notes: "# Raw\n- Foundation wants a pilot",
@@ -89,10 +88,7 @@ assert.equal(recap, [
   "Open questions:",
   "• Who signs?",
 ].join("\n"), "done actions are left out of next steps");
-const mailto = notesRecapMailto(input);
-assert.ok(mailto.startsWith("mailto:?subject=Recap%3A%20Partner%20call%20%2F%20Example&body="));
-assert.ok(notesRecapMailto({ ...input, draft: { ...input.draft!, summary: "x".repeat(5000) } }).length < 6000, "long recaps are cut for mail clients");
-console.log("✓ export: Markdown sections, safe file names, recap, mailto");
+console.log("✓ export: Markdown sections, safe file names, recap");
 
 // ---------- Ask bar context ------------------------------------------------------------
 const small = meetingAskContextAttachment({ ...input, people: ["Sam Rivera — Treasurer"] });

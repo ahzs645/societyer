@@ -160,7 +160,7 @@ test("notes tab on a phone keeps controls inside the screen", async ({ page }) =
   if (SHOTS) await page.getByRole("region", { name: "Action items" }).screenshot({ path: `${SHOTS}/notes-phone.png` });
 });
 
-test("AI notes suggestions: name diarized speakers, add attendees, see the people the AI knows", async ({ page }) => {
+test("AI notes suggestions: name diarized speakers, see the people the AI knows", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await seed(page);
@@ -172,7 +172,7 @@ test("AI notes suggestions: name diarized speakers, add attendees, see the peopl
     const sam = people.find((person) => person.fullName === "Sam Rivera");
     const id = await client.mutation("meetings:create", {
       societyId, type: "Working", title: "Partner call", scheduledAt: "2026-11-12T17:00:00.000Z",
-      electronic: true, status: "Held", attendeeIds: [], recordKind: "notes", workingNotes: "- Sam to send the budget",
+      electronic: true, status: "Held", attendeeIds: ["Sam Rivera"], recordKind: "notes", workingNotes: "- Sam to send the budget",
     });
     await client.mutation("transcripts:importTimed", {
       societyId, meetingId: id, provider: "vtt", durationSeconds: 20,
@@ -185,7 +185,6 @@ test("AI notes suggestions: name diarized speakers, add attendees, see the peopl
       id, template: "external_call",
       draft: { summary: "Budget follow-up.", actionItems: [{ text: "Send the budget", assignee: "Sam Rivera", assigneePersonId: sam._id }] },
       speakers: [{ label: "SPEAKER_00", name: "Sam Rivera", personId: sam._id, evidence: "Sam Rivera here" }],
-      attendees: [{ name: "Sam Rivera", personId: sam._id }],
       generatedBy: "On-device: test model", usedNotes: true, usedTranscript: true,
     });
     return id;
@@ -203,10 +202,6 @@ test("AI notes suggestions: name diarized speakers, add attendees, see the peopl
   await expect(speakers.getByText("“Sam Rivera here”")).toBeVisible();
   await speakers.getByRole("button", { name: "Name speaker" }).click();
   await expect(speakers.getByText("Named")).toBeVisible();
-
-  const tookPart = aiNotes.getByRole("region", { name: "Took part" });
-  await tookPart.getByRole("button", { name: "Add to attendees" }).click();
-  await expect(tookPart.getByRole("button", { name: /Add/ })).toHaveCount(0);
 
   await page.getByText("People the AI knows").click();
   const roster = page.locator(".notes-roster");

@@ -61,6 +61,7 @@ export const meetingNotesDraftValidator = v.object({
   usedTranscript: v.boolean(),
   // The tool-calling skill's suggestions, applied only when someone chooses to.
   speakerSuggestions: v.optional(v.array(v.object({ label: v.string(), name: v.string(), personId: v.optional(v.id("peopleDirectory")), evidence: v.string() }))),
+  // No longer written ("Took part" was removed); kept so drafts saved before still validate.
   attendeeSuggestions: v.optional(v.array(v.object({ name: v.string(), personId: v.optional(v.id("peopleDirectory")) }))),
 });
 

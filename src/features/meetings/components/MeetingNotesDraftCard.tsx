@@ -27,7 +27,7 @@ import { notesTranscriptSearch } from "../transcript/transcriptQuote";
 import { isDraftCancelled, useDeviceDraftProgress, deviceDraftLabel } from "../deviceDraftProgress";
 import { useNotesDraft, type NotesDraftMeeting } from "../useNotesDraft";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { NotesDraftSuggestions, SkillRosterDisclosure, type AttendeeSuggestion, type SpeakerSuggestion } from "./NotesDraftSuggestions";
+import { NotesDraftSuggestions, SkillRosterDisclosure, type SpeakerSuggestion } from "./NotesDraftSuggestions";
 import { DEVICE_AI_SETTINGS_HREF } from "../../../lib/localAi/useDeviceAi";
 
 export type StoredNotesDraft = {
@@ -42,7 +42,6 @@ export type StoredNotesDraft = {
   usedNotes: boolean;
   usedTranscript: boolean;
   speakerSuggestions?: SpeakerSuggestion[];
-  attendeeSuggestions?: AttendeeSuggestion[];
 };
 
 export function MeetingNotesDraftCard({
@@ -187,9 +186,7 @@ export function MeetingNotesDraftCard({
                 societyId={meeting.societyId}
                 meetingId={meeting._id}
                 speakers={draft.speakerSuggestions ?? []}
-                attendees={draft.attendeeSuggestions ?? []}
                 transcript={transcriptRow as any}
-                currentAttendees={meeting.attendeeIds ?? []}
                 canWrite={canWrite}
                 canNameSpeakers={canReadTranscript}
               />

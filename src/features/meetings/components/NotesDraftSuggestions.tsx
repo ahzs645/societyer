@@ -1,11 +1,10 @@
 /**
  * The notes skill's suggestions under the AI notes: who each transcript
- * speaker is (with the words that show it) and who took part. Nothing is
- * applied until someone chooses to: speakers through transcripts:assignSpeaker,
- * attendees onto the meeting's attendee list.
+ * speaker is, with the words that show it. Nothing is applied until someone
+ * chooses to, through transcripts:assignSpeaker.
  */
 import { useState } from "react";
-import { Check, UserCheck, Users } from "lucide-react";
+import { Check, UserCheck } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useToast } from "@/components/Toast";
@@ -13,7 +12,6 @@ import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export type SpeakerSuggestion = { label: string; name: string; personId?: string; evidence: string };
-export type AttendeeSuggestion = { name: string; personId?: string };
 
 type TranscriptSpeakers = { speakers?: Array<{ label: string; name?: string; personId?: string }> } | null | undefined;
 
@@ -23,25 +21,20 @@ export function NotesDraftSuggestions({
   societyId,
   meetingId,
   speakers,
-  attendees,
   transcript,
-  currentAttendees,
   canWrite,
   canNameSpeakers,
 }: {
   societyId: Id<"societies">;
   meetingId: Id<"meetings">;
   speakers: SpeakerSuggestion[];
-  attendees: AttendeeSuggestion[];
   transcript: TranscriptSpeakers;
-  currentAttendees: string[];
   canWrite: boolean;
   /** Naming speakers changes the working transcript: minute-takers only (decision A1). */
   canNameSpeakers: boolean;
 }) {
   const toast = useToast();
   const assignSpeaker = usePermissionedMutation(api.transcripts.assignSpeaker, canWrite && canNameSpeakers);
-  const updateMeeting = usePermissionedMutation(api.meetings.update, canWrite);
   const [busy, setBusy] = useState(false);
 
   const named = new Map((transcript?.speakers ?? []).map((speaker) => [speaker.label, speaker]));
@@ -49,10 +42,8 @@ export function NotesDraftSuggestions({
     const current = named.get(suggestion.label);
     return Boolean(current && (suggestion.personId ? current.personId === suggestion.personId : current.name && nameKey(current.name) === nameKey(suggestion.name)));
   };
-  const attending = new Set(currentAttendees.map(nameKey));
   const pendingSpeakers = speakers.filter((suggestion) => !isApplied(suggestion));
-  const pendingAttendees = attendees.filter((attendee) => !attending.has(nameKey(attendee.name)));
-  if (!speakers.length && !attendees.length) return null;
+  if (!speakers.length) return null;
 
   const applySpeakers = async (list: SpeakerSuggestion[]) => {
     setBusy(true);
@@ -69,18 +60,6 @@ export function NotesDraftSuggestions({
       toast.success(list.length === 1 ? `${list[0].label} is now ${list[0].name}.` : `${list.length} speakers named.`);
     } catch (error) {
       toast.error("Could not name the speaker", error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addAttendees = async (list: AttendeeSuggestion[]) => {
-    setBusy(true);
-    try {
-      await updateMeeting({ id: meetingId, patch: { attendeeIds: [...currentAttendees, ...list.map((attendee) => attendee.name)] } });
-      toast.success(list.length === 1 ? `${list[0].name} added to attendees.` : `${list.length} attendees added.`);
-    } catch (error) {
-      toast.error("Could not update attendees", error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
@@ -118,25 +97,6 @@ export function NotesDraftSuggestions({
               );
             })}
           </ul>
-        </section>
-      )}
-      {attendees.length > 0 && (
-        <section className="notes-suggestions__group" aria-label="Took part">
-          <div className="notes-suggestions__head">
-            <h3><Users size={13} aria-hidden="true" /> Took part</h3>
-            {canWrite && pendingAttendees.length > 0 && (
-              <button type="button" className="btn-action" disabled={busy} onClick={() => { void addAttendees(pendingAttendees); }}>
-                Add {pendingAttendees.length === 1 ? "to attendees" : `all ${pendingAttendees.length} to attendees`}
-              </button>
-            )}
-          </div>
-          <p className="notes-suggestions__people">
-            {attendees.map((attendee, index) => (
-              <span key={attendee.personId ?? attendee.name} className={attending.has(nameKey(attendee.name)) ? "is-listed" : undefined}>
-                {attendee.name}{index < attendees.length - 1 ? ", " : ""}
-              </span>
-            ))}
-          </p>
         </section>
       )}
     </div>

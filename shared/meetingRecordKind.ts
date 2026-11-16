@@ -68,7 +68,7 @@ export function resolveMeetingTab(requested: string | null | undefined, kind: Me
   return match ?? "overview";
 }
 
-export type MeetingRecordStepId = "transcript" | "notes" | "aiNotes" | "followUps" | "minutesDraft" | "approved";
+export type MeetingRecordStepId = "transcript" | "notes" | "minutesDraft" | "approved";
 export type MeetingRecordStepState = "done" | "current" | "upcoming";
 export type MeetingRecordStep = { id: MeetingRecordStepId; label: string; state: MeetingRecordStepState };
 
@@ -84,27 +84,11 @@ export function meetingRecordSteps(input: {
   hasNotes: boolean;
   minutesStarted: boolean;
   minutesApproved: boolean;
-  /**
-   * A general / working meeting that keeps notes: it never goes to the minute
-   * book, so its path ends with the follow-ups, not minutes and approval.
-   */
-  working?: boolean;
-  hasAiNotes?: boolean;
-  /** Action items still open on the notes. */
-  openActionItems?: number;
 }): MeetingRecordStep[] {
   if (input.kind === "meeting") return [];
   const steps: Array<{ id: MeetingRecordStepId; label: string; done: boolean; optional: boolean }> = [
     { id: "transcript", label: "Transcript", done: input.hasTranscript, optional: true },
   ];
-  if (input.working && input.kind === "notes" && !input.minutesStarted && !input.minutesApproved) {
-    steps.push(
-      { id: "notes", label: "Notes", done: input.hasNotes, optional: false },
-      { id: "aiNotes", label: "AI notes", done: Boolean(input.hasAiNotes), optional: true },
-      { id: "followUps", label: "Follow-ups", done: (input.hasNotes || Boolean(input.hasAiNotes)) && (input.openActionItems ?? 0) === 0, optional: false },
-    );
-    return stepStates(steps);
-  }
   if (input.kind === "notes" || input.hasNotes) {
     steps.push({ id: "notes", label: "Notes", done: input.hasNotes, optional: input.kind === "minutes" });
   }

@@ -4,14 +4,14 @@
  * Ask bar that hands the meeting to the assistant.
  */
 import { useState, type ReactNode } from "react";
-import { ChevronDown, Copy, Download, FileText, Info, Mail, Mic, MonitorUp, MoreHorizontal, Printer, Send, Sparkles, Square, Video } from "lucide-react";
+import { ChevronDown, Copy, Download, Info, Mic, MonitorUp, MoreHorizontal, Printer, Send, Sparkles, Square, Video } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Menu, type MenuItem } from "@/components/Menu";
 import { useAiChatVisibility } from "@/hooks/useAiChatVisibility";
 import { Segmented } from "@/components/primitives";
 import { useToast } from "@/components/Toast";
 import { triggerBlobDownload } from "../../../lib/zip";
-import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
+import { printPdfDocument } from "../../../lib/pdf";
 import { markdownToHtml } from "../../../lib/markdown";
 import { askGlobalAiAssistant } from "../../ai/aiAssistantEvents";
 import { NOTES_DRAFT_TEMPLATES, type NotesDraftTemplateId } from "../../../../shared/ai/notesDraft";
@@ -19,7 +19,6 @@ import {
   meetingAskContextAttachment,
   notesExportFileName,
   notesMeetingMarkdown,
-  notesRecapMailto,
   notesRecapText,
   type NotesExportInput,
 } from "../../../../shared/meetingNotesExport";
@@ -131,7 +130,7 @@ export function RecordControl({
   );
 }
 
-/** ••• : export, recap, and on phones the meeting details. */
+/** ••• : Markdown, print (or save as PDF), the recap to paste anywhere, and on phones the meeting details. */
 export function NotesMoreMenu({ exportInput, onOpenDetails }: { exportInput: () => NotesExportInput; onOpenDetails?: () => void }) {
   const toast = useToast();
   const run = (label: string, task: () => Promise<unknown> | unknown) => async () => {
@@ -145,10 +144,8 @@ export function NotesMoreMenu({ exportInput, onOpenDetails }: { exportInput: () 
   const title = () => exportInput().meeting.title;
   const items: MenuItem[] = [
     { id: "md", label: "Download Markdown", icon: <Download size={14} />, onSelect: run("export", () => triggerBlobDownload(new Blob([markdown()], { type: "text/markdown" }), notesExportFileName(exportInput().meeting, "md"))) },
-    { id: "pdf", label: "Download PDF", icon: <FileText size={14} />, onSelect: run("export", () => exportPdfDownload({ filename: notesExportFileName(exportInput().meeting, "pdf"), title: title(), bodyHtml: markdownToHtml(markdown()) })) },
-    { id: "print", label: "Print", icon: <Printer size={14} />, onSelect: run("print", () => printPdfDocument({ title: title(), bodyHtml: markdownToHtml(markdown()) })) },
-    { id: "copy", label: "Copy recap", hint: "Summary, decisions and who does what", icon: <Copy size={14} />, onSelect: run("copy", async () => { await navigator.clipboard.writeText(notesRecapText(exportInput())); toast.success("Recap copied."); }) },
-    { id: "email", label: "Email recap", icon: <Mail size={14} />, onSelect: run("email", () => { window.location.href = notesRecapMailto(exportInput()); }) },
+    { id: "print", label: "Print or save as PDF", icon: <Printer size={14} />, onSelect: run("print", () => printPdfDocument({ title: title(), bodyHtml: markdownToHtml(markdown()) })) },
+    { id: "copy", label: "Copy recap", hint: "Summary, decisions and who does what, to paste into an email or chat", icon: <Copy size={14} />, onSelect: run("copy", async () => { await navigator.clipboard.writeText(notesRecapText(exportInput())); toast.success("Recap copied."); }) },
     ...(onOpenDetails ? [{ id: "details", label: "Meeting details", hint: "Date, place, attendees, materials", icon: <Info size={14} />, onSelect: onOpenDetails }] : []),
   ];
   return (

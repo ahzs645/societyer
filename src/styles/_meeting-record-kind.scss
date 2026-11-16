@@ -328,14 +328,6 @@
   font-size: token("fs-xs");
   color: token("text-tertiary");
 }
-.notes-suggestions__people {
-  margin: token("s-1") 0 0;
-  font-size: token("fs-sm");
-  .is-listed {
-    color: token("text-tertiary");
-  }
-}
-
 .notes-roster {
   font-size: token("fs-sm");
   summary {

@@ -1,6 +1,6 @@
 // The meeting notes skill (shared/ai/meetingNotesSkill.ts): tools, context,
 // the session that checks every call, the tool loop, JSON mode, the roster
-// query (meetings:notesSkillContext) and saving speaker and attendee suggestions.
+// query (meetings:notesSkillContext) and saving speaker suggestions.
 //
 //   node --import tsx scripts/check-meeting-notes-skill.ts
 import assert from "node:assert/strict";
@@ -29,7 +29,7 @@ import { DeviceAiError } from "../src/lib/localAi/transport";
 // ---------- tools and prompt -------------------------------------------------------
 assert.deepEqual(
   MEETING_NOTES_TOOLS.map((tool) => tool.function.name),
-  ["write_summary", "add_decision", "add_open_question", "add_action_item", "add_quote", "identify_speaker", "mark_attendee", "finish"],
+  ["write_summary", "add_decision", "add_open_question", "add_action_item", "add_quote", "identify_speaker", "finish"],
 );
 for (const tool of MEETING_NOTES_TOOLS) assert.equal((tool.function.parameters as { type: string }).type, "object", `${tool.function.name} takes an object`);
 const block = meetingNotesSkillContextBlock(CONTEXT);
@@ -93,9 +93,6 @@ ok("identify_speaker", { speaker_label: "SPEAKER_00", person_id: "pd_priya", evi
 ok("identify_speaker", { speaker_label: "SPEAKER_02", name: "Li", evidence: "From the volunteer side" });
 ok("identify_speaker", { speaker_label: "SPEAKER_03", name: "Gabe", evidence: "Gabe from the City" });
 refused("identify_speaker", { speaker_label: "SPEAKER_09", name: "x", evidence: "y" }, /not in the Transcript speakers/);
-ok("mark_attendee", { person_id: "pd_marcus" });
-ok("mark_attendee", { name: "Marcus" });
-refused("mark_attendee", {}, /person_id or name/);
 refused("delete_everything", {}, /no tool/);
 refused("add_decision", "{not json", /not a JSON object/);
 ok("finish", {});
@@ -114,8 +111,7 @@ assert.deepEqual(
   "the speaker-label owner resolves once SPEAKER_02 is identified as Li",
 );
 assert.deepEqual(result.speakers.map((speaker) => [speaker.label, speaker.personId ?? speaker.name]), [["SPEAKER_00", "pd_priya"], ["SPEAKER_02", "pd_li"], ["SPEAKER_03", "Gabe"]]);
-assert.deepEqual(result.attendees, [{ name: "Marcus Oyelaran", personId: "pd_marcus" }], "one attendee, however named");
-assert.equal(result.refused.length, 10);
+assert.equal(result.refused.length, 9);
 console.log("✓ session: ids checked, names matched, bad calls refused with a reason, speaker-label owners resolved");
 
 // ---------- quotes are checked against the transcript ---------------------------------
@@ -301,7 +297,6 @@ await client.mutation("meetings:saveNotesDraft", {
     { label: "SPEAKER_02", name: "Nobody", personId: "pd_nobody", evidence: "x" },
     { label: "", name: "No label", evidence: "x" },
   ],
-  attendees: [{ name: "Marcus Oyelaran", personId: "pd_marcus" }, { name: "Guest Person" }, { name: "guest person" }],
   generatedBy: "test",
   usedNotes: true,
   usedTranscript: true,
@@ -322,7 +317,7 @@ assert.deepEqual(
   [{ text: "As treasurer I have the revised numbers for the Foundation.", speaker: "SPEAKER_01", atSec: 5 }],
   "saving re-checks quotes against the transcript: speaker and time from the line; quotes not in it, or clipped, are dropped",
 );
-assert.deepEqual(saved.notesDraft.attendeeSuggestions, [{ name: "Marcus Oyelaran", personId: "pd_marcus" }, { name: "Guest Person" }]);
+assert.equal(saved.notesDraft.attendeeSuggestions, undefined, "no attendee suggestions any more");
 // Applying a suggestion goes through the existing speaker assignment.
 await client.mutation("transcripts:assignSpeaker", { societyId, meetingId: "m_skill", label: "SPEAKER_01", name: "Marcus Oyelaran", personId: "pd_marcus" });
 const named = tables().transcripts.find((row) => row._id === "tr_1").speakers;
@@ -360,7 +355,6 @@ for (const [fixture, model] of [["a", "default"], ["a", "small"], ["b", "default
   for (const label of spec.expected.unidentifiable) assert.ok(!run.speakers.some((item) => item.label === label), `${where}: ${label} stays unnamed`);
   for (const pattern of spec.expected.decisions) assert.ok(run.draft.decisions.some((item: string) => pattern.test(item)), `${where}: decision ${pattern}`);
   for (const pattern of spec.expected.notDecisions ?? []) assert.ok(!run.draft.decisions.some((item: string) => pattern.test(item)), `${where}: not a decision ${pattern}`);
-  for (const id of spec.expected.attendeesNever) assert.ok(!run.attendees.some((item) => item.personId === id), `${where}: ${id} not an attendee`);
   // Quotes: a few, every one word for word from the transcript (none refused).
   const quotes = run.draft.quotes ?? [];
   assert.ok(quotes.length >= 1 && quotes.length <= 3, `${where}: one to three quotes`);
