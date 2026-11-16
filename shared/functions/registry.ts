@@ -322,6 +322,7 @@ const MEETING_NOTES_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "meetingRecordings:attach", handler: meetingRecordingsFns.attachPortable }),
   definePortableMutation({ name: "meetingRecordings:remove", handler: meetingRecordingsFns.removePortable }),
   definePortableMutation({ name: "meetings:saveNotesDraft", handler: meetingNotesFns.saveNotesDraftPortable }),
+  definePortableQuery({ name: "meetings:notesSkillContext", handler: meetingNotesFns.notesSkillContextPortable }),
   definePortableMutation({ name: "meetings:discardNotesDraft", handler: meetingNotesFns.discardNotesDraftPortable }),
   definePortableMutation({ name: "meetings:setNoteActionItems", handler: meetingNotesFns.setNoteActionItemsPortable }),
   definePortableMutation({ name: "meetings:createTaskFromNoteAction", handler: meetingNotesFns.createTaskFromNoteActionPortable }),

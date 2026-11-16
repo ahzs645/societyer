@@ -7,6 +7,7 @@
  * convex-test oracle.
  */
 
+import { directoryPersonForSociety } from "./peopleDirectory";
 import { validateTranscriptRef } from "../transcriptModel";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
@@ -183,7 +184,8 @@ export async function taskCreate(
   await requireSocietyMembership(ctx, args.societyId);
   if (!(TASK_STATUSES as readonly string[]).includes(args.status)) throw new Error(`Unknown task status "${args.status}".`);
   if (args.agendaItemId) await assertAgendaItem(ctx, args.agendaItemId, args.societyId, args.meetingId);
-  if (args.assigneePersonId) await getOwned(ctx, "peopleDirectory", args.assigneePersonId, args.societyId);
+  // Directory people can be shared records with no workspace id (local and desktop).
+  if (args.assigneePersonId) await directoryPersonForSociety(ctx, args.assigneePersonId, args.societyId);
   if (args.committeeId) await getOwned(ctx, "committees", args.committeeId, args.societyId);
   if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   if (args.goalId) await getOwned(ctx, "goals", args.goalId, args.societyId);

@@ -251,6 +251,97 @@
   gap: token("s-2");
 }
 
+.notes-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-3");
+  padding-top: token("s-2");
+  border-top: 1px solid token("border");
+}
+.notes-suggestions__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  h3 {
+    display: inline-flex;
+    align-items: center;
+    gap: token("s-1");
+    margin: 0;
+    font-size: token("fs-sm");
+    font-weight: 600;
+  }
+}
+.notes-suggestions__group ul {
+  list-style: none;
+  margin: token("s-1") 0 0;
+  padding: 0;
+}
+.notes-suggestions__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  padding: token("s-1") 0;
+}
+.notes-suggestions__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 240px;
+  overflow-wrap: anywhere;
+  .muted {
+    font-size: token("fs-xs");
+  }
+}
+.notes-suggestions__done {
+  display: inline-flex;
+  align-items: center;
+  gap: token("s-1");
+  font-size: token("fs-xs");
+  color: token("text-tertiary");
+}
+.notes-suggestions__people {
+  margin: token("s-1") 0 0;
+  font-size: token("fs-sm");
+  .is-listed {
+    color: token("text-tertiary");
+  }
+}
+
+.notes-roster {
+  font-size: token("fs-sm");
+  summary {
+    cursor: pointer;
+    color: token("text-secondary");
+  }
+  .muted {
+    margin: token("s-1") 0;
+    font-size: token("fs-xs");
+  }
+}
+.notes-roster__list {
+  list-style: none;
+  margin: token("s-1") 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  li {
+    padding: 2px 0;
+    overflow-wrap: anywhere;
+  }
+}
+.notes-roster__tag {
+  margin-left: token("s-1");
+  padding: 0 token("s-1");
+  border-radius: token("r-sm");
+  background: token("bg-subtle");
+  font-size: token("fs-xxs");
+  color: token("text-secondary");
+}
+
 /* ---------- Notes action items ---------- */
 .meeting-note-actions__body {
   display: flex;

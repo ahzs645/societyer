@@ -1,0 +1,78 @@
+{
+  "calls": [
+    {
+      "tool": "write_summary",
+      "arguments": {
+        "summary": "Program check-in between the Executive Director and a program staff member, held Thursday 12 November 2026. The youth workshop was moved to January after the facilitator cancelled, and the staff member will finish the new workshop outline by Friday 13 November. Carla in finance is to be asked to arrange the cheque for the January facilitator.",
+        "sections": [
+          {
+            "heading": "Updates",
+            "points": [
+              "The youth workshop is behind after the facilitator cancelled.",
+              "The Tuesday drop-in cancellation was agreed last week and is done."
+            ]
+          },
+          {
+            "heading": "Challenges and blockers",
+            "points": [
+              "The youth workshop has slipped because the facilitator cancelled."
+            ]
+          },
+          {
+            "heading": "Feedback",
+            "points": [
+              "The Executive Director said the staff member is doing really well in the new role."
+            ]
+          },
+          {
+            "heading": "Goals and development",
+            "points": [
+              "The youth workshop is part of the goal to run 12 youth workshops in 2026."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "tool": "add_decision",
+      "arguments": {
+        "text": "Move the youth workshop to January."
+      }
+    },
+    {
+      "tool": "add_action_item",
+      "arguments": {
+        "text": "Finish the new workshop outline.",
+        "owner_speaker_label": "SPEAKER_00",
+        "due_date": "2026-11-13",
+        "at_seconds": 35,
+        "goal_id": "goal_youth"
+      }
+    },
+    {
+      "tool": "add_action_item",
+      "arguments": {
+        "text": "Ask Carla in finance to cut the cheque for the January facilitator.",
+        "at_seconds": 62
+      }
+    },
+    {
+      "tool": "identify_speaker",
+      "arguments": {
+        "speaker_label": "SPEAKER_01",
+        "person_id": "pd_ed",
+        "evidence": "As ED I'd rather we move it than rush it."
+      }
+    },
+    {
+      "tool": "mark_attendee",
+      "arguments": {
+        "person_id": "pd_ed"
+      }
+    },
+    {
+      "tool": "finish",
+      "arguments": {}
+    }
+  ]
+}

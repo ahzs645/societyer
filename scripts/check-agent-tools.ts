@@ -131,8 +131,8 @@ const expectedBrowser: Record<FixtureRole, string[]> = {
   Owner: ALL,
   Admin: ALL,
   Director: ALL.filter((name) => name !== "create_governance_tasks"),
-  Viewer: ALL.filter((name) => name !== "create_governance_tasks" && name !== "get_transcript"),
-  Member: ["get_governance_snapshot", "list_meetings", "get_meeting", "search_documents", "get_document", "list_tasks", "open_governance_view"],
+  Viewer: ALL.filter((name) => !["create_governance_tasks", "get_transcript", "add_meeting_action_items", "name_transcript_speakers"].includes(name)),
+  Member: ["get_governance_snapshot", "list_meetings", "get_meeting", "get_meeting_notes_context", "search_documents", "get_document", "list_tasks", "open_governance_view"],
 };
 for (const role of ROLES) {
   const permissions = listPermissionsForRole(role);
@@ -195,6 +195,13 @@ async function rejectsWith(promise: Promise<unknown>, code: AgentToolError["code
     "commitments:list": [{ _id: "c1", title: typed("commitment"), category: "Grant", counterparty: typed("funder"), cadence: "Annual", nextDueDate: "2026-10-01", owner: typed("owner"), status: "Active", requirement: typed("requirement") }],
     "filings:list": [{ _id: "f1", title: typed("filing"), dueDate: "2026-10-01", status: "Due" }],
     "dashboard:summary": { complianceFlags: [] },
+    "meetings:notesSkillContext": {
+      meeting: { title: typed("meeting title"), date: "2026-10-01" },
+      people: [{ id: "pd1", name: typed("person"), aliases: [typed("alias")], roles: [typed("role")], attendee: true }],
+      goals: [{ id: "g1", title: typed("goal") }],
+      committees: [{ id: "c1", name: typed("committee") }],
+      speakers: [{ label: "SPEAKER_00", name: typed("speaker"), segments: 2, sample: [typed("sample line")] }],
+    },
   };
   const stub: AgentToolAdapter = {
     context: { ...context("Owner", "device"), workspace: { id: SOCIETY_ID, name: typed("workspace") } },
@@ -211,6 +218,7 @@ async function rejectsWith(promise: Promise<unknown>, code: AgentToolError["code
     ["list_meetings", {}],
     ["get_meeting", { meetingId: "m1" }],
     ["get_transcript", { meetingId: "m1" }],
+    ["get_meeting_notes_context", { meetingId: "m1" }],
     ["search_documents", { query: "doc" }],
     ["get_document", { documentId: "d1" }],
     ["list_tasks", {}],

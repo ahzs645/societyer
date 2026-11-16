@@ -11,6 +11,7 @@
  * convex-test oracle.
  */
 
+import { directoryPersonForSociety } from "./peopleDirectory";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { isTimedTranscriptProvider, type TimedTranscriptProvider } from "../transcriptFormats";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
@@ -381,7 +382,8 @@ export async function assignSpeakerPortable(
   if (!args.label.trim() || args.label.length > 200 || (args.name?.length ?? 0) > 200) {
     throw new Error("Speaker labels and names must be 1–200 characters.");
   }
-  if (args.personId) await getOwned(ctx, "peopleDirectory", args.personId, args.societyId);
+  // Directory people can be shared records with no workspace id (local and desktop).
+  if (args.personId) await directoryPersonForSociety(ctx, args.personId, args.societyId);
   const speakers: TranscriptSpeaker[] = row.speakers ?? [];
   const previous = speakers.find((speaker) => speaker.label === args.label);
   const name = args.name === undefined ? previous?.name : normalizeTranscriptText(args.name);

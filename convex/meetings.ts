@@ -6,21 +6,34 @@ import { meetingExtensionFields, meetingNoteActionItemValidator } from "./valida
 import {
   createTaskFromNoteActionPortable,
   discardNotesDraftPortable,
+  notesSkillContextPortable,
   saveNotesDraftPortable,
   setNoteActionItemsPortable,
 } from "../shared/functions/meetingNotes";
 import {
   heuristicNotesDraft,
   isNotesDraftTemplateId,
-  mergeNotesDrafts,
-  NOTES_DRAFT_JSON_SCHEMA,
   notesDraftTranscriptFromRow,
-  parseNotesDraft,
-  planNotesDraftRequests,
   type NotesDraft,
   type NotesDraftInput,
 } from "../shared/ai/notesDraft";
-import { completeStructuredJson, endpointLabel, resolveMinutesEndpoint } from "./providers/llm";
+import { completeStructuredJson, endpointLabel, resolveMinutesEndpoint, ToolsUnsupportedError, toolStep, type MinutesModelEndpoint } from "./providers/llm";
+import {
+  applySkillCalls,
+  createMeetingNotesSkillSession,
+  MEETING_NOTES_CALLS_JSON_SCHEMA,
+  meetingNotesJsonModeInstruction,
+  mergeSkillResults,
+  planMeetingNotesSkill,
+  runMeetingNotesSkillLoop,
+  skillCallsFromText,
+  type MeetingNotesSkillContext,
+  type MeetingNotesSkillInput,
+  type MeetingNotesSkillResult,
+  type SkillAttendee,
+  type SkillSpeakerSuggestion,
+} from "../shared/ai/meetingNotesSkill";
+import type { ChatMessage } from "../shared/ai/minutesDraft";
 import { aiProviderErrorMessage } from "../shared/ai/providerErrors";
 import type { JsonSchemaFormat } from "../shared/ai/openAiCompatible";
 import {
@@ -228,9 +241,19 @@ export const saveNotesDraft = authorizedMutation("meetings:saveNotesDraft", muta
     generatedBy: v.string(),
     usedNotes: v.boolean(),
     usedTranscript: v.boolean(),
+    // Untrusted, like draft: checked and bounded by the handler.
+    speakers: v.optional(v.any()),
+    attendees: v.optional(v.any()),
   },
   returns: v.any(),
   handler: async (ctx, args) => saveNotesDraftPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/** What the notes skill may know: people with ids and roles, goals, committees, speakers. */
+export const notesSkillContext = authorizedQuery("meetings:notesSkillContext", query)({
+  args: { id: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, args) => notesSkillContextPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const discardNotesDraft = authorizedMutation("meetings:discardNotesDraft", mutation)({
@@ -286,21 +309,17 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
     };
     const endpoint = await resolveMinutesEndpoint(ctx, String(meeting.societyId));
     let draft: NotesDraft = heuristicNotesDraft(input);
+    let speakers: SkillSpeakerSuggestion[] = [];
+    let attendees: SkillAttendee[] = [];
     let generatedBy = "Rule-based (no AI model connected)";
     if (endpoint) {
       try {
-        const plan = planNotesDraftRequests(input, HOSTED_NOTES_DRAFT_BUDGET_CHARS);
-        const parts: NotesDraft[] = [];
-        for (const request of plan.requests) {
-          const text = await completeStructuredJson(endpoint, {
-            messages: request.messages,
-            jsonSchema: NOTES_DRAFT_JSON_SCHEMA as unknown as JsonSchemaFormat,
-            maxTokens: 2500,
-            label: "notes draft",
-          });
-          parts.push(parseNotesDraft(text, heuristicNotesDraft(request.input)));
-        }
-        draft = mergeNotesDrafts(parts);
+        // The meeting notes skill: the model calls tools, checked against the organization's people.
+        const context = (await ctx.runQuery(api.meetings.notesSkillContext, { id })) as MeetingNotesSkillContext;
+        const result = await runNotesSkillHosted(endpoint, { template, notes, transcript, context });
+        draft = { ...result.draft, summary: result.draft.summary || draft.summary };
+        speakers = result.speakers;
+        attendees = result.attendees;
         generatedBy = endpointLabel(endpoint);
       } catch (error) {
         throw new Error(`${aiProviderErrorMessage(error)} Nothing was changed.`);
@@ -310,9 +329,35 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
       id,
       template,
       draft,
+      speakers,
+      attendees,
       generatedBy,
       usedNotes: Boolean(notes.trim()),
       usedTranscript: Boolean(transcript.trim()),
     });
   },
 });
+
+/**
+ * The skill against a hosted model: a tool loop per transcript part, or the
+ * whole set of calls as JSON when the provider refuses tools.
+ */
+async function runNotesSkillHosted(endpoint: MinutesModelEndpoint, input: MeetingNotesSkillInput): Promise<MeetingNotesSkillResult> {
+  const results: MeetingNotesSkillResult[] = [];
+  for (const messages of planMeetingNotesSkill(input, HOSTED_NOTES_DRAFT_BUDGET_CHARS)) {
+    const session = createMeetingNotesSkillSession(input.context, input.template);
+    try {
+      results.push(await runMeetingNotesSkillLoop(toolStep(endpoint), messages, session));
+    } catch (error) {
+      if (!(error instanceof ToolsUnsupportedError)) throw error;
+      const text = await completeStructuredJson(endpoint, {
+        messages: [...messages, { role: "system", content: meetingNotesJsonModeInstruction() }] as ChatMessage[],
+        jsonSchema: MEETING_NOTES_CALLS_JSON_SCHEMA as unknown as JsonSchemaFormat,
+        maxTokens: 3000,
+        label: "notes draft",
+      });
+      results.push(applySkillCalls(session, skillCallsFromText(text)));
+    }
+  }
+  return mergeSkillResults(results);
+}

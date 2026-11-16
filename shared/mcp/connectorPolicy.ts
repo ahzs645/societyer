@@ -36,6 +36,7 @@ const SCOPE_TEXT: Record<string, { label: string; description: string }> = {
   "filings:read": { label: "Filings", description: "Filing due dates and status, in the snapshot." },
   "commitments:read": { label: "Commitments", description: "Recurring obligations from contracts, grants and policies." },
   "tasks:write": { label: "Create tasks", description: "Propose up to eight tasks per call. Nothing is added until someone approves the draft in AI agents → AI tool drafts." },
+  "meetings:write": { label: "Meeting notes", description: "Propose action items for a meeting and names for its transcript speakers. Nothing changes until someone approves the draft in AI agents → AI tool drafts." },
 };
 
 function unique(values: readonly string[]): string[] {

@@ -141,3 +141,65 @@ test("notes tab on a phone keeps controls inside the screen", async ({ page }) =
   expect(overflow).toBeLessThanOrEqual(0);
   if (SHOTS) await page.getByRole("region", { name: "Action items" }).screenshot({ path: `${SHOTS}/notes-phone.png` });
 });
+
+test("AI notes suggestions: name diarized speakers, add attendees, see the people the AI knows", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await seed(page);
+  const meetingId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    const societyId = getStoredSocietyId();
+    const people = await client.query("peopleDirectory:list", { societyId }) as any[];
+    const sam = people.find((person) => person.fullName === "Sam Rivera");
+    const id = await client.mutation("meetings:create", {
+      societyId, type: "Working", title: "Partner call", scheduledAt: "2026-11-12T17:00:00.000Z",
+      electronic: true, status: "Held", attendeeIds: [], recordKind: "notes", workingNotes: "- Sam to send the budget",
+    });
+    await client.mutation("transcripts:importTimed", {
+      societyId, meetingId: id, provider: "vtt", durationSeconds: 20,
+      segments: [
+        { speaker: "SPEAKER_00", text: "Hi, Sam Rivera here, I'll send the budget.", startSec: 0, endSec: 5 },
+        { speaker: "SPEAKER_01", text: "Thanks Sam.", startSec: 6, endSec: 8 },
+      ],
+    });
+    await client.mutation("meetings:saveNotesDraft", {
+      id, template: "external_call",
+      draft: { summary: "Budget follow-up.", actionItems: [{ text: "Send the budget", assignee: "Sam Rivera", assigneePersonId: sam._id }] },
+      speakers: [{ label: "SPEAKER_00", name: "Sam Rivera", personId: sam._id, evidence: "Sam Rivera here" }],
+      attendees: [{ name: "Sam Rivera", personId: sam._id }],
+      generatedBy: "On-device: test model", usedNotes: true, usedTranscript: true,
+    });
+    return id;
+  });
+  await page.goto(`/app/meetings/${meetingId}?tab=notes`);
+  const aiNotes = page.getByRole("region", { name: "AI notes" });
+  await expect(aiNotes.getByText("Budget follow-up.")).toBeVisible({ timeout: 60_000 });
+
+  // The suggested owner is linked to the person in the directory.
+  const actions = page.getByRole("region", { name: "Action items" });
+  await expect(actions.getByRole("listitem").first().getByRole("combobox", { name: "Who" })).toHaveValue("Sam Rivera");
+
+  const speakers = aiNotes.getByRole("region", { name: "Who's speaking" });
+  await expect(speakers.getByText("“Sam Rivera here”")).toBeVisible();
+  await speakers.getByRole("button", { name: "Name speaker" }).click();
+  await expect(speakers.getByText("Named")).toBeVisible();
+
+  const tookPart = aiNotes.getByRole("region", { name: "Took part" });
+  await tookPart.getByRole("button", { name: "Add to attendees" }).click();
+  await expect(tookPart.getByRole("button", { name: /Add/ })).toHaveCount(0);
+
+  await page.getByText("People the AI knows").click();
+  const roster = page.locator(".notes-roster");
+  await expect(roster.getByText("Sam Rivera")).toBeVisible();
+  await expect(roster.getByText("attending")).toBeVisible();
+  if (SHOTS) await aiNotes.screenshot({ path: `${SHOTS}/ai-notes-suggestions.png` });
+
+  const named = await page.evaluate(async (id) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const transcript = await client.query("transcripts:getByMeeting", { meetingId: id }) as any;
+    return transcript.speakers;
+  }, meetingId);
+  expect(named.some((speaker: any) => speaker.label === "SPEAKER_00" && speaker.name === "Sam Rivera" && speaker.personId)).toBe(true);
+  expect(errors).toEqual([]);
+});

@@ -50,6 +50,62 @@ when an action was agreed.
 - The transcript is read only when the person may read it
   (`transcripts:getByMeeting`, decision A1), with in-camera sessions withheld.
 
+## The meeting notes skill (how the AI writes notes)
+
+`shared/ai/meetingNotesSkill.ts`. "Draft notes" doesn't ask the model for one
+JSON blob. It gives the model **primitives with schemas** and the **context**
+to use them, and the model calls tools:
+
+| Tool | What it records |
+| --- | --- |
+| `write_summary` | Summary and sections (per template) |
+| `add_decision` / `add_open_question` | One decision or open question per call |
+| `add_action_item` | Text, `owner_person_id` / `owner_name` / `owner_speaker_label`, `due_date`, `at_seconds`, `goal_id`, `committee_id` |
+| `identify_speaker` | Who a diarization label (`SPEAKER_01`) is, with the quoted evidence |
+| `mark_attendee` | Someone who took part |
+| `finish` | Done |
+
+**Context** (`meetings:notesSkillContext`): the organization's people with
+directory ids, aliases and roles (directors and officers, committee members
+and roles, staff, active volunteers, members, attendees first, up to 150), open
+goals, active committees, and the transcript's speaker labels with sample
+lines. Each register is included only if the caller (and, for a connector
+token, its scopes) may read it, so the context never reveals more than the
+person could read register by register.
+
+**Every call is checked** (`createMeetingNotesSkillSession`): ids must be in the
+context, dates must be real `YYYY-MM-DD`, speaker labels must exist, speaker
+identifications need evidence. A refused call gets an error answer the model
+can correct. Names are matched to people by name, alias or a unique first
+name. An action owned by an unidentified speaker label takes that person once
+the label is identified. Saving (`meetings:saveNotesDraft`) checks every id
+again against the workspace.
+
+**Runs on any model**: a tool loop over OpenAI-compatible and Anthropic
+endpoints (hosted), the on-device client (including Claude Code / Codex, which
+run their own loop through `onToolCall`), and JSON mode (`{"calls": [...]}`)
+for models that refuse tools.
+
+**Suggestions are applied by people**: the AI notes card lists **Who's
+speaking** (each label, the person, the quoted evidence; **Name speaker** uses
+`transcripts:assignSpeaker`) and **Took part** (**Add to attendees**).
+**People the AI knows** shows the roster the model gets.
+
+**Agent tools** (`shared/agentTools/tools/meetingNotes.ts`) expose the same
+primitives to the in-app assistant, WebMCP and the MCP connector:
+`get_meeting_notes_context`, `add_meeting_action_items`,
+`name_transcript_speakers`. Remote connectors only propose drafts a person
+approves; connector tokens have no people-register scope, so they get goals and
+speakers but no roster.
+
+**Prompt evaluation**: `scripts/fixtures/meetingNotesSkillFixture.ts` holds two
+meetings with traps (an absent director, an outside guest, two people called
+Sam, relative dates, a role two people share, a decision from last week). The
+prompt was run by a larger and a smaller model given only the prompt, tools and
+context; their calls are kept in `scripts/fixtures/meeting-notes-skill-replays/`
+and checked by `npm run test:meeting-notes-skill` (all expectations met: owners,
+due dates, goals, speakers, and no over-assignment).
+
 ## Action items (Notes tab)
 
 `meetings.noteActionItems`, `shared/meetingNoteActions.ts`. Suggested items
@@ -97,5 +153,6 @@ include recordings.
 - `npm run test:timed-transcript` — transcript formats.
 - `npm run test:meeting-record-kind` — working meetings.
 - `npm run test:meeting-notes-draft` — AI notes, action items, tasks, hosted permissions.
+- `npm run test:meeting-notes-skill` — the skill: tools, context, checks, tool loop, adapters, replays.
 - `npm run test:meeting-recordings` — recording storage choice, local and hosted.
 - `npm run test:meeting-notes-ui`, `npm run test:meeting-recordings-ui` — Playwright on the local runtime.

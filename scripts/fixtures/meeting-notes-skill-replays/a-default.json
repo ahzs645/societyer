@@ -1,0 +1,52 @@
+{"calls": [
+  {"tool": "write_summary", "arguments": {
+    "summary": "Operations check-in on the second site, the Foundation budget, the hamper drive, zoning and the walk-in freezer. The meeting agreed to go with the Elm Street site, and the City confirmed it is zoned for warehouse use. Who signs the lease is still open, and so is what the freezer warranty covers. Dana sent regrets.",
+    "sections": [
+      {"heading": "Elm Street site", "points": [
+        "Three site options were reviewed, and Elm Street is the only one with a loading dock.",
+        "Marcus said the rent works if the Foundation grant comes through.",
+        "The meeting agreed to go with Elm Street, and Priya will draft the lease letter by December 1."
+      ]},
+      {"heading": "Foundation budget", "points": [
+        "Marcus has the revised budget numbers.",
+        "The Foundation wants them by next Friday, and Marcus will send them before then."
+      ]},
+      {"heading": "Hamper drive", "points": [
+        "The hamper drive is short about ten volunteers.",
+        "Li will put out a call and recruit volunteers over the next two weeks.",
+        "Li reported that Sam from the Events Committee will run the raffle again this year."
+      ]},
+      {"heading": "Zoning", "points": [
+        "Gabe from the City's parks department confirmed Elm Street is zoned for warehouse use.",
+        "Gabe will email the zoning letter this week."
+      ]},
+      {"heading": "Lease signing", "points": [
+        "It is unsettled whether the board or the executive director signs the lease.",
+        "Marcus thinks it is a board call and suggested asking Jo-Anne to check the bylaws."
+      ]},
+      {"heading": "Walk-in freezer", "points": [
+        "The walk-in freezer warranty expires soon, and someone needs to check what it covers.",
+        "The switch to the new freezer supplier, Northern Cold, was approved last month."
+      ]}
+    ]
+  }},
+  {"tool": "add_decision", "arguments": {"text": "Go with the Elm Street site."}},
+  {"tool": "add_open_question", "arguments": {"text": "Does the board need to sign the Elm Street lease, or can the executive director sign it?"}},
+  {"tool": "add_open_question", "arguments": {"text": "What does the walk-in freezer warranty cover before it expires?"}},
+  {"tool": "add_action_item", "arguments": {"text": "Draft the Elm Street lease letter", "owner_person_id": "pd_priya", "due_date": "2026-12-01", "at_seconds": 40, "goal_id": "goal_site"}},
+  {"tool": "add_action_item", "arguments": {"text": "Send the revised budget to the Foundation", "owner_person_id": "pd_marcus", "due_date": "2026-11-20", "at_seconds": 70, "goal_id": "goal_grants"}},
+  {"tool": "add_action_item", "arguments": {"text": "Put out a call and recruit about ten volunteers for the hamper drive", "owner_person_id": "pd_li", "due_date": "2026-11-26", "at_seconds": 104}},
+  {"tool": "add_action_item", "arguments": {"text": "Run the hamper drive raffle again this year", "owner_person_id": "pd_samuel", "at_seconds": 130, "committee_id": "com_events"}},
+  {"tool": "add_action_item", "arguments": {"text": "Email the Elm Street zoning letter", "owner_name": "Gabe", "due_date": "2026-11-13", "at_seconds": 146, "goal_id": "goal_site"}},
+  {"tool": "add_action_item", "arguments": {"text": "Ask Jo-Anne to check the bylaws on whether the board or the executive director signs the lease", "at_seconds": 188}},
+  {"tool": "add_action_item", "arguments": {"text": "Check what the walk-in freezer warranty covers before it expires", "at_seconds": 200}},
+  {"tool": "identify_speaker", "arguments": {"speaker_label": "SPEAKER_00", "person_id": "pd_priya", "evidence": "\"Hi everyone, Priya here\""}},
+  {"tool": "identify_speaker", "arguments": {"speaker_label": "SPEAKER_01", "person_id": "pd_marcus", "evidence": "Asked \"Marcus, can you walk us through...\" and answered \"Sure. As treasurer I've got the revised numbers\""}},
+  {"tool": "identify_speaker", "arguments": {"speaker_label": "SPEAKER_02", "person_id": "pd_li", "evidence": "\"From the volunteer side we're short about ten people\" (Li is the only volunteer coordinator)"}},
+  {"tool": "identify_speaker", "arguments": {"speaker_label": "SPEAKER_03", "name": "Gabe", "evidence": "\"Gabe from the City's parks department\""}},
+  {"tool": "mark_attendee", "arguments": {"person_id": "pd_priya"}},
+  {"tool": "mark_attendee", "arguments": {"person_id": "pd_marcus"}},
+  {"tool": "mark_attendee", "arguments": {"person_id": "pd_li"}},
+  {"tool": "mark_attendee", "arguments": {"name": "Gabe"}},
+  {"tool": "finish", "arguments": {}}
+]}

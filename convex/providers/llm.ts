@@ -23,7 +23,10 @@ import {
 import {
   chatCompletionBody,
   chatCompletionContent,
+  chatCompletionToolCalls,
   isResponseFormatRejection,
+  isToolsRejection,
+  type ChatWireMessage,
   type JsonMode,
   type JsonSchemaFormat,
 } from "../../shared/ai/openAiCompatible";
@@ -32,6 +35,7 @@ import { normalizeAiBaseUrl } from "../../shared/ai/endpointPolicy";
 import { isHostedAiUrlAllowed } from "../lib/aiEndpointPolicy";
 import { fetchConvexOutbound } from "../lib/outboundUrlPolicy";
 import { providers } from "./env";
+import type { SkillStep } from "../../shared/ai/meetingNotesSkill";
 
 export type { MinuteDraft } from "../../shared/ai/minutesDraft";
 
@@ -221,6 +225,79 @@ async function anthropicJson(endpoint: Extract<MinutesModelEndpoint, { kind: "an
 /** Sends one structured request to the endpoint and returns the reply text. Throws on any provider failure. */
 export async function completeStructuredJson(endpoint: MinutesModelEndpoint, request: StructuredJsonRequest): Promise<string> {
   return endpoint.kind === "anthropic" ? anthropicJson(endpoint, request) : openAiCompatibleJson(endpoint, request);
+}
+
+/** Thrown when an endpoint refuses `tools`; the caller falls back to JSON-mode calls. */
+export class ToolsUnsupportedError extends Error {}
+
+/**
+ * One tool-calling turn against the endpoint (OpenAI-compatible or Anthropic),
+ * as a SkillStep for shared/ai/meetingNotesSkill.ts runMeetingNotesSkillLoop.
+ */
+export function toolStep(endpoint: MinutesModelEndpoint, maxTokens = 2500): SkillStep {
+  return async (messages, tools) => {
+    if (endpoint.kind === "anthropic") {
+      const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
+      const response = await postJson(endpoint, { "x-api-key": endpoint.apiKey, "anthropic-version": "2023-06-01" }, {
+        model: endpoint.model,
+        max_tokens: maxTokens,
+        temperature: 0.2,
+        system,
+        tools: tools.map((tool) => ({ name: tool.function.name, description: tool.function.description, input_schema: tool.function.parameters })),
+        messages: anthropicMessages(messages),
+      });
+      if (!response.ok) {
+        if (isToolsRejection(response.status, response.text)) throw new ToolsUnsupportedError("tools refused");
+        throw new ProviderStatusError(response.status);
+      }
+      const blocks = (JSON.parse(response.text) as { content?: unknown }).content;
+      const list = Array.isArray(blocks) ? (blocks as Array<Record<string, unknown>>) : [];
+      return {
+        text: list.filter((block) => block.type === "text").map((block) => String(block.text ?? "")).join("\n"),
+        toolCalls: list.filter((block) => block.type === "tool_use").map((block) => ({ id: String(block.id ?? ""), name: String(block.name ?? ""), arguments: block.input ?? {} })),
+      };
+    }
+    const response = await postJson(endpoint, { authorization: `Bearer ${endpoint.apiKey}` }, chatCompletionBody({ model: endpoint.model, messages, tools, maxTokens }));
+    if (!response.ok) {
+      if (isToolsRejection(response.status, response.text)) throw new ToolsUnsupportedError("tools refused");
+      throw new ProviderStatusError(response.status);
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(response.text);
+    } catch {
+      throw new Error("The AI provider returned an unreadable reply.");
+    }
+    return { text: chatCompletionContent(payload) ?? "", toolCalls: chatCompletionToolCalls(payload) };
+  };
+}
+
+/** OpenAI-shaped turns as Anthropic messages: tool calls become tool_use blocks, results tool_result blocks. */
+function anthropicMessages(messages: readonly ChatWireMessage[]) {
+  const out: Array<{ role: "user" | "assistant"; content: unknown }> = [];
+  for (const message of messages) {
+    if (message.role === "system") continue;
+    if (message.role === "tool") {
+      const block = { type: "tool_result", tool_use_id: message.tool_call_id, content: message.content };
+      const last = out[out.length - 1];
+      if (last?.role === "user" && Array.isArray(last.content)) (last.content as unknown[]).push(block);
+      else out.push({ role: "user", content: [block] });
+      continue;
+    }
+    if (message.role === "assistant" && "tool_calls" in message) {
+      const content: unknown[] = [];
+      if (message.content) content.push({ type: "text", text: message.content });
+      for (const call of message.tool_calls) {
+        let input: unknown = {};
+        try { input = JSON.parse(call.function.arguments || "{}"); } catch { input = {}; }
+        content.push({ type: "tool_use", id: call.id, name: call.function.name, input });
+      }
+      out.push({ role: "assistant", content });
+      continue;
+    }
+    out.push({ role: message.role === "assistant" ? "assistant" : "user", content: message.content });
+  }
+  return out;
 }
 
 function minutesDraftRequest(input: MinutesDraftInput): StructuredJsonRequest {

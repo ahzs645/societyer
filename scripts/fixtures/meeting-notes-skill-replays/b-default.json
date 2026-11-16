@@ -1,0 +1,44 @@
+{"calls": [
+  {"tool": "write_summary", "arguments": {
+    "summary": "Program check-in between Edwin (Executive Director) and a program coordinator. The youth workshop is behind after the facilitator cancelled, so it was moved to January, and the coordinator will finish a new workshop outline by Friday. The Tuesday drop-in cancellation from last week was confirmed.",
+    "sections": [
+      {"heading": "Updates", "points": [
+        "The youth workshop is slipping behind schedule.",
+        "The Tuesday drop-in was already cancelled last week, and that is done."
+      ]},
+      {"heading": "Challenges and blockers", "points": [
+        "The youth workshop facilitator cancelled.",
+        "Gym booking was in the notes but did not come up in the discussion."
+      ]},
+      {"heading": "Feedback", "points": [
+        "Edwin said the coordinator is doing really well in the new role."
+      ]},
+      {"heading": "Goals and development", "points": [
+        "The youth workshop moves to January rather than being rushed.",
+        "A new workshop outline is due this Friday.",
+        "Finance will be asked to pay the January facilitator."
+      ]}
+    ]
+  }},
+  {"tool": "add_decision", "arguments": {"text": "Move the youth workshop to January."}},
+  {"tool": "add_open_question", "arguments": {"text": "Gym booking was listed in the notes but not discussed; its status is unresolved."}},
+  {"tool": "add_action_item", "arguments": {
+    "text": "Finish the new youth workshop outline",
+    "owner_speaker_label": "SPEAKER_00",
+    "due_date": "2026-11-13",
+    "at_seconds": 35,
+    "goal_id": "goal_youth"
+  }},
+  {"tool": "add_action_item", "arguments": {
+    "text": "Ask Carla in finance to cut the cheque for the January facilitator",
+    "at_seconds": 62,
+    "goal_id": "goal_youth"
+  }},
+  {"tool": "identify_speaker", "arguments": {
+    "speaker_label": "SPEAKER_01",
+    "person_id": "pd_ed",
+    "evidence": "\"As ED I'd rather we move it than rush it.\" Edwin Park is the only Executive Director."
+  }},
+  {"tool": "mark_attendee", "arguments": {"person_id": "pd_ed"}},
+  {"tool": "finish", "arguments": {}}
+]}

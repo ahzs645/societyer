@@ -4,7 +4,7 @@
  * desktop app (the same split as minutes drafting).
  */
 import { useCallback } from "react";
-import { useAction } from "convex/react";
+import { useAction, useConvex } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { isLocalDataRuntime } from "../../lib/staticRuntime";
@@ -14,7 +14,8 @@ import { deviceAiModelLabel } from "../../lib/localAi/models";
 import { DeviceAiError } from "../../lib/localAi/transport";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { notesDraftTranscriptFromRow, type NotesDraftTemplateId } from "../../../shared/ai/notesDraft";
-import { draftNotesOnDevice } from "./localNotesDraft";
+import { draftNotesWithSkillOnDevice } from "./localNotesDraft";
+import type { MeetingNotesSkillContext } from "../../../shared/ai/meetingNotesSkill";
 import { beginDeviceDraft, DRAFT_CANCELLED } from "./deviceDraftProgress";
 
 export const NOTES_DRAFT_UNAVAILABLE =
@@ -31,6 +32,7 @@ export type NotesDraftMeeting = {
 export function useNotesDraft(canWrite: boolean) {
   const local = isLocalDataRuntime();
   const hosted = useAction(api.meetings.generateNotesDraft);
+  const convex = useConvex();
   const save = usePermissionedMutation(api.meetings.saveNotesDraft, canWrite);
   const deviceAi = useDeviceAi("minutes");
   const model = deviceAiModelLabel(deviceAi.config.kind, deviceAi.config.model);
@@ -42,16 +44,11 @@ export function useNotesDraft(canWrite: boolean) {
       const transcript = notesDraftTranscriptFromRow(input.transcriptRow);
       const progress = beginDeviceDraft(input.meeting._id);
       try {
-        const result = await draftNotesOnDevice({
+        // The meeting notes skill: tools plus the organization's people, goals and committees.
+        const context = (await convex.query(api.meetings.notesSkillContext, { id: input.meeting._id })) as MeetingNotesSkillContext;
+        const result = await draftNotesWithSkillOnDevice({
           client: deviceAiClient(),
-          draft: {
-            meetingTitle: input.meeting.title,
-            meetingDate: String(input.meeting.scheduledAt ?? "").slice(0, 10) || undefined,
-            template: input.template,
-            notes: input.notes,
-            transcript,
-            attendees: input.meeting.attendeeIds?.slice(0, 50),
-          },
+          skill: { template: input.template, notes: input.notes, transcript, context },
           chunkChars: deviceAi.config.minutesChunkChars,
           signal: progress.signal,
           onProgress: progress.progress,
@@ -61,6 +58,8 @@ export function useNotesDraft(canWrite: boolean) {
           id: input.meeting._id,
           template: input.template,
           draft: result.draft,
+          speakers: result.speakers,
+          attendees: result.attendees,
           generatedBy: `On-device: ${model}`,
           usedNotes: Boolean(input.notes.trim()),
           usedTranscript: Boolean(transcript.trim()),
@@ -69,7 +68,7 @@ export function useNotesDraft(canWrite: boolean) {
         progress.end();
       }
     },
-    [local, hosted, save, deviceAi.ready, deviceAi.reason, deviceAi.config.minutesChunkChars, model],
+    [local, hosted, save, convex, deviceAi.ready, deviceAi.reason, deviceAi.config.minutesChunkChars, model],
   );
 
   return {

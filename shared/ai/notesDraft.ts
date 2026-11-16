@@ -81,7 +81,14 @@ export type NotesDraftActionItem = {
   dueDate?: string;
   /** Seconds into the recording where the action was agreed. */
   atSec?: number;
+  /** From the tool-calling skill (shared/ai/meetingNotesSkill.ts): ids it checked against the context. */
+  assigneePersonId?: string;
+  goalId?: string;
+  committeeId?: string;
 };
+
+const RECORD_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const recordId = (value: unknown) => (typeof value === "string" && RECORD_ID.test(value) ? value : undefined);
 
 export type NotesDraft = {
   template: NotesDraftTemplateId;
@@ -271,11 +278,17 @@ function normalizeActionItem(value: unknown): NotesDraftActionItem | undefined {
   const atSec = typeof row?.atSec === "number" && Number.isFinite(row.atSec) && row.atSec >= 0 && row.atSec <= MAX_REF_SEC
     ? Math.round(row.atSec * 10) / 10
     : undefined;
+  const assigneePersonId = recordId(row?.assigneePersonId);
+  const goalId = recordId(row?.goalId);
+  const committeeId = recordId(row?.committeeId);
   return {
     text,
     ...(assignee ? { assignee } : {}),
     ...(isIsoDate(row?.dueDate) ? { dueDate: row!.dueDate as string } : {}),
     ...(atSec !== undefined ? { atSec } : {}),
+    ...(assigneePersonId ? { assigneePersonId } : {}),
+    ...(goalId ? { goalId } : {}),
+    ...(committeeId ? { committeeId } : {}),
   };
 }
 

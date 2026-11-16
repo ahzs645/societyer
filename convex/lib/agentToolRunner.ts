@@ -25,6 +25,7 @@ import * as deadlines from "../../shared/functions/deadlines";
 import * as documents from "../../shared/functions/documents";
 import * as filings from "../../shared/functions/filings";
 import * as meetings from "../../shared/functions/meetings";
+import * as meetingNotes from "../../shared/functions/meetingNotes";
 import * as minutes from "../../shared/functions/minutes";
 import * as tasks from "../../shared/functions/tasks";
 import * as transcripts from "../../shared/functions/transcripts";
@@ -48,6 +49,10 @@ export const AGENT_TOOL_FUNCTIONS: readonly PortableFunctionDef[] = [
   definePortableQuery({ name: "tasks:list", handler: tasks.tasksList }),
   definePortableQuery({ name: "commitments:list", handler: commitments.listPortable }),
   definePortableMutation({ name: "tasks:create", handler: tasks.taskCreate }),
+  // Meeting notes tools (shared/agentTools/tools/meetingNotes.ts).
+  definePortableQuery({ name: "meetings:notesSkillContext", handler: meetingNotes.notesSkillContextPortable }),
+  definePortableMutation({ name: "meetings:setNoteActionItems", handler: meetingNotes.setNoteActionItemsPortable }),
+  definePortableMutation({ name: "transcripts:assignSpeaker", handler: transcripts.assignSpeakerPortable }),
 ].map((definition) => ({ ...definition, applicationPolicy: true }));
 
 export type GrantDenied = { ok: false; status: 401 | 403; error: string; message: string };

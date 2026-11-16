@@ -5,7 +5,7 @@
  * card below. The person's own notes are never changed, except when they
  * choose "Add to my notes".
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Copy, NotebookPen, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -23,6 +23,8 @@ import {
 } from "../../../../shared/ai/notesDraft";
 import { isDraftCancelled, useDeviceDraftProgress, deviceDraftLabel } from "../deviceDraftProgress";
 import { useNotesDraft, type NotesDraftMeeting } from "../useNotesDraft";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import { NotesDraftSuggestions, SkillRosterDisclosure, type AttendeeSuggestion, type SpeakerSuggestion } from "./NotesDraftSuggestions";
 import { DEVICE_AI_SETTINGS_HREF } from "../../../lib/localAi/useDeviceAi";
 
 export type StoredNotesDraft = {
@@ -35,6 +37,8 @@ export type StoredNotesDraft = {
   generatedBy: string;
   usedNotes: boolean;
   usedTranscript: boolean;
+  speakerSuggestions?: SpeakerSuggestion[];
+  attendeeSuggestions?: AttendeeSuggestion[];
 };
 
 export function MeetingNotesDraftCard({
@@ -48,7 +52,7 @@ export function MeetingNotesDraftCard({
   flushNotes,
   onAddToNotes,
 }: {
-  meeting: NotesDraftMeeting;
+  meeting: NotesDraftMeeting & { societyId: Id<"societies"> };
   draft: StoredNotesDraft | undefined;
   /** The notes as currently typed. */
   notes: string;
@@ -161,6 +165,18 @@ export function MeetingNotesDraftCard({
             canWrite={canWrite}
             onAddToNotes={() => onAddToNotes(markdown)}
             onCopy={() => { void copy(); }}
+            suggestions={
+              <NotesDraftSuggestions
+                societyId={meeting.societyId}
+                meetingId={meeting._id}
+                speakers={draft.speakerSuggestions ?? []}
+                attendees={draft.attendeeSuggestions ?? []}
+                transcript={transcriptRow as any}
+                currentAttendees={meeting.attendeeIds ?? []}
+                canWrite={canWrite}
+                canNameSpeakers={canReadTranscript}
+              />
+            }
             onDiscard={async () => {
               const ok = await confirm({
                 title: "Discard the AI notes?",
@@ -172,6 +188,7 @@ export function MeetingNotesDraftCard({
             }}
           />
         )}
+        {canWrite && <SkillRosterDisclosure meetingId={meeting._id} />}
       </div>
     </section>
   );
@@ -183,11 +200,13 @@ function NotesDraftView({
   onAddToNotes,
   onCopy,
   onDiscard,
+  suggestions,
 }: {
   draft: StoredNotesDraft;
   canWrite: boolean;
   onAddToNotes: () => void;
   onCopy: () => void;
+  suggestions?: ReactNode;
   onDiscard: () => Promise<void>;
 }) {
   return (
@@ -198,6 +217,7 @@ function NotesDraftView({
       ))}
       <DraftList heading="Decisions" items={draft.decisions} />
       <DraftList heading="Open questions" items={draft.openQuestions} />
+      {suggestions}
       <p className="meeting-ai-notes__meta">
         {notesDraftTemplate(draft.template).label} · drafted {formatDateTime(draft.generatedAtISO)} by {draft.generatedBy}
         {" · from "}

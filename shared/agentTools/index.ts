@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { createGovernanceTasks, getGovernanceSnapshot, listCommitments, listDeadlines, listTasks, openGovernanceView } from "./tools/governance";
 import { getMeeting, getTranscript, listMeetings } from "./tools/meetings";
+import { addMeetingActionItems, getMeetingNotesContext, nameTranscriptSpeakers } from "./tools/meetingNotes";
 import { getDocument, searchDocuments } from "./tools/documents";
 import {
   AGENT_TOOL_DRAFT_OUTPUT,
@@ -27,6 +28,9 @@ export const AGENT_TOOLS: readonly AgentTool[] = Object.freeze([
   listMeetings,
   getMeeting,
   getTranscript,
+  getMeetingNotesContext,
+  addMeetingActionItems,
+  nameTranscriptSpeakers,
   searchDocuments,
   getDocument,
   listTasks,

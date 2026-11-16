@@ -57,6 +57,9 @@ export const meetingNotesDraftValidator = v.object({
   generatedBy: v.string(),
   usedNotes: v.boolean(),
   usedTranscript: v.boolean(),
+  // The tool-calling skill's suggestions, applied only when someone chooses to.
+  speakerSuggestions: v.optional(v.array(v.object({ label: v.string(), name: v.string(), personId: v.optional(v.id("peopleDirectory")), evidence: v.string() }))),
+  attendeeSuggestions: v.optional(v.array(v.object({ name: v.string(), personId: v.optional(v.id("peopleDirectory")) }))),
 });
 
 /**
