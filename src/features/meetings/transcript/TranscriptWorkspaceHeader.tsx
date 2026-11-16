@@ -4,8 +4,15 @@ import { AudioLines, Captions, CloudDownload, FolderOpen, Loader2, Sparkles, Upl
 import { Badge } from "../../../components/ui";
 import { meetingSourceBroker } from "../../../lib/meetingSourceUpload";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
-import { AttachedRecordingsPanel, formatRecordingSize } from "./AttachedRecordingsPanel";
-import { useAttachedSharePointRecording, type AttachedSharePointRecording } from "./useAttachedSharePointRecording";
+import { AttachedRecordingsPanel, formatRecordingSize, type AttachedRecordings } from "./AttachedRecordingsPanel";
+import { useAttachedWorkspaceRecording } from "./useAttachedWorkspaceRecording";
+import { useMeetingRecordingStore } from "../recordings/workspaceRecordings";
+
+const WORKSPACE_RECORDINGS_COPY = {
+  intro: "Recordings kept for this meeting under Recordings on the Overview tab. Playing one opens it in this window.",
+  empty: "No recordings are kept for this meeting yet. Add one under Recordings on the Overview tab.",
+};
+import { useAttachedSharePointRecording } from "./useAttachedSharePointRecording";
 import { ATTACHED_RECORDINGS_INTENT } from "./timedImportOffer";
 import type { RecordingOrigin, RememberedRecording } from "./useTranscriptRecording";
 import { DEVICE_AI_SETTINGS_HREF } from "../../../lib/localAi/useDeviceAi";
@@ -31,6 +38,8 @@ export type LocalTranscriptionControls = {
 
 type TranscriptWorkspaceHeaderProps = {
   meetingId: string;
+  /** The meeting's workspace: its settings decide where kept recordings come from. */
+  societyId?: string;
   provider?: string;
   recording?: OpenRecording;
   localTranscription?: LocalTranscriptionControls;
@@ -52,6 +61,7 @@ type TranscriptWorkspaceHeaderProps = {
 
 export function TranscriptWorkspaceHeader({
   meetingId,
+  societyId,
   provider,
   recording,
   localTranscription,
@@ -75,7 +85,12 @@ export function TranscriptWorkspaceHeader({
   const [attachedOpen, setAttachedOpen] = useState(false);
   // Raw recordings are restricted to meeting editors on a connected deployment
   // with the transfer broker, the same gate as Meeting source files.
-  const attachedAvailable = Boolean(meetingSourceBroker) && !isLocalDataRuntime() && canWrite;
+  // Recordings kept in workspace file storage (or on this computer in the desktop
+  // app) list through Convex instead; the workspace's settings choose which.
+  const recordingStore = useMeetingRecordingStore(societyId)?.store;
+  const workspaceStore = recordingStore === "workspace" || recordingStore === "device";
+  const sharePointAvailable = Boolean(meetingSourceBroker) && !isLocalDataRuntime() && canWrite && recordingStore !== "workspace";
+  const attachedAvailable = canWrite && (sharePointAvailable || workspaceStore);
   const onAttachedLoaded = useCallback(
     (file: File) => {
       setRecording(file, "attached");
@@ -84,7 +99,9 @@ export function TranscriptWorkspaceHeader({
     },
     [setRecording],
   );
-  const attached = useAttachedSharePointRecording(meetingId, onAttachedLoaded);
+  const sharePointAttached = useAttachedSharePointRecording(meetingId, onAttachedLoaded);
+  const workspaceAttached = useAttachedWorkspaceRecording(meetingId, canWrite && workspaceStore, onAttachedLoaded);
+  const attached: AttachedRecordings = workspaceStore ? workspaceAttached : sharePointAttached;
   useAttachedRecordingsIntent(attachedAvailable, attached, setAttachedOpen);
   const draftUnavailable = Boolean(draftUnavailableReason);
   return (
@@ -151,7 +168,7 @@ export function TranscriptWorkspaceHeader({
           </p>
         )}
         {attachedAvailable && attachedOpen && (
-          <AttachedRecordingsPanel id={attachedPanelId} attached={attached} />
+          <AttachedRecordingsPanel id={attachedPanelId} attached={attached} copy={workspaceStore ? WORKSPACE_RECORDINGS_COPY : undefined} />
         )}
         {attachedAvailable && !attachedOpen && attached.download && (
           <p className="transcript-muted transcript-toolbar__note" role="status">
@@ -197,7 +214,7 @@ export function TranscriptWorkspaceHeader({
  */
 function useAttachedRecordingsIntent(
   available: boolean,
-  attached: AttachedSharePointRecording,
+  attached: AttachedRecordings,
   setOpen: (open: boolean) => void,
 ) {
   const [searchParams, setSearchParams] = useSearchParams();

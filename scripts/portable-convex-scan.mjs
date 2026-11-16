@@ -60,6 +60,10 @@ export const LOCAL_RUNTIME_VARIANTS = new Map([
     handler: "financialHubFns.markDemoConnectionConnectedPortable",
     reason: "Local demo Wave setup; hosted implementation validates operator workspace bindings.",
   }],
+  ["meetingRecordings:settings", {
+    handler: "meetingRecordingsFns.settingsPortable",
+    reason: "Hosted adds the operator storage policy and server transcription limits; local runtimes have neither.",
+  }],
   ["paperless:recordConnectionTest", {
     handler: "paperlessFns.recordConnectionTestPortable",
     reason: "Local demo-only simulation; hosted internal mutation records verified provider results.",

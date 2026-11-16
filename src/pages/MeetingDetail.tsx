@@ -1,4 +1,5 @@
 import { ScheduleNextMeetingModal } from "../features/meetings/components/ScheduleNextMeetingModal";
+import { MeetingRecordingsCard } from "../features/meetings/recordings/MeetingRecordingsCard";
 import { isWorkingMeeting } from "../../shared/meetingBody";
 import { transcriptText } from "../../shared/transcriptModel";
 import { meetingAgendaSnapshot, meetingExpectedFields, type MeetingExpectedFields } from "../../shared/meetingConcurrency";
@@ -2565,6 +2566,15 @@ function MeetingDetailWorkspace() {
         )}
         {activeTab === "transcript" && !transcriptAccess && <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} />}
         {(activeTab === "overview" || activeTab === "minutes" || activeTab === "sources") && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} canReadTranscript={canReadTranscript} />}
+        {(activeTab === "overview" || activeTab === "sources") && (
+          <MeetingRecordingsCard
+            societyId={meeting.societyId}
+            meetingId={meeting._id}
+            canWrite={canMeetingsWrite}
+            canTranscribe={canMinutesWrite && canReadTranscript}
+            hasTranscript={Boolean(transcriptRecord && (transcriptRecord.text || transcriptRecord.segments?.length))}
+          />
+        )}
         {activeTab === "overview" && recordKind === "meeting" && (
           <MeetingRecordKindPrompt
             meetingId={meeting._id}

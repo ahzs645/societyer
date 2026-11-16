@@ -335,6 +335,71 @@
   }
 }
 
+/* ---------- Recordings kept in workspace storage ---------- */
+.meeting-recordings__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  .card__title {
+    display: inline-flex;
+    align-items: center;
+    gap: token("s-2");
+    margin-right: auto;
+  }
+}
+.meeting-recordings__body {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-2");
+  .muted {
+    margin: 0;
+  }
+}
+.meeting-recordings__progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  font-size: token("fs-sm");
+  progress {
+    flex: 1 1 160px;
+  }
+}
+.meeting-recordings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.meeting-recordings__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token("s-2");
+  padding: token("s-2") 0;
+  border-bottom: 1px solid token("border");
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+.meeting-recordings__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  strong {
+    overflow-wrap: anywhere;
+  }
+  .muted {
+    font-size: token("fs-xs");
+  }
+}
+.meeting-recordings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token("s-1");
+}
+
 /* ---------- No write-up prompt (Overview) ---------- */
 .record-kind-prompt {
   display: flex;

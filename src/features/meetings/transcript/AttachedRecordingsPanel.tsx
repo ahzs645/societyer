@@ -1,5 +1,22 @@
 import { Play, X } from "lucide-react";
-import type { AttachedSharePointRecording } from "./useAttachedSharePointRecording";
+import type { AttachedRecordingDownload } from "./useAttachedSharePointRecording";
+
+/** Recordings kept for a meeting: SharePoint (Meeting source files) or workspace file storage. */
+export type AttachedRecordings<T extends { id: string; fileName: string; size: number } = any> = {
+  recordings: T[] | null;
+  listing: boolean;
+  download: AttachedRecordingDownload | null;
+  message: string;
+  error: string;
+  refresh: () => Promise<void>;
+  play: (recording: T) => Promise<void>;
+  cancel: () => void;
+};
+
+const SHAREPOINT_COPY = {
+  intro: "Recordings attached under Meeting source files. Playing one downloads it from private meeting storage into this browser; nothing is saved to the device.",
+  empty: "No recordings are attached to this meeting yet. Attach one under Meeting source files on the Overview tab.",
+};
 import { WAVEFORM_FILE_LIMIT } from "./waveform";
 
 /** Decimal MB (KB under 1 MB), matching Meeting source files. */
@@ -11,17 +28,16 @@ export function formatRecordingSize(bytes: number) {
 export function AttachedRecordingsPanel({
   id,
   attached,
+  copy = SHAREPOINT_COPY,
 }: {
   id: string;
-  attached: AttachedSharePointRecording;
+  attached: AttachedRecordings;
+  copy?: { intro: string; empty: string };
 }) {
   const { recordings, listing, download, message, error, play, cancel } = attached;
   return (
     <div id={id} className="transcript-attached" role="region" aria-label="Attached recordings">
-      <p className="transcript-muted">
-        Recordings attached under Meeting source files. Playing one downloads it from private meeting storage
-        into this browser; nothing is saved to the device.
-      </p>
+      <p className="transcript-muted">{copy.intro}</p>
       {listing && !recordings && (
         <p className="transcript-muted" role="status">
           Loading attached recordings…
@@ -33,10 +49,7 @@ export function AttachedRecordingsPanel({
         </p>
       )}
       {recordings && !recordings.length && (
-        <p className="transcript-muted">
-          No recordings are attached to this meeting yet. Attach one under Meeting source files on the
-          Overview tab.
-        </p>
+        <p className="transcript-muted">{copy.empty}</p>
       )}
       {recordings && recordings.length > 0 && (
         <ul className="transcript-attached__list">

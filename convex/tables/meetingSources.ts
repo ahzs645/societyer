@@ -15,6 +15,21 @@ export const meetingSourceTables = {
     textChunks: v.optional(v.number()), textBytes: v.optional(v.number()), textComplete: v.optional(v.boolean()),
     jobId: v.optional(v.string()), jobStatus: v.optional(v.string()), jobStartedAt: v.optional(v.number()), jobError: v.optional(v.string()),
   }).index("by_meeting", ["meetingId"]).index("by_actor_fingerprint", ["actorId", "meetingId", "fingerprint"]),
+  // Recordings kept in workspace file storage (hosted native storage, or the
+  // desktop app's disk). SharePoint recordings stay in meetingSources.
+  meetingRecordings: defineTable({
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    fileName: v.string(),
+    size: v.number(),
+    mimeType: v.optional(v.string()),
+    // "convex" (a `_storage` id) or "local-filesystem" (a desktop file key).
+    provider: v.union(v.literal("convex"), v.literal("local-filesystem")),
+    storageKey: v.string(),
+    sha256: v.optional(v.string()),
+    uploadedByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+  }).index("by_meeting", ["meetingId"]).index("by_society", ["societyId"]),
   meetingSourceText: defineTable({ sourceId: v.id("meetingSources"), index: v.number(), text: v.string() })
     .index("by_source_index", ["sourceId", "index"]),
 };

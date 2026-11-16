@@ -11,7 +11,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm", "organizationSetup"],
   members: ["members", "memberHistory", "memberGovernance", "personHistory", "peopleDirectory", "roleHolderHistory", "registerHistory", "orgChartAssignments"],
   directors: ["directors"], employees: ["employees", "remuneration"], committees: ["committees"],
-  meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts", "meetingSources", "meetingSourceSpeech", "meetingTranscription"],
+  meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts", "meetingSources", "meetingSourceSpeech", "meetingTranscription", "meetingRecordings"],
   minutes: ["minutes", "minuteBook", "minutesReview"], agendas: ["agendas"], motions: ["motions", "motionBacklog", "motionTemplates", "writtenResolutions", "memberProposals"],
   proxies: ["proxies"], conflicts: ["conflicts"], attestations: ["attestations", "pipaTraining"], auditors: ["auditors"], courtOrders: ["courtOrders"],
   filings: ["filings", "annualFilings", "filingExports", "filingBot"],
@@ -166,6 +166,9 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (!resource) throw new Error(`Unclassified application action: ${name}.`);
   // Raw meeting sources are working material for meeting editors, including reads.
   if (name === "meetingTranscription:configure") return "settings:write";
+  // Keeping recordings at all is a workspace setting; reading it is for members.
+  if (name === "meetingRecordings:setPreference") return "settings:write";
+  if (name === "meetingRecordings:settings") return "society:read";
   if (domain === "meetingTranscription" && kind === "query") return TRANSCRIPT_READ_SCOPE;
   if (domain === "meetingSources" || domain === "meetingSourceSpeech") return "meetings:write";
   if (["society:updateModules", "society:updateComplianceSettings", "society:updateInventorySettings", "society:updateNotificationSettings"].includes(name)) return "settings:write";

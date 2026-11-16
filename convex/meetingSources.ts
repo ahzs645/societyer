@@ -8,6 +8,7 @@ import { hasPermission, requirePermissionPortable } from "../shared/functions/pe
 import { requireTranscriptReaderPortable } from "../shared/functions/minutesPrivacy";
 import { MEETING_SOURCE_CHUNK_BYTES, MEETING_SOURCE_MAX_BYTES, MEETING_TRANSCRIPT_MAX_BYTES, validateMeetingSource } from "../shared/storage/meetingSourceProtocol";
 import { workspaceStorage } from "./providers/env";
+import { meetingRecordingPreference } from "../shared/meetingRecordingStorage";
 
 async function access(ctx: QueryCtx | MutationCtx, meetingId: Id<"meetings">) {
   const meeting = await ctx.db.get(meetingId);
@@ -163,6 +164,10 @@ export const allocate = internalMutation({
       throw new Error("Meeting recordings upload to SharePoint, which isn't enabled for this workspace.");
     }
     const kind = validateMeetingSource(args.fileName, args.size);
+    // A workspace that keeps transcripts only still takes transcript files, never recordings.
+    if (kind === "recording" && meetingRecordingPreference(await ctx.db.get(meeting.societyId)) !== "keep") {
+      throw new Error("This workspace keeps transcripts only. Open the recording in the Transcript tab to transcribe it without saving it.");
+    }
     if (!/^[a-f0-9]{64}$/.test(args.fingerprint) || !/^[a-f0-9-]{36}$/.test(args.nonce)) throw new Error("Invalid upload identity.");
     const existing = await ctx.db.query("meetingSources").withIndex("by_actor_fingerprint", q => q.eq("actorId", actor._id as Id<"users">).eq("meetingId", args.meetingId).eq("fingerprint", args.fingerprint)).order("desc").first();
     if (existing && !["cancelled", "expired", "failed"].includes(existing.status)) return existing._id;

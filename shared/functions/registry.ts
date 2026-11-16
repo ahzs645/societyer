@@ -124,6 +124,7 @@ const documentCatalogFns = lazyHandlers(() => import("./documentCatalog"), "docu
 const organizationHistoryFns = lazyHandlers(() => import("./organizationHistory"), "organizationHistory");
 import * as meetingsFns from "./meetings";
 import * as meetingNotesFns from "./meetingNotes";
+import * as meetingRecordingsFns from "./meetingRecordings";
 import * as agendasFns from "./agendas";
 import * as motionsFns from "./motions";
 const evidenceRegistersFns = lazyHandlers(() => import("./evidenceRegisters"), "evidenceRegisters");
@@ -311,8 +312,15 @@ const TASK_ATTACHMENT_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "listViews:importInvoiceViews", handler: listViewsFns.importInvoiceViewsPortable }),
 ];
 
-// Meeting notes: AI draft and action items (shared/functions/meetingNotes.ts).
+// Meeting notes: AI draft and action items (shared/functions/meetingNotes.ts),
+// and recordings kept in workspace file storage (shared/functions/meetingRecordings.ts).
 const MEETING_NOTES_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableQuery({ name: "meetingRecordings:settings", handler: meetingRecordingsFns.settingsPortable }),
+  definePortableMutation({ name: "meetingRecordings:setPreference", handler: meetingRecordingsFns.setPreferencePortable }),
+  definePortableQuery({ name: "meetingRecordings:list", handler: meetingRecordingsFns.listPortable }),
+  definePortableMutation({ name: "meetingRecordings:generateUploadUrl", handler: meetingRecordingsFns.generateUploadUrlPortable }),
+  definePortableMutation({ name: "meetingRecordings:attach", handler: meetingRecordingsFns.attachPortable }),
+  definePortableMutation({ name: "meetingRecordings:remove", handler: meetingRecordingsFns.removePortable }),
   definePortableMutation({ name: "meetings:saveNotesDraft", handler: meetingNotesFns.saveNotesDraftPortable }),
   definePortableMutation({ name: "meetings:discardNotesDraft", handler: meetingNotesFns.discardNotesDraftPortable }),
   definePortableMutation({ name: "meetings:setNoteActionItems", handler: meetingNotesFns.setNoteActionItemsPortable }),

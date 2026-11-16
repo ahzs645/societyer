@@ -133,6 +133,8 @@ export default defineSchema({
   ...mcpOAuthTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
+    // shared/meetingRecordingStorage.ts: "keep" (absent) or "transcripts_only".
+    meetingRecordingPreference: v.optional(v.union(v.literal("keep"), v.literal("transcripts_only"))),
     onboardingAnswersJson: v.optional(v.string()),
     name: v.string(),
     incorporationNumber: v.optional(v.string()),

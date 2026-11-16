@@ -171,6 +171,7 @@ export function TranscriptWorkspace({
       {jobId && !page && <p role="status">Loading transcript page…</p>}
       <TranscriptWorkspaceHeader
         meetingId={meetingId}
+        societyId={societyId}
         provider={transcript?.provider}
         recording={recording ? { name: recording.name, origin: recordingOrigin, size: recording.size, duration: clock.duration } : undefined}
         localTranscription={localTranscription}

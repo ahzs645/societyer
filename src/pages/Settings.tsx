@@ -1,4 +1,5 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { MeetingRecordingSettingsCard } from "../features/meetings/recordings/MeetingRecordingSettingsCard";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { PageLoading, SeedPrompt } from "./_helpers";
@@ -719,6 +720,7 @@ export function SettingsPage() {
       <>
       <WorkspaceStorageCard />
       <DocumentStorageSettingsCard />
+      <MeetingRecordingSettingsCard />
       <ExternalDocumentSourcesSettingsCard />
 
       <div className="settings-pair" style={{ marginBottom: 16 }}>
