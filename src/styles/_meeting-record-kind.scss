@@ -184,6 +184,157 @@
   min-width: 0;
 }
 
+/* ---------- AI notes (Notes tab) ---------- */
+.meeting-ai-notes__head {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: token("s-2");
+  .card__title {
+    display: inline-flex;
+    align-items: center;
+    gap: token("s-2");
+  }
+}
+.meeting-ai-notes__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  min-width: 0;
+}
+.meeting-ai-notes__template {
+  width: 190px;
+  max-width: 100%;
+}
+.meeting-ai-notes__body {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-2");
+  .muted,
+  .flag {
+    margin: 0;
+  }
+}
+.meeting-ai-notes__draft {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-3");
+  min-width: 0;
+}
+.meeting-ai-notes__summary {
+  margin: 0;
+  line-height: 1.5;
+}
+.meeting-ai-notes__section {
+  h3 {
+    margin: 0 0 token("s-1");
+    font-size: token("fs-sm");
+    font-weight: 600;
+  }
+  ul {
+    margin: 0;
+    padding-left: token("s-4");
+  }
+  li {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+}
+.meeting-ai-notes__meta {
+  margin: 0;
+  font-size: token("fs-xs");
+  color: token("text-tertiary");
+}
+.meeting-ai-notes__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token("s-2");
+}
+
+/* ---------- Notes action items ---------- */
+.meeting-note-actions__body {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-2");
+  .muted {
+    margin: 0;
+  }
+}
+.meeting-note-actions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.meeting-note-action {
+  display: flex;
+  flex-direction: column;
+  gap: token("s-1");
+  padding: token("s-2") 0;
+  border-bottom: 1px solid token("border");
+  min-width: 0;
+  &:last-child {
+    border-bottom: 0;
+  }
+  &.is-done .meeting-note-action__text {
+    text-decoration: line-through;
+    color: token("text-tertiary");
+  }
+}
+.meeting-note-action__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  min-width: 0;
+}
+.meeting-note-action__text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.meeting-note-action__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token("s-2");
+  padding-left: calc(#{token("s-2")} + 16px);
+  min-width: 0;
+  > * {
+    min-width: 0;
+  }
+}
+.meeting-note-action__field {
+  flex: 1 1 160px;
+  max-width: 240px;
+}
+.meeting-note-action__due {
+  flex: 0 0 auto;
+  width: auto;
+}
+.meeting-note-action__select {
+  flex: 1 1 150px;
+  max-width: 220px;
+}
+.meeting-note-actions__add {
+  display: flex;
+  gap: token("s-2");
+  .input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+@media (max-width: 640px) {
+  .meeting-note-action__links {
+    padding-left: 0;
+  }
+  .meeting-note-action__field,
+  .meeting-note-action__select {
+    max-width: none;
+    flex-basis: 100%;
+  }
+}
+
 /* ---------- No write-up prompt (Overview) ---------- */
 .record-kind-prompt {
   display: flex;

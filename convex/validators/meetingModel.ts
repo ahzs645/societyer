@@ -42,6 +42,44 @@ export const minutesActionItemValidator = v.object({
   transcriptRef: v.optional(transcriptRefValidator),
 });
 
+/**
+ * AI notes draft for a meeting that keeps notes (shared/ai/notesDraft.ts).
+ * Stored beside the person's own `workingNotes`, never over them.
+ */
+export const meetingNotesDraftValidator = v.object({
+  template: v.string(),
+  summary: v.string(),
+  sections: v.array(v.object({ heading: v.string(), points: v.array(v.string()) })),
+  decisions: v.array(v.string()),
+  openQuestions: v.array(v.string()),
+  generatedAtISO: v.string(),
+  // "Workspace AI", "On-device: <model>" or "Rule-based".
+  generatedBy: v.string(),
+  usedNotes: v.boolean(),
+  usedTranscript: v.boolean(),
+});
+
+/**
+ * An action item on a notes meeting (shared/meetingNoteActions.ts): the
+ * minutes action item shape plus a stable id and links to a goal and a
+ * committee, so "Create task" carries them onto the task.
+ */
+export const meetingNoteActionItemValidator = v.object({
+  id: v.string(),
+  text: v.string(),
+  assignee: v.optional(v.string()),
+  assigneePersonId: v.optional(v.id("peopleDirectory")),
+  dueDate: v.optional(v.string()),
+  done: v.boolean(),
+  status: v.optional(actionItemStatusValidator),
+  taskId: v.optional(v.id("tasks")),
+  transcriptRef: v.optional(transcriptRefValidator),
+  goalId: v.optional(v.id("goals")),
+  committeeId: v.optional(v.id("committees")),
+  // "ai": suggested by the notes draft and not yet edited; "manual" otherwise.
+  origin: v.optional(v.union(v.literal("ai"), v.literal("manual"))),
+});
+
 export const detailedAttendanceValidator = v.object({
   name: v.string(),
   status: v.string(), // present | absent | regrets | guest | staff | invited | proxy | unknown

@@ -2583,6 +2583,14 @@ function MeetingDetailWorkspace() {
             minutesApproved={Boolean(minutes?.approvedAt)}
             steps={recordSteps}
             onMinutesStarted={() => setActiveTab("minutes")}
+            meeting={meeting as any}
+            transcriptRow={transcriptRecord}
+            hasTranscript={Boolean(transcriptRecord && (transcriptRecord.text || transcriptRecord.segments?.length))}
+            canReadTranscript={canReadTranscript}
+            canCreateTasks={canTasksWrite}
+            people={directoryPeople as any}
+            committees={(committees ?? []) as any}
+            tasks={linkedTasks as any}
           />
         )}
         {activeTab === "overview" && (

@@ -7,6 +7,7 @@
  * convex-test oracle.
  */
 
+import { validateTranscriptRef } from "../transcriptModel";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { HISTORICAL_ACTION_TAG, PROMOTED_ACTION_TAG, TASK_STATUSES, actionTitleKey, isHistoricalSourceAction, sourceAssigneeFromTitle } from "../taskStatus";
@@ -163,6 +164,8 @@ export async function taskCreate(
     committeeId?: string;
     meetingId?: string;
     agendaItemId?: string;
+    /** Where in the meeting recording the action was agreed. */
+    transcriptRef?: { startSec: number; endSec: number };
     goalId?: string;
     filingId?: string;
     workflowId?: string;
@@ -189,6 +192,10 @@ export async function taskCreate(
   if (args.documentId) await getOwned(ctx, "documents", args.documentId, args.societyId);
   if (args.commitmentId) await getOwned(ctx, "commitments", args.commitmentId, args.societyId);
   if (args.eventId) await assertTaskEventReference(ctx, args.eventId, args.societyId);
+  if (args.transcriptRef) {
+    if (!args.meetingId) throw new Error("A transcript time needs the meeting it belongs to.");
+    validateTranscriptRef(args.transcriptRef.startSec, args.transcriptRef.endSec);
+  }
   for (const userId of args.responsibleUserIds ?? []) {
     await getOwned(ctx, "users", userId, args.societyId);
   }

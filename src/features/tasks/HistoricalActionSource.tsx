@@ -4,6 +4,7 @@
  * carried-forward copies), the owner as written, tags, and the
  * "not a verified current obligation" notice.
  */
+import { formatTranscriptTime } from "../meetings/transcript/activeIndex";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, History } from "lucide-react";
 import { Badge } from "../../components/ui";
@@ -36,6 +37,14 @@ export function HistoricalActionSource({ task, meetingTitle, onPromote }: { task
         {task.meetingId && (
           <div>
             Meeting: <Link to={`/app/meetings/${task.meetingId}?tab=minutes`}>{meetingTitle ?? "Open source meeting"}</Link>
+            {task.transcriptRef && (
+              <>
+                {" · "}
+                <Link to={`/app/meetings/${task.meetingId}?tab=transcript&t=${task.transcriptRef.startSec}-${task.transcriptRef.endSec}`}>
+                  Recording at {formatTranscriptTime(task.transcriptRef.startSec)}
+                </Link>
+              </>
+            )}
           </div>
         )}
         {first && <div>Source date{first !== last ? "s" : ""}: {first}{last && last !== first ? ` – ${last}` : ""}{observations.length > 1 ? ` (${observations.length} observations)` : ""}</div>}

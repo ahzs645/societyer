@@ -1,7 +1,28 @@
-import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
-import { query, mutation } from "./_generated/server";
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
+import { action, query, mutation } from "./_generated/server";
+import { api } from "./_generated/api";
 import { v } from "convex/values";
-import { meetingExtensionFields } from "./validators/meetingModel";
+import { meetingExtensionFields, meetingNoteActionItemValidator } from "./validators/meetingModel";
+import {
+  createTaskFromNoteActionPortable,
+  discardNotesDraftPortable,
+  saveNotesDraftPortable,
+  setNoteActionItemsPortable,
+} from "../shared/functions/meetingNotes";
+import {
+  heuristicNotesDraft,
+  isNotesDraftTemplateId,
+  mergeNotesDrafts,
+  NOTES_DRAFT_JSON_SCHEMA,
+  notesDraftTranscriptFromRow,
+  parseNotesDraft,
+  planNotesDraftRequests,
+  type NotesDraft,
+  type NotesDraftInput,
+} from "../shared/ai/notesDraft";
+import { completeStructuredJson, endpointLabel, resolveMinutesEndpoint } from "./providers/llm";
+import { aiProviderErrorMessage } from "../shared/ai/providerErrors";
+import type { JsonSchemaFormat } from "../shared/ai/openAiCompatible";
 import {
   listPortable,
   getPortable,
@@ -194,4 +215,104 @@ export const merge = authorizedMutation("meetings:merge", mutation)({
   args: { targetId: v.id("meetings"), duplicateId: v.id("meetings"), addMissingAttendees: v.optional(v.boolean()) },
   returns: v.any(),
   handler: async (ctx, args) => mergePortable(await toPortableMutationCtx(ctx), args),
+});
+
+// --- Meeting notes: AI draft and action items (shared/functions/meetingNotes.ts) ---
+
+export const saveNotesDraft = authorizedMutation("meetings:saveNotesDraft", mutation)({
+  args: {
+    id: v.id("meetings"),
+    template: v.string(),
+    // Untrusted model output; normalised and bounded by the handler.
+    draft: v.any(),
+    generatedBy: v.string(),
+    usedNotes: v.boolean(),
+    usedTranscript: v.boolean(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveNotesDraftPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const discardNotesDraft = authorizedMutation("meetings:discardNotesDraft", mutation)({
+  args: { id: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, args) => discardNotesDraftPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const setNoteActionItems = authorizedMutation("meetings:setNoteActionItems", mutation)({
+  args: { id: v.id("meetings"), items: v.array(meetingNoteActionItemValidator) },
+  returns: v.any(),
+  handler: async (ctx, args) => setNoteActionItemsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const createTaskFromNoteAction = authorizedMutation("meetings:createTaskFromNoteAction", mutation)({
+  args: { id: v.id("meetings"), itemId: v.string(), priority: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, args) => createTaskFromNoteActionPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/** Hosted models take long transcripts whole; past this they are drafted in parts. */
+const HOSTED_NOTES_DRAFT_BUDGET_CHARS = 120_000;
+
+/**
+ * The notes draft with the workspace's (or the server's) AI model. Reads the
+ * meeting's notes and the transcript as this person may read it, then saves
+ * through meetings:saveNotesDraft. Without a model, a rule-based draft is
+ * saved and labelled as such; a provider failure saves nothing.
+ */
+export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft", action)({
+  args: { id: v.id("meetings"), template: v.string() },
+  returns: v.any(),
+  handler: async (ctx, { id, template }): Promise<unknown> => {
+    if (!isNotesDraftTemplateId(template)) throw new Error("Unknown notes template.");
+    const meeting = await ctx.runQuery(api.meetings.get, { id });
+    if (!meeting) throw new Error("Meeting not found.");
+    const notes = String(meeting.workingNotes ?? "");
+    let transcript = "";
+    try {
+      // Only someone who may read the transcript gets it in their draft.
+      transcript = notesDraftTranscriptFromRow(await ctx.runQuery(api.transcripts.getByMeeting, { meetingId: id }));
+    } catch {
+      transcript = "";
+    }
+    if (!notes.trim() && !transcript.trim()) throw new Error("Write some notes or add a transcript first.");
+    const input: NotesDraftInput = {
+      meetingTitle: String(meeting.title ?? "Meeting"),
+      meetingDate: String(meeting.scheduledAt ?? "").slice(0, 10) || undefined,
+      template,
+      notes,
+      transcript,
+      attendees: Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String).slice(0, 50) : undefined,
+    };
+    const endpoint = await resolveMinutesEndpoint(ctx, String(meeting.societyId));
+    let draft: NotesDraft = heuristicNotesDraft(input);
+    let generatedBy = "Rule-based (no AI model connected)";
+    if (endpoint) {
+      try {
+        const plan = planNotesDraftRequests(input, HOSTED_NOTES_DRAFT_BUDGET_CHARS);
+        const parts: NotesDraft[] = [];
+        for (const request of plan.requests) {
+          const text = await completeStructuredJson(endpoint, {
+            messages: request.messages,
+            jsonSchema: NOTES_DRAFT_JSON_SCHEMA as unknown as JsonSchemaFormat,
+            maxTokens: 2500,
+            label: "notes draft",
+          });
+          parts.push(parseNotesDraft(text, heuristicNotesDraft(request.input)));
+        }
+        draft = mergeNotesDrafts(parts);
+        generatedBy = endpointLabel(endpoint);
+      } catch (error) {
+        throw new Error(`${aiProviderErrorMessage(error)} Nothing was changed.`);
+      }
+    }
+    return await ctx.runMutation(api.meetings.saveNotesDraft, {
+      id,
+      template,
+      draft,
+      generatedBy,
+      usedNotes: Boolean(notes.trim()),
+      usedTranscript: Boolean(transcript.trim()),
+    });
+  },
 });

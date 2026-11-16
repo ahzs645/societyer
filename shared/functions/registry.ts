@@ -123,6 +123,7 @@ import * as documentSourcesFns from "./documentSources";
 const documentCatalogFns = lazyHandlers(() => import("./documentCatalog"), "documentCatalog");
 const organizationHistoryFns = lazyHandlers(() => import("./organizationHistory"), "organizationHistory");
 import * as meetingsFns from "./meetings";
+import * as meetingNotesFns from "./meetingNotes";
 import * as agendasFns from "./agendas";
 import * as motionsFns from "./motions";
 const evidenceRegistersFns = lazyHandlers(() => import("./evidenceRegisters"), "evidenceRegisters");
@@ -308,6 +309,14 @@ const TASK_ATTACHMENT_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "listViews:update", handler: listViewsFns.updatePortable }),
   definePortableMutation({ name: "listViews:remove", handler: listViewsFns.removePortable }),
   definePortableMutation({ name: "listViews:importInvoiceViews", handler: listViewsFns.importInvoiceViewsPortable }),
+];
+
+// Meeting notes: AI draft and action items (shared/functions/meetingNotes.ts).
+const MEETING_NOTES_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableMutation({ name: "meetings:saveNotesDraft", handler: meetingNotesFns.saveNotesDraftPortable }),
+  definePortableMutation({ name: "meetings:discardNotesDraft", handler: meetingNotesFns.discardNotesDraftPortable }),
+  definePortableMutation({ name: "meetings:setNoteActionItems", handler: meetingNotesFns.setNoteActionItemsPortable }),
+  definePortableMutation({ name: "meetings:createTaskFromNoteAction", handler: meetingNotesFns.createTaskFromNoteActionPortable }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
@@ -804,6 +813,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "spendBudgets:remove", handler: spendBudgetsFns.removePortable }),
   ...BILLING_COMMERCE_FUNCTIONS,
   ...TASK_ATTACHMENT_FUNCTIONS,
+  ...MEETING_NOTES_FUNCTIONS,
   // invoices
   definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
   definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),

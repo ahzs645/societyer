@@ -73,6 +73,8 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "meetingTranscription:cancel",
   "meetingTranscription:apply",
   "minutes:generateDraft",
+  // The local Notes tab drafts with the on-device model (localNotesDraft.ts).
+  "meetings:generateNotesDraft",
   "notifications:sendDigest",
   "paperless:disconnect",
   "paperless:pullSourceDocument",

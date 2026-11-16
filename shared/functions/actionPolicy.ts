@@ -139,6 +139,8 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "paperless:recordSyncResult": ["paperlessTaskId"],
   "legalOperations:upsertGeneratedLegalDocument": ["syngrafiiFileId", "syngrafiiDocumentId", "syngrafiiPackageId"],
   "legalOperations:upsertJurisdictionMetadata": ["nuansReservationReportTypeId", "sourceOptionId"],
+  // A notes action item's id inside meetings.noteActionItems, not a row.
+  "meetings:createTaskFromNoteAction": ["itemId"],
   // A list's id in code (RecordListTable `tableId`), not a row.
   "listViews:list": ["tableId"],
   "listViews:create": ["tableId"],

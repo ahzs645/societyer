@@ -13,6 +13,7 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import * as tasksModule from "../shared/functions/tasks";
 import { taskRecurrenceValidator } from "./validators/taskRecurrence";
+import { transcriptRefValidator } from "./validators/meetingModel";
 
 export const list = authorizedQuery("tasks:list", query)({
   args: { societyId: v.id("societies") },
@@ -56,6 +57,7 @@ export const create = authorizedMutation("tasks:create", mutation)({
     committeeId: v.optional(v.id("committees")),
     meetingId: v.optional(v.id("meetings")),
     agendaItemId: v.optional(v.id("agendaItems")),
+    transcriptRef: v.optional(transcriptRefValidator),
     goalId: v.optional(v.id("goals")),
     filingId: v.optional(v.id("filings")),
     workflowId: v.optional(v.id("workflows")),

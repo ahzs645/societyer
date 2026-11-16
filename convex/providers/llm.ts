@@ -14,10 +14,9 @@ import {
   buildMinutesDraftMessages,
   heuristicMinutesDraft,
   MINUTES_DRAFT_JSON_SCHEMA,
-  MINUTES_DRAFT_SYSTEM_PROMPT,
-  minutesDraftUserPrompt,
   parseJsonObject,
   normalizeDraft,
+  type ChatMessage,
   type MinuteDraft,
   type MinutesDraftInput,
 } from "../../shared/ai/minutesDraft";
@@ -26,6 +25,7 @@ import {
   chatCompletionContent,
   isResponseFormatRejection,
   type JsonMode,
+  type JsonSchemaFormat,
 } from "../../shared/ai/openAiCompatible";
 import { aiProviderErrorMessage, aiProviderStatusMessage } from "../../shared/ai/providerErrors";
 import { normalizeAiBaseUrl } from "../../shared/ai/endpointPolicy";
@@ -156,15 +156,23 @@ async function postJson(endpoint: MinutesModelEndpoint, headers: Record<string, 
   return { ok: response.ok, status: response.status, text: await response.text().catch(() => "") };
 }
 
-async function openAiCompatibleDraft(endpoint: Extract<MinutesModelEndpoint, { kind: "openai-compatible" }>, input: MinutesDraftInput): Promise<string> {
-  const messages = buildMinutesDraftMessages(input);
+/** One structured-JSON request: the minutes draft, the notes draft, … */
+export type StructuredJsonRequest = {
+  messages: ChatMessage[];
+  jsonSchema: JsonSchemaFormat;
+  maxTokens: number;
+  /** What the reply is, for errors ("minutes draft"). */
+  label: string;
+};
+
+async function openAiCompatibleJson(endpoint: Extract<MinutesModelEndpoint, { kind: "openai-compatible" }>, request: StructuredJsonRequest): Promise<string> {
   let lastStatus = 0;
   for (const jsonMode of endpoint.jsonModes) {
     const response = await postJson(endpoint, { authorization: `Bearer ${endpoint.apiKey}` }, chatCompletionBody({
       model: endpoint.model,
-      messages,
+      messages: request.messages,
       jsonMode,
-      jsonSchema: MINUTES_DRAFT_JSON_SCHEMA,
+      jsonSchema: request.jsonSchema,
     }));
     if (response.ok) {
       let payload: unknown;
@@ -174,7 +182,7 @@ async function openAiCompatibleDraft(endpoint: Extract<MinutesModelEndpoint, { k
         throw new Error("The AI provider returned an unreadable reply.");
       }
       const content = chatCompletionContent(payload);
-      if (!content?.trim()) throw new Error("The AI provider returned an empty minutes draft.");
+      if (!content?.trim()) throw new Error(`The AI provider returned an empty ${request.label}.`);
       return content;
     }
     lastStatus = response.status;
@@ -183,13 +191,14 @@ async function openAiCompatibleDraft(endpoint: Extract<MinutesModelEndpoint, { k
   throw new ProviderStatusError(lastStatus);
 }
 
-async function anthropicDraft(endpoint: Extract<MinutesModelEndpoint, { kind: "anthropic" }>, input: MinutesDraftInput): Promise<string> {
+async function anthropicJson(endpoint: Extract<MinutesModelEndpoint, { kind: "anthropic" }>, request: StructuredJsonRequest): Promise<string> {
+  const system = request.messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
   const response = await postJson(endpoint, { "x-api-key": endpoint.apiKey, "anthropic-version": "2023-06-01" }, {
     model: endpoint.model,
-    max_tokens: 1800,
+    max_tokens: request.maxTokens,
     temperature: 0.2,
-    system: MINUTES_DRAFT_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: minutesDraftUserPrompt(input) }],
+    system,
+    messages: request.messages.filter((message) => message.role !== "system"),
   });
   if (!response.ok) throw new ProviderStatusError(response.status);
   let payload: unknown;
@@ -205,8 +214,22 @@ async function anthropicDraft(endpoint: Extract<MinutesModelEndpoint, { kind: "a
         .join("\n")
         .trim()
     : "";
-  if (!content) throw new Error("The AI provider returned an empty minutes draft.");
+  if (!content) throw new Error(`The AI provider returned an empty ${request.label}.`);
   return content;
+}
+
+/** Sends one structured request to the endpoint and returns the reply text. Throws on any provider failure. */
+export async function completeStructuredJson(endpoint: MinutesModelEndpoint, request: StructuredJsonRequest): Promise<string> {
+  return endpoint.kind === "anthropic" ? anthropicJson(endpoint, request) : openAiCompatibleJson(endpoint, request);
+}
+
+function minutesDraftRequest(input: MinutesDraftInput): StructuredJsonRequest {
+  return { messages: buildMinutesDraftMessages(input), jsonSchema: MINUTES_DRAFT_JSON_SCHEMA as unknown as JsonSchemaFormat, maxTokens: 1800, label: "minutes draft" };
+}
+
+/** A short name for the endpoint, stored with a draft ("Workspace AI (gpt-4.1-mini)"). */
+export function endpointLabel(endpoint: MinutesModelEndpoint): string {
+  return `${endpoint.source === "workspace" ? "Workspace AI" : "Server AI"} (${endpoint.model})`;
 }
 
 /**
@@ -221,7 +244,7 @@ export async function summarizeMinutes(
   const fallback = heuristicMinutesDraft(args);
   if (!endpoint) return fallback;
   try {
-    const text = endpoint.kind === "anthropic" ? await anthropicDraft(endpoint, args) : await openAiCompatibleDraft(endpoint, args);
+    const text = await completeStructuredJson(endpoint, minutesDraftRequest(args));
     const raw = parseJsonObject(text);
     if (raw === undefined) throw new Error("The AI provider's minutes draft was not JSON.");
     return normalizeDraft(raw, fallback);

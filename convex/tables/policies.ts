@@ -1,6 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
-import { bodyQuorumRuleValidator } from "../validators/meetingModel";
+import { bodyQuorumRuleValidator, transcriptRefValidator } from "../validators/meetingModel";
 import { taskRecurrenceValidator } from "../validators/taskRecurrence";
 
 export const policyTables = {
@@ -199,6 +199,8 @@ export const policyTables = {
     meetingId: v.optional(v.id("meetings")),
     // B6: the agenda item the action came from.
     agendaItemId: v.optional(v.id("agendaItems")),
+    // Where in the meeting recording the action was agreed (notes action items).
+    transcriptRef: v.optional(transcriptRefValidator),
     // P5: external action ids of carried-forward duplicates folded into this task.
     mergedExternalActionIds: v.optional(v.array(v.string())),
     goalId: v.optional(v.id("goals")),

@@ -1,5 +1,6 @@
 import { FOLLOW_UP_RECEIPT_FIELDS, followUpMotionFingerprint, followUpMotionSelection, followUpRequestDigest } from "../followUpScheduling";
 import { isWorkingMeeting } from "../meetingBody";
+import { minutesActionItemsFromNotes } from "../meetingNoteActions";
 import { inCameraFacts, isInCameraMotion, IN_CAMERA_ACCESS_PERMISSION } from "../minutesPrivacy";
 import { carryForwardToMeetingPortable } from "./motionBacklog";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
@@ -1023,15 +1024,22 @@ export async function startMinutesFromNotesPortable(ctx: PortableMutationCtx, { 
       discussion: notes,
       sections: [],
       motions: [],
-      decisions: [],
-      actionItems: [],
+      // The notes draft's decisions and the notes' action items carry over.
+      decisions: Array.isArray(meeting.notesDraft?.decisions) ? meeting.notesDraft.decisions.map(String) : [],
+      actionItems: minutesActionItemsFromNotes(meeting.noteActionItems),
     }));
-    seeded = notes.length > 0;
+    seeded = notes.length > 0 || Boolean(meeting.noteActionItems?.length);
   } else {
     minutesId = String(existing._id);
     const discussion = existing.approvedAt ? null : discussionSeededWithNotes(existing.discussion, notes);
     if (discussion !== null) {
       await updateMinutesPortable(ctx, { id: minutesId, patch: { discussion } });
+      seeded = true;
+    }
+    // An unapproved draft with no actions yet takes the notes' action items.
+    const noteActions = minutesActionItemsFromNotes(meeting.noteActionItems);
+    if (!existing.approvedAt && noteActions.length && !(Array.isArray(existing.actionItems) && existing.actionItems.length)) {
+      await updateMinutesPortable(ctx, { id: minutesId, patch: { actionItems: noteActions } });
       seeded = true;
     }
   }

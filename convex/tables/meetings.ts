@@ -2,6 +2,8 @@ import { meetingHistoryFields } from "../validators/meetingHistory";
 import {
   detailedAttendanceValidator,
   meetingExtensionFields,
+  meetingNoteActionItemValidator,
+  meetingNotesDraftValidator,
   minutesActionItemValidator,
   motionExtensionFields,
   nextMeetingValidator,
@@ -56,6 +58,9 @@ export const meetingTables = {
     packageReviewedByUserId: v.optional(v.id("users")),
     notes: v.optional(v.string()),
     ...meetingExtensionFields,
+    // Written only by meetings:saveNotesDraft / setNoteActionItems, never by meetings:update.
+    notesDraft: v.optional(meetingNotesDraftValidator),
+    noteActionItems: v.optional(v.array(meetingNoteActionItemValidator)),
   })
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "scheduledAt"])

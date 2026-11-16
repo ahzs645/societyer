@@ -16,6 +16,11 @@ import { MeetingRecordStepper } from "./MeetingRecordStepper";
 import { MeetingDraftRecovery, useMeetingDraft } from "../useMeetingDraft";
 import type { AutosaveDraft } from "../lib/meetingDraftStore";
 import { createNotesAutosave, type NotesSaveState } from "../lib/notesAutosave";
+import { MeetingNotesDraftCard, type StoredNotesDraft } from "./MeetingNotesDraftCard";
+import { MeetingNoteActionsCard } from "./MeetingNoteActionsCard";
+import type { NotesDraftMeeting } from "../useNotesDraft";
+import type { NoteActionItem } from "../../../../shared/meetingNoteActions";
+import type { DirectoryPerson } from "../../../components/PersonNameLinkField";
 
 /** Typing must pause this long before the notes save. */
 const NOTES_SAVE_DELAY_MS = 800;
@@ -89,9 +94,27 @@ export function MeetingNotesTab({
   minutesApproved,
   steps,
   onMinutesStarted,
+  meeting,
+  transcriptRow,
+  hasTranscript,
+  canReadTranscript,
+  canCreateTasks,
+  people,
+  committees,
+  tasks,
 }: {
   meetingId: Id<"meetings">;
   workingNotes: string | undefined;
+  /** The meeting row: AI notes draft and action items live on it. */
+  meeting: NotesDraftMeeting & { societyId: Id<"societies">; notesDraft?: StoredNotesDraft; noteActionItems?: NoteActionItem[] };
+  /** The working transcript as this person may read it (undefined while loading or not readable). */
+  transcriptRow: unknown;
+  hasTranscript: boolean;
+  canReadTranscript: boolean;
+  canCreateTasks: boolean;
+  people?: DirectoryPerson[];
+  committees?: ReadonlyArray<{ _id: string; name: string }>;
+  tasks?: ReadonlyArray<{ _id: string; title: string; status: string }>;
   /** meetings:write: edit the notes. */
   canWrite: boolean;
   /** meetings:write and minutes:write: turn the notes into minutes. */
@@ -192,16 +215,47 @@ export function MeetingNotesTab({
           {!canWrite && <p className="muted">You can read these notes. Editing needs meeting edit access.</p>}
         </div>
       </section>
-      {canStartMinutes && (
-        <div className="meeting-notes-tab__actions">
-          <button type="button" className="btn btn--accent" onClick={() => { void turnIntoMinutes(); }} disabled={converting || tooLong}>
-            {converting ? "Starting minutes…" : "Turn notes into minutes"}
-          </button>
-          <span className="meeting-notes-tab__actions-hint">
-            Adds the agenda, motions, quorum and approval. Your notes start the draft.
-          </span>
-        </div>
-      )}
+      <MeetingNotesDraftCard
+        meeting={meeting}
+        draft={meeting.notesDraft}
+        notes={notes.value}
+        transcriptRow={transcriptRow}
+        hasTranscript={hasTranscript}
+        canReadTranscript={canReadTranscript}
+        canWrite={canWrite && !converting}
+        flushNotes={notes.flush}
+        onAddToNotes={(markdown) => { notes.onChange(appendMarkdown(notes.value, markdown)); toast.success("Added to your notes."); }}
+      />
+      <MeetingNoteActionsCard
+        societyId={meeting.societyId}
+        meetingId={meetingId}
+        items={meeting.noteActionItems ?? []}
+        people={people}
+        committees={committees}
+        tasks={tasks}
+        canWrite={canWrite && !converting}
+        canCreateTasks={canCreateTasks}
+      />
+      {canStartMinutes && <TurnIntoMinutesBar converting={converting} disabled={tooLong} onTurn={() => { void turnIntoMinutes(); }} />}
     </div>
   );
+}
+
+function TurnIntoMinutesBar({ converting, disabled, onTurn }: { converting: boolean; disabled: boolean; onTurn: () => void }) {
+  return (
+    <div className="meeting-notes-tab__actions">
+      <button type="button" className="btn btn--accent" onClick={onTurn} disabled={converting || disabled}>
+        {converting ? "Starting minutes…" : "Turn notes into minutes"}
+      </button>
+      <span className="meeting-notes-tab__actions-hint">
+        Adds the agenda, motions, quorum and approval. Your notes start the draft; decisions and action items carry over.
+      </span>
+    </div>
+  );
+}
+
+/** The AI notes appended under the person's own notes, never in place of them. */
+function appendMarkdown(current: string, markdown: string) {
+  const kept = current.trimEnd();
+  return kept ? `${kept}\n\n${markdown}` : markdown;
 }
