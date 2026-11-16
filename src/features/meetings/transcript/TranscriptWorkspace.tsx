@@ -36,6 +36,7 @@ import { linkedTranscriptRange, citationsBySegment, type LinkableMotion } from "
 import { useMinutesLinks, type LinkMinutes } from "./useMinutesLinks";
 import { useInCameraMarks } from "./useInCameraMarks";
 import { InCameraNote } from "./InCameraTranscript";
+import { TIMED_TRANSCRIPT_ACCEPT, TIMED_TRANSCRIPT_FORMAT_LABEL } from "../../../../shared/transcriptFormats";
 
 const EMPTY_SEGMENTS: TranscriptSegment[] = [];
 const TRANSCRIPT_FORMATS_HINT = "VTT, SRT or Whisper JSON";
@@ -151,8 +152,8 @@ export function TranscriptWorkspace({
   }, [jobId, page, source, clock.currentTime, clock.playing, convex, pageIndex, headerTranscript?.pageCount, setPageIndex]);
   if (pagedUnavailable) return <section className="transcript-workspace" aria-label="Transcript workspace">
     <p role="alert">This transcript uses hosted pages that are unavailable in this local workspace. Open the connected workspace to read or export them, then import a timed local copy here. No paged edits can be saved on this device.</p>
-    {canWrite && <label className="field"><span>Import a local transcript copy (VTT, SRT or Whisper JSON)</span>
-      <input type="file" accept=".vtt,.srt,.json" disabled={importing} onChange={(event) => {
+    {canWrite && <label className="field"><span>Import a local transcript copy ({TIMED_TRANSCRIPT_FORMAT_LABEL})</span>
+      <input type="file" accept={TIMED_TRANSCRIPT_ACCEPT} disabled={importing} onChange={(event) => {
         const file = event.target.files?.[0]; event.target.value = ""; if (file) void importFile(file);
       }} />
     </label>}

@@ -103,7 +103,8 @@ assert.equal(
 );
 assert.throws(() => parseTimedTranscript("x.vtt", "WEBVTT\n\n00:99.000 --> 01:00.000\nx"), /timestamp/);
 assert.throws(() => parseTimedTranscript("x.vtt", "WEBVTT\n\nNOTE no cues"), /segments/);
-assert.throws(() => parseTimedTranscript("x.txt", "hello"), /Choose/);
+assert.throws(() => parseTimedTranscript("x.docx", "hello"), /Choose/);
+assert.throws(() => parseTimedTranscript("x.txt", "hello"), /no timestamps/);
 assert.throws(() => parseTimedTranscript("x.json", " ".repeat(16 * 1024 * 1024 + 1)), /16 MB/);
 assert.throws(
   () =>
@@ -486,6 +487,98 @@ for (const local of [false, true]) {
   for (const read of reads)
     assert.match(read.args, /canReadTranscript|TRANSCRIPT_READ_PERMISSION/, `${read.where} is skipped without transcript access`);
 }
+
+// SubViewer (YouTube): `H:MM:SS.mmm,H:MM:SS.mmm` cues, ">>" speaker changes, repeated prefixes.
+const sbv = parseTimedTranscript(
+  "captions.sbv",
+  [
+    "0:00:01.000,0:00:03.500",
+    ">> Chair: Call to order.",
+    "",
+    "0:00:03.500,0:00:06.000",
+    "Treasurer: The budget",
+    "is balanced.",
+    "",
+    "0:00:06.000,0:00:08.000",
+    "Chair: Thank you.",
+    "",
+    "0:00:08.000,0:00:09.000",
+    "Treasurer: Pleasure.",
+    "",
+  ].join("\r\n"),
+);
+assert.equal(sbv.provider, "sbv");
+assert.deepEqual(
+  sbv.segments.map((segment) => [segment.speaker, segment.text, segment.startSec, segment.endSec]),
+  [
+    ["Chair", "Call to order.", 1, 3.5],
+    ["Treasurer", "The budget is balanced.", 3.5, 6],
+    ["Chair", "Thank you.", 6, 8],
+    ["Treasurer", "Pleasure.", 8, 9],
+  ],
+  "a prefix counts as a speaker once it repeats, as in VTT and SRT",
+);
+assert.throws(() => parseTimedTranscript("x.sbv", "no cues here"), /SBV/);
+assert.throws(() => parseTimedTranscript("x.sbv", "0:00:05.000,0:00:01.000\nx"), /start before/);
+assert.throws(() => parseTimedTranscript("x.sbv", "0:61:00.000,0:62:00.000\nx"), /timestamp/);
+
+// Otter / Teams: "Name  M:SS" header after a blank line, then the turn's text.
+const otter = parseTimedTranscript(
+  "otter.txt",
+  [
+    "Board meeting - Nov 12",
+    "",
+    "Jane Doe  0:05",
+    "Welcome everyone. We will reconvene at 7:30",
+    "after the break.",
+    "",
+    "Sam Lee  0:12",
+    "Thanks Jane.",
+    "",
+    "Jane Doe  1:02:03",
+    "Meeting adjourned.",
+    "",
+    "Transcribed by https://otter.ai",
+  ].join("\n"),
+);
+assert.equal(otter.provider, "timestamped-text");
+assert.deepEqual(
+  otter.segments.map((segment) => [segment.speaker, segment.text, segment.startSec, segment.endSec]),
+  [
+    ["Jane Doe", "Welcome everyone. We will reconvene at 7:30 after the break.", 5, 12],
+    ["Sam Lee", "Thanks Jane.", 12, 3723],
+    ["Jane Doe", "Meeting adjourned.", 3723, 3724],
+  ],
+  "a time inside a turn's text is not a new turn; the title and export footer are dropped",
+);
+
+// Rev: "Name (MM:SS):" headers.
+const rev = parseTimedTranscript("rev.txt", "Speaker 1 (00:00):\nHello.\n\nSpeaker 2 (00:04):\nHi there.\n");
+assert.deepEqual(rev.segments.map((segment) => [segment.speaker, segment.startSec, segment.endSec]), [["Speaker 1", 0, 4], ["Speaker 2", 4, 5]]);
+
+// Descript and similar: "[HH:MM:SS] Name: text" per line.
+const descript = parseTimedTranscript(
+  "descript.txt",
+  "[00:00:01] Alex: Opening remarks.\n[00:00:09] Priya: Seconded.\n[00:00:15] Alex: Carried.\n[00:00:18] Priya: Noted.\n",
+);
+assert.deepEqual(
+  descript.segments.map((segment) => [segment.speaker, segment.text, segment.startSec]),
+  [["Alex", "Opening remarks.", 1], ["Priya", "Seconded.", 9], ["Alex", "Carried.", 15], ["Priya", "Noted.", 18]],
+);
+
+// Google Meet: a timestamp line every few minutes, then "Name: text" turns sharing its span.
+const meet = parseTimedTranscript(
+  "meet.txt",
+  "Transcript\n\n00:00:00\n\nAlex: Hello all.\nPriya: Hi Alex, thanks for having us.\n\n00:05:00\n\nAlex: Next item.\nPriya: Agreed.\n",
+);
+assert.deepEqual(meet.segments.map((segment) => segment.speaker), ["Alex", "Priya", "Alex", "Priya"]);
+assert.equal(meet.segments[0].startSec, 0);
+assert.ok(meet.segments[1].startSec > 0 && meet.segments[1].startSec < 300, "turns split the block's span by length");
+assert.equal(meet.segments[1].endSec, 300);
+assert.equal(meet.segments[2].startSec, 300);
+
+assert.throws(() => parseTimedTranscript("x.txt", "[00:05] one\n[00:02] two\n"), /backwards/);
+assert.throws(() => parseTimedTranscript("x.txt", "Notes from 7:30 meeting\nWe met."), /no timestamps/);
 
 // The in-camera divider names the session once, whatever the minutes call it.
 assert.equal(inCameraDividerLabel("Executive director review"), "In camera: Executive director review");

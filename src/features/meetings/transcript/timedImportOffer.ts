@@ -1,4 +1,5 @@
 import { TIMED_TRANSCRIPT_FILE_LIMIT } from "../../../../shared/transcriptModel";
+import { TIMED_TRANSCRIPT_FILE, timedTranscriptRank } from "../../../../shared/transcriptFormats";
 import { crc32, openZip, readZipEntryBytes } from "../../../lib/zipStream";
 import { parseTimedTranscript, type TimedTranscript } from "./timedTranscript";
 
@@ -17,9 +18,8 @@ export const REVIEW_SPEAKERS_INTENT = "review-speakers";
 /** `?intent=` value that opens Attached recordings when the Transcript tab loads ("Play in Transcript tab"). */
 export const ATTACHED_RECORDINGS_INTENT = "attached-recordings";
 
-const TIMED_FILE = /\.(vtt|srt|json)$/i;
-// Richer formats first: Whisper JSON carries speakers and word timings.
-const zipRank = (name: string) => (/\.json$/i.test(name) ? 0 : /\.vtt$/i.test(name) ? 1 : 2);
+const TIMED_FILE = TIMED_TRANSCRIPT_FILE;
+const zipRank = timedTranscriptRank;
 const MAX_ZIP_ATTEMPTS = 5;
 
 /**

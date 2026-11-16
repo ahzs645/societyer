@@ -12,6 +12,7 @@ import { DEVICE_AI_SETTINGS_HREF } from "../../../lib/localAi/useDeviceAi";
 import { describeTranscriptionStep, type LocalTranscriptionJob } from "./useLocalTranscription";
 import { formatTranscriptTime } from "./activeIndex";
 import { DeviceDraftStatus } from "../components/DeviceDraftStatus";
+import { TIMED_TRANSCRIPT_ACCEPT } from "../../../../shared/transcriptFormats";
 
 /** The recording open in the player. `duration` is 0 until its metadata loads. */
 export type OpenRecording = { name: string; origin?: RecordingOrigin; size: number; duration: number };
@@ -178,7 +179,7 @@ export function TranscriptWorkspaceHeader({
       <input
         ref={fileInput}
         type="file"
-        accept=".vtt,.srt,.json,text/vtt,application/json"
+        accept={TIMED_TRANSCRIPT_ACCEPT}
         hidden
         onChange={(event) => {
           const file = event.target.files?.[0];

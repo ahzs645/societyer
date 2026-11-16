@@ -162,7 +162,8 @@ export const importTimed = authorizedMutation("transcripts:importTimed", mutatio
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
-    provider: v.union(v.literal("vtt"), v.literal("srt"), v.literal("whisper-json"), v.literal("local-whisper")),
+    // shared/transcriptFormats.ts TIMED_TRANSCRIPT_PROVIDERS.
+    provider: v.union(v.literal("vtt"), v.literal("srt"), v.literal("sbv"), v.literal("timestamped-text"), v.literal("whisper-json"), v.literal("local-whisper")),
     segments: v.array(transcriptSegment),
     durationSeconds: v.optional(v.number()),
   },

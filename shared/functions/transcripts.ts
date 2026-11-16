@@ -12,6 +12,7 @@
  */
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { isTimedTranscriptProvider, type TimedTranscriptProvider } from "../transcriptFormats";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { requireTranscriptReaderPortable, transcriptForReader } from "./minutesPrivacy";
@@ -529,13 +530,13 @@ export async function importTimedPortable(
     societyId: string;
     meetingId: string;
     /** "local-whisper": transcribed on this device (Transcript tab). */
-    provider: "vtt" | "srt" | "whisper-json" | "local-whisper";
+    provider: TimedTranscriptProvider;
     segments: TranscriptSegmentRow[];
     durationSeconds?: number;
   },
 ) {
   const existing = await workingTranscript(ctx, args.societyId, args.meetingId);
-  if (!["vtt", "srt", "whisper-json", "local-whisper"].includes(args.provider)) {
+  if (!isTimedTranscriptProvider(args.provider)) {
     throw new Error("Unsupported timed transcript provider.");
   }
   if (!args.segments.length || args.segments.length > 20_000) {

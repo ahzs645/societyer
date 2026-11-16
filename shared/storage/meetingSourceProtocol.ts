@@ -1,3 +1,5 @@
+import { RECORDING_EXTENSIONS, TRANSCRIPT_SOURCE_EXTENSIONS } from "../transcriptFormats";
+
 /** Decimal MB in the UI; chunks are sixteen Microsoft 320 KiB blocks. */
 export const MEETING_SOURCE_MAX_BYTES = 500_000_000;
 export const MEETING_SOURCE_CHUNK_BYTES = 5 * 1024 * 1024;
@@ -6,10 +8,10 @@ export type MeetingSourceKind = "transcript" | "recording" | "archive";
 
 export function meetingSourceKind(name: string): MeetingSourceKind {
   const extension = name.toLowerCase().split(".").pop();
-  if (["txt", "vtt", "srt", "json"].includes(extension ?? "")) return "transcript";
+  if ((TRANSCRIPT_SOURCE_EXTENSIONS as readonly string[]).includes(extension ?? "")) return "transcript";
   if (extension === "zip") return "archive";
-  if (["mp3", "mp4", "m4a", "wav", "webm", "ogg", "oga", "flac", "aac", "mov", "mkv", "wma"].includes(extension ?? "")) return "recording";
-  throw new Error("Choose TXT, VTT, SRT, Whisper JSON/ZIP, or an audio/video recording.");
+  if ((RECORDING_EXTENSIONS as readonly string[]).includes(extension ?? "")) return "recording";
+  throw new Error("Choose TXT, VTT, SRT, SBV, Whisper JSON/ZIP, or an audio/video recording.");
 }
 
 export function validateMeetingSource(name: string, size: number) {

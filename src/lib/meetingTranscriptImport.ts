@@ -1,4 +1,5 @@
 import { openZip, readZipEntryChunks, crc32 } from "./zipStream";
+import { CAPTION_FILE, TRANSCRIPT_SOURCE_FILE } from "../../shared/transcriptFormats";
 
 const encoder = new TextEncoder();
 const JSON_LIMIT = 16 * 1024 * 1024;
@@ -20,7 +21,7 @@ export async function* meetingTranscriptChunks(file: File): AsyncGenerator<strin
       expanded += entry.size;
       if (expanded > 1_000_000_000) throw new Error("ZIP expands beyond 1 GB. Extract the transcript separately.");
     }
-    const candidates = [...entries.values()].filter(e => !e.dir && /\.(txt|vtt|srt|json)$/i.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name));
+    const candidates = [...entries.values()].filter(e => !e.dir && TRANSCRIPT_SOURCE_FILE.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name));
     // Prefer the human transcript to JSON metadata or duplicate caption formats.
     candidates.sort((a, b) => score(a.name) - score(b.name) || a.name.localeCompare(b.name));
     const entry = candidates[0];
@@ -44,8 +45,8 @@ export async function* meetingTranscriptChunks(file: File): AsyncGenerator<strin
     if (!body.trim()) throw new Error("Whisper JSON must contain text or segments[].text.");
     yield* splitText(body); return;
   }
-  if (!/\.(txt|vtt|srt)$/i.test(name)) throw new Error("This recording is attached. Import its transcript separately when available.");
-  const captions = /\.(vtt|srt)$/i.test(name);
+  if (!TRANSCRIPT_SOURCE_FILE.test(name) || /\.json$/i.test(name)) throw new Error("This recording is attached. Import its transcript separately when available.");
+  const captions = CAPTION_FILE.test(name);
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let pending = ""; let output = ""; let cue = false; let skip = false;
   const lineText = (line: string) => {
@@ -54,7 +55,7 @@ export async function* meetingTranscriptChunks(file: File): AsyncGenerator<strin
     if (!line.trim()) { cue = false; skip = false; return ""; }
     if (/^(NOTE|STYLE|REGION)\b/.test(line)) { skip = true; return ""; }
     if (skip || /^WEBVTT\b/.test(line)) return "";
-    if (/\d{1,2}:\d{2}.*-->/.test(line)) { cue = true; return ""; }
+    if (/\d{1,2}:\d{2}.*-->/.test(line) || SBV_CUE_LINE.test(line)) { cue = true; return ""; }
     if (!cue) return "";
     return `${line.replace(/<v(?:\.[^ >]+)?\s+([^>]+)>/gi, "$1: ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")}\n`;
   };
@@ -94,7 +95,9 @@ export async function importMeetingSourceText(file: File, append: (chunk: Meetin
   return index + 1;
 }
 
-function score(name: string) { return /\.txt$/i.test(name) ? 0 : /\.vtt$/i.test(name) ? 1 : /\.srt$/i.test(name) ? 2 : 3; }
+function score(name: string) { return /\.txt$/i.test(name) ? 0 : /\.vtt$/i.test(name) ? 1 : /\.srt$/i.test(name) ? 2 : /\.sbv$/i.test(name) ? 3 : 4; }
+/** SubViewer cue timing (`0:00:01.000,0:00:04.000`). */
+const SBV_CUE_LINE = /^\d{1,3}:\d{2}:\d{2}\.\d{1,3},\d{1,3}:\d{2}:\d{2}\.\d{1,3}$/;
 function safePrefix(text: string) { let end = Math.min(12_000, text.length); if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1])) end--; return text.slice(0, end); }
 function* splitText(text: string) { while (text) { const head = safePrefix(text); yield head; text = text.slice(head.length); } }
 async function* blobChunks(blob: Blob) { const reader = blob.stream().getReader(); try { for (;;) { const { done, value } = await reader.read(); if (done) break; yield value; } } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); } }

@@ -17,10 +17,11 @@ import { usePermissionedMutation } from "../../../hooks/usePermissionedMutation"
 import { ATTACHED_RECORDINGS_INTENT, REPLACE_TRANSCRIPT_CONFIRM, REVIEW_SPEAKERS_INTENT, timedTranscriptOffer } from "../transcript/timedImportOffer";
 import { needsSpeakerReview } from "../transcript/speakerSuggestions";
 import type { TimedTranscript } from "../transcript/timedTranscript";
+import { MEETING_SOURCE_ACCEPT, TRANSCRIPT_SOURCE_FILE } from "../../../../shared/transcriptFormats";
 
 type TimedOffer = TimedTranscript & { fileName: string; sourceName: string };
 
-const SOURCE_ACCEPT = ".txt,.vtt,.srt,.json,.zip,.mp3,.mp4,.m4a,.wav,.webm,.ogg,.oga,.flac,.aac,.mov,.mkv,.wma";
+const SOURCE_ACCEPT = MEETING_SOURCE_ACCEPT;
 const PIPELINE_DOC_URL = "https://github.com/ahzs645/societyer/blob/main/docs/meeting-source-pipeline.md";
 
 /** Chrome's File System Access save dialog; other browsers download through a Blob URL. */
@@ -88,7 +89,7 @@ function ConnectedMeetingSources({ societyId, meetingId, canDraft, canReadTransc
     try {
       const source = await uploadMeetingSource(file, meetingId, state => { setActive(state); setMessage(state.status === "verifying" ? "Verifying the stored file…" : "Uploading to private meeting storage…"); }, abort.signal);
       setMessage("Original attached and verified.");
-      if (/\.(txt|vtt|srt|json|zip)$/i.test(file.name)) {
+      if (TRANSCRIPT_SOURCE_FILE.test(file.name) || /\.zip$/i.test(file.name)) {
         setMessage("Original attached. Importing transcript text…");
         await importMeetingSourceText(file, chunk => appendText({ sourceId: source.id, ...chunk }), abort.signal);
         const parsed = await timed;
