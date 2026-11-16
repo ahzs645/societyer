@@ -59,21 +59,30 @@ export function MeetingNoteActionsCard({
     [committees],
   );
 
-  const save = async (next: NoteActionItem[]) => {
+  // Each change is applied to the list as it is on the server, so edits by
+  // someone else (or a task just created) are never overwritten.
+  const send = async (ops: unknown[]) => {
     try {
-      await setItems({ id: meetingId, items: next as any });
+      await setItems({ id: meetingId, ops: ops as any });
     } catch (error) {
       toast.error("Could not save the action items", error instanceof Error ? error.message : String(error));
     }
   };
   // Any edit makes a suggestion the person's own: a redraft keeps it.
-  const patch = (id: string, change: Partial<NoteActionItem>) =>
-    save(items.map((item) => (item.id === id ? withoutEmpty({ ...item, ...change, origin: "manual" }) : item)));
+  const patch = (id: string, change: Partial<NoteActionItem>) => {
+    const set: Record<string, unknown> = { origin: "manual" };
+    const unset: string[] = [];
+    for (const [key, value] of Object.entries(change)) {
+      if (value === undefined || value === "") unset.push(key);
+      else set[key] = value;
+    }
+    return send([{ op: "patch", itemId: id, set, ...(unset.length ? { unset } : {}) }]);
+  };
 
   const add = async () => {
     const text = newText.replace(/\s+/g, " ").trim();
     if (!text) return;
-    await save([...items, { id: newNoteActionId(), text, done: false, status: "open", origin: "manual" }]);
+    await send([{ op: "add", item: { id: newNoteActionId(), text, done: false, status: "open", origin: "manual" } }]);
     setNewText("");
   };
 
@@ -119,7 +128,7 @@ export function MeetingNoteActionsCard({
               canCreateTasks={canCreateTasks}
               creating={busy === item.id}
               onPatch={(change) => { void patch(item.id, change); }}
-              onRemove={() => { void save(items.filter((entry) => entry.id !== item.id)); }}
+              onRemove={() => { void send([{ op: "remove", itemId: item.id }]); }}
               onCreateTask={() => { void makeTask(item); }}
             />
           ))}
@@ -268,13 +277,4 @@ function NoteActionRow({
       </div>
     </li>
   );
-}
-
-/** Drops cleared optional fields: Convex keeps a field that is sent as undefined out of the row. */
-function withoutEmpty(item: NoteActionItem): NoteActionItem {
-  const out = { ...item } as Record<string, unknown>;
-  for (const key of ["assignee", "assigneePersonId", "dueDate", "goalId", "committeeId"]) {
-    if (out[key] === undefined || out[key] === "") delete out[key];
-  }
-  return out as NoteActionItem;
 }

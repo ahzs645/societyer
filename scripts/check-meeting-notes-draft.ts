@@ -248,6 +248,17 @@ assert.equal(task.committeeId, "c_1");
 assert.deepEqual(task.transcriptRef, { startSec: 125, endSec: 140 }, "the task keeps the moment in the recording");
 assert.deepEqual(task.tags, ["meeting-notes"]);
 assert.equal(meeting().noteActionItems[0].taskId, created.taskId, "the item links back to its task");
+// Changes sent as ops apply to the list as it is now: a screen showing the list
+// from before the task was created can't drop the task link or the other item.
+await client.mutation("meetings:setNoteActionItems", { id: "m_notes", ops: [{ op: "patch", itemId: call.id, set: { done: true, status: "completed" }, unset: ["dueDate"] }] });
+await client.mutation("meetings:setNoteActionItems", { id: "m_notes", ops: [{ op: "patch", itemId: hall.id, set: { assignee: "Jo" } }] });
+assert.equal(meeting().noteActionItems[0].taskId, created.taskId, "a patch keeps the task link");
+assert.equal(meeting().noteActionItems[0].done, true);
+assert.equal(meeting().noteActionItems[1].assignee, "Jo", "both edits landed");
+await client.mutation("meetings:setNoteActionItems", { id: "m_notes", ops: [{ op: "add", item: { id: "na_new", text: "New one", done: false, status: "open", origin: "manual" } }, { op: "remove", itemId: "na_new" }] });
+assert.equal(meeting().noteActionItems.length, 2, "add then remove in one call");
+await client.mutation("meetings:setNoteActionItems", { id: "m_notes", ops: [{ op: "patch", itemId: call.id, set: { done: false, status: "open", taskId: "forged" } }] });
+assert.equal(meeting().noteActionItems[0].taskId, created.taskId, "a patch can't change the task link");
 const again = await client.mutation("meetings:createTaskFromNoteAction", { id: "m_notes", itemId: call.id }) as { taskId: string; created: boolean };
 assert.deepEqual(again, { taskId: created.taskId, created: false }, "creating twice returns the same task");
 await assert.rejects(() => client.mutation("meetings:createTaskFromNoteAction", { id: "m_notes", itemId: "gone" }), /no longer on this meeting/);
@@ -319,3 +330,32 @@ assert.equal(hostedResult.actionItemsAdded, 1);
 assert.equal(hostedMeeting?.noteActionItems?.[0]?.text, "Jo to send the MOU");
 assert.equal(hostedMeeting?.workingNotes, "- Jo to send the MOU\n- We agreed to a pilot", "hosted drafting never rewrites the notes");
 console.log("✓ hosted: viewers refused; without a model the action saves a labelled rule-based draft");
+
+// AI notes made from the transcript follow the transcript's read rule.
+await owner.mutation(api.meetings.saveNotesDraft, {
+  id: hostedMeetingId, template: "general",
+  draft: { summary: "From the call.", quotes: [{ text: "We'll fund a pilot.", speaker: "Dana", atSec: 9 }] },
+  generatedBy: "test", usedNotes: true, usedTranscript: true,
+});
+const ownerView = await owner.query(api.meetings.get, { id: hostedMeetingId }) as any;
+assert.equal(ownerView.notesDraft?.summary, "From the call.", "people who may read the transcript see the AI notes");
+assert.equal(ownerView.notesDraft?.quotes, undefined, "a quote that isn't in the transcript isn't saved");
+const viewerView = await viewer.query(api.meetings.get, { id: hostedMeetingId }) as any;
+assert.equal(viewerView.notesDraft, undefined, "a viewer doesn't get AI notes made from the transcript");
+assert.equal(viewerView.notesDraftWithheld, true);
+assert.equal(viewerView.workingNotes, "- Jo to send the MOU\n- We agreed to a pilot", "the notes themselves stay readable");
+const hostedSocietyId = (await t.run((ctx) => ctx.db.get(hostedMeetingId)))!.societyId;
+const viewerList = await viewer.query(api.meetings.list, { societyId: hostedSocietyId }) as any[];
+const listed = viewerList.find((row) => row._id === hostedMeetingId);
+assert.equal(listed.notesDraft, undefined, "the list never carries AI notes");
+assert.equal(listed.hasNotesDraft, true);
+await owner.mutation(api.meetings.saveNotesDraft, {
+  id: hostedMeetingId, template: "general", draft: { summary: "From the notes." }, generatedBy: "test", usedNotes: true, usedTranscript: false,
+});
+assert.equal((await viewer.query(api.meetings.get, { id: hostedMeetingId }) as any).notesDraft?.summary, "From the notes.", "a draft from the notes alone follows the notes");
+const formalId = await t.run((ctx) => ctx.db.insert("meetings", {
+  societyId: hostedSocietyId, title: "Board", type: "Board", scheduledAt: "2026-04-02T18:00:00.000Z",
+  electronic: true, status: "Held", attendeeIds: [], recordKind: "minutes", workingNotes: "- x",
+}) as any);
+await assert.rejects(() => owner.action(api.meetings.generateNotesDraft, { id: formalId, template: "general" }), /meetings that keep notes/);
+console.log("✓ privacy: AI notes from the transcript withheld from readers without transcript access; lists only flag them; formal meetings refused");

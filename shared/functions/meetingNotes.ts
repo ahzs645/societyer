@@ -11,8 +11,10 @@ import { getOwned, requireOwnedRow } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { directoryPersonForSociety, listPortable as peopleListPortable } from "./peopleDirectory";
 import { getByMeetingPortable as getTranscriptByMeetingPortable } from "./transcripts";
-import { SKILL_CONTEXT_LIMITS, type MeetingNotesSkillContext, type SkillPerson, type SkillSpeaker } from "../ai/meetingNotesSkill";
-import { isNotesDraftTemplateId, normalizeNotesActionItems, normalizeNotesDraft } from "../ai/notesDraft";
+import { minutesForMeeting } from "./minutesPrivacy";
+import { transcriptWithoutInCamera } from "../minutesPrivacy";
+import { findTranscriptQuote, SKILL_CONTEXT_LIMITS, transcriptLines, type MeetingNotesSkillContext, type SkillPerson, type SkillSpeaker } from "../ai/meetingNotesSkill";
+import { isNotesDraftTemplateId, normalizeNotesActionItems, normalizeNotesDraft, notesDraftTranscriptFromRow, type NotesDraftQuote } from "../ai/notesDraft";
 import {
   isReplaceableSuggestion,
   mergeSuggestedActions,
@@ -60,6 +62,9 @@ export async function saveNotesDraftPortable(
       committeeId: await owned("committees", item.committeeId),
     })),
   );
+  // Quotes are kept only if their words are in the transcript this person may
+  // read (in-camera parts aside), with the speaker and time of that line.
+  const quotes = draft.quotes?.length ? await verifiedQuotes(ctx, args.id, meeting.societyId, draft.quotes) : [];
   const speakerSuggestions = await normalizeSpeakerSuggestions(args.speakers, owned);
   const attendeeSuggestions = await normalizeAttendeeSuggestions(args.attendees, owned);
   if (!draft.summary && !draft.sections.length && !draft.decisions.length && !suggestions.length) {
@@ -74,7 +79,7 @@ export async function saveNotesDraftPortable(
       sections: draft.sections,
       decisions: draft.decisions,
       openQuestions: draft.openQuestions,
-      ...(draft.quotes?.length ? { quotes: draft.quotes } : {}),
+      ...(quotes.length ? { quotes } : {}),
       generatedAtISO: new Date().toISOString(),
       generatedBy: String(args.generatedBy ?? "").trim().slice(0, GENERATED_BY_MAX) || "AI",
       usedNotes: Boolean(args.usedNotes),
@@ -85,6 +90,24 @@ export async function saveNotesDraftPortable(
     noteActionItems: items.map(withoutUndefined),
   });
   return { actionItemsAdded: added, actionItems: items.length };
+}
+
+async function verifiedQuotes(ctx: PortableMutationCtx, meetingId: string, societyId: unknown, quotes: readonly NotesDraftQuote[]): Promise<NotesDraftQuote[]> {
+  let text = "";
+  try {
+    const readable = await getTranscriptByMeetingPortable(ctx as unknown as PortableQueryCtx, { meetingId });
+    text = readable ? notesDraftTranscriptFromRow(transcriptWithoutInCamera(readable, await minutesForMeeting(ctx as unknown as PortableQueryCtx, meetingId, societyId))) : "";
+  } catch {
+    text = "";
+  }
+  const lines = transcriptLines(text);
+  if (!lines.length) return [];
+  return quotes.flatMap((quote) => {
+    const found = findTranscriptQuote(lines, quote.text, quote.atSec);
+    if ("error" in found) return [];
+    const { line } = found;
+    return [{ text: quote.text, ...(line.speaker ? { speaker: line.speaker } : {}), ...(line.atSec !== undefined ? { atSec: line.atSec } : {}) }];
+  });
 }
 
 type OwnedCheck = (table: "peopleDirectory" | "goals" | "committees", id: string | undefined) => Promise<string | undefined>;
@@ -148,14 +171,48 @@ export async function discardNotesDraftPortable(ctx: PortableMutationCtx, { id }
 }
 
 /** Replaces the action items list (add, edit, reorder, remove). */
-export async function setNoteActionItemsPortable(ctx: PortableMutationCtx, { id, items }: { id: string; items: NoteActionItem[] }) {
+/**
+ * One change to the action items, applied to the list as it is now on the
+ * server: two people (or two quick clicks) editing different items never
+ * undo each other, and a task link set meanwhile is kept.
+ */
+export type NoteActionOp =
+  | { op: "add"; item: NoteActionItem }
+  | { op: "patch"; itemId: string; set?: Partial<NoteActionItem>; unset?: string[] }
+  | { op: "remove"; itemId: string };
+
+const PATCHABLE = new Set(["text", "assignee", "assigneePersonId", "dueDate", "done", "status", "goalId", "committeeId", "origin"]);
+
+export function applyNoteActionOps(current: readonly NoteActionItem[], ops: readonly NoteActionOp[]): NoteActionItem[] {
+  let items = [...current];
+  for (const op of ops) {
+    if (op.op === "add") {
+      if (!items.some((item) => item.id === op.item.id)) items.push(op.item);
+    } else if (op.op === "remove") {
+      items = items.filter((item) => item.id !== op.itemId);
+    } else if (op.op === "patch") {
+      items = items.map((item) => {
+        if (item.id !== op.itemId) return item;
+        const next: Record<string, unknown> = { ...item };
+        for (const [key, value] of Object.entries(op.set ?? {})) if (PATCHABLE.has(key) && value !== undefined) next[key] = value;
+        for (const key of op.unset ?? []) if (PATCHABLE.has(key)) delete next[key];
+        return next as NoteActionItem;
+      });
+    }
+  }
+  return items;
+}
+
+export async function setNoteActionItemsPortable(ctx: PortableMutationCtx, args: { id: string; items?: NoteActionItem[]; ops?: NoteActionOp[] }) {
+  const { id } = args;
   const meeting = await requireOwnedRow(ctx, "meetings", id);
   const societyId = String(meeting.societyId);
   await requirePermissionPortable(ctx, societyId, "meetings:write");
+  const current = (Array.isArray(meeting.noteActionItems) ? meeting.noteActionItems : []) as NoteActionItem[];
+  if (!args.items && !args.ops) throw new Error("Send items or ops.");
+  const items = args.ops ? applyNoteActionOps(current, args.ops) : args.items!;
   const normalized = normalizeNoteActionItems(items);
-  const previous = new Map(
-    ((Array.isArray(meeting.noteActionItems) ? meeting.noteActionItems : []) as NoteActionItem[]).map((item) => [item.id, item]),
-  );
+  const previous = new Map(current.map((item) => [item.id, item]));
   for (const item of normalized) {
     if (item.assigneePersonId) await directoryPersonForSociety(ctx, item.assigneePersonId, societyId);
     if (item.goalId) await getOwned(ctx, "goals", item.goalId, societyId);
@@ -330,7 +387,9 @@ export async function notesSkillContextPortable(ctx: PortableQueryCtx, { id }: {
 
   let speakers: SkillSpeaker[] = [];
   try {
-    const transcript = await getTranscriptByMeetingPortable(ctx, { meetingId: id });
+    // In-camera parts never go to the model, whoever asks.
+    const readable = await getTranscriptByMeetingPortable(ctx, { meetingId: id });
+    const transcript = readable ? transcriptWithoutInCamera(readable, await minutesForMeeting(ctx, id, meeting.societyId)) as typeof readable : readable;
     const segments = Array.isArray(transcript?.segments) ? (transcript!.segments as Array<{ speaker: string; text: string }>) : [];
     const map = new Map<string, { name?: string; personId?: string }>(
       (Array.isArray(transcript?.speakers) ? transcript!.speakers : []).map((speaker: any) => [String(speaker.label), { name: speaker.name, personId: speaker.personId }]),

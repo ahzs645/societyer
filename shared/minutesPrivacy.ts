@@ -576,6 +576,25 @@ export function workingNotesAreInCamera(meeting: unknown, minutes: unknown): boo
   return kind === "minutes" && inCameraFacts(minutes).hasInCamera;
 }
 
+/**
+ * AI notes made from the transcript (its summary, quotes, who each speaker
+ * is) follow the transcript's read rule. A draft from the notes alone
+ * follows the notes.
+ */
+export function notesDraftNeedsTranscriptAccess(draft: unknown): boolean {
+  if (!isRow(draft)) return false;
+  return draft.usedTranscript !== false
+    || (Array.isArray(draft.quotes) && draft.quotes.length > 0)
+    || (Array.isArray(draft.speakerSuggestions) && draft.speakerSuggestions.length > 0);
+}
+
+/** The meeting row without its AI notes; says they exist. */
+export function withheldNotesDraft<T>(meeting: T): T {
+  if (!isRow(meeting) || !meeting.notesDraft) return meeting;
+  const { notesDraft: _draft, ...rest } = meeting;
+  return { ...rest, notesDraftWithheld: true } as T;
+}
+
 /** The meeting row without its working notes, saying why. */
 export function withheldWorkingNotes<T>(meeting: T): T {
   if (!isRow(meeting)) return meeting;

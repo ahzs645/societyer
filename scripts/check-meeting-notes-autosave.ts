@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { createNotesAutosave } from "../src/features/meetings/lib/notesAutosave";
+import { createNotesAutosave, keepBothNoteTexts, mergeNoteTexts } from "../src/features/meetings/lib/notesAutosave";
+
+// Merging two people's edits to the same notes.
+assert.equal(mergeNoteTexts("A\nB", "A\nB\nMine", "A\nB\nTheirs"), "A\nB\nTheirs\nMine", "both added at the end: theirs, then mine");
+assert.equal(mergeNoteTexts("A\nB\nC", "A2\nB\nC", "A\nB\nC2"), "A2\nB\nC2", "edits to different lines combine");
+assert.equal(mergeNoteTexts("A\nB\nC", "A\nB\nC", "A\nX\nC"), "A\nX\nC", "only they changed it");
+assert.equal(mergeNoteTexts("A\nB", "A\nMine", "A\nTheirs"), null, "the same line changed both ways needs a person");
+assert.equal(mergeNoteTexts("", "Mine", "Theirs"), "Theirs\nMine");
+assert.equal(keepBothNoteTexts("A\nB", "A\nMine", "A\nTheirs"), "A\nTheirs\n\nMine", "keep both: theirs, then my changed lines");
+
 
 function deferred() {
   let resolve!: () => void;
@@ -45,11 +54,12 @@ function deferred() {
   let converted = false;
   await assert.rejects(async () => { await controller.flush(); converted = true; }, /Connection lost/);
   assert.equal(converted, false, "a failed note save cannot start minutes conversion");
-  controller.receiveServer("Someone else's notes");
-  assert.equal(controller.getSnapshot().value, "Keep this draft");
   assert.equal(controller.getSnapshot().saveState, "error");
+  // Newer notes from someone else arrive: the draft goes on top of them, never over them.
+  controller.receiveServer("Someone else's notes");
   await controller.flush();
-  assert.deepEqual(expectedValues, [null, null], "a retry must not silently accept a newer remote baseline");
+  assert.equal(controller.getSnapshot().value, "Someone else's notes\nKeep this draft");
+  assert.deepEqual(expectedValues, [null, "Someone else's notes"], "the retry is checked against their notes, keeping both");
   assert.equal(controller.getSnapshot().saveState, "saved");
 }
 
@@ -67,11 +77,43 @@ function deferred() {
   await assert.rejects(controller.flush(), /changed while you were editing/);
   assert.equal(server, "Collaborator's accepted edit");
   assert.equal(controller.getSnapshot().value, "My draft");
+  assert.equal(controller.getSnapshot().conflict, true, "overlapping edits are a conflict to resolve");
   controller.useLatestServer();
   assert.equal(controller.getSnapshot().value, server);
   controller.change("Reviewed combined notes");
   await controller.flush();
   assert.equal(server, "Reviewed combined notes");
+}
+
+// A save rejected because someone added notes meanwhile is combined and saved, no dead end.
+{
+  let server = "Agenda";
+  const controller = createNotesAutosave(server, async (value, expected) => {
+    if (server !== expected) throw new Error("Meeting changed while you were editing");
+    server = value;
+  });
+  controller.change("Agenda\n- my point");
+  server = "Agenda\n- their point";
+  controller.receiveServer(server);
+  await controller.flush();
+  assert.equal(server, "Agenda\n- their point\n- my point");
+  assert.equal(controller.getSnapshot().saveState, "saved");
+}
+
+// Overlapping edits: Keep both saves theirs with my changed lines under them.
+{
+  let server = "Budget: 10k";
+  const controller = createNotesAutosave(server, async (value, expected) => {
+    if (server !== expected) throw new Error("Meeting changed while you were editing");
+    server = value;
+  });
+  controller.change("Budget: 12k");
+  server = "Budget: 15k";
+  controller.receiveServer(server);
+  await assert.rejects(controller.flush(), /changed while you were editing/);
+  await controller.keepBoth();
+  assert.equal(server, "Budget: 15k\n\nBudget: 12k");
+  assert.equal(controller.getSnapshot().conflict, false);
 }
 
 // When there is no local edit, collaborators' accepted changes are reactive.

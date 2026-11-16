@@ -28,6 +28,8 @@ import {
   redactInCameraMotion,
   transcriptWithoutInCamera,
   withheldWorkingNotes,
+  withheldNotesDraft,
+  notesDraftNeedsTranscriptAccess,
   withheldInCameraTask,
   withoutTranscriptCopy,
   workingNotesAreInCamera,
@@ -108,7 +110,7 @@ export async function minutesForReader<T>(ctx: PortableQueryCtx, minutes: T, gat
 /** Heavy fields the in-camera facts never need. */
 const FACTS_OMITTED_FIELDS = ["sourceMeetingRecord", "sourceTransposition", "draftTranscript", "importedSourceVersions"] as const;
 
-async function minutesForMeeting(ctx: PortableQueryCtx, meetingId: unknown, societyId: unknown): Promise<PortableDoc | null> {
+export async function minutesForMeeting(ctx: PortableQueryCtx, meetingId: unknown, societyId: unknown): Promise<PortableDoc | null> {
   if (typeof meetingId !== "string") return null;
   const minutes = await ctx.db
     .query("minutes")
@@ -188,15 +190,21 @@ export async function agendaItemsForReader<T extends PortableDoc>(ctx: PortableQ
 /**
  * A meeting row for the current reader: a formal-minutes meeting's working
  * notes are withheld from readers without in-camera access when its minutes
- * record an in-camera session (decision A3).
+ * record an in-camera session (decision A3). AI notes made from the
+ * transcript are withheld from readers who may not read the transcript, and
+ * go with the working notes when those are withheld.
  */
 export async function meetingForReader<T extends PortableDoc>(ctx: PortableQueryCtx, row: T, gate: Gate = readerAccessGate(ctx)): Promise<T> {
   // Follow-up replay receipts are internal bookkeeping for every reader.
-  const meeting = withoutFollowUpReceipt(row);
+  let meeting = withoutFollowUpReceipt(row);
+  const access = () => gate(String(meeting.societyId));
+  if (meeting.notesDraft && notesDraftNeedsTranscriptAccess(meeting.notesDraft) && !(await access()).transcript) {
+    meeting = withheldNotesDraft(meeting);
+  }
   if (typeof meeting.workingNotes !== "string" || !meeting.workingNotes.trim()) return meeting;
   const minutes = await minutesForMeeting(ctx, meeting._id, meeting.societyId);
   if (!workingNotesAreInCamera(meeting, minutes)) return meeting;
-  return (await gate(String(meeting.societyId))).inCamera ? meeting : withheldWorkingNotes(meeting);
+  return (await access()).inCamera ? meeting : withheldNotesDraft(withheldWorkingNotes(meeting));
 }
 
 /**

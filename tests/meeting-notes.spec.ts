@@ -428,6 +428,87 @@ test("quotes: Quote in notes from a transcript selection, and the AI notes' key 
     return ((await client.query("meetings:get", { id })) as any)?.workingNotes as string;
   }, meetingId);
   // The editor saves standard Markdown escapes (SPEAKER\_01, \& in the link); the link still opens that moment.
-  expect(saved).toMatch(/> “Small pilots are where we learn the most\.”\n>\n> — SPEAKER\\?_01, \[0:12\]\(http[^)]*tab=notes\\?&view=transcript\\?&t=12-18\)/);
+  expect(saved).toMatch(/> “Small pilots are where we learn the most\.”\n>\n> — SPEAKER\\?_01, \[0:12\]\(\/app\/meetings\/[^)]*tab=notes\\?&view=transcript\\?&t=12-18\)/);
+  expect(errors).toEqual([]);
+});
+
+test("recorder: Stop on the Notes tab keeps the file, closing asks first, an interrupted recording is offered back", async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("dialog", (dialog) => { void dialog.accept(); });
+  await seed(page);
+  const meetingId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    return client.mutation("meetings:create", {
+      societyId: getStoredSocietyId(), type: "Working", title: "Board prep", scheduledAt: "2026-11-12T17:00:00.000Z",
+      electronic: true, status: "Held", attendeeIds: [], recordKind: "notes",
+    });
+  });
+  await page.goto(`/app/meetings/${meetingId}?tab=notes&view=transcript`);
+  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible({ timeout: 60_000 });
+  const bar = page.getByRole("region", { name: "Meeting recording" });
+
+  // Record with the Transcript view already open, and stop from the tab's own button.
+  await page.getByRole("button", { name: /^Record/ }).click();
+  await page.getByRole("menuitem", { name: /^Microphone/ }).first().click();
+  await expect(bar.getByText("Recording", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(6_000);
+  await page.getByRole("button", { name: /^Stop · / }).click();
+  await expect(bar.getByText(/doesn't keep recordings/)).toBeVisible({ timeout: 15_000 });
+  await expect(bar.getByRole("button", { name: "Download" })).toBeVisible();
+  // The Transcript view, opened before recording and kept mounted, picks the recording up.
+  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "Transcript" }).click();
+  await expect(page.locator(".notes-surface__view--transcript").getByText(/Board prep .*\.(webm|m4a|ogg)/).first()).toBeVisible({ timeout: 15_000 });
+
+  // Closing without keeping it asks first.
+  await bar.getByRole("button", { name: "Close" }).click();
+  const dialog = page.getByRole("dialog", { name: "Close without keeping the recording?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(bar.getByRole("button", { name: "Download" })).toBeVisible();
+  const download = page.waitForEvent("download");
+  await bar.getByRole("button", { name: "Download" }).click();
+  expect((await download).suggestedFilename()).toMatch(/^Board prep .*\.(webm|m4a|ogg)$/);
+  await bar.getByRole("button", { name: "Close" }).click();
+  await expect(bar).toHaveCount(0);
+
+  // A recording cut off by a reload is kept in the browser and offered back.
+  await page.getByRole("button", { name: /^Record/ }).click();
+  await page.getByRole("menuitem", { name: /^Microphone/ }).first().click();
+  await expect(bar.getByText("Recording", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(6_000);
+  await page.reload();
+  // Not offered while it may still be running in another tab: age it as if the tab had closed a while ago.
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const open = indexedDB.open("societyer-meeting-recordings");
+    open.onsuccess = () => {
+      const tx = open.result.transaction("recordings", "readwrite");
+      const store = tx.objectStore("recordings");
+      const all = store.getAll();
+      all.onsuccess = () => { for (const row of all.result) store.put({ ...row, updatedAt: Date.now() - 120_000 }); };
+      tx.oncomplete = () => { open.result.close(); resolve(); };
+      tx.onerror = () => reject(tx.error);
+    };
+    open.onerror = () => reject(open.error);
+  }));
+  await page.reload();
+  await expect(bar.getByText("A recording wasn't finished. Recover it?")).toBeVisible({ timeout: 60_000 });
+  await bar.getByRole("button", { name: "Recover" }).click();
+  await expect(bar.getByText(/Recovered · Board prep/)).toBeVisible({ timeout: 15_000 });
+  await expect(bar.getByText(/doesn't keep recordings/)).toBeVisible();
+  const recovered = page.waitForEvent("download");
+  await bar.getByRole("button", { name: "Download" }).click();
+  const file = await recovered;
+  const size = (await (await import("node:fs/promises")).stat(await file.path())).size;
+  expect(size).toBeGreaterThan(1_000);
+  await bar.getByRole("button", { name: "Close" }).click();
+  await expect(bar).toHaveCount(0);
+  // Closed: not offered again.
+  await page.reload();
+  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible({ timeout: 60_000 });
+  await page.waitForTimeout(1_500);
+  await expect(bar).toHaveCount(0);
   expect(errors).toEqual([]);
 });

@@ -16,7 +16,16 @@ import type { LinkMinutesItem } from "./useMinutesLinks";
 import { inCameraMenuSections, type InCameraProps } from "./InCameraTranscript";
 import { TranscriptQuoteContext, type TranscriptQuotePick } from "./transcriptQuote";
 
-type SelectedQuote = { text: string; speaker: string; start: number; end: number; left: number; top: number };
+type SelectedQuote = {
+  text: string;
+  speaker: string;
+  /** Who said which words, when the selection runs across speakers. */
+  parts: Array<{ speaker: string; text: string }>;
+  start: number;
+  end: number;
+  left: number;
+  top: number;
+};
 
 export function useTranscriptSelection({
   root,
@@ -63,6 +72,7 @@ export function useTranscriptSelection({
       .map((segment) => ({ node: segment, text: selectedText(range, segment).trim() }))
       .filter((part) => part.text);
     const text = parts.map((part) => part.text).join(" ");
+    const said = speakerParts(parts, segments, speakers);
     const selectedSegments = parts.map((part) => part.node);
     const first = selectedSegments[0];
     const last = selectedSegments.at(-1);
@@ -78,6 +88,7 @@ export function useTranscriptSelection({
     const width = (quoteInNotes ? 130 : 0) + (linkTargets.length || inCamera?.canMark ? 420 : 232);
     setSelected({
       text,
+      parts: said,
       speaker: speakerName(segments[Number(first.dataset.segment)].speaker, speakers),
       start: Number(words.find((word) => first.contains(word))?.dataset.start ?? first.dataset.start),
       end: Number(words.filter((word) => last.contains(word)).at(-1)?.dataset.end ?? last.dataset.end),
@@ -205,7 +216,7 @@ function SelectionToolbar({
         <button
           type="button"
           className="is-primary"
-          onClick={() => onQuote({ text: selected.text, speaker: selected.speaker, start: selected.start, end: selected.end })}
+          onClick={() => onQuote({ text: selected.text, speaker: selected.speaker, parts: selected.parts, start: selected.start, end: selected.end })}
         >
           Quote in notes
         </button>
@@ -270,6 +281,18 @@ function useLinkedTranscriptRange(root: RefObject<HTMLDivElement>, segments: rea
       for (const node of highlighted) node.classList.remove("is-linked-range");
     };
   }, [root, segments, location.search]);
+}
+
+/** The selected words grouped by who said them, in order. */
+function speakerParts(parts: ReadonlyArray<{ node: HTMLElement; text: string }>, segments: readonly TranscriptSegment[], speakers: readonly TranscriptSpeaker[]) {
+  const said: Array<{ speaker: string; text: string }> = [];
+  for (const part of parts) {
+    const speaker = speakerName(segments[Number(part.node.dataset.segment)].speaker, speakers);
+    const last = said.at(-1);
+    if (last && last.speaker === speaker) last.text = `${last.text} ${part.text}`;
+    else said.push({ speaker, text: part.text });
+  }
+  return said;
 }
 
 /** Clip a selection to text content, excluding speaker headers and action controls. */

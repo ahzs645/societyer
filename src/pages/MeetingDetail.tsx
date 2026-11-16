@@ -28,7 +28,7 @@ import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { MeetingSourcesCard } from "../features/meetings/components/MeetingSourcesCard";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { minutesDraftBlocker, minutesDraftTranscript, withoutTemplateSeededSections } from "../../shared/minutesDraftInput";
-import { TRANSCRIPT_READ_PERMISSION, TRANSCRIPT_WITHHELD_IN_CAMERA, inCameraAgendaTopics, transcriptTextWithoutInCamera } from "../../shared/minutesPrivacy";
+import { TRANSCRIPT_READ_PERMISSION, TRANSCRIPT_WITHHELD_IN_CAMERA, inCameraAgendaTopics, transcriptTextWithoutInCamera, transcriptWithoutInCamera } from "../../shared/minutesPrivacy";
 import { TranscriptAccessNotice, type TranscriptAccess } from "../features/meetings/components/TranscriptAccessNotice";
 import { bylawBaselineForOrganization, quorumRequiresLegalRegisterFor } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
@@ -762,7 +762,7 @@ function MeetingDetailWorkspace() {
     minutesStarted: hasStartedMinutesDraft(minutes),
     minutesApproved: Boolean(minutes?.approvedAt),
     working: isWorkingMeeting(meeting),
-    hasAiNotes: Boolean((meeting as any).notesDraft),
+    hasAiNotes: Boolean((meeting as any).notesDraft || (meeting as any).notesDraftWithheld),
     openActionItems: ((meeting as any).noteActionItems ?? []).filter((item: { done?: boolean }) => !item.done).length,
   });
   // A transcript pasted or imported as plain text lives on the minutes
@@ -2271,7 +2271,7 @@ function MeetingDetailWorkspace() {
   const duplicateIds = duplicateIndex((allMeetings ?? []) as any[], (committees ?? []) as any[]).get(String(meeting._id)) ?? [];
   // Phones fold the stat cells into the header's one line (see the subtitle).
   // One transcript workspace, shown on the Transcript tab and inside the Notes view switch.
-  const transcriptWorkspace = <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} />;
+  const transcriptWorkspace = <TranscriptWorkspace key={meeting._id} societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} plainTextNote={transcriptKeptWithMinutes ? <>Saved as text with the minutes. <Link to={{ search: "?tab=sources" }}>Edit it under Sources</Link>.</> : undefined} minutes={minutes} motions={displayMotions} attendees={speakerAttendees} onDraftMinutes={canMinutesWrite && recordKind === "minutes" ? draftFromTranscriptTab : undefined} draftingMinutes={busy} inCameraMarking={recordKind === "minutes"} />;
   const phoneMeetingFacts: string[] = !isPhone || minutesLoading ? [] : recordKind === "minutes"
     ? [
         `${minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0} ${meetingNotYetHeld(meeting) ? "expected" : "present"}`,
@@ -2600,7 +2600,8 @@ function MeetingDetailWorkspace() {
             steps={recordSteps}
             onMinutesStarted={() => setActiveTab("minutes")}
             meeting={meeting as any}
-            transcriptRow={transcriptRecord}
+            // In-camera parts never reach the AI notes, the Ask bar or the notes export.
+            transcriptRow={transcriptRecord ? transcriptWithoutInCamera(transcriptRecord, minutes) : transcriptRecord}
             hasTranscript={Boolean(transcriptRecord && (transcriptRecord.text || transcriptRecord.segments?.length))}
             canReadTranscript={canReadTranscript}
             canCreateTasks={canTasksWrite}

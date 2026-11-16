@@ -1,5 +1,5 @@
 import { useConvex, useQuery } from "convex/react";
-import { takeFinishedRecording } from "../recorder/meetingRecorder";
+import { takeFinishedRecording, useMeetingRecorder } from "../recorder/meetingRecorder";
 import { api as hostedApi } from "@/lib/convexApi";
 import { WhisperXQueue } from "./WhisperXQueue";
 import { PagedTranscriptToolbar } from "./PagedTranscriptToolbar";
@@ -68,6 +68,7 @@ export function TranscriptWorkspace({
   onDraftMinutes,
   draftingMinutes,
   plainTextNote,
+  inCameraMarking = true,
 }: {
   societyId: Id<"societies">;
   meetingId: Id<"meetings">;
@@ -81,6 +82,8 @@ export function TranscriptWorkspace({
   draftingMinutes?: boolean;
   /** Where an untimed transcript is kept and edited, shown with its text. */
   plainTextNote?: ReactNode;
+  /** Off for meetings that keep notes: in-camera sessions belong to formal minutes. */
+  inCameraMarking?: boolean;
 }) {
   const location = useLocation();
   const headerTranscript = transcript;
@@ -117,13 +120,15 @@ export function TranscriptWorkspace({
   const clock = useMediaClock();
   const { recording, recordingOrigin, setRecording, lastRecording, source, peaks, waveformNote } =
     useTranscriptRecording(meetingId);
-  // A recording just made in the app (RecordingBar) opens here, ready to play and transcribe.
+  // A recording just made in the app opens here, ready to play and transcribe,
+  // also when this view was already open while recording.
+  const recorder = useMeetingRecorder();
   useEffect(() => {
     const file = takeFinishedRecording(meetingId);
     if (file) setRecording(file, "device");
-  }, [meetingId, setRecording]);
+  }, [meetingId, setRecording, recorder.phase, recorder.file]);
   const links = useMinutesLinks({ societyId, meetingId, minutes, motions });
-  const inCamera = useInCameraMarks({ societyId, meetingId, minutes });
+  const inCamera = useInCameraMarks({ societyId, meetingId, minutes, markingAllowed: inCameraMarking });
   const feedback = useTranscriptFeedback({ status, linkStatus: links.status, markStatus: inCamera.status, waveformNote, undo });
   const segments = transcript?.segments ?? EMPTY_SEGMENTS;
   const speakers = transcript?.speakers ?? EMPTY_SPEAKERS;

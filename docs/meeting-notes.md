@@ -162,10 +162,21 @@ keeps your place; a hidden view pauses its media.
   screen with "Share audio" ticked), or **Join & record** for a meeting with a
   link. A floating bar (`src/features/meetings/recorder/RecordingBar.tsx`)
   shows the timer and level on every page; navigating inside the app keeps
-  recording, and leaving or reloading asks first. On Stop the file is saved
-  where the workspace keeps recordings (see below) and handed to the Transcript
-  view; if recordings aren't kept, the bar offers a download. Transcription
-  happens after the recording ends, not live.
+  recording, and leaving or reloading asks first. However it is stopped (the
+  bar or the Notes tab's Stop), the file is saved where the workspace keeps
+  recordings (see below) and opens in the Transcript view, also when that view
+  was already open; if recordings aren't kept, the bar offers a download, and
+  closing without keeping or downloading it asks first. Transcription happens
+  after the recording ends, not live.
+- **Crash-safe.** Audio is recorded at 32 kbps mono (about 14 MB an hour) in
+  5-second chunks, each written to this browser's IndexedDB as it is recorded
+  (`recorder/recordingStash.ts`). After a crash, a reload or a closed tab, the
+  bar offers **Recover** (then it is saved like any other recording) or
+  discard. A copy is removed once the recording is saved, closed or discarded;
+  one updated in the last 30 seconds may be running in another tab and isn't
+  offered. The bar warns when the microphone stops (unplugged, or taken by
+  another app), a recorder error stops and keeps what was recorded, and the
+  screen is kept awake while recording where the browser allows.
 - **•••** downloads Markdown or PDF, prints, copies a plain-text recap
   (summary, decisions, open next steps, open questions) or opens it in your
   mail app (`shared/meetingNotesExport.ts`). On a phone it also leads to the
@@ -190,8 +201,43 @@ keeps your place; a hidden view pauses its media.
   if its words appear in one transcript line (ignoring case, punctuation and
   quote marks), and takes the speaker and time from that line, not from the
   model. A speaker label the skill identifies is replaced by the person's
-  name. Each quote's time opens the Transcript view there; "Add to my notes",
-  Copy and the Markdown export include them.
+  name. Quotes must be whole sentences, so a clipped "we should cut the
+  program" can't stand in for "I don't think we should cut the program".
+  Saving a draft checks every quote again against the transcript the saver
+  may read (in-camera parts aside) and drops any that aren't there. Each
+  quote's time opens the Transcript view there; "Add to my notes", Copy and
+  the Markdown export include them.
+- A selection across speakers is quoted with each speaker's own words. Quote
+  links are app paths (`/app/meetings/…`), so they work on the web and in the
+  desktop app.
+
+## Who sees what
+
+- **AI notes follow the transcript.** AI notes made from the transcript (its
+  summary, quotes, who each speaker is) are only sent to people who may read
+  the transcript (`minutes:write`); others see that AI notes exist. A draft
+  made from the notes alone follows the notes. The meetings list never carries
+  AI notes, only `hasNotesDraft`.
+- **In-camera parts never reach the AI.** Drafting (hosted and on-device), the
+  skill's speaker samples, the Ask bar and the notes export use the transcript
+  without in-camera sessions, whoever asks. AI notes go with the working notes
+  when those are withheld for an in-camera session.
+- **In-camera sessions belong to formal minutes.** The transcript's "Mark as
+  in-camera…" isn't offered on meetings that keep notes, and AI notes can only
+  be drafted for meetings that keep notes.
+
+## Saving safely
+
+- **Action items** are changed one item at a time (`ops` on
+  `meetings:setNoteActionItems`: add, patch, remove), applied to the list as it
+  is on the server, so two people or two quick clicks never undo each other
+  and a task link is never lost. A patch can't change the task link. The
+  `add_meeting_action_items` agent tool adds the same way.
+- **Notes** save against the version they started from. When someone else saved
+  first, edits to different lines (or lines both added at the same place) are
+  combined and saved automatically. When both changed the same lines, the
+  editor offers **Keep both** (their notes, then your changed lines) or
+  **Load saved notes**.
 
 ## Working meetings: progress and duplicates
 

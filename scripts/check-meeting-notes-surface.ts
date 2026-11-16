@@ -115,11 +115,11 @@ assert.equal(formatElapsed(3725), "1:02:05");
 console.log("✓ recorder: safe file names and elapsed time");
 
 // ---------- quote in notes -------------------------------------------------------------
-const quoteHref = notesTranscriptLink(54, 61.5, { pathname: "/app/meetings/m1", search: "?tab=notes&view=transcript" }, { locationHref: "https://app.example.org/app/meetings/m1" });
-assert.equal(quoteHref, "https://app.example.org/app/meetings/m1?tab=notes&view=transcript&t=54-61.5");
+const quoteHref = notesTranscriptLink(54, 61.5, { pathname: "/app/meetings/m1", search: "?tab=notes&view=transcript" });
+assert.equal(quoteHref, "/app/meetings/m1?tab=notes&view=transcript&t=54-61.5", "an app path: works on the web and in the desktop app");
 assert.equal(
-  notesTranscriptLink(3, 4, { pathname: "/app/meetings/m1", search: "?tab=transcript&t=1-2" }, { locationHref: "https://app.example.org/" }),
-  "https://app.example.org/app/meetings/m1?tab=notes&view=transcript&t=3-4",
+  notesTranscriptLink(3, 4, { pathname: "/app/meetings/m1", search: "?tab=transcript&t=1-2" }),
+  "/app/meetings/m1?tab=notes&view=transcript&t=3-4",
   "from the Transcript tab it still opens the notes surface at that moment",
 );
 assert.equal(
@@ -128,4 +128,9 @@ assert.equal(
   "one line of words, existing quote marks dropped, then who and when",
 );
 assert.match(transcriptQuoteMarkdown({ text: "Hi", speaker: " ", start: 0, end: 1 }, "x"), /— Unknown speaker, \[0:00\]\(x\)$/);
-console.log("✓ quote in notes: blockquote with speaker and a link back to that moment");
+assert.equal(
+  transcriptQuoteMarkdown({ text: "Can we? Yes we can.", speaker: "Sam", parts: [{ speaker: "Sam", text: "Can we?" }, { speaker: "Priya", text: "Yes we can." }], start: 3, end: 8 }, "x"),
+  "> **Sam:** “Can we?”\n>\n> **Priya:** “Yes we can.”\n>\n> — [0:03](x)",
+  "a selection across speakers credits each one",
+);
+console.log("✓ quote in notes: blockquote with speaker and a link back to that moment; each speaker credited");

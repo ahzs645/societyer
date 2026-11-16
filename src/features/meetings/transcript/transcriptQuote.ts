@@ -4,10 +4,16 @@
  * toolbar shows Copy quote and Copy link only.
  */
 import { createContext } from "react";
-import { appRouteAbsoluteHref, type AppRouteHrefOptions } from "../../../lib/appRouteHref";
 import { formatTranscriptTime } from "./activeIndex";
 
-export type TranscriptQuotePick = { text: string; speaker: string; start: number; end: number };
+export type TranscriptQuotePick = {
+  text: string;
+  speaker: string;
+  /** Who said which words, when the selection runs across speakers. */
+  parts?: Array<{ speaker: string; text: string }>;
+  start: number;
+  end: number;
+};
 
 export const TranscriptQuoteContext = createContext<((quote: TranscriptQuotePick) => void) | null>(null);
 
@@ -22,9 +28,12 @@ export function notesTranscriptSearch(search: string, start: number, end?: numbe
   return `?${params.toString()}`;
 }
 
-/** The same, as an absolute link for notes and exports. */
-export function notesTranscriptLink(start: number, end: number, location: { pathname: string; search: string }, options: AppRouteHrefOptions = {}) {
-  return appRouteAbsoluteHref(`${location.pathname}${notesTranscriptSearch(location.search, start, end)}`, options);
+/**
+ * The same as an app path for the notes: no origin, so the link works from
+ * the web app and the desktop app alike.
+ */
+export function notesTranscriptLink(start: number, end: number, location: { pathname: string; search: string }) {
+  return `${location.pathname}${notesTranscriptSearch(location.search, start, end)}`;
 }
 
 /**
@@ -36,7 +45,13 @@ export function notesTranscriptLink(start: number, end: number, location: { path
  *   > — Priya Raman, [0:54](…?tab=notes&view=transcript&t=54-62)
  */
 export function transcriptQuoteMarkdown(quote: TranscriptQuotePick, href: string): string {
-  const text = quote.text.replace(/\s+/g, " ").trim().replace(/^["“]+|["”]+$/g, "");
-  const speaker = quote.speaker.replace(/\s+/g, " ").trim() || "Unknown speaker";
-  return `> “${text}”\n>\n> — ${speaker}, [${formatTranscriptTime(quote.start)}](${href})`;
+  const clean = (value: string) => value.replace(/\s+/g, " ").trim().replace(/^["“]+|["”]+$/g, "");
+  const who = (value: string) => value.replace(/\s+/g, " ").trim() || "Unknown speaker";
+  const time = `[${formatTranscriptTime(quote.start)}](${href})`;
+  // Across speakers: each one's words, so nobody is credited with someone else's.
+  if (quote.parts && new Set(quote.parts.map((part) => who(part.speaker))).size > 1) {
+    const lines = quote.parts.map((part) => `> **${who(part.speaker)}:** “${clean(part.text)}”`);
+    return `${lines.join("\n>\n")}\n>\n> — ${time}`;
+  }
+  return `> “${clean(quote.text)}”\n>\n> — ${who(quote.speaker)}, ${time}`;
 }

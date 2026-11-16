@@ -422,7 +422,7 @@ export async function listPortable(
   { societyId }: { societyId: string },
 ) {
   await requireSocietyMembership(ctx, societyId);
-  return ctx.db
+  const rows = await ctx.db
     .query("meetings")
     .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
     .order("desc")
@@ -430,6 +430,12 @@ export async function listPortable(
     // Replay receipts are internal bookkeeping and never part of a reader's view.
     .omitFields("workingNotes", ...FOLLOW_UP_RECEIPT_FIELDS)
     .collect();
+  // AI notes follow the transcript's read rule (meetingForReader); a list only says they exist.
+  return rows.map((row: any) => {
+    if (!row.notesDraft) return row;
+    const { notesDraft: _draft, ...rest } = row;
+    return { ...rest, hasNotesDraft: true };
+  });
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {

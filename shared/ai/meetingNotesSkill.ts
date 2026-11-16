@@ -301,16 +301,45 @@ type PendingAction = SkillActionItem & { speakerLabel?: string };
 
 export type SkillSpeakerSuggestion = { label: string; name: string; personId?: string; evidence: string };
 
+/**
+ * Where a quote's words are said: one transcript line, whole sentences, word
+ * for word (case, punctuation and quote marks aside). Whole sentences, so a
+ * clipped "we should cut the program" can't stand in for "I don't think we
+ * should cut the program". Used by the skill and again when a draft is saved.
+ */
+export function findTranscriptQuote(lines: readonly TranscriptLine[], words: string, near?: number): { line: TranscriptLine } | { error: string } {
+  const key = quoteKey(words);
+  if (key.split(" ").length < 3) return { error: "a quote needs at least three words." };
+  const whole = (line: TranscriptLine) => {
+    const sentences = line.text.split(/(?<=[.!?…])\s+/).map(quoteKey).filter(Boolean);
+    for (let start = 0; start < sentences.length; start++) {
+      let joined = "";
+      for (let end = start; end < sentences.length; end++) {
+        joined = joined ? `${joined} ${sentences[end]}` : sentences[end];
+        if (joined === key) return true;
+        if (joined.length >= key.length) break;
+      }
+    }
+    return false;
+  };
+  const inLine = lines.filter((line) => ` ${line.key} `.includes(` ${key} `));
+  if (!inLine.length) return { error: "those words are not in the transcript exactly. Copy them from one line without changing or joining them." };
+  const matches = inLine.filter(whole);
+  if (!matches.length) return { error: "quote whole sentences, not part of one: a clipped sentence can change what was meant." };
+  const line = near === undefined ? matches[0] : [...matches].sort((a, b) => Math.abs((a.atSec ?? 0) - near) - Math.abs((b.atSec ?? 0) - near))[0];
+  return { line };
+}
+
 type PendingQuote = NotesDraftQuote & { speakerLabel?: string };
 
 /** One transcript line: "[m:ss] Speaker: words", or plain words. */
-type TranscriptLine = { atSec?: number; speaker?: string; text: string; key: string };
+export type TranscriptLine = { atSec?: number; speaker?: string; text: string; key: string };
 
 /** Lowercase letters and digits only, so curly quotes, dashes and spacing don't matter. */
 const quoteKey = (value: string) =>
   value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-function transcriptLines(transcript: string): TranscriptLine[] {
+export function transcriptLines(transcript: string): TranscriptLine[] {
   return transcript.split(/\r?\n/).flatMap((raw) => {
     const line = raw.trim();
     if (!line) return [];
@@ -466,11 +495,10 @@ export function createMeetingNotesSkillSession(
         if (!words) return refuse(tool, "text is empty.");
         if (!lines.length) return refuse(tool, "there is no transcript to quote.");
         const key = quoteKey(words);
-        if (key.split(" ").length < 3) return refuse(tool, "a quote needs at least three words.");
-        const matches = lines.filter((line) => line.key.includes(key));
-        if (!matches.length) return refuse(tool, "those words are not in the transcript exactly. Copy them from one line without changing or joining them.");
         const near = typeof args.at_seconds === "number" && Number.isFinite(args.at_seconds) ? args.at_seconds : undefined;
-        const line = near === undefined ? matches[0] : [...matches].sort((a, b) => Math.abs((a.atSec ?? 0) - near) - Math.abs((b.atSec ?? 0) - near))[0];
+        const found = findTranscriptQuote(lines, words, near);
+        if ("error" in found) return refuse(tool, found.error);
+        const { line } = found;
         if (quotes.some((quote) => quoteKey(quote.text) === key)) return { content: "Already recorded." };
         if (quotes.length >= NOTES_DRAFT_LIMITS.quotes) return refuse(tool, `keep at most ${NOTES_DRAFT_LIMITS.quotes} quotes.`);
         const label = line.speaker && speakerLabels.has(line.speaker) ? line.speaker : undefined;

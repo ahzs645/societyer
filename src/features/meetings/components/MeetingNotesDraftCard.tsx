@@ -87,8 +87,10 @@ export function MeetingNotesDraftCard({
     if (isNotesDraftTemplateId(draft?.template)) setTemplate(draft.template);
   }, [draft?.template]);
   const [running, setRunning] = useState(false);
+  // AI notes made from the transcript are only sent to people who may read it.
+  const withheld = !draft && Boolean((meeting as { notesDraftWithheld?: boolean }).notesDraftWithheld);
   const hasNotes = notes.trim().length > 0;
-  const canDraft = canWrite && notesDraft.available && (hasNotes || (hasTranscript && canReadTranscript)) && !running;
+  const canDraft = canWrite && !withheld && notesDraft.available && (hasNotes || (hasTranscript && canReadTranscript)) && !running;
 
   const sourceHint = !canReadTranscript
     ? "Drafts from your notes. Transcripts are only read for people who keep the minutes."
@@ -136,7 +138,7 @@ export function MeetingNotesDraftCard({
         <h2 className="card__title" id="meeting-ai-notes-title">
           <Sparkles size={14} aria-hidden="true" /> AI notes
         </h2>
-        {canWrite && (
+        {canWrite && !withheld && (
           <div className="meeting-ai-notes__controls">
             <div className="meeting-ai-notes__template">
               <Select
@@ -146,7 +148,7 @@ export function MeetingNotesDraftCard({
                 options={NOTES_DRAFT_TEMPLATES.map((entry) => ({ value: entry.id, label: entry.label, hint: entry.hint }))}
               />
             </div>
-            <button type="button" className="btn-action btn-action--primary" onClick={() => { void runDraft(); }} disabled={!canDraft}>
+            <button type="button" className="btn-action btn-action--primary" onClick={() => { void runDraft(); }} disabled={!canDraft} title={!notesDraft.available ? notesDraft.unavailableReason : undefined}>
               {draft ? <RefreshCw size={12} aria-hidden="true" /> : <Sparkles size={12} aria-hidden="true" />}
               {running ? (progress ? deviceDraftLabel(progress) : "Drafting…") : draft ? "Redraft" : "Draft notes"}
             </button>
@@ -154,21 +156,26 @@ export function MeetingNotesDraftCard({
         )}
       </div>
       <div className="card__body meeting-ai-notes__body">
-        {canWrite && !draft && (
+        {withheld && (
+          <p className="muted">
+            This meeting has AI notes. They were made from the transcript, so only people who can read the transcript see them.
+          </p>
+        )}
+        {canWrite && !draft && !withheld && (
           <p className="muted">
             {notesDraftTemplate(template).hint} {sourceHint} Your own notes stay exactly as you wrote them.
           </p>
         )}
-        {canWrite && !notesDraft.available && (
+        {canWrite && !withheld && !draft && !notesDraft.available && (
           <p className="flag flag--warn" role="note">
             Drafting notes here uses on-device AI. {notesDraft.unavailableReason}{" "}
             <Link to={DEVICE_AI_SETTINGS_HREF}>Set up on-device AI</Link>
           </p>
         )}
-        {canWrite && notesDraft.available && !hasNotes && !(hasTranscript && canReadTranscript) && (
+        {canWrite && !withheld && notesDraft.available && !hasNotes && !(hasTranscript && canReadTranscript) && (
           <p className="muted">Write some notes or add a transcript to draft from.</p>
         )}
-        {!canWrite && !draft && <p className="muted">No AI notes yet.</p>}
+        {!canWrite && !draft && !withheld && <p className="muted">No AI notes yet.</p>}
         {draft && (
           <NotesDraftView
             draft={draft}

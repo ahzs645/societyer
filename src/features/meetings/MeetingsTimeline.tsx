@@ -23,7 +23,7 @@ type Row = {
   externalOrganization?: string;
   recordKind?: string;
   remoteUrl?: string;
-  notesDraft?: unknown;
+  hasNotesDraft?: boolean;
   noteActionItems?: Array<{ done?: boolean }>;
   location?: string;
 };
@@ -92,7 +92,7 @@ export function MeetingsTimeline({
                       {meetingBodyLabel(row as any, committees as any)}
                       {" · "}
                       {kind === "notes" ? "Notes" : kind === "minutes" ? (minutesStarted(row._id) ? "Minutes started" : "Minutes") : "No write-up"}
-                      {row.notesDraft ? <span className="meetings-timeline__chip"><Sparkles size={10} aria-hidden="true" /> AI notes</span> : null}
+                      {row.hasNotesDraft ? <span className="meetings-timeline__chip"><Sparkles size={10} aria-hidden="true" /> AI notes</span> : null}
                       {open > 0 && <span className="meetings-timeline__chip">{open} open action{open === 1 ? "" : "s"}</span>}
                     </span>
                   </span>

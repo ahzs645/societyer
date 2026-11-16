@@ -4,7 +4,7 @@
  * the progress stepper, and "Turn notes into minutes".
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -89,7 +89,7 @@ function useAutosavedNotes(meetingId: Id<"meetings">, serverValue: string | unde
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(flushInBackground, NOTES_SAVE_DELAY_MS);
   };
-  return { ...state, onChange, flush, flushInBackground, useLatestServer: controller.useLatestServer, recovery, restore: controller.restore, saveRecovered: controller.saveRecovered };
+  return { ...state, onChange, flush, flushInBackground, useLatestServer: controller.useLatestServer, keepBoth: controller.keepBoth, recovery, restore: controller.restore, saveRecovered: controller.saveRecovered };
 }
 
 export function MeetingNotesTab({
@@ -173,6 +173,7 @@ export function MeetingNotesTab({
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const recorder = useMeetingRecorder();
   const recordingHere = recorder.meetingId === meetingId && (recorder.phase === "recording" || recorder.phase === "starting");
   const requested = searchParams.get("view");
@@ -206,7 +207,7 @@ export function MeetingNotesTab({
   // Quote in notes: the selection goes under the notes as a quote linked back to that moment.
   const quoteInNotes = canWrite && !converting
     ? (quote: TranscriptQuotePick) => {
-        notes.onChange(appendMarkdown(notes.value, transcriptQuoteMarkdown(quote, notesTranscriptLink(quote.start, quote.end, window.location))));
+        notes.onChange(appendMarkdown(notes.value, transcriptQuoteMarkdown(quote, notesTranscriptLink(quote.start, quote.end, location))));
         toast.success("Quoted in your notes.", { action: { label: "Show notes", onClick: () => setView("notes") } });
       }
     : null;
@@ -328,9 +329,15 @@ function NotesDocCard({ notes, canWrite, converting, tooLong, onPickTemplate }: 
         )}
         {notes.saveState === "error" && (
           <div className="flag flag--warn" role="alert">
-            <p>{notes.error || "The notes could not be saved."} Your draft is still in the editor.</p>
+            <p>
+              {notes.conflict
+                ? "Someone else saved changes to the same part of these notes. Keep both puts your changes under theirs; nothing is lost."
+                : <>{notes.error || "The notes could not be saved."} Your draft is still in the editor.</>}
+            </p>
             <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="btn-action" onClick={notes.flushInBackground} disabled={!canWrite}>Retry save</button>
+              {notes.conflict
+                ? <button type="button" className="btn-action" onClick={() => { void notes.keepBoth().catch(() => undefined); }} disabled={!canWrite}>Keep both</button>
+                : <button type="button" className="btn-action" onClick={notes.flushInBackground} disabled={!canWrite}>Retry save</button>}
               <button type="button" className="btn-action" onClick={async () => {
                 const discard = await confirm({
                   title: "Load the latest saved notes?",

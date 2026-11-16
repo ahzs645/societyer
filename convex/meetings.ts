@@ -17,6 +17,8 @@ import {
   type NotesDraft,
   type NotesDraftInput,
 } from "../shared/ai/notesDraft";
+import { meetingRecordKind } from "../shared/meetingRecordKind";
+import { transcriptWithoutInCamera } from "../shared/minutesPrivacy";
 import { completeStructuredJson, endpointLabel, resolveMinutesEndpoint, ToolsUnsupportedError, toolStep, type MinutesModelEndpoint } from "./providers/llm";
 import {
   applySkillCalls,
@@ -263,7 +265,16 @@ export const discardNotesDraft = authorizedMutation("meetings:discardNotesDraft"
 });
 
 export const setNoteActionItems = authorizedMutation("meetings:setNoteActionItems", mutation)({
-  args: { id: v.id("meetings"), items: v.array(meetingNoteActionItemValidator) },
+  args: {
+    id: v.id("meetings"),
+    // The whole list, or (preferred) changes applied to the list as it is now.
+    items: v.optional(v.array(meetingNoteActionItemValidator)),
+    ops: v.optional(v.array(v.union(
+      v.object({ op: v.literal("add"), item: meetingNoteActionItemValidator }),
+      v.object({ op: v.literal("patch"), itemId: v.string(), set: v.optional(v.any()), unset: v.optional(v.array(v.string())) }),
+      v.object({ op: v.literal("remove"), itemId: v.string() }),
+    ))),
+  },
   returns: v.any(),
   handler: async (ctx, args) => setNoteActionItemsPortable(await toPortableMutationCtx(ctx), args),
 });
@@ -290,11 +301,15 @@ export const generateNotesDraft = authorizedAction("meetings:generateNotesDraft"
     if (!isNotesDraftTemplateId(template)) throw new Error("Unknown notes template.");
     const meeting = await ctx.runQuery(api.meetings.get, { id });
     if (!meeting) throw new Error("Meeting not found.");
+    if (meetingRecordKind(meeting) !== "notes") throw new Error("AI notes are for meetings that keep notes. This meeting keeps formal minutes.");
     const notes = String(meeting.workingNotes ?? "");
     let transcript = "";
     try {
-      // Only someone who may read the transcript gets it in their draft.
-      transcript = notesDraftTranscriptFromRow(await ctx.runQuery(api.transcripts.getByMeeting, { meetingId: id }));
+      // Only someone who may read the transcript gets it in their draft, and
+      // in-camera parts never go to the model, whoever asks.
+      const row = await ctx.runQuery(api.transcripts.getByMeeting, { meetingId: id });
+      const minutes = row ? await ctx.runQuery(api.minutes.getByMeeting, { meetingId: id }).catch(() => null) : null;
+      transcript = notesDraftTranscriptFromRow(row ? transcriptWithoutInCamera(row, minutes) : row);
     } catch {
       transcript = "";
     }

@@ -4,14 +4,18 @@
  * Chrome and Edge; tab audio elsewhere). Both are mixed into one file.
  *
  * One recording at a time, held in this module so it keeps running while the
- * person moves around the app; the floating RecordingBar shows and stops it.
- * When it stops, the file is handed to whoever is waiting (`takeFinishedRecording`)
- * and to the save step (src/features/meetings/recorder/saveRecording.ts).
+ * person moves around the app. Whoever stops it (the floating RecordingBar or
+ * the Notes tab's Stop), the finished file stays in the state: the bar saves
+ * it where the workspace keeps recordings, and the meeting's Transcript view
+ * opens it (`takeFinishedRecording`).
  *
+ * Each chunk is also written to this browser's IndexedDB as it is recorded
+ * (recordingStash.ts), so a crash or closed tab doesn't lose the meeting.
  * Nothing here is sent anywhere: the audio stays in this browser until it is
  * saved where the workspace keeps recordings, or downloaded.
  */
 import { useSyncExternalStore } from "react";
+import { dropStash, stashChunk, type StashMeta } from "./recordingStash";
 
 export type RecorderPhase = "idle" | "starting" | "recording" | "stopping" | "finished" | "error";
 
@@ -29,8 +33,14 @@ export type RecorderState = {
   /** A warning that didn't stop the recording (no shared audio, for example). */
   notice?: string;
   error?: string;
-  /** Set once finished: the file, until the save step takes it. */
+  /** Set once finished: the file, kept until the recording is closed. */
   file?: File;
+  /** The Transcript view has opened the file. */
+  transcriptTaken?: boolean;
+  /** The crash-safe copy in this browser (recordingStash.ts). */
+  stashId?: string;
+  /** Brought back from the stash after a crash or a closed tab. */
+  recovered?: boolean;
 };
 
 const IDLE: RecorderState = { phase: "idle", elapsed: 0, level: 0, sharedAudio: false };
@@ -80,6 +90,30 @@ export function recordingFileName(title: string | undefined, startedAt: number, 
   const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}-${pad(date.getMinutes())}`;
   const base = String(title ?? "Meeting").replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Meeting";
   return `${base} ${stamp}.${extension}`;
+}
+
+/** Small files: speech at 32 kbps mono is about 14 MB an hour, under transcription upload limits. */
+export const RECORDING_BITS_PER_SECOND = 32_000;
+
+type WakeLockLike = { release: () => Promise<void> };
+let wakeLock: WakeLockLike | null = null;
+/** Keeps a phone or laptop screen awake while recording, where the browser allows it. */
+async function holdWakeLock() {
+  try {
+    const api = (navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<WakeLockLike> } }).wakeLock;
+    if (api && !wakeLock && document.visibilityState === "visible") wakeLock = await api.request("screen");
+  } catch {
+    /* not allowed here; recording continues */
+  }
+}
+function releaseWakeLock() {
+  const lock = wakeLock;
+  wakeLock = null;
+  void lock?.release().catch(() => undefined);
+}
+function onVisibility() {
+  // Browsers drop the lock when the page is hidden; take it again on return.
+  if (session && document.visibilityState === "visible") { wakeLock = null; void holdWakeLock(); }
 }
 
 type Session = {
@@ -144,16 +178,51 @@ export async function startMeetingRecording(input: { meetingId: string; meetingT
     source.connect(destination);
     analysers.push(analyser);
   }
+  destination.channelCount = 1;
   const { mimeType, extension } = recordingMimeType();
-  const recorder = new MediaRecorder(destination.stream, mimeType ? { mimeType } : undefined);
+  let recorder: MediaRecorder;
+  try {
+    recorder = new MediaRecorder(destination.stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: RECORDING_BITS_PER_SECOND });
+  } catch {
+    recorder = new MediaRecorder(destination.stream, mimeType ? { mimeType } : undefined);
+  }
   const chunks: Blob[] = [];
-  recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+  const startedAt = Date.now();
+  const stash: StashMeta = {
+    id: `${input.meetingId}:${startedAt}`,
+    meetingId: input.meetingId,
+    meetingTitle: input.meetingTitle,
+    startedAt,
+    mimeType: mimeType || recorder.mimeType || "audio/webm",
+    extension,
+    updatedAt: startedAt,
+    elapsed: 0,
+  };
+  let seq = 0;
+  recorder.ondataavailable = (event) => {
+    if (!event.data.size) return;
+    chunks.push(event.data);
+    const now = Date.now();
+    void stashChunk({ ...stash, updatedAt: now, elapsed: Math.floor((now - startedAt) / 1000) }, seq++, event.data);
+  };
+  // A recorder error keeps what was recorded: stop and hand the file on.
+  recorder.onerror = () => {
+    set({ notice: "The recording hit an error and stopped. What was recorded is kept." });
+    if (session?.recorder === recorder && recorder.state !== "inactive") void stopMeetingRecording().catch(() => undefined);
+  };
+  // An unplugged microphone (or one another app takes) ends its track: say so, it would record silence.
+  for (const track of streams[0].getAudioTracks()) {
+    track.onended = () => set({
+      notice: streams.length > 1
+        ? "The microphone stopped (unplugged, or taken by another app). Still recording the shared audio."
+        : "The microphone stopped (unplugged, or taken by another app). Stop, then start a new recording to keep going.",
+    });
+  }
   // A shared tab closing ends its track; keep recording the microphone.
   for (const stream of streams.slice(1)) {
     for (const track of stream.getAudioTracks()) track.onended = () => set({ sharedAudio: false, notice: "Sharing stopped; still recording your microphone." });
   }
   const buffer = new Uint8Array(512);
-  const startedAt = Date.now();
   const timer = window.setInterval(() => {
     let level = 0;
     for (const analyser of analysers) {
@@ -164,10 +233,20 @@ export async function startMeetingRecording(input: { meetingId: string; meetingT
     }
     set({ elapsed: Math.floor((Date.now() - startedAt) / 1000), level });
   }, 200);
-  // Chunks every few seconds, so a crash mid-meeting loses little.
+  // A chunk every few seconds, each written to the stash: a crash loses only the last few seconds.
   recorder.start(5_000);
-  session = { recorder, streams, context, chunks, timer, extension, mimeType: mimeType || recorder.mimeType || "audio/webm" };
-  set({ phase: "recording", startedAt, sharedAudio: streams.length > 1, notice });
+  session = { recorder, streams, context, chunks, timer, extension, mimeType: stash.mimeType };
+  document.addEventListener("visibilitychange", onVisibility);
+  void holdWakeLock();
+  set({ phase: "recording", startedAt, sharedAudio: streams.length > 1, notice, stashId: stash.id });
+}
+
+function endSession(current: Session) {
+  window.clearInterval(current.timer);
+  stopTracks(current.streams);
+  void current.context.close().catch(() => undefined);
+  document.removeEventListener("visibilitychange", onVisibility);
+  releaseWakeLock();
 }
 
 /** Stops and returns the recorded file (also kept in the state until taken). */
@@ -177,9 +256,7 @@ export function stopMeetingRecording(): Promise<File> {
   set({ phase: "stopping", level: 0 });
   return new Promise((resolve, reject) => {
     current.recorder.onstop = () => {
-      window.clearInterval(current.timer);
-      stopTracks(current.streams);
-      void current.context.close().catch(() => undefined);
+      endSession(current);
       session = null;
       if (!current.chunks.length) {
         set({ phase: "error", error: "Nothing was recorded." });
@@ -188,37 +265,53 @@ export function stopMeetingRecording(): Promise<File> {
       }
       const type = current.mimeType.split(";")[0] || "audio/webm";
       const file = new File(current.chunks, recordingFileName(state.meetingTitle, state.startedAt ?? Date.now(), current.extension), { type });
-      set({ phase: "finished", file });
+      set({ phase: "finished", file, transcriptTaken: false });
       resolve(file);
     };
     current.recorder.stop();
   });
 }
 
-/** Stops and throws the audio away. */
+/** Stops and throws the audio away, including the crash-safe copy. */
 export function discardMeetingRecording() {
   const current = session;
+  const stashId = state.stashId;
   session = null;
   if (current) {
-    window.clearInterval(current.timer);
     current.recorder.onstop = null;
+    current.recorder.ondataavailable = null;
     try { current.recorder.stop(); } catch { /* already stopped */ }
-    stopTracks(current.streams);
-    void current.context.close().catch(() => undefined);
+    endSession(current);
   }
+  if (stashId) void dropStash(stashId);
   set(IDLE);
 }
 
-/** The finished file for this meeting, once; the bar then returns to idle. */
+/** The finished file for this meeting, once, for the Transcript view. The file stays for saving. */
 export function takeFinishedRecording(meetingId: string): File | null {
-  if (state.phase !== "finished" || state.meetingId !== meetingId || !state.file) return null;
-  const file = state.file;
-  set({ file: undefined });
-  return file;
+  if (state.phase !== "finished" || state.meetingId !== meetingId || !state.file || state.transcriptTaken) return null;
+  set({ transcriptTaken: true });
+  return state.file;
 }
 
-export function resetRecorder() {
-  if (!session) set(IDLE);
+/** A recording recovered from the stash: finished, to be saved like any other. */
+export function adoptRecoveredRecording(meta: StashMeta, file: File) {
+  if (session || (state.phase !== "idle" && state.phase !== "error")) return false;
+  set({ ...IDLE, phase: "finished", meetingId: meta.meetingId, meetingTitle: meta.meetingTitle, startedAt: meta.startedAt, elapsed: meta.elapsed, file, transcriptTaken: false, stashId: meta.id, recovered: true });
+  return true;
+}
+
+/** The recording is saved, downloaded or let go: forget it and its crash-safe copy. */
+export function closeFinishedRecording() {
+  if (session) return;
+  if (state.stashId) void dropStash(state.stashId);
+  set(IDLE);
+}
+
+/** Saved where the workspace keeps recordings: the crash-safe copy is no longer needed. */
+export function recordingSaved() {
+  if (state.stashId) void dropStash(state.stashId);
+  set({ stashId: undefined });
 }
 
 /** For the save step: mark progress on the bar without exposing the setter. */

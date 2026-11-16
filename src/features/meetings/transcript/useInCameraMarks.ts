@@ -52,17 +52,20 @@ export function useInCameraMarks({
   societyId,
   meetingId,
   minutes,
+  markingAllowed = true,
 }: {
   societyId: Id<"societies">;
   meetingId: Id<"meetings">;
   minutes?: MarkMinutes | null;
+  /** In-camera sessions belong to formal minutes: a meeting that keeps notes can't mark them. */
+  markingAllowed?: boolean;
 }): InCameraMarks {
   const { can } = usePermissions();
   const choices = useMemo(() => inCameraSessionChoices(minutes), [minutes]);
   const marks = useMemo(() => (choices.length ? markedRanges(choices) : NO_MARKS), [choices]);
   const allMarked = useMemo(() => Boolean(inCameraRecordingRanges(minutes)), [minutes]);
   const frozen = Boolean(minutes?.approvedAt || minutes?.adoptedSnapshot || Array.isArray(minutes?.motionSnapshots));
-  const canMark = can("minutes:write") && can("meetings:write") && Boolean(minutes) && !frozen;
+  const canMark = markingAllowed && can("minutes:write") && can("meetings:write") && Boolean(minutes) && !frozen;
   const mark = usePermissionedMutation(api.transcripts.markInCameraRange, canMark);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");

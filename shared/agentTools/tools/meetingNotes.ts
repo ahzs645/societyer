@@ -93,7 +93,6 @@ export const addMeetingActionItems = defineAgentTool({
   async handler({ meetingId, items }, adapter) {
     const meeting = await adapter.query<unknown>("meetings:get", { id: meetingId });
     if (!isRow(meeting)) throw new AgentToolError("not_found", "Meeting not found.");
-    const existing = (Array.isArray(meeting.noteActionItems) ? meeting.noteActionItems : []) as NoteActionItem[];
     const added: NoteActionItem[] = items.map((item) => ({
       id: newNoteActionId(),
       text: item.text,
@@ -107,7 +106,8 @@ export const addMeetingActionItems = defineAgentTool({
       origin: "manual",
     }));
     // The handler refuses an id that isn't a record of this workspace.
-    await adapter.mutation("meetings:setNoteActionItems", { id: meetingId, items: [...existing, ...added] });
+    // Added to the list as it is on the server, so edits made meanwhile stay.
+    await adapter.mutation("meetings:setNoteActionItems", { id: meetingId, ops: added.map((item) => ({ op: "add", item })) });
     adapter.context.browser?.navigate(`/app/meetings/${meetingId}?tab=notes`);
     return { added: added.map((item) => ({ id: item.id, text: item.text })), count: added.length };
   },

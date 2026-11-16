@@ -127,6 +127,8 @@ console.log("✓ session: ids checked, names matched, bad calls refused with a r
   assert.match(say({ text: "Elm Street is zoned for warehouse use so you are fine" }).content, /not in the transcript exactly/, "a paraphrase is refused");
   assert.match(say({ text: "I'll draft the lease letter. The rent works." }).content, /not in the transcript exactly/, "words joined from two lines are refused");
   assert.match(say({ text: "sounds good" }).content, /at least three words/);
+  assert.match(say({ text: "is zoned for warehouse use" }).content, /whole sentences/, "a clipped sentence is refused");
+  assert.match(say({ text: "Street is the only one with a loading dock" }).content, /whole sentences/, "a sentence cut at the start too");
   assert.equal(say({ text: "Elm Street is zoned for warehouse use, so you're fine" }).content, "Already recorded.");
   quoting.handle({ name: "identify_speaker", arguments: { speaker_label: "SPEAKER_01", person_id: "pd_marcus", evidence: "As treasurer" } });
   const { quotes } = quoting.result().draft;
@@ -288,7 +290,12 @@ await client.mutation("meetings:saveNotesDraft", {
   draft: { summary: "Ops.", actionItems: [
     { text: "Send budget", assignee: "Marcus Oyelaran", assigneePersonId: "pd_marcus", goalId: "goal_1", committeeId: "com_fin" },
     { text: "Forged links", assigneePersonId: "pd_nobody", goalId: "goal_other_ws", committeeId: "bad id with spaces" },
-  ], quotes: [{ text: "“I'll send the revised budget.”", speaker: "Marcus Oyelaran", atSec: 70.4 }, { text: "  " }, { text: "No time", atSec: -3 }] },
+  ], quotes: [
+    { text: "“As treasurer I have the revised numbers for the Foundation.”", speaker: "Made up", atSec: 999 },
+    { text: "I'll send the revised budget." },
+    { text: "have the revised numbers" },
+    { text: "  " },
+  ] },
   speakers: [
     { label: "SPEAKER_01", name: "Marcus Oyelaran", personId: "pd_marcus", evidence: "As treasurer" },
     { label: "SPEAKER_02", name: "Nobody", personId: "pd_nobody", evidence: "x" },
@@ -310,7 +317,11 @@ assert.deepEqual(saved.notesDraft.speakerSuggestions, [
   { label: "SPEAKER_01", name: "Marcus Oyelaran", personId: "pd_marcus", evidence: "As treasurer" },
   { label: "SPEAKER_02", name: "Nobody", evidence: "x" },
 ]);
-assert.deepEqual(saved.notesDraft.quotes, [{ text: "I'll send the revised budget.", speaker: "Marcus Oyelaran", atSec: 70 }, { text: "No time" }], "quotes saved without quote marks, bad times dropped");
+assert.deepEqual(
+  saved.notesDraft.quotes,
+  [{ text: "As treasurer I have the revised numbers for the Foundation.", speaker: "SPEAKER_01", atSec: 5 }],
+  "saving re-checks quotes against the transcript: speaker and time from the line; quotes not in it, or clipped, are dropped",
+);
 assert.deepEqual(saved.notesDraft.attendeeSuggestions, [{ name: "Marcus Oyelaran", personId: "pd_marcus" }, { name: "Guest Person" }]);
 // Applying a suggestion goes through the existing speaker assignment.
 await client.mutation("transcripts:assignSpeaker", { societyId, meetingId: "m_skill", label: "SPEAKER_01", name: "Marcus Oyelaran", personId: "pd_marcus" });
