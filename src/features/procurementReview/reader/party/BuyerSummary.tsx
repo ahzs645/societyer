@@ -23,7 +23,7 @@ import { toNoticeRow, type NoticeRow } from "../../../../../shared/procurementNo
 import { useReaderNavigation, type PartyField } from "../routes";
 import type { ListRow } from "../source";
 import { Amount, RankedCard, RankedList, foldRanked } from "../analytics/parts";
-import { NoticeLinks, PREVIEW, PartyLink, UsBadge, partyKey, type PartyTab } from "./parts";
+import { NoticeLinks, PREVIEW, PartyLink, UsBadge, partyKey, partyRowAction, type PartyTab } from "./parts";
 
 export type BuyerField = Exclude<PartyField, "supplier">;
 /** "from" a buyer, "issued for" an organisation. */
@@ -153,7 +153,8 @@ function BuyerTiles({ open, opportunities, awards, awarded, partial, onShow }: {
 
 /**
  * Whom it awarded to, by value, each opening the supplier's page; the
- * smallest fold into "+N more", which opens the table. `who` names whose
+ * smallest fold into "+N more", which opens the table, where every supplier
+ * is listed and opens its page the same way. `who` names whose
  * awards these are ("this buyer", "these notices").
  */
 export function TopSuppliers({ who, awarded, partial, title = "Top suppliers" }: { who: string; awarded: Awarded; partial: boolean; title?: string }) {
@@ -190,6 +191,7 @@ export function TopSuppliers({ who, awarded, partial, title = "Top suppliers" }:
           { key: "share", label: "Share", numeric: true },
         ],
         rows: awarded.suppliers.map((row) => ({ name: row.name, count: count(row.count), value: exactOf(row.value), share: `${Math.round(row.share * 1000) / 10}%` })),
+        rowAction: partyRowAction(nav, "supplier", "supplier", awarded.suppliers.map((row) => row.name)),
       }}
     >
       {(showTable) => (

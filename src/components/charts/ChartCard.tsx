@@ -120,6 +120,23 @@ export function ChartDataTable({ table }: { table: ChartTable }) {
 function RowHeading({ table, index, text }: { table: ChartTable; index: number; text: string | number }) {
   const action = table.rowAction?.(index);
   if (!action) return <>{text}</>;
+  if (action.href) {
+    return (
+      <a
+        className="chart-table__row-action"
+        href={action.href}
+        aria-label={action.label}
+        onClick={(event) => {
+          // With a modifier or another button the browser follows the href itself.
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          action.onSelect();
+        }}
+      >
+        {text}
+      </a>
+    );
+  }
   return (
     <button type="button" className="chart-table__row-action" onClick={action.onSelect} aria-label={action.label}>
       {text}

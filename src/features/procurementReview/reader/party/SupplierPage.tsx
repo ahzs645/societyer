@@ -33,6 +33,7 @@ import {
   PartyTabs,
   UsBadge,
   partyKey,
+  partyRowAction,
   progressOf,
   titleOf,
   usePartyTab,
@@ -259,6 +260,7 @@ function SupplierSummary({
                 { key: "value", label: "Award value", numeric: true },
               ],
               rows: won.buyers.map((row) => ({ name: row.name, count: count(row.count), value: exactOf(row.value) })),
+              rowAction: partyRowAction(nav, "organization", "buyer", won.buyers.map((row) => row.name)),
             }}
           >
             {(showTable) => (

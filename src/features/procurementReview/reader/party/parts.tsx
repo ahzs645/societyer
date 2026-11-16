@@ -114,6 +114,22 @@ export function PartyLink({ field, name }: { field: PartyField; name: string }) 
 }
 
 /**
+ * For a ranking's table: each row's name as a link to that organisation's
+ * page, as its bar is in the chart. `names` are the table's rows, in order.
+ */
+export const partyRowAction = (
+  nav: Pick<ReturnType<typeof useReaderNavigation>, "partyHref" | "openParty">,
+  field: PartyField,
+  noun: string,
+  names: string[],
+) => (index: number) => {
+  const name = names[index];
+  return name
+    ? { label: `Open ${noun} ${name}`, href: nav.partyHref(field, name), onSelect: () => nav.openParty(field, name) }
+    : null;
+};
+
+/**
  * A short list of notices, each opening its page: the title, a line under it,
  * and a figure at the right. The whole row opens the notice; a link in the
  * line under the title (a supplier, a buyer) opens that organisation instead.

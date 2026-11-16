@@ -36,6 +36,8 @@ export type ChartTable = {
   /**
    * What a row's heading opens (the records behind it), as a button in the
    * first cell; null leaves that row as text, such as a month with nothing in it.
+   * With an `href` (the row's own page) it is a link instead: a plain click
+   * runs `onSelect`, a middle-click or modifier opens the page in a new tab.
    */
-  rowAction?: (index: number) => { label: string; onSelect: () => void } | null;
+  rowAction?: (index: number) => { label: string; onSelect: () => void; href?: string } | null;
 };

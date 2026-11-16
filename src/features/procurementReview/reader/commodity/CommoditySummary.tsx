@@ -23,7 +23,7 @@ import { useReaderNavigation } from "../routes";
 import type { ListRow } from "../source";
 import { Amount, RankedCard, RankedList, foldRanked } from "../analytics/parts";
 import { TopSuppliers, useAwarded, type Awarded } from "../party/BuyerSummary";
-import { NoticeLinks, PREVIEW, UsBadge, partyKey, type PartyTab } from "../party/parts";
+import { NoticeLinks, PREVIEW, UsBadge, partyKey, partyRowAction, type PartyTab } from "../party/parts";
 import { NARROWER, codeLabel, levelName } from "./codes";
 import { unspscLevel } from "../../../../../shared/unspsc";
 
@@ -134,6 +134,12 @@ function NarrowerCard({ code, name, narrower, titles }: { code: string; name: st
           { key: "count", label: "Notices", numeric: true },
         ],
         rows: narrower.map((item) => ({ code: item.code, title: titles(item.code) || "Untitled", count: count(item.count) })),
+        rowAction: (index) => {
+          const item = narrower[index];
+          return item
+            ? { label: `Open ${item.code} ${titles(item.code)}`.trim(), href: nav.commodityHref(item.code), onSelect: () => nav.openCommodity(item.code) }
+            : null;
+        },
       }}
     >
       {(showTable) => {
@@ -185,6 +191,7 @@ function BuyersCard({ buyers, level, partial }: { buyers: ReturnType<typeof useB
           { key: "awards", label: "Awards", numeric: true },
         ],
         rows: buyers.map((buyer) => ({ name: buyer.name, opportunities: count(buyer.opportunities), awards: count(buyer.awards) })),
+        rowAction: partyRowAction(nav, "organization", "buyer", buyers.map((buyer) => buyer.name)),
       }}
     >
       {(showTable) => (
