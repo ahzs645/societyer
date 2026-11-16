@@ -1,4 +1,5 @@
 import { noticeWindowLabel } from "../features/meetings/lib/noticeWindow";
+import { isWorkingMeeting, WORKING_MEETING_TYPE } from "../../shared/meetingBody";
 import { TeamsMeetingImport } from "../features/meetings/TeamsMeetings";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MEETING_STATUS_LABELS, MEETING_STATUS_OPTIONS, meetingStatusTone as sharedMeetingStatusTone } from "../../shared/meetingStatus";
@@ -30,7 +31,7 @@ import {
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
-import { Plus, Calendar, AlertTriangle, CheckCircle2, Copy, Monitor, Pencil, RotateCcw, Tag, Trash2, ExternalLink, Merge } from "lucide-react";
+import { Plus, NotebookPen, Calendar, AlertTriangle, CheckCircle2, Copy, Monitor, Pencil, RotateCcw, Tag, Trash2, ExternalLink, Merge } from "lucide-react";
 import type { ToneVariant } from "../components/ui";
 import { type MenuSection } from "../components/Menu";
 import { Modal, useConfirm } from "../components/Modal";
@@ -281,7 +282,8 @@ export function MeetingsPage() {
     if (!society || open || !meetingTemplates || !canManage) return;
     const intent = params.get("intent");
     if (intent !== "create" && intent !== "generate-agm-package") return;
-    const type = params.get("type") === "AGM" ? "AGM" : "Board";
+    const requested = params.get("type");
+    const type = requested === "AGM" ? "AGM" : isWorkingMeeting(requested) ? WORKING_MEETING_TYPE : "Board";
     openNew({
       type,
       title: intent === "generate-agm-package" ? "Annual general meeting" : "",
@@ -358,6 +360,16 @@ export function MeetingsPage() {
           <>
           {!isLocalDataRuntime() && canManage && can("settings:write") && can("minutes:write") && <TeamsMeetingImport societyId={society._id} />}
           {meetingPreparationEnabled() && getAuthMode() !== "none" && !isLocalDataRuntime() && <Link className="btn" to="/app/meetings/offline">Offline preparation</Link>}
+          <button
+            className="btn-action meetings-page__new-notes"
+            type="button"
+            onClick={() => openNew({ type: WORKING_MEETING_TYPE, recordKind: "notes" })}
+            disabled={!canManage}
+            title="A staff check-in, 1:1 or partner call: notes, transcript and action items, no quorum or minute book."
+          >
+            <NotebookPen size={14} />
+            <span className="meetings-page__new-label">Meeting notes</span>
+          </button>
           <button
             className="btn-action btn-action--primary meetings-page__new"
             type="button"

@@ -30,7 +30,8 @@ export function meetingRecordKind(meeting: { recordKind?: string | null } | null
 
 /**
  * The default for a new meeting of `type`: formal minutes for the board and
- * general meetings (AGM, SGM), informal notes for committees and anything else.
+ * general meetings (AGM, SGM), informal notes for committees, working
+ * meetings and anything else.
  */
 export function defaultRecordKindForType(type: string | null | undefined): MeetingRecordKind {
   const value = String(type ?? "").trim().toLowerCase();

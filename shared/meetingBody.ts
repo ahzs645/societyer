@@ -13,9 +13,9 @@
  */
 
 export type MeetingBody = {
-  /** Native meeting type: Board | Committee | AGM | SGM. */
-  type: "Board" | "Committee" | "AGM" | "SGM";
-  /** Stable identity key: board | agm | sgm | committee:<slug> | external:<slug>. */
+  /** Native meeting type: Board | Committee | AGM | SGM | Working. */
+  type: "Board" | "Committee" | "AGM" | "SGM" | "Working";
+  /** Stable identity key: board | agm | sgm | working | committee:<slug> | external:<slug>. */
   bodyKey: string;
   /** Committee display name when type is Committee. */
   committeeName?: string;
@@ -26,6 +26,25 @@ export type MeetingBody = {
   /** "default" when nothing in the payload named a body (Board assumed). */
   basis?: "explicit" | "title" | "default";
 };
+
+/**
+ * `type: "Working"`: a general / working meeting (staff check-in, 1:1, a call
+ * with a funder or partner). Not a meeting of a governing body: no quorum, no
+ * minute book, no governance cadence. Stored as "Working", not "General",
+ * because a "general meeting" of a society is a members' meeting (AGM / SGM).
+ */
+export const WORKING_MEETING_TYPE = "Working";
+export const WORKING_MEETING_LABEL = "General / working meeting";
+
+export function isWorkingMeeting(meeting: { type?: string | null } | string | null | undefined): boolean {
+  const type = typeof meeting === "string" ? meeting : meeting?.type;
+  return String(type ?? "").trim().toLowerCase() === "working";
+}
+
+/** Display name for `meetings.type` ("Working" reads "Working meeting"). */
+export function meetingTypeDisplay(type: string | null | undefined): string {
+  return isWorkingMeeting(type) ? "Working meeting" : String(type ?? "");
+}
 
 export function slugBody(value: unknown): string {
   return String(value ?? "")
@@ -127,6 +146,7 @@ export function bodyKeyForMeeting(
   const type = String(meeting.type ?? "").toLowerCase();
   if (type === "agm") return "agm";
   if (type === "sgm") return "sgm";
+  if (type === "working") return "working";
   if (meeting.committeeId && committee) {
     const key = committee.bodyKey || inferMeetingBody(committee.name).committeeKey || slugBody(committee.name) || "committee";
     return `committee:${key}`;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { meetingTypeDisplay } from "../../shared/meetingBody";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -41,7 +42,7 @@ export function TimelinePage() {
       const committee = (committees ?? []).find((c: any) => c._id === m.committeeId);
       events.push({
         date: m.scheduledAt,
-        kind: m.type === "AGM" ? annualMeetingTitle : m.type,
+        kind: m.type === "AGM" ? annualMeetingTitle : meetingTypeDisplay(m.type),
         title: m.title,
         sub: `${m.location ?? "TBD"}${committee ? ` · ${committee.name}` : ""}`,
         to: `/app/meetings/${m._id}`,

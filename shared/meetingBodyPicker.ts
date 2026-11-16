@@ -5,10 +5,12 @@
  * of an external body that the society attended (A18).
  *
  * A body choice is encoded as a string so it fits a single <select>:
- *   board · board:special · agm · sgm · committee:<id> · committee:<id>:special · external
+ *   board · board:special · agm · sgm · committee:<id> · committee:<id>:special · working · external
  *
  * Pure module.
  */
+
+import { WORKING_MEETING_LABEL } from "./meetingBody";
 
 export type BodyCommittee = { _id: string; name: string; status?: string | null; kind?: string | null };
 
@@ -23,7 +25,7 @@ export type MeetingBodyFields = {
 };
 
 export type MeetingBodyPatch = {
-  type: "Board" | "Committee" | "AGM" | "SGM";
+  type: "Board" | "Committee" | "AGM" | "SGM" | "Working";
   committeeId?: string;
   clearCommitteeId?: boolean;
   special: boolean;
@@ -43,6 +45,7 @@ export function meetingBodyOptions(committees: readonly BodyCommittee[] | null |
     options.push({ value: `committee:${committee._id}`, label: `${committee.name}${inactive}`, group: "Committees" });
     options.push({ value: `committee:${committee._id}:special`, label: `Special meeting — ${committee.name}`, group: "Committees" });
   }
+  options.push({ value: "working", label: WORKING_MEETING_LABEL, group: "Other" });
   options.push({ value: "external", label: "External body (attended)", group: "Other" });
   return options;
 }
@@ -54,6 +57,7 @@ export function bodyValueForMeeting(meeting: MeetingBodyFields | null | undefine
   const type = String(meeting.type ?? "").toLowerCase();
   if (type === "agm") return "agm";
   if (type === "sgm") return "sgm";
+  if (type === "working") return "working";
   if (meeting.committeeId) return `committee:${meeting.committeeId}${meeting.special ? ":special" : ""}`;
   if (type === "committee") return "committee:";
   return meeting.special ? "board:special" : "board";
@@ -63,6 +67,7 @@ export function bodyValueForMeeting(meeting: MeetingBodyFields | null | undefine
 export function bodyPatchForValue(value: string): MeetingBodyPatch {
   if (value === "agm") return { type: "AGM", clearCommitteeId: true, special: false, hostBody: "own" };
   if (value === "sgm") return { type: "SGM", clearCommitteeId: true, special: false, hostBody: "own" };
+  if (value === "working") return { type: "Working", clearCommitteeId: true, special: false, hostBody: "own" };
   if (value === "board:special") return { type: "Board", clearCommitteeId: true, special: true, hostBody: "own" };
   if (value === "external") return { type: "Committee", clearCommitteeId: true, special: false, hostBody: "external" };
   if (value.startsWith("committee:")) {
@@ -83,6 +88,7 @@ export function meetingBodyLabel(meeting: MeetingBodyFields | null | undefined, 
   const type = String(meeting.type ?? "");
   if (type === "AGM") return "AGM";
   if (type === "SGM") return "SGM";
+  if (type === "Working") return WORKING_MEETING_LABEL;
   if (meeting.committeeId) {
     const committee = (committees ?? []).find((row) => String(row._id) === String(meeting.committeeId));
     const name = committee?.name ?? "Committee";

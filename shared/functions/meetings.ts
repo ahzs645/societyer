@@ -1,4 +1,5 @@
 import { FOLLOW_UP_RECEIPT_FIELDS, followUpMotionFingerprint, followUpMotionSelection, followUpRequestDigest } from "../followUpScheduling";
+import { isWorkingMeeting } from "../meetingBody";
 import { inCameraFacts, isInCameraMotion, IN_CAMERA_ACCESS_PERMISSION } from "../minutesPrivacy";
 import { carryForwardToMeetingPortable } from "./motionBacklog";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
@@ -77,6 +78,15 @@ async function buildQuorumSnapshot(
     args.societyId,
     args.meetingDateISO,
   );
+  // A working meeting is not a meeting of a governing body: no bylaw quorum.
+  if (isWorkingMeeting(args.meetingType)) {
+    return {
+      bylawRuleSetId: rules._id,
+      quorumSourceLabel: "No quorum: working meeting",
+      quorumRequired: args.quorumRequiredOverride,
+      quorumComputedAtISO: now,
+    };
+  }
   const { required: ruleRequired, articlesLabel } = await computeRequiredQuorum(ctx, rules, args);
   const quorumRequired =
     args.quorumRequiredOverride ?? ruleRequired;
@@ -528,7 +538,9 @@ export async function createPortable(
     args.societyId,
     args.scheduledAt,
   );
-  if (args.electronic && !rules.allowElectronicMeetings) {
+  // Bylaw rules on electronic participation govern meetings of the society's
+  // bodies, not a staff check-in or a call with a partner.
+  if (args.electronic && !rules.allowElectronicMeetings && !isWorkingMeeting(args.type)) {
     throw new Error(
       "Electronic participation is disabled by the bylaw rule set effective for this meeting date.",
     );

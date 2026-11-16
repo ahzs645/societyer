@@ -11,6 +11,8 @@ import type { Id } from "../convex/_generated/dataModel";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import { PORTABLE_TEST_AUTH_SUBJECT } from "./portable-test-fixture";
 import { minutesDraftBlocker } from "../shared/minutesDraftInput";
+import { bodyPatchForValue, bodyValueForMeeting, meetingBodyLabel, meetingBodyOptions } from "../shared/meetingBodyPicker";
+import { bodyKeyForMeeting, isWorkingMeeting } from "../shared/meetingBody";
 import {
   defaultRecordKindForType,
   discussionSeededWithNotes,
@@ -150,6 +152,30 @@ await assert.rejects(
 );
 assert.equal(meetingRow(created.notes)?.notes, undefined, "working notes never touch the preparation notes field");
 console.log("✓ create and update: each kind stored, invalid kinds and oversized notes rejected");
+
+// General / working meetings: notes by default, no quorum, electronic regardless of bylaw rules.
+assert.equal(defaultRecordKindForType("Working"), "notes");
+assert.deepEqual(bodyPatchForValue("working"), { type: "Working", clearCommitteeId: true, special: false, hostBody: "own" });
+assert.equal(bodyValueForMeeting({ type: "Working" }), "working");
+assert.equal(meetingBodyLabel({ type: "Working" }), "General / working meeting");
+assert.ok(meetingBodyOptions([]).some((option) => option.value === "working"), "picker offers a working meeting");
+assert.equal(bodyKeyForMeeting({ type: "Working" }), "working", "a working meeting is never the board");
+assert.equal(isWorkingMeeting({ type: "working" }), true);
+assert.equal(isWorkingMeeting({ type: "Board" }), false);
+const working = String(await client.mutation("meetings:create", {
+  societyId,
+  type: "Working",
+  title: "Staff check-in",
+  scheduledAt: "2026-03-03T16:00:00.000Z",
+  electronic: true,
+  status: "Scheduled",
+  attendeeIds: [],
+  quorumRequired: undefined,
+  recordKind: "notes",
+}));
+assert.equal(meetingRow(working)?.quorumRequired, undefined, "no bylaw quorum for a working meeting");
+assert.equal(meetingRow(working)?.quorumSourceLabel, "No quorum: working meeting");
+console.log("✓ working meetings: picker, body key, notes default, no quorum");
 
 // Notes → minutes on a new meeting: its empty minutes stub takes the notes.
 const stub = minutesFor(created.notes);

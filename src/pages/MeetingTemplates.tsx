@@ -200,7 +200,7 @@ AGENDA_ITEM_LIBRARY[AGENDA_ITEM_LIBRARY.length - 1].items = AGENDA_ITEM_LIBRARY
   .flatMap((entry) => entry.items);
 
 const SECTION_TYPES = ["discussion", "motion", "report", "decision", "other"];
-const MEETING_TYPES = ["Board", "Committee", "AGM", "SGM", "Other"];
+const MEETING_TYPES = ["Board", "Committee", "AGM", "SGM", "Working", "Other"];
 
 type MeetingTemplate = Doc<"meetingTemplates">;
 type MeetingTemplateRecord = MeetingTemplate & { itemCount: number };

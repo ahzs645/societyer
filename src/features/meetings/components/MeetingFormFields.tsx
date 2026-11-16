@@ -4,6 +4,7 @@
  * reused by the page Drawer and the global "Create meeting" popup
  * (MeetingCreateModal).
  */
+import { isWorkingMeeting } from "../../../../shared/meetingBody";
 import { MEETING_STATUS_OPTIONS } from "../../../../shared/meetingStatus";
 import { bodyPatchForValue, bodyValueForMeeting, meetingBodyOptions } from "../../../../shared/meetingBodyPicker";
 import { useEffect, useMemo, useRef } from "react";
@@ -188,7 +189,10 @@ export function makeMeetingDraft(
   const type = overrides.type ?? "Board";
   const template = meetingTemplatesForType(data.meetingTemplates, type).find((row) => row.isDefault) ??
     meetingTemplatesForType(data.meetingTemplates, type)[0];
-  const scheduled = defaultNewMeetingStart(data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
+  // A working meeting needs no notice: it is usually happening now.
+  const scheduled = isWorkingMeeting(type)
+    ? new Date(Math.floor(Date.now() / 900_000) * 900_000)
+    : defaultNewMeetingStart(data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
   return blankMeetingDraft({
     type,
     scheduledAt: toDateTimeLocalValue(scheduled),
@@ -223,6 +227,8 @@ export function meetingTemplatesForType(
   templates: Doc<"meetingTemplates">[] | undefined,
   type: string,
 ) {
+  // Untyped templates are governance agendas; a working meeting only uses its own.
+  if (isWorkingMeeting(type)) return (templates ?? []).filter((template) => isWorkingMeeting(template.meetingType));
   return (templates ?? []).filter((template) => !template.meetingType || template.meetingType === type);
 }
 
@@ -337,7 +343,7 @@ export function MeetingFormFields({
         />
       </Field>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Body" hint="Board, a special meeting, AGM/SGM, or a committee.">
+        <Field label="Body" hint="Board, a special meeting, AGM/SGM, a committee, or a general / working meeting.">
           <Select
             value={bodyValueForMeeting({ type: value.type, committeeId: value.committeeId || null, special: value.special })}
             searchable
@@ -389,13 +395,13 @@ export function MeetingFormFields({
           ariaLabel="Venue or join link"
         />
       </Field>
-      <Toggle
+      {!isWorkingMeeting(value.type) && <Toggle
         checked={value.electronic}
         onChange={(v) => onChange({ electronic: v })}
         disabled={!effectiveRules?.allowElectronicMeetings}
         label="Electronic participation permitted"
-      />
-      <Field label="Quorum required">
+      />}
+      {!isWorkingMeeting(value.type) && <Field label="Quorum required">
         <input
           className="input"
           type="number"
@@ -407,7 +413,7 @@ export function MeetingFormFields({
           value={value.quorumRequired ?? ""}
           onChange={(e) => onChange({ quorumRequired: e.target.value })}
         />
-      </Field>
+      </Field>}
       <Field label="Preparation notes" hint="For organisers. Not part of the meeting notes or minutes.">
         <MarkdownEditor
           rows={4}

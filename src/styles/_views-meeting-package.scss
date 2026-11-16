@@ -42,14 +42,16 @@
     justify-content: flex-end;
   }
 
-  .meetings-page__new {
+  .meetings-page__new,
+  .meetings-page__new-notes {
     justify-content: center;
     width: 32px;
     height: 32px;
     padding: 0;
   }
 
-  .meetings-page__new .meetings-page__new-label {
+  .meetings-page__new .meetings-page__new-label,
+  .meetings-page__new-notes .meetings-page__new-label {
     display: none;
   }
 }

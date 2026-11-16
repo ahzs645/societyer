@@ -1,4 +1,5 @@
 import { ScheduleNextMeetingModal } from "../features/meetings/components/ScheduleNextMeetingModal";
+import { isWorkingMeeting } from "../../shared/meetingBody";
 import { transcriptText } from "../../shared/transcriptModel";
 import { meetingAgendaSnapshot, meetingExpectedFields, type MeetingExpectedFields } from "../../shared/meetingConcurrency";
 import { TranscriptWorkspace } from "../features/meetings/transcript/TranscriptWorkspace";
@@ -1788,7 +1789,9 @@ function MeetingDetailWorkspace() {
   };
 
   // Names offered by the grid's "Add current directors / committee members".
-  const expectedAttendees = (meeting.type === "Committee"
+  // A working meeting has no standing membership to fill in.
+  const expectedAttendees = (isWorkingMeeting(meeting) ? []
+    : meeting.type === "Committee"
     ? ((meetingCommitteeDetail?.members ?? []) as any[]).map((member) => String(member.name ?? "").trim())
     : attendanceRowsForDirectors(currentDirectors).map((row) => row.name)
   ).filter(Boolean);

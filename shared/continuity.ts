@@ -346,6 +346,8 @@ function meetingBodyKey(meeting: SnapshotMeeting): string {
   if (meeting.committeeId) return `committee:${meeting.committeeId}`;
   const type = String(meeting.type ?? "");
   if (type === "AGM" || type === "SGM" || /annual general|special general/i.test(String(meeting.title ?? ""))) return "members";
+  // A working meeting (staff, 1:1, partner call) is not a meeting of any governing body.
+  if (type === "Working") return "working";
   return "board";
 }
 

@@ -18,6 +18,7 @@ import { interfaceRouteReadPermission } from "../interfaceRouteAccess";
 import { assertAllowedOption } from "../orgHubOptions";
 import { isCorporation, type LegalEntityLike } from "../organizationDomain";
 import { todayDateOnly } from "../dateOnly";
+import { isWorkingMeeting } from "../meetingBody";
 import { writtenResolutionView } from "./writtenResolutions";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "ArticlesOfIncorporation", "CertificateOfIncorporation", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
@@ -151,7 +152,8 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     recordsLocations,
   ] = await Promise.all([
     read("minuteBookItems", SUPPORT_RECORD_LIMIT),
-    readable.has("meetings:read") ? ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).order("desc").take(MEETING_RECORD_LIMIT) : Promise.resolve([]),
+    // Working meetings (staff, 1:1, partner calls) are not governance records.
+    readable.has("meetings:read") ? ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).order("desc").take(MEETING_RECORD_LIMIT).then((rows) => rows.filter((row) => !isWorkingMeeting(row.type as string | undefined))) : Promise.resolve([]),
     read("minutes", MINUTES_RECORD_LIMIT),
     read("filings", CORE_RECORD_LIMIT),
     read("policies", CORE_RECORD_LIMIT),
