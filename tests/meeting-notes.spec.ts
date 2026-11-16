@@ -297,3 +297,77 @@ test("templates, export, Ask bar and recording on the notes surface", async ({ p
   await expect(page.getByText(/Weekly check-in .*\.(webm|m4a|ogg)/).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("Meetings timeline groups meetings by day", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await seed(page);
+  await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    const societyId = getStoredSocietyId();
+    const day = (offset: number, hour: number) => { const date = new Date(); date.setDate(date.getDate() + offset); date.setHours(hour, 0, 0, 0); return date.toISOString(); };
+    const make = (title: string, scheduledAt: string, extra: Record<string, unknown> = {}) => client.mutation("meetings:create", {
+      societyId, type: "Working", title, scheduledAt, electronic: true, status: "Scheduled", attendeeIds: [], recordKind: "notes", ...extra,
+    });
+    await make("Funder call", day(0, 15), { remoteUrl: "https://meet.example.org/funder" });
+    await make("Staff stand-up", day(1, 9));
+    await make("Volunteer debrief", day(-1, 18));
+  });
+  await page.goto("/app/meetings");
+  await page.getByRole("group", { name: "Meetings layout" }).getByRole("button", { name: "Timeline" }).click();
+  const timeline = page.getByLabel("Meetings by day");
+  await expect(timeline.getByRole("region", { name: "Tomorrow" }).getByText("Staff stand-up")).toBeVisible({ timeout: 60_000 });
+  const today = timeline.getByRole("region", { name: "Today" });
+  await expect(today.getByText("Funder call")).toBeVisible();
+  await expect(today.getByRole("button", { name: "Join & record" })).toBeVisible();
+  await expect(timeline.getByRole("region", { name: "Yesterday" }).getByText("Volunteer debrief")).toBeVisible();
+  // Coming up first, then today, then earlier days.
+  const order = await timeline.locator(".meetings-timeline__label").allTextContents();
+  expect(order.map((label) => label.replace(/Today$/, "").trim()).slice(0, 3)).toEqual(["Tomorrow", "Today", "Yesterday"]);
+  if (SHOTS) await timeline.screenshot({ path: `${SHOTS}/timeline.png` });
+  // The layout is remembered.
+  await page.reload();
+  await expect(page.getByLabel("Meetings by day")).toBeVisible({ timeout: 60_000 });
+  await today.getByRole("link", { name: /Open notes: Funder call/ }).click();
+  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("notes surface on a phone: one view at a time, ••• holds the rest", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page);
+  const meetingId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    const id = await client.mutation("meetings:create", {
+      societyId: getStoredSocietyId(), type: "Working", title: "Partner call", scheduledAt: new Date().toISOString(),
+      electronic: true, status: "Held", attendeeIds: [], recordKind: "notes", workingNotes: "## Context\n\n- Pilot funding",
+    });
+    await client.mutation("meetings:saveNotesDraft", {
+      id, template: "external_call", draft: { summary: "They'll fund a pilot.", decisions: ["Apply"], actionItems: [{ text: "Send the budget" }] },
+      generatedBy: "On-device: test model", usedNotes: true, usedTranscript: false,
+    });
+    return id;
+  });
+  await page.goto(`/app/meetings/${meetingId}`);
+  const views = page.getByRole("group", { name: "Notes view" });
+  await expect(views.getByRole("button", { name: "AI notes" })).toHaveAttribute("aria-pressed", "true", { timeout: 60_000 });
+  await expect(page.getByText("They'll fund a pilot.")).toBeVisible();
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-ai-notes.png` });
+  await views.getByRole("button", { name: "Notes", exact: true }).click();
+  await expect(page.getByText("Pilot funding")).toBeVisible();
+  await page.getByRole("button", { name: "More: export and recap" }).click();
+  await expect(page.getByRole("menuitem", { name: /Meeting details/ })).toBeVisible();
+  if (SHOTS) {
+    await page.waitForTimeout(400); // let the menu finish opening
+    await page.screenshot({ path: `${SHOTS}/phone-more.png` });
+  }
+  await page.getByRole("menuitem", { name: /Meeting details/ }).click();
+  await expect(page).toHaveURL(/tab=overview/);
+  // And back: the Notes tab is the default for a notes meeting.
+  await page.getByRole("tab", { name: /Notes/ }).first().click();
+  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});

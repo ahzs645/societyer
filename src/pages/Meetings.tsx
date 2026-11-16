@@ -1,4 +1,6 @@
 import { noticeWindowLabel } from "../features/meetings/lib/noticeWindow";
+import { MeetingsTimeline } from "../features/meetings/MeetingsTimeline";
+import { Segmented } from "../components/primitives";
 import { isWorkingMeeting, WORKING_MEETING_TYPE } from "../../shared/meetingBody";
 import { TeamsMeetingImport } from "../features/meetings/TeamsMeetings";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -84,6 +86,9 @@ const SOURCE_REVIEW_LABELS: Record<string, string> = {
 
 type BulkKind = "status" | "body";
 
+
+type MeetingsLayout = "table" | "timeline";
+const LAYOUT_KEY = "societyer:meetings-layout";
 export function MeetingsPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
@@ -92,6 +97,14 @@ export function MeetingsPage() {
   const [form, setForm] = useState<MeetingDraft | null>(null);
   const [formInitial, setFormInitial] = useState("");
   const [params, setParams] = useSearchParams();
+  // Table (the record table and its views) or Timeline (by day); remembered per browser.
+  const [layout, setLayout] = useState<MeetingsLayout>(() => {
+    try { return localStorage.getItem(LAYOUT_KEY) === "timeline" ? "timeline" : "table"; } catch { return "table"; }
+  });
+  const chooseLayout = (next: MeetingsLayout) => {
+    setLayout(next);
+    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* Not remembered: storage unavailable. */ }
+  };
   const data = useMeetingFormData(society?._id, form?.scheduledAt);
   const meetings = data.meetings;
   const meetingTemplates = data.meetingTemplates;
@@ -360,6 +373,13 @@ export function MeetingsPage() {
           <>
           {!isLocalDataRuntime() && canManage && can("settings:write") && can("minutes:write") && <TeamsMeetingImport societyId={society._id} />}
           {meetingPreparationEnabled() && getAuthMode() !== "none" && !isLocalDataRuntime() && <Link className="btn" to="/app/meetings/offline">Offline preparation</Link>}
+          <Segmented<MeetingsLayout>
+            aria-label="Meetings layout"
+            className="meetings-layout-toggle"
+            value={layout}
+            onChange={chooseLayout}
+            items={[{ id: "table", label: "Table" }, { id: "timeline", label: "Timeline" }]}
+          />
           <button
             className="btn-action meetings-page__new-notes"
             type="button"
@@ -452,7 +472,14 @@ export function MeetingsPage() {
         </div>
       )}
 
-      {showMetadataWarning ? (
+      {layout === "timeline" ? (
+          <MeetingsTimeline
+            meetings={(meetings ?? []) as any}
+            committees={committeeRows}
+            canRecord={canManage}
+            minutesStarted={(meetingId) => Boolean(summaryByMeeting.get(meetingId)?.started)}
+          />
+        ) : showMetadataWarning ? (
           <RecordTableMetadataEmpty societyId={society?._id} objectLabel="meeting" />
         ) : tableData.objectMetadata ? (
           <RecordTableScope

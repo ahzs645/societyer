@@ -11,6 +11,7 @@ import { useMutation } from "convex/react";
 import { Download, FileAudio, Mic, Square, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "@/hooks/useSociety";
+import { useConfirm } from "@/components/Modal";
 import { triggerBlobDownload } from "../../../lib/zip";
 import { meetingSourceBroker, uploadMeetingSource } from "../../../lib/meetingSourceUpload";
 import { postToUploadUrl, useMeetingRecordingStore, writeDesktopRecording } from "../recordings/workspaceRecordings";
@@ -27,6 +28,7 @@ type SaveState = { status: "idle" } | { status: "saving"; sent: number; total: n
 export function RecordingBar() {
   const recorder = useMeetingRecorder();
   const society = useSociety();
+  const confirm = useConfirm();
   const store = useMeetingRecordingStore(society?._id ? String(society._id) : undefined);
   const generateUploadUrl = useMutation(api.meetingRecordings.generateUploadUrl);
   const attach = useMutation(api.meetingRecordings.attach);
@@ -109,7 +111,10 @@ export function RecordingBar() {
             className="recording-bar__icon"
             aria-label="Discard recording"
             title="Discard: stop and throw the audio away"
-            onClick={() => { if (window.confirm("Discard this recording? The audio is thrown away.")) discardMeetingRecording(); }}
+            onClick={() => {
+              void confirm({ title: "Discard this recording?", message: "The audio is thrown away.", confirmLabel: "Discard", tone: "danger" })
+                .then((ok) => { if (ok) discardMeetingRecording(); });
+            }}
           >
             <X size={14} aria-hidden="true" />
           </button>

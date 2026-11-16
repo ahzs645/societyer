@@ -148,6 +148,44 @@ a recording on the server (up to 25 MB with OpenAI, 200 MB with a self-hosted
 `WHISPER_ENDPOINT`); never with the demo provider. Desktop backups don't
 include recordings.
 
+## The notes surface (Notes tab)
+
+A notes meeting opens on its Notes tab. One bar switches between **My notes**,
+**AI notes** and **Transcript** (the view is in the URL as `?view=`), with
+**Record** and **•••** beside it. Views you've opened stay mounted, so switching
+keeps your place; a hidden view pauses its media.
+
+- **Templates.** Empty notes offer the AI notes templates (General, 1:1,
+  Check-in, External call) as starting headings.
+- **Record.** Microphone, microphone + call audio (a shared tab, window or
+  screen with "Share audio" ticked), or **Join & record** for a meeting with a
+  link. A floating bar (`src/features/meetings/recorder/RecordingBar.tsx`)
+  shows the timer and level on every page; navigating inside the app keeps
+  recording, and leaving or reloading asks first. On Stop the file is saved
+  where the workspace keeps recordings (see below) and handed to the Transcript
+  view; if recordings aren't kept, the bar offers a download. Transcription
+  happens after the recording ends, not live.
+- **•••** downloads Markdown or PDF, prints, copies a plain-text recap
+  (summary, decisions, open next steps, open questions) or opens it in your
+  mail app (`shared/meetingNotesExport.ts`). On a phone it also leads to the
+  meeting details.
+- **Ask anything.** The bar under the notes opens the AI assistant with the
+  meeting attached (notes, AI notes, action items, people, then as much of the
+  transcript as fits in 32 KiB) and sends the question. With the AI agents
+  module off it points to Settings instead.
+- **Phones.** One view at a time, with a fourth **Actions** view for action
+  items; the Record and ••• buttons sit under the view switch.
+
+## Meetings page: Timeline
+
+The Meetings page has a **Table / Timeline** switch (remembered per browser).
+The timeline (`shared/meetingTimeline.ts`, `src/features/meetings/MeetingsTimeline.tsx`)
+groups meetings by day: the next 30 days soonest first, then today, then the
+last 60 days newest first, with **Show earlier meetings** for more. Each row
+says whether the meeting keeps notes or minutes, whether there are AI notes and
+open action items, and offers **Join & record** for today's and upcoming
+meetings with a link.
+
 ## Tests
 
 - `npm run test:timed-transcript` — transcript formats.
@@ -155,4 +193,5 @@ include recordings.
 - `npm run test:meeting-notes-draft` — AI notes, action items, tasks, hosted permissions.
 - `npm run test:meeting-notes-skill` — the skill: tools, context, checks, tool loop, adapters, replays.
 - `npm run test:meeting-recordings` — recording storage choice, local and hosted.
+- `npm run test:meeting-notes-surface` — timeline grouping, export and recap, Ask bar context, recorder file names.
 - `npm run test:meeting-notes-ui`, `npm run test:meeting-recordings-ui` — Playwright on the local runtime.

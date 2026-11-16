@@ -414,7 +414,8 @@ function MeetingDetailWorkspace() {
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev);
-        if (next === "overview") params.delete("tab");
+        // The default tab (Overview, or Notes for a notes meeting) needs no ?tab=.
+        if (next === resolveMeetingTab(null, recordKind)) params.delete("tab");
         else params.set("tab", next);
         return params;
       },
