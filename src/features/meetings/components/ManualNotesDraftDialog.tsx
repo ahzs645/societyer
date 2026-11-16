@@ -7,13 +7,13 @@
  */
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
-import { Check, ChevronDown, ClipboardPaste, Copy } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Modal, useConfirm } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { notesDraftTemplate, notesDraftTranscriptFromRow, type NotesDraftTemplateId } from "../../../../shared/ai/notesDraft";
+import { notesDraftTranscriptFromRow, type NotesDraftTemplateId } from "../../../../shared/ai/notesDraft";
 import type { MeetingNotesSkillContext } from "../../../../shared/ai/meetingNotesSkill";
 import {
   buildManualNotesPrompt,
@@ -25,7 +25,6 @@ import {
   type ManualReplyImport,
 } from "../../../../shared/ai/meetingNotesManualPrompt";
 
-const CORE_SECTIONS: ManualPromptSectionId[] = ["transcript", "notes", "people"];
 export const MANUAL_DRAFT_GENERATED_BY = "Your own AI (pasted)";
 
 export function ManualNotesDraftDialog({
@@ -60,8 +59,13 @@ export function ManualNotesDraftDialog({
   const [showPrompt, setShowPrompt] = useState(false);
   const [copied, setCopied] = useState(false);
   const [reply, setReply] = useState("");
-  const [checked, setChecked] = useState<ManualReplyImport | null>(null);
+  const [showRequirements, setShowRequirements] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Checked as it's pasted: the same session as the built-in AI's.
+  const checked: ManualReplyImport | null = useMemo(
+    () => (context && reply.trim() ? importManualNotesReply(reply, { template, context, transcript }) : null),
+    [context, reply, template, transcript],
+  );
 
   const effective = { ...sections, transcript: sections.transcript && Boolean(transcript.trim()) };
   const prompt = useMemo(
@@ -69,7 +73,6 @@ export function ManualNotesDraftDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [context, template, notes, transcript, sections, requirements],
   );
-  const enabled = MANUAL_PROMPT_SECTIONS.filter((section) => sections[section.id]).length;
 
   const copy = async () => {
     try {
@@ -79,10 +82,6 @@ export function ManualNotesDraftDialog({
     } catch {
       toast.error("Could not copy", "Your browser blocked the clipboard. Open View prompt and copy it from there.");
     }
-  };
-  const check = () => {
-    if (!context) return;
-    setChecked(importManualNotesReply(reply, { template, context, transcript }));
   };
   const saveDraft = async () => {
     if (!checked?.ok) return;
@@ -104,7 +103,6 @@ export function ManualNotesDraftDialog({
       const added = saved?.actionItemsAdded ?? 0;
       toast.success("AI notes saved.", added ? `${added} suggested action item${added === 1 ? "" : "s"} added.` : undefined);
       setReply("");
-      setChecked(null);
       onClose();
     } catch (error) {
       toast.error("Could not save the AI notes", error instanceof Error ? error.message : String(error));
@@ -113,109 +111,122 @@ export function ManualNotesDraftDialog({
     }
   };
 
+  const transcriptMissing = !transcript.trim();
   return (
-    <Modal open={open} onClose={onClose} title="Draft the AI notes with your own AI" size="lg">
+    <Modal open={open} onClose={onClose} title="Draft with your own AI" size="md">
       <div className="manual-draft">
-        <section className="manual-draft__step" aria-labelledby="manual-draft-copy">
-          <div className="manual-draft__step-head">
-            <h3 id="manual-draft-copy">1. Copy the prompt</h3>
+        <p className="muted manual-draft__lede">Copy the prompt into ChatGPT, Claude or another AI, then paste its reply below.</p>
+
+        <section className="manual-draft__step" aria-label="Copy the prompt">
+          <div className="manual-draft__copy">
+            <span className="manual-draft__num" aria-hidden="true">1</span>
             <button type="button" className="btn-action btn-action--primary" onClick={() => { void copy(); }} disabled={!prompt}>
               {copied ? <><Check size={12} aria-hidden="true" /> Copied</> : <><Copy size={12} aria-hidden="true" /> Copy prompt</>}
             </button>
+            <span className="muted manual-draft__size">{prompt ? `${Math.round(prompt.length / 1000)}k characters` : "Loading…"}</span>
           </div>
-          <p className="muted">
-            Paste it into your AI (ChatGPT, Claude, Copilot or another), then bring back the JSON it returns. It asks for the {notesDraftTemplate(template).label} template;
-            change the template on the AI notes card. It includes {transcript.trim() ? "the transcript" : "no transcript"}{context ? ` and ${context.people.length} ${context.people.length === 1 ? "person" : "people"} the AI can assign work to` : ""}.
-          </p>
-          {!context && <p className="muted" role="status">Loading the people, goals and committees…</p>}
-          <div className="manual-draft__blocks">
-            <div className="manual-draft__blocks-head">
-              <span className="muted">Choose what goes in the prompt.</span>
-              <span className="manual-draft__presets">
-                <button type="button" className="btn-action" onClick={() => setSections(manualPromptSectionState())}>Everything</button>
-                <button type="button" className="btn-action" onClick={() => setSections(manualPromptSectionState(CORE_SECTIONS))}>Core only</button>
-              </span>
-            </div>
-            <div className="manual-draft__grid">
-              {MANUAL_PROMPT_SECTIONS.map((section) => {
-                const unavailable = section.id === "transcript" && !transcript.trim();
-                return (
-                  <label key={section.id} className={`manual-draft__block${unavailable ? " is-disabled" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={sections[section.id] && !unavailable}
-                      disabled={unavailable}
-                      onChange={() => setSections((current) => ({ ...current, [section.id]: !current[section.id] }))}
-                    />
-                    <span>
-                      <strong>{section.label}</strong>
-                      <span className="muted">{unavailable ? (canReadTranscript ? "No transcript yet. Add one in the Transcript view." : "Only people who keep the minutes can include the transcript.") : section.description}</span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            <p className="muted">{enabled} of {MANUAL_PROMPT_SECTIONS.length} blocks included.</p>
+          <div className="manual-draft__chips" role="group" aria-label="Include in the prompt">
+            {MANUAL_PROMPT_SECTIONS.map((section) => {
+              const unavailable = section.id === "transcript" && transcriptMissing;
+              const on = sections[section.id] && !unavailable;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={`manual-draft__chip${on ? " is-on" : ""}`}
+                  aria-pressed={on}
+                  disabled={unavailable}
+                  title={unavailable ? (canReadTranscript ? "No transcript yet: add one in the Transcript view." : "Only people who keep the minutes can include the transcript.") : section.description}
+                  onClick={() => setSections((current) => ({ ...current, [section.id]: !current[section.id] }))}
+                >
+                  {on && <Check size={11} aria-hidden="true" />} {CHIP_LABELS[section.id]}
+                </button>
+              );
+            })}
           </div>
-          <label className="manual-draft__requirements">
-            <span>Anything else for the AI (added at the end)</span>
-            <textarea className="input" rows={2} value={requirements} onChange={(event) => setRequirements(event.target.value)} placeholder="For example: keep the summary to three sentences; list every date mentioned." />
-          </label>
-          {prompt.length > MANUAL_PROMPT_LONG_CHARS && (
-            <p className="flag flag--warn">This prompt is {Math.round(prompt.length / 1000)}k characters. If your AI won't take it in one message, untick Transcript and attach the transcript file to the chat instead.</p>
+          <div className="manual-draft__links">
+            <button type="button" className="manual-draft__link" aria-expanded={showRequirements} onClick={() => setShowRequirements((value) => !value)}>
+              {requirements.trim() ? "Edit your instructions" : "Add instructions"}
+            </button>
+            <button type="button" className="manual-draft__link" aria-expanded={showPrompt} onClick={() => setShowPrompt((value) => !value)}>
+              {showPrompt ? "Hide prompt" : "View prompt"}
+            </button>
+          </div>
+          {showRequirements && (
+            <textarea
+              className="input manual-draft__requirements"
+              rows={2}
+              value={requirements}
+              onChange={(event) => setRequirements(event.target.value)}
+              placeholder="Added at the end, e.g. keep the summary to three sentences."
+              aria-label="Your instructions for the AI"
+            />
           )}
-          <button type="button" className="btn-action manual-draft__toggle" aria-expanded={showPrompt} onClick={() => setShowPrompt((value) => !value)}>
-            <ChevronDown size={12} aria-hidden="true" style={{ transform: showPrompt ? "rotate(180deg)" : undefined }} /> {showPrompt ? "Hide prompt" : "View prompt"} ({Math.round(prompt.length / 1000)}k characters)
-          </button>
+          {prompt.length > MANUAL_PROMPT_LONG_CHARS && (
+            <p className="manual-draft__hint">Long prompt: if your AI won't take it in one message, turn off Transcript and attach the transcript file instead.</p>
+          )}
           {showPrompt && <pre className="manual-draft__prompt" aria-label="The prompt">{prompt}</pre>}
         </section>
 
-        <section className="manual-draft__step" aria-labelledby="manual-draft-paste">
-          <h3 id="manual-draft-paste">2. Paste what it returns</h3>
-          <textarea
-            className="input manual-draft__reply"
-            rows={8}
-            value={reply}
-            onChange={(event) => { setReply(event.target.value); setChecked(null); }}
-            placeholder='{"calls": [{"tool": "write_summary", "arguments": {…}}, …]}'
-            aria-label="The JSON your AI returned"
-          />
+        <section className="manual-draft__step" aria-label="Paste the reply">
+          <div className="manual-draft__paste">
+            <span className="manual-draft__num" aria-hidden="true">2</span>
+            <textarea
+              className="input manual-draft__reply"
+              rows={6}
+              value={reply}
+              onChange={(event) => setReply(event.target.value)}
+              placeholder="Paste the AI's reply here"
+              aria-label="The JSON your AI returned"
+            />
+          </div>
+          {checked && !checked.ok && <p className="manual-draft__error" role="alert">{checked.error}</p>}
+          {checked?.ok && <ManualReplySummary checked={checked} />}
           <div className="manual-draft__actions">
-            <button type="button" className="btn-action" onClick={check} disabled={!reply.trim() || !context}>
-              <ClipboardPaste size={12} aria-hidden="true" /> Check
-            </button>
             <button type="button" className="btn-action btn-action--primary" onClick={() => { void saveDraft(); }} disabled={!checked?.ok || saving}>
               {saving ? "Saving…" : "Save as AI notes"}
             </button>
           </div>
-          {checked && !checked.ok && <p className="flag flag--warn" role="alert">{checked.error}</p>}
-          {checked?.ok && <ManualReplySummary checked={checked} />}
         </section>
       </div>
     </Modal>
   );
 }
 
+const CHIP_LABELS: Record<ManualPromptSectionId, string> = {
+  transcript: "Transcript",
+  notes: "My notes",
+  people: "People",
+  goals: "Goals & committees",
+  speakers: "Speaker names",
+  quotes: "Quotes",
+};
+
 function ManualReplySummary({ checked }: { checked: Extract<ManualReplyImport, { ok: true }> }) {
   const { result } = checked;
   const { draft } = result;
   const owned = draft.actionItems.filter((item) => item.assigneePersonId).length;
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
   const counts = [
-    `${draft.sections.length} section${draft.sections.length === 1 ? "" : "s"}`,
-    `${draft.decisions.length} decision${draft.decisions.length === 1 ? "" : "s"}`,
-    `${draft.actionItems.length} action item${draft.actionItems.length === 1 ? "" : "s"}${draft.actionItems.length ? ` (${owned} with an owner from People)` : ""}`,
-    `${draft.openQuestions.length} open question${draft.openQuestions.length === 1 ? "" : "s"}`,
-    ...(draft.quotes?.length ? [`${draft.quotes.length} quote${draft.quotes.length === 1 ? "" : "s"}`] : []),
-    ...(result.speakers.length ? [`${result.speakers.length} speaker${result.speakers.length === 1 ? "" : "s"} named`] : []),
+    plural(draft.decisions.length, "decision"),
+    `${plural(draft.actionItems.length, "action item")}${draft.actionItems.length ? ` (${owned} assigned)` : ""}`,
+    ...(draft.openQuestions.length ? [plural(draft.openQuestions.length, "question")] : []),
+    ...(draft.quotes?.length ? [plural(draft.quotes.length, "quote")] : []),
   ];
   return (
     <div className="manual-draft__result" role="status">
-      <p><strong>Ready to save:</strong> {counts.join(", ")}.</p>
-      {draft.summary && <p className="muted">{draft.summary}</p>}
+      <Check size={13} aria-hidden="true" />
+      <span>{counts.join(" · ")}</span>
       {result.refused.length > 0 && (
         <details>
-          <summary>{result.refused.length} call{result.refused.length === 1 ? " was" : "s were"} left out</summary>
+          <summary>{result.refused.length} left out</summary>
           <ul>{result.refused.map((item, index) => <li key={index}><code>{item.tool}</code>: {item.reason.replace(/^Not recorded: /, "")}</li>)}</ul>
+        </details>
+      )}
+      {(result.adjusted?.length ?? 0) > 0 && (
+        <details>
+          <summary>{result.adjusted!.length} link{result.adjusted!.length === 1 ? "" : "s"} dropped</summary>
+          <ul>{result.adjusted!.map((item, index) => <li key={index}>{item.reason}</li>)}</ul>
         </details>
       )}
     </div>

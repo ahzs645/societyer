@@ -94,6 +94,7 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
 
   // Link a committee, add a manual item, then turn the first into a task.
   const first = actions.getByRole("listitem").first();
+  await first.getByRole("button", { name: "Details" }).click();
   await first.getByRole("button", { name: "Committee" }).click();
   await page.getByRole("option", { name: "Finance Committee" }).click();
   await expect(first.getByText("Suggested")).toHaveCount(0);
@@ -196,7 +197,7 @@ test("AI notes suggestions: name diarized speakers, see the people the AI knows"
 
   // The suggested owner is linked to the person in the directory.
   const actions = page.getByRole("region", { name: "Action items" });
-  await expect(actions.getByRole("listitem").first().getByRole("combobox", { name: "Who" })).toHaveValue("Sam Rivera");
+  await expect(actions.getByRole("listitem").first().getByRole("button", { name: "Owner: Sam Rivera" })).toBeVisible();
 
   const speakers = aiNotes.getByRole("region", { name: "Who's speaking" });
   await expect(speakers.getByText("“Sam Rivera here”")).toBeVisible();
@@ -533,8 +534,8 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
   // AI notes: built-in AI is off here, so draft with your own.
   await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "AI notes" }).click();
   await page.getByRole("button", { name: "Use your own AI" }).click();
-  const dialog = page.getByRole("dialog", { name: "Draft the AI notes with your own AI" });
-  await expect(dialog.getByText(/(person|people) the AI can assign work to/)).toBeVisible({ timeout: 15_000 });
+  const dialog = page.getByRole("dialog", { name: "Draft with your own AI" });
+  await expect(dialog.getByText(/k characters/)).toBeVisible({ timeout: 15_000 });
   await dialog.getByRole("button", { name: "Copy prompt" }).click();
   await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/own-ai-copy.png`, fullPage: false });
@@ -555,9 +556,9 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
     { tool: "finish", arguments: {} },
   ] };
   await dialog.getByRole("textbox", { name: "The JSON your AI returned" }).fill("```json\n" + JSON.stringify(reply, null, 2) + "\n```");
-  await dialog.getByRole("button", { name: "Check" }).click();
-  await expect(dialog.locator(".manual-draft__result p").first()).toContainText("2 action items (1 with an owner from People)");
-  await expect(dialog.getByText("1 call was left out")).toBeVisible();
+  // Checked as it's pasted.
+  await expect(dialog.locator(".manual-draft__result")).toContainText("2 action items (1 assigned)");
+  await expect(dialog.getByText("1 left out")).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/own-ai-dialog.png`, fullPage: false });
   await dialog.getByRole("button", { name: "Save as AI notes" }).click();
   await expect(dialog).toHaveCount(0);
@@ -567,7 +568,7 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
   await expect(aiNotes.getByText(/by Your own AI \(pasted\)/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Key quotes" }).getByText("“We'd like to fund a pilot in the spring.”")).toBeVisible();
   const actions = page.getByRole("region", { name: "Action items" });
-  await expect(actions.locator("input[aria-label='Action item']").first()).toHaveValue("Thank the funder");
-  await expect(actions.getByRole("combobox", { name: "Who" }).first()).toHaveValue("Sam Rivera");
+  await expect(actions.locator("[aria-label='Action item']").first()).toHaveValue("Thank the funder");
+  await expect(actions.getByRole("button", { name: "Owner: Sam Rivera" }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });

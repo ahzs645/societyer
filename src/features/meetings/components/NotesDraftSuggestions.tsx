@@ -73,7 +73,7 @@ export function NotesDraftSuggestions({
             <h3><UserCheck size={13} aria-hidden="true" /> Who's speaking</h3>
             {canWrite && canNameSpeakers && pendingSpeakers.length > 1 && (
               <button type="button" className="btn-action" disabled={busy} onClick={() => { void applySpeakers(pendingSpeakers); }}>
-                Name all {pendingSpeakers.length}
+                {pendingSpeakers.every((suggestion) => nameKey(suggestion.label) === nameKey(suggestion.name)) ? "Link" : "Name"} all {pendingSpeakers.length}
               </button>
             )}
           </div>
@@ -83,14 +83,17 @@ export function NotesDraftSuggestions({
               return (
                 <li key={suggestion.label} className="notes-suggestions__item">
                   <div className="notes-suggestions__text">
-                    <span><code>{suggestion.label}</code> → <strong>{suggestion.name}</strong>{suggestion.personId ? "" : " (not in People)"}</span>
-                    <span className="muted">“{suggestion.evidence}”</span>
+                    {nameKey(suggestion.label) === nameKey(suggestion.name)
+                      // Already named in the file (Teams, Zoom): this only links them to their People record.
+                      ? <span><strong>{suggestion.name}</strong> <span className="muted">{suggestion.personId ? "· in People" : "· not in People"}</span></span>
+                      : <span><code>{suggestion.label}</code> → <strong>{suggestion.name}</strong>{suggestion.personId ? "" : " (not in People)"}</span>}
+                    {nameKey(suggestion.label) !== nameKey(suggestion.name) && <span className="muted">“{suggestion.evidence}”</span>}
                   </div>
                   {applied ? (
                     <span className="notes-suggestions__done"><Check size={12} aria-hidden="true" /> Named</span>
                   ) : canWrite && canNameSpeakers ? (
                     <button type="button" className="btn-action" disabled={busy} onClick={() => { void applySpeakers([suggestion]); }}>
-                      Name speaker
+                      {nameKey(suggestion.label) === nameKey(suggestion.name) ? "Link" : "Name speaker"}
                     </button>
                   ) : null}
                 </li>

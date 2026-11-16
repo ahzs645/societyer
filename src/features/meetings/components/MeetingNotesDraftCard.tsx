@@ -7,7 +7,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Bot, Copy, NotebookPen, Play, Quote, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, Copy, NotebookPen, Play, Quote, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/Modal";
@@ -96,14 +96,6 @@ export function MeetingNotesDraftCard({
   const hasNotes = notes.trim().length > 0;
   const canDraft = canWrite && !withheld && notesDraft.available && (hasNotes || (hasTranscript && canReadTranscript)) && !running;
 
-  const sourceHint = !canReadTranscript
-    ? "Drafts from your notes. Transcripts are only read for people who keep the minutes."
-    : hasTranscript
-      ? "Drafts from your notes and the transcript."
-      : onOpenTranscript
-        ? "No transcript yet: drafts from your notes."
-        : "No transcript yet: drafts from your notes. Add a recording or transcript on the Transcript tab.";
-
   const runDraft = async () => {
     if (!canDraft) return;
     if (draft) {
@@ -184,8 +176,11 @@ export function MeetingNotesDraftCard({
           </p>
         )}
         {canWrite && !draft && !withheld && (
-          <p className="muted">
-            {notesDraftTemplate(template).hint} {sourceHint} Your own notes stay exactly as you wrote them.
+          <p className="muted meeting-ai-notes__empty">
+            {notesDraftTemplate(template).hint}{" "}
+            {!hasNotes && !(hasTranscript && canReadTranscript)
+              ? "Write some notes or add a transcript to draft from."
+              : canReadTranscript && hasTranscript ? "Drafts from your notes and the transcript." : "Drafts from your notes."}
             {canReadTranscript && !hasTranscript && onOpenTranscript && (
               <>
                 {" "}
@@ -197,13 +192,12 @@ export function MeetingNotesDraftCard({
           </p>
         )}
         {canWrite && !withheld && !draft && !notesDraft.available && (
-          <p className="flag flag--warn" role="note">
-            Drafting notes here uses on-device AI. {notesDraft.unavailableReason}{" "}
-            <Link to={DEVICE_AI_SETTINGS_HREF}>Set up on-device AI</Link>, or choose <strong>Use your own AI</strong> to draft them with ChatGPT, Claude or another AI.
+          <p className="muted meeting-ai-notes__empty">
+            <span>
+              No AI is connected here: choose <strong>Use your own AI</strong>, or{" "}
+              <Link to={DEVICE_AI_SETTINGS_HREF}>set up on-device AI</Link>.
+            </span>
           </p>
-        )}
-        {canWrite && !withheld && notesDraft.available && !hasNotes && !(hasTranscript && canReadTranscript) && (
-          <p className="muted">Write some notes or add a transcript to draft from.</p>
         )}
         {!canWrite && !draft && !withheld && <p className="muted">No AI notes yet.</p>}
         {draft && (
@@ -257,10 +251,13 @@ function NotesDraftView({
   return (
     <article className="meeting-ai-notes__draft" aria-label="AI notes draft">
       {draft.summary && <p className="meeting-ai-notes__summary">{draft.summary}</p>}
-      {draft.sections.map((section) => (
-        <DraftList key={section.heading} heading={section.heading} items={section.points} />
-      ))}
-      <DraftList heading="Decisions" items={draft.decisions} />
+      {draft.decisions.length > 0 && (
+        <section className="meeting-ai-notes__decisions" aria-label="Decisions">
+          <h3><CheckCircle2 size={13} aria-hidden="true" /> Decisions</h3>
+          <ul>{draft.decisions.map((item, index) => <li key={`${index}-${item.slice(0, 24)}`}>{item}</li>)}</ul>
+        </section>
+      )}
+      <DraftSections sections={draft.sections} />
       <DraftList heading="Open questions" items={draft.openQuestions} />
       <DraftQuotes quotes={draft.quotes ?? []} />
       {suggestions}
@@ -319,6 +316,22 @@ function DraftQuotes({ quotes }: { quotes: readonly NotesDraftQuote[] }) {
         </figure>
       ))}
     </section>
+  );
+}
+
+/** Discussion topics: short ones in full; many points fold, the first topic open. */
+function DraftSections({ sections }: { sections: ReadonlyArray<{ heading: string; points: string[] }> }) {
+  const total = sections.reduce((sum, section) => sum + section.points.length, 0);
+  if (total <= 10) return <>{sections.map((section) => <DraftList key={section.heading} heading={section.heading} items={section.points} />)}</>;
+  return (
+    <div className="meeting-ai-notes__topics">
+      {sections.map((section, index) => (
+        <details key={section.heading} className="meeting-ai-notes__topic" open={index === 0}>
+          <summary><span>{section.heading}</span> <span className="muted">{section.points.length}</span></summary>
+          <ul>{section.points.map((point, at) => <li key={`${at}-${point.slice(0, 24)}`}>{point}</li>)}</ul>
+        </details>
+      ))}
+    </div>
   );
 }
 

@@ -138,7 +138,7 @@ export function importManualNotesReply(text: string, input: { template: NotesDra
         : "That isn't JSON. Paste the JSON object your AI returned.",
     };
   }
-  const session = createMeetingNotesSkillSession(input.context, input.template, { transcript: input.transcript });
+  const session = createMeetingNotesSkillSession(input.context, input.template, { transcript: input.transcript, lenient: true });
   const result = applySkillCalls(session, calls);
   if (!result.draft.summary && !result.draft.sections.length && !result.draft.decisions.length && !result.draft.actionItems.length) {
     return { ok: false, error: result.refused.length ? `Nothing could be imported: ${result.refused[0].tool}: ${result.refused[0].reason}` : "The reply had no summary, decisions or action items." };

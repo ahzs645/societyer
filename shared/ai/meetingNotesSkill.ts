@@ -344,6 +344,8 @@ export type MeetingNotesSkillResult = {
   speakers: SkillSpeakerSuggestion[];
   /** Calls refused, for diagnostics and tests. */
   refused: Array<{ tool: string; reason: string }>;
+  /** Lenient sessions (pasted replies): links dropped from calls that were kept. */
+  adjusted?: Array<{ tool: string; reason: string }>;
   calls: number;
   finished: boolean;
 };
@@ -384,8 +386,17 @@ export function createMeetingNotesSkillSession(
   context: MeetingNotesSkillContext,
   template: NotesDraftTemplateId,
   /** The whole transcript: quotes must appear in it word for word. */
-  options: { transcript?: string } = {},
+  options: {
+    transcript?: string;
+    /**
+     * A pasted reply can't be corrected and resent, so an action item whose
+     * owner, goal or committee isn't listed is kept without that link (and
+     * noted) instead of refused.
+     */
+    lenient?: boolean;
+  } = {},
 ) {
+  const adjusted: Array<{ tool: string; reason: string }> = [];
   const lines = transcriptLines(options.transcript ?? "");
   const quotes: PendingQuote[] = [];
   const peopleById = new Map(context.people.filter((person) => person.id).map((person) => [person.id!, person]));
@@ -450,13 +461,31 @@ export function createMeetingNotesSkillSession(
         const text = str(args.text, NOTES_DRAFT_LIMITS.actionText);
         if (!text) return refuse(tool, "text is empty.");
         if (actions.length >= NOTES_DRAFT_LIMITS.actionItems) return refuse(tool, "too many action items.");
-        const owner = person(args.owner_person_id, args.owner_name);
-        if (!owner.ok) return refuse(tool, owner.reason);
-        if (args.due_date !== undefined && args.due_date !== null && args.due_date !== "" && !isIsoDate(args.due_date)) return refuse(tool, "due_date must be YYYY-MM-DD.");
-        const goalId = typeof args.goal_id === "string" && args.goal_id.trim() ? args.goal_id.trim() : undefined;
-        if (goalId && !goalIds.has(goalId)) return refuse(tool, `goal_id "${clip(goalId, 40)}" is not in the Open goals list. Omit it or use a listed id.`);
-        const committeeId = typeof args.committee_id === "string" && args.committee_id.trim() ? args.committee_id.trim() : undefined;
-        if (committeeId && !committeeIds.has(committeeId)) return refuse(tool, `committee_id "${clip(committeeId, 40)}" is not in the Committees list. Omit it or use a listed id.`);
+        const note = (reason: string) => adjusted.push({ tool, reason: `"${clip(text, 60)}": ${reason}` });
+        let owner = person(args.owner_person_id, args.owner_name);
+        if (!owner.ok) {
+          if (!options.lenient) return refuse(tool, owner.reason);
+          note("its owner isn't in the People list, so it has no owner.");
+          owner = { ok: true };
+        }
+        let dueDate = args.due_date;
+        if (dueDate !== undefined && dueDate !== null && dueDate !== "" && !isIsoDate(dueDate)) {
+          if (!options.lenient) return refuse(tool, "due_date must be YYYY-MM-DD.");
+          note(`"${clip(String(dueDate), 20)}" isn't a date, so it has no due date.`);
+          dueDate = undefined;
+        }
+        let goalId = typeof args.goal_id === "string" && args.goal_id.trim() ? args.goal_id.trim() : undefined;
+        if (goalId && !goalIds.has(goalId)) {
+          if (!options.lenient) return refuse(tool, `goal_id "${clip(goalId, 40)}" is not in the Open goals list. Omit it or use a listed id.`);
+          note("its goal isn't listed, so it isn't linked to one.");
+          goalId = undefined;
+        }
+        let committeeId = typeof args.committee_id === "string" && args.committee_id.trim() ? args.committee_id.trim() : undefined;
+        if (committeeId && !committeeIds.has(committeeId)) {
+          if (!options.lenient) return refuse(tool, `committee_id "${clip(committeeId, 40)}" is not in the Committees list. Omit it or use a listed id.`);
+          note("its committee isn't listed, so it isn't linked to one.");
+          committeeId = undefined;
+        }
         const ownerLabel = typeof args.owner_speaker_label === "string" && args.owner_speaker_label.trim() ? args.owner_speaker_label.trim() : undefined;
         if (ownerLabel && !speakerLabels.has(ownerLabel)) return refuse(tool, `owner_speaker_label "${clip(ownerLabel, 40)}" is not in the Transcript speakers list.`);
         const at = typeof args.at_seconds === "number" && Number.isFinite(args.at_seconds) && args.at_seconds >= 0 && args.at_seconds <= MAX_REF_SEC ? Math.round(args.at_seconds) : undefined;
@@ -465,7 +494,7 @@ export function createMeetingNotesSkillSession(
           text,
           ...(owner.name ? { assignee: owner.name } : {}),
           ...(owner.personId ? { assigneePersonId: owner.personId } : {}),
-          ...(isIsoDate(args.due_date) ? { dueDate: args.due_date as string } : {}),
+          ...(isIsoDate(dueDate) ? { dueDate: dueDate as string } : {}),
           ...(at !== undefined ? { atSec: at } : {}),
           ...(goalId ? { goalId } : {}),
           ...(committeeId ? { committeeId } : {}),
@@ -530,6 +559,7 @@ export function createMeetingNotesSkillSession(
       },
       speakers: [...speakers.values()],
       refused: [...refused],
+      ...(adjusted.length ? { adjusted: [...adjusted] } : {}),
       calls,
       finished,
     };

@@ -8,9 +8,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ListChecks, Plus, Sparkles, X } from "lucide-react";
+import { CalendarDays, ListChecks, Plus, Sparkles, Target, User, Users, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { Badge } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -184,8 +183,12 @@ function NoteActionRow({
   onRemove: () => void;
   onCreateTask: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const due = item.dueDate ? new Date(`${item.dueDate}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
+  const goal = item.goalId ? goalOptions.find((option) => option.value === item.goalId)?.label : undefined;
+  const committee = item.committeeId ? committeeOptions.find((option) => option.value === item.committeeId)?.label : undefined;
   return (
-    <li className={`meeting-note-action${item.done ? " is-done" : ""}`}>
+    <li className={`meeting-note-action${item.done ? " is-done" : ""}${open ? " is-open" : ""}`}>
       <div className="meeting-note-action__main">
         <input
           type="checkbox"
@@ -194,9 +197,13 @@ function NoteActionRow({
           aria-label={item.done ? `Reopen: ${item.text}` : `Mark done: ${item.text}`}
           onChange={(event) => { onPatch({ done: event.target.checked, status: event.target.checked ? "completed" : "open" }); }}
         />
-        <input
+        {/* Wraps instead of cutting the wording off; Enter saves. */}
+        <textarea
           key={`${item.id}:${item.text}`}
           className="input meeting-note-action__text"
+          rows={1}
+          ref={fitToText}
+          onInput={(event) => fitToText(event.currentTarget)}
           defaultValue={item.text}
           readOnly={!canWrite}
           aria-label="Action item"
@@ -205,16 +212,12 @@ function NoteActionRow({
             if (text && text !== item.text) onPatch({ text });
             else event.target.value = item.text;
           }}
-          onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}
         />
-        {item.origin === "ai" && (
-          <Badge tone="info"><Sparkles size={10} aria-hidden="true" /> Suggested</Badge>
-        )}
-        <TranscriptTimeChip transcriptRef={item.transcriptRef} label={item.text} />
         {canWrite && (
           <button
             type="button"
-            className="btn-action btn-action--icon"
+            className="btn-action btn-action--icon meeting-note-action__remove"
             aria-label={`Remove: ${item.text}`}
             title={item.taskId ? "Remove from the notes. Its task stays on the task board." : "Remove"}
             onClick={onRemove}
@@ -223,58 +226,69 @@ function NoteActionRow({
           </button>
         )}
       </div>
-      <div className="meeting-note-action__links">
-        <div className="meeting-note-action__field">
-          <PersonNameLinkField
-            compact
-            ariaLabel="Who"
-            placeholder="Who"
-            value={{ name: item.assignee ?? "", personId: item.assigneePersonId }}
-            people={people}
-            onChange={(next) => {
-              if (!canWrite || (next.name === (item.assignee ?? "") && next.personId === item.assigneePersonId)) return;
-              onPatch({ assignee: next.name, assigneePersonId: next.personId });
-            }}
-          />
-        </div>
-        <input
-          className="input meeting-note-action__due"
-          type="date"
-          aria-label="Due date"
-          value={item.dueDate ?? ""}
-          disabled={!canWrite}
-          onChange={(event) => { onPatch({ dueDate: event.target.value || undefined }); }}
-        />
-        <div className="meeting-note-action__select">
-          <Select
-            aria-label="Goal"
-            value={item.goalId ?? ""}
-            disabled={!canWrite || !goalsLoaded}
-            options={goalOptions}
-            onChange={(value) => { onPatch({ goalId: value || undefined }); }}
-          />
-        </div>
-        <div className="meeting-note-action__select">
-          <Select
-            aria-label="Committee"
-            value={item.committeeId ?? ""}
-            disabled={!canWrite}
-            options={committeeOptions}
-            onChange={(value) => { onPatch({ committeeId: value || undefined }); }}
-          />
-        </div>
+      {/* At a glance: who, when, where it came from; Details edits them. */}
+      <div className="meeting-note-action__chips">
+        <button type="button" className={`meeting-note-action__chip${item.assignee ? "" : " is-empty"}`} onClick={() => setOpen(true)} aria-label={item.assignee ? `Owner: ${item.assignee}` : "No owner: choose one"}>
+          <User size={11} aria-hidden="true" /> {item.assignee || "No owner"}
+        </button>
+        {due && <button type="button" className="meeting-note-action__chip" onClick={() => setOpen(true)} aria-label={`Due ${due}`}><CalendarDays size={11} aria-hidden="true" /> {due}</button>}
+        {goal && <span className="meeting-note-action__chip" title="Goal"><Target size={11} aria-hidden="true" /> {goal}</span>}
+        {committee && <span className="meeting-note-action__chip" title="Committee"><Users size={11} aria-hidden="true" /> {committee}</span>}
+        <TranscriptTimeChip transcriptRef={item.transcriptRef} label={item.text} />
+        {item.origin === "ai" && <span className="meeting-note-action__ai" title="Suggested by the AI notes; any edit makes it yours"><Sparkles size={11} aria-hidden="true" /><span className="sr-only">Suggested</span></span>}
         {task ? (
-          <Link className="btn-action" to="/app/tasks" title={`Task: ${task.title}`}>
-            Task · {taskStatusLabel(task.status)}
-          </Link>
+          <Link className="meeting-note-action__chip is-task" to="/app/tasks" title={`Task: ${task.title}`}>Task · {taskStatusLabel(task.status)}</Link>
         ) : item.taskId ? (
-          <span className="muted">Task created</span>
-        ) : canWrite && canCreateTasks ? (
-          <button type="button" className="btn-action" disabled={creating} onClick={onCreateTask}>
-            {creating ? "Creating…" : "Create task"}
-          </button>
+          <span className="meeting-note-action__chip is-task">Task created</span>
         ) : null}
+        {canWrite && (
+          <button type="button" className="meeting-note-action__details" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+            {open ? "Done" : "Details"}
+          </button>
+        )}
       </div>
+      {open && canWrite && (
+        <div className="meeting-note-action__links">
+          <div className="meeting-note-action__field">
+            <PersonNameLinkField
+              compact
+              ariaLabel="Who"
+              placeholder="Who"
+              value={{ name: item.assignee ?? "", personId: item.assigneePersonId }}
+              people={people}
+              onChange={(next) => {
+                if (next.name === (item.assignee ?? "") && next.personId === item.assigneePersonId) return;
+                onPatch({ assignee: next.name, assigneePersonId: next.personId });
+              }}
+            />
+          </div>
+          <input
+            className="input meeting-note-action__due"
+            type="date"
+            aria-label="Due date"
+            value={item.dueDate ?? ""}
+            onChange={(event) => { onPatch({ dueDate: event.target.value || undefined }); }}
+          />
+          <div className="meeting-note-action__select">
+            <Select aria-label="Goal" value={item.goalId ?? ""} disabled={!goalsLoaded} options={goalOptions} onChange={(value) => { onPatch({ goalId: value || undefined }); }} />
+          </div>
+          <div className="meeting-note-action__select">
+            <Select aria-label="Committee" value={item.committeeId ?? ""} options={committeeOptions} onChange={(value) => { onPatch({ committeeId: value || undefined }); }} />
+          </div>
+          {!task && !item.taskId && canCreateTasks && (
+            <button type="button" className="btn-action" disabled={creating} onClick={onCreateTask}>
+              {creating ? "Creating…" : "Create task"}
+            </button>
+          )}
+        </div>
+      )}
     </li>
   );
+}
+
+/** Grows the wording box to its text (field-sizing isn't in every browser yet). */
+function fitToText(node: HTMLTextAreaElement | null) {
+  if (!node) return;
+  node.style.height = "auto";
+  node.style.height = `${node.scrollHeight + 2}px`;
 }

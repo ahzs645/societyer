@@ -86,6 +86,12 @@ endpoints (hosted), the on-device client (including Claude Code / Codex, which
 run their own loop through `onToolCall`), and JSON mode (`{"calls": [...]}`)
 for models that refuse tools.
 
+The AI notes read: summary, **Decisions** (highlighted), the discussion
+topics (folded when there are more than ten points, the first open), open
+questions, key quotes. Action items show their wording, owner, due date and
+transcript time at a glance; **Details** edits the owner, date, goal and
+committee and creates the task.
+
 **Suggestions are applied by people**: the AI notes card lists **Who's
 speaking** (each label, the person, the quoted evidence; **Name speaker** uses
 `transcripts:assignSpeaker`).
@@ -117,13 +123,17 @@ any AI chat, which works when no AI model is connected to the workspace:
    the template, and the meeting's context. Blocks can be switched off:
    Transcript (off when you attach the file to the chat instead), Your notes,
    People and roles (ids, roles, attending), Goals and committees, Name the
-   speakers, Key quotes. Anything typed in the box is added at the end. A
+   speakers, Key quotes (chips under Copy prompt; each one's description is
+   its tooltip). **Add instructions** adds your own text at the end. A
    prompt over 120k characters says to attach the transcript instead.
 2. **Paste what it returns** (`{"calls": [...]}`, also inside a code fence or
-   with text around it), **Check**, then **Save as AI notes**. The calls run
-   through the same session as the built-in AI's: an id that isn't listed, a
-   bad date or a quote that isn't word for word in the transcript is left out,
-   and the dialog lists what was left out and why. Saving goes through
+   with text around it); it's checked as it's pasted, then **Save as AI
+   notes**. The calls run through the same session as the built-in AI's, in
+   its lenient mode: a reply can't be corrected and resent, so an action item
+   whose owner, goal or committee isn't listed (people changed since copying,
+   or a reply pasted into another meeting) is kept without that link, and a
+   quote that isn't word for word in the transcript is left out. The dialog
+   lists both. Saving goes through
    `meetings:saveNotesDraft` (quotes re-checked there) and is labelled "Your
    own AI (pasted)".
 

@@ -400,8 +400,10 @@ console.log("✓ replays: four recorded model runs meet every expectation (owner
   ] }), { template: "general", context: CONTEXT, transcript: SKILL_FIXTURE_TRANSCRIPT });
   assert.ok(forged.ok);
   if (forged.ok) {
-    assert.deepEqual(forged.result.refused.map((item) => item.tool), ["add_action_item", "add_quote"], "unknown people and made-up quotes are left out, with reasons");
-    assert.equal(forged.result.draft.actionItems.length, 0);
+    assert.deepEqual(forged.result.refused.map((item) => item.tool), ["add_quote"], "a made-up quote is left out, with the reason");
+    // A pasted reply can't be resent: an unknown owner drops the owner, not the action.
+    assert.deepEqual(forged.result.draft.actionItems, [{ text: "Do it" }]);
+    assert.match(forged.result.adjusted?.[0]?.reason ?? "", /"Do it": its owner isn't in the People list/);
   }
   assert.deepEqual(importManualNotesReply("", { template: "general", context: CONTEXT, transcript: "" }), { ok: false, error: "Paste the JSON your AI returned." });
   assert.match((importManualNotesReply("Sorry, I can't help with that.", { template: "general", context: CONTEXT, transcript: "" }) as { error: string }).error, /isn't JSON/);
