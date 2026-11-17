@@ -30,6 +30,30 @@ timestamped text from Otter (`Name  0:05`), Rev (`Name (00:05):`), Descript
 turns). A `.txt` with no timestamps imports as plain text. A `Name:` prefix
 becomes a speaker once it repeats in the file, as for captions.
 
+### Speakers and People
+
+**Speakers** offers attendees, expected attendees, committee members,
+directors and everyone in People (`speakerCandidates`, People capped at 300).
+A label that is someone's name in People is suggested with that person;
+**Apply all suggestions** links them. A name shared by two People records is
+offered by name only, never guessed.
+
+Named labels are remembered per workspace (`speakerBindings`, keyed by the
+normalized label): assigning "Ahmad Jalil" to a person makes the next import
+with that label assign the same person (`importTimed` returns
+`rememberedSpeakers`, shown in the save status). Changing the assignment
+changes what is remembered; clearing it ("no one") makes later imports leave
+the label unassigned. Diarization labels (`SPEAKER_01`, `Speaker 2`,
+`Speaker A`, `Unknown`) are never remembered, since they are a different voice
+in every file. A remembered person who left People is dropped and only the
+name is kept.
+
+### Player
+
+One row: play/pause (a small square button), back and forward, the time, the
+scrubber with speaker lanes and minutes markers, speed and shortcuts. On a
+narrow screen the scrubber takes its own row under the buttons.
+
 ## AI notes (Notes tab)
 
 `shared/ai/notesDraft.ts`. The person's notes plus the transcript become a

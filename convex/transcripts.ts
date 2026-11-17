@@ -109,7 +109,7 @@ export const importVtt = authorizedMutation("transcripts:importVtt", mutation)({
     importVttPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
-const timedResult = v.object({ wordsDropped: v.boolean() });
+const timedResult = v.object({ wordsDropped: v.boolean(), rememberedSpeakers: v.optional(v.number()) });
 
 export const assignSpeaker = authorizedMutation("transcripts:assignSpeaker", mutation)({
   args: {

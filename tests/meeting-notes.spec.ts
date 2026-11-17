@@ -579,6 +579,39 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
   const actions = page.getByRole("region", { name: "Action items" });
   await expect(actions.locator("[aria-label='Action item']").first()).toHaveValue("Thank the funder");
   await expect(actions.getByRole("button", { name: "Owner: Sam Rivera" }).first()).toBeVisible();
+
+  // The next meeting's import remembers who "Sam Rivera" is; it can still be changed.
+  const nextId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
+    return client.mutation("meetings:create", {
+      societyId: getStoredSocietyId(), type: "Working", title: "Funder follow-up", scheduledAt: "2026-11-23T17:00:00.000Z",
+      electronic: true, status: "Held", attendeeIds: [], recordKind: "notes",
+    });
+  });
+  await page.goto(`/app/meetings/${nextId}?tab=notes&view=transcript`);
+  await page.locator(".transcript-workspace input[type=file]").last().setInputFiles({ name: "Follow-up.vtt", mimeType: "text/vtt", buffer: Buffer.from(vtt) });
+  await expect(page.getByText(/1 speaker assigned as last time/)).toBeVisible({ timeout: 60_000 });
+  const linked = await page.evaluate(async (id) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const transcript = await client.query("transcripts:getByMeeting", { meetingId: id }) as any;
+    return transcript.speakers.map((speaker: any) => [speaker.label, speaker.name, Boolean(speaker.personId)]);
+  }, nextId);
+  expect(linked).toEqual([["Sam Rivera", "Sam Rivera", true]]);
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/remembered-speakers.png`, fullPage: false });
+  // The player is one row, and speed and shortcuts stay inside it (measured together, once laid out).
+  await page.getByRole("button", { name: "Done", exact: true }).last().click();
+  for (const width of [1440, 1180, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate(() => {
+      const row = document.querySelector(".transcript-player__controls")!.getBoundingClientRect();
+      return ["[aria-label='Play']", "[aria-label='Playback speed']", "[aria-label='Keyboard shortcuts']"].every((selector) => {
+        const box = document.querySelector(`.transcript-player__controls ${selector}`)!.getBoundingClientRect();
+        return box.right <= row.right + 1 && box.left >= row.left - 1 && Math.abs((box.top + box.bottom) / 2 - (row.top + row.bottom) / 2) < 8;
+      });
+    }), { message: `play, speed and shortcuts on the player's one row at ${width}px` }).toBe(true);
+    if (SHOTS) await page.locator(".transcript-player__controls").screenshot({ path: `${SHOTS}/player-row-${width}.png` });
+  }
   expect(errors).toEqual([]);
 });
 

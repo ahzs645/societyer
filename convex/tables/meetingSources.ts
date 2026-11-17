@@ -43,6 +43,18 @@ export const meetingSourceTables = {
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   }).index("by_meeting", ["meetingId"]).index("by_meeting_user", ["meetingId", "userId"]),
+  // Who a named transcript speaker is in this workspace, remembered from the
+  // last assignment (shared/functions/transcripts.ts): "Ahmad Jalil" in a
+  // Teams VTT is the same person next time. `unbound` remembers "no one".
+  speakerBindings: defineTable({
+    societyId: v.id("societies"),
+    labelKey: v.string(),
+    label: v.string(),
+    personId: v.optional(v.string()),
+    name: v.optional(v.string()),
+    unbound: v.optional(v.boolean()),
+    updatedAtISO: v.string(),
+  }).index("by_society_label", ["societyId", "labelKey"]),
   meetingSourceText: defineTable({ sourceId: v.id("meetingSources"), index: v.number(), text: v.string() })
     .index("by_source_index", ["sourceId", "index"]),
 };

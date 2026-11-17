@@ -203,19 +203,19 @@
 .transcript-player__controls {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: token("s-2");
 }
+/* A small square play button, the same height as the other controls. */
 .transcript-play {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   display: grid;
   place-items: center;
   color: token("accent-on-accent");
   background: token("accent");
   border: 0;
-  border-radius: token("r-pill");
+  border-radius: token("r-sm");
   cursor: pointer;
   &:disabled {
     opacity: token("opacity-disabled");
@@ -252,13 +252,20 @@
 }
 .transcript-player__controls > .transcript-player__time {
   order: 3;
-  margin-right: auto;
+}
+/* The timeline takes the rest of the row and is what shrinks when space is short. */
+.transcript-player__track {
+  order: 4;
+  flex: 1 1 0;
+  min-width: 120px;
 }
 .transcript-player__controls > .transcript-rate {
-  order: 4;
+  order: 5;
 }
 .transcript-shortcuts-trigger {
-  order: 5;
+  order: 6;
+  flex: none;
+  padding-inline: token("s-2");
   background: transparent;
   border-color: transparent;
   color: token("text-secondary");
@@ -280,14 +287,13 @@
 }
 .transcript-scrubber {
   position: relative;
-  margin-top: token("s-3");
   cursor: pointer;
   touch-action: none;
   border-radius: token("r-xs");
   canvas {
     display: block;
     width: 100%;
-    height: 56px;
+    height: 26px;
   }
 }
 .transcript-waveform {
@@ -300,8 +306,8 @@
 }
 .transcript-speaker-lane {
   position: relative;
-  height: 8px;
-  margin-top: token("s-1");
+  height: 5px;
+  margin-top: 2px;
   overflow: hidden;
   background: token("bg-muted");
   border-radius: token("r-pill");
@@ -1161,13 +1167,18 @@ button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
 }
 // Phones: one compact control row so the pinned player stays short.
 @container transcript (max-width: 419.98px) {
+  /* Phones: the buttons on one row, the timeline under them. */
   .transcript-player__controls {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: token("s-1");
   }
   .transcript-player__controls > .transcript-player__time {
     flex: 1 1 auto;
     min-width: 0;
+  }
+  .transcript-player__track {
+    flex-basis: 100%;
+    order: 10;
   }
   .transcript-rate {
     padding-inline: token("s-2");
@@ -1176,7 +1187,7 @@ button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
     display: none;
   }
   .transcript-scrubber canvas {
-    height: 40px;
+    height: 26px;
   }
 }
 @media (hover: none), (pointer: coarse) {

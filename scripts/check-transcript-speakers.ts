@@ -13,6 +13,7 @@ import {
   type PortablePrincipal,
 } from "../shared/portable/index";
 import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
+import { rememberableSpeakerLabel, speakerBindingKey } from "../shared/functions/transcripts";
 import { actionPermission } from "../shared/functions/actionPolicy";
 import {
   resolveSpeakerLabel,
@@ -485,6 +486,75 @@ for (const local of [false, true]) {
     "SPEAKER_01",
     "denied calls change nothing",
   );
+}
+
+// Remembered speakers: a named label keeps its person for the next import in
+// this workspace; diarization labels never do; changes and "no one" stick.
+assert.equal(rememberableSpeakerLabel("Ahmad Jalil"), true);
+assert.equal(rememberableSpeakerLabel("jordan.lee@example.org"), true);
+for (const raw of ["SPEAKER_01", "speaker_03", "Speaker 2", "Speaker A", "spk-1", "Unknown", "Guest 4", "12", "A"]) {
+  assert.equal(rememberableSpeakerLabel(raw), false, `${raw} is a diarization label`);
+}
+assert.equal(speakerBindingKey("  Ahmad_Jalil "), speakerBindingKey("ahmad jalil"));
+for (const local of [false, true]) {
+  const societyId = "binding-test";
+  const meetings = ["m1", "m2", "m3", "m4", "m5"].map((_id) => ({ _id, societyId }));
+  const seed = {
+    ...portableTestSeed(societyId),
+    meetings: [...meetings, { _id: "other-meeting", societyId: "other" }],
+    peopleDirectory: [
+      { _id: "p_ahmad", societyId, displayName: "Ahmad Jalil", searchName: "ahmad jalil" },
+      { _id: "p_sam", societyId, displayName: "Sam Rivera", searchName: "sam rivera" },
+      { _id: "p_foreign", societyId: "other", displayName: "Ahmad Jalil", searchName: "ahmad jalil" },
+    ],
+  };
+  const db = local ? new LocalStoreDb(new MemoryRowStore(seed)) : new MemoryDb({ seed });
+  const runtime = new PortableRuntime({
+    db,
+    capabilities: makeCapabilities({}),
+    principalProvider: () => portableTestPrincipal(),
+  }).registerAll(PORTABLE_FUNCTIONS);
+  const segments = [
+    { speaker: "Ahmad Jalil", startSec: 0, endSec: 4, text: "Let's start with the budget." },
+    { speaker: "SPEAKER_01", startSec: 4, endSec: 8, text: "I have the numbers here." },
+    { speaker: "Sam Rivera", startSec: 8, endSec: 12, text: "Thanks, both." },
+  ];
+  const importInto = (meetingId: string) =>
+    runtime.runMutation<{ rememberedSpeakers?: number }>("transcripts:importTimed", { societyId, meetingId, provider: "vtt", segments });
+  const assign = (meetingId: string, label: string, who: { name?: string; personId?: string }) =>
+    runtime.runMutation("transcripts:assignSpeaker", { societyId, meetingId, label, ...who });
+  const speakersOf = async (meetingId: string) =>
+    ((await runtime.runQuery<Row>("transcripts:getByMeeting", { meetingId })).speakers ?? []).map(({ label, name, personId }) => ({ label, name, personId }));
+
+  assert.equal((await importInto("m1")).rememberedSpeakers, undefined, "nothing remembered yet");
+  await assign("m1", "Ahmad Jalil", { name: "Ahmad Jalil", personId: "p_ahmad" });
+  await assign("m1", "SPEAKER_01", { name: "Sam Rivera", personId: "p_sam" });
+
+  // Next meeting: Ahmad is assigned on import; SPEAKER_01 is a different voice every time.
+  assert.equal((await importInto("m2")).rememberedSpeakers, 1);
+  assert.deepEqual(await speakersOf("m2"), [{ label: "Ahmad Jalil", name: "Ahmad Jalil", personId: "p_ahmad" }]);
+  const m2 = await runtime.runQuery<Row>("transcripts:getByMeeting", { meetingId: "m2" });
+  assert.match(m2.text, /Ahmad Jalil: Let's start/, "transcript text uses the remembered name");
+
+  // Changing the assignment changes what the next import uses.
+  await assign("m2", "Ahmad Jalil", { name: "Sam Rivera", personId: "p_sam" });
+  await importInto("m3");
+  assert.deepEqual(await speakersOf("m3"), [{ label: "Ahmad Jalil", name: "Sam Rivera", personId: "p_sam" }]);
+
+  // Clearing it ("no one") means the next import leaves the speaker unassigned.
+  await assign("m3", "Ahmad Jalil", { name: "" });
+  assert.equal((await importInto("m4")).rememberedSpeakers, undefined);
+  assert.deepEqual(await speakersOf("m4"), []);
+
+  // A person deleted (or from another workspace) is dropped; a name alone still carries over.
+  await assign("m4", "Sam Rivera", { name: "Sam Rivera", personId: "p_sam" });
+  await db.transaction(() => db.delete("p_sam"));
+  await importInto("m5");
+  assert.deepEqual(await speakersOf("m5"), [{ label: "Sam Rivera", name: "Sam Rivera", personId: undefined }]);
+  await assert.rejects(() => assign("m5", "Ahmad Jalil", { personId: "p_foreign" }), /not found/i);
+  const bindings = (await db.query("speakerBindings").collect()) as Array<Record<string, unknown>>;
+  assert.ok(bindings.every((row) => row.societyId === societyId), "bindings stay in their workspace");
+  assert.ok(!bindings.some((row) => String(row.labelKey).startsWith("speaker")), "diarization labels are never stored");
 }
 
 // Assignment candidates: attendance, expected attendees, committee, directors;

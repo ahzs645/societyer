@@ -10,6 +10,10 @@ import type { AssignSpeaker, MergeSpeakers, UnmergeSpeaker } from "./SpeakerPane
 import type { UpdateSegment } from "./TranscriptTurns";
 import { REPLACE_TRANSCRIPT_CONFIRM } from "./timedImportOffer";
 
+/** Named speakers the import assigned from earlier meetings (`speakerBindings`). */
+const rememberedNote = (count = 0) =>
+  count ? ` ${count} speaker${count === 1 ? "" : "s"} assigned as last time; change any under Speakers.` : "";
+
 export function useTranscriptMutations({
   societyId,
   meetingId,
@@ -133,9 +137,8 @@ export function useTranscriptMutations({
   async function save(parsed: TimedTranscript, announce: (wordsDropped: boolean) => string) {
     if (hasTranscript && !(await confirm(REPLACE_TRANSCRIPT_CONFIRM))) return null;
     const { provider, segments, durationSeconds } = parsed;
-    const result = await importTimed({ societyId, meetingId, provider, segments, durationSeconds });
-    setUndo(null);
-    setStatus(announce(result.wordsDropped));
+    const result: { wordsDropped: boolean; rememberedSpeakers?: number } = await importTimed({ societyId, meetingId, provider, segments, durationSeconds });
+    setUndo(null); setStatus(`${announce(result.wordsDropped)}${rememberedNote(result.rememberedSpeakers)}`);
     return parsed;
   }
   /** Resolves with the parsed transcript once it is saved, or null when nothing was imported. */

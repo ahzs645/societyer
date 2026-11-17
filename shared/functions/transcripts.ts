@@ -396,6 +396,7 @@ export async function assignSpeakerPortable(
   };
   const next = [...speakers.filter((speaker) => speaker.label !== args.label), assignment];
   if (next.length > 1000) throw new Error("Use at most 1,000 speaker assignments.");
+  await rememberSpeaker(ctx, args.societyId, args.label, assignment);
   if (row.pagedJobId) { await ctx.db.patch(row._id, { speakers: next, contentRevision: `${Date.now()}:${Math.random()}` }); return { wordsDropped: false }; }
   const segments: TranscriptSegmentRow[] = row.segments;
   const bounded = boundedTranscript({
@@ -413,6 +414,57 @@ export async function assignSpeakerPortable(
   });
   await syncMinutesDraftTranscript(ctx, args.meetingId, bounded.text);
   return { wordsDropped: bounded.wordsDropped ?? false };
+}
+
+// ---------------------------------------------------------------------------
+// Remembered speakers: a named speaker label (Teams, Zoom, a hand-named
+// export) keeps the person it was last assigned to, for the next import.
+// ---------------------------------------------------------------------------
+
+/** Diarization labels ("SPEAKER_01", "Speaker 2", "Speaker A", "Unknown") mean nothing across meetings. */
+const RAW_SPEAKER_LABEL = /^(?:(?:speaker|spk|guest|unknown|participant|voice)(?:[\s_-]*(?:\d+|[a-z]))?|[\s_-]*\d+)$/i;
+export function rememberableSpeakerLabel(label: string): boolean {
+  const text = label.trim();
+  return text.length >= 2 && /\p{L}/u.test(text) && !RAW_SPEAKER_LABEL.test(text);
+}
+export const speakerBindingKey = (label: string) => label.normalize("NFKC").toLocaleLowerCase().replace(/[\s_]+/g, " ").trim();
+
+async function rememberSpeaker(ctx: PortableMutationCtx, societyId: string, label: string, assignment: TranscriptSpeaker) {
+  if (!rememberableSpeakerLabel(label)) return;
+  const labelKey = speakerBindingKey(label);
+  const existing = (await ctx.db.query("speakerBindings").withIndex("by_society_label", (q) => q.eq("societyId", societyId).eq("labelKey", labelKey)).collect())[0];
+  const binding = {
+    label: label.trim(),
+    personId: assignment.personId ?? undefined,
+    name: assignment.name ?? undefined,
+    // Cleared on purpose: next time, leave this speaker unassigned too.
+    unbound: !assignment.personId && !assignment.name,
+    updatedAtISO: new Date().toISOString(),
+  };
+  if (existing) await ctx.db.patch(existing._id, binding);
+  else await ctx.db.insert("speakerBindings", { societyId, labelKey, ...binding });
+}
+
+/** The remembered person for each named label in these segments; a person no longer in the workspace is skipped. */
+async function rememberedSpeakers(ctx: PortableMutationCtx, societyId: string, segments: ReadonlyArray<{ speaker: string }>): Promise<TranscriptSpeaker[]> {
+  const labels = [...new Set(segments.map((segment) => segment.speaker))].filter(rememberableSpeakerLabel).slice(0, 200);
+  const out: TranscriptSpeaker[] = [];
+  for (const label of labels) {
+    const binding = (await ctx.db.query("speakerBindings").withIndex("by_society_label", (q) => q.eq("societyId", societyId).eq("labelKey", speakerBindingKey(label))).collect())[0];
+    if (!binding || binding.unbound) continue;
+    let personId = typeof binding.personId === "string" ? binding.personId : undefined;
+    if (personId) {
+      try {
+        await directoryPersonForSociety(ctx, personId, societyId);
+      } catch {
+        personId = undefined;
+      }
+    }
+    const name = typeof binding.name === "string" && binding.name.trim() ? binding.name : undefined;
+    if (!personId && !name) continue;
+    out.push({ label, ...(name ? { name } : {}), ...(personId ? { personId } : {}) });
+  }
+  return out;
 }
 
 export async function updateSegmentPortable(
@@ -557,14 +609,16 @@ export async function importTimedPortable(
   ) {
     throw new Error("Duration must be finite and include every segment.");
   }
+  // Named speakers take the person they were last assigned to in this workspace.
+  const speakers = await rememberedSpeakers(ctx, args.societyId, segments);
   const row = boundedTranscript({
     societyId: args.societyId,
     meetingId: args.meetingId,
     provider: args.provider,
     segments,
-    text: transcriptText(segments),
+    text: transcriptText(segments, speakers),
     durationSeconds: args.durationSeconds ?? end,
-    speakers: [],
+    speakers,
     demo: false,
     createdAtISO: existing?.createdAtISO ?? new Date().toISOString(),
     wordsDropped: false,
@@ -572,7 +626,7 @@ export async function importTimedPortable(
   if (existing) await ctx.db.patch(existing._id, { ...row, storageKey: undefined, language: undefined, pagedJobId: undefined, contentRevision: `${Date.now()}:${Math.random()}`, segmentCount: undefined, pageCount: undefined });
   else await ctx.db.insert("transcripts", row);
   await syncMinutesDraftTranscript(ctx, args.meetingId, row.text);
-  return { wordsDropped: row.wordsDropped };
+  return { wordsDropped: row.wordsDropped, ...(speakers.length ? { rememberedSpeakers: speakers.length } : {}) };
 }
 
 type LinkMinutesItemArgs = {

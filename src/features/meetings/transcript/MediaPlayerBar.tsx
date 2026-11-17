@@ -195,7 +195,8 @@ export function MediaPlayerBar({
         ) : (
           <audio key={source} ref={clock.mediaRef} src={source} preload="metadata" hidden />
         ))}
-      <PlaybackControls clock={clock} source={source} duration={duration} />
+      {/* One row: back, play, forward, time, the timeline, speed, shortcuts. */}
+      <PlaybackControls clock={clock} source={source} duration={duration}>
       <div
         ref={slider}
         className="transcript-scrubber"
@@ -253,6 +254,7 @@ export function MediaPlayerBar({
         <span className="transcript-playhead" style={{ left: `${fraction * 100}%` }} aria-hidden="true" />
       </div>
       <MinutesMarkers targets={markers} duration={duration} width={width} onSelect={onMarker} />
+      </PlaybackControls>
       {clock.error && (
         <p role="alert" className="transcript-error">
           {clock.error}
@@ -266,10 +268,13 @@ function PlaybackControls({
   clock,
   source,
   duration,
+  children,
 }: {
   clock: MediaClock;
   source: string;
   duration: number;
+  /** The timeline, between the time and the speed. */
+  children?: React.ReactNode;
 }) {
   const [rate, setRate] = useState(1);
   useEffect(() => {
@@ -286,7 +291,7 @@ function PlaybackControls({
         disabled={!source}
         aria-label={clock.playing ? "Pause" : "Play"}
       >
-        {clock.playing ? <Pause size={18} /> : <Play size={18} />}
+        {clock.playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
       </button>
       <span className="transcript-time transcript-player__time">
         <strong>{formatTranscriptTime(clock.currentTime)}</strong> / {formatTranscriptTime(duration)}
@@ -299,7 +304,7 @@ function PlaybackControls({
           disabled={!source}
           aria-label="Back 10 seconds"
         >
-          <RotateCcw size={18} />
+          <RotateCcw size={15} />
         </button>
         <button
           type="button"
@@ -308,9 +313,10 @@ function PlaybackControls({
           disabled={!source}
           aria-label="Forward 10 seconds"
         >
-          <RotateCw size={18} />
+          <RotateCw size={15} />
         </button>
       </div>
+      <div className="transcript-player__track">{children}</div>
       <select
         className="transcript-rate"
         aria-label="Playback speed"
@@ -334,10 +340,11 @@ function PlaybackControls({
         className="btn-action transcript-shortcuts-trigger"
         aria-expanded={showShortcuts}
         aria-haspopup="dialog"
+        aria-label="Keyboard shortcuts"
+        title="Keyboard shortcuts"
         onClick={() => setShowShortcuts((value) => !value)}
       >
-        <Keyboard size={16} />
-        Shortcuts
+        <Keyboard size={15} aria-hidden="true" />
       </button>
       {createPortal(
         <ViewportPopover
