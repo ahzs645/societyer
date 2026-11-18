@@ -54,6 +54,7 @@ import { compareLedgerEntries, deriveCurrentHoldings, materializeRightsHoldings,
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../shareSplit";
 import { bodyRowsAsOf, buildSocietyRenderContext, roleHoldersInOffice } from "../societyRenderContext";
 import { formatLongDate, resolveLocale } from "../locale";
+import { nameApprovalPacketView } from "../nameRequests";
 import {
   addressInForce,
   assetTransferView,
@@ -1300,6 +1301,9 @@ async function buildPacketDataContext(
         ...view,
       };
     }
+    case "federal-articles-preparation":
+      // The approved name request, when there is one, names the corporation.
+      return { ...common, nameApproval: nameApprovalPacketView(await read("nameSearchItems"), society?.name, (day) => formatLongDate(day)) };
     case "change-of-offices":
       return { ...common, ...officeChangeView(await read("organizationAddresses"), scope) };
     case "asset-transfer":

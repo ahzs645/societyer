@@ -1041,7 +1041,7 @@ export async function applyApprovedSectionRecordsPortable(
         `Source placeholder created while applying ${record.recordKind} from ${hydrateSession(session).name}. Pull or review the original source document before publishing content.`,
         sourceCatalog,
       );
-      const target = await insertSectionRecord(ctx, societyId, record, sourceDocumentIds);
+      const target = await insertSectionRecord(ctx, societyId, record, sourceDocumentIds, sourceCatalog);
       if (record.recordKind !== "sourceEvidence" && record.recordKind !== "representationGap") {
         await insertSourceEvidenceForAppliedRecord(ctx, societyId, record, target, sourceDocumentIds);
       }

@@ -1,4 +1,5 @@
 import type { OrganizationSetupProgress, SetupPhaseView, SetupStepState, SetupStepView } from "../../../shared/organizationSetup/types";
+import { formatDecisionExpected } from "../../../shared/nameRequests";
 
 /** Short state label shown on each step row. */
 export const STEP_STATE_LABEL: Record<SetupStepState, string> = {
@@ -16,6 +17,15 @@ export const PHASE_STATUS_LABEL: Record<SetupPhaseView["status"], string> = {
   upcoming: "Coming up",
   ongoing: "Ongoing",
 };
+
+/**
+ * The step's note as this viewer reads it: a time in it ("decision expected
+ * Nov 18, 2:00 p.m. PST") on the viewer's own clock, not the organization's.
+ */
+export function stepNoteText(step: Pick<SetupStepView, "note" | "noteParts">): string | undefined {
+  if (!step.note || !step.noteParts?.length) return step.note;
+  return step.noteParts.map((part) => ("at" in part ? formatDecisionExpected(part.at) : part.text)).join("");
+}
 
 /** Lifecycle steps move the organization through filing; they are never put off. */
 export function isLifecycleStep(step: Pick<SetupStepView, "action">): boolean {

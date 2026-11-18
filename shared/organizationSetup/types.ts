@@ -46,6 +46,12 @@ export type SetupStepDecision = {
 /** Inline lifecycle actions the view renders instead of a link. */
 export type SetupStepAction = "choose_name" | "mark_submitted" | "record_certificate";
 
+/**
+ * A piece of a step note: text, or an absolute time (ISO with an offset) the
+ * view words on the viewer's clock ("Nov 18, 2:00 p.m. PST").
+ */
+export type SetupNotePart = { text: string } | { at: string };
+
 export type SetupStepView = {
   key: SetupStepKey;
   phase: SetupPhaseKey;
@@ -54,6 +60,14 @@ export type SetupStepView = {
   state: SetupStepState;
   /** Short status line, e.g. "Working name saved: Maple Inc." or the skip reason. */
   note?: string;
+  /**
+   * `note` in parts when it holds a time. The server can't know the viewer's
+   * time zone, so `note` words it on the organization's clock and the view
+   * rebuilds the line from these parts on the viewer's.
+   */
+  noteParts?: SetupNotePart[];
+  /** "warning" when the note needs attention (e.g. a name approval about to expire). */
+  noteTone?: "warning";
   optional: boolean;
   /** "Doesn't apply to us" is offered (needs a reason). */
   allowNotApplicable: boolean;

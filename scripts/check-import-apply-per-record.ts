@@ -204,4 +204,40 @@ assert.equal(String(linkedMinutes.importedTargets.meetings.meetingId), minutesAp
 assert.equal(linkedMinutes.blocked, undefined);
 assert.equal(((await query("importSessions:get", { sessionId: again2 })) as any).session.summary.approvedUnapplied, 0);
 
-console.log("PASS import apply per record: valid records apply past blocked ones; duplicates, waiting and invalid records are reported with reasons; link/skip/defer/retry resolve them; waiting materials apply when their meeting is created; conflicting minutes are blocked per record; repeated applies and compaction stay idempotent");
+// 9. Name requests carry their request fields; supporting documents map to this workspace's documents (a bundle
+// source becomes its imported document, an id from another workspace is left off and noted); an older bare decision
+// time is pinned to the organization's time zone; an invalid optional value is left out, not a failed record.
+await db.patch(society, { jurisdictionCode: "CA-BC" });
+const nameBundle = await mutate("importSessions:createFromBundle", { societyId: society, name: "Name request", bundle: {
+  documentMap: [source("name-approval")],
+  nameSearchItems: [{
+    name: "Riverbend Synthetic", suffix: "inc", status: "approved", registry: "Corporations Canada", requestId: "21480579", confidence: "High",
+    submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00", decidedOn: "2026-11-18", expiresOn: "2027-02-16",
+    contactEmail: "not an email", receiptOrderNumber: "R-1", amountPaidCents: 1380, distinctiveRationale: "Named for the river",
+    similarNamesReviewed: 50, exactMatchesFound: 0, similarNamesNotes: "Riverbend Consulting (Ontario)",
+    supportingDocumentIds: ["local:name-approval.pdf", "documents_from_another_workspace"], sourceExternalIds: ["local:name-approval.pdf"],
+  }],
+} });
+await mutate("importSessions:bulkSetStatus", { sessionId: nameBundle, status: "Approved" });
+await mutate("importSessions:applyApprovedDocuments", { sessionId: nameBundle });
+const nameApply = await mutate("importSessions:applyApprovedSectionRecords", { sessionId: nameBundle });
+assert.equal(nameApply.byKind.nameSearchItem, 1, JSON.stringify(nameApply));
+const imported = (db.dump("nameSearchItems") as any[]).find((row) => row.requestId === "21480579");
+const approvalDocument = (db.dump("documents") as any[]).find((row) => row.title === "name-approval.pdf" && !row.tags?.includes("import-session"));
+assert.ok(imported && approvalDocument);
+assert.equal(imported.status, "approved");
+assert.equal(imported.success, true, "success follows the status");
+assert.equal(imported.registry, "Corporations Canada");
+assert.equal(imported.decisionExpectedAtISO, "2026-11-18T14:00:00-08:00", "a bare time is read in the organization's zone (BC)");
+assert.equal(imported.contactEmail, undefined, "an invalid email is left out");
+assert.equal(imported.amountPaidCents, 1380);
+assert.equal(imported.similarNamesNotes, "Riverbend Consulting (Ontario)");
+assert.deepEqual(imported.supportingDocumentIds, [approvalDocument._id], "the bundle's source maps to the imported document");
+assert.match(imported.notes, /Left off documents not found in this import or workspace: documents_from_another_workspace\./);
+// The same request ID again is a duplicate, not a second request.
+const nameAgain = await mutate("importSessions:createFromBundle", { societyId: society, name: "Name request again", bundle: { nameSearchItems: [{ name: "Riverbend Synthetic Again", requestId: "21480579", confidence: "High" }] } });
+await mutate("importSessions:bulkSetStatus", { sessionId: nameAgain, status: "Approved" });
+const nameAgainApply = await mutate("importSessions:applyApprovedSectionRecords", { sessionId: nameAgain });
+assert.equal(nameAgainApply.blocked?.[0]?.reason, "duplicate", JSON.stringify(nameAgainApply));
+
+console.log("PASS import apply per record: valid records apply past blocked ones; duplicates, waiting and invalid records are reported with reasons; link/skip/defer/retry resolve them; waiting materials apply when their meeting is created; conflicting minutes are blocked per record; repeated applies and compaction stay idempotent; name requests carry their fields and mapped documents");

@@ -486,6 +486,12 @@ $setup-phone: 640px;
   font-size: token('fs-sm');
 }
 .setup-step__note--reason { font-style: italic; }
+// A note that needs attention, e.g. a name approval about to expire.
+.setup-step__note--warning,
+.setup-next__note--warning {
+  color: token('warn-text');
+  font-weight: 500;
+}
 .setup-step__buttons {
   display: flex;
   flex-wrap: wrap;

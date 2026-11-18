@@ -50,4 +50,17 @@ assertImportBundlePreflight({ meetingMinutes: [{ meetingDate: "2021-05-18", meet
   nextMeetings: [{ at: "2021-06-15", body: "board" }],
   motions: [{ motionText: "Adopt minutes", outcome: "Passed", decidedBy: "consent", sectionIndex: 0, sectionTitle: "Minutes", adoptsMinutes: { meetingDate: "2021-04-20" }, abstainedBy: ["Blair Sample"], opposedBy: [{ name: "Casey Rep" }] }],
 }] });
+// Name requests (nameSearchItems from a workspace export): the request fields survive; an invalid optional value is
+// reported as dropped (a representation gap), not a failed import.
+const nameRequest = {
+  name: "DDC North", suffix: "inc", status: "approved", registry: "Corporations Canada", requestId: "21480579",
+  submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00:00-08:00", decidedOn: "2026-11-18", expiresOn: "2027-02-16",
+  contactEmail: "owner@example.com", receiptOrderNumber: "R-1", amountPaidCents: 1380, distinctiveRationale: "Initials of the founders",
+  similarNamesReviewed: 50, exactMatchesFound: 0, similarNamesNotes: "DDC Consulting (Ontario)", supportingDocumentIds: ["local:approval.pdf"],
+  sourceExternalIds: ["local:approval.pdf"],
+};
+assert.deepEqual(importBundlePreflightIssues({ nameSearchItems: [nameRequest] }), []);
+const lossy = importBundlePreflightIssues({ nameSearchItems: [{ ...nameRequest, contactEmail: "not an email", status: "pending", decisionExpectedAtISO: "tomorrow" }] });
+assert.deepEqual(lossy.map((issue) => issue.split(":")[0]).sort(), ["nameSearchItems[0].contactEmail", "nameSearchItems[0].decisionExpectedAtISO", "nameSearchItems[0].status"]);
+assert.ok(lossy.every((issue) => /normalization would discard/.test(issue)), lossy.join("\n"));
 console.log("Import bundle preflight checks passed.");

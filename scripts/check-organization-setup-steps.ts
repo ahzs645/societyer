@@ -13,6 +13,12 @@ import type { OrganizationSetupProgress, SetupStepDecision, SetupStepKey, SetupS
 import { setupStepHref } from "../shared/organizationSetup/types";
 import { describeOnboardingAnswers, onboardingAnswerSentences, type OrganizationOnboardingAnswers } from "../shared/onboarding";
 import { ROLE_MATRIX } from "../shared/functions/permissions";
+import {
+  assertNameRequestFields, cleanImportedNameRequestFields, decisionExpectedFromFields, decisionTimeFields, decisionTimeViewerHint, formatDecisionExpected,
+  nameApprovalPacketView, nameRequestProgressLine, nameRequestStatus, suggestedNameApprovalExpiry, summarizeNameRequests,
+} from "../shared/nameRequests";
+import { timeZoneAbbreviation, zonedDateTimeISO } from "../shared/timeZones";
+import { stepNoteText } from "../src/features/organizationSetup/setupCopy";
 
 const cbca: SetupOrganization = {
   name: "Northstar Corp.", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_",
@@ -396,6 +402,147 @@ for (const [label, organization, answers] of ORGS) {
   assert.deepEqual(society.map((line) => `${line.label}: ${line.value}`), ["Membership classes: one membership class", "Documents: you have signed copies to upload", "People: details ready to enter"]);
   assert.deepEqual(describeOnboardingAnswers(undefined, cbca), []);
   for (const line of lines) assert.doesNotMatch(line, BANNED);
+}
+
+/* ---------------- Name requests: pending, approved, expiring, rejected ---------------- */
+{
+  const answers = preparingAnswers("federal_cbca");
+  const ddc: SetupOrganization = { ...cbca, name: "DDC North Inc." };
+  const nameStep = (patch: Partial<OrganizationSetupFacts>, organization: SetupOrganization = ddc) =>
+    stepOf(evaluateOrganizationSetup(facts(organization, patch, answers)), "name");
+
+  // Submitted and waiting: in progress, with the dates and a link to record the decision. The server words the
+  // time on the organization's clock; the parts let the view word it on the viewer's.
+  const pending = nameStep({ nameRequest: { state: "pending", id: "ns_1", name: "DDC North Inc.", requestId: "21480579", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00:00-08:00", timeZone: "America/Vancouver" } });
+  assert.equal(pending.state, "in_progress");
+  assert.equal(pending.note, "Submitted Nov 17 · decision expected Nov 18, 2:00 p.m. PST");
+  assert.deepEqual(pending.noteParts, [{ text: "Submitted Nov 17 · decision expected " }, { at: "2026-11-18T14:00:00-08:00" }]);
+  assert.equal(stepNoteText({ ...pending, noteParts: pending.noteParts }), `Submitted Nov 17 · decision expected ${formatDecisionExpected("2026-11-18T14:00:00-08:00")}`, "the view rewords the time on the runtime's clock");
+  // No organization zone: the server words it in UTC; a day alone needs no zone and no parts.
+  assert.equal(nameStep({ nameRequest: { state: "pending", id: "ns_1", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00:00-08:00" } }).note, "Submitted Nov 17 · decision expected Nov 18, 10:00 p.m. UTC");
+  const dayOnly = nameStep({ nameRequest: { state: "pending", id: "ns_1", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18" } });
+  assert.equal(dayOnly.note, "Submitted Nov 17 · decision expected Nov 18");
+  assert.equal(dayOnly.noteParts, undefined);
+  assert.equal(pending.actionLabel, "Record the decision");
+  assert.equal(pending.to, "/app/formation-maintenance?nameSearch=ns_1");
+  assert.equal(pending.action, undefined, "no numbered-name choice while a request is pending");
+  // A pending request is never done, whatever the pathway or a NUANS number says.
+  assert.equal(nameStep({ nameRequest: { state: "pending", id: "ns_1" }, pathwayRun: { nodes: { "name-approval": "completed" } } }).state, "in_progress");
+
+  // Approved, well before expiry: done, with the approved name.
+  const approved = nameStep({ nameRequest: { state: "approved", id: "ns_1", name: "DDC North Inc.", requestId: "21480579", decidedOn: "2026-11-18", expiresOn: "2027-02-16", daysUntilExpiry: 90 } });
+  assert.equal(approved.state, "done");
+  assert.equal(approved.note, "Name: DDC North Inc. · approved");
+  assert.equal(approved.to, "/app/formation-maintenance?nameSearch=ns_1", "Open goes to the approved request");
+
+  // Approved but expiring within 14 days before filing: a warning, back in progress.
+  const expiring = nameStep({ nameRequest: { state: "approved", id: "ns_1", name: "DDC North Inc.", expiresOn: "2027-02-16", daysUntilExpiry: 10 } });
+  assert.equal(expiring.state, "in_progress");
+  assert.equal(expiring.noteTone, "warning");
+  assert.equal(expiring.note, "Name approval expires Feb 16 — file before then");
+  const expired = nameStep({ nameRequest: { state: "approved", id: "ns_1", name: "DDC North Inc.", expiresOn: "2027-02-16", daysUntilExpiry: -1 } });
+  assert.equal(expired.state, "in_progress");
+  assert.equal(expired.note, "Name approval expired Feb 16");
+  // Once filed, expiry no longer matters.
+  assert.equal(nameStep({ nameRequest: { state: "approved", name: "DDC North Inc.", expiresOn: "2027-02-16", daysUntilExpiry: -1 } }, { ...ddc, formationStatus: "submitted" }).state, "done");
+
+  // Rejected: try another name (the numbered-name choice stays).
+  const rejected = nameStep({ nameRequest: { state: "rejected", id: "ns_2", name: "DDC North Inc." } });
+  assert.equal(rejected.state, "in_progress");
+  assert.equal(rejected.note, "Name request rejected — try another name");
+  assert.equal(rejected.action, "choose_name");
+
+  // A legacy approval (NUANS number on a formation record, no statuses) reads the workspace name.
+  assert.equal(nameStep({ nameRequest: { state: "approved" } }).note, "Name: DDC North Inc.");
+
+  // The articles and filing steps carry the approved name; a different workspace name is a warning.
+  const approvedFacts = { nameRequest: { state: "approved" as const, name: "DDC North Inc.", requestId: "21480579", daysUntilExpiry: 90 } };
+  let progress = evaluateOrganizationSetup(facts(ddc, approvedFacts, answers));
+  assert.equal(stepOf(progress, "articles").note, "Approved name: DDC North Inc. (request 21480579)");
+  assert.equal(stepOf(progress, "file").note, "Approved name: DDC North Inc. (request 21480579)");
+  progress = evaluateOrganizationSetup(facts({ ...ddc, name: "DDC Holdings Inc." }, approvedFacts, answers));
+  assert.match(String(stepOf(progress, "articles").note), /workspace is named DDC Holdings Inc\.; change it to match/);
+  assert.equal(stepOf(progress, "articles").noteTone, "warning");
+}
+
+/* ---------------- Name request summary ---------------- */
+{
+  const rows = [
+    { _id: "a", name: "DDC North", suffix: "inc", status: "rejected", updatedAtISO: "2026-11-10T00:00:00Z" },
+    { _id: "b", name: "DDC North", suffix: "inc", status: "submitted", requestId: "21480579", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00", updatedAtISO: "2026-11-17T00:00:00Z" },
+  ];
+  const pending = summarizeNameRequests(rows, { legacyApproval: true, timeZone: "America/Vancouver" });
+  assert.equal(pending.state, "pending", "a pending request beats a rejection, and a NUANS number never counts while one is pending");
+  assert.equal(pending.id, "b");
+  assert.equal(pending.name, "DDC North Inc.");
+  assert.equal(pending.decisionExpectedAtISO, "2026-11-18T14:00:00-08:00", "an older bare time is pinned to the organization's zone");
+  assert.equal(pending.timeZone, "America/Vancouver");
+  assert.equal(summarizeNameRequests(rows).decisionExpectedAtISO, "2026-11-18T14:00", "without a zone it stays as saved");
+  const approved = summarizeNameRequests([...rows, { _id: "c", name: "DDC North Inc.", status: "approved", decidedOn: "2026-11-18", expiresOn: "2027-02-16", updatedAtISO: "2026-11-18T00:00:00Z" }], { today: "2026-11-18" });
+  assert.equal(approved.state, "approved");
+  assert.equal(approved.daysUntilExpiry, 90);
+  // Legacy rows: success true is approved; otherwise searching, which decides nothing.
+  assert.equal(nameRequestStatus({ success: true }), "approved");
+  assert.equal(nameRequestStatus({ success: false }), "searching");
+  assert.equal(summarizeNameRequests([{ success: true, name: "Old Name Ltd." }]).state, "approved");
+  assert.equal(summarizeNameRequests([], { legacyApproval: true }).state, "approved");
+  assert.equal(summarizeNameRequests([{ status: "searching", name: "X" }], { legacyApproval: true }).state, "none", "statuses switch the NUANS fallback off");
+  assert.equal(suggestedNameApprovalExpiry("2026-11-18"), "2027-02-16");
+  assert.equal(nameRequestProgressLine(rows[1], { today: "2026-11-18", timeZone: "America/Vancouver" }), "Request 21480579 · Submitted Nov 17 · Decision expected Nov 18, 2:00 p.m. PST");
+  assert.equal(nameRequestProgressLine(rows[1], { today: "2026-11-18", timeZone: "America/Toronto", sourceTimeZone: "America/Vancouver" }), "Request 21480579 · Submitted Nov 17 · Decision expected Nov 18, 5:00 p.m. EST", "an older bare time, given in Vancouver, read in Toronto");
+  assert.equal(nameRequestProgressLine({ status: "approved", decidedOn: "2026-11-18", expiresOn: "2027-02-16" }, { today: "2026-11-18" }), "Approved Nov 18 · Expires Feb 16, 2027");
+  assert.throws(() => assertNameRequestFields({ status: "pending" }), /status must be one of/);
+  assert.throws(() => assertNameRequestFields({ decisionExpectedAtISO: "2026-11-18T25:00:00-08:00" }), /Decision expected/);
+  assert.throws(() => assertNameRequestFields({ decisionExpectedAtISO: "2026-11-18T14:00" }), /needs a time zone/, "a new time is saved with its offset");
+  assert.throws(() => assertNameRequestFields({ amountPaidCents: 13.8 }), /whole number/);
+  assert.doesNotThrow(() => assertNameRequestFields({ status: "submitted", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00:00-08:00", contactEmail: "owner@example.com", amountPaidCents: 1380, similarNamesReviewed: 50, exactMatchesFound: 0 }));
+  assert.doesNotThrow(() => assertNameRequestFields({ decisionExpectedAtISO: "2026-11-18" }));
+  const packet = nameApprovalPacketView([{ name: "DDC North Inc.", status: "approved", registry: "Corporations Canada", requestId: "21480579", nuansReportNumber: "123466315", decidedOn: "2026-11-18" }], "DDC North Inc.", (day) => day);
+  assert.equal(packet.name, "DDC North Inc.");
+  assert.equal(packet.line, "Proposed corporate name: DDC North Inc. Name approved by Corporations Canada on 2026-11-18 (request 21480579; NUANS 123466315). Use it exactly as approved in the application.");
+}
+
+/* ---------------- Decision times: zones, daylight time, the form ---------------- */
+{
+  // Saved with the offset of the chosen zone on that day, daylight time included.
+  assert.equal(zonedDateTimeISO("2026-11-18", "14:00", "America/Vancouver"), "2026-11-18T14:00:00-08:00");
+  assert.equal(zonedDateTimeISO("2026-07-02", "14:00", "America/Vancouver"), "2026-07-02T14:00:00-07:00");
+  assert.equal(zonedDateTimeISO("2026-11-18", "14:00", "America/St_Johns"), "2026-11-18T14:00:00-03:30");
+  assert.equal(zonedDateTimeISO("2026-03-08", "02:30", "America/Toronto"), "2026-03-08T03:30:00-04:00", "a skipped hour moves forward");
+  assert.equal(timeZoneAbbreviation("America/St_Johns", Date.parse("2026-07-02T12:00:00Z")), "NDT");
+  // Shown on the reader's clock, with its short name.
+  assert.equal(formatDecisionExpected("2026-11-18T14:00:00-08:00", { timeZone: "America/Toronto" }), "Nov 18, 5:00 p.m. EST");
+  assert.equal(formatDecisionExpected("2026-11-18T23:30:00-08:00", { timeZone: "America/Halifax" }), "Nov 19, 3:30 a.m. AST");
+  assert.equal(formatDecisionExpected("2026-11-18", { timeZone: "America/Halifax" }), "Nov 18");
+
+  // The form opens a saved time in the zone it was given in when it can tell.
+  const vancouver = { viewerTimeZone: "America/Vancouver" };
+  assert.deepEqual(decisionTimeFields("2026-11-18T14:00:00-08:00", vancouver), { date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" });
+  assert.deepEqual(decisionTimeFields("2026-11-18T14:00:00-05:00", vancouver), { date: "2026-11-18", time: "14:00", timeZone: "America/Toronto" }, "an Eastern offset opens in Eastern time");
+  assert.deepEqual(decisionTimeFields("2026-11-18T14:00:00+01:00", vancouver), { date: "2026-11-18", time: "05:00", timeZone: "America/Vancouver" }, "an unknown offset is converted to the viewer's zone");
+  assert.deepEqual(decisionTimeFields("2026-11-18T14:00", { ...vancouver, sourceTimeZone: "America/Toronto" }), { date: "2026-11-18", time: "14:00", timeZone: "America/Toronto" }, "an older bare time opens in the organization's zone");
+  assert.deepEqual(decisionTimeFields("2026-11-18", vancouver), { date: "2026-11-18", time: "", timeZone: "America/Vancouver" });
+  assert.equal(decisionExpectedFromFields({ date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" }), "2026-11-18T14:00:00-08:00");
+  assert.equal(decisionExpectedFromFields({ date: "2026-11-18", time: "", timeZone: "America/Vancouver" }), "2026-11-18");
+  assert.equal(decisionExpectedFromFields({ date: "", time: "14:00" }), undefined);
+  // The hint under the field converts to the viewer's clock only when it differs.
+  assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" }, "America/Toronto"), "That's 5:00 p.m. your time");
+  assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "23:00", timeZone: "America/Vancouver" }, "America/Toronto"), "That's Nov 19, 2:00 a.m. your time");
+  assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" }, "America/Vancouver"), undefined);
+  assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "", timeZone: "America/Halifax" }, "America/Vancouver"), undefined);
+
+  // Import cleanup: each field on its own; what fails is named, the rest is kept.
+  const cleaned = cleanImportedNameRequestFields({
+    status: "Approved", registry: " Corporations Canada ", requestId: 21480579, decidedOn: "2026-11-18", expiresOn: "2026-11-01",
+    decisionExpectedAtISO: "2026-11-18T14:00", contactEmail: "not an email", amountPaidCents: "1380", similarNamesReviewed: -1,
+    supportingDocumentIds: ["local:approval.pdf", 7], submittedOn: "2026-02-30",
+  });
+  assert.deepEqual(cleaned.fields, {
+    status: "approved", registry: "Corporations Canada", requestId: "21480579", decidedOn: "2026-11-18",
+    decisionExpectedAtISO: "2026-11-18T14:00", amountPaidCents: 1380, supportingDocumentIds: ["local:approval.pdf"],
+  });
+  assert.deepEqual(cleaned.dropped.sort(), ["contactEmail", "expiresOn", "similarNamesReviewed", "submittedOn", "supportingDocumentIds"]);
+  assert.deepEqual(cleanImportedNameRequestFields({ status: "pending", decisionExpectedAtISO: "tomorrow" }).dropped, ["status", "decisionExpectedAtISO"]);
 }
 
 /* ---------------- Catalogue helpers ---------------- */

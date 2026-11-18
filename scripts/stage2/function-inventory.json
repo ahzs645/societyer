@@ -16625,6 +16625,12 @@
         "table": "documents",
         "array": false,
         "optional": true
+      },
+      {
+        "path": "supportingDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -44851,6 +44857,12 @@
         "path": "reportDocumentId",
         "table": "documents",
         "array": false,
+        "optional": true
+      },
+      {
+        "path": "supportingDocumentIds",
+        "table": "documents",
+        "array": true,
         "optional": true
       }
     ]

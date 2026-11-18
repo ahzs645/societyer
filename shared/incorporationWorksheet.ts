@@ -4,13 +4,20 @@ import {
 import { organizationLabel, type LegalEntityLike } from "./organizationDomain";
 import { articlesAdoptionSentence } from "./operativeArticles";
 import { FEDERAL_BC_PREPARATION } from "./federalBcIncorporation";
+import type { NameApprovalPacketView } from "./nameRequests";
 
 type PreparationGuide = NonNullable<ReturnType<typeof incorporationPreparationForOrganization>>;
 
-/** An editable planning worksheet, never a registry application or legal instrument. */
+/**
+ * An editable planning worksheet, never a registry application or legal
+ * instrument. With an approved name request (`nameApprovalPacketView`, the
+ * same line the federal articles packet uses) the name line states the
+ * approved name and its approval instead of the workspace name.
+ */
 export function incorporationWorksheetText(
   guide: PreparationGuide,
   organization: LegalEntityLike,
+  options: { nameApproval?: NameApprovalPacketView } = {},
 ): string {
   return [
     "INCORPORATION PREPARATION WORKSHEET",
@@ -20,7 +27,7 @@ export function incorporationWorksheetText(
     "This worksheet does not incorporate an entity, replace government forms, or supply articles, bylaws, or an incorporation agreement.",
     "Draft guidance uses existing repository sources. Verify current registry channels, fees, forms, and mail availability before filing.",
     "",
-    `Workspace / proposed legal name: ${organizationLabel(organization)}`,
+    options.nameApproval?.hasRecord ? options.nameApproval.line : `Workspace / proposed legal name: ${organizationLabel(organization)}`,
     `Home jurisdiction: ${guide.jurisdictionCode}`,
     `Legislation: ${guide.statute}`,
     "Prepared by: ____________________",

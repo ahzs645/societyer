@@ -13,6 +13,7 @@
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 import { hasRecordedExecution, isAnnualPacketRecord, preparationDocumentUpdate } from "../preparationDocumentState";
+import { assertNameRequestFields } from "../nameRequests";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import type { PortableDoc, TableName } from "../portable/ctx";
 import {
@@ -607,6 +608,22 @@ export interface UpsertNameSearchItemArgs {
   distinctiveElement?: string;
   nuansReportNumber?: string;
   suffix?: string;
+  /** searching | submitted | approved | rejected | withdrawn (shared/nameRequests.ts). */
+  status?: string;
+  registry?: string;
+  requestId?: string;
+  submittedOn?: string;
+  decisionExpectedAtISO?: string;
+  decidedOn?: string;
+  expiresOn?: string;
+  contactEmail?: string;
+  receiptOrderNumber?: string;
+  amountPaidCents?: number;
+  distinctiveRationale?: string;
+  similarNamesReviewed?: number;
+  exactMatchesFound?: number;
+  similarNamesNotes?: string;
+  supportingDocumentIds?: string[];
   sourceExternalIds?: string[];
   notes?: string;
 }
@@ -623,13 +640,35 @@ export async function upsertNameSearchItemPortable(
   if (args.reportDocumentId) {
     await getOwned(ctx, "documents", args.reportDocumentId, args.societyId);
   }
+  await requireOwnedIds(ctx, "documents", args.supportingDocumentIds ?? [], args.societyId);
   assertAllowedOption("suffixCompanyNames", args.suffix, "Name suffix");
+  const status = cleanText(args.status);
+  const request = {
+    status,
+    submittedOn: cleanText(args.submittedOn),
+    decisionExpectedAtISO: cleanText(args.decisionExpectedAtISO),
+    decidedOn: cleanText(args.decidedOn),
+    expiresOn: cleanText(args.expiresOn),
+    contactEmail: cleanText(args.contactEmail),
+    amountPaidCents: args.amountPaidCents,
+    similarNamesReviewed: args.similarNamesReviewed,
+    exactMatchesFound: args.exactMatchesFound,
+  };
+  assertNameRequestFields(request);
   const now = new Date().toISOString();
   const payload = {
     societyId: args.societyId,
     formationRecordId: args.formationRecordId,
     name: cleanText(args.name) || "Unnamed search",
-    success: args.success,
+    // `success` stays in step with the status for readers that predate it.
+    success: status ? status === "approved" : args.success,
+    ...request,
+    registry: cleanText(args.registry),
+    requestId: cleanText(args.requestId),
+    receiptOrderNumber: cleanText(args.receiptOrderNumber),
+    distinctiveRationale: cleanText(args.distinctiveRationale),
+    similarNamesNotes: cleanText(args.similarNamesNotes),
+    supportingDocumentIds: args.supportingDocumentIds ?? [],
     errors: cleanList(args.errors),
     reportUrl: cleanText(args.reportUrl),
     reportDocumentId: args.reportDocumentId,

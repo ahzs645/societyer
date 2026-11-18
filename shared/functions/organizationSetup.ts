@@ -4,7 +4,8 @@
  * - `progress` gathers counts and booleans from the registers the viewer may
  *   read (probing each read permission the way the dashboard does) and runs
  *   the pure evaluator in shared/organizationSetup/evaluate.ts. No row data,
- *   names or ids from the registers leave the query.
+ *   names or ids from the registers leave the query, except the deciding
+ *   name request's name, request id and dates (the name step links to it).
  * - `decideStep` stores "Doesn't apply to us" (with a reason) or "Remind me
  *   later" for one step, or clears the decision.
  * - `markSubmitted` moves a preparing workspace to "submitted" (filed with the
@@ -20,12 +21,13 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { certificateAnniversaryDate, validateEntitySetup, validateFormationEvidence } from "../entitySetup";
-import { validateWorkspaceLegalIdentity } from "../organizationDomain";
+import { organizationTimeZone, validateWorkspaceLegalIdentity } from "../organizationDomain";
 import { onboardingAnswerSentences, readOnboardingAnswersJson, type OrganizationOnboardingAnswers } from "../onboarding";
 import { organizationToday } from "./electionElectorate";
 import { loadOrganizationTaxContext } from "./organizationTaxFacts";
 import { charityRegistrationAtDate } from "../receipting/registration";
 import { isDateOnly, parseDateOnly } from "../dateOnly";
+import { summarizeNameRequests } from "../nameRequests";
 import {
   decidableSetupSteps,
   evaluateOrganizationSetup,
@@ -174,7 +176,11 @@ export async function progressPortable(ctx: PortableQueryCtx, { societyId }: { s
       draft: transfers.filter((row: any) => row.transferType === "issuance" && row.status === "draft").length,
     },
     holdings: holdings.filter((row: any) => (row.status ?? "current") === "current" && Number(row.quantity) !== 0).length,
-    nameApproved: nameSearches.some((row: any) => row.success === true) || formationRecords.some((row: any) => Boolean(String(row.nuansNumber ?? "").trim())),
+    nameRequest: summarizeNameRequests(nameSearches, {
+      today: organizationToday(society),
+      timeZone: organizationTimeZone(society),
+      legacyApproval: formationRecords.some((row: any) => Boolean(String(row.nuansNumber ?? "").trim())),
+    }),
     evidence,
     generatedPackets: [...generatedPackets],
     pathwayRun,

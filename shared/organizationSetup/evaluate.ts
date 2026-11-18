@@ -24,6 +24,7 @@
 
 import { formatLongDate } from "../locale";
 import { charityStatusConflict } from "../entitySetup";
+import { NAME_APPROVAL_EXPIRY_WARNING_DAYS, decisionExpectedHasTime, formatDecisionExpected, formatShortDate, type NameRequestSummary } from "../nameRequests";
 import type { OrganizationOnboardingAnswers } from "../onboarding";
 import {
   SETUP_PHASE_ORDER,
@@ -39,7 +40,9 @@ import {
 import type {
   OrganizationSetupProgress,
   SetupPhaseKey,
+  SetupNotePart,
   SetupPhaseView,
+  SetupStepAction,
   SetupStepDecision,
   SetupStepKey,
   SetupStepState,
@@ -53,9 +56,11 @@ export type SetupRoleCounts = { current: number; proposed: number };
 export type SetupEvidenceStage = "preparing" | "executed" | "filed" | "certified";
 
 /**
- * Counts and booleans only: the progress query never returns row data. A
- * source the viewer can't read is reported as zero/false (and the steps that
- * depend on it show as restricted).
+ * Counts and booleans only: the progress query never returns row data (the
+ * deciding name request's name, request id and dates are the one exception,
+ * so the name step can describe and link to it). A source the viewer can't
+ * read is reported as zero/false (and the steps that depend on it show as
+ * restricted).
  */
 export type OrganizationSetupFacts = {
   organization: SetupOrganization;
@@ -77,8 +82,12 @@ export type OrganizationSetupFacts = {
   issuances: { posted: number; draft: number };
   /** Current holdings in the share register. */
   holdings: number;
-  /** A successful name search or a recorded NUANS report. */
-  nameApproved: boolean;
+  /**
+   * The deciding name request (shared/nameRequests.ts `summarizeNameRequests`):
+   * approved, waiting for a decision, rejected, or none. A NUANS number on a
+   * formation record counts as approved only when no request has a status.
+   */
+  nameRequest: NameRequestSummary;
   /** Post-incorporation evidence stage by checklist step key. */
   evidence: Record<string, SetupEvidenceStage>;
   /** Document packets with a staged precedent run. */
@@ -109,14 +118,27 @@ export function emptyOrganizationSetupFacts(organization: SetupOrganization, ans
     organization, answers,
     roles: { director: none(), officer: none(), shareholder: none(), controller: none() },
     societyDirectors: 0, members: 0, shareClasses: 0, membershipClasses: 0,
-    issuances: { posted: 0, draft: 0 }, holdings: 0, nameApproved: false,
+    issuances: { posted: 0, draft: 0 }, holdings: 0, nameRequest: { state: "none" },
     evidence: {}, generatedPackets: [], pathwayRun: null,
     users: 1, pendingInvitations: 0, otherRegistrations: 0, recordsOffice: false,
     upcomingAnnualMeeting: false, meetingsThisYear: 0, filingsTracked: false, openDeadlines: 0, minuteBookItems: 0,
   };
 }
 
-type Status = { state: "done" | "in_progress" | "todo"; note?: string };
+/**
+ * A step's computed state. A rule may also point the step somewhere else for
+ * this state (`to`, `actionLabel`) or drop its inline action (`action: null`),
+ * e.g. a pending name request links to "Record the decision".
+ */
+type Status = {
+  state: "done" | "in_progress" | "todo";
+  note?: string;
+  noteParts?: SetupNotePart[];
+  tone?: "warning";
+  to?: string;
+  actionLabel?: string;
+  action?: SetupStepAction | null;
+};
 const done = (note?: string): Status => ({ state: "done", ...(note ? { note } : {}) });
 const progress = (note?: string): Status => ({ state: "in_progress", ...(note ? { note } : {}) });
 const todo = (): Status => ({ state: "todo" });
@@ -149,6 +171,61 @@ function truncate(text: string, max = 80): string {
 
 const COMPLETED_NODE = ["completed", "approved", "submitted", "skipped"];
 
+/** The name request's own record on Formation and maintenance. */
+function nameRequestHref(request: NameRequestSummary): string | undefined {
+  return request.id ? `/app/formation-maintenance?nameSearch=${encodeURIComponent(request.id)}` : undefined;
+}
+
+/** The name step while a name request is approved, waiting or rejected. */
+function nameRequestStatus(request: NameRequestSummary, filed: boolean): Status | undefined {
+  const href = nameRequestHref(request);
+  const openRecord = (actionLabel: string): Partial<Status> => (href ? { to: href, actionLabel, action: null } : {});
+  if (request.state === "approved") {
+    const days = request.daysUntilExpiry;
+    if (!filed && request.expiresOn && days !== undefined) {
+      const date = formatShortDate(request.expiresOn);
+      if (days < 0) return { state: "in_progress", tone: "warning", note: `Name approval expired ${date}` };
+      if (days <= NAME_APPROVAL_EXPIRY_WARNING_DAYS) {
+        return { state: "in_progress", tone: "warning", note: `Name approval expires ${date} — file before then`, ...openRecord("Open the name request") };
+      }
+    }
+    return request.name ? { ...done(`Name: ${request.name} · approved`), ...(href ? { to: href } : {}) } : undefined;
+  }
+  if (request.state === "pending") {
+    const submitted = request.submittedOn ? `Submitted ${formatShortDate(request.submittedOn)}` : "Submitted";
+    const at = request.decisionExpectedAtISO;
+    if (!at) return { state: "in_progress", note: submitted, ...openRecord("Record the decision") };
+    const lead = `${submitted} · decision expected `;
+    // On the organization's clock here; the view rewords the time on the viewer's.
+    const note = `${lead}${formatDecisionExpected(at, { timeZone: request.timeZone ?? "UTC" })}`;
+    const noteParts = decisionExpectedHasTime(at) ? [{ text: lead }, { at }] : undefined;
+    return { state: "in_progress", note, ...(noteParts ? { noteParts } : {}), ...openRecord("Record the decision") };
+  }
+  return undefined;
+}
+
+/**
+ * "Approved name: DDC North Inc. (request 21480579)" for the articles and
+ * filing steps, as a warning when the workspace's name is spelled differently.
+ */
+function approvedNameNote(request: NameRequestSummary, organizationName: string | null | undefined): { note: string; warning: boolean } | undefined {
+  if (request.state !== "approved" || !request.name) return undefined;
+  const reference = request.requestId ? ` (request ${request.requestId})` : request.nuansReportNumber ? ` (NUANS ${request.nuansReportNumber})` : "";
+  const note = `Approved name: ${request.name}${reference}`;
+  const squash = (value: string) => value.trim().replace(/\s+/g, " ");
+  const current = squash(String(organizationName ?? ""));
+  if (current && current !== squash(request.name)) {
+    return { note: `${note}. The workspace is named ${current}; change it to match before you file.`, warning: true };
+  }
+  return { note, warning: false };
+}
+
+function withApprovedName(status: Status, facts: OrganizationSetupFacts): Status {
+  const name = approvedNameNote(facts.nameRequest, facts.organization.name);
+  if (!name) return status;
+  return { ...status, note: [status.note, name.note].filter(Boolean).join(" · "), ...(name.warning ? { tone: "warning" as const } : {}) };
+}
+
 /** Completion rule for one step (before decisions and permissions). */
 function stepStatus(definition: SetupStepDefinition, variant: SetupVariant, facts: OrganizationSetupFacts, ctx: SetupCopyContext): Status {
   const org = facts.organization;
@@ -162,7 +239,12 @@ function stepStatus(definition: SetupStepDefinition, variant: SetupVariant, fact
       return org.jurisdictionCode && org.actFormedUnder ? done(ctx.placeName ? `${ctx.placeName} · ${ctx.actTitle}` : ctx.actTitle) : todo();
     case "name": {
       if (!ctx.society && org.numbered) return done("Numbered name");
-      if (facts.nameApproved || pathwayNode(facts, "name-approval", COMPLETED_NODE) || pathwayNode(facts, "numbered-name", COMPLETED_NODE)) return done(org.name ? `Name: ${org.name}` : undefined);
+      const request = facts.nameRequest;
+      const fromRequest = nameRequestStatus(request, filed);
+      if (fromRequest) return fromRequest;
+      // An approval without a recorded name (a legacy NUANS number) reads the workspace name.
+      if (request.state === "approved" || pathwayNode(facts, "name-approval", COMPLETED_NODE) || pathwayNode(facts, "numbered-name", COMPLETED_NODE)) return done(org.name ? `Name: ${org.name}` : undefined);
+      if (request.state === "rejected") return progress("Name request rejected — try another name");
       return progress(org.name ? `Working name saved: ${org.name}` : undefined);
     }
     case "office":
@@ -197,9 +279,9 @@ function stepStatus(definition: SetupStepDefinition, variant: SetupVariant, fact
       const evidenceKeys = ctx.bcCompany ? ["bc-incorporation-agreement-articles", "bc-prepare-articles"] : ["prepare-federal-articles"];
       const packets = ctx.bcCompany ? ["bc-incorporation-agreement", "bc-articles-preparation"] : ["federal-articles-preparation"];
       // Articles on the profile (uploaded, re-filed or chosen there) are prepared.
-      if (org.hasConstitutionDocument) return done("Articles on file");
-      if (evidenceAtLeast(facts, evidenceKeys, "preparing") || pathwayNode(facts, "prepare-documents", COMPLETED_NODE)) return done();
-      return packetGenerated(facts, packets) ? progress("Worksheet started") : todo();
+      if (org.hasConstitutionDocument) return withApprovedName(done("Articles on file"), facts);
+      if (evidenceAtLeast(facts, evidenceKeys, "preparing") || pathwayNode(facts, "prepare-documents", COMPLETED_NODE)) return withApprovedName(done(), facts);
+      return withApprovedName(packetGenerated(facts, packets) ? progress("Worksheet started") : todo(), facts);
     }
     case "review":
       if (pathwayNode(facts, "review", ["approved", "submitted", "completed"])) return done("Reviewed");
@@ -211,7 +293,7 @@ function stepStatus(definition: SetupStepDefinition, variant: SetupVariant, fact
       if (org.hasBylawsDocument || evidenceAtLeast(facts, ["society-prepare-bylaws"], "preparing")) return done();
       return packetGenerated(facts, ["society-incorporation-bylaws"]) ? progress("Draft started") : todo();
     case "file": {
-      if (!filed) return todo();
+      if (!filed) return withApprovedName(todo(), facts);
       const parts = [org.filingSubmittedAtISO ? `Filed on ${org.filingSubmittedAtISO}` : "Filed", org.filingReference ? `Reference ${org.filingReference}` : ""].filter(Boolean);
       return done(parts.join(" · "));
     }
@@ -362,9 +444,15 @@ export function evaluateOrganizationSetup(
     const restricted = status.state !== "done" && definition.readPermissions.some((permission) => !canRead(readable, permission));
     let state: SetupStepState = status.state;
     let note = status.note;
-    if (decision?.decision === "not_applicable") { state = "not_applicable"; note = decision.reason?.trim(); }
-    else if (restricted) { state = "restricted"; note = "Ask an owner or admin to do this"; }
+    let noteParts = status.noteParts;
+    let noteTone = status.tone;
+    if (decision?.decision === "not_applicable") { state = "not_applicable"; note = decision.reason?.trim(); noteParts = undefined; noteTone = undefined; }
+    else if (restricted) { state = "restricted"; note = "Ask an owner or admin to do this"; noteParts = undefined; noteTone = undefined; }
     else if (decision?.decision === "later") state = "later";
+    // A rule's per-state destination replaces the catalogue's; `action: null` drops the inline action.
+    const to = status.to ?? definition.to;
+    const actionLabel = status.actionLabel ?? definition.actionLabel;
+    const action = status.action === null ? undefined : status.action ?? definition.action;
     const view: EvaluatedStep = {
       key: definition.key,
       phase: definition.phase,
@@ -372,11 +460,13 @@ export function evaluateOrganizationSetup(
       description: definition.description,
       state,
       ...(note ? { note } : {}),
+      ...(note && noteParts ? { noteParts } : {}),
+      ...(note && noteTone ? { noteTone } : {}),
       optional: definition.optional,
       allowNotApplicable: definition.allowNotApplicable,
-      ...(definition.to ? { to: definition.to } : {}),
-      ...(definition.actionLabel ? { actionLabel: definition.actionLabel } : {}),
-      ...(definition.action ? { action: definition.action } : {}),
+      ...(to ? { to } : {}),
+      ...(actionLabel ? { actionLabel } : {}),
+      ...(action ? { action } : {}),
       ...(definition.externalUrl ? { externalUrl: definition.externalUrl } : {}),
       ...(definition.externalLabel ? { externalLabel: definition.externalLabel } : {}),
       underlying: status.state,

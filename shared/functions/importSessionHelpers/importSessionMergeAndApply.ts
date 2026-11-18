@@ -18,6 +18,8 @@ import { insertRepresentationGapFromImport } from "../representationGaps";
 import { transactionImportMappingCandidates } from "../../accountingMappingCandidates";
 import { reconcileDividend } from "../../dividends";
 import { meetingCalendarDate } from "../../meetingDates";
+import { cleanImportedNameRequestFields, withDecisionTimeZone } from "../../nameRequests";
+import { organizationTimeZone } from "../../organizationDomain";
 import {
   HISTORY_ITEM_CATEGORY,
   HISTORY_ITEM_TAG,
@@ -379,7 +381,45 @@ type SectionRecordContext = {
   sourceDocumentIds: any[];
   firstSourceDocumentId: any;
   sourceNote: any;
+  /** The session's sources by external id, for rows that name documents in their payload. */
+  sourceCatalog?: Map<string, any>;
 };
+
+/**
+ * Documents an imported row names in its payload (a name request's
+ * supporting documents), as this workspace's documents. A source the bundle
+ * carries, by its external id, becomes the imported (or placeholder) document
+ * the way `sourceExternalIds` do; a source already recorded here resolves
+ * through its source evidence; an id of a document already in this workspace
+ * is kept. Anything else is left off and listed in `missing`.
+ */
+async function importedDocumentReferences(
+  ctx: any,
+  societyId: string,
+  references: readonly unknown[],
+  sourceCatalog: Map<string, any> | undefined,
+  placeholderNote: string,
+): Promise<{ ids: string[]; missing: string[] }> {
+  const ids: string[] = [];
+  const missing: string[] = [];
+  for (const reference of unique([...references])) {
+    if (sourceCatalog?.has(reference)) {
+      ids.push(...await ensureImportSourceDocuments(ctx, societyId, [reference], "Imported Source", placeholderNote, sourceCatalog));
+      continue;
+    }
+    const evidence = await ctx.db.query("sourceEvidence")
+      .withIndex("by_society_external", (q: any) => q.eq("societyId", societyId).eq("externalId", reference))
+      .first();
+    if (evidence?.sourceDocumentId) {
+      ids.push(String(evidence.sourceDocumentId));
+      continue;
+    }
+    const document = await ctx.db.get(reference, "documents");
+    if (document && String(document.societyId) === societyId) ids.push(String(document._id));
+    else missing.push(reference);
+  }
+  return { ids: unique(ids), missing };
+}
 
 type SectionRecordHandler = (h: SectionRecordContext) => Promise<any>;
 
@@ -1465,23 +1505,41 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
     });
   },
 
-  nameSearchItem: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
+  nameSearchItem: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote, sourceCatalog }: SectionRecordContext) => {
+    // Request fields pass the same rules as the name request form (normalization already left out what fails;
+    // this re-reads the typed values). A bare decision time is pinned to the organization's time zone when it
+    // has one; without one it stays bare and reads as the viewer's local time.
+    const { fields } = cleanImportedNameRequestFields(payload);
+    const society = await ctx.db.get(societyId, "societies");
+    const decisionExpectedAtISO = fields.decisionExpectedAtISO ? withDecisionTimeZone(fields.decisionExpectedAtISO, organizationTimeZone(society)) : undefined;
+    const placeholderNote = "Source placeholder created for a name request's supporting document. Pull or review the original before relying on it.";
+    const supporting = await importedDocumentReferences(ctx, societyId, fields.supportingDocumentIds ?? [], sourceCatalog, placeholderNote);
+    const report = cleanText(payload.reportDocumentId)
+      ? await importedDocumentReferences(ctx, societyId, [payload.reportDocumentId], sourceCatalog, placeholderNote)
+      : { ids: [], missing: [] };
+    const formation = cleanText(payload.formationRecordId) ? await ctx.db.get(cleanText(payload.formationRecordId), "formationRecords") : null;
+    const missing = [...supporting.missing, ...report.missing];
+    const request = { ...fields, decisionExpectedAtISO, supportingDocumentIds: supporting.ids };
     return await ctx.db.insert("nameSearchItems", {
       societyId,
-      formationRecordId: cleanText(payload.formationRecordId) as any,
+      formationRecordId: formation && String(formation.societyId) === societyId ? formation._id : undefined,
       name: cleanText(payload.name) || record.title || "Imported name search",
-      success: optionalBoolean(payload.success),
+      // `success` stays in step with the status for readers that predate it.
+      success: request.status ? request.status === "approved" : optionalBoolean(payload.success),
       errors: arrayOf(payload.errors).map(String).map(cleanText).filter(Boolean),
       reportUrl: cleanText(payload.reportUrl) || cleanText(payload.reportLink),
-      reportDocumentId: cleanText(payload.reportDocumentId) as any,
+      reportDocumentId: report.ids[0],
       rank: numberOrUndefined(payload.rank),
       expressService: optionalBoolean(payload.expressService),
       descriptiveElement: cleanText(payload.descriptiveElement),
       distinctiveElement: cleanText(payload.distinctiveElement),
       nuansReportNumber: cleanText(payload.nuansReportNumber),
       suffix: cleanText(payload.suffix),
+      ...request,
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
-      notes: sourceNote,
+      notes: missing.length
+        ? [sourceNote, `Left off documents not found in this import or workspace: ${missing.join(", ")}.`].filter(Boolean).join("\n")
+        : sourceNote,
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
@@ -1781,7 +1839,7 @@ function importedGrantDetails(payload: any) {
   return out;
 }
 
-async function insertSectionRecord(ctx: any, societyId: string, record: any, sourceDocumentIds: any[]) {
+async function insertSectionRecord(ctx: any, societyId: string, record: any, sourceDocumentIds: any[], sourceCatalog?: Map<string, any>) {
   const payload = normalizePayload(record.recordKind, record.payload ?? {});
   const firstSourceDocumentId = sourceDocumentIds[0];
   const sourceNote = sourceNoteFor(record, sourceDocumentIds);
@@ -1790,7 +1848,7 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   if (!handler) {
     throw new Error(`Unsupported section record kind: ${record.recordKind}`);
   }
-  return await handler({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote });
+  return await handler({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote, sourceCatalog });
 }
 
 async function findExistingMeetingImport(

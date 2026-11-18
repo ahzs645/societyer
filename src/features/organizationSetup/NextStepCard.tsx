@@ -3,7 +3,7 @@ import type { OrganizationSetupProgress } from "../../../shared/organizationSetu
 import { findSetupStep } from "./useOrganizationSetup";
 import { SetupStepActions } from "./SetupStepActions";
 import { useSetupView } from "./SetupViewContext";
-import { isLifecycleStep } from "./setupCopy";
+import { isLifecycleStep, stepNoteText } from "./setupCopy";
 
 /** The next recommended step, pinned above the phases. */
 export function NextStepCard({ progress }: { progress: OrganizationSetupProgress }) {
@@ -36,7 +36,7 @@ export function NextStepCard({ progress }: { progress: OrganizationSetupProgress
         </button>
       </h2>
       <p className="setup-next__description">{step.description}</p>
-      {step.note && <p className="setup-next__note">{step.note}</p>}
+      {step.note && <p className={`setup-next__note${step.noteTone === "warning" ? " setup-next__note--warning" : ""}`}>{stepNoteText(step)}</p>}
       <div className="setup-next__actions">
         <SetupStepActions step={step} context="next" />
         {view.canWrite && !isLifecycleStep(step) && step.state !== "later" && (

@@ -282,6 +282,9 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
     const rows = await ctx.db.query("nameSearchItems").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     const key = compactKey([payload.name, payload.nuansReportNumber, payload.rank]);
     if (key && rows.some((row: any) => compactKey([row.name, row.nuansReportNumber, row.rank]) === key)) issues.push("Duplicate name search item already exists.");
+    // A registry request ID names one request. Invalid request fields never block: normalization leaves them out.
+    const requestId = cleanText(payload.requestId);
+    if (requestId && rows.some((row: any) => cleanText(row.requestId) === requestId)) issues.push("Duplicate name request: one with this request ID already exists.");
   }
 
   if (kind === "entityAmendment") {

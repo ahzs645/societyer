@@ -18,7 +18,7 @@ import { useToast } from "../components/Toast";
 import { BookTemplate, FileSignature, Landmark, Scale, Trash2, UserCheck, UsersRound } from "lucide-react";
 import { CreateMenu } from "../components/CreateMenu";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { formatDate } from "../lib/format";
+import { centsToDollarInput, dollarInputToCents, formatDate } from "../lib/format";
 import { OPTION_SETS, optionLabel, type OptionSetName } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -44,6 +44,7 @@ import {
   isCorporation,
   isPreparingIncorporation,
   organizationLabel,
+  organizationTimeZone,
 } from "../../shared/organizationDomain";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { todayDateOnly } from "../../shared/dateOnly";
@@ -51,6 +52,21 @@ import { deriveCurrentHoldings } from "../lib/equity";
 import { isRedeemableClass, type StructuredShareRights } from "../../shared/equityLedger";
 import { SHARE_CLASS_PRESETS } from "../../shared/shareClassPresets";
 import { StatTile } from "../components/StatTile";
+import { NameRequestFiles } from "../features/formation/NameRequestFiles";
+import { TimeZoneSelect } from "../components/TimeZoneSelect";
+import { viewerTimeZone } from "../../shared/timeZones";
+import {
+  NAME_APPROVAL_VALID_DAYS,
+  NAME_REQUEST_STATUSES,
+  NAME_REQUEST_STATUS_LABELS,
+  decisionExpectedFromFields,
+  decisionTimeFields,
+  decisionTimeViewerHint,
+  nameRequestProgressLine,
+  nameRequestStatus,
+  suggestedNameApprovalExpiry,
+  type NameRequestStatus,
+} from "../../shared/nameRequests";
 
 type RoleHolderDraft = {
   _id?: Id<"roleHolders">;
@@ -762,19 +778,23 @@ const FORMATIONS_TABLE = legalTable("formations", "Formation record", "Formation
   { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 130, config: { options: statusOptions("formationStatuses") } },
 ]);
 
+const NAME_REQUEST_TONE: Record<NameRequestStatus, "success" | "warn" | "danger" | "neutral"> = {
+  searching: "neutral",
+  submitted: "warn",
+  approved: "success",
+  rejected: "danger",
+  withdrawn: "neutral",
+};
+
 const NAME_SEARCHES_TABLE = legalTable("name-searches", "Name search", "Name searches", "name", [
   { name: "name", label: "Name", fieldType: FIELD_TYPES.TEXT, size: 280, config: { groupable: false } },
   {
     name: "result",
-    label: "Result",
+    label: "Status",
     fieldType: FIELD_TYPES.SELECT,
     size: 140,
     config: {
-      options: [
-        { value: "Approved", label: "Approved", color: "green" },
-        { value: "Not approved", label: "Not approved", color: "red" },
-        { value: "No result yet", label: "No result yet", color: "gray" },
-      ],
+      options: NAME_REQUEST_STATUSES.map((status) => ({ value: status, label: NAME_REQUEST_STATUS_LABELS[status], color: TONE_COLOR[NAME_REQUEST_TONE[status]] })),
     },
   },
   { name: "report", label: "Report", fieldType: FIELD_TYPES.TEXT, size: 130 },
@@ -882,12 +902,31 @@ type NameSearchRow = {
   name?: string;
   suffix?: string;
   success?: boolean;
+  status?: string;
   reportUrl?: string;
   rank?: number | string;
   nuansReportNumber?: string;
   expressService?: boolean;
   errors?: string[];
+  descriptiveElement?: string;
+  distinctiveElement?: string;
+  distinctiveRationale?: string;
+  registry?: string;
+  requestId?: string;
+  submittedOn?: string;
+  decisionExpectedAtISO?: string;
+  decidedOn?: string;
+  expiresOn?: string;
+  contactEmail?: string;
+  receiptOrderNumber?: string;
+  amountPaidCents?: number;
+  similarNamesReviewed?: number;
+  exactMatchesFound?: number;
+  similarNamesNotes?: string;
+  supportingDocumentIds?: string[];
+  notes?: string;
 };
+
 
 type AmendmentRow = {
   _id: string;
@@ -1948,6 +1987,8 @@ export function FormationMaintenancePage() {
   const { can } = usePermissions();
   const canWrite = can("documents:write");
   const data = useQuery(api.legalOperations.formationMaintenance, society ? { societyId: society._id } : "skip");
+  // Where a decision time saved without a time zone was given.
+  const orgTimeZone = organizationTimeZone(society);
   const upsertFormation = useMutation(api.legalOperations.upsertFormationRecord);
   const upsertNameSearch = useMutation(api.legalOperations.upsertNameSearchItem);
   const upsertAmendment = useMutation(api.legalOperations.upsertEntityAmendment);
@@ -1964,18 +2005,31 @@ export function FormationMaintenancePage() {
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
   // `?new=nameSearch` / `?new=amendment` opens that form directly (the setup
-  // view's "Record a name search" lands here).
+  // view's "Record a name search" lands here), and `?nameSearch=<id>` opens
+  // that name request (the setup view's "Record the decision").
   const [searchParams, setSearchParams] = useSearchParams();
   const newKind = searchParams.get("new");
+  const nameSearchId = searchParams.get("nameSearch");
   useEffect(() => {
     if (!canWrite || (newKind !== "nameSearch" && newKind !== "amendment")) return;
-    setDraft(newKind === "amendment" ? { kind: "amendment", status: "draft" } : { kind: "nameSearch" });
+    setDraft(newKind === "amendment" ? { kind: "amendment", status: "draft" } : newNameSearchDraft());
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("new");
       return next;
     }, { replace: true });
   }, [canWrite, newKind, setSearchParams]);
+  useEffect(() => {
+    if (!canWrite || !nameSearchId || data === undefined) return;
+    const row = ((data?.nameSearches ?? []) as NameSearchRow[]).find((candidate) => candidate._id === nameSearchId);
+    if (row) setDraft(editNameSearch(row, orgTimeZone));
+    else toast.error("Name request not found", "It may have been deleted.");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("nameSearch");
+      return next;
+    }, { replace: true });
+  }, [canWrite, nameSearchId, data, orgTimeZone, setSearchParams, toast]);
   const del = async (remover: (args: { id: any }) => Promise<unknown>, id: any, label: string) => {
     if (!canWrite) return;
     const ok = await confirm({
@@ -2012,7 +2066,7 @@ export function FormationMaintenancePage() {
         _id: row._id,
         row,
         name: nameSearchName(row),
-        result: row.success === true ? "Approved" : row.success === false ? "Not approved" : "No result yet",
+        result: nameRequestStatus(row),
         report: nameSearchReportUrl(row) ? "Open report" : "",
       })),
     [data?.nameSearches],
@@ -2115,7 +2169,8 @@ export function FormationMaintenancePage() {
         notes: empty(draft.notes),
       });
     } else if (draft.kind === "nameSearch") {
-      await upsertNameSearch({ id: draft._id, societyId: society._id, name: draft.name || "Unnamed search", success: draft.success, errors: csv(draft.errorsText ?? draft.errors), reportUrl: empty(draft.reportUrl), rank: numberOrUndefined(draft.rank), expressService: draft.expressService, descriptiveElement: empty(draft.descriptiveElement), distinctiveElement: empty(draft.distinctiveElement), nuansReportNumber: empty(draft.nuansReportNumber), suffix: empty(draft.suffix), notes: empty(draft.notes) });
+      const decided = draft.status === "approved" || draft.status === "rejected";
+      await upsertNameSearch({ id: draft._id, societyId: society._id, name: draft.name || "Unnamed search", status: draft.status || "searching", errors: csv(draft.errorsText ?? draft.errors), reportUrl: empty(draft.reportUrl), rank: numberOrUndefined(draft.rank), expressService: draft.expressService, descriptiveElement: empty(draft.descriptiveElement), distinctiveElement: empty(draft.distinctiveElement), distinctiveRationale: empty(draft.distinctiveRationale), nuansReportNumber: empty(draft.nuansReportNumber), suffix: empty(draft.suffix), registry: empty(draft.registry), requestId: empty(draft.requestId), submittedOn: empty(draft.submittedOn), decisionExpectedAtISO: decisionExpectedFromFields({ date: draft.decisionExpectedDate, time: draft.decisionExpectedTime, timeZone: draft.decisionExpectedTimeZone }), decidedOn: decided ? empty(draft.decidedOn) : undefined, expiresOn: draft.status === "approved" ? empty(draft.expiresOn) : undefined, contactEmail: empty(draft.contactEmail), receiptOrderNumber: empty(draft.receiptOrderNumber), amountPaidCents: dollarInputToCents(draft.amountPaid), similarNamesReviewed: numberOrUndefined(draft.similarNamesReviewed), exactMatchesFound: numberOrUndefined(draft.exactMatchesFound), similarNamesNotes: empty(draft.similarNamesNotes), supportingDocumentIds: draft.supportingDocumentIds ?? [], notes: empty(draft.notes) });
     } else if (draft.kind === "amendment") {
       await upsertAmendment({ id: draft._id, societyId: society._id, status: draft.status || "draft", effectiveDate: empty(draft.effectiveDate), entityNameNew: empty(draft.entityNameNew), directorsMinimum: numberOrUndefined(draft.directorsMinimum), directorsMaximum: numberOrUndefined(draft.directorsMaximum), shareClassAmendmentText: empty(draft.shareClassAmendmentText), jurisdictionNew: empty(draft.jurisdictionNew), notes: empty(draft.notes) });
     } else if (draft.kind === "annual") {
@@ -2156,7 +2211,7 @@ export function FormationMaintenancePage() {
             disabled={!canWrite}
             items={[
               { id: "formation", label: "Formation package", onSelect: () => setDraft({ kind: "formation", status: "draft" }) },
-              { id: "nameSearch", label: "Name search", onSelect: () => setDraft({ kind: "nameSearch" }) },
+              { id: "nameSearch", label: "Name request", onSelect: () => setDraft(newNameSearchDraft()) },
               { id: "amendment", label: "Amendment", onSelect: () => setDraft({ kind: "amendment", status: "draft" }) },
               { id: "annual", label: "Annual maintenance", onSelect: () => setDraft({ kind: "annual", status: "draft" }) },
               { id: "jurisdiction", label: "Jurisdiction", onSelect: () => setDraft({ kind: "jurisdiction" }) },
@@ -2185,7 +2240,7 @@ export function FormationMaintenancePage() {
         />
       </Section>
 
-      <Section title="Name searches" count={data?.nameSearches?.length ?? 0}>
+      <Section title="Name requests" count={data?.nameSearches?.length ?? 0}>
         <RecordListTable<ListRecord<NameSearchRow>>
           variant="card"
           table={NAME_SEARCHES_TABLE}
@@ -2193,12 +2248,14 @@ export function FormationMaintenancePage() {
           label="Name searches"
           records={nameSearchRecords}
           loading={data === undefined}
-          onOpen={canWrite ? (record) => setDraft(editNameSearch(record.row)) : undefined}
+          onOpen={canWrite ? (record) => setDraft(editNameSearch(record.row, orgTimeZone)) : undefined}
           renderCell={({ record, field }) => {
             const { row } = record;
-            if (field.name === "name") return <NameSearchCell row={row} />;
-            if (field.name === "result")
-              return <Badge tone={row.success === true ? "success" : row.success === false ? "danger" : "neutral"}>{String(record.result)}</Badge>;
+            if (field.name === "name") return <NameSearchCell row={row} sourceTimeZone={orgTimeZone} />;
+            if (field.name === "result") {
+              const status = nameRequestStatus(row);
+              return <Badge tone={NAME_REQUEST_TONE[status]}>{NAME_REQUEST_STATUS_LABELS[status]}</Badge>;
+            }
             if (field.name === "report") {
               const report = nameSearchReportUrl(row);
               return report ? <a href={report} target="_blank" rel="noreferrer">Open report</a> : <span className="muted">None</span>;
@@ -2207,12 +2264,12 @@ export function FormationMaintenancePage() {
           }}
           renderRowActions={(record) => (
             <RowActions
-              label="name search"
-              onEdit={() => setDraft(editNameSearch(record.row))}
-              onDelete={() => del(removeNameSearch, record.row._id, "name search")}
+              label="name request"
+              onEdit={() => setDraft(editNameSearch(record.row, orgTimeZone))}
+              onDelete={() => del(removeNameSearch, record.row._id, "name request")}
             />
           )}
-          emptyState={<RecordTableEmpty title="No name searches yet" />}
+          emptyState={<RecordTableEmpty title="No name requests yet" />}
         />
       </Section>
 
@@ -2300,7 +2357,7 @@ export function FormationMaintenancePage() {
       </Section>
 
       <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={formationDraftTitle(draft)} footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}>
-        {draft && <FormationDraftForm draft={draft} setDraft={setDraft} jurisdictionByCode={latestJurisdictionByCode} corporate={corporateMaintenance} />}
+        {draft && <FormationDraftForm draft={draft} setDraft={setDraft} jurisdictionByCode={latestJurisdictionByCode} corporate={corporateMaintenance} societyId={society._id} />}
       </Drawer>
     </div>
   );
@@ -2316,9 +2373,15 @@ function nameSearchReportUrl(row: NameSearchRow) {
   return /^https?:\/\//i.test(String(row.reportUrl ?? "")) ? String(row.reportUrl) : "";
 }
 
-/** Name search: the name, then rank, NUANS number and express service when recorded. */
-function NameSearchCell({ row }: { row: NameSearchRow }) {
-  const details = [
+/**
+ * Name request: the name, then where the request stands ("Request 21480579 ·
+ * Submitted Nov 17 · Decision expected Nov 18, 2:00 p.m. PST", on the
+ * viewer's clock), or for a plain search its rank, NUANS number and express
+ * service.
+ */
+function NameSearchCell({ row, sourceTimeZone }: { row: NameSearchRow; sourceTimeZone?: string }) {
+  const progress = nameRequestProgressLine(row, { today: todayDateOnly(), sourceTimeZone });
+  const details = progress ? [progress] : [
     row.rank != null && row.rank !== "" ? `Choice ${row.rank}` : "",
     row.nuansReportNumber ? `NUANS ${row.nuansReportNumber}` : "",
     row.expressService ? "Express" : "",
@@ -2326,8 +2389,27 @@ function NameSearchCell({ row }: { row: NameSearchRow }) {
   return <TwoLines primary={<strong>{nameSearchName(row)}</strong>} secondary={details.join(" · ")} />;
 }
 
-function editNameSearch(row: NameSearchRow) {
-  return { ...row, kind: "nameSearch", rank: row.rank ?? "", errorsText: (row.errors ?? []).join(", ") };
+function newNameSearchDraft() {
+  return { kind: "nameSearch", status: "searching", supportingDocumentIds: [], decisionExpectedTimeZone: viewerTimeZone() ?? "" };
+}
+
+/** `sourceTimeZone`: where a decision time saved without a zone was given (the organization's). */
+function editNameSearch(row: NameSearchRow, sourceTimeZone?: string) {
+  const decision = decisionTimeFields(row.decisionExpectedAtISO, { viewerTimeZone: viewerTimeZone() ?? "UTC", sourceTimeZone });
+  return {
+    ...row,
+    kind: "nameSearch",
+    status: nameRequestStatus(row),
+    rank: row.rank ?? "",
+    errorsText: (row.errors ?? []).join(", "),
+    decisionExpectedDate: decision.date,
+    decisionExpectedTime: decision.time,
+    decisionExpectedTimeZone: decision.timeZone,
+    amountPaid: centsToDollarInput(row.amountPaidCents),
+    similarNamesReviewed: row.similarNamesReviewed ?? "",
+    exactMatchesFound: row.exactMatchesFound ?? "",
+    supportingDocumentIds: row.supportingDocumentIds ?? [],
+  };
 }
 
 function editAmendment(row: AmendmentRow) {
@@ -2426,7 +2508,7 @@ function TemplateDraftForm({ draft, setDraft }: { draft: any; setDraft: (draft: 
   );
 }
 
-function FormationDraftForm({ draft, setDraft, jurisdictionByCode, corporate = false }: { draft: any; setDraft: (draft: any) => void; jurisdictionByCode: Map<any, any>; corporate?: boolean }) {
+function FormationDraftForm({ draft, setDraft, jurisdictionByCode, corporate = false, societyId }: { draft: any; setDraft: (draft: any) => void; jurisdictionByCode: Map<any, any>; corporate?: boolean; societyId: Id<"societies"> }) {
   if (draft.kind === "formation") {
     return (
       <>
@@ -2443,17 +2525,7 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode, corporate = f
       </>
     );
   }
-  if (draft.kind === "nameSearch") {
-    return (
-      <>
-        <Field label="Name"><input className="input" value={draft.name ?? ""} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
-        <OptionSelect label="Suffix" setName="suffixCompanyNames" value={draft.suffix ?? ""} emptyLabel="No suffix" onChange={(value) => setDraft({ ...draft, suffix: value })} />
-        <div className="grid two"><Field label="Rank"><input className="input" value={draft.rank ?? ""} onChange={(e) => setDraft({ ...draft, rank: e.target.value })} /></Field><Field label="NUANS report number"><input className="input" value={draft.nuansReportNumber ?? ""} onChange={(e) => setDraft({ ...draft, nuansReportNumber: e.target.value })} /></Field></div>
-        <Field label="Report URL"><input className="input" value={draft.reportUrl ?? ""} onChange={(e) => setDraft({ ...draft, reportUrl: e.target.value })} /></Field>
-        <div className="row" style={{ gap: 16 }}><label><input type="checkbox" checked={Boolean(draft.success)} onChange={(e) => setDraft({ ...draft, success: e.target.checked })} /> Successful</label><label><input type="checkbox" checked={Boolean(draft.expressService)} onChange={(e) => setDraft({ ...draft, expressService: e.target.checked })} /> Express</label></div>
-      </>
-    );
-  }
+  if (draft.kind === "nameSearch") return <NameRequestForm draft={draft} setDraft={setDraft} societyId={societyId} />;
   if (draft.kind === "amendment") {
     return (
       <>
@@ -2495,6 +2567,93 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode, corporate = f
       <Field label="URL"><input className="input" value={draft.pageLocationUrl ?? ""} onChange={(e) => setDraft({ ...draft, pageLocationUrl: e.target.value })} /></Field>
       <Field label="Error code"><input className="input" value={draft.errorCode ?? ""} onChange={(e) => setDraft({ ...draft, errorCode: e.target.value })} /></Field>
       <Field label="Error message"><MarkdownEditor rows={4} value={draft.errorMessage ?? ""} onChange={(markdown) => setDraft({ ...draft, errorMessage: markdown })} /></Field>
+    </>
+  );
+}
+
+/**
+ * A name request: where it stands, what was sent, the name and its search,
+ * what was paid, the decision, and the files that came back.
+ */
+function NameRequestForm({ draft, setDraft, societyId }: { draft: any; setDraft: (draft: any) => void; societyId: Id<"societies"> }) {
+  const status: NameRequestStatus = nameRequestStatus(draft);
+  const decided = status === "approved" || status === "rejected";
+  const suggestedExpiry = status === "approved" ? suggestedNameApprovalExpiry(draft.decidedOn) : undefined;
+  // Approving (or dating the approval) suggests an expiry, unless one was typed in.
+  const withSuggestedExpiry = (next: any) => {
+    if (next.status !== "approved") return next;
+    if (next.expiresOn && next.expiresOn !== suggestedNameApprovalExpiry(draft.decidedOn)) return next;
+    const expiresOn = suggestedNameApprovalExpiry(next.decidedOn);
+    return expiresOn ? { ...next, expiresOn } : next;
+  };
+  const set = (patch: Record<string, unknown>) => setDraft({ ...draft, ...patch });
+  // The decision time on the viewer's clock when it was given in another zone ("That's 5:00 p.m. your time").
+  const decisionFields = { date: draft.decisionExpectedDate, time: draft.decisionExpectedTime, timeZone: draft.decisionExpectedTimeZone };
+  // Dates the zone's short name (PST or PDT); noon when only the day is set.
+  const decisionInstant = decisionExpectedFromFields({ ...decisionFields, time: draft.decisionExpectedTime || "12:00" });
+  const decisionAt = decisionInstant && decisionInstant.length > 10 ? Date.parse(decisionInstant) : undefined;
+  const decisionTimeHint = decisionTimeViewerHint(decisionFields, viewerTimeZone() ?? "UTC");
+  return (
+    <>
+      <Field label="Status">
+        <Select value={status} onChange={(value) => setDraft(withSuggestedExpiry({ ...draft, status: value, decidedOn: (value === "approved" || value === "rejected") && !draft.decidedOn ? todayDateOnly() : draft.decidedOn }))} options={NAME_REQUEST_STATUSES.map((value) => ({ value, label: NAME_REQUEST_STATUS_LABELS[value] }))} />
+      </Field>
+
+      <fieldset className="name-request-section">
+        <legend>Request</legend>
+        <div className="grid two"><Field label="Registry"><input className="input" placeholder="Corporations Canada" value={draft.registry ?? ""} onChange={(e) => set({ registry: e.target.value })} /></Field><Field label="Request ID"><input className="input mono" value={draft.requestId ?? ""} onChange={(e) => set({ requestId: e.target.value })} /></Field></div>
+        <div className="grid two"><Field label="Submitted on"><DatePicker value={draft.submittedOn ?? ""} onChange={(value) => set({ submittedOn: value })} /></Field><Field label="Confirmation sent to" hint="The email the registry writes to."><input className="input" type="email" value={draft.contactEmail ?? ""} onChange={(e) => set({ contactEmail: e.target.value })} /></Field></div>
+        <div className="grid two">
+          <Field label="Decision expected"><DatePicker value={draft.decisionExpectedDate ?? ""} onChange={(value) => set({ decisionExpectedDate: value })} /></Field>
+          <Field label="Time" hint={decisionTimeHint ?? "Optional. In the time zone the registry gave."}>
+            <div className="name-request-time">
+              <input className="input" type="time" value={draft.decisionExpectedTime ?? ""} disabled={!draft.decisionExpectedDate} onChange={(e) => set({ decisionExpectedTime: e.target.value })} />
+              <TimeZoneSelect value={draft.decisionExpectedTimeZone ?? ""} at={decisionAt} disabled={!draft.decisionExpectedDate} onChange={(decisionExpectedTimeZone) => set({ decisionExpectedTimeZone })} />
+            </div>
+          </Field>
+        </div>
+      </fieldset>
+
+      <fieldset className="name-request-section">
+        <legend>Name</legend>
+        <div className="grid two"><Field label="Name"><input className="input" value={draft.name ?? ""} onChange={(e) => set({ name: e.target.value })} /></Field><OptionSelect label="Suffix" setName="suffixCompanyNames" value={draft.suffix ?? ""} emptyLabel="No suffix" onChange={(value) => set({ suffix: value })} /></div>
+        <div className="grid two"><Field label="Distinctive part" hint="E.g. DDC North"><input className="input" value={draft.distinctiveElement ?? ""} onChange={(e) => set({ distinctiveElement: e.target.value })} /></Field><Field label="Descriptive part" hint="E.g. Consulting"><input className="input" value={draft.descriptiveElement ?? ""} onChange={(e) => set({ descriptiveElement: e.target.value })} /></Field></div>
+        <Field label="Why this name" hint="What the distinctive words mean, for the registry or your records."><textarea className="textarea" rows={2} value={draft.distinctiveRationale ?? ""} onChange={(e) => set({ distinctiveRationale: e.target.value })} /></Field>
+        <Field label="Choice" hint="1 for your first choice."><input className="input" inputMode="numeric" value={draft.rank ?? ""} onChange={(e) => set({ rank: e.target.value })} /></Field>
+        <fieldset className="name-request-section name-request-section--nested">
+          <legend>Name search (NUANS)</legend>
+          <div className="grid two"><Field label="NUANS report number"><input className="input mono" value={draft.nuansReportNumber ?? ""} onChange={(e) => set({ nuansReportNumber: e.target.value })} /></Field><Field label="Report link"><input className="input" value={draft.reportUrl ?? ""} onChange={(e) => set({ reportUrl: e.target.value })} /></Field></div>
+          <div className="grid two"><Field label="Similar names found"><input className="input" inputMode="numeric" value={draft.similarNamesReviewed ?? ""} onChange={(e) => set({ similarNamesReviewed: e.target.value })} /></Field><Field label="Exact matches"><input className="input" inputMode="numeric" value={draft.exactMatchesFound ?? ""} onChange={(e) => set({ exactMatchesFound: e.target.value })} /></Field></div>
+          <Field label="Names to watch" hint="Close names or trademarks the search turned up."><textarea className="textarea" rows={2} value={draft.similarNamesNotes ?? ""} onChange={(e) => set({ similarNamesNotes: e.target.value })} /></Field>
+          <Checkbox checked={Boolean(draft.expressService)} onChange={(checked) => set({ expressService: checked })} label="Express service" />
+        </fieldset>
+      </fieldset>
+
+      <fieldset className="name-request-section">
+        <legend>Payment</legend>
+        <div className="grid two"><Field label="Receipt or order number"><input className="input mono" value={draft.receiptOrderNumber ?? ""} onChange={(e) => set({ receiptOrderNumber: e.target.value })} /></Field><Field label="Amount paid (CAD)" hint="Including tax."><input className="input" inputMode="decimal" placeholder="0.00" value={draft.amountPaid ?? ""} onChange={(e) => set({ amountPaid: e.target.value })} /></Field></div>
+      </fieldset>
+
+      {decided && (
+        <fieldset className="name-request-section">
+          <legend>Decision</legend>
+          <div className="grid two">
+            <Field label={status === "approved" ? "Approved on" : "Rejected on"}><DatePicker value={draft.decidedOn ?? ""} onChange={(value) => setDraft(withSuggestedExpiry({ ...draft, decidedOn: value }))} /></Field>
+            {status === "approved" && (
+              <Field label="Expires on" hint={draft.expiresOn && draft.expiresOn === suggestedExpiry ? `Set to ${NAME_APPROVAL_VALID_DAYS} days after approval. Check the decision letter for the exact date.` : "Check the decision letter for the exact date."}>
+                <DatePicker value={draft.expiresOn ?? ""} onChange={(value) => set({ expiresOn: value })} />
+              </Field>
+            )}
+          </div>
+        </fieldset>
+      )}
+
+      <fieldset className="name-request-section">
+        <legend>Files</legend>
+        <NameRequestFiles societyId={societyId} documentIds={draft.supportingDocumentIds ?? []} onChange={(supportingDocumentIds) => set({ supportingDocumentIds })} />
+      </fieldset>
+
+      <Field label="Notes"><textarea className="textarea" rows={3} value={draft.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} /></Field>
     </>
   );
 }
@@ -2575,7 +2734,7 @@ function formationDraftTitle(draft?: any) {
   if (!draft) return "";
   return {
     formation: "Formation record",
-    nameSearch: "Name search",
+    nameSearch: "Name request",
     amendment: "Entity amendment",
     annual: "Annual maintenance",
     jurisdiction: "Jurisdiction metadata",

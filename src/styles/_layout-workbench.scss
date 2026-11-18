@@ -1026,6 +1026,56 @@
 }
 
 /* "As of" strip above a dated register (certificates, share register). */
+// Name request drawer (Formation and maintenance): fields grouped by what
+// the registry sends back. Fields keep their own bottom margin.
+.name-request-section {
+  margin: 0 0 token('s-2');
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  & + & {
+    padding-top: token('s-4');
+    border-top: 1px solid token('border');
+  }
+  > legend {
+    padding: 0;
+    margin-bottom: token('s-3');
+    font-size: token('fs-sm');
+    font-weight: 600;
+    color: token('text-primary');
+  }
+}
+// The NUANS search sits inside the name group: one request can carry a paid
+// search and a separate decision.
+.name-request-section--nested {
+  padding: token('s-3') token('s-3') 0;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  > legend { padding: 0 token('s-1'); margin-bottom: 0; }
+}
+// The decision time: the time input with its time-zone short name beside it.
+.name-request-time {
+  display: flex;
+  align-items: center;
+  gap: token('s-1');
+  > .input { flex: 1 1 auto; min-width: 0; }
+}
+.name-request-files {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-2');
+  margin: 0 0 token('s-3');
+  padding: 0;
+  list-style: none;
+}
+.name-request-files__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+  min-width: 0;
+  > a, > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 .register-asof {
   display: flex;
   flex-wrap: wrap;

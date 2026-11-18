@@ -8,6 +8,9 @@ import { incorporationWorksheetText } from "../shared/incorporationWorksheet";
 import type { LegalEntityLike } from "../shared/organizationDomain";
 import { setupCopyContext, setupStepCatalogue } from "../shared/organizationSetup/catalogue";
 import { FederalBcIncorporationGuide } from "../src/components/FederalBcIncorporationGuide";
+import { nameApprovalPacketView } from "../shared/nameRequests";
+import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
+import { formatLongDate } from "../shared/locale";
 
 const federal = {
   name: "Example Planning Inc.",
@@ -66,6 +69,21 @@ for (const section of FEDERAL_BC_PREPARATION.sections) {
     if (field.appliesWhen) assert.ok(worksheet.includes(field.appliesWhen), `export retains condition for ${field.id}`);
   }
 }
+// With an approved name request the worksheet's name line is the federal articles packet's approved-name line.
+assert.ok(worksheet.includes("Workspace / proposed legal name: Example Planning Inc."), "no approval: the workspace name");
+const nameApproval = nameApprovalPacketView(
+  [{ name: "Example Planning", suffix: "inc", status: "approved", registry: "Corporations Canada", requestId: "21480579", decidedOn: "2026-11-18", expiresOn: "2027-02-16" }],
+  "Example Planning Ltd.",
+  (day) => formatLongDate(day),
+);
+const named = incorporationWorksheetText(federalGuide, federal, { nameApproval });
+assert.ok(named.includes(`\n${nameApproval.line}\n`), named.slice(0, 900));
+assert.match(nameApproval.line, /^Proposed corporate name: Example Planning Inc\. Name approved by Corporations Canada on November 18, 2026 \(request 21480579\)\. .*expires February 16, 2027.*workspace is named Example Planning Ltd\./);
+assert.ok(!named.includes("Workspace / proposed legal name:"));
+const articlesPacket = CORPORATION_DOCUMENT_PACKETS.find((packet) => packet.key === "federal-articles-preparation");
+assert.ok(JSON.stringify(articlesPacket?.sections ?? []).includes("{nameApproval.line}"), "the DOCX worksheet reads the same line");
+assert.ok(!incorporationWorksheetText(federalGuide, federal, { nameApproval: nameApprovalPacketView([], federal.name, (day) => day) }).includes("Proposed corporate name:"), "no approved request: unchanged");
+
 for (const organization of [bc, society]) {
   const guide = incorporationPreparationForOrganization(organization)!;
   assert.ok(!incorporationWorksheetText(guide, organization).includes(inventoryHeading));

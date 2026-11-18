@@ -6,7 +6,7 @@ import { Badge, Banner } from "../components/ui";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useConvex, useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { FileText } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -23,6 +23,8 @@ import { humanizeKey } from "../../shared/documentProvenance";
 import { pathwayForPacket } from "../../shared/pathways/registry";
 import { MinuteBookReportsCard } from "../components/MinuteBookReportsCard";
 import { isReportPacketKey } from "../../shared/corporationReportPackets";
+import { nameApprovalPacketView } from "../../shared/nameRequests";
+import { formatLongDate } from "../../shared/locale";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -97,6 +99,7 @@ export function DocumentCatalogPage() {
     api.legalOperations.templateEngine,
     society ? { societyId: society._id } : "skip",
   ) as CatalogData | undefined;
+  const convex = useConvex();
   const generate = useMutation(api.legalOperations.generateDocumentFromCatalog);
   const seedCatalog = useMutation(api.legalOperations.seedDocumentPacketsForEntity);
   const permissions = usePermissions();
@@ -127,6 +130,22 @@ export function DocumentCatalogPage() {
     } finally {
       setSeeding(false);
     }
+  };
+
+  // The worksheet names the approved name the way the federal articles packet does, when a request is approved.
+  const downloadWorksheet = async (guide: NonNullable<ReturnType<typeof incorporationPreparationForOrganization>>) => {
+    let nameSearches: Parameters<typeof nameApprovalPacketView>[0] = [];
+    try {
+      const formation = (await convex.query(api.legalOperations.formationMaintenance, { societyId: society._id })) as { nameSearches?: typeof nameSearches } | null;
+      nameSearches = formation?.nameSearches ?? [];
+    } catch {
+      // Without the name requests the worksheet falls back to the workspace name.
+    }
+    const nameApproval = nameApprovalPacketView(nameSearches, society.name, (day) => formatLongDate(day));
+    triggerBlobDownload(
+      new Blob([incorporationWorksheetText(guide, society, { nameApproval })], { type: "text/plain;charset=utf-8" }),
+      incorporationWorksheetFileName(guide, society),
+    );
   };
 
   // A transaction-scoped packet renders only the transaction of its date, so
@@ -201,10 +220,7 @@ export function DocumentCatalogPage() {
               ...(preparationGuide ? [{
                 id: "worksheet",
                 label: "Download preparation worksheet",
-                onSelect: () => triggerBlobDownload(
-                  new Blob([incorporationWorksheetText(preparationGuide, society)], { type: "text/plain;charset=utf-8" }),
-                  incorporationWorksheetFileName(preparationGuide, society),
-                ),
+                onSelect: () => void downloadWorksheet(preparationGuide),
               }] : []),
             ]}
           />

@@ -2,7 +2,7 @@ import { useId, type ReactNode } from "react";
 import { CheckCircle2, ChevronDown, Circle, CircleDashed, Clock, Lock, MinusCircle, MoreHorizontal, Undo2 } from "lucide-react";
 import type { SetupStepState, SetupStepView } from "../../../shared/organizationSetup/types";
 import { Menu, type MenuItem } from "../../components/Menu";
-import { STEP_STATE_LABEL, canDecideStep, isLifecycleStep } from "./setupCopy";
+import { STEP_STATE_LABEL, canDecideStep, isLifecycleStep, stepNoteText } from "./setupCopy";
 import { SetupStepActions } from "./SetupStepActions";
 import { useSetupView } from "./SetupViewContext";
 
@@ -93,8 +93,8 @@ export function SetupStepRow({
       <div className="setup-step__body" id={bodyId} hidden={!open}>
         <p className="setup-step__description">{step.description}</p>
         {step.note && (
-          <p className={`setup-step__note${struck ? " setup-step__note--reason" : ""}`}>
-            {struck ? <>Doesn't apply: {step.note}</> : step.note}
+          <p className={`setup-step__note${struck ? " setup-step__note--reason" : step.noteTone === "warning" ? " setup-step__note--warning" : ""}`}>
+            {struck ? <>Doesn't apply: {step.note}</> : stepNoteText(step)}
           </p>
         )}
         {step.state === "later" && <p className="setup-step__note">You asked to be reminded later. It still counts toward setup.</p>}

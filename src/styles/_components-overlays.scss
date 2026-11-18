@@ -87,6 +87,21 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   font-size: token('fs-sm');
   gap: 4px;
 }
+/* A quiet trigger that reads as text beside another control until hovered,
+   e.g. the time-zone short name ("PST") next to a time input. */
+.select-trigger--quiet {
+  width: auto;
+  flex: 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+  color: token('text-secondary');
+}
+.select-trigger--quiet:hover:not(:disabled) {
+  border-color: transparent;
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+.select-trigger--quiet:disabled { background: transparent; border-style: solid; border-color: transparent; }
 .select-trigger__label {
   flex: 1;
   min-width: 0;

@@ -871,6 +871,21 @@ export const upsertNameSearchItem = authorizedMutation("legalOperations:upsertNa
     distinctiveElement: v.optional(v.string()),
     nuansReportNumber: v.optional(v.string()),
     suffix: v.optional(v.string()),
+    status: v.optional(v.string()),
+    registry: v.optional(v.string()),
+    requestId: v.optional(v.string()),
+    submittedOn: v.optional(v.string()),
+    decisionExpectedAtISO: v.optional(v.string()),
+    decidedOn: v.optional(v.string()),
+    expiresOn: v.optional(v.string()),
+    contactEmail: v.optional(v.string()),
+    receiptOrderNumber: v.optional(v.string()),
+    amountPaidCents: v.optional(v.number()),
+    distinctiveRationale: v.optional(v.string()),
+    similarNamesReviewed: v.optional(v.number()),
+    exactMatchesFound: v.optional(v.number()),
+    similarNamesNotes: v.optional(v.string()),
+    supportingDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
@@ -881,6 +896,7 @@ export const upsertNameSearchItem = authorizedMutation("legalOperations:upsertNa
     if (args.id) await getOwned(portableCtx, "nameSearchItems", args.id, args.societyId);
     if (args.formationRecordId) await getOwned(portableCtx, "formationRecords", args.formationRecordId, args.societyId);
     if (args.reportDocumentId) await getOwned(portableCtx, "documents", args.reportDocumentId, args.societyId);
+    for (const documentId of args.supportingDocumentIds ?? []) await getOwned(portableCtx, "documents", documentId, args.societyId);
     return upsertNameSearchItemPortable(portableCtx, args);
   },
 });

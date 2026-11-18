@@ -3,6 +3,7 @@ import { normalizeMeetingHistory } from "../../meetingHistory";
 // Import-session payload normalization, including insurance-policy dedupe/merge.
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
 import { actionStatusFromSource, isActionItemStatus } from "../../actionItemStatus";
+import { cleanImportedNameRequestFields } from "../../nameRequests";
 
 import {
   SECTION_RECORD_KINDS,
@@ -30,6 +31,7 @@ function normalizePayload(recordKind: string, payload: any) {
   if (recordKind === "motion") return normalizeMotionPayload(payload);
   if (recordKind === "meetingMinutes") return normalizeMeetingMinutesPayload(payload);
   if (recordKind === "budget") return normalizeBudgetPayload(payload);
+  if (recordKind === "nameSearchItem") return normalizeNameSearchPayload(payload);
   if (SECTION_RECORD_KINDS.includes(recordKind as any)) return normalizeSectionPayload(payload);
   return { ...(payload ?? {}) };
 }
@@ -405,6 +407,19 @@ function normalizeBudgetPayload(budget: any) {
     lines: arrayOf(budget?.lines),
     sourceExternalIds: arrayOf(budget?.sourceExternalIds).map(String),
   };
+}
+
+/**
+ * A name request: the section fields, with each request field (status,
+ * dates, decision time, email, counts, supporting documents) checked by the
+ * shared name-request rules. A value that fails is left out, so the bundle
+ * preflight reports it as dropped instead of the whole row failing.
+ */
+function normalizeNameSearchPayload(payload: any) {
+  const section: Record<string, unknown> = { ...normalizeSectionPayload(payload) };
+  const { fields, dropped } = cleanImportedNameRequestFields(section);
+  for (const key of dropped) delete section[key];
+  return { ...section, ...fields };
 }
 
 function normalizeSectionPayload(payload: any) {

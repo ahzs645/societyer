@@ -58,6 +58,11 @@ type SelectProps<T extends string> = {
   /** Min width of the popup menu in px. Defaults to the trigger width. */
   menuMinWidth?: number;
   /**
+   * What the closed trigger shows in place of the selected option's label,
+   * e.g. "PST" for a time zone whose menu row reads "Pacific time".
+   */
+  triggerLabel?: ReactNode;
+  /**
    * When true, the menu is open on first render. Used for cell-edit
    * inputs in the record table, where clicking the cell should drop
    * straight into an open menu (no extra click on the trigger).
@@ -94,6 +99,7 @@ export function Select<T extends string>({
   clearable,
   clearLabel = "— none —",
   menuMinWidth,
+  triggerLabel,
   defaultOpen = false,
   onClose,
   triggerless = false,
@@ -424,7 +430,7 @@ export function Select<T extends string>({
           style={style}
         >
           <span className="select-trigger__label">
-            {selected ? (
+            {triggerLabel !== undefined ? triggerLabel : selected ? (
               selected.color ? (
                 <Tag color={selected.color} text={selected.label} />
               ) : (

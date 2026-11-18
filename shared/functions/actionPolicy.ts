@@ -141,6 +141,8 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "legalOperations:upsertJurisdictionMetadata": ["nuansReservationReportTypeId", "sourceOptionId"],
   // A notes action item's id inside meetings.noteActionItems, not a row.
   "meetings:createTaskFromNoteAction": ["itemId"],
+  // The registry's own request number for a name request, not a row.
+  "legalOperations:upsertNameSearchItem": ["requestId"],
   // A list's id in code (RecordListTable `tableId`), not a row.
   "listViews:list": ["tableId"],
   "listViews:create": ["tableId"],
