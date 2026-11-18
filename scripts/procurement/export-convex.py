@@ -366,7 +366,7 @@ def download(config, folder, output):
     review = manifest.get('review')
     if review and (review.get('formatVersion') != 1 or review.get('profile') != PROFILE['profile'] or review.get('encoding') != 'gzip'): raise ValueError('Unsupported compact review profile; update the operator tools')
     resource = review or manifest['catalog']
-    cap = 128 * 1024 * 1024 if review else 1024 * 1024 * 1024
+    cap = 512 * 1024 * 1024 if review else 1024 * 1024 * 1024  # compact review passed 128 MiB at ~6.9k opportunities (Nov 13, 2026)
     if not isinstance(resource.get('bytes'), int) or not 0 < resource['bytes'] <= cap: raise ValueError('Catalog exceeds transfer budget')
     if not 1 <= len(resource['parts']) <= 160: raise ValueError('Invalid catalog part count')
     def part(entry):
