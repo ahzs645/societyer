@@ -17287,6 +17287,188 @@
     ]
   },
   {
+    "key": "convex:meetingPersonalNotes:mine",
+    "surface": "convex",
+    "name": "meetingPersonalNotes:mine",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingPersonalNotes.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingPersonalNotes:remove",
+    "surface": "convex",
+    "name": "meetingPersonalNotes:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingPersonalNotes.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingPersonalNotes:save",
+    "surface": "convex",
+    "name": "meetingPersonalNotes:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingPersonalNotes.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingPersonalNotes:setShared",
+    "surface": "convex",
+    "name": "meetingPersonalNotes:setShared",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingPersonalNotes.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingPersonalNotes:shared",
+    "surface": "convex",
+    "name": "meetingPersonalNotes:shared",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingPersonalNotes.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingRecordings:attach",
+    "surface": "convex",
+    "name": "meetingRecordings:attach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingRecordings.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "storageId",
+        "table": "_storage",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingRecordings:generateUploadUrl",
+    "surface": "convex",
+    "name": "meetingRecordings:generateUploadUrl",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingRecordings.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingRecordings:list",
+    "surface": "convex",
+    "name": "meetingRecordings:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingRecordings.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingRecordings:remove",
+    "surface": "convex",
+    "name": "meetingRecordings:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingRecordings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetingRecordings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingRecordings:setPreference",
+    "surface": "convex",
+    "name": "meetingRecordings:setPreference",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetingRecordings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetingRecordings:settings",
+    "surface": "convex",
+    "name": "meetingRecordings:settings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetingRecordings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:meetings:applyTemplate",
     "surface": "convex",
     "name": "meetings:applyTemplate",
@@ -17399,6 +17581,54 @@
     ]
   },
   {
+    "key": "convex:meetings:createTaskFromNoteAction",
+    "surface": "convex",
+    "name": "meetings:createTaskFromNoteAction",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetings:discardNotesDraft",
+    "surface": "convex",
+    "name": "meetings:discardNotesDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetings:generateNotesDraft",
+    "surface": "convex",
+    "name": "meetings:generateNotesDraft",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:meetings:get",
     "surface": "convex",
     "name": "meetings:get",
@@ -17497,9 +17727,57 @@
     ]
   },
   {
+    "key": "convex:meetings:notesSkillContext",
+    "surface": "convex",
+    "name": "meetings:notesSkillContext",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:meetings:remove",
     "surface": "convex",
     "name": "meetings:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetings:saveNotesDraft",
+    "surface": "convex",
+    "name": "meetings:saveNotesDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetings:setNoteActionItems",
+    "surface": "convex",
+    "name": "meetings:setNoteActionItems",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/meetings.ts",
@@ -45330,6 +45608,188 @@
     ]
   },
   {
+    "key": "portable:meetingPersonalNotes:mine",
+    "surface": "portable",
+    "name": "meetingPersonalNotes:mine",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingPersonalNotes:remove",
+    "surface": "portable",
+    "name": "meetingPersonalNotes:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingPersonalNotes:save",
+    "surface": "portable",
+    "name": "meetingPersonalNotes:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingPersonalNotes:setShared",
+    "surface": "portable",
+    "name": "meetingPersonalNotes:setShared",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingPersonalNotes:shared",
+    "surface": "portable",
+    "name": "meetingPersonalNotes:shared",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingRecordings:attach",
+    "surface": "portable",
+    "name": "meetingRecordings:attach",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "storageId",
+        "table": "_storage",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingRecordings:generateUploadUrl",
+    "surface": "portable",
+    "name": "meetingRecordings:generateUploadUrl",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingRecordings:list",
+    "surface": "portable",
+    "name": "meetingRecordings:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingRecordings:remove",
+    "surface": "portable",
+    "name": "meetingRecordings:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetingRecordings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingRecordings:setPreference",
+    "surface": "portable",
+    "name": "meetingRecordings:setPreference",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetingRecordings:settings",
+    "surface": "portable",
+    "name": "meetingRecordings:settings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:meetings:applyTemplate",
     "surface": "portable",
     "name": "meetings:applyTemplate",
@@ -45442,6 +45902,38 @@
     ]
   },
   {
+    "key": "portable:meetings:createTaskFromNoteAction",
+    "surface": "portable",
+    "name": "meetings:createTaskFromNoteAction",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetings:discardNotesDraft",
+    "surface": "portable",
+    "name": "meetings:discardNotesDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:meetings:get",
     "surface": "portable",
     "name": "meetings:get",
@@ -45540,9 +46032,57 @@
     ]
   },
   {
+    "key": "portable:meetings:notesSkillContext",
+    "surface": "portable",
+    "name": "meetings:notesSkillContext",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:meetings:remove",
     "surface": "portable",
     "name": "meetings:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetings:saveNotesDraft",
+    "surface": "portable",
+    "name": "meetings:saveNotesDraft",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetings:setNoteActionItems",
+    "surface": "portable",
+    "name": "meetings:setNoteActionItems",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
