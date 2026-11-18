@@ -6,6 +6,8 @@
 .flag--ok { background: token('success-soft'); color: token('success'); }
 .flag--warn { background: token('warn-soft'); color: token('warn'); }
 .flag--err { background: token('danger-soft'); color: token('danger'); }
+/* A status note, not a pass or a gap ("isn't incorporated yet"). */
+.flag--info { background: token('bg-subtle'); color: token('text-secondary'); }
 .flag > svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
 
 /* Citation chips follow the flag text on the same line when there's room,
@@ -13,6 +15,39 @@
 .flag__body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; flex: 1; }
 .flag__text { min-width: 0; flex: 0 1 auto; }
 .flag__citations { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+
+/* A flag's buttons sit inside its box at the trailing edge, so the alert and
+ * its fix read as one unit. Tighter vertical padding keeps the row about as
+ * tall as a plain flag once the button is in it. */
+.flag--has-actions { align-items: center; flex-wrap: wrap; padding-block: 4px; padding-right: 4px; }
+/* The buttons drop under the text only when the text would get too narrow. */
+.flag--has-actions > .flag__body { flex: 1 1 14em; }
+.flag--has-actions > svg { margin-top: 0; }
+.flag__actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; }
+/* Buttons take the flag's colour (an outline in its text colour on a clear
+ * fill), so they read as part of the alert instead of a white or black chip
+ * laid on top of it. */
+.flag__actions .btn {
+  background: transparent;
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  color: inherit;
+  // Inter's line box has more room above the capitals than below the
+  // baseline, so a centred label sits ~0.6px low. The outline in the text's
+  // own colour makes that visible; lift the label half a pixel.
+  padding-bottom: 1px;
+  @media (hover: hover) {
+    &:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+  }
+  &:active { background: color-mix(in srgb, currentColor 16%, transparent); }
+  &:focus-visible { outline-color: currentColor; }
+}
+.flag__actions .btn:disabled:hover,
+.flag__actions .btn:disabled:active { background: transparent; }
+.flag__actions .info-popover__trigger {
+  color: inherit;
+  opacity: 0.8;
+  &:hover, &[aria-expanded="true"] { color: inherit; opacity: 1; background: color-mix(in srgb, currentColor 10%, transparent); }
+}
 
 .dashboard-compliance {
   display: grid;
@@ -134,46 +169,6 @@
 .dashboard-compliance__details {
   display: grid;
   gap: 6px;
-}
-
-.dashboard-remediation {
-  display: grid;
-  gap: 6px;
-}
-
-/* Desktop: an alert's action sits beside it rather than on a row of its own.
- * The rows share the card's action column, so the alerts stay one width. */
-@media (min-width: 761px) {
-  :has(> .dashboard-remediation) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    > * { grid-column: 1 / -1; }
-  }
-  .dashboard-remediation {
-    align-items: center;
-    grid-template-columns: subgrid;
-    > .flag { grid-column: 1; grid-row: 1 / span 3; }
-    > :not(.flag) { grid-column: 2; padding: 0; }
-  }
-  .dashboard-remediation:not(:has(> :nth-child(2))) > .flag { grid-column: 1 / -1; }
-}
-
-.dashboard-remediation__meta {
-  align-items: center;
-  color: token('text-tertiary');
-  display: flex;
-  flex-wrap: wrap;
-  font-size: token('fs-sm');
-  gap: 6px;
-  line-height: 1.35;
-  padding: 0 10px;
-}
-
-.dashboard-remediation__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 10px 6px;
 }
 
 .transparency-builder {

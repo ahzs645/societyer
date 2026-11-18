@@ -17,7 +17,8 @@ import { resolvePrivacyProfile, hasApplicablePrivacyLaw, PRIVACY_LAWS, type Priv
 import type { LegalEntityLike } from "./organizationDomain";
 import { audienceAppliesToOrganization, type RuleAudience } from "./entityRuleScope";
 
-export type ComplianceFlagLevel = "ok" | "warn" | "err";
+/** `info` is a neutral status note (e.g. "isn't incorporated yet"): not a pass and not a gap. */
+export type ComplianceFlagLevel = "ok" | "info" | "warn" | "err";
 
 export type DashboardRemediationAction = {
   id: string;

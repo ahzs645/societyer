@@ -18,6 +18,7 @@ import { todayDateOnly } from "../dateOnly";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
+import { isPreparingIncorporation } from "../organizationDomain";
 import { documentAccessPredicate } from "./documents";
 import {
   committeeCadenceExpectations,
@@ -248,12 +249,20 @@ export async function gapsPortable(
 
 /** Dashboard checks derived from continuity: AGM, annual report, minutes approval, consent. */
 export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  // Before the certificate of incorporation there is no entity to hold
+  // meetings or have directors, so the record checks wait (readAccess still
+  // runs first, so this answer needs the same access as the checks).
+  await readAccess(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies") as { formationStatus?: string; organizationStatus?: string } | null;
+  if (isPreparingIncorporation(society)) {
+    return { checks: [], today: todayISO(), preIncorporation: true as const };
+  }
   const { snapshot, stored } = await loadSnapshot(ctx, societyId);
   const today = snapshot.today;
   const year = Number(today.slice(0, 4));
   const expectations = effectiveExpectations(stored.map(toEffective), snapshot);
   const rows = evaluateContinuity(expectations, snapshot, { fromYear: year - 1, toYear: year });
-  const checks: { id: string; level: "ok" | "warn" | "err" | "info"; title: string; text: string; to: string; citation?: string }[] = [];
+  const checks: { id: string; level: "ok" | "warn" | "err" | "info"; title: string; text: string; to: string; actionLabel: string; citation?: string }[] = [];
   const periodFor = (kind: string, key: string) => rows.find((row) => row.expectation.kind === kind)?.periods.find((period) => period.periodKey === key);
   const agmRow = rows.find((row) => row.expectation.kind === "agm");
   // "AGM" for societies, "annual meeting" for corporations and custom
@@ -272,7 +281,8 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       text: held
         ? `${am === "AGM" ? "AGM" : "Annual meeting"} recorded on ${current!.evidence.find((item) => item.table === "meetings")?.date ?? "a date this year"}.`
         : current?.mark ? current.note ?? "Period marked." : `No ${am} recorded yet for ${year}${calendarYearRule ? "; it must be held by Dec 31" : ""}.${previous && previous.status === "record_missing" && previous.foundCount === 0 ? ` ${year - 1} also has no ${am} record.` : ""}`,
-      to: "/app/coverage?tab=continuity",
+      to: held ? "/app/coverage?tab=continuity" : "/app/meetings",
+      actionLabel: held ? "View coverage" : `Schedule the ${am === "AGM" ? "AGM" : "annual meeting"}`,
       citation: agmRow.expectation.citation,
     });
   }
@@ -286,6 +296,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       title: "Annual report filing evidence",
       text: !latest ? "No applicable annual reporting cycle is identified; review incorporation and filing history." : latest.status === "satisfied" ? `Filed for ${latest.label}${latest.note ? ` (${latest.note})` : ""}.` : latest.status === "upcoming" ? `Annual report for ${latest.label} due ${latest.dueDate}.` : `No filing evidence for the ${latest.label} cycle (due ${latest.dueDate}).`,
       to: "/app/filings",
+      actionLabel: latest?.status === "satisfied" ? "View filings" : "Record the filing",
       citation: filingRow.expectation.citation,
     });
   }
@@ -307,7 +318,8 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       level,
       title: "Minutes approved (last 12 months)",
       text: !recent.length ? "No meetings held in the last 12 months." : `${recent.length - missing.length - unapproved.length} of ${recent.length} held meeting(s) have approved minutes${unapproved.length ? `; ${unapproved.length} awaiting approval` : ""}${missing.length ? `; ${missing.length} with no minutes` : ""}.`,
-      to: "/app/minutes",
+      to: !recent.length ? "/app/meetings" : "/app/minutes",
+      actionLabel: !recent.length ? "Record a meeting" : missing.length ? "Add minutes" : unapproved.length ? "Approve minutes" : "View minutes",
     });
   }
   if (snapshot.readable.directors) {
@@ -319,6 +331,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       title: "Director consent on file",
       text: !active.length ? "No active directors in the register." : missing.length ? `${missing.length} of ${active.length} active director(s) have no consent evidence.` : `All ${active.length} active directors have consent evidence.`,
       to: "/app/directors",
+      actionLabel: !active.length ? "Add directors" : missing.length ? "Record consents" : "View directors",
       // Societies Act citation only for a BC society; corporations get the check without it.
       citation: appliesBcSocietyRules(snapshot.society) ? "Societies Act, SBC 2015, c. 18, s. 42(4)" : undefined,
     });
@@ -335,6 +348,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
         title: "Agreement renewals and reports",
         text: !found.length ? "No agreement is expiring without a renewal decision and no report is overdue." : [renewals ? `${renewals} agreement(s) expiring or expired without a renewal decision` : "", reports ? `${reports} report(s) overdue` : ""].filter(Boolean).join("; ") + ".",
         to: "/app/coverage?tab=record",
+        actionLabel: found.length ? "Review agreements" : "View agreements",
       });
     }
   }

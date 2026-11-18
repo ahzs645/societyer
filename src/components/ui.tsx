@@ -802,9 +802,13 @@ export function Flag({
   children,
   citationId,
   citationIds,
+  actions,
 }: {
-  level: "ok" | "warn" | "err";
+  /** `info` is a neutral status note: not a pass and not a gap. */
+  level: "ok" | "info" | "warn" | "err";
   children: ReactNode;
+  /** Buttons for the flag, drawn inside its tinted box at the trailing edge. */
+  actions?: ReactNode;
   /**
    * Regulatory citation id to surface next to the flag copy. Hovering the
    * badge reveals the source quote, full citation, and a link to the
@@ -815,14 +819,14 @@ export function Flag({
   /** Several citations (primary rendered first). */
   citationIds?: string[];
 }) {
-  const Icon = level === "ok" ? CheckCircle2 : level === "warn" ? Info : AlertTriangle;
+  const Icon = level === "ok" ? CheckCircle2 : level === "warn" || level === "info" ? Info : AlertTriangle;
   const ids = citationIds && citationIds.length > 0
     ? citationIds
     : citationId
       ? [citationId]
       : [];
   return (
-    <div className={`flag flag--${level}`}>
+    <div className={`flag flag--${level}${actions ? " flag--has-actions" : ""}`}>
       <Icon />
       <div className="flag__body">
         <div className="flag__text">{children}</div>
@@ -834,6 +838,7 @@ export function Flag({
           </div>
         )}
       </div>
+      {actions && <div className="flag__actions">{actions}</div>}
     </div>
   );
 }

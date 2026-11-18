@@ -105,7 +105,7 @@ export function Dashboard() {
   const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks } = data;
   const todayISO = organizationTodayISO(society);
   const canRead = (permission: string) => data.readAccess?.includes(permission) ?? can(permission);
-  const actionableComplianceFlags = complianceFlags.filter((flag: any) => flag.level !== "ok");
+  const actionableComplianceFlags = complianceFlags.filter((flag: any) => flag.level !== "ok" && flag.level !== "info");
   const completeComplianceAccess = ["directors:read", "members:read", "documents:read"].every(canRead);
   const currentRoleHolders = (roleHolders ?? []).filter((row: any) => (row.status ?? "current") === "current");
   const roleHolderCounts = {
@@ -268,70 +268,66 @@ export function Dashboard() {
           )}
 
           <div className={`dashboard-compliance__details${showComplianceDetails ? " is-open" : ""}`}>
-            {complianceFlags.map((f: any, i: number) => (
-              <div className="dashboard-remediation" key={f.ruleId ?? i}>
-                <Flag
-                  level={f.level}
-                  citationId={(f as any).citationId}
-                  citationIds={(f as any).citationIds}
-                >
-                  {pluralizeCounts(f.text)}
-                </Flag>
-                {f.remediationStatus && (
-                  <div className="dashboard-remediation__meta">
+            {complianceFlags.map((f: any, i: number) => {
+              const evidenceInfo = f.evidenceRequired?.length > 0 ? (
+                <InfoPopover label="Evidence that resolves this">
+                  <p><strong>Evidence that resolves this</strong></p>
+                  <ul style={{ margin: 0, paddingLeft: "1.1em" }}>
+                    {f.evidenceRequired.map((item: string) => <li key={item}>{item}</li>)}
+                  </ul>
+                </InfoPopover>
+              ) : null;
+              const actionDisabled = (action: any) => remediationActionDisabled(f, action);
+              // One primary action per row; the rest sit in a ⋯ menu.
+              const [primary, ...secondary] = visibleRemediationActions(f);
+              const actions = f.remediationStatus || primary || evidenceInfo ? (
+                <>
+                  {f.remediationStatus && (
                     <Badge tone={f.remediationStatus === "resolved" ? "success" : "info"}>
                       {f.remediationStatus === "open" ? "Workflow open" : f.remediationStatus}
                     </Badge>
-                  </div>
-                )}
-                {(f.remediationActions?.length > 0 || f.evidenceRequired?.length > 0) && (() => {
-                  const evidenceInfo = f.evidenceRequired?.length > 0 ? (
-                    <InfoPopover label="Evidence that resolves this">
-                      <p><strong>Evidence that resolves this</strong></p>
-                      <ul style={{ margin: 0, paddingLeft: "1.1em" }}>
-                        {f.evidenceRequired.map((item: string) => <li key={item}>{item}</li>)}
-                      </ul>
-                    </InfoPopover>
-                  ) : null;
-                  const visibleActions = visibleRemediationActions(f);
-                  const actionDisabled = (action: any) => remediationActionDisabled(f, action);
-                  const [primary, ...secondary] = visibleActions;
-                  if (!primary) return evidenceInfo ? <div className="dashboard-remediation__actions">{evidenceInfo}</div> : null;
-                  // One primary action per row; the rest sit in a ⋯ menu.
-                  return (
-                    <div className="dashboard-remediation__actions">
-                      {primary.intent === "navigate" && primary.to ? (
-                        <Link className="btn btn--sm" to={primary.to}>
-                          {primary.label}
-                        </Link>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          disabled={actionDisabled(primary)}
-                          onClick={() => runRemediationAction(f, primary)}
-                        >
-                          {busyRemediationAction === `${f.ruleId}:${primary.id}` ? "Working..." : primary.label}
-                        </button>
-                      )}
-                      {secondary.length > 0 && (
-                        <MoreActionsMenu
-                          label=""
-                          align="left"
-                          items={secondary.map((action: any) => ({
-                            id: action.id,
-                            label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label,
-                            disabled: actionDisabled(action),
-                            onSelect: () => runRemediationAction(f, action),
-                          }))}
-                        />
-                      )}
-                      {evidenceInfo}
-                    </div>
-                  );
-                })()}
-              </div>
-            ))}
+                  )}
+                  {primary && (primary.intent === "navigate" && primary.to ? (
+                    <Link className="btn btn--sm" to={primary.to}>
+                      {primary.label}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={actionDisabled(primary)}
+                      onClick={() => runRemediationAction(f, primary)}
+                    >
+                      {busyRemediationAction === `${f.ruleId}:${primary.id}` ? "Working..." : primary.label}
+                    </button>
+                  ))}
+                  {secondary.length > 0 && (
+                    <MoreActionsMenu
+                      label=""
+                      align="left"
+                      items={secondary.map((action: any) => ({
+                        id: action.id,
+                        label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label,
+                        disabled: actionDisabled(action),
+                        onSelect: () => runRemediationAction(f, action),
+                      }))}
+                    />
+                  )}
+                  {evidenceInfo}
+                </>
+              ) : null;
+              return (
+                <Flag
+                  key={f.ruleId ?? i}
+                  level={f.level}
+                  citationId={(f as any).citationId}
+                  citationIds={(f as any).citationIds}
+                  actions={actions}
+                >
+                  {pluralizeCounts(f.text)}
+                </Flag>
+              );
+            })}
           </div>
         </div>
       </div>

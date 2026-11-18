@@ -502,7 +502,7 @@ function roleHolderAsDirector(row: Record<string, any>) {
 function preparingComplianceNote(society: SocietyRecord): DashboardComplianceFlag {
   return {
     ruleId: "DASHBOARD-COMPLIANCE-PREPARING",
-    level: "ok",
+    level: "info",
     text: `${society.name || "This organization"} isn't incorporated yet. Legal checks start once the certificate of incorporation is recorded.`,
     evidenceRequired: [],
     remediationActions: [

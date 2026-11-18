@@ -122,7 +122,7 @@ export function buildAttentionItems({
 
   const flagRuleIds = new Set<string>();
   for (const flag of flags ?? []) {
-    if (flag.level === "ok") continue;
+    if (flag.level === "ok" || flag.level === "info") continue;
     flagRuleIds.add(flag.ruleId);
     const text = pluralizeCounts(flag.text);
     const { title, rest } = splitSentence(text);
