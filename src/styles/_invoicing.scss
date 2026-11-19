@@ -293,7 +293,7 @@
 }
 
 /* Line items */
-.line-editor { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: token(s-2); }
+.line-editor { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: token(s-2); container: line-editor / inline-size; }
 .line-editor__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -374,6 +374,15 @@
     > span { flex-basis: 100%; white-space: nowrap; }
     > .btn { flex: 1; justify-content: center; }
   }
+}
+
+/* A narrow host (the repair drawer) stacks lines like a phone does: the
+ * quantity, price, tax and amount columns need about 420px side by side. */
+@container line-editor (max-width: 440px) {
+  .line-editor__main, .line-editor__more { grid-template-columns: minmax(0, 1fr); }
+  .line-editor__nums { grid-template-columns: 64px minmax(0, 1fr); }
+  .line-editor__field--tax { grid-column: 1 / -1; }
+  .line-editor__amount { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; min-height: 0; padding: 0; }
 }
 
 /* Bill-to picker */

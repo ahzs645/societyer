@@ -39,6 +39,9 @@ jobs:
 
       - name: Build site
         run: npm run build:pages
+        env:
+          # The typecheck and bundle outgrew Node's default heap (same limit as the test workflows).
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
