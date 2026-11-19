@@ -67,6 +67,7 @@
     "test:workspace-access": "tsx scripts/check-workspace-access.ts && tsx scripts/check-module-access.ts",
     "test:incorporation-preparation": "tsx scripts/check-incorporation-preparation.ts",
     "test:federal-bc-incorporation": "node --import tsx scripts/check-federal-bc-incorporation.ts",
+    "test:registry-documents": "tsx scripts/check-registry-documents.ts",
     "test:clerk-auth": "tsx scripts/check-clerk-auth.ts",
     "test:workspace-mfa": "tsx scripts/check-workspace-mfa.ts",
     "test:workspace-sign-in-policy": "tsx scripts/check-workspace-sign-in-policy.ts",
