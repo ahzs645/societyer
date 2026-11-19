@@ -84,7 +84,8 @@ test("corporation MVP flow renders obligations, share register, registration, an
   await expect(page.getByRole("tab", { name: /^Registrations/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Canada federal - CBCA").first()).toBeVisible();
   await expect(page.getByText("Ontario - OBCA").first()).toBeVisible();
-  await expect(page.getByText("ON-BROWSER-001")).toBeVisible();
+  const registrations = page.getByRole("tabpanel", { name: "Registrations", exact: true });
+  await expect(registrations.getByText("ON-BROWSER-001", { exact: true })).toBeVisible();
 
   await navigate("/app/compliance-obligations");
   await expect(page.getByRole("heading", { name: "Compliance obligations" })).toBeVisible();
