@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "fs";
 import path from "path";
-import { instanceWorkspaceSymbol } from "./shared/instanceBranding";
+import { DEFAULT_FAVICON_TAG, instanceFaviconMarkup } from "./shared/instanceFavicon";
 
 const base = process.env.VITE_BASE_PATH ?? "/";
 const stableAssetNames = process.env.VITE_STABLE_ASSET_NAMES === "1";
@@ -92,16 +92,14 @@ function pluginBundles(): Plugin {
 }
 
 function instanceBrandIcons(): Plugin {
-  let symbols: ReturnType<typeof instanceWorkspaceSymbol> = null;
+  let favicon = DEFAULT_FAVICON_TAG;
   return {
     name: "societyer-instance-brand-icons",
     configResolved(config) {
-      symbols = instanceWorkspaceSymbol(config.env.VITE_WORKSPACE_SYMBOL_BRAND_ID, config.env);
+      favicon = instanceFaviconMarkup(config.env);
     },
     transformIndexHtml(html) {
-      if (!symbols) return html;
-      return html.replace('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
-        `<link rel="icon" type="image/svg+xml" href="${symbols.light}" />\n    <link rel="icon" type="image/svg+xml" href="${symbols.dark}" media="(prefers-color-scheme: dark)" />`);
+      return html.replace(DEFAULT_FAVICON_TAG, favicon);
     },
   };
 }

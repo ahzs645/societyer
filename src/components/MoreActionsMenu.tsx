@@ -16,7 +16,7 @@ export function MoreActionsMenu({
   align = "right",
 }: {
   items: MenuItem[];
-  /** Trigger label next to the ⋯ icon. */
+  /** Trigger label next to the ⋯ icon. Empty renders a square icon button. */
   label?: string;
   align?: "left" | "right";
 }) {
@@ -25,8 +25,14 @@ export function MoreActionsMenu({
     <Menu
       align={align}
       trigger={
-        <button className="btn-action" aria-label="More actions">
-          <MoreHorizontal size={14} /> {label}
+        <button
+          type="button"
+          className={label ? "btn-action" : "btn-action btn-action--icon"}
+          aria-label="More actions"
+          title={label ? undefined : "More actions"}
+        >
+          <MoreHorizontal size={14} />
+          {label}
         </button>
       }
       sections={[{ id: "more", items }]}

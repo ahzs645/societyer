@@ -27,7 +27,8 @@
 /* Buttons take the flag's colour (an outline in its text colour on a clear
  * fill), so they read as part of the alert instead of a white or black chip
  * laid on top of it. */
-.flag__actions .btn {
+.flag__actions .btn,
+.flag__actions .btn-action {
   background: transparent;
   border-color: color-mix(in srgb, currentColor 45%, transparent);
   color: inherit;
@@ -42,7 +43,9 @@
   &:focus-visible { outline-color: currentColor; }
 }
 .flag__actions .btn:disabled:hover,
-.flag__actions .btn:disabled:active { background: transparent; }
+.flag__actions .btn:disabled:active,
+.flag__actions .btn-action:disabled:hover,
+.flag__actions .btn-action:disabled:active { background: transparent; }
 .flag__actions .info-popover__trigger {
   color: inherit;
   opacity: 0.8;

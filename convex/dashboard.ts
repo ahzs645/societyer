@@ -1,6 +1,7 @@
 import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./_generated/server";
-import { v } from "convex/values";
+import { v, type Validator } from "convex/values";
+import type { ComplianceFlagLevel } from "../shared/dashboardComplianceRules";
 import { navCountsPortable, summaryPortable } from "../shared/functions/dashboard";
 import { toPortableQueryCtx } from "./lib/portable";
 
@@ -17,9 +18,17 @@ const validator = v as unknown as {
   union: (...values: unknown[]) => unknown;
 };
 
+// Keep the hosted validator exhaustive when the shared flag levels change.
+const complianceFlagLevels = {
+  ok: v.literal("ok"),
+  info: v.literal("info"),
+  warn: v.literal("warn"),
+  err: v.literal("err"),
+} satisfies { [Level in ComplianceFlagLevel]: Validator<Level> };
+
 const complianceFlagValidator = validator.object({
   ruleId: validator.string(),
-  level: validator.union(validator.literal("ok"), validator.literal("warn"), validator.literal("err")),
+  level: validator.union(...Object.values(complianceFlagLevels)),
   text: validator.string(),
   citationId: validator.optional(validator.string()),
   citationIds: validator.optional(validator.array(validator.string())),

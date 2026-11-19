@@ -1,4 +1,6 @@
 {
+  // Legacy Pages project retained for rollback and existing pages.dev sessions.
+  // Normal releases use `npm run deploy:shared` and the root wrangler.jsonc.
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "societyer-firstform",
   "pages_build_output_dir": "../../tmp/firstform-dist",

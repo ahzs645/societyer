@@ -1,20 +1,28 @@
 # First Form hosted workspace
 
-Updated November 8, 2026. First Form now shares Convex production with DDC North.
-It keeps its own workspace, website, members, roles, branding and storage policy.
+Updated November 19, 2026. First Form shares Convex production and the production
+frontend with DDC North. Its custom-domain attachment and DNS now target the
+shared Pages project; Cloudflare domain validation is active. It keeps its own
+workspace, website, members, roles, branding and storage policy.
 See the [deployed setup](shared-workspaces/production-setup.md) for the complete
 configuration and transfer evidence.
 
 | Resource | Current target |
 | --- | --- |
 | Primary app | [portal.1stform.ca](https://portal.1stform.ca) |
-| Pages alias | [societyer-firstform.pages.dev](https://societyer-firstform.pages.dev) |
-| Pages project | `societyer-firstform`, Direct Upload |
+| Legacy Pages alias | [societyer-firstform.pages.dev](https://societyer-firstform.pages.dev); retained prior release |
+| Production Pages project | `societyer-ddcnorth`, Direct Upload |
+| Production frontend release | `bf8ab44f-d9cb-464f-9197-4029737631af`, source `7dcad5ef` |
 | Shared production | [industrious-cricket-610](https://dashboard.convex.dev/t/ahmad-jalil/societyer-ddcnorth/industrious-cricket-610) |
 | Development / qualification | `reminiscent-marlin-243`; not moved |
 | Former production | `elated-bee-460`; retained with old client access locked |
 
 ## Release
+
+The frontend release commands now use the shared build and target Pages project
+`societyer-ddcnorth`. See the [shared frontend release guide](shared-workspaces/shared-frontend-release.md)
+and [November 19 release evidence](shared-workspaces/production-setup.md#november-19-2026-shared-frontend-release).
+The shared backend was deployed from the same released source before the frontend.
 
 Use locked dependencies and a clean, current checkout. Both production frontend
 profiles name the shared backend. Backend deployment affects DDC too, so use an
@@ -24,21 +32,27 @@ explicit shared selector and preserve both workspaces' policies:
 printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-shared-production.local
 npx convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable --dry-run
 npx convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable
-npm run deploy:firstform
+npm run deploy:shared
 ```
 
-`deploy:firstform` builds with `.env.firstform` into `tmp/firstform-dist` and
-publishes with `deploy/firstform/wrangler.jsonc`. A frontend-only change does not
-need a backend deploy. The old `.env.convex-firstform-production.local` selector
+`deploy:shared` builds with `.env.shared` into `dist` and publishes both custom
+domains through the root `wrangler.jsonc`.
+`deploy:firstform` and `deploy:ddcnorth` are aliases for that command. The old
+First Form project/configuration is retained only for compatibility and rollback.
+A frontend-only change does not need a backend deploy. The old
+`.env.convex-firstform-production.local` selector
 may still name `elated-bee-460`; do not use it for a shared release. Backend
 secrets belong in shared Convex, never in `VITE_*`.
 
 ## Domain and access
 
 `portal.1stform.ca` is a Pages custom domain and a proxied CNAME to
-`societyer-firstform.pages.dev`. It is an exact trusted `SITE_URL` origin and
+`societyer-ddcnorth.pages.dev`. It is an exact trusted `SITE_URL` origin and
 First Form's primary Active workspace mapping. The Pages alias remains trusted
-and mapped as a secondary origin. Both use the same build and backend. See
+and mapped as a secondary origin. It retains deployment
+`72aa7753-dd02-46ac-8b25-086cddbe0f16` from commit `03f5dcfa` for existing sessions
+and rollback, while the custom domain targets the shared frontend. Both use the
+same Convex backend. See
 [domain onboarding](shared-workspaces/operator-runbook.md#4-domains).
 
 Public sign-up is closed with `SOCIETYER_AUTH_MANUAL_PROVISIONING=1`. For an
@@ -77,7 +91,7 @@ First Form default deliberately, use `workspaceDefaults:installInvoiceTemplate`
 for that workspace only. Owners choose defaults under **Invoices → Templates**.
 Invoice numbers, customers, tax settings and payment instructions stay scoped.
 
-## Verified release and retained source
+## Historical November 8 migration and retained source
 
 [PR #77](https://github.com/ahzs645/societyer/pull/77) contains the shared frontend
 configuration. Both production builds and six PR checks passed. The real
