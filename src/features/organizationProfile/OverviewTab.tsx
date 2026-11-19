@@ -7,7 +7,7 @@ import { formatDate } from "../../lib/format";
 import { optionLabel } from "../../lib/orgHubOptions";
 import { setupViewStepLink } from "../../lib/organizationSetupLinks";
 import { isBcJurisdiction, isExtraProvincialRegistration, isSecretIdentifier, mask, monthDayLabel, primaryIdentifier, addressLine, findCurrentAddress } from "./detailRows";
-import { organizationProfileAttention, type AttentionItem } from "./attention";
+import { organizationProfileAttention, type AttentionAction, type AttentionItem } from "./attention";
 import { ComingUpCard, PeopleAndSharesCard, useOverviewRegisters } from "./OverviewRegisters";
 import { actShortName, profileStatus } from "./status";
 import type { OrganizationDetail, OrganizationRecord, ProfileForm, ProfileTab } from "./types";
@@ -37,12 +37,14 @@ type OverviewProps = {
   form: ProfileForm;
   detail: OrganizationDetail | undefined;
   canEdit: boolean;
-  /** Phase 2 opens the "Record incorporation" drawer here; for now it opens the Legal profile. */
+  /** Opens the "Record incorporation" drawer. */
   onRecordIncorporation: () => void;
   onOpenTab: (tab: ProfileTab, anchor?: string) => void;
+  /** Opens a profile drawer named by an attention item. */
+  onAction: (action: AttentionAction) => void;
 };
 
-export function OverviewTab({ society, form, detail, canEdit, onRecordIncorporation, onOpenTab }: OverviewProps) {
+export function OverviewTab({ society, form, detail, canEdit, onRecordIncorporation, onOpenTab, onAction }: OverviewProps) {
   const registers = useOverviewRegisters(society);
   const attention = useMemo(
     () => detail ? organizationProfileAttention(society, { ...detail, directors: registers.directors }) : undefined,
@@ -66,7 +68,7 @@ export function OverviewTab({ society, form, detail, canEdit, onRecordIncorporat
       <div className="org-profile-panel">
         <div className="org-profile-grid">
           <KeyFactsCard form={form} detail={detail} />
-          <AttentionCard items={attention} onOpenTab={onOpenTab} />
+          <AttentionCard items={attention} canEdit={canEdit} onOpenTab={onOpenTab} onAction={onAction} />
           <ComingUpCard society={society} detail={detail} deadlines={registers.deadlines} deadlinesReadable={registers.settingsReadable} />
           <PeopleAndSharesCard society={society} registers={registers} />
         </div>
@@ -106,7 +108,7 @@ function KeyFactsCard({ form, detail }: { form: ProfileForm; detail: Organizatio
   );
 }
 
-function AttentionCard({ items, onOpenTab }: { items: AttentionItem[] | undefined; onOpenTab: OverviewProps["onOpenTab"] }) {
+function AttentionCard({ items, canEdit, onOpenTab, onAction }: { items: AttentionItem[] | undefined; canEdit: boolean; onOpenTab: OverviewProps["onOpenTab"]; onAction: OverviewProps["onAction"] }) {
   return (
     <section className="card" aria-labelledby="org-needs-attention">
       <div className="card__head">
@@ -121,9 +123,7 @@ function AttentionCard({ items, onOpenTab }: { items: AttentionItem[] | undefine
               {items.map((item) => (
                 <li key={item.id}>
                   <span className="org-profile-todo__text">{item.text}</span>
-                  {"href" in item.target
-                    ? <Link className="btn btn--sm" to={item.target.href}>{item.action}</Link>
-                    : <button className="btn btn--sm" type="button" onClick={() => { if ("tab" in item.target) onOpenTab(item.target.tab, item.target.anchor); }}>{item.action}</button>}
+                  <AttentionButton item={item} canEdit={canEdit} onOpenTab={onOpenTab} onAction={onAction} />
                 </li>
               ))}
             </ul>
@@ -131,4 +131,11 @@ function AttentionCard({ items, onOpenTab }: { items: AttentionItem[] | undefine
       </div>
     </section>
   );
+}
+
+function AttentionButton({ item, canEdit, onOpenTab, onAction }: { item: AttentionItem; canEdit: boolean; onOpenTab: OverviewProps["onOpenTab"]; onAction: OverviewProps["onAction"] }) {
+  const target = item.target;
+  if ("href" in target) return <Link className="btn btn--sm" to={target.href}>{item.action}</Link>;
+  if ("action" in target) return canEdit ? <button className="btn btn--sm" type="button" onClick={() => onAction(target.action)}>{item.action}</button> : null;
+  return <button className="btn btn--sm" type="button" onClick={() => onOpenTab(target.tab, target.anchor)}>{item.action}</button>;
 }

@@ -1,9 +1,9 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
-import { validateEntitySetup } from "../../shared/entitySetup";
+import { organizationStatusForFormation, validateArticlesProvisions, validateEntitySetup } from "../../shared/entitySetup";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Upload } from "lucide-react";
+import { FileUp, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -12,7 +12,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Tabs } from "../components/primitives";
 import { ORGANIZATION_SETUP_PATH } from "../../shared/organizationSetup/types";
 import { ENTITY_KIND_ENTITY_TYPES, entityKindForType, type IncorporationAct } from "../../shared/incorporationActs";
-import { isPreparingIncorporation } from "../../shared/organizationDomain";
+import { isCorporation, isPreparingIncorporation } from "../../shared/organizationDomain";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
@@ -35,6 +35,9 @@ import { useDetailDrawer } from "../features/organizationProfile/useDetailDrawer
 import { profileUpsertArgs } from "../features/organizationProfile/saveProfile";
 import { useProfileTab } from "../features/organizationProfile/useProfileTab";
 import { unsavedProfileTabs } from "../features/organizationProfile/tabFields";
+import { ArticlesCard } from "../features/organizationProfile/ArticlesCard";
+import { RegistryPackageCard } from "../features/organizationProfile/RegistryPackageCard";
+import { useRegistryDrawers } from "../features/organizationProfile/useRegistryDrawers";
 import "../features/organizationProfile/organization-profile.scss";
 import { PROFILE_TABS, type OrganizationDetail, type OrganizationRecord, type ProfileDocument, type ProfileForm, type ProfileTab, type SetProfileField } from "../features/organizationProfile/types";
 
@@ -163,6 +166,7 @@ export function SocietyPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const registry = useRegistryDrawers({ society, form, setForm, detail, documents: evidenceDocuments, canEdit });
 
   const formReady = Boolean(form);
   // ?intent=address opens the new-address form over the addresses register.
@@ -197,12 +201,17 @@ export function SocietyPage() {
   // back immediately, before it is saved.
   const preparing = isPreparingIncorporation(form);
   const unsaved = unsavedProfileTabs(form, society);
+  // Articles and the registry package are a corporation's.
+  const corporation = isCorporation(form);
+  const articlesCard = corporation ? <ArticlesCard society={society} form={form} set={set} documents={evidenceDocuments ?? []} /> : undefined;
+  const registryPackage = corporation ? <RegistryPackageCard society={society} detail={detail} documents={evidenceDocuments} canEdit={canEdit} onImport={registry.openImport} /> : undefined;
 
   const save = async () => {
     if (!canEdit || saving) return;
     setSaving(true);
     try {
       validateEntitySetup(form);
+      validateArticlesProvisions(form);
       await upsert(profileUpsertArgs(form, society, detail?.addresses ?? []));
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
@@ -237,6 +246,7 @@ export function SocietyPage() {
           <>
             <span className="muted society-header__updated" style={{ fontSize: "var(--fs-sm)" }}>{updated}</span>
             <Link className="btn btn--sm" to="/app/business-records">Business records</Link>
+            {canEdit && corporation && <button className="btn btn--sm" type="button" onClick={registry.openImport}><FileUp size={14} /> Import from registry documents</button>}
             <button className="btn btn--accent" type="button" onClick={save} disabled={saving || !canEdit} title={updated}>
               {saving ? "Saving…" : "Save changes"}
             </button>
@@ -257,20 +267,23 @@ export function SocietyPage() {
             form={form}
             detail={detail}
             canEdit={canEdit}
-            // Phase 2 opens the "Record incorporation" drawer from here.
-            onRecordIncorporation={() => showTab("legal", "more-organization-details")}
+            onRecordIncorporation={() => registry.openRecordIncorporation()}
             onOpenTab={showTab}
+            onAction={(action) => { if (action === "registry-import") registry.openImport(); }}
           />
         ) : (
           <fieldset disabled={!canEdit} className="society-fieldset">
-            {tab === "legal" && <LegalProfileTab society={society} form={form} set={set} setGoverningAct={setGoverningAct} canEdit={canEdit} documents={evidenceDocuments ?? []} />}
+            {tab === "legal" && <LegalProfileTab society={society} form={form} set={set} setGoverningAct={setGoverningAct} canEdit={canEdit} documents={evidenceDocuments ?? []} articlesCard={articlesCard} onRecordIncorporation={() => registry.openRecordIncorporation()} />}
             {tab === "registrations" && (
               <RegistrationsTab
                 society={society}
                 form={form}
                 detail={detail}
+                documents={evidenceDocuments}
+                canEdit={canEdit}
                 onAdd={() => drawer.openRegistration()}
-                onEdit={drawer.openRegistration}
+                onAddHome={drawer.openHomeRegistration}
+                onEdit={(row) => drawer.openRegistration(row)}
                 onRemove={(row) => { void drawer.remove("registration", row); }}
               />
             )}
@@ -296,12 +309,13 @@ export function SocietyPage() {
                 onRemoveIdentifier={(row) => { void drawer.remove("identifier", row); }}
               />
             )}
-            {tab === "documents" && <DocumentsTab society={society} form={form} canEdit={canEdit} documents={evidenceDocuments} />}
+            {tab === "documents" && <DocumentsTab society={society} form={form} canEdit={canEdit} documents={evidenceDocuments} registryPackage={registryPackage} />}
           </fieldset>
         )}
       </div>
 
       {drawer.element}
+      {registry.element}
     </div>
   );
 }
@@ -377,16 +391,4 @@ function withGoverningAct(current: ProfileForm, value: string | undefined, act?:
     ...current, actFormedUnder: value, jurisdictionCode: act.jurisdictionCode, legalSubtype: act.legalSubtype,
     ...(keepsEntity ? {} : { entityType: ENTITY_KIND_ENTITY_TYPES[act.entityKinds[0]], isMemberFunded: false }),
   };
-}
-
-/**
- * Keep the workspace status in step with the legal formation status chosen on
- * the profile: preparing or filed means "Preparing incorporation"; a verified
- * certificate (or an existing entity) makes a preparing workspace active. Other statuses (archived,
- * removed) are left as they are.
- */
-function organizationStatusForFormation(formationStatus: string | undefined, current: string | undefined) {
-  if (formationStatus === "preparing" || formationStatus === "submitted") return "pre_incorporation";
-  if ((formationStatus === "incorporated" || formationStatus === "unverified_existing") && (!current || current === "pre_incorporation")) return "active";
-  return current;
 }

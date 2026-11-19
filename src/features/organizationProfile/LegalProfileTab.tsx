@@ -25,8 +25,10 @@ type LegalProfileProps = {
   setGoverningAct: (value: string | undefined, act?: IncorporationAct) => void;
   canEdit: boolean;
   documents: readonly ProfileDocument[];
-  /** Phase 2's Articles card, shown after "Identity & formation". */
+  /** The Articles card, shown after "Identity & formation". */
   articlesCard?: ReactNode;
+  /** Opens "Record incorporation"; offered while the organization is preparing or filed. */
+  onRecordIncorporation?: () => void;
 };
 
 /**
@@ -36,10 +38,10 @@ type LegalProfileProps = {
  * Locks follow the saved organization: before incorporation, or while a field
  * is still empty, editing has no legal consequence, so no unlock is asked for.
  */
-export function LegalProfileTab({ society, form, set, setGoverningAct, canEdit, documents, articlesCard }: LegalProfileProps) {
+export function LegalProfileTab({ society, form, set, setGoverningAct, canEdit, documents, articlesCard, onRecordIncorporation }: LegalProfileProps) {
   return (
     <div className="org-profile-panel" id="more-organization-details">
-      <IdentityCard society={society} form={form} set={set} setGoverningAct={setGoverningAct} documents={documents} />
+      <IdentityCard society={society} form={form} set={set} setGoverningAct={setGoverningAct} documents={documents} onRecordIncorporation={canEdit ? onRecordIncorporation : undefined} />
       {articlesCard}
       <div className="org-profile-grid">
         <BusinessYearCard society={society} form={form} set={set} />
@@ -60,7 +62,7 @@ export function LegalProfileTab({ society, form, set, setGoverningAct, canEdit, 
   );
 }
 
-function IdentityCard({ society, form, set, setGoverningAct, documents }: Omit<LegalProfileProps, "canEdit" | "articlesCard">) {
+function IdentityCard({ society, form, set, setGoverningAct, documents, onRecordIncorporation }: Omit<LegalProfileProps, "canEdit" | "articlesCard">) {
   const savedPreparing = isPreparingIncorporation(society);
   const lockWhenSet = (value: unknown) => !savedPreparing && hasText(value);
   const preparing = isPreparingIncorporation(form);
@@ -99,7 +101,12 @@ function IdentityCard({ society, form, set, setGoverningAct, documents }: Omit<L
   );
   return (
     <section className="card" aria-labelledby="org-identity">
-      <div className="card__head"><h2 className="card__title" id="org-identity">Identity &amp; formation</h2></div>
+      <div className="card__head">
+        <h2 className="card__title" id="org-identity">Identity &amp; formation</h2>
+        {savedPreparing && onRecordIncorporation && (
+          <button className="btn btn--sm btn--accent org-profile-card-link" type="button" onClick={onRecordIncorporation}>Record incorporation</button>
+        )}
+      </div>
       <div className="card__body">
         <LockedField
           label={preparing ? "Proposed name" : "Legal name"}
@@ -206,7 +213,7 @@ const LIFECYCLE_DATE_TYPES: { value: LifecycleDateKey; label: string }[] = [
 
 function RarelyNeeded({ form, set }: { form: ProfileForm; set: SetProfileField }) {
   // While preparing, the formation status is the one status; the workspace
-  // status follows it (see organizationStatusForFormation in the page).
+  // status follows it (organizationStatusForFormation in shared/entitySetup).
   const preparing = isPreparingIncorporation(form);
   return (
     <details id="rarely-needed" className="card org-profile-more">

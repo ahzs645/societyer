@@ -6,13 +6,18 @@ import { TooltipCopyable } from "../../components/TooltipCopyable";
 import { formatDate } from "../../lib/format";
 import { optionLabel } from "../../lib/orgHubOptions";
 import { FIELD_TYPES, RecordListTable, RecordTableEmpty, staticRecordTable } from "@/platform/record-engine";
+import { calendarDateKey } from "../../lib/calendarDates";
 import { jurisdictionModuleContract } from "../../../shared/jurisdictionWorkspace";
-import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, isPreparingIncorporation } from "../../../shared/organizationDomain";
+import { canonicalizeJurisdictionCode, isCorporation, isFederalCbca, isPreparingIncorporation } from "../../../shared/organizationDomain";
 import { DetailSection, RowActions } from "./DetailDrawers";
-import { isExtraProvincialRegistration, isHomeRegistration, monthDayLabel, SECRET_IDENTIFIER_KINDS } from "./detailRows";
+import { DocumentLink } from "./DocumentSelect";
+import { bcExtraProvincialReportWindow, cbcaAnnualReturnWindow } from "./deadlines";
+import { isBcJurisdiction, isExtraProvincialRegistration, isHomeRegistration, monthDayLabel, SECRET_IDENTIFIER_KINDS } from "./detailRows";
 import { detailOptions } from "./registerTables";
+import { attorneyLabel, portalAccessLabel, publicRecordLink, registrationTimeLabel, type CorporationKeyState } from "./registryFacts";
 import { profileStatus } from "./status";
-import type { DetailRecord, IdentifierRow, OrganizationDetail, OrganizationRecord, ProfileForm, RegistrationRow } from "./types";
+import { useCorporationKeyState } from "./useCorporationKeyState";
+import type { DetailRecord, IdentifierRow, OrganizationDetail, OrganizationRecord, PortalAccessEntry, ProfileDocument, ProfileForm, RegistrationRow } from "./types";
 
 const REGISTRATIONS_TABLE = staticRecordTable({
   id: "organization-details:registrations",
@@ -35,13 +40,17 @@ type RegistrationsProps = {
   society: OrganizationRecord;
   form: ProfileForm;
   detail: OrganizationDetail | undefined;
+  documents: readonly ProfileDocument[] | undefined;
+  canEdit: boolean;
   onAdd: () => void;
+  /** Opens the drawer for a new home registration row, prefilled from the profile. */
+  onAddHome: () => void;
   onEdit: (row: RegistrationRow) => void;
   onRemove: (row: RegistrationRow) => void;
 };
 
 /** Registrations: the home registration, one card per extra-provincial registration, and a table for the rest. */
-export function RegistrationsTab({ society, form, detail, onAdd, onEdit, onRemove }: RegistrationsProps) {
+export function RegistrationsTab({ society, form, detail, documents, canEdit, onAdd, onAddHome, onEdit, onRemove }: RegistrationsProps) {
   const registrations = detail?.registrations ?? [];
   const identifiers = detail?.identifiers ?? [];
   const home = registrations.find(isHomeRegistration);
@@ -53,9 +62,9 @@ export function RegistrationsTab({ society, form, detail, onAdd, onEdit, onRemov
         <button className="btn btn--sm" type="button" onClick={onAdd}><Plus size={12} /> Registration</button>
       </div>
       <div className="org-profile-grid">
-        <HomeRegistrationCard society={society} form={form} row={home} identifiers={identifiers} onEdit={onEdit} />
+        <HomeRegistrationCard society={society} form={form} row={home} identifiers={identifiers} documents={documents} canEdit={canEdit} onEdit={onEdit} onAddHome={onAddHome} />
         {extraProvincial.map((row) => (
-          <ExtraProvincialCard key={row._id} row={row} identifiers={identifiers} onEdit={() => onEdit(row)} onRemove={() => onRemove(row)} />
+          <ExtraProvincialCard key={row._id} row={row} identifiers={identifiers} documents={documents} onEdit={() => onEdit(row)} onRemove={() => onRemove(row)} />
         ))}
       </div>
       <OtherRegistrations rows={others} loading={detail === undefined} onAdd={onAdd} onEdit={onEdit} onRemove={onRemove} />
@@ -82,36 +91,108 @@ function KeyState({ stored, label }: { stored: boolean; label: string }) {
     : <span><span className="muted">Not stored</span> · <Link to="/app/access-custody">Store it in Access custody</Link></span>;
 }
 
-function HomeRegistrationCard({ society, form, row, identifiers, onEdit }: {
+/** The corporation key's custody state, never its value. */
+function CorporationKeyFact({ state }: { state: CorporationKeyState }) {
+  if (state === "loading") return <span className="muted">Checking…</span>;
+  if (state === "stored") return <span>Stored in Access custody · <Link to="/app/access-custody">Open</Link></span>;
+  if (state === "reference") {
+    return (
+      <span className="org-profile-fact-stack">
+        <span>Reference only · <Link to="/app/access-custody">Access custody</Link></span>
+        <span className="muted org-profile-fact-hint">Access custody records where the key is kept, not the key itself.</span>
+      </span>
+    );
+  }
+  return (
+    <span className="org-profile-fact-stack">
+      <span><span className="muted">Not stored</span> · <Link to="/app/access-custody">Access custody</Link></span>
+      <span className="muted org-profile-fact-hint">Store it in Access custody, or import the Corporation Information Sheet that holds it.</span>
+    </span>
+  );
+}
+
+/** "19 Nov 2026, 11:59 AM PT". */
+function registeredAt(date: string | undefined, row: RegistrationRow | undefined) {
+  if (!date) return undefined;
+  const time = registrationTimeLabel(row?.registrationTime, row?.registrationTimeZone);
+  return time ? `${formatDate(date)}, ${time}` : formatDate(date);
+}
+
+function PortalAccessFact({ entries }: { entries: readonly PortalAccessEntry[] | undefined }) {
+  if (!entries?.length) return <Missing>No one recorded</Missing>;
+  return (
+    <span className="org-profile-fact-stack">
+      {entries.map((entry, index) => (
+        <span key={`${entry.name}-${index}`}>
+          {portalAccessLabel(entry)}
+          {entry.updatedAtISO && <span className="muted"> · updated {formatDate(entry.updatedAtISO.slice(0, 10))}</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function ReminderFact({ value }: { value: boolean | undefined }) {
+  return value === undefined ? <Missing /> : <>{value ? "Subscribed" : "Not subscribed"}</>;
+}
+
+function PublicRecordFact({ link }: { link: { url: string; derived: boolean } | undefined }) {
+  if (!link) return <Missing />;
+  return (
+    <span>
+      <a href={link.url} target="_blank" rel="noreferrer noopener">Open the public record</a>
+      {link.derived && <span className="muted"> · derived from the corporation number</span>}
+    </span>
+  );
+}
+
+function windowText(window: { opens: string; due: string } | null) {
+  return window ? `${formatDate(window.opens)} – ${formatDate(window.due)}` : undefined;
+}
+
+function HomeRegistrationCard({ society, form, row, identifiers, documents, canEdit, onEdit, onAddHome }: {
   society: OrganizationRecord;
   form: ProfileForm;
   row: RegistrationRow | undefined;
   identifiers: readonly IdentifierRow[];
+  documents: readonly ProfileDocument[] | undefined;
+  canEdit: boolean;
   onEdit: (row: RegistrationRow) => void;
+  onAddHome: () => void;
 }) {
   const registry = jurisdictionModuleContract(form).registryPortalLabel;
   const status = profileStatus(society);
-  const home = homeJurisdictionCode(society);
-  const keyStored = Boolean(society.corporationKeyVaultItemId) || identifiers.some((identifier) =>
-    identifier.kind === "corporation_key" || (SECRET_IDENTIFIER_KINDS.has(identifier.kind ?? "") && sameJurisdiction(identifier.jurisdiction, home)));
-  const showKey = keyStored || (isCorporation(society) && !isPreparingIncorporation(society));
+  const keyState = useCorporationKeyState(society, identifiers);
+  const preparing = isPreparingIncorporation(society);
+  const showKey = keyState !== "missing" || (isCorporation(society) && !preparing);
   const anniversary = society.anniversaryDate || society.incorporationDate;
+  const federal = isFederalCbca(society);
+  const returnWindow = federal && !preparing ? cbcaAnnualReturnWindow(anniversary, calendarDateKey(new Date()), row?.lastAnnualReturnFiledDate) : null;
+  const publicRecord = publicRecordLink(row, { federalCbca: federal && !preparing, corporationNumber: society.incorporationNumber });
+  const certificateId = row?.certificateDocumentId ?? society.certificateEvidenceDocumentId;
   return (
     <section className="card" aria-labelledby="org-home-registration">
       <div className="card__head">
         <h2 className="card__title" id="org-home-registration">{registry}</h2>
         <Badge>Home</Badge>
         <Badge tone={status.tone}>{status.label}</Badge>
-        {row && <button className="btn btn--ghost btn--sm org-profile-card-link" type="button" onClick={() => onEdit(row)}>Edit</button>}
+        {row
+          ? <button className="btn btn--ghost btn--sm org-profile-card-link" type="button" onClick={() => onEdit(row)}>Edit</button>
+          : canEdit && !preparing && <button className="btn btn--ghost btn--sm org-profile-card-link" type="button" onClick={onAddHome}>Add details</button>}
       </div>
       <div className="card__body">
         <dl className="org-profile-kv">
           <Fact label="Corporation no.">{society.incorporationNumber ? <TooltipCopyable value={society.incorporationNumber} label="corporation number" /> : <Missing>Not assigned yet</Missing>}</Fact>
-          <Fact label="Incorporated">{society.incorporationDate ? formatDate(society.incorporationDate) : <Missing>Not incorporated yet</Missing>}</Fact>
+          <Fact label="Incorporated">{society.incorporationDate ? registeredAt(society.incorporationDate, row?.registrationDate === society.incorporationDate ? row : undefined) : <Missing>Not incorporated yet</Missing>}</Fact>
           <Fact label="Anniversary">{anniversary ? monthDayLabel(anniversary) : <Missing>Not set</Missing>}</Fact>
-          {showKey && <Fact label="Corporation key"><KeyState stored={keyStored} label="Corporation key" /></Fact>}
+          {federal && !preparing && <Fact label="Annual return window">{windowText(returnWindow) ?? <Missing>Set the anniversary</Missing>}</Fact>}
+          {showKey && <Fact label="Corporation key"><CorporationKeyFact state={keyState} /></Fact>}
           {row?.registrationNumber && row.registrationNumber !== society.incorporationNumber && <Fact label="Registration no."><TooltipCopyable value={row.registrationNumber} label="registration number" /></Fact>}
-          {row?.registrationDate && row.registrationDate !== society.incorporationDate && <Fact label="Registered">{formatDate(row.registrationDate)}</Fact>}
+          {row?.registrationDate && row.registrationDate !== society.incorporationDate && <Fact label="Registered">{registeredAt(row.registrationDate, row)}</Fact>}
+          {!preparing && <Fact label={federal ? "Filing Centre access" : "Registry access"}><PortalAccessFact entries={row?.portalAccess} /></Fact>}
+          {!preparing && <Fact label="Reminder emails"><ReminderFact value={row?.reminderEmailsSubscribed} /></Fact>}
+          {!preparing && <Fact label="Public record"><PublicRecordFact link={publicRecord} /></Fact>}
+          {certificateId && <Fact label="Certificate"><DocumentLink id={certificateId} documents={documents} fallback="Certificate" /></Fact>}
           {row?.lastAnnualReturnFiledDate && <Fact label="Last annual return">{formatDate(row.lastAnnualReturnFiledDate)}</Fact>}
           {row?.annualReturnDueDate && <Fact label="Annual return due">{formatDate(row.annualReturnDueDate)}</Fact>}
         </dl>
@@ -121,9 +202,10 @@ function HomeRegistrationCard({ society, form, row, identifiers, onEdit }: {
   );
 }
 
-function ExtraProvincialCard({ row, identifiers, onEdit, onRemove }: {
+function ExtraProvincialCard({ row, identifiers, documents, onEdit, onRemove }: {
   row: RegistrationRow;
   identifiers: readonly IdentifierRow[];
+  documents: readonly ProfileDocument[] | undefined;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -132,6 +214,10 @@ function ExtraProvincialCard({ row, identifiers, onEdit, onRemove }: {
   const keyStored = Boolean(row.companyKeyVaultItemId) || identifiers.some((identifier) =>
     identifier.kind !== "corporation_key" && SECRET_IDENTIFIER_KINDS.has(identifier.kind ?? "") && sameJurisdiction(identifier.jurisdiction, row.jurisdiction));
   const agent = [row.agentForServiceName, row.agentForServiceAddress].filter(Boolean).join(", ");
+  const attorney = attorneyLabel(row.attorneyStatus, row.attorneyNotRequiredReason);
+  const bc = isBcJurisdiction(row.jurisdiction);
+  const reportWindow = bc && row.status !== "inactive" ? bcExtraProvincialReportWindow(row.registrationDate, calendarDateKey(new Date()), row.lastAnnualReturnFiledDate) : null;
+  const homeName = row.homeJurisdiction ? optionLabel("entityJurisdictions", row.homeJurisdiction) : "";
   return (
     <section className="card" aria-labelledby={headingId}>
       <div className="card__head">
@@ -146,13 +232,21 @@ function ExtraProvincialCard({ row, identifiers, onEdit, onRemove }: {
       <div className="card__body">
         <dl className="org-profile-kv">
           <Fact label="Registration no.">{row.registrationNumber ? <TooltipCopyable value={row.registrationNumber} label={`${place} registration number`} /> : <Missing />}</Fact>
-          <Fact label="Registered">{row.registrationDate ? formatDate(row.registrationDate) : <Missing />}</Fact>
-          <Fact label="Home jurisdiction">{row.homeJurisdiction ? optionLabel("entityJurisdictions", row.homeJurisdiction) : <Missing />}</Fact>
+          <Fact label="Registered">{registeredAt(row.registrationDate, row) ?? <Missing />}</Fact>
+          <Fact label="Home jurisdiction">{homeName || <Missing />}</Fact>
+          <Fact label="Name at home">{row.nameInHomeJurisdiction ? <span className="org-profile-kv__wrap">{row.nameInHomeJurisdiction}{homeName ? <span className="muted"> ({homeName})</span> : null}</span> : <Missing />}</Fact>
+          <Fact label="Home corp. no.">{row.homeCorporationNumber ? <TooltipCopyable value={row.homeCorporationNumber} label="home corporation number" /> : <Missing />}</Fact>
           {row.assumedName && <Fact label="Assumed name">{row.assumedName}</Fact>}
-          <Fact label="Agent or attorney">{agent ? <span className="org-profile-kv__wrap">{agent}</span> : <Missing>None recorded</Missing>}</Fact>
+          <Fact label="Attorney">{attorney ?? <Missing>No decision recorded</Missing>}</Fact>
+          {(agent || row.attorneyStatus === "appointed") && <Fact label="Agent or attorney">{agent ? <span className="org-profile-kv__wrap">{agent}</span> : <Missing>Name not recorded</Missing>}</Fact>}
           <Fact label="Principal office">{row.principalOfficeAddress ? <span className="org-profile-kv__wrap">{row.principalOfficeAddress}</span> : <Missing />}</Fact>
-          <Fact label="Annual return due">{row.annualReturnDueDate ? formatDate(row.annualReturnDueDate) : <Missing>Not set</Missing>}</Fact>
+          {bc && <Fact label="Next annual report">{windowText(reportWindow) ?? <Missing>Set the registration date</Missing>}</Fact>}
+          {(!bc || row.annualReturnDueDate) && <Fact label="Annual return due">{row.annualReturnDueDate ? formatDate(row.annualReturnDueDate) : <Missing>Not set</Missing>}</Fact>}
           <Fact label="Last filed">{row.lastAnnualReturnFiledDate ? formatDate(row.lastAnnualReturnFiledDate) : <Missing>Not yet</Missing>}</Fact>
+          <Fact label="Registry access"><PortalAccessFact entries={row.portalAccess} /></Fact>
+          <Fact label="Reminder emails"><ReminderFact value={row.reminderEmailsSubscribed} /></Fact>
+          <Fact label="Public record"><PublicRecordFact link={publicRecordLink(row)} /></Fact>
+          <Fact label="Certificate">{row.certificateDocumentId ? <DocumentLink id={row.certificateDocumentId} documents={documents} fallback="Certificate" /> : <Missing />}</Fact>
           {keyStored && <Fact label="Company key"><KeyState stored label="Company key" /></Fact>}
         </dl>
       </div>

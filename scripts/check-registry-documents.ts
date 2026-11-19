@@ -6,10 +6,14 @@
  * bodies) and use invented organizations, people and numbers only.
  */
 import assert from "node:assert/strict";
+import { extractBytes } from "../shared/intake/extract";
+import { readRegistryFile } from "../src/features/organizationProfile/registryImport/extractCore";
+import { buildImportFiles, importDocumentRows, restrictedWarning } from "../src/features/organizationProfile/registryImport/importModel";
 import {
   buildRegistryImportProposal,
   classifyRegistryDocument,
   defaultRegistryImportSelection,
+  emlAttachments,
   parseRegistryDocument,
   proposalToApplyArgs,
   withRegistryDocumentIds,
@@ -506,5 +510,150 @@ const otherKey = INFORMATION_SHEET.replace(KEY, "62738495");
 const twoKeys = buildRegistryImportProposal([parseRegistryDocument(INFORMATION_SHEET), parseRegistryDocument(otherKey)]);
 check(twoKeys.secrets.length === 2 && twoKeys.secrets.every((secret) => !secret.selectedByDefault) && twoKeys.conflicts.some((conflict) => conflict.includes("corporation keys")), "conflicting corporation keys");
 check(buildRegistryImportProposal([parseRegistryDocument(INFORMATION_SHEET)], { hasCorporationKey: true }).secrets[0].selectedByDefault === false, "existing vault key is not replaced by default");
+
+
+// --- Email attachments (.eml) ------------------------------------------------------------
+// Synthetic MIME: a multipart/alternative body, a base64 PDF, a quoted-printable PDF with an
+// RFC 2231 file name, an attached message carrying its own PDF, and an image that is skipped.
+// The "PDFs" are stand-ins (a %PDF- header and the fixture text); the injected extractor reads
+// them back, so pdf.js isn't needed here.
+const FAKE_PDF_HEADER = "%PDF-1.4 stand-in\n";
+const fakePdf = (text: string) => new TextEncoder().encode(`${FAKE_PDF_HEADER}${text}`);
+const base64Lines = (bytes: Uint8Array) => (Buffer.from(bytes).toString("base64").match(/.{1,76}/g) ?? []).join("\r\n");
+const quotedPrintable = (bytes: Uint8Array) => {
+  let line = "";
+  const lines: string[] = [];
+  for (const byte of bytes) {
+    const piece = byte === 10 ? "\n" : (byte >= 33 && byte <= 126 && byte !== 61) || byte === 32 ? String.fromCharCode(byte) : `=${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+    if (piece === "\n") {
+      lines.push(`${line}=0A=`);
+      line = "";
+      continue;
+    }
+    if (line.length + piece.length > 72) {
+      lines.push(`${line}=`);
+      line = "";
+    }
+    line += piece;
+  }
+  lines.push(line);
+  return lines.join("\r\n");
+};
+const PLAIN_BODY = "Corporations Canada\r\n\r\nNorthwind Example Inc. has just incorporated with Corporations Canada.\r\n\r\nWe have included the following documents:\r\n\r\n* Certificate of Incorporation\r\n* Form 1 - Articles of Incorporation\r\n* Form 2 - Initial Registered Office Address and First Board of Directors\r\n* Corporate Information Sheet\r\n\r\nYour corporate information is now available to the public on Search for a Federal Corporation (http://ised-isde.canada.ca/cc/lgcy/fdrlCrpDtls.html?corpId=3D12345678&locale=3Den_CA).\r\n\r\nYou have subscribed to receive annual return reminder emails.";
+const ATTACHED_MESSAGE = [
+  "From: Jordan Example <jordan@northwind.example>",
+  "Subject: Fwd: Certificate",
+  "MIME-Version: 1.0",
+  'Content-Type: multipart/mixed; boundary="inner-b"',
+  "",
+  "--inner-b",
+  "Content-Type: text/plain",
+  "",
+  "See attached.",
+  "--inner-b",
+  'Content-Type: application/pdf; name="certificate.pdf"',
+  'Content-Disposition: attachment; filename="certificate.pdf"',
+  "Content-Transfer-Encoding: base64",
+  "",
+  base64Lines(fakePdf(CERTIFICATE_PACKAGE)),
+  "--inner-b--",
+  "",
+].join("\r\n");
+const EML_WITH_ATTACHMENTS = [
+  "From: <ic.corporationscanada.ic@ised-isde.gc.ca>",
+  "To: <records@northwind.example>",
+  "Subject: Incorporation/Constitution",
+  "Date: Fri, 14 Mar 2025 13:45:00 -0400",
+  "MIME-Version: 1.0",
+  'Content-Type: multipart/mixed; boundary="outer-b"',
+  "",
+  "This is a multi-part message in MIME format.",
+  "--outer-b",
+  'Content-Type: multipart/alternative; boundary="alt-b"',
+  "",
+  "--alt-b",
+  'Content-Type: text/plain; charset="UTF-8"',
+  "Content-Transfer-Encoding: quoted-printable",
+  "",
+  PLAIN_BODY,
+  "--alt-b",
+  'Content-Type: text/html; charset="UTF-8"',
+  "",
+  "<html><body><p>Northwind Example Inc. has just incorporated.</p></body></html>",
+  "--alt-b--",
+  "",
+  "--outer-b",
+  'Content-Type: application/pdf; name="=?utf-8?Q?Corporate_Information_Sheet.pdf?="',
+  'Content-Disposition: attachment; filename="Corporate Information Sheet.pdf"',
+  "Content-Transfer-Encoding: base64",
+  "",
+  base64Lines(fakePdf(INFORMATION_SHEET)),
+  "--outer-b",
+  "Content-Type: application/octet-stream",
+  "Content-Disposition: attachment;",
+  " filename*0*=UTF-8''Initial%20ISC%20%E2%80%93%20;",
+  " filename*1=filing.pdf",
+  "Content-Transfer-Encoding: quoted-printable",
+  "",
+  quotedPrintable(fakePdf(ISC)),
+  "--outer-b",
+  "Content-Type: message/rfc822",
+  "Content-Disposition: attachment",
+  "",
+  ATTACHED_MESSAGE,
+  "--outer-b",
+  'Content-Type: image/png; name="logo.png"',
+  "Content-Disposition: inline",
+  "Content-Transfer-Encoding: base64",
+  "",
+  "iVBORw0KGgo=",
+  "--outer-b--",
+  "",
+].join("\r\n");
+
+const emlBytes = new TextEncoder().encode(EML_WITH_ATTACHMENTS);
+const attachments = emlAttachments(emlBytes);
+const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+check(attachments.map((attachment) => attachment.name).join("|") === "Corporate Information Sheet.pdf|Initial ISC – filing.pdf|Fwd Certificate.eml", `attachment names: ${attachments.map((attachment) => attachment.name).join("|")}`);
+check(attachments.map((attachment) => attachment.contentType).join(",") === "application/pdf,application/pdf,message/rfc822", "PDF and message attachments only; the image is skipped");
+check(decode(attachments[0].bytes) === `${FAKE_PDF_HEADER}${INFORMATION_SHEET}`, "base64 attachment decoded byte for byte");
+check(decode(attachments[1].bytes) === `${FAKE_PDF_HEADER}${ISC}`, "quoted-printable attachment decoded byte for byte");
+const nested = emlAttachments(attachments[2].bytes);
+check(nested.length === 1 && nested[0].name === "certificate.pdf" && decode(nested[0].bytes) === `${FAKE_PDF_HEADER}${CERTIFICATE_PACKAGE}`, "attached message keeps its own PDF");
+check(emlAttachments(INCORPORATION_EMAIL).length === 0, "an email without attachments yields none");
+check(emlAttachments("Subject: hi\r\n\r\nNo MIME here.").length === 0, "plain message yields none");
+
+const fakeExtract = async (name: string, bytes: Uint8Array) => {
+  if (/\.pdf$/i.test(name)) {
+    const text = decode(bytes);
+    assert.ok(text.startsWith(FAKE_PDF_HEADER), `${name} is a stand-in PDF`);
+    return { text: text.slice(FAKE_PDF_HEADER.length), warnings: [] };
+  }
+  const extract = await extractBytes(name, bytes);
+  return { text: extract.text, warnings: extract.warnings };
+};
+const readTexts = await readRegistryFile({ id: "f0", name: "Incorporation_Constitution.eml", bytes: emlBytes }, fakeExtract);
+check(readTexts.map((text) => `${text.id}<${text.parentId ?? ""}`).join(" ") === "f0< f0.1<f0 f0.2<f0 f0.3<f0 f0.3.1<f0.3", `email then its attachments, nested in order: ${readTexts.map((text) => text.id).join(" ")}`);
+check(readTexts.every((text) => text.sourceId === "f0"), "every part traces back to the chosen file");
+check(!readTexts[0].attachment && readTexts.slice(1).every((text) => text.attachment?.bytes.byteLength), "attachments carry their bytes for upload; the email itself doesn't");
+const readKinds = readTexts.map((text) => parseRegistryDocument(text.text, text.name).kind);
+check(readKinds.join(",") === "federal_incorporation_email,federal_corporation_information_sheet,federal_initial_isc,unknown,federal_certificate_of_incorporation", `attachment kinds: ${readKinds.join(",")}`);
+
+// The review model: attachments become documents; restricted ones start un-uploaded with the warning.
+const chosenEmail = new File([emlBytes], "Incorporation_Constitution.eml", { type: "message/rfc822" });
+const importFiles = buildImportFiles([{ id: "f0", file: chosenEmail }], readTexts);
+check(importFiles.length === 5 && importFiles[1].file.name === "Corporate Information Sheet.pdf" && importFiles[1].file.type === "application/pdf", "attachments rebuilt as files");
+check(!importFiles[0].parsed.warnings.some((warning) => /attachments are not read/i.test(warning)), "no 'attachments not read' warning once they are read");
+const importProposal = buildRegistryImportProposal(importFiles.map((file) => file.parsed));
+const rows = importDocumentRows(importProposal, importFiles, []);
+const rowFor = (name: string) => rows.find((row) => row.file.name === name)!;
+check(rowFor("Incorporation_Constitution.eml").reasons.join("|") === "the corporation key|personal information" && !rowFor("Incorporation_Constitution.eml").defaultUpload, "the email carrying the sheet and ISC is restricted and not uploaded by default");
+check(rowFor("Corporate Information Sheet.pdf").reasons.join("|") === "the corporation key" && !rowFor("Corporate Information Sheet.pdf").defaultUpload, "information sheet holds the key");
+check(rowFor("Initial ISC – filing.pdf").reasons.join("|") === "personal information" && !rowFor("Initial ISC – filing.pdf").defaultUpload, "ISC holds personal information");
+check(rowFor("certificate.pdf").reasons.length === 0 && rowFor("certificate.pdf").defaultUpload, "the certificate uploads by default");
+check(restrictedWarning(["the corporation key"]) === "Every director can open uploaded documents. This one contains the corporation key.", "restricted warning copy");
+check(importProposal.secrets.length === 1 && !JSON.stringify(importProposal).includes(KEY) && !JSON.stringify(rows.map((row) => row.entry)).includes(KEY), "the key read from an attachment stays out of the proposal and rows");
+const existingCopy = importDocumentRows(importProposal, importFiles, [{ _id: "doc_existing", title: rowFor("certificate.pdf").entry.suggestedTitle, category: "CertificateOfIncorporation" }]);
+check(existingCopy.find((row) => row.file.name === "certificate.pdf")?.existing?._id === "doc_existing" && !existingCopy.find((row) => row.file.name === "certificate.pdf")?.defaultUpload, "a copy already in Documents is linked, not uploaded again");
 
 console.log(`registry documents: ${checks} checks passed`);

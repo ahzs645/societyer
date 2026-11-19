@@ -1,12 +1,16 @@
 import { governingDocumentSlots } from "../../../shared/governingDocuments";
 import { legalGovernanceProfile, requiredResidentCanadianDirectors } from "../../../shared/legalGovernanceProfiles";
-import { isCorporation, isPreparingIncorporation, type LegalEntityLike } from "../../../shared/organizationDomain";
+import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, isPreparingIncorporation, type LegalEntityLike } from "../../../shared/organizationDomain";
 import { optionLabel } from "../../lib/orgHubOptions";
 import { isExtraProvincialRegistration } from "./detailRows";
+import { listText, registrationGaps } from "./registryFacts";
 import type { AddressRow, IdentifierRow, ProfileTab, RegistrationRow } from "./types";
 
-/** Where an attention item sends people: a profile tab (and section), or another page. */
-export type AttentionTarget = { tab: ProfileTab; anchor?: string } | { href: string };
+/** Profile drawers an attention item can open. */
+export type AttentionAction = "registry-import";
+
+/** Where an attention item sends people: a profile tab (and section), another page, or a drawer. */
+export type AttentionTarget = { tab: ProfileTab; anchor?: string } | { href: string } | { action: AttentionAction };
 
 export type AttentionItem = {
   id: string;
@@ -26,6 +30,12 @@ export type AttentionOrganization = LegalEntityLike & {
   distributing?: boolean;
   legalSubtype?: string;
   isMemberFunded?: boolean;
+  articlesMinDirectors?: number;
+  articlesMaxDirectors?: number;
+  articlesShareTransferRestrictions?: string;
+  articlesBusinessRestrictions?: string;
+  articlesOtherProvisions?: string;
+  articlesSourceDocumentId?: string;
 };
 
 export type AttentionDirector = { status?: string; residentCanadianStatus?: string };
@@ -65,9 +75,28 @@ export function organizationProfileAttention(org: AttentionOrganization, detail:
     items.push({ id: "corporation-key-missing", text: "Store the corporation key in Access custody.", action: "Open Access custody", target: { href: "/app/access-custody" } });
   }
 
+  // A federal corporation's Corporations Canada (and BC Registries) documents fill the number, articles, registrations and addresses.
+  const readableRegistry = canonicalizeJurisdictionCode(homeJurisdictionCode(org)) === "CA-FED-CBCA";
+  const imported = Boolean(org.articlesSourceDocumentId) || detail.registrations.some((row) => row.certificateDocumentId || row.sourceDocumentIds?.length);
+  if (isCorporation(org) && readableRegistry && org.formationStatus !== "preparing" && !imported) {
+    items.push({ id: "registry-import", text: org.formationStatus === "submitted"
+      ? "Got the certificate? Import the registry documents to record the incorporation and fill the profile."
+      : "Import the registry documents to fill the articles, registrations and addresses from the filed copies.", action: "Import documents", target: { action: "registry-import" } });
+  }
+
+  if (isCorporation(org) && !preparing && !articlesRecorded(org)) {
+    items.push({ id: "articles-missing", text: "The articles are not recorded: director limits, share transfer and business restrictions.", action: "Record the articles", target: { tab: "legal", anchor: "articles" } });
+  }
+
   for (const row of detail.registrations) {
-    if (!isExtraProvincialRegistration(row) || row.status === "inactive" || row.registrationNumber?.trim()) continue;
-    items.push({ id: `registration-number-missing:${row._id}`, text: `The ${optionLabel("entityJurisdictions", row.jurisdiction)} extra-provincial registration has no number.`, action: "Add the number", target: { tab: "registrations" } });
+    if (!isExtraProvincialRegistration(row) || row.status === "inactive") continue;
+    const place = optionLabel("entityJurisdictions", row.jurisdiction);
+    if (!row.registrationNumber?.trim()) {
+      items.push({ id: `registration-number-missing:${row._id}`, text: `The ${place} extra-provincial registration has no number.`, action: "Add the number", target: { tab: "registrations" } });
+      continue;
+    }
+    const gaps = registrationGaps(row);
+    if (gaps.length) items.push({ id: `registration-details-missing:${row._id}`, text: `The ${place} extra-provincial registration has no ${listText(gaps)} recorded.`, action: "Complete it", target: { tab: "registrations" } });
   }
 
   for (const slot of governingDocumentSlots(org)) {
@@ -86,4 +115,10 @@ export function organizationProfileAttention(org: AttentionOrganization, detail:
   }
 
   return items;
+}
+
+/** Any of the filed articles' provisions, or their source document, is on the profile. */
+export function articlesRecorded(org: AttentionOrganization) {
+  return org.articlesMinDirectors !== undefined || org.articlesMaxDirectors !== undefined || Boolean(org.articlesSourceDocumentId)
+    || [org.articlesShareTransferRestrictions, org.articlesBusinessRestrictions, org.articlesOtherProvisions].some((value) => Boolean(value?.trim()));
 }

@@ -19,7 +19,7 @@ import type { OrganizationDetail, OrganizationRecord } from "./types";
  */
 type DirectorRow = { status?: string; residentCanadianStatus?: string };
 type SignificantIndividualRow = { status?: string };
-type RightsClassRow = { _id: string; className?: string; classType?: string; status?: string; maxAuthorized?: number };
+export type RightsClassRow = { _id: string; className?: string; classType?: string; status?: string; maxAuthorized?: number };
 type DerivedDeadlineRow = { key: string; title: string; dueDate: string; cycleYear?: number; status?: string };
 
 export type OverviewRegisters = {
@@ -125,9 +125,14 @@ export function ComingUpCard({ society, detail, deadlines, deadlinesReadable }: 
   );
 }
 
-function shareClassLabel(row: RightsClassRow) {
+export function shareClassLabel(row: RightsClassRow) {
   const name = row.className?.trim() || "Unnamed class";
   return row.maxAuthorized === undefined ? `${name}, unlimited` : `${name}, up to ${row.maxAuthorized.toLocaleString()}`;
+}
+
+/** "min 1, max 10" from the articles; either limit alone when only one is recorded. */
+export function directorLimitsText(min: number | undefined, max: number | undefined) {
+  return [min !== undefined ? `min ${min}` : "", max !== undefined ? `max ${max}` : ""].filter(Boolean).join(", ");
 }
 
 export function PeopleAndSharesCard({ society, registers }: { society: OrganizationRecord; registers: OverviewRegisters }) {
@@ -137,6 +142,7 @@ export function PeopleAndSharesCard({ society, registers }: { society: Organizat
   const residents = active?.filter((director) => director.residentCanadianStatus === "yes").length ?? 0;
   const individuals = registers.significantIndividuals?.filter((row) => row.status === "current");
   const classes = registers.shareClasses?.filter((row) => row.status !== "inactive");
+  const limits = directorLimitsText(society.articlesMinDirectors, society.articlesMaxDirectors);
   return (
     <section className="card" aria-labelledby="org-people-shares">
       <div className="card__head"><h2 className="card__title" id="org-people-shares">People and shares</h2></div>
@@ -146,7 +152,7 @@ export function PeopleAndSharesCard({ society, registers }: { society: Organizat
             <dt><Link to="/app/directors">Directors</Link></dt>
             <dd>{!registers.directorsReadable ? <span className="muted">No access</span>
               : active === undefined ? <span className="muted">Loading…</span>
-              : `${active.length}${canadianQuota && active.length ? ` · ${residents} resident Canadian${residents === 1 ? "" : "s"} (${requiredResidentCanadianDirectors(active.length)} needed)` : ""}`}</dd>
+              : `${active.length}${limits ? ` (${limits})` : ""}${canadianQuota && active.length ? ` · ${residents} resident Canadian${residents === 1 ? "" : "s"} (${requiredResidentCanadianDirectors(active.length)} needed)` : ""}`}</dd>
           </div>
           {corporation && (
             <div>

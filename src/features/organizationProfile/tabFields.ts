@@ -14,6 +14,9 @@ export const PROFILE_TAB_FIELDS: Readonly<Record<ProfileTab, readonly string[]>>
     "name", "entityType", "jurisdictionCode", "actFormedUnder", "legalSubtype", "isMemberFunded",
     "formationStatus", "incorporationNumber", "incorporationDate",
     "certificateEvidenceDocumentId", "certificateReference", "certificateDate",
+    // Articles
+    "articlesMinDirectors", "articlesMaxDirectors", "articlesShareTransferRestrictions",
+    "articlesBusinessRestrictions", "articlesOtherProvisions", "articlesSourceDocumentId",
     // Business & year
     "purposes", "naicsSector", "naicsCode", "fiscalYearEnd",
     ...ENTITY_DATE_FIELDS.map((field) => field.value), "annualMeetingYear", "agmExtensionEvidence",
@@ -51,6 +54,7 @@ export const PROFILE_ANCHOR_TABS: Readonly<Record<string, ProfileTab>> = {
   "registered-office": "offices",
   "tax-identifiers": "tax",
   "more-organization-details": "legal",
+  articles: "legal",
   "business-year": "legal",
   "rarely-needed": "legal",
   "governing-documents": "documents",

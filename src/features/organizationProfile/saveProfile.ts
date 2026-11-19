@@ -50,6 +50,13 @@ export function profileUpsertArgs(form: ProfileForm, society: OrganizationRecord
     memberDataGapDocumented: !!form.memberDataGapDocumented,
     memberDataAccessReviewedAtISO: form.memberDataAccessReviewedAtISO,
     memberDataAccessNotes: form.memberDataAccessNotes,
+    // Articles. A number or document left blank keeps its saved value (the upsert patches).
+    articlesMinDirectors: form.articlesMinDirectors,
+    articlesMaxDirectors: form.articlesMaxDirectors,
+    articlesShareTransferRestrictions: form.articlesShareTransferRestrictions,
+    articlesBusinessRestrictions: form.articlesBusinessRestrictions,
+    articlesOtherProvisions: form.articlesOtherProvisions,
+    articlesSourceDocumentId: form.articlesSourceDocumentId || undefined,
     boardCadence: form.boardCadence,
     boardCadenceDayOfWeek: form.boardCadenceDayOfWeek,
     boardCadenceTime: form.boardCadenceTime,

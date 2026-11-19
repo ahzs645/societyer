@@ -53,7 +53,24 @@ export type RegistrationRow = {
   companyKeyVaultItemId?: string;
   status?: string;
   representativeIds?: string[];
+  /** "HH:mm" in the registry's local time, with its IANA zone. */
+  registrationTime?: string;
+  registrationTimeZone?: string;
+  /** The entity's number and name in its home jurisdiction (extra-provincial rows). */
+  homeCorporationNumber?: string;
+  nameInHomeJurisdiction?: string;
+  attorneyStatus?: AttorneyStatus;
+  attorneyNotRequiredReason?: string;
+  reminderEmailsSubscribed?: boolean;
+  publicRecordUrl?: string;
+  certificateDocumentId?: string;
+  /** Who holds registry portal access (Online Filing Centre, BC Registry). */
+  portalAccess?: PortalAccessEntry[];
+  sourceDocumentIds?: string[];
 };
+
+export type AttorneyStatus = "required" | "not_required" | "appointed";
+export type PortalAccessEntry = { name: string; role?: string; updatedAtISO?: string; notes?: string };
 
 export type IdentifierRow = {
   _id: string;
@@ -74,4 +91,4 @@ export type OrganizationDetail = {
 };
 
 /** A document as the profile's pickers list it. */
-export type ProfileDocument = { _id: string; title?: string; category?: string; createdAtISO?: string; fileName?: string; archivedAtISO?: string };
+export type ProfileDocument = { _id: string; title?: string; category?: string; createdAtISO?: string; fileName?: string; archivedAtISO?: string; tags?: string[] };

@@ -5,9 +5,11 @@ import { Drawer } from "../../components/ui";
 import { useConfirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { optionLabel } from "../../lib/orgHubOptions";
-import { homeJurisdictionCode } from "../../../shared/organizationDomain";
+import { homeJurisdictionCode, isFederalCbca } from "../../../shared/organizationDomain";
 import { AddressFields, drawerTitle, IdentifierFields, RegistrationFields, type DetailDraft } from "./DetailDrawers";
+import { cleanPortalAccess } from "./PortalAccessEditor";
 import { csv } from "./detailRows";
+import { cbcaPublicRecordUrl } from "./registryFacts";
 import type { TaxIdentifierKind } from "./TaxTab";
 import type { AddressRow, DrawerKind, IdentifierRow, OrganizationRecord, ProfileDocument, RegistrationRow } from "./types";
 
@@ -19,6 +21,46 @@ function newIdentifierDraft(kind: TaxIdentifierKind | "other"): DetailDraft {
   // Invoices use only active GST/HST and PST registrations, so a new one starts as Needs review.
   const salesTax = kind === "gst" || kind === "pst";
   return { kind, number: "", status: salesTax ? "needs_review" : "active", accessLevel: "internal", jurisdiction: kind === "pst" ? "CA-BC" : "federal__canada_" };
+}
+
+/** `upsertRegistration`'s arguments from the drawer: blanks dropped, a time zone only with a time. */
+function registrationArgs(draft: DetailDraft, societyId: string) {
+  return {
+    id: draft._id,
+    societyId,
+    registrationType: draft.registrationType || "extra_provincial",
+    corporationClass: draft.corporationClass || undefined,
+    licenceEvidenceDocumentId: draft.licenceEvidenceDocumentId || undefined,
+    jurisdiction: draft.jurisdiction || "Needs review",
+    homeJurisdiction: draft.homeJurisdiction || undefined,
+    assumedName: draft.assumedName || undefined,
+    registrationNumber: draft.registrationNumber || undefined,
+    registrationDate: draft.registrationDate || undefined,
+    activityCommencementDate: draft.activityCommencementDate || undefined,
+    deRegistrationDate: draft.deRegistrationDate || undefined,
+    nuansNumber: draft.nuansNumber || undefined,
+    officialEmail: draft.officialEmail || undefined,
+    annualReturnDueDate: draft.annualReturnDueDate || undefined,
+    lastAnnualReturnFiledDate: draft.lastAnnualReturnFiledDate || undefined,
+    registryProfileReportDate: draft.registryProfileReportDate || undefined,
+    registryPortalKey: draft.registryPortalKey || undefined,
+    agentForServiceName: draft.agentForServiceName || undefined,
+    agentForServiceAddress: draft.agentForServiceAddress || undefined,
+    principalOfficeAddress: draft.principalOfficeAddress || undefined,
+    registrationTime: draft.registrationTime || undefined,
+    registrationTimeZone: draft.registrationTime ? draft.registrationTimeZone || undefined : undefined,
+    homeCorporationNumber: draft.homeCorporationNumber || undefined,
+    nameInHomeJurisdiction: draft.nameInHomeJurisdiction || undefined,
+    attorneyStatus: draft.attorneyStatus || undefined,
+    attorneyNotRequiredReason: draft.attorneyStatus === "not_required" ? draft.attorneyNotRequiredReason || undefined : undefined,
+    reminderEmailsSubscribed: draft.reminderEmailsSubscribed,
+    publicRecordUrl: draft.publicRecordUrl?.trim() || undefined,
+    certificateDocumentId: draft.certificateDocumentId || undefined,
+    portalAccess: cleanPortalAccess(draft.portalAccess),
+    representativeIds: csv(draft.representativeIdsText ?? draft.representativeIds),
+    status: draft.status || "active",
+    notes: draft.notes || undefined,
+  };
 }
 
 /**
@@ -47,7 +89,8 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
   };
 
   const openAddress = (row?: AddressRow) => open("address", row ?? NEW_ADDRESS);
-  const openRegistration = (row?: RegistrationRow) => open("registration", row
+  /** An existing row, or a new one (extra-provincial unless `preset` says otherwise). */
+  const openRegistration = (row?: RegistrationRow, preset?: DetailDraft) => open("registration", row
     ? { ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") }
     : {
       registrationType: "extra_provincial",
@@ -55,7 +98,15 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
       homeJurisdiction: homeJurisdictionCode(society),
       representativeIds: [],
       status: "active",
+      ...preset,
     });
+  /** The home registration row, prefilled from the profile's number and date. */
+  const openHomeRegistration = () => openRegistration(undefined, {
+    registrationType: "home",
+    registrationNumber: society?.incorporationNumber,
+    registrationDate: society?.incorporationDate,
+    certificateDocumentId: society?.certificateEvidenceDocumentId,
+  });
   const openIdentifier = (row: IdentifierRow | TaxIdentifierKind | "other") => open("identifier", typeof row === "string" ? newIdentifierDraft(row) : row);
 
   const save = async () => {
@@ -79,32 +130,7 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
         });
       }
       if (kind === "registration") {
-        await upsertRegistration({
-          id: draft._id,
-          societyId: society._id,
-          registrationType: draft.registrationType || "extra_provincial",
-          corporationClass: draft.corporationClass || undefined,
-          licenceEvidenceDocumentId: draft.licenceEvidenceDocumentId || undefined,
-          jurisdiction: draft.jurisdiction || "Needs review",
-          homeJurisdiction: draft.homeJurisdiction || undefined,
-          assumedName: draft.assumedName || undefined,
-          registrationNumber: draft.registrationNumber || undefined,
-          registrationDate: draft.registrationDate || undefined,
-          activityCommencementDate: draft.activityCommencementDate || undefined,
-          deRegistrationDate: draft.deRegistrationDate || undefined,
-          nuansNumber: draft.nuansNumber || undefined,
-          officialEmail: draft.officialEmail || undefined,
-          annualReturnDueDate: draft.annualReturnDueDate || undefined,
-          lastAnnualReturnFiledDate: draft.lastAnnualReturnFiledDate || undefined,
-          registryProfileReportDate: draft.registryProfileReportDate || undefined,
-          registryPortalKey: draft.registryPortalKey || undefined,
-          agentForServiceName: draft.agentForServiceName || undefined,
-          agentForServiceAddress: draft.agentForServiceAddress || undefined,
-          principalOfficeAddress: draft.principalOfficeAddress || undefined,
-          representativeIds: csv(draft.representativeIdsText ?? draft.representativeIds),
-          status: draft.status || "active",
-          notes: draft.notes || undefined,
-        });
+        await upsertRegistration(registrationArgs(draft, society._id));
       }
       if (kind === "identifier") {
         await upsertIdentifier({
@@ -161,10 +187,17 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
       }
     >
       {kind === "address" && draft && <AddressFields draft={draft} setDraft={setDraft} />}
-      {kind === "registration" && draft && <RegistrationFields draft={draft} setDraft={setDraft} documents={documents ?? []} />}
+      {kind === "registration" && draft && (
+        <RegistrationFields
+          draft={draft}
+          setDraft={setDraft}
+          documents={documents ?? []}
+          derivedPublicRecordUrl={draft.registrationType === "home" && isFederalCbca(society) ? cbcaPublicRecordUrl(draft.registrationNumber || society?.incorporationNumber) : undefined}
+        />
+      )}
       {kind === "identifier" && draft && <IdentifierFields draft={draft} setDraft={setDraft} />}
     </Drawer>
   );
 
-  return { openAddress, openRegistration, openIdentifier, remove, element };
+  return { openAddress, openRegistration, openHomeRegistration, openIdentifier, remove, element };
 }

@@ -6,7 +6,11 @@ import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { OptionSelect } from "../../components/OptionSelect";
 import { Select } from "../../components/Select";
 import { StructuredAddressFields } from "../../components/StructuredAddressFields";
-import type { DrawerKind, ProfileDocument } from "./types";
+import { CANADIAN_TIME_ZONES } from "../../../shared/timeZones";
+import { DocumentSelect } from "./DocumentSelect";
+import { PortalAccessEditor } from "./PortalAccessEditor";
+import { ATTORNEY_STATUS_LABELS, defaultRegistrationTimeZone, registrationTimeLabel } from "./registryFacts";
+import type { AttorneyStatus, DrawerKind, PortalAccessEntry, ProfileDocument } from "./types";
 
 /**
  * The address, registration and identifier drawers' fields. Each register row
@@ -49,6 +53,16 @@ export type DetailDraft = {
   companyKeyVaultItemId?: string;
   representativeIds?: string[];
   representativeIdsText?: string;
+  registrationTime?: string;
+  registrationTimeZone?: string;
+  homeCorporationNumber?: string;
+  nameInHomeJurisdiction?: string;
+  attorneyStatus?: AttorneyStatus;
+  attorneyNotRequiredReason?: string;
+  reminderEmailsSubscribed?: boolean;
+  publicRecordUrl?: string;
+  certificateDocumentId?: string;
+  portalAccess?: PortalAccessEntry[];
   // Identifier
   kind?: string;
   number?: string;
@@ -114,7 +128,27 @@ export function AddressFields({ draft, setDraft }: DraftProps) {
   );
 }
 
-export function RegistrationFields({ draft, setDraft, documents }: DraftProps & { documents: readonly ProfileDocument[] }) {
+const REMINDER_OPTIONS = [
+  { value: "yes", label: "Subscribed" },
+  { value: "no", label: "Not subscribed" },
+];
+
+export function RegistrationFields({ draft, setDraft, documents, derivedPublicRecordUrl }: DraftProps & {
+  documents: readonly ProfileDocument[];
+  /** The federal search page a CBCA home row links to when no URL is stored. */
+  derivedPublicRecordUrl?: string;
+}) {
+  const home = draft.registrationType === "home";
+  const zoneOptions = [
+    ...CANADIAN_TIME_ZONES.map((choice) => ({ value: choice.zone, label: choice.label, hint: choice.place })),
+    ...(draft.registrationTimeZone && !CANADIAN_TIME_ZONES.some((choice) => choice.zone === draft.registrationTimeZone) ? [{ value: draft.registrationTimeZone, label: draft.registrationTimeZone }] : []),
+  ];
+  const timeLabel = registrationTimeLabel(draft.registrationTime, draft.registrationTimeZone);
+  const setTime = (value: string) => setDraft({
+    ...draft,
+    registrationTime: value,
+    registrationTimeZone: value && !draft.registrationTimeZone ? defaultRegistrationTimeZone(draft.jurisdiction) : draft.registrationTimeZone,
+  });
   return (
     <>
       <div className="row" style={{ gap: 12 }}>
@@ -124,6 +158,12 @@ export function RegistrationFields({ draft, setDraft, documents }: DraftProps & 
       <div className="row" style={{ gap: 12 }}>
         <OptionSelect label="Home jurisdiction" setName="entityJurisdictions" value={draft.homeJurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, homeJurisdiction: value })} emptyLabel="No home jurisdiction" />
       </div>
+      {!home && (
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Home corporation number" hint="The number in the home jurisdiction."><input className="input mono" value={draft.homeCorporationNumber ?? ""} onChange={(e) => setDraft({ ...draft, homeCorporationNumber: e.target.value })} /></Field>
+          <Field label="Name in home jurisdiction"><input className="input" value={draft.nameInHomeJurisdiction ?? ""} onChange={(e) => setDraft({ ...draft, nameInHomeJurisdiction: e.target.value })} /></Field>
+        </div>
+      )}
       <Field label="Corporation registration class" hint="Ontario EPCA licence obligations apply to the licensed foreign class; ordinary federal corporations need a separate assessment."><Select value={draft.corporationClass ?? ""} onChange={(value) => setDraft({ ...draft, corporationClass: value })} options={[{ value: "", label: "Unclassified / needs review" }, { value: "federal_corporation", label: "Federal corporation" }, { value: "foreign_epca_licensed", label: "Ontario licensed foreign corporation (EPCA)" }, { value: "other", label: "Other — assess registry obligations" }]} /></Field>
       <Field label="Licence evidence document" hint="Required before selecting Ontario licensed foreign corporation."><Select value={draft.licenceEvidenceDocumentId ?? ""} onChange={(value) => setDraft({ ...draft, licenceEvidenceDocumentId: value })} options={[{ value: "", label: "Select an evidence document" }, ...documents.map((document) => ({ value: document._id, label: document.title ?? "Untitled document" }))]} /></Field>
       <Field label="Assumed name"><input className="input" value={draft.assumedName ?? ""} onChange={(e) => setDraft({ ...draft, assumedName: e.target.value })} /></Field>
@@ -134,6 +174,10 @@ export function RegistrationFields({ draft, setDraft, documents }: DraftProps & 
       <div className="row" style={{ gap: 12 }}>
         <Field label="Registration date"><DatePicker value={draft.registrationDate ?? ""} onChange={(value) => setDraft({ ...draft, registrationDate: value })} /></Field>
         <Field label="Activity commenced"><DatePicker value={draft.activityCommencementDate ?? ""} onChange={(value) => setDraft({ ...draft, activityCommencementDate: value })} /></Field>
+      </div>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Registration time" hint={timeLabel ? `Shows as ${timeLabel}` : "The registry's local time, from the certificate."}><input className="input" type="time" value={draft.registrationTime ?? ""} onChange={(e) => setTime(e.target.value)} /></Field>
+        <Field label="Time zone"><Select value={draft.registrationTimeZone ?? ""} onChange={(value) => setDraft({ ...draft, registrationTimeZone: value || undefined })} options={zoneOptions} clearable placeholder="Choose a zone" /></Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
         <Field label="De-registration date"><DatePicker value={draft.deRegistrationDate ?? ""} onChange={(value) => setDraft({ ...draft, deRegistrationDate: value })} /></Field>
@@ -147,12 +191,26 @@ export function RegistrationFields({ draft, setDraft, documents }: DraftProps & 
         <Field label="Profile report date"><DatePicker value={draft.registryProfileReportDate ?? ""} onChange={(value) => setDraft({ ...draft, registryProfileReportDate: value })} /></Field>
         <Field label="Registry portal key"><input className="input" value={draft.registryPortalKey ?? ""} onChange={(e) => setDraft({ ...draft, registryPortalKey: e.target.value })} /></Field>
       </div>
+      <Field label="Certificate" hint="The registry's certificate for this registration, uploaded in Documents.">
+        <DocumentSelect value={draft.certificateDocumentId} onChange={(value) => setDraft({ ...draft, certificateDocumentId: value })} documents={documents} preferredCategories={["CertificateOfIncorporation", "Filing"]} placeholder="Choose the certificate" />
+      </Field>
       <Field label="Principal office"><input className="input" value={draft.principalOfficeAddress ?? ""} onChange={(e) => setDraft({ ...draft, principalOfficeAddress: e.target.value })} /></Field>
+      {!home && (
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Attorney"><Select value={draft.attorneyStatus ?? ""} onChange={(value) => setDraft({ ...draft, attorneyStatus: (value || undefined) as AttorneyStatus | undefined })} options={(Object.keys(ATTORNEY_STATUS_LABELS) as AttorneyStatus[]).map((value) => ({ value, label: ATTORNEY_STATUS_LABELS[value] }))} clearable placeholder="No decision recorded" /></Field>
+          {draft.attorneyStatus === "not_required" && <Field label="Why not required"><input className="input" value={draft.attorneyNotRequiredReason ?? ""} placeholder="e.g. Head office is in British Columbia" onChange={(e) => setDraft({ ...draft, attorneyNotRequiredReason: e.target.value })} /></Field>}
+        </div>
+      )}
       <div className="row" style={{ gap: 12 }}>
         <Field label="Agent for service"><input className="input" value={draft.agentForServiceName ?? ""} onChange={(e) => setDraft({ ...draft, agentForServiceName: e.target.value })} /></Field>
         <Field label="Agent address"><input className="input" value={draft.agentForServiceAddress ?? ""} onChange={(e) => setDraft({ ...draft, agentForServiceAddress: e.target.value })} /></Field>
       </div>
       <Field label="Official email"><input className="input" value={draft.officialEmail ?? ""} onChange={(e) => setDraft({ ...draft, officialEmail: e.target.value })} /></Field>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Reminder emails" hint="Annual filing reminders from the registry."><Select value={draft.reminderEmailsSubscribed === undefined ? "" : draft.reminderEmailsSubscribed ? "yes" : "no"} onChange={(value) => setDraft({ ...draft, reminderEmailsSubscribed: value ? value === "yes" : undefined })} options={REMINDER_OPTIONS} clearable placeholder="Not recorded" /></Field>
+        <Field label="Public record" hint={!draft.publicRecordUrl && derivedPublicRecordUrl ? "Left blank, the profile links to the federal search page for this number." : "A link to the registry's public page."}><input className="input" type="url" inputMode="url" value={draft.publicRecordUrl ?? ""} placeholder={derivedPublicRecordUrl ?? "https://"} onChange={(e) => setDraft({ ...draft, publicRecordUrl: e.target.value })} /></Field>
+      </div>
+      <PortalAccessEditor value={draft.portalAccess ?? []} onChange={(portalAccess) => setDraft({ ...draft, portalAccess })} />
       <Field label="Representatives"><input className="input" value={draft.representativeIdsText ?? (draft.representativeIds ?? []).join(", ")} onChange={(e) => setDraft({ ...draft, representativeIdsText: e.target.value })} placeholder="Name or record IDs, comma separated" /></Field>
       <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
     </>
