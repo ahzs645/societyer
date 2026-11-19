@@ -16,6 +16,11 @@ configuration and transfer evidence.
 
 ## Release
 
+The frontend release commands now use the shared build and target Pages project
+`societyer-ddcnorth`. Follow the [shared frontend release and domain move](shared-workspaces/shared-frontend-release.md)
+before the first consolidated release. The resource table above describes the
+pre-consolidation attachment; verify the live attachment in Cloudflare.
+
 Use locked dependencies and a clean, current checkout. Both production frontend
 profiles name the shared backend. Backend deployment affects DDC too, so use an
 explicit shared selector and preserve both workspaces' policies:
@@ -24,12 +29,15 @@ explicit shared selector and preserve both workspaces' policies:
 printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-shared-production.local
 npx convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable --dry-run
 npx convex deploy --env-file .env.convex-shared-production.local --codegen disable --typecheck enable
-npm run deploy:firstform
+npm run deploy:shared
 ```
 
-`deploy:firstform` builds with `.env.firstform` into `tmp/firstform-dist` and
-publishes with `deploy/firstform/wrangler.jsonc`. A frontend-only change does not
-need a backend deploy. The old `.env.convex-firstform-production.local` selector
+`deploy:shared` builds with `.env.shared` into `dist` and publishes both custom
+domains through the root `wrangler.jsonc` after the domain move.
+`deploy:firstform` and `deploy:ddcnorth` are aliases for that command. The old
+First Form project/configuration is retained only for compatibility and rollback.
+A frontend-only change does not need a backend deploy. The old
+`.env.convex-firstform-production.local` selector
 may still name `elated-bee-460`; do not use it for a shared release. Backend
 secrets belong in shared Convex, never in `VITE_*`.
 

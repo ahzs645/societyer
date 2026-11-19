@@ -32,6 +32,7 @@ import { CandidatePreview, ProcessorSettings, type Connection } from "../transcr
 import { formatRecordingSize, type AttachedRecordings } from "../transcript/AttachedRecordingsPanel";
 import { MEETING_SOURCE_ACCEPT, TRANSCRIPT_SOURCE_FILE } from "../../../../shared/transcriptFormats";
 import { latestJobBySource, meetingFileRow, type FileAction, type FileJob, type FileRow } from "./meetingFileRows";
+import { WorkspaceMeetingSourceGate } from "./WorkspaceMeetingSourceGate";
 
 type TimedOffer = TimedTranscript & { fileName: string; sourceName: string };
 
@@ -59,10 +60,12 @@ type MeetingSourcesAccess = {
   transcript?: { _id?: string; createdAtISO?: string; contentRevision?: string } | null;
 };
 
-/** For meeting editors (meetings:write) on broker-configured hosted deployments. */
+/** For meeting editors in SharePoint workspaces on broker-configured hosted deployments. */
 export function MeetingSourcesCard({ canWrite, ...access }: MeetingSourcesAccess & { canWrite: boolean }) {
   if (!meetingSourceBroker || isLocalDataRuntime() || !canWrite) return null;
-  return <ConnectedMeetingSources key={access.meetingId} {...access} />;
+  return <WorkspaceMeetingSourceGate key={access.societyId} societyId={access.societyId}>
+    <ConnectedMeetingSources key={access.meetingId} {...access} />
+  </WorkspaceMeetingSourceGate>;
 }
 
 function ConnectedMeetingSources({ societyId, meetingId, canDraft, canReadTranscript, player, transcript }: MeetingSourcesAccess) {
