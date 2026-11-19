@@ -227,6 +227,7 @@ export function DirectorsPage() {
         }
       />
 
+      <div><Link className="btn btn--sm" to="/app/business-records?register=directorConsents">Director consent history</Link></div>
       <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <StatStrip ariaLabel="Director summary">
         <StatTile

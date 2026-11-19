@@ -1,3 +1,4 @@
+import * as businessEvidenceFns from "./businessEvidence";
 import * as personHistoryFns from './personHistory';
 const personMergeFns = lazyHandlers(() => import("./personMerge"), "personMerge");
 const rosterPromotionFns = lazyHandlers(() => import("./rosterPromotion"), "rosterPromotion");
@@ -334,6 +335,12 @@ const MEETING_NOTES_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "meetingPersonalNotes:remove", handler: meetingPersonalNotesFns.removePortable }),
 ];
 
+const BUSINESS_EVIDENCE_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableQuery({ name: "businessEvidence:list", handler: businessEvidenceFns.list }),
+  definePortableQuery({ name: "businessEvidence:choices", handler: businessEvidenceFns.choices }),
+  definePortableMutation({ name: "businessEvidence:save", handler: businessEvidenceFns.save }),
+];
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
   definePortableQuery({ name: "personHistory:profile", handler: personHistoryFns.profile }),
@@ -623,6 +630,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // retention
   definePortableQuery({ name: "retention:expiredForSociety", handler: retentionFns.expiredForSocietyPortable }),
 
+  ...BUSINESS_EVIDENCE_FUNCTIONS,
   // serviceProviders
   definePortableQuery({ name: "serviceProviders:list", handler: serviceProvidersFns.listPortable }),
   definePortableQuery({ name: "serviceProviders:functionsCatalog", handler: serviceProvidersFns.functionsCatalogPortable }),

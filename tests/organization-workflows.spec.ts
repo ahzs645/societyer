@@ -241,3 +241,53 @@ test("acknowledgement becomes a separately signed official receipt without chang
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test("business records preserve linked notices and director consent history after reload", async ({ page }) => {
+  await page.goto("/app/society");
+  await expect(page.getByRole("heading", { name: "Organization profile" })).toBeVisible();
+  const societyId = await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts" as string);
+    const { setStoredSocietyId } = await import("/src/hooks/useSociety.ts" as string);
+    const { setStoredUserId } = await import("/src/hooks/useCurrentUser.ts" as string);
+    const { societyId } = await client.mutation("society:createWorkspace", {
+      name: "Example Records Inc.", entityType: "corporation__business_", jurisdictionCode: "CA-BC",
+      actFormedUnder: "business_corporations_act", isCharity: false, isMemberFunded: false,
+    });
+    const users = await client.query("users:list", { societyId });
+    setStoredUserId(users.find((person: any) => person.role === "Owner")._id);
+    setStoredSocietyId(societyId);
+    await client.mutation("directors:create", { societyId, firstName: "Example", lastName: "Director", position: "Director",
+      status: "Active", consentOnFile: false, isBCResident: true, termStart: "2026-02-01" });
+    const rightsClassId = await client.mutation("legalOperations:upsertRightsClass", { societyId, className: "Class A", classType: "share", status: "active" });
+    await client.mutation("legalOperations:upsertRightsholdingTransfer", { societyId, rightsClassId, destinationHolderName: "Example Holder",
+      transferType: "issuance", considerationType: "cash", quantity: 10, status: "posted", transferDate: "2026-02-01", fullyPaidConfirmedAt: "2026-02-01" });
+    return societyId;
+  });
+  const documentId = await evidencePdf(page, societyId, "Organizing records");
+  await page.goto("/app/business-records?register=shareNotices");
+  await page.getByRole("button", { name: "Add record" }).click();
+  await page.getByLabel("Issuance or transfer", { exact: true }).selectOption({ index: 1 });
+  await page.getByLabel("Notice number").fill("N-001");
+  await page.getByLabel("Notice date").fill("2026-02-01");
+  await page.getByLabel("Supporting document").selectOption(documentId);
+  await page.getByLabel("Source page").fill("1");
+  await page.getByRole("button", { name: "Save record" }).click();
+  await expect(page.getByText("N-001", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("link", { name: /Organizing records/ })).toHaveAttribute("href", "/app/documents/" + documentId);
+  await page.getByLabel("Register", { exact: true }).selectOption("directorConsents");
+  await page.getByRole("button", { name: "Add record" }).click();
+  await page.getByLabel("Director", { exact: true }).selectOption({ label: "Example Director" });
+  await page.getByLabel("Consent or acknowledgment").selectOption("Consent to act");
+  await page.getByLabel("Event", { exact: true }).selectOption("Given");
+  await page.getByLabel("Effective date").fill("2026-02-01");
+  await page.getByRole("button", { name: "Save record" }).click();
+  await expect(page.getByText("Given", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Revise record" }).click();
+  await page.getByLabel("Received on").fill("2026-02-03");
+  await page.getByRole("button", { name: "Save record" }).click();
+  await expect(page.getByText("2026-02-03", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByLabel("Show previous versions").check();
+  await expect(page.getByText("Previous version", { exact: true })).toBeVisible();
+});

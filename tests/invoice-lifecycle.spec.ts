@@ -23,7 +23,8 @@ test("correct an unsent unposted invoice in place and retain its previous PDF", 
   page.on("pageerror", error => errors.push(error.message));
   await page.clock.setFixedTime(new Date("2026-11-08T20:00:00Z"));
   await page.goto("/app/invoices");
-  await expect(page.getByRole("button", { name: "New invoice", exact: true })).toBeVisible();
+  // An empty list also offers "New invoice" in its empty state; the toolbar button is first.
+  await expect(page.getByRole("button", { name: "New invoice", exact: true }).first()).toBeVisible();
   const id = await page.evaluate(async name => {
     const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
     const { setStoredSocietyId } = await import("/src/hooks/useSociety.ts");

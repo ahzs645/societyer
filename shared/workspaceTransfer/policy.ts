@@ -69,6 +69,9 @@ export const TRANSFER_COPY_TABLES = [
   "staffCostPlans", "stockMovements", "subscriptionPlans", "taskAttachments", "tasks", "transactionCandidates", "transactionRules", "transcriptionJobs",
   "transcripts", "treasurerReports", "viewFields", "views", "volunteerApplications", "volunteerScreenings", "volunteers", "workflowPackages",
   "workflowRuns", "writtenResolutions",
+  // Business records registers: workspace records whose revisions chain by previousId.
+  "bankRelationships", "businessChannels", "clientCardAccess", "directorConsents", "equitySubscriptions", "governanceDecisions", "identifierDetails", "mailboxServices",
+  "recognitionDetails", "shareNotices",
 ] as const;
 
 const skip = (reason: string): TablePolicy => ({ mode: "skip", reason });

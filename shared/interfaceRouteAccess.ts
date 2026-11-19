@@ -81,6 +81,8 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/inventory": "financials:read",
   "/app/insurance": "financials:read",
   "/app/agreements": "agreements:read",
+  // Each register checks its own permission; the page lists the ones the reader holds.
+  "/app/business-records": "society:read",
   "/app/dividends": "financials:read",
   "/app/elections": "elections:read",
   "/app/grants": "grants:read",

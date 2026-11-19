@@ -49,7 +49,7 @@ const dialogCases: ReadonlyArray<readonly [string, string, string, string?]> = [
   ["template-engine", "New", "Run name", "Package run"],
   ["template-engine", "New", "Title", "Draft document"],
   ["template-engine", "New", "Full name", "Signer"],
-  ["formation-maintenance", "New", "Name", "Name search"],
+  ["formation-maintenance", "New", "Name", "Name request"],
   ["formation-maintenance", "New", "New entity name", "Amendment"],
   ["formation-maintenance", "New", "Filing year", "Annual maintenance"],
   ["formation-maintenance", "New", "Label", "Jurisdiction"],

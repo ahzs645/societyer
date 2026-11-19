@@ -405,6 +405,8 @@ for (const [label, organization, answers] of ORGS) {
 }
 
 /* ---------------- Name requests: pending, approved, expiring, rejected ---------------- */
+// Times converted between zones use past dates (February 2026). B.C. has kept UTC-7 all year since
+// 2026-11-01 (tzdata 2026b), and later dates give different answers on older and newer time zone data.
 {
   const answers = preparingAnswers("federal_cbca");
   const ddc: SetupOrganization = { ...cbca, name: "DDC North Inc." };
@@ -413,13 +415,13 @@ for (const [label, organization, answers] of ORGS) {
 
   // Submitted and waiting: in progress, with the dates and a link to record the decision. The server words the
   // time on the organization's clock; the parts let the view word it on the viewer's.
-  const pending = nameStep({ nameRequest: { state: "pending", id: "ns_1", name: "DDC North Inc.", requestId: "21480579", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00:00-08:00", timeZone: "America/Vancouver" } });
+  const pending = nameStep({ nameRequest: { state: "pending", id: "ns_1", name: "DDC North Inc.", requestId: "21480579", submittedOn: "2026-02-17", decisionExpectedAtISO: "2026-02-18T14:00:00-08:00", timeZone: "America/Vancouver" } });
   assert.equal(pending.state, "in_progress");
-  assert.equal(pending.note, "Submitted Nov 17 · decision expected Nov 18, 2:00 p.m. PST");
-  assert.deepEqual(pending.noteParts, [{ text: "Submitted Nov 17 · decision expected " }, { at: "2026-11-18T14:00:00-08:00" }]);
-  assert.equal(stepNoteText({ ...pending, noteParts: pending.noteParts }), `Submitted Nov 17 · decision expected ${formatDecisionExpected("2026-11-18T14:00:00-08:00")}`, "the view rewords the time on the runtime's clock");
+  assert.equal(pending.note, "Submitted Feb 17 · decision expected Feb 18, 2:00 p.m. PST");
+  assert.deepEqual(pending.noteParts, [{ text: "Submitted Feb 17 · decision expected " }, { at: "2026-02-18T14:00:00-08:00" }]);
+  assert.equal(stepNoteText({ ...pending, noteParts: pending.noteParts }), `Submitted Feb 17 · decision expected ${formatDecisionExpected("2026-02-18T14:00:00-08:00")}`, "the view rewords the time on the runtime's clock");
   // No organization zone: the server words it in UTC; a day alone needs no zone and no parts.
-  assert.equal(nameStep({ nameRequest: { state: "pending", id: "ns_1", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00:00-08:00" } }).note, "Submitted Nov 17 · decision expected Nov 18, 10:00 p.m. UTC");
+  assert.equal(nameStep({ nameRequest: { state: "pending", id: "ns_1", submittedOn: "2026-02-17", decisionExpectedAtISO: "2026-02-18T14:00:00-08:00" } }).note, "Submitted Feb 17 · decision expected Feb 18, 10:00 p.m. UTC");
   const dayOnly = nameStep({ nameRequest: { state: "pending", id: "ns_1", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18" } });
   assert.equal(dayOnly.note, "Submitted Nov 17 · decision expected Nov 18");
   assert.equal(dayOnly.noteParts, undefined);
@@ -468,16 +470,16 @@ for (const [label, organization, answers] of ORGS) {
 /* ---------------- Name request summary ---------------- */
 {
   const rows = [
-    { _id: "a", name: "DDC North", suffix: "inc", status: "rejected", updatedAtISO: "2026-11-10T00:00:00Z" },
-    { _id: "b", name: "DDC North", suffix: "inc", status: "submitted", requestId: "21480579", submittedOn: "2026-11-17", decisionExpectedAtISO: "2026-11-18T14:00", updatedAtISO: "2026-11-17T00:00:00Z" },
+    { _id: "a", name: "DDC North", suffix: "inc", status: "rejected", updatedAtISO: "2026-02-10T00:00:00Z" },
+    { _id: "b", name: "DDC North", suffix: "inc", status: "submitted", requestId: "21480579", submittedOn: "2026-02-17", decisionExpectedAtISO: "2026-02-18T14:00", updatedAtISO: "2026-02-17T00:00:00Z" },
   ];
   const pending = summarizeNameRequests(rows, { legacyApproval: true, timeZone: "America/Vancouver" });
   assert.equal(pending.state, "pending", "a pending request beats a rejection, and a NUANS number never counts while one is pending");
   assert.equal(pending.id, "b");
   assert.equal(pending.name, "DDC North Inc.");
-  assert.equal(pending.decisionExpectedAtISO, "2026-11-18T14:00:00-08:00", "an older bare time is pinned to the organization's zone");
+  assert.equal(pending.decisionExpectedAtISO, "2026-02-18T14:00:00-08:00", "an older bare time is pinned to the organization's zone");
   assert.equal(pending.timeZone, "America/Vancouver");
-  assert.equal(summarizeNameRequests(rows).decisionExpectedAtISO, "2026-11-18T14:00", "without a zone it stays as saved");
+  assert.equal(summarizeNameRequests(rows).decisionExpectedAtISO, "2026-02-18T14:00", "without a zone it stays as saved");
   const approved = summarizeNameRequests([...rows, { _id: "c", name: "DDC North Inc.", status: "approved", decidedOn: "2026-11-18", expiresOn: "2027-02-16", updatedAtISO: "2026-11-18T00:00:00Z" }], { today: "2026-11-18" });
   assert.equal(approved.state, "approved");
   assert.equal(approved.daysUntilExpiry, 90);
@@ -488,8 +490,8 @@ for (const [label, organization, answers] of ORGS) {
   assert.equal(summarizeNameRequests([], { legacyApproval: true }).state, "approved");
   assert.equal(summarizeNameRequests([{ status: "searching", name: "X" }], { legacyApproval: true }).state, "none", "statuses switch the NUANS fallback off");
   assert.equal(suggestedNameApprovalExpiry("2026-11-18"), "2027-02-16");
-  assert.equal(nameRequestProgressLine(rows[1], { today: "2026-11-18", timeZone: "America/Vancouver" }), "Request 21480579 · Submitted Nov 17 · Decision expected Nov 18, 2:00 p.m. PST");
-  assert.equal(nameRequestProgressLine(rows[1], { today: "2026-11-18", timeZone: "America/Toronto", sourceTimeZone: "America/Vancouver" }), "Request 21480579 · Submitted Nov 17 · Decision expected Nov 18, 5:00 p.m. EST", "an older bare time, given in Vancouver, read in Toronto");
+  assert.equal(nameRequestProgressLine(rows[1], { today: "2026-02-18", timeZone: "America/Vancouver" }), "Request 21480579 · Submitted Feb 17 · Decision expected Feb 18, 2:00 p.m. PST");
+  assert.equal(nameRequestProgressLine(rows[1], { today: "2026-02-18", timeZone: "America/Toronto", sourceTimeZone: "America/Vancouver" }), "Request 21480579 · Submitted Feb 17 · Decision expected Feb 18, 5:00 p.m. EST", "an older bare time, given in Vancouver, read in Toronto");
   assert.equal(nameRequestProgressLine({ status: "approved", decidedOn: "2026-11-18", expiresOn: "2027-02-16" }, { today: "2026-11-18" }), "Approved Nov 18 · Expires Feb 16, 2027");
   assert.throws(() => assertNameRequestFields({ status: "pending" }), /status must be one of/);
   assert.throws(() => assertNameRequestFields({ decisionExpectedAtISO: "2026-11-18T25:00:00-08:00" }), /Decision expected/);
@@ -505,29 +507,29 @@ for (const [label, organization, answers] of ORGS) {
 /* ---------------- Decision times: zones, daylight time, the form ---------------- */
 {
   // Saved with the offset of the chosen zone on that day, daylight time included.
-  assert.equal(zonedDateTimeISO("2026-11-18", "14:00", "America/Vancouver"), "2026-11-18T14:00:00-08:00");
+  assert.equal(zonedDateTimeISO("2026-02-18", "14:00", "America/Vancouver"), "2026-02-18T14:00:00-08:00");
   assert.equal(zonedDateTimeISO("2026-07-02", "14:00", "America/Vancouver"), "2026-07-02T14:00:00-07:00");
-  assert.equal(zonedDateTimeISO("2026-11-18", "14:00", "America/St_Johns"), "2026-11-18T14:00:00-03:30");
+  assert.equal(zonedDateTimeISO("2026-02-18", "14:00", "America/St_Johns"), "2026-02-18T14:00:00-03:30");
   assert.equal(zonedDateTimeISO("2026-03-08", "02:30", "America/Toronto"), "2026-03-08T03:30:00-04:00", "a skipped hour moves forward");
   assert.equal(timeZoneAbbreviation("America/St_Johns", Date.parse("2026-07-02T12:00:00Z")), "NDT");
   // Shown on the reader's clock, with its short name.
-  assert.equal(formatDecisionExpected("2026-11-18T14:00:00-08:00", { timeZone: "America/Toronto" }), "Nov 18, 5:00 p.m. EST");
-  assert.equal(formatDecisionExpected("2026-11-18T23:30:00-08:00", { timeZone: "America/Halifax" }), "Nov 19, 3:30 a.m. AST");
+  assert.equal(formatDecisionExpected("2026-02-18T14:00:00-08:00", { timeZone: "America/Toronto" }), "Feb 18, 5:00 p.m. EST");
+  assert.equal(formatDecisionExpected("2026-02-18T23:30:00-08:00", { timeZone: "America/Halifax" }), "Feb 19, 3:30 a.m. AST");
   assert.equal(formatDecisionExpected("2026-11-18", { timeZone: "America/Halifax" }), "Nov 18");
 
   // The form opens a saved time in the zone it was given in when it can tell.
   const vancouver = { viewerTimeZone: "America/Vancouver" };
-  assert.deepEqual(decisionTimeFields("2026-11-18T14:00:00-08:00", vancouver), { date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" });
-  assert.deepEqual(decisionTimeFields("2026-11-18T14:00:00-05:00", vancouver), { date: "2026-11-18", time: "14:00", timeZone: "America/Toronto" }, "an Eastern offset opens in Eastern time");
-  assert.deepEqual(decisionTimeFields("2026-11-18T14:00:00+01:00", vancouver), { date: "2026-11-18", time: "05:00", timeZone: "America/Vancouver" }, "an unknown offset is converted to the viewer's zone");
+  assert.deepEqual(decisionTimeFields("2026-02-18T14:00:00-08:00", vancouver), { date: "2026-02-18", time: "14:00", timeZone: "America/Vancouver" });
+  assert.deepEqual(decisionTimeFields("2026-02-18T14:00:00-05:00", vancouver), { date: "2026-02-18", time: "14:00", timeZone: "America/Toronto" }, "an Eastern offset opens in Eastern time");
+  assert.deepEqual(decisionTimeFields("2026-02-18T14:00:00+01:00", vancouver), { date: "2026-02-18", time: "05:00", timeZone: "America/Vancouver" }, "an unknown offset is converted to the viewer's zone");
   assert.deepEqual(decisionTimeFields("2026-11-18T14:00", { ...vancouver, sourceTimeZone: "America/Toronto" }), { date: "2026-11-18", time: "14:00", timeZone: "America/Toronto" }, "an older bare time opens in the organization's zone");
   assert.deepEqual(decisionTimeFields("2026-11-18", vancouver), { date: "2026-11-18", time: "", timeZone: "America/Vancouver" });
-  assert.equal(decisionExpectedFromFields({ date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" }), "2026-11-18T14:00:00-08:00");
+  assert.equal(decisionExpectedFromFields({ date: "2026-02-18", time: "14:00", timeZone: "America/Vancouver" }), "2026-02-18T14:00:00-08:00");
   assert.equal(decisionExpectedFromFields({ date: "2026-11-18", time: "", timeZone: "America/Vancouver" }), "2026-11-18");
   assert.equal(decisionExpectedFromFields({ date: "", time: "14:00" }), undefined);
   // The hint under the field converts to the viewer's clock only when it differs.
-  assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" }, "America/Toronto"), "That's 5:00 p.m. your time");
-  assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "23:00", timeZone: "America/Vancouver" }, "America/Toronto"), "That's Nov 19, 2:00 a.m. your time");
+  assert.equal(decisionTimeViewerHint({ date: "2026-02-18", time: "14:00", timeZone: "America/Vancouver" }, "America/Toronto"), "That's 5:00 p.m. your time");
+  assert.equal(decisionTimeViewerHint({ date: "2026-02-18", time: "23:00", timeZone: "America/Vancouver" }, "America/Toronto"), "That's Feb 19, 2:00 a.m. your time");
   assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "14:00", timeZone: "America/Vancouver" }, "America/Vancouver"), undefined);
   assert.equal(decisionTimeViewerHint({ date: "2026-11-18", time: "", timeZone: "America/Halifax" }, "America/Vancouver"), undefined);
 

@@ -724,6 +724,7 @@ export function SocietyPage() {
         </>
       )}
 
+      <div><Link className="btn btn--sm" to="/app/business-records">Business records</Link></div>
       <GstAccountReference identifiers={detail?.identifiers} actions={<>
         <button className="btn-action" type="button" onClick={() => openMoreDetails("tax-identifiers")}>Manage tax identifiers</button>
         {canEdit && <button className="btn-action btn-action--primary" type="button" onClick={() => {

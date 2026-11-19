@@ -19,6 +19,7 @@ import { exportRowsForReader } from "./minutesPrivacy";
 import { createDownloadUrl } from "../storage/signedUrl";
 import { sharePointDownloadBrokerUrl } from "../storage/sharePointBrokerUrl";
 import { visibleDirectoryRows } from "./peopleDirectory";
+import { businessRegisters } from "../businessEvidence";
 
 const EXPORT_VERSION = 2;
 
@@ -311,9 +312,22 @@ export const EXPORTABLE_TABLES = [
   "governanceExpectations",
   "continuityPeriodMarks",
   "agreements",
+  // Business records registers (share notices, director consents, supporting records).
+  "shareNotices",
+  "directorConsents",
+  "businessChannels",
+  "mailboxServices",
+  "bankRelationships",
+  "clientCardAccess",
+  "governanceDecisions",
+  "identifierDetails",
+  "recognitionDetails",
+  "equitySubscriptions",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
+/** Business records cite supporting documents; a row follows its document's access. */
+const BUSINESS_RECORD_TABLES = new Set<string>(businessRegisters.map((register) => register.table));
 const DEFAULT_REDACTED_FIELDS = ["secretEncrypted", "tokenHash", "storageId"] as const;
 const RECOVERY_REDACTED_FIELDS = ["storageId"] as const;
 const GLOBAL_TABLES = new Set(["jurisdictionMetadata", "aiModelCatalogCache"]);
@@ -605,7 +619,7 @@ async function paginateForSociety(
     const parents = table === "documents" ? visibleRows : await Promise.all(visibleRows.map((row) => row.documentId ? ctx.db.get(String(row.documentId), "documents") : null));
     visibleRows = visibleRows.filter((_, index) => allows(parents[index]));
   }
-  if (["generatedLegalDocuments", "legalPrecedentRuns", "legalSigners", "sourceEvidence", "minuteBookItems"].includes(table)) visibleRows = await filterDocumentLinkedRows(ctx, societyId, visibleRows, table);
+  if (["generatedLegalDocuments", "legalPrecedentRuns", "legalSigners", "sourceEvidence", "minuteBookItems"].includes(table) || BUSINESS_RECORD_TABLES.has(table)) visibleRows = await filterDocumentLinkedRows(ctx, societyId, visibleRows, table);
   if (table === "taskAttachments") {
     // A document attachment carries the document's title: only documents the reader may open.
     const allows = await documentAccessPredicate(ctx, societyId);

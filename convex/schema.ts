@@ -1,3 +1,4 @@
+import { businessEvidenceTables } from "./tables/businessEvidence";
 import { payrollRemittanceTables } from "./tables/payrollRemittance";
 import { payrollRoeWorkflowTables } from "./tables/payrollRoeWorkflow";
 import { payrollRuleTables } from "./tables/payrollRules";
@@ -131,6 +132,7 @@ export default defineSchema({
   ...payrollTd1Tables,
   ...agentConnectorTables,
   ...mcpOAuthTables,
+  ...businessEvidenceTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     // shared/meetingRecordingStorage.ts: "keep" (absent) or "transcripts_only".
