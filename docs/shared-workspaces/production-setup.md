@@ -1,11 +1,15 @@
 # DDC North and First Form: deployed setup
 
-Verified November 8, 2026 (America/Vancouver). Use this page for the current
-production configuration, the [operator runbook](operator-runbook.md) for
+Updated November 19, 2026 (America/Vancouver). The shared frontend and First Form
+domain move are live; Cloudflare domain, ownership and certificate validation
+are active. Both portals' sign-in presentation and shared script were verified
+in the browser.
+The November 8 database-migration evidence is preserved separately below.
+Use this page for the current production configuration, the [operator runbook](operator-runbook.md) for
 commands, and [lessons learned](lessons-learned.md) for the reasons and limits.
 The feasibility review and October qualification records describe earlier states.
 
-## One backend, separate workspaces and websites
+## One backend and frontend, separate workspaces and domains
 
 | Resource | Current configuration |
 | --- | --- |
@@ -14,23 +18,23 @@ The feasibility review and October qualification records describe earlier states
 | Auth broker / HTTP actions | `https://industrious-cricket-610.convex.site` |
 | DDC primary frontend | [portal.ddcnorth.com](https://portal.ddcnorth.com) |
 | First Form primary frontend | [portal.1stform.ca](https://portal.1stform.ca) |
-| DDC Pages project / alias | `societyer-ddcnorth` / `societyer-ddcnorth.pages.dev` |
-| First Form Pages project / alias | `societyer-firstform` / `societyer-firstform.pages.dev` |
+| Shared production Pages project / alias | `societyer-ddcnorth` / `societyer-ddcnorth.pages.dev`; both custom domains attached |
+| Legacy First Form Pages project / alias | `societyer-firstform` / `societyer-firstform.pages.dev`; retained prior release |
 | Cloudflare account | `479e77f49d4ac5d7498529ee360f194b` |
 | Old First Form backend | `elated-bee-460`; retained for rollback, old client identities locked out |
 | Transfer rehearsal | `rapid-ox-123`; isolated copy, temporary deploy key revoked |
 | Development | `gallant-anteater-27` (DDC), `reminiscent-marlin-243` (First Form); not repurposed |
 
 ```mermaid
-flowchart LR
-  D[portal.ddcnorth.com] --> DP[Pages: societyer-ddcnorth]
-  F[portal.1stform.ca] --> FP[Pages: societyer-firstform]
-  FA[societyer-firstform.pages.dev] --> FP
-  DP --> C[Shared Convex: industrious-cricket-610]
+flowchart TD
+  D["portal.ddcnorth.com"] --> DP["Pages: societyer-ddcnorth"]
+  F["portal.1stform.ca"] --> DP
+  FA["societyer-firstform.pages.dev"] --> FP["Legacy Pages: societyer-firstform"]
+  DP --> C["Shared Convex: industrious-cricket-610"]
   FP --> C
-  C --> DW[DDC workspaces: Microsoft group / SharePoint]
-  C --> FW[First Form: provisioned passwords / native storage]
-  A[ddcnorth.com/admin: separate portal Worker] -->|signed identity verification| C
+  C --> DW["DDC workspaces: Microsoft group / SharePoint"]
+  C --> FW["First Form: provisioned passwords / native storage"]
+  A["ddcnorth.com/admin: separate portal Worker"] -->|signed identity verification| C
 ```
 
 The staff/client portal in `ddcnorth/portal` is a separate Worker with D1/R2 data.
@@ -130,9 +134,9 @@ custom domain. Existing aliases are not forced through an HTTP redirect.
 
 Mail, SharePoint, signing and meeting-transfer credentials remain server-only.
 They are not `VITE_*` variables, DNS values or documentation examples. Public
-production URLs are in `.env.ddcnorth` and `.env.firstform`; both name the same
-backend. There is no new Microsoft registration or permission grant for the
-First Form frontend domain.
+production URLs are in `.env.shared`; the retained `.env.ddcnorth` and
+`.env.firstform` profiles name the same backend. There is no new Microsoft
+registration or permission grant for the First Form frontend domain.
 
 ## Branding and release ownership
 
@@ -147,9 +151,10 @@ describes the broader package contents.
 
 The DDC header shows the wordmark without a second visible workspace name;
 accessible labels and picker names remain. Compact/sidebar and favicon artwork
-uses the supplied six-dot symbols. `.env.ddcnorth` scopes symbol overrides to
-the matching `ddcnorth` brand, so First Form does not inherit them. Source and
-licence notes are under `public/ddcnorth`.
+uses the supplied six-dot symbols. `.env.shared` scopes workspace symbol overrides
+to the matching `ddcnorth` brand, and sign-in artwork and favicons to the DDC
+origin, so First Form does not inherit them. Source and licence notes are under
+`public/ddcnorth`.
 
 The separate staff admin in `ddcnorth/portal` shows plain `ddcnorth` in its brand
 and name/role in the account area. Display name comes from the signed Microsoft
@@ -157,10 +162,11 @@ profile; tenant/group/Object ID checks establish authority. Its own
 [cutover guide](https://github.com/ddcnorth/portal/blob/main/docs/CUTOVER.md) remains
 the source for its D1/R2, mail and Worker configuration.
 
-Societyer's two Cloudflare Pages projects use Direct Upload. A successful
+Societyer's shared production Pages project uses Direct Upload; the old First
+Form project is retained for its alias and rollback. A successful
 GitHub check, push to main or GitHub Pages mirror release does not deploy hosted
-Convex or these Cloudflare projects. Deploy the backend when needed, then the
-intended frontend profile, and verify actual Cloudflare deployment metadata.
+Convex or Cloudflare. Deploy the backend when needed, then `deploy:shared`, and
+verify actual Cloudflare deployment metadata.
 The separate `ddcnorth/portal` Worker has its own direct GitHub build connection;
 do not confuse that workflow with Societyer's Pages releases. Shared production
 includes the `documentSources` table and workspace brand fields.
@@ -218,6 +224,35 @@ steps are in [domain onboarding](operator-runbook.md#4-domains).
 
 ## Release and transfer evidence
 
+### November 19, 2026: shared frontend release
+
+The shared backend was deployed from source
+`7dcad5ef620e362c77d204eeafeb0df988fcaa82` before publishing the frontend. The
+Convex 1.49.0 dry run and deployment passed with `--codegen disable` and required
+TypeScript checks; live schema validation completed. The signed-in dashboard
+then showed 32 `nameSearchItems` fields, including `status`, `requestId` and
+`supportingDocumentIds`, confirming the previously missing name-request schema.
+
+| Check / resource | November 19 result |
+| --- | --- |
+| Shared frontend build | Build and TypeScript checks passed; `.env.shared` / `dist` |
+| Cloudflare production | `bf8ab44f-d9cb-464f-9197-4029737631af`, source `7dcad5ef620e362c77d204eeafeb0df988fcaa82`; succeeded at `2026-11-19T17:12:09.573998Z` |
+| DDC sign-in UI | Microsoft-only sign-in and DDC branding rendered; `/ddcnorth/symbol-midnight.svg` and `/ddcnorth/symbol-white.svg` loaded |
+| First Form sign-in UI | "Sign in to Firstform", email/password fields and the existing Microsoft button rendered; public sign-up closed; neutral `/favicon.svg` loaded without DDC symbol assets |
+| Shared frontend asset | Both custom domains loaded `/assets/index-CnAobUEW.js` |
+| Direct workspace route | `/account/workspaces` on both custom domains loaded the app and redirected an unauthenticated visit to the correct branded login with the return path preserved |
+| First Form custom domain | Attached to `societyer-ddcnorth` as `4b03a228-fdac-4ad1-bd23-d3128f1fd5ec`; domain, ownership and HTTP certificate-validation statuses all active after initial provisioning |
+| First Form DNS | Record `836dea32d6fd953b7e5195fa73575ac7` now targets `societyer-ddcnorth.pages.dev`; proxying, TTL, comment and settings preserved |
+| Retained First Form alias | `societyer-firstform.pages.dev`, deployment `72aa7753-dd02-46ac-8b25-086cddbe0f16`, source `03f5dcfaecb7c9f2267e9036d6f03d6233f76648` |
+
+This was a code and hosting release, with no database import, account merge or
+workspace-policy configuration change. Both custom origins and their Convex
+mappings remain unchanged. The legacy First Form alias keeps its existing sessions and handoff
+flow; it is not blanket-redirected. See the [release and rollback guide](shared-frontend-release.md).
+Authenticated business workflows were not requalified by this hosting release.
+
+### November 8, 2026: shared-backend migration
+
 Shared-workspace features were already on main at `0135f7c8`. Configuration
 commit `7071c7a1` was merged in [PR #77](https://github.com/ahzs645/societyer/pull/77)
 as `fd6eeac6`. Both frontends came from the same clean source and followed the
@@ -244,9 +279,10 @@ lists, not the workspace-transfer policy/verifier. They were recorded, not
 reported as passing. Not every acceptance journey was rerun; the
 [acceptance matrix](acceptance-tests.md) distinguishes remaining work.
 
-Pages deployment IDs: DDC `526172de-04c1-4cec-ae98-1c30e1794184`, First Form
+Historical November 8 Pages deployment IDs: DDC
+`526172de-04c1-4cec-ae98-1c30e1794184`, First Form
 `27bf4cc5-7acc-43fa-95b5-c91847866863`. Both succeeded with clean source metadata.
-Later releases will replace these IDs.
+These are migration evidence, not the current production deployments.
 
 ## Backups, retained source and rollback
 
