@@ -3,7 +3,8 @@
 Updated November 19, 2026 (America/Vancouver). The shared frontend and First Form
 domain move are live; Cloudflare domain, ownership and certificate validation
 are active. Both portals' sign-in presentation and shared script were verified
-in the browser.
+in the browser. The obsolete First Form production backend was deleted on
+November 19; shared production and the retained frontend alias are unaffected.
 The November 8 database-migration evidence is preserved separately below.
 Use this page for the current production configuration, the [operator runbook](operator-runbook.md) for
 commands, and [lessons learned](lessons-learned.md) for the reasons and limits.
@@ -21,7 +22,7 @@ The feasibility review and October qualification records describe earlier states
 | Shared production Pages project / alias | `societyer-ddcnorth` / `societyer-ddcnorth.pages.dev`; both custom domains attached |
 | Legacy First Form Pages project / alias | `societyer-firstform` / `societyer-firstform.pages.dev`; retained prior release |
 | Cloudflare account | `479e77f49d4ac5d7498529ee360f194b` |
-| Old First Form backend | `elated-bee-460`; retained for rollback, old client identities locked out |
+| Former First Form backend | `elated-bee-460`; deleted November 19, 2026; no longer a rollback target |
 | Transfer rehearsal | `rapid-ox-123`; isolated copy, temporary deploy key revoked |
 | Development | `gallant-anteater-27` (DDC), `reminiscent-marlin-243` (First Form); not repurposed |
 
@@ -262,6 +263,22 @@ and checks preparing, submitted, legacy pre-incorporation and incorporated
 states, including anonymous-access denial. This is a backend response-validation
 fix; it does not require new Cloudflare assets or a database migration.
 
+### November 19, 2026: obsolete backend retirement
+
+The official Convex Management API deletion of `elated-bee-460` returned HTTP
+200 at `2026-11-19T18:02:22Z`. A subsequent deployment lookup
+returned HTTP 404. Only that deployment was deleted; the First Form project
+remains and its inventory now contains only development deployment
+`reminiscent-marlin-243`. The shared project still contains production
+`industrious-cricket-610`, development `gallant-anteater-27` and rehearsal
+`rapid-ox-123`.
+
+Both custom portals, the retained `societyer-firstform.pages.dev` release and
+the meeting-transfer Worker use the shared backend. Deleting the obsolete
+deployment required no frontend, DNS, workspace-policy or shared-data change.
+The retained Pages release remains available for hosting rollback; it does not
+depend on `elated-bee-460`.
+
 ### November 8, 2026: shared-backend migration
 
 Shared-workspace features were already on main at `0135f7c8`. Configuration
@@ -297,25 +314,31 @@ These are migration evidence, not the current production deployments.
 
 ## Backups, retained source and rollback
 
-Old First Form remains intact. Its
-`SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS=cutover.invalid` blocks old client
-identities and prevents writes from old builds. The inventoried source had no
-API tokens or scheduled workflows to continue writing around that gate. This
-source-specific freeze is not a general read-only mode for deployments with
-service credentials or automation.
+After the November 8 migration and until its November 19 deletion, the former
+First Form source used
+`SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS=cutover.invalid` to block old client
+identities and prevent writes from old builds. The migration inventory found
+no API tokens or scheduled workflows on that source to write around the gate.
+This historical, source-specific freeze was not a general read-only mode for
+deployments with service credentials or automation.
 
-Encrypted database/file exports, environment rollback copies, plans, verify
-reports and explicit identity maps are held outside Git in the private
-`~/societyer-backups/shared-workspaces-20261108` directory. Its local README
-explains decryption and recovery. Plaintext snapshots were removed after
-encrypted copies were saved. Both temporary transfer keys were revoked and
+The November 8 migration record places encrypted database/file exports,
+environment rollback copies, plans, verify reports and explicit identity maps
+outside Git in the private `~/societyer-backups/shared-workspaces-20261108`
+directory, with decryption and recovery instructions in its local README.
+Those backup files were not reverified during the November 19 retirement.
+The migration record also confirms that plaintext snapshots were removed after
+encrypted copies were saved, and both temporary transfer keys were revoked and
 their local copies removed. Setup links are private credentials, not repo docs.
 
 Before `finalize`, `transfer:workspace abort` removes only its run's inserts.
-After `finalize`, it refuses. After destination writes, reopening the source is
-not a data rollback: reconcile those writes first. Never run a whole-snapshot
-`--replace`/`--replace-all` import against shared production. Full replacement
-was used only in the fresh isolated rehearsal.
+After `finalize`, it refuses. The deleted First Form source cannot be reopened.
+Recovery from historical exports would require verifying those backups,
+restoring into a fresh deployment and reconciling subsequent shared-production
+writes before any cutover. Never run a whole-snapshot `--replace`/`--replace-all`
+import against shared production. Full replacement was used only in the fresh
+isolated rehearsal. A [frontend hosting rollback](shared-frontend-release.md#legacy-alias-and-rollback)
+continues to use `industrious-cricket-610` and does not restore the old database.
 
 For routine releases, use the explicit shared selector and `--codegen disable`
 in the [First Form guide](../firstform-cloud-deployment.md). Do not restore the

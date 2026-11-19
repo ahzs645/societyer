@@ -6,10 +6,14 @@ to what now exists. Do it only after staging passes
 ([staging-setup.md](staging-setup.md), [acceptance-tests.md](acceptance-tests.md)).
 Operator commands are in the [runbook](operator-runbook.md).
 
-The DDC/First Form production cutover is complete, using DDC production as the
-destination. The [deployed setup and evidence](production-setup.md) records the
-actual domains, checks, identity decision and retained source. The procedure
-below remains the reusable guide for another migration.
+The DDC/First Form production migration completed on November 8, 2026, using
+DDC production as the destination. The former source, `elated-bee-460`, was
+deleted on November 19. The [deployed setup and evidence](production-setup.md)
+records the actual domains, checks, identity decision and source retirement.
+The procedure below remains a reusable guide for another migration. Commands
+and comparisons naming `elated-bee-460` are preserved as historical examples;
+they cannot operate on the deleted deployment. Use the actual source and
+destination names for a future migration.
 
 ## What this change does and doesn't provide
 
@@ -46,7 +50,8 @@ transfer keeps its records, history and files.
 The November 8 destination chosen after inventory was **DDC production
 (`industrious-cricket-610`)**. It preserved the existing Entra redirect,
 SharePoint/mail settings, staff admin and meeting-transfer connections. The
-alternatives below remain useful for a future migration.
+alternatives below record that decision; the First Form deployment named here
+no longer exists. The same considerations apply to a future migration.
 
 | Option | For | Against |
 | --- | --- | --- |
@@ -475,9 +480,19 @@ After cutover:
 
 ## Rollback
 
-Before any member writes to the destination, rollback is to republish the
-previous frontend builds and restore the source's variables (Worker, Entra
-redirect URI, staff admin). The source still holds everything.
+For the completed DDC/First Form migration, `elated-bee-460` was deleted on
+November 19 and cannot be reopened. The retained First Form Pages alias uses
+`industrious-cricket-610`, so [hosting rollback](shared-frontend-release.md#legacy-alias-and-rollback)
+does not require the old backend. Data recovery from historical exports would
+require verifying those backups, restoring into a fresh deployment and
+reconciling subsequent shared-production writes. The November 8 backup location
+is recorded in [production setup](production-setup.md#backups-retained-source-and-rollback);
+those files were not reverified during the November 19 retirement.
+
+For a future migration, while the source is retained and before any member
+writes to the destination, rollback is to republish the previous frontend
+builds and restore the source's variables (Worker, Entra redirect URI, staff
+admin). This assumes the source still holds everything.
 
 After members have written to the destination, repointing the frontends back is
 not a data rollback. Those writes exist only on the destination. Decide before

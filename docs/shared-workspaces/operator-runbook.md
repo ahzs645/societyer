@@ -1,7 +1,7 @@
 # Shared workspaces: operator runbook
 
 This runbook covers every operator task for shared workspaces and linked sign-in.
-The current DDC/First Form domains, release evidence and retained source are in
+The current DDC/First Form domains, release evidence and source-retirement status are in
 [production-setup.md](production-setup.md); operational findings are in
 [lessons-learned.md](lessons-learned.md).
 Read [architecture.md](architecture.md) first. It defines the tables and functions
@@ -20,8 +20,8 @@ change sign-in, domain or storage policy from the app.
 | Name | Deployment | Frontend | Notes |
 | --- | --- | --- | --- |
 | DDC North production | `industrious-cricket-610` (project `societyer-ddcnorth`) | `https://portal.ddcnorth.com`, Pages project `societyer-ddcnorth` | Workspace Microsoft/group policies, SharePoint, mail, meeting-transfer Worker |
-| First Form production | Shared `industrious-cricket-610` | `https://portal.1stform.ca`, alias `https://societyer-firstform.pages.dev`; Pages project `societyer-firstform` | Separate password logins, native workspace policy |
-| Former First Form backend | `elated-bee-460` | No current frontend | Retained source; old client identities locked out to prevent split writes |
+| First Form production | Shared `industrious-cricket-610` | `https://portal.1stform.ca`, Pages project `societyer-ddcnorth`; legacy alias `https://societyer-firstform.pages.dev` retained on `societyer-firstform` | Separate password logins, native workspace policy; legacy alias also uses shared Convex |
+| Former First Form backend | `elated-bee-460` | No current frontend | Deleted November 19, 2026; not a release or rollback target |
 | Transfer rehearsal | `rapid-ox-123` | No published frontend | Isolated destination copy and completed rehearsal; temporary key revoked |
 | Shared staging | created in [staging-setup.md](staging-setup.md) | Pages preview branches | Synthetic data only |
 
@@ -35,7 +35,7 @@ This runbook calls the deployment you are changing `$TARGET`.
 Set the target once per shell and confirm it before any write:
 
 ```sh
-TARGET=industrious-cricket-610        # or elated-bee-460, or the staging deployment
+TARGET=industrious-cricket-610        # or the staging deployment
 npx convex env get SITE_URL --deployment "$TARGET"
 ```
 
@@ -47,23 +47,16 @@ the one you meant.
   `convex run`, `convex env`, `convex export` and `convex import` don't list an
   `--env-file` option, so don't rely on one.
 - Code deploys use a selector file that holds only `CONVEX_DEPLOYMENT`, with
-  `--dry-run` first. The files below are git-ignored (`.env.*.local`).
+  `--dry-run` first. The file below is git-ignored (`.env.*.local`).
 
-```sh
-# DDC North. The existing .env.convex-ddcnorth-production.local holds settings, not a selector.
-printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-ddcnorth-deploy.local
-# First Form. This file already exists with this content.
-printf 'CONVEX_DEPLOYMENT=prod:elated-bee-460\n' > .env.convex-firstform-production.local
-```
-
-Those are the original per-project selectors, retained for source operations.
-For a **current shared production release**, use a new explicit selector:
+For a **current shared production release**, use the explicit shared selector:
 
 ```sh
 printf 'CONVEX_DEPLOYMENT=prod:industrious-cricket-610\n' > .env.convex-shared-production.local
 ```
 
-Do not use the former First Form selector to release the shared backend. Keep
+The former `.env.convex-firstform-production.local` selector targeted the now
+deleted `elated-bee-460` deployment; do not use it for current operations. Keep
 `--codegen disable` when deploying this checkout's tracked generated TypeScript
 files, and run its real type checks. See the [release guide](../firstform-cloud-deployment.md#release).
 
@@ -109,11 +102,11 @@ of them.
 | [8. Link conflicts and unlink requests](#8-link-conflicts-and-unlink-requests) | As needed | |
 | [9. Offboarding](#9-offboarding) | As needed | |
 
-Steps 2, 4 and 5 are safe to run on the current separate deployments. They have
-no visible effect while DDC keeps `SOCIETYER_ENTRA_SSO_REQUIRED=1` and
-`SOCIETYER_DISABLE_NATIVE_FILE_STORAGE=1`, and they mean the rows are ready when
-First Form joins. Step 3 only happens on the deployment that will hold both
-organizations.
+The sequence above includes the initial bootstrap on separate deployments.
+During that bootstrap, steps 2, 4 and 5 prepared the rows while DDC still kept
+`SOCIETYER_ENTRA_SSO_REQUIRED=1` and `SOCIETYER_DISABLE_NATIVE_FILE_STORAGE=1`.
+Step 3 applied only to the deployment receiving both organizations. Current
+production is already consolidated; use the shared release procedure below.
 
 ## 1. Deploy the new code to each existing deployment
 
@@ -121,8 +114,9 @@ Deploy the backend first, then the frontend, on each deployment. Build both
 frontends from the same clean commit. Record the commit hash.
 
 For the current consolidated production setup, deploy the shared backend once
-and then both frontends. The separate-backend instructions below describe the
-initial bootstrap; the retired First Form backend is not a routine release target.
+and then the shared frontend, as described in the [release guide](shared-frontend-release.md).
+The separate-backend instructions below describe the initial bootstrap;
+the former First Form backend was deleted on November 19, 2026.
 
 ### Is it backward compatible?
 
@@ -372,7 +366,9 @@ deployment that holds both organizations they must be set as follows.
 | Storage variables | see [step 5](#5-storage-policies) | |
 | `SOCIETYER_INITIAL_INVOICE_TEMPLATE` | unset | See [step 6](#6-workspace-defaults). |
 
-Compare the two deployments' variable names before cutover:
+Historical November 8 pre-cutover comparison of the two deployments' variable
+names follows. `elated-bee-460` was deleted on November 19; for another migration,
+substitute its actual source and destination rather than rerunning these names:
 
 ```sh
 npx convex env list --names-only --deployment industrious-cricket-610 | sort > /tmp/ddc-env-names
@@ -869,8 +865,11 @@ holds through their own login.
 
 These individual reversals are not a complete production data rollback. After
 consolidation, keep code that enforces workspace policies, and reconcile any
-destination writes before reopening the old source. Do not delete real policy
-or link rows just to satisfy an older schema.
+destination writes before any data-recovery cutover. The old First Form source
+was deleted on November 19; recovery from verified exports would require a fresh
+deployment. The retained First Form Pages alias still uses shared Convex for
+[hosting rollback](shared-frontend-release.md#legacy-alias-and-rollback). Do not
+delete real policy or link rows just to satisfy an older schema.
 
 | Change | Undo |
 | --- | --- |

@@ -64,7 +64,8 @@ legacy/rollback operations.
 A frontend-only change does not require a Convex deployment. When backend code
 also changes, deploy the shared backend first using the explicit shared selector
 and `--codegen disable` in the [backend release guide](../firstform-cloud-deployment.md#release).
-Never deploy to the old First Form `elated-bee-460` production selector.
+The old First Form `elated-bee-460` deployment was deleted on November 19, 2026;
+its production selector is obsolete. Use `industrious-cricket-610` for both workspaces.
 
 The November 19 release required the name-request backend
 contract introduced in `686ee2de`. Its `legalOperations:upsertNameSearchItem`
@@ -110,7 +111,9 @@ Do not change Convex settings or import any data for this hosting move.
 `societyer-firstform.pages.dev` retains deployment
 `72aa7753-dd02-46ac-8b25-086cddbe0f16` from commit
 `03f5dcfaecb7c9f2267e9036d6f03d6233f76648`. It is a compatibility and recovery
-endpoint, not a second normal production release target. Existing alias users
+endpoint, not a second normal production release target. That retained release
+already uses `industrious-cricket-610` and does not depend on the deleted
+`elated-bee-460` backend. Existing alias users
 can use the workspace switcher to move to the canonical custom domain. Do not blanket-redirect its routes:
 session handoff uses origin-bound verifier storage and the source origin's
 existing session. Retiring the alias requires a separate session-aware plan.
@@ -121,8 +124,9 @@ retained deployment. No Convex rollback or data restore is needed.
 
 If reverting the shared frontend to a pre-consolidation DDC-specific build,
 first move First Form back to its legacy project. Then roll back the DDC Pages
-deployment. A hosting rollback must not alter workspace policies or reopen the
-retired First Form database.
+deployment. A hosting rollback continues to use the shared backend and must
+preserve workspace policies. The former First Form database was deleted on
+November 19 and is not a rollback target.
 
 Keep the newer compatible backend during a frontend rollback. Once new
 name-request fields have been saved, an older strict schema can reject those

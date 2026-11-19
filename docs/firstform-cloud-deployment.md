@@ -15,7 +15,7 @@ configuration and transfer evidence.
 | Production frontend release | `bf8ab44f-d9cb-464f-9197-4029737631af`, source `7dcad5ef` |
 | Shared production | [industrious-cricket-610](https://dashboard.convex.dev/t/ahmad-jalil/societyer-ddcnorth/industrious-cricket-610) |
 | Development / qualification | `reminiscent-marlin-243`; not moved |
-| Former production | `elated-bee-460`; retained with old client access locked |
+| Former production | `elated-bee-460`; deleted November 19, 2026; First Form development and shared production retained |
 
 ## Release
 
@@ -40,9 +40,9 @@ domains through the root `wrangler.jsonc`.
 `deploy:firstform` and `deploy:ddcnorth` are aliases for that command. The old
 First Form project/configuration is retained only for compatibility and rollback.
 A frontend-only change does not need a backend deploy. The old
-`.env.convex-firstform-production.local` selector
-may still name `elated-bee-460`; do not use it for a shared release. Backend
-secrets belong in shared Convex, never in `VITE_*`.
+`.env.convex-firstform-production.local` selector is obsolete: its target
+`elated-bee-460` was deleted on November 19. Use the shared selector above for
+production releases. Backend secrets belong in shared Convex, never in `VITE_*`.
 
 ## Domain and access
 
@@ -91,7 +91,7 @@ First Form default deliberately, use `workspaceDefaults:installInvoiceTemplate`
 for that workspace only. Owners choose defaults under **Invoices → Templates**.
 Invoice numbers, customers, tax settings and payment instructions stay scoped.
 
-## Historical November 8 migration and retained source
+## Historical November 8 migration and November 19 retirement
 
 [PR #77](https://github.com/ahzs645/societyer/pull/77) contains the shared frontend
 configuration. Both production builds and six PR checks passed. The real
@@ -100,8 +100,13 @@ browser sign-in, reload and Pages-alias-to-custom-domain handoff passed. Real
 third-party AI client authorization and a new native document-version upload
 remain unqualified.
 
-The former backend is not the current production target. Its old identities
-are blocked to prevent split writes. Encrypted backups and recovery notes are
-held privately outside Git. Once users write on shared production, reopening
-that source does not recover those writes. Use the
+The former backend's old identities were blocked after migration to prevent
+split writes. `elated-bee-460` was deleted on November 19 at
+`2026-11-19T18:02:22Z`; the subsequent lookup returned HTTP 404. Only that
+deployment was deleted. Shared production and First Form development remain,
+and the legacy Pages alias continues to use the shared backend for hosting
+rollback. The November 8 record identifies encrypted backups and recovery notes
+held privately outside Git; those files were not reverified during retirement.
+Recovery from those exports would require a fresh deployment and reconciliation
+of subsequent shared-production writes. Use the
 [migration and rollback procedure](shared-workspaces/migration-and-cutover.md).
