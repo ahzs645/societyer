@@ -84,8 +84,8 @@ function decodeCharset(bytes: Uint8Array, charset: string): string {
   }
 }
 
-/** RFC 2047 encoded words in a header value ("=?utf-8?Q?Fiche_d=27information?="). */
-function decodeEncodedWords(value: string): string {
+/** RFC 2047 encoded words in a header value ("=?utf-8?Q?Fiche_d=27information?="), in their own charset. */
+export function decodeEncodedWords(value: string): string {
   return value
     .replace(/(=\?[^?]+\?[BbQq]\?[^?]*\?=)\s+(?==\?)/g, "$1")
     .replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_match, charset: string, encoding: string, payload: string) => {

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Trash2 } from "lucide-react";
-import { Badge, Field } from "../../components/ui";
+import { Link } from "react-router-dom";
+import { Badge, Banner, Field } from "../../components/ui";
+import { useConfirm } from "../../components/Modal";
 import { DatePicker } from "../../components/DatePicker";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { OptionSelect } from "../../components/OptionSelect";
@@ -9,7 +11,7 @@ import { StructuredAddressFields } from "../../components/StructuredAddressField
 import { CANADIAN_TIME_ZONES } from "../../../shared/timeZones";
 import { DocumentSelect } from "./DocumentSelect";
 import { PortalAccessEditor } from "./PortalAccessEditor";
-import { ATTORNEY_STATUS_LABELS, defaultRegistrationTimeZone, registrationTimeLabel } from "./registryFacts";
+import { ATTORNEY_STATUS_LABELS, defaultRegistrationTimeZone, isPlainTextPortalKey, registrationTimeLabel } from "./registryFacts";
 import type { AttorneyStatus, DrawerKind, PortalAccessEntry, ProfileDocument } from "./types";
 
 /**
@@ -46,7 +48,10 @@ export type DetailDraft = {
   annualReturnDueDate?: string;
   lastAnnualReturnFiledDate?: string;
   registryProfileReportDate?: string;
+  /** Which registry portal the row uses; the drawer never edits it. */
   registryPortalKey?: string;
+  /** Set when the editor chose to remove a key saved as plain text; saving sends null. */
+  registryPortalKeyCleared?: boolean;
   agentForServiceName?: string;
   agentForServiceAddress?: string;
   principalOfficeAddress?: string;
@@ -187,10 +192,8 @@ export function RegistrationFields({ draft, setDraft, documents, derivedPublicRe
         <Field label="Annual return due"><DatePicker value={draft.annualReturnDueDate ?? ""} onChange={(value) => setDraft({ ...draft, annualReturnDueDate: value })} /></Field>
         <Field label="Last annual return filed"><DatePicker value={draft.lastAnnualReturnFiledDate ?? ""} onChange={(value) => setDraft({ ...draft, lastAnnualReturnFiledDate: value })} /></Field>
       </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Profile report date"><DatePicker value={draft.registryProfileReportDate ?? ""} onChange={(value) => setDraft({ ...draft, registryProfileReportDate: value })} /></Field>
-        <Field label="Registry portal key"><input className="input" value={draft.registryPortalKey ?? ""} onChange={(e) => setDraft({ ...draft, registryPortalKey: e.target.value })} /></Field>
-      </div>
+      <Field label="Profile report date"><DatePicker value={draft.registryProfileReportDate ?? ""} onChange={(value) => setDraft({ ...draft, registryProfileReportDate: value })} /></Field>
+      <PlainTextKeyNotice draft={draft} setDraft={setDraft} />
       <Field label="Certificate" hint="The registry's certificate for this registration, uploaded in Documents.">
         <DocumentSelect value={draft.certificateDocumentId} onChange={(value) => setDraft({ ...draft, certificateDocumentId: value })} documents={documents} preferredCategories={["CertificateOfIncorporation", "Filing"]} placeholder="Choose the certificate" />
       </Field>
@@ -214,6 +217,36 @@ export function RegistrationFields({ draft, setDraft, documents, derivedPublicRe
       <Field label="Representatives"><input className="input" value={draft.representativeIdsText ?? (draft.representativeIds ?? []).join(", ")} onChange={(e) => setDraft({ ...draft, representativeIdsText: e.target.value })} placeholder="Name or record IDs, comma separated" /></Field>
       <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
     </>
+  );
+}
+
+/**
+ * Registry keys belong in Access custody, so the drawer has no key field.
+ * A key saved here as plain text earlier is flagged (never shown) and can be
+ * removed from the record.
+ */
+function PlainTextKeyNotice({ draft, setDraft }: DraftProps) {
+  const confirm = useConfirm();
+  if (!isPlainTextPortalKey(draft.registryPortalKey)) return null;
+  if (draft.registryPortalKeyCleared) {
+    return <Banner tone="info">The plain-text portal key is removed from this record when you save.</Banner>;
+  }
+  const clear = async () => {
+    const ok = await confirm({
+      title: "Remove the plain-text key?",
+      message: "Store the key in Access custody first if you still need it. Saving this registration then removes the copy kept here.",
+      confirmLabel: "Remove it",
+      tone: "warn",
+    });
+    if (ok) setDraft({ ...draft, registryPortalKeyCleared: true });
+  };
+  return (
+    <Banner tone="warn" title="A portal key is saved as plain text on this record">
+      <span className="org-plain-key">
+        <span>Move it to <Link to="/app/access-custody">Access custody</Link>, where keys are kept encrypted.</span>
+        <button className="btn btn--sm" type="button" onClick={() => { void clear(); }}>Remove from this record</button>
+      </span>
+    </Banner>
   );
 }
 

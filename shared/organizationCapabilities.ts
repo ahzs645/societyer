@@ -33,7 +33,7 @@ export function organizationCapabilities(organization: CapabilityOrganization, o
 
   const nextSteps: OrganizationCapabilityLink[] = [];
   if (identity.status !== "recorded") {
-    nextSteps.push({ key: "identity", title: "Confirm the entity, home jurisdiction and governing Act", detail: identity.issues.map(issue => issue.message).join(" "), to: "/app/society" });
+    nextSteps.push({ key: "identity", title: "Confirm the entity, home jurisdiction and governing Act", detail: identity.issues.map(issue => issue.message).join(" "), to: "/app/society?tab=legal" });
   } else if (!governanceSupported) {
     nextSteps.push({ key: "coverage", title: "Review statutory requirements for this legal form", detail: governance.reasons.map(issue => issue.message).join(" "), to: "/app/society" });
   }
@@ -44,7 +44,7 @@ export function organizationCapabilities(organization: CapabilityOrganization, o
   } else if (governanceSupported) {
     nextSteps.push({ key: "annual", title: "Review the annual cycle against your records", detail: "Confirm the next meeting and filing obligations, with their supporting documents and receipts.", to: "/app/annual-cycle" });
   }
-  nextSteps.push({ key: "tax", title: "Record tax registrations and assess what you sell", detail: "Incorporation, nonprofit status, charity registration and sales-tax treatment are separate decisions. Record the applicable tax accounts, then assess each item and transaction.", to: "/app/society" });
+  nextSteps.push({ key: "tax", title: "Record tax registrations and assess what you sell", detail: "Incorporation, nonprofit status, charity registration and sales-tax treatment are separate decisions. Record the applicable tax accounts, then assess each item and transaction.", to: "/app/society?tab=tax" });
 
   return {
     kind,

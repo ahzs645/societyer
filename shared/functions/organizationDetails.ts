@@ -29,9 +29,10 @@ import {
   validateEntitySetup,
   validateFormationEvidence,
 } from "../entitySetup";
-import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../organizationDomain";
+import { isPreparingIncorporation, validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../organizationDomain";
 import { organizationToday } from "./electionElectorate";
 import { isTimeZone } from "../timeZones";
+import { proposedRegisteredOffice } from "../registeredOffice";
 
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -129,7 +130,8 @@ export async function upsertRegistrationPortable(
     annualReturnDueDate?: string;
     lastAnnualReturnFiledDate?: string;
     registryProfileReportDate?: string;
-    registryPortalKey?: string;
+    /** Which registry portal the row uses ("bc_registry_societies"). `null` removes it, e.g. a key typed here as plain text. */
+    registryPortalKey?: string | null;
     profileReportDocumentId?: string;
     companyKeyVaultItemId?: string;
     agentForServiceName?: string;
@@ -164,8 +166,11 @@ export async function upsertRegistrationPortable(
   assertAllowedOption("registrationTypes", args.registrationType, "Registration type");
   assertAllowedOption("registrationStatuses", args.status, "Registration status");
   const now = new Date().toISOString();
+  // `null` removes the stored value (the profile no longer edits it: a key typed there belongs in Access custody).
+  const { registryPortalKey, ...rest } = args;
   const payload = {
-    ...cleanObject(args),
+    ...cleanObject({ ...rest, ...(registryPortalKey ? { registryPortalKey } : {}) }),
+    ...(registryPortalKey === null && id ? { registryPortalKey: undefined } : {}),
     registrationType: cleanText(args.registrationType) || "extra_provincial",
     jurisdiction: cleanText(args.jurisdiction) || "Needs review",
     representativeIds: args.representativeIds ?? [],
@@ -548,6 +553,14 @@ export async function recordIncorporationPortable(ctx: PortableMutationCtx, args
   const actFormedUnder = requireRegistryText(args.actFormedUnder, "Act formed under", 200);
   assertAllowedOption("actsFormedUnder", actFormedUnder, "Act formed under");
   const effectiveFrom = requireRegistryDate(args.registeredOfficeEffectiveFrom, "Registered office effective date") ?? incorporationDate;
+  // Recording again with the same number and date is a no-op; anything else is a correction, not a recording.
+  if (society.formationStatus === "incorporated") {
+    if (registrationNumberKey(society.incorporationNumber) === registrationNumberKey(incorporationNumber) && society.incorporationDate === incorporationDate) {
+      const home = await findHomeRegistration(ctx, society);
+      return { registeredOfficeUpdated: false, homeRegistrationId: home ? String(home._id) : null };
+    }
+    throw new Error("The incorporation is already recorded with a different number or date. Correct those on the Legal profile instead.");
+  }
 
   const document = await getOwned(ctx, "documents", args.certificateEvidenceDocumentId, args.societyId);
   const versions = await ctx.db.query("documentVersions").withIndex("by_document", (q) => q.eq("documentId", document._id)).collect();
@@ -586,10 +599,7 @@ export async function recordIncorporationPortable(ctx: PortableMutationCtx, args
       .query("organizationAddresses")
       .withIndex("by_society_type", (q) => q.eq("societyId", args.societyId).eq("type", "registered_office"))
       .collect();
-    const proposed = offices
-      .filter((row) => row.status === "proposed")
-      .sort((a, b) => String(b.effectiveFrom ?? "").localeCompare(String(a.effectiveFrom ?? ""))
-        || String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")))[0];
+    const proposed = proposedRegisteredOffice(offices);
     if (proposed) {
       for (const row of offices) {
         if (row._id === proposed._id || row.status !== "current") continue;
@@ -610,7 +620,9 @@ export async function recordIncorporationPortable(ctx: PortableMutationCtx, args
   };
   let homeRegistrationId: string | null = home ? String(home._id) : null;
   if (home) {
-    await ctx.db.patch(String(home._id), { ...registration, ...(home.status === "pending" ? { notes: "Created automatically from the workspace home jurisdiction." } : {}) });
+    // A note someone wrote on the home row is kept.
+    const keepNotes = Boolean(cleanText(home.notes));
+    await ctx.db.patch(String(home._id), { ...registration, ...(home.status === "pending" && !keepNotes ? { notes: "Created automatically from the workspace home jurisdiction." } : {}) });
   } else {
     const jurisdiction = society.homeJurisdictionCode ?? society.jurisdictionCode;
     if (jurisdiction) {
@@ -647,6 +659,8 @@ export type RegistryImportProfile = {
 };
 
 export type RegistryImportRegistration = RegistrationRegistryFacts & {
+  /** The stored row to patch (the one the review compared against); without it rows are matched. */
+  id?: string;
   registrationType: string;
   jurisdiction: string;
   homeJurisdiction?: string;
@@ -670,6 +684,8 @@ export type RegistryImportAddress = {
 };
 
 export type RegistryImportIdentifier = {
+  /** The stored row to patch (the one the review compared against); without it rows are matched. */
+  id?: string;
   kind: string;
   number: string;
   jurisdiction?: string;
@@ -700,11 +716,18 @@ export type ApplyRegistryImportArgs = {
 export type RegistryImportSectionResult = { created: number; updated: number; unchanged: number; ids: string[] };
 
 export type ApplyRegistryImportResult = {
-  /** `updated` is 1 when any profile field changed; `fields` names them. */
-  profile: RegistryImportSectionResult & { fields: string[] };
+  /**
+   * `updated` is 1 when any profile field changed; `fields` names them.
+   * `deferred`: fields left for "Record incorporation" (the number and date of
+   * an organization still preparing or filed).
+   */
+  profile: RegistryImportSectionResult & { fields: string[]; deferred: string[] };
   registrations: RegistryImportSectionResult;
-  /** `demotedIds`: current rows of the same type moved to past. */
-  addresses: RegistryImportSectionResult & { demotedIds: string[] };
+  /**
+   * `demotedIds`: current rows of the same type moved to past. `pastIds`:
+   * imported addresses kept as past because a newer current one is on file.
+   */
+  addresses: RegistryImportSectionResult & { demotedIds: string[]; pastIds: string[] };
   identifiers: RegistryImportSectionResult;
   /** `valueStored` is false when the runtime can't encrypt: only where the key is kept is recorded. */
   corporationKey: (RegistryImportSectionResult & { valueStored: boolean }) | null;
@@ -921,11 +944,21 @@ export async function applyRegistryImportPortable(
     ...identifiers.flatMap(({ input }) => input.sourceDocumentIds ?? []),
     ...(args.corporationKey?.sourceDocumentIds ?? []),
   ]);
+  // Rows the review compared against must belong to this organization.
+  const registrationTargets = new Map<string, PortableDoc>();
+  for (const { input } of registrations) if (input.id) registrationTargets.set(input.id, await getOwned(ctx, "organizationRegistrations", input.id, societyId));
+  const identifierTargets = new Map<string, PortableDoc>();
+  for (const { input, cleaned } of identifiers) {
+    if (!input.id) continue;
+    const row = await getOwned(ctx, "organizationIdentifiers", input.id, societyId);
+    if (row.kind !== cleaned.kind) throw new Error("An imported identifier can only replace one of the same kind.");
+    identifierTargets.set(input.id, row);
+  }
 
   const result: ApplyRegistryImportResult = {
-    profile: { ...emptySection(), fields: [] },
+    profile: { ...emptySection(), fields: [], deferred: [] },
     registrations: emptySection(),
-    addresses: { ...emptySection(), demotedIds: [] },
+    addresses: { ...emptySection(), demotedIds: [], pastIds: [] },
     identifiers: emptySection(),
     corporationKey: null,
   };
@@ -935,7 +968,16 @@ export async function applyRegistryImportPortable(
     const candidate: Record<string, unknown> = { ...profile };
     if (profile.jurisdictionCode) candidate.homeJurisdictionCode = profile.jurisdictionCode;
     if (society.formationStatus === "incorporated" && profile.incorporationDate && profile.incorporationDate !== society.certificateDate) {
-      throw new Error("The incorporation date comes from the recorded certificate. Record the incorporation again to change it.");
+      throw new Error("The incorporation date comes from the recorded certificate. Correct it on the Legal profile instead.");
+    }
+    // Before the certificate is recorded, the number and date wait for
+    // "Record incorporation"; a preparing organization can't hold them yet.
+    if (isPreparingIncorporation({ formationStatus: society.formationStatus, organizationStatus: society.organizationStatus })) {
+      for (const field of ["incorporationNumber", "incorporationDate"] as const) {
+        if (candidate[field] === undefined) continue;
+        delete candidate[field];
+        result.profile.deferred.push(field);
+      }
     }
     const patch = changedFields(society, candidate);
     validateArticlesProvisions({
@@ -953,7 +995,7 @@ export async function applyRegistryImportPortable(
     }
   }
 
-  // Registrations: by number, else by type and jurisdiction.
+  // Registrations: the row the review compared against, else by number, else by type and jurisdiction.
   if (registrations.length) {
     const existing = await ctx.db
       .query("organizationRegistrations")
@@ -962,7 +1004,8 @@ export async function applyRegistryImportPortable(
     for (const { input, cleaned } of registrations) {
       const numberKey = registrationNumberKey(cleaned.registrationNumber);
       const jurisdictionKey = canonicalizeJurisdictionCode(String(cleaned.jurisdiction));
-      const match = (numberKey ? existing.find((row) => registrationNumberKey(row.registrationNumber) === numberKey) : undefined)
+      const match = input.id ? existing.find((row) => String(row._id) === input.id) ?? registrationTargets.get(input.id)
+        : (numberKey ? existing.find((row) => registrationNumberKey(row.registrationNumber) === numberKey) : undefined)
         ?? existing.find((row) => (row.registrationType ?? "extra_provincial") === cleaned.registrationType
           && canonicalizeJurisdictionCode(row.jurisdiction) === jurisdictionKey
           && (!numberKey || !registrationNumberKey(row.registrationNumber)));
@@ -1004,7 +1047,9 @@ export async function applyRegistryImportPortable(
     }
   }
 
-  // Addresses: by type, street and postal code. A current one retires the other current rows of its type.
+  // Addresses: by type, street and postal code. A current one retires the other
+  // current rows of its type, unless one of them is newer: then the import is
+  // the older address and is kept as past.
   if (addresses.length) {
     const existing = await ctx.db
       .query("organizationAddresses")
@@ -1015,9 +1060,14 @@ export async function applyRegistryImportPortable(
       const match = existing.find((row) => row.type === cleaned.type
         && streetKey(row.street) === streetKey(cleaned.street)
         && postalKey(row.postalCode) === postalKey(cleaned.postalCode));
+      const newer = cleaned.status === "current" && cleaned.effectiveFrom
+        ? existing.find((row) => row !== match && row.type === cleaned.type && row.status === "current" && row.effectiveFrom && String(row.effectiveFrom) > String(cleaned.effectiveFrom))
+        : undefined;
+      const status = newer ? "past" : cleaned.status;
+      const effectiveTo = newer ? String(newer.effectiveFrom) : undefined;
       let id: string;
       if (match) {
-        const candidate: Record<string, unknown> = { status: cleaned.status, effectiveFrom: cleaned.effectiveFrom };
+        const candidate: Record<string, unknown> = { status, effectiveFrom: cleaned.effectiveFrom, effectiveTo };
         const sourceDocumentIds = unionIds(match.sourceDocumentIds, input.sourceDocumentIds);
         if (sourceDocumentIds) candidate.sourceDocumentIds = sourceDocumentIds;
         const patch = changedFields(match, candidate);
@@ -1031,7 +1081,7 @@ export async function applyRegistryImportPortable(
         id = String(match._id);
       } else {
         const row = {
-          ...cleanObject(cleaned),
+          ...cleanObject({ ...cleaned, status, effectiveTo }),
           societyId,
           ...(input.sourceDocumentIds?.length ? { sourceDocumentIds: Array.from(new Set(input.sourceDocumentIds)) } : {}),
           createdAtISO: nowISO,
@@ -1042,18 +1092,21 @@ export async function applyRegistryImportPortable(
         result.addresses.created += 1;
       }
       result.addresses.ids.push(id);
-      if (cleaned.status === "current") currentByType.set(cleaned.type, { id, effectiveFrom: cleaned.effectiveFrom });
+      if (newer) result.addresses.pastIds.push(id);
+      if (status === "current") currentByType.set(cleaned.type, { id, effectiveFrom: cleaned.effectiveFrom });
     }
     for (const row of existing) {
       const current = currentByType.get(String(row.type));
       if (!current || row.status !== "current" || String(row._id) === current.id) continue;
+      // Never retire a row that took effect after the imported one.
+      if (current.effectiveFrom && row.effectiveFrom && String(row.effectiveFrom) > current.effectiveFrom) continue;
       await ctx.db.patch(row._id, { status: "past", ...(current.effectiveFrom && !row.effectiveTo ? { effectiveTo: current.effectiveFrom } : {}), updatedAtISO: nowISO });
       row.status = "past";
       result.addresses.demotedIds.push(String(row._id));
     }
   }
 
-  // Identifiers: by kind and the digits of the number.
+  // Identifiers: the row the review compared against, else by kind and the digits of the number.
   if (identifiers.length) {
     const existing = await ctx.db
       .query("organizationIdentifiers")
@@ -1061,10 +1114,12 @@ export async function applyRegistryImportPortable(
       .collect();
     for (const { input, cleaned } of identifiers) {
       const digits = identifierDigits(cleaned.number);
-      const match = digits ? existing.find((row) => row.kind === cleaned.kind && identifierDigits(row.number) === digits) : undefined;
+      const match = input.id ? existing.find((row) => String(row._id) === input.id) ?? identifierTargets.get(input.id)
+        : digits ? existing.find((row) => row.kind === cleaned.kind && identifierDigits(row.number) === digits) : undefined;
       if (match) {
         const candidate: Record<string, unknown> = {
-          // Matched on digits, so the stored spelling stays.
+          // The same digits keep their stored spelling; a different number replaces it.
+          ...(identifierDigits(match.number) !== digits ? { number: cleaned.number } : {}),
           jurisdiction: cleaned.jurisdiction,
           registeredAt: cleaned.registeredAt,
           status: cleaned.status,

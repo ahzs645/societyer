@@ -237,7 +237,7 @@ export function ComplianceSettingsPage() {
             <div className="settings-section__fact">
               <span className="settings-section__fact-label">Fiscal year end</span>
               <span>{society.fiscalYearEnd ? formatMonthDay(society.fiscalYearEnd) : "Not set"}</span>
-              <Link to="/app/society" className="settings-section__fact-link">Change in profile</Link>
+              <Link to="/app/society?tab=legal#business-year" className="settings-section__fact-link">Change in profile</Link>
             </div>
             {(legalGovernanceProfile(society)?.id === "bc_company" || waive) && <Checkbox
               checked={waive}

@@ -11,7 +11,7 @@ import { jurisdictionModuleContract } from "../../../shared/jurisdictionWorkspac
 import { canonicalizeJurisdictionCode, isCorporation, isFederalCbca, isPreparingIncorporation } from "../../../shared/organizationDomain";
 import { DetailSection, RowActions } from "./DetailDrawers";
 import { DocumentLink } from "./DocumentSelect";
-import { bcExtraProvincialReportWindow, cbcaAnnualReturnWindow } from "./deadlines";
+import { bcExtraProvincialReportWindow, cbcaAnnualReturnWindow, recordedDueStatus, type FilingWindow } from "./deadlines";
 import { isBcJurisdiction, isExtraProvincialRegistration, isHomeRegistration, monthDayLabel, SECRET_IDENTIFIER_KINDS } from "./detailRows";
 import { detailOptions } from "./registerTables";
 import { attorneyLabel, portalAccessLabel, publicRecordLink, registrationTimeLabel, type CorporationKeyState } from "./registryFacts";
@@ -146,8 +146,17 @@ function PublicRecordFact({ link }: { link: { url: string; derived: boolean } | 
   );
 }
 
-function windowText(window: { opens: string; due: string } | null) {
-  return window ? `${formatDate(window.opens)} – ${formatDate(window.due)}` : undefined;
+/** "19 Nov 2027 – 18 Jan 2028", flagged when the window closed with no filing recorded. */
+function windowText(window: FilingWindow | null) {
+  if (!window) return undefined;
+  const text = `${formatDate(window.opens)} – ${formatDate(window.due)}`;
+  return window.overdue ? <span>{text} <Badge tone="danger">Overdue</Badge></span> : text;
+}
+
+function DueFact({ due, lastFiled }: { due: string | undefined; lastFiled: string | undefined }) {
+  if (!due) return <Missing>Not set</Missing>;
+  const overdue = recordedDueStatus(due, calendarDateKey(new Date()), lastFiled) === "overdue";
+  return <span>{formatDate(due)}{overdue && <> <Badge tone="danger">Overdue</Badge></>}</span>;
 }
 
 function HomeRegistrationCard({ society, form, row, identifiers, documents, canEdit, onEdit, onAddHome }: {
@@ -194,7 +203,7 @@ function HomeRegistrationCard({ society, form, row, identifiers, documents, canE
           {!preparing && <Fact label="Public record"><PublicRecordFact link={publicRecord} /></Fact>}
           {certificateId && <Fact label="Certificate"><DocumentLink id={certificateId} documents={documents} fallback="Certificate" /></Fact>}
           {row?.lastAnnualReturnFiledDate && <Fact label="Last annual return">{formatDate(row.lastAnnualReturnFiledDate)}</Fact>}
-          {row?.annualReturnDueDate && <Fact label="Annual return due">{formatDate(row.annualReturnDueDate)}</Fact>}
+          {row?.annualReturnDueDate && <Fact label="Annual return due"><DueFact due={row.annualReturnDueDate} lastFiled={row.lastAnnualReturnFiledDate} /></Fact>}
         </dl>
         <p className="muted org-profile-card-note">The number, date and anniversary are edited on the Legal profile.</p>
       </div>
@@ -240,8 +249,8 @@ function ExtraProvincialCard({ row, identifiers, documents, onEdit, onRemove }: 
           <Fact label="Attorney">{attorney ?? <Missing>No decision recorded</Missing>}</Fact>
           {(agent || row.attorneyStatus === "appointed") && <Fact label="Agent or attorney">{agent ? <span className="org-profile-kv__wrap">{agent}</span> : <Missing>Name not recorded</Missing>}</Fact>}
           <Fact label="Principal office">{row.principalOfficeAddress ? <span className="org-profile-kv__wrap">{row.principalOfficeAddress}</span> : <Missing />}</Fact>
-          {bc && <Fact label="Next annual report">{windowText(reportWindow) ?? <Missing>Set the registration date</Missing>}</Fact>}
-          {(!bc || row.annualReturnDueDate) && <Fact label="Annual return due">{row.annualReturnDueDate ? formatDate(row.annualReturnDueDate) : <Missing>Not set</Missing>}</Fact>}
+          {bc && <Fact label="Annual report window">{windowText(reportWindow) ?? <Missing>Set the registration date</Missing>}</Fact>}
+          {(!bc || row.annualReturnDueDate) && <Fact label="Annual return due"><DueFact due={row.annualReturnDueDate} lastFiled={row.lastAnnualReturnFiledDate} /></Fact>}
           <Fact label="Last filed">{row.lastAnnualReturnFiledDate ? formatDate(row.lastAnnualReturnFiledDate) : <Missing>Not yet</Missing>}</Fact>
           <Fact label="Registry access"><PortalAccessFact entries={row.portalAccess} /></Fact>
           <Fact label="Reminder emails"><ReminderFact value={row.reminderEmailsSubscribed} /></Fact>

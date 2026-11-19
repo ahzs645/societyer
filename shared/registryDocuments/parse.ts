@@ -346,11 +346,31 @@ function emailHeader(lines: string[], name: string): string | undefined {
   return line?.slice(name.length + 1).trim();
 }
 
+const HEADER_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/**
+ * An RFC 5322 Date header as an ISO timestamp in the sender's own offset
+ * ("Fri, 14 Mar 2025 19:45:00 -0400" → "2025-03-14T19:45:00-04:00"), so its
+ * first ten characters are the calendar date the email was sent, not the UTC one.
+ */
+export function emailHeaderDateISO(header: string): string | undefined {
+  const match = /(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([+-]\d{4}|GMT|UTC?|Z)?/i.exec(header);
+  const month = match ? HEADER_MONTHS.indexOf(match[2].toLowerCase()) : -1;
+  if (match && month >= 0) {
+    const pad = (value: string | number) => String(value).padStart(2, "0");
+    const zone = match[7] && /^[+-]\d{4}$/.test(match[7]) ? `${match[7].slice(0, 3)}:${match[7].slice(3)}` : "+00:00";
+    const iso = `${match[3]}-${pad(month + 1)}-${pad(match[1])}T${pad(match[4])}:${match[5]}:${match[6] ?? "00"}${zone}`;
+    if (!Number.isNaN(Date.parse(iso))) return iso;
+  }
+  const parsed = new Date(header);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+
 function readEmailHeaders(lines: string[], ctx: Context) {
   const from = emailHeader(lines, "From") ?? "";
   const date = emailHeader(lines, "Date");
-  const parsed = date ? new Date(date) : undefined;
-  if (parsed && !Number.isNaN(parsed.getTime())) put(ctx, "emailDateISO", parsed.toISOString(), `Date: ${date}`);
+  const dateISO = date ? emailHeaderDateISO(date) : undefined;
+  if (dateISO) put(ctx, "emailDateISO", dateISO, `Date: ${date}`);
   if (/ised-isde|corporationscanada|ic\.gc\.ca|gov\.bc\.ca/i.test(from)) {
     const to = emailHeader(lines, "To") ?? "";
     const address = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/.exec(to)?.[0];

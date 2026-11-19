@@ -4,6 +4,8 @@ import type { RegistryExtractRequest, RegistryExtractResponse } from "./extractP
 
 export const MAX_REGISTRY_FILES = 30;
 export const MAX_REGISTRY_FILE_BYTES = 25 * 1024 * 1024;
+/** How long one file (with its attachments) may take before the reader is stopped. */
+export const REGISTRY_FILE_TIMEOUT_MS = 60_000;
 
 /** True for the files the import reads: PDFs and saved emails. */
 export function isRegistryFile(file: Pick<File, "name" | "type">) {
@@ -21,29 +23,44 @@ function extractName(file: File) {
  * device. A worker does the reading (pdf.js and MIME decoding stay off the
  * main thread); without workers the same code is loaded here on demand.
  * Results come back in the order the files were chosen, each email followed
- * by its attachments.
+ * by its attachments. A file that takes longer than a minute stops the
+ * reader; `signal` cancels it.
  */
-export async function readRegistryFiles(files: readonly { id: string; file: File }[], onProgress?: (done: number, total: number) => void): Promise<RegistryFileText[]> {
+export async function readRegistryFiles(files: readonly { id: string; file: File }[], onProgress?: (done: number, total: number) => void, signal?: AbortSignal): Promise<RegistryFileText[]> {
   const inputs = await Promise.all(files.map(async ({ id, file }) => ({ id, name: extractName(file), bytes: await file.arrayBuffer() })));
+  if (signal?.aborted) throw new DOMException("Reading cancelled.", "AbortError");
   if (typeof Worker === "undefined") return readOnMainThread(inputs, onProgress);
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./registryExtract.worker.ts", import.meta.url), { type: "module", name: "societyer-registry-extract" });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let current = 0;
+    const finish = (outcome: () => void) => {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+      worker.terminate();
+      outcome();
+    };
+    const fail = (message: string) => finish(() => reject(new Error(message)));
+    // Each file gets its own minute, from the moment the worker starts on it.
+    const startTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => fail(`Reading ${files[current]?.file.name ?? "a file"} took longer than a minute, so it was stopped. Try again without that file.`), REGISTRY_FILE_TIMEOUT_MS);
+    };
+    const cancel = () => finish(() => reject(new DOMException("Reading cancelled.", "AbortError")));
+    signal?.addEventListener("abort", cancel, { once: true });
     worker.onmessage = (event: MessageEvent<RegistryExtractResponse | { type?: unknown }>) => {
       const message = event.data;
       // pdf.js posts its own handshake messages; only ours finish the job.
-      if (message.type === "progress" && "done" in message) onProgress?.(message.done, message.total);
-      else if (message.type === "result" && "files" in message) {
-        worker.terminate();
-        resolve(message.files);
-      } else if (message.type === "error" && "message" in message) {
-        worker.terminate();
-        reject(new Error(message.message));
-      }
+      if (message.type === "progress" && "done" in message) {
+        current = message.done;
+        startTimer();
+        onProgress?.(message.done, message.total);
+      } else if (message.type === "result" && "files" in message) finish(() => resolve(message.files));
+      else if (message.type === "error" && "message" in message) fail(message.message);
     };
-    worker.onerror = () => {
-      worker.terminate();
-      reject(new Error("The document reader could not start. Reload the page and try again."));
-    };
+    worker.onmessageerror = () => fail("The document reader sent back something that couldn't be read. Try again with fewer files.");
+    worker.onerror = () => fail("The document reader could not start. Reload the page and try again.");
+    startTimer();
     const request: RegistryExtractRequest = { files: inputs };
     worker.postMessage(request, inputs.map((input) => input.bytes));
   });

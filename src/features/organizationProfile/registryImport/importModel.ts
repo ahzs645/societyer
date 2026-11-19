@@ -12,6 +12,7 @@ import {
   type RegistryProposalValue,
 } from "../../../../shared/registryDocuments";
 import type { ApplyRegistryImportResult } from "../../../../shared/functions/organizationDetails";
+import { isUnofficialDocument } from "../../../../shared/entitySetup";
 import { listText } from "../registryFacts";
 import type { OrganizationDetail, OrganizationRecord, ProfileDocument } from "../types";
 import type { RegistryFileText } from "./extractCore";
@@ -73,6 +74,7 @@ function currentDirectors(directors: readonly DirectorRegisterRow[] | undefined)
 /** What the organization holds today, for the proposal to compare against. */
 export function currentSnapshot(society: OrganizationRecord, detail: OrganizationDetail | undefined, directors: readonly DirectorRegisterRow[] | undefined): CurrentProfileSnapshot {
   return {
+    formationStatus: society.formationStatus ?? null,
     profile: {
       name: society.name,
       incorporationNumber: society.incorporationNumber ?? null,
@@ -90,6 +92,7 @@ export function currentSnapshot(society: OrganizationRecord, detail: Organizatio
       officialEmail: society.officialEmail ?? null,
     },
     registrations: (detail?.registrations ?? []).map((row) => ({
+      id: row._id,
       registrationType: row.registrationType ?? null,
       jurisdiction: row.jurisdiction ?? null,
       homeJurisdiction: row.homeJurisdiction ?? null,
@@ -108,6 +111,7 @@ export function currentSnapshot(society: OrganizationRecord, detail: Organizatio
     addresses: (detail?.addresses ?? []).flatMap((row) => row.type && row.street && row.city ? [{
       type: row.type,
       status: row.status ?? null,
+      effectiveFrom: row.effectiveFrom ?? null,
       street: row.street,
       unit: row.unit ?? null,
       city: row.city,
@@ -115,7 +119,7 @@ export function currentSnapshot(society: OrganizationRecord, detail: Organizatio
       postalCode: row.postalCode ?? null,
       country: row.country ?? null,
     }] : []),
-    identifiers: (detail?.identifiers ?? []).flatMap((row) => row.kind && row.number ? [{ kind: row.kind, number: row.number }] : []),
+    identifiers: (detail?.identifiers ?? []).flatMap((row) => row.kind && row.number ? [{ id: row._id, kind: row.kind, number: row.number }] : []),
     directors: currentDirectors(directors).map((row) => ({ name: directorName(row), residentCanadianStatus: row.residentCanadianStatus ?? null })).filter((row) => row.name),
     hasCorporationKey: Boolean(society.corporationKeyVaultItemId),
   };
@@ -164,7 +168,8 @@ export function importDocumentRows(proposal: RegistryImportProposal, files: read
   return proposal.documents.map((entry, index) => {
     const file = files[index];
     const reasons = restrictionReasons(file, files);
-    const existing = (documents ?? []).find((document) => !document.archivedAtISO
+    // Generated drafts and archived copies never stand in for a registry document (least of all a certificate).
+    const existing = (documents ?? []).find((document) => !isUnofficialDocument(document)
       && document.category === entry.suggestedCategory
       && document.title?.trim() === entry.suggestedTitle);
     return { file, entry, reasons, ...(existing ? { existing } : {}), defaultUpload: entry.selectedByDefault && !entry.restricted && !reasons.length && !existing };
@@ -241,6 +246,7 @@ export function importSummary(result: ApplyRegistryImportResult, uploadedCount: 
     changed(result.identifiers) ? plural(changed(result.identifiers), "tax number") : "",
   ].filter(Boolean);
   const sentences = [parts.length ? `Updated ${listText(parts)}.` : "No profile changes."];
+  if (result.profile.deferred?.length) sentences.push("The corporation number and date are recorded with Record incorporation.");
   if (result.corporationKey) sentences.push(result.corporationKey.valueStored ? "Corporation key stored in Access custody." : "Corporation key recorded as a reference.");
   if (uploadedCount) sentences.push(`${plural(uploadedCount, "document")} uploaded.`);
   return sentences.join(" ");

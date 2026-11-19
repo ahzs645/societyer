@@ -123,6 +123,13 @@ export const setWorkspaceBrand = authorizedMutation("society:setWorkspaceBrand",
   handler: async (ctx, args) => setWorkspaceBrandPortable(await toPortableMutationCtx(ctx), args),
 });
 
+/** Society fields `upsert` removes when sent as null. */
+const CLEARABLE_SOCIETY_FIELDS = ["articlesMinDirectors", "articlesMaxDirectors", "articlesSourceDocumentId"] as const;
+
+function withoutNulls<T extends Record<string, unknown>>(value: T): { [K in keyof T]: Exclude<T[K], null> } {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== null)) as { [K in keyof T]: Exclude<T[K], null> };
+}
+
 export const upsert = authorizedMutation("society:upsert", mutation)({
   args: {
     id: v.optional(v.id("societies")),
@@ -200,19 +207,24 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     publicVolunteerIntakeEnabled: v.optional(v.boolean()),
     publicGrantIntakeEnabled: v.optional(v.boolean()),
     demoMode: v.optional(v.boolean()),
-    articlesMinDirectors: v.optional(v.number()),
-    articlesMaxDirectors: v.optional(v.number()),
+    // null clears a recorded limit or source document (an omitted field is unchanged).
+    articlesMinDirectors: v.optional(v.union(v.number(), v.null())),
+    articlesMaxDirectors: v.optional(v.union(v.number(), v.null())),
     articlesShareTransferRestrictions: v.optional(v.string()),
     articlesBusinessRestrictions: v.optional(v.string()),
     articlesOtherProvisions: v.optional(v.string()),
-    articlesSourceDocumentId: v.optional(v.id("documents")),
+    articlesSourceDocumentId: v.optional(v.union(v.id("documents"), v.null())),
   },
   returns: v.any(),
   // Patch semantics: a field the caller leaves out keeps its stored value, so
   // pages that save a few fields (Privacy, Transparency, setup) never clear
   // the rest. Derived fields are written only when they have a value.
   handler: async (ctx, args) => {
-    const { id, ...rest } = args;
+    const { id, ...input } = args;
+    // A field sent as null is removed; one left out keeps its stored value.
+    const clearedFields = CLEARABLE_SOCIETY_FIELDS.filter((key) => input[key] === null);
+    const rest = withoutNulls(input);
+    const cleared = Object.fromEntries(clearedFields.map((key) => [key, undefined]));
     const portable = await toPortableMutationCtx(ctx);
     if (!id && PORTABLE_ACCESS_ENFORCEMENT) requireAuthenticated(portable);
     if (id) {
@@ -235,7 +247,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
       }
     }
     const previous = id ? await ctx.db.get(id) : {};
-    const formation = { ...previous, ...rest };
+    const formation = { ...previous, ...rest, ...cleared };
     validateEntitySetup(formation);
     validateArticlesProvisions(formation);
     if (rest.articlesSourceDocumentId) await getOwned(portable, "documents", rest.articlesSourceDocumentId, id ?? "");
@@ -264,6 +276,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     };
     const payload = {
       ...rest,
+      ...cleared,
       ...Object.fromEntries(Object.entries(derived).filter(([, value]) => value !== undefined)),
       updatedAt: Date.now(),
     };

@@ -43,7 +43,8 @@ function registrationArgs(draft: DetailDraft, societyId: string) {
     annualReturnDueDate: draft.annualReturnDueDate || undefined,
     lastAnnualReturnFiledDate: draft.lastAnnualReturnFiledDate || undefined,
     registryProfileReportDate: draft.registryProfileReportDate || undefined,
-    registryPortalKey: draft.registryPortalKey || undefined,
+    // Never sent back: null only removes a key that was saved here as plain text.
+    registryPortalKey: draft.registryPortalKeyCleared ? null : undefined,
     agentForServiceName: draft.agentForServiceName || undefined,
     agentForServiceAddress: draft.agentForServiceAddress || undefined,
     principalOfficeAddress: draft.principalOfficeAddress || undefined,

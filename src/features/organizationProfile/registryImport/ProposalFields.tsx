@@ -57,6 +57,7 @@ function FieldRow({ field, selection, onChange }: {
         </fieldset>
       )}
       {!field.conflict && field.sources.length > 0 && <div className="muted registry-import__source">From {sourceText(field.sources)}</div>}
+      {field.note && <div className="registry-import__note">{field.note}</div>}
     </li>
   );
 }

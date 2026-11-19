@@ -251,6 +251,10 @@ export type RegistryProposalField = {
   conflict?: { note: string; options: RegistryProposalOption[] };
   /** Address `effectiveFrom` or identifier `registeredAt`, when the documents date it. */
   effectiveDate?: string;
+  /** The stored row `current` was read from; applying patches that row (registrations, identifiers). */
+  currentId?: string;
+  /** Why a value is shown but not applied, or not selected by default. */
+  note?: string;
   equalsCurrent: boolean;
   /** A current value exists and differs: applying replaces it. */
   replacesCurrent: boolean;
@@ -324,6 +328,8 @@ export type RegistryProposalSecret = {
 /** The registration rows the proposal can write, with the keys `applyRegistryImport` matches on. */
 export type RegistryRegistrationTarget = {
   key: RegistryRegistrationKey;
+  /** The stored registration the proposal compared against; applying patches it. */
+  existingId?: string;
   label: string;
   registrationType: "home" | "extra_provincial";
   jurisdiction: string;
@@ -348,7 +354,10 @@ export type RegistryImportProposal = {
 /** What the organization holds today, for comparison. Every part is optional. */
 export type CurrentProfileSnapshot = {
   profile?: Partial<Record<RegistryProfileField, string | number | null>>;
+  /** "preparing" or "submitted": the number and date are left to Record incorporation. */
+  formationStatus?: string | null;
   registrations?: Array<{
+    id?: string;
     registrationType?: string | null;
     jurisdiction?: string | null;
     homeJurisdiction?: string | null;
@@ -364,8 +373,8 @@ export type CurrentProfileSnapshot = {
     publicRecordUrl?: string | null;
     portalAccess?: Array<{ name: string; role?: string; updatedAtISO?: string; notes?: string }> | null;
   }>;
-  addresses?: Array<{ type: string; status?: string | null; street: string; unit?: string | null; city: string; provinceState?: string | null; postalCode?: string | null; country?: string | null }>;
-  identifiers?: Array<{ kind: string; number: string }>;
+  addresses?: Array<{ type: string; status?: string | null; effectiveFrom?: string | null; street: string; unit?: string | null; city: string; provinceState?: string | null; postalCode?: string | null; country?: string | null }>;
+  identifiers?: Array<{ id?: string; kind: string; number: string }>;
   directors?: Array<{ name: string; residentCanadianStatus?: string | null }>;
   hasCorporationKey?: boolean;
 };
@@ -401,6 +410,8 @@ export type RegistryImportProfileArgs<DocId extends string = string> = {
 };
 
 export type RegistryImportRegistrationArgs<DocId extends string = string> = {
+  /** The stored registration to patch (the one the review compared against). */
+  id?: string;
   registrationType: "home" | "extra_provincial";
   jurisdiction: string;
   homeJurisdiction?: string;
@@ -420,7 +431,7 @@ export type RegistryImportRegistrationArgs<DocId extends string = string> = {
   status: string;
 };
 
-export type RegistryImportAddressArgs = {
+export type RegistryImportAddressArgs<DocId extends string = string> = {
   type: RegistryAddressType;
   status: string;
   street: string;
@@ -430,23 +441,27 @@ export type RegistryImportAddressArgs = {
   postalCode?: string;
   country: string;
   effectiveFrom?: string;
+  sourceDocumentIds?: DocId[];
 };
 
-export type RegistryImportIdentifierArgs = {
+export type RegistryImportIdentifierArgs<DocId extends string = string> = {
+  /** The stored identifier to patch (the one the review compared against). */
+  id?: string;
   kind: RegistryIdentifierKind;
   number: string;
   jurisdiction?: string;
   registeredAt?: string;
   status: string;
   accessLevel: string;
+  sourceDocumentIds?: DocId[];
 };
 
 /** Exactly the args of `organizationDetails.applyRegistryImport` (minus `societyId`). */
 export type RegistryImportApplyArgs<DocId extends string = string> = {
   profile?: RegistryImportProfileArgs<DocId>;
   registrations?: RegistryImportRegistrationArgs<DocId>[];
-  addresses?: RegistryImportAddressArgs[];
-  identifiers?: RegistryImportIdentifierArgs[];
+  addresses?: RegistryImportAddressArgs<DocId>[];
+  identifiers?: RegistryImportIdentifierArgs<DocId>[];
   corporationKey?: { value: string; label: string };
 };
 
@@ -454,7 +469,9 @@ export type RegistryImportApplyArgs<DocId extends string = string> = {
 export type RegistryDocumentRefTarget =
   | { target: "profile.articlesSourceDocumentId" }
   | { target: "registration.certificateDocumentId"; registrationIndex: number }
-  | { target: "registration.sourceDocumentIds"; registrationIndex: number };
+  | { target: "registration.sourceDocumentIds"; registrationIndex: number }
+  | { target: "address.sourceDocumentIds"; addressIndex: number }
+  | { target: "identifier.sourceDocumentIds"; identifierIndex: number };
 
 /** Keyed by file fingerprint. */
 export type RegistryDocumentRefs = Record<string, RegistryDocumentRefTarget[]>;

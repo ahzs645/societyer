@@ -212,7 +212,9 @@ export function SocietyPage() {
     try {
       validateEntitySetup(form);
       validateArticlesProvisions(form);
+      const before = society.updatedAt;
       await upsert(profileUpsertArgs(form, society, detail?.addresses ?? []));
+      registry.reseedFormWhen((current) => current.updatedAt !== before);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
       toast.success("Organization profile saved");

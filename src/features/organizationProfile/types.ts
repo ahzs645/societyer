@@ -31,6 +31,7 @@ export type AddressRow = {
   effectiveFrom?: string;
   effectiveTo?: string;
   notes?: string;
+  createdAtISO?: string;
 };
 
 export type RegistrationRow = {
@@ -91,4 +92,17 @@ export type OrganizationDetail = {
 };
 
 /** A document as the profile's pickers list it. */
-export type ProfileDocument = { _id: string; title?: string; category?: string; createdAtISO?: string; fileName?: string; archivedAtISO?: string; tags?: string[] };
+export type ProfileDocument = {
+  _id: string;
+  title?: string;
+  category?: string;
+  createdAtISO?: string;
+  fileName?: string;
+  archivedAtISO?: string;
+  tags?: string[];
+  // Markers of a generated or draft document (see isUnofficialDocument in shared/entitySetup).
+  importRecordKind?: string;
+  sourceExternalIds?: string[];
+  sourcePayloadJson?: string;
+  flaggedForDeletion?: boolean;
+};

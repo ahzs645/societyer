@@ -12,7 +12,8 @@ import { DocumentSelect } from "./DocumentSelect";
 import { addressLine } from "./detailRows";
 import { REGISTRY_IMPORT_TAG } from "./registryFacts";
 import { useProfileDocumentUpload } from "./useProfileDocumentUpload";
-import type { AddressRow, OrganizationDetail, OrganizationRecord, ProfileDocument } from "./types";
+import { proposedRegisteredOffice } from "../../../shared/registeredOffice";
+import type { OrganizationDetail, OrganizationRecord, ProfileDocument } from "./types";
 
 /** Values the drawer opens with, e.g. from a registry import. */
 export type RecordIncorporationPrefill = {
@@ -24,12 +25,6 @@ export type RecordIncorporationPrefill = {
 
 type CertificateSource = "existing" | "upload";
 
-/** The proposed registered office recording the incorporation makes current: the latest one, as the server picks it. */
-export function proposedRegisteredOffice(addresses: readonly AddressRow[]): AddressRow | undefined {
-  return addresses
-    .filter((row) => row.type === "registered_office" && row.status === "proposed")
-    .sort((a, b) => String(b.effectiveFrom ?? "").localeCompare(String(a.effectiveFrom ?? "")))[0];
-}
 
 /**
  * "Record incorporation": turns a preparing or filed organization into a

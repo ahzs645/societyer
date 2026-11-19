@@ -165,7 +165,7 @@ export function BooksSettingsPage() {
           <div className="settings-section__fact">
             <span className="settings-section__fact-label">Fiscal year end</span>
             <span>{settings.fiscalYearEnd ? formatMonthDay(settings.fiscalYearEnd) : "Not set"}</span>
-            {!settings.fiscalYearEnd && <Link to="/app/society" className="settings-section__fact-link">Set it in organization details</Link>}
+            {!settings.fiscalYearEnd && <Link to="/app/society?tab=legal#business-year" className="settings-section__fact-link">Set it in organization details</Link>}
           </div>
 
           <hr className="books-settings__divider" />

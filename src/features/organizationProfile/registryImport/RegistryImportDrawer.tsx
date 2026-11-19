@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Banner, Drawer } from "../../../components/ui";
@@ -56,6 +56,7 @@ export function RegistryImportDrawer({ open, onClose, society, detail, documents
   const [uploaded, setUploaded] = useState<Record<string, string>>({});
   const [step, setStep] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const reading = useRef<AbortController | null>(null);
   const canStoreKey = role === "Owner" || role === "Admin";
   const userName = auth.session?.user.name?.trim() || currentUser?.displayName?.trim() || "";
 
@@ -63,9 +64,13 @@ export function RegistryImportDrawer({ open, onClose, society, detail, documents
   const proposal = useMemo(() => (files.length ? buildProposal(files, snapshot) : undefined), [files, snapshot]);
   const rows = useMemo(() => (proposal ? importDocumentRows(proposal, files, documents) : []), [proposal, files, documents]);
 
-  // A fresh start each time the drawer opens.
+  // A fresh start each time the drawer opens; closing it stops any reading.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      reading.current?.abort();
+      reading.current = null;
+      return;
+    }
     setStage("choose");
     setChosen([]);
     setSkipped([]);
@@ -79,18 +84,25 @@ export function RegistryImportDrawer({ open, onClose, society, detail, documents
   const read = async () => {
     setError(null);
     setStage("reading");
+    const controller = new AbortController();
+    reading.current = controller;
     try {
-      const texts = await readRegistryFiles(chosen, (done, total) => setStep(`Reading ${Math.min(done + 1, total)} of ${total}…`));
+      const texts = await readRegistryFiles(chosen, (done, total) => setStep(`Reading ${Math.min(done + 1, total)} of ${total}…`), controller.signal);
       const parsedFiles = buildImportFiles(chosen, texts);
       const first = buildProposal(parsedFiles, snapshot);
       setFiles(parsedFiles);
       setSelection({ ...defaultRegistryImportSelection(first), portalAccessName: userName });
       setUpload(Object.fromEntries(importDocumentRows(first, parsedFiles, documents).map((row) => [row.file.id, row.defaultUpload])));
-      setUploaded({});
+      // Files uploaded before going Back stay uploaded; only files no longer chosen are forgotten.
+      const chosenIds = new Set(chosen.map((entry) => entry.id));
+      setUploaded((current) => Object.fromEntries(Object.entries(current).filter(([fileId]) => chosenIds.has(fileId.split(".")[0]))));
       setStage("review");
     } catch (caught) {
+      if (controller.signal.aborted) return;
       setError(caught instanceof Error ? caught.message : String(caught));
       setStage("choose");
+    } finally {
+      if (reading.current === controller) reading.current = null;
     }
   };
 
@@ -124,7 +136,8 @@ export function RegistryImportDrawer({ open, onClose, society, detail, documents
 
   const footer = stage === "choose" || stage === "reading" ? (
     <>
-      <button className="btn" type="button" onClick={onClose} disabled={busy}>Cancel</button>
+      {/* Cancel stays available while reading: closing stops the reader. */}
+      <button className="btn" type="button" onClick={onClose}>Cancel</button>
       <button className="btn btn--accent" type="button" disabled={!chosen.length || busy} onClick={() => { void read(); }}>
         {stage === "reading" ? step || "Reading…" : "Read documents"}
       </button>
@@ -139,7 +152,7 @@ export function RegistryImportDrawer({ open, onClose, society, detail, documents
   );
 
   return (
-    <Drawer open={open} onClose={busy ? () => undefined : onClose} title="Import from registry documents" size="wide" footer={footer} className="registry-import">
+    <Drawer open={open} onClose={stage === "applying" ? () => undefined : onClose} title="Import from registry documents" size="wide" footer={footer} className="registry-import">
       {error && <Banner tone="danger" title={stage === "choose" ? "Could not read the documents" : "Not imported"}>{error}</Banner>}
       {unsavedChanges && stage !== "choose" && (
         <Banner tone="warn">The profile has unsaved changes. Applying the import reloads the profile and discards them.</Banner>

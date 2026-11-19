@@ -3,10 +3,11 @@
 // summary and snapshot, and the unsaved-changes dots.
 // Run: ./node_modules/.bin/tsx scripts/check-organization-profile.ts
 import assert from "node:assert/strict";
-import { anniversaryInYear, bcExtraProvincialReportWindow, cbcaAnnualReturnWindow } from "../src/features/organizationProfile/deadlines";
+import { anniversaryInYear, bcExtraProvincialReportWindow, cbcaAnnualReturnWindow, recordedDueStatus } from "../src/features/organizationProfile/deadlines";
+import { clearable } from "../src/features/organizationProfile/saveProfile";
 import { organizationProfileAttention, type AttentionDetail, type AttentionOrganization } from "../src/features/organizationProfile/attention";
 import { PROFILE_ANCHOR_TABS, unsavedProfileTabs } from "../src/features/organizationProfile/tabFields";
-import { attorneyLabel, cbcaPublicRecordUrl, corporationKeyState, publicRecordLink, registrationGaps, registrationTimeLabel } from "../src/features/organizationProfile/registryFacts";
+import { attorneyLabel, cbcaPublicRecordUrl, corporationKeyState, defaultRegistrationTimeZone, isPlainTextPortalKey, publicRecordLink, registrationGaps, registrationTimeLabel } from "../src/features/organizationProfile/registryFacts";
 import { currentSnapshot, directorMismatches, importChangedSociety, importSummary } from "../src/features/organizationProfile/registryImport/importModel";
 import type { ApplyRegistryImportResult } from "../shared/functions/organizationDetails";
 import type { OrganizationRecord } from "../src/features/organizationProfile/types";
@@ -18,8 +19,20 @@ assert.deepEqual(bcExtraProvincialReportWindow("2025-03-10", "2025-06-01"), { cy
 assert.deepEqual(cbcaAnnualReturnWindow("2025-03-10", "2026-04-01"), { cycleYear: 2026, opens: "2026-03-10", due: "2026-05-09" });
 // A filing on or after the window opened moves on to the next cycle.
 assert.deepEqual(bcExtraProvincialReportWindow("2025-03-10", "2026-04-01", "2026-03-20"), { cycleYear: 2027, opens: "2027-03-10", due: "2027-05-10" });
-// A closed window moves on.
-assert.equal(bcExtraProvincialReportWindow("2025-03-10", "2026-05-11")?.cycleYear, 2027);
+// A closed window with no filing recorded is overdue, not skipped.
+assert.deepEqual(bcExtraProvincialReportWindow("2025-03-10", "2026-05-11"), { cycleYear: 2026, opens: "2026-03-10", due: "2026-05-10", overdue: true });
+assert.equal(cbcaAnnualReturnWindow("2025-03-10", "2026-12-01")?.overdue, true, "overdue until the next window opens");
+assert.deepEqual(cbcaAnnualReturnWindow("2025-03-10", "2027-03-15"), { cycleYear: 2027, opens: "2027-03-10", due: "2027-05-09" }, "then the open window");
+// With a filing recorded, the earliest unfiled cycle after it.
+assert.deepEqual(cbcaAnnualReturnWindow("2020-03-10", "2026-06-01", "2022-04-01"), { cycleYear: 2023, opens: "2023-03-10", due: "2023-05-09", overdue: true });
+assert.equal(cbcaAnnualReturnWindow("2025-03-10", "2026-06-01", "2026-04-01")?.overdue, undefined, "filed this cycle: the next one, not overdue");
+// CBCA: anniversary plus 60 days, as the information sheet prints it (11-19 to 01-18).
+assert.equal(cbcaAnnualReturnWindow("2026-11-19", "2027-01-01")?.due, "2028-01-18");
+// A due date recorded on a registration.
+assert.equal(recordedDueStatus("2026-06-30", "2026-06-01"), "upcoming");
+assert.equal(recordedDueStatus("2026-06-30", "2026-07-02"), "overdue");
+assert.equal(recordedDueStatus("2026-06-30", "2026-07-02", "2026-06-15"), "filed");
+assert.equal(recordedDueStatus("2026-06-30", "2026-07-02", "2025-06-15"), "overdue", "last year's filing doesn't cover this cycle");
 // Two calendar months clamp to the month's end; 60 days do not.
 assert.equal(bcExtraProvincialReportWindow("2024-12-31", "2025-01-01")?.due, "2026-02-28");
 assert.equal(cbcaAnnualReturnWindow("2024-12-31", "2025-01-01")?.due, "2026-03-01");
@@ -94,6 +107,23 @@ assert.deepEqual(publicRecordLink({ publicRecordUrl: "https://example.org/record
 assert.equal(publicRecordLink({}, { federalCbca: false, corporationNumber: "1234567-8" }), undefined);
 assert.equal(attorneyLabel("not_required", "Head office is in British Columbia"), "Not required: head office is in British Columbia");
 assert.equal(attorneyLabel(undefined), undefined);
+// Registry zones: "BC" inside CA-FED-CBCA or CA-ON-OBCA is not British Columbia.
+assert.equal(defaultRegistrationTimeZone("CA-BC"), "America/Vancouver");
+assert.equal(defaultRegistrationTimeZone("british_columbia"), "America/Vancouver");
+assert.equal(defaultRegistrationTimeZone("CA-FED-CBCA"), "America/Toronto");
+assert.equal(defaultRegistrationTimeZone("CA-ON-OBCA"), "America/Toronto");
+assert.equal(defaultRegistrationTimeZone("alberta"), "America/Edmonton");
+assert.equal(defaultRegistrationTimeZone("CA-NS"), "America/Halifax");
+assert.equal(defaultRegistrationTimeZone(undefined), "America/Toronto");
+// A portal identifier is not a key; anything else in that field is treated as a plain-text key.
+assert.equal(isPlainTextPortalKey("bc_registry_societies"), false);
+assert.equal(isPlainTextPortalKey("corporations_canada"), false);
+assert.equal(isPlainTextPortalKey(undefined), false);
+assert.equal(isPlainTextPortalKey("Zq7-123"), true);
+// Clearing on save: null only when a saved value is cleared on the form.
+assert.equal(clearable(undefined, 3), null);
+assert.equal(clearable(5, 3), 5);
+assert.equal(clearable(undefined, undefined), undefined);
 // The key's custody state, never its value.
 assert.equal(corporationKeyState(undefined, undefined), "missing");
 assert.equal(corporationKeyState("v1", undefined), "loading");
@@ -115,6 +145,8 @@ const snapshot = currentSnapshot(society, {
 assert.equal(snapshot.profile?.incorporationNumber, "1234567-8");
 assert.equal(snapshot.profile?.articlesMinDirectors, 1);
 assert.equal(snapshot.hasCorporationKey, true);
+assert.equal(snapshot.registrations?.[0].id, "r1", "registrations carry their ids");
+assert.equal(snapshot.identifiers?.[0].id, "i1", "identifiers carry their ids");
 assert.equal(snapshot.addresses?.length, 1, "addresses without a street are left out");
 assert.equal(snapshot.identifiers?.length, 1, "identifiers without a number are left out");
 assert.deepEqual(snapshot.directors, [{ name: "Jordan Example", residentCanadianStatus: "yes" }]);
@@ -130,16 +162,17 @@ assert.deepEqual(directorMismatches(check, [
 ]);
 const section = (created: number, updated: number) => ({ created, updated, unchanged: 0, ids: [] });
 const result: ApplyRegistryImportResult = {
-  profile: { ...section(0, 1), fields: ["incorporationNumber", "articlesMinDirectors"] },
+  profile: { ...section(0, 1), fields: ["incorporationNumber", "articlesMinDirectors"], deferred: [] },
   registrations: section(1, 1),
-  addresses: { ...section(1, 0), demotedIds: [] },
+  addresses: { ...section(1, 0), demotedIds: [], pastIds: [] },
   identifiers: section(2, 0),
   corporationKey: { ...section(1, 0), valueStored: false },
 };
 assert.equal(importSummary(result, 3), "Updated 2 profile fields, 2 registrations, 1 address and 2 tax numbers. Corporation key recorded as a reference. 3 documents uploaded.");
-assert.equal(importSummary({ ...result, profile: { ...section(0, 0), fields: [] }, registrations: section(0, 0), addresses: { ...section(0, 0), demotedIds: [] }, identifiers: section(0, 0), corporationKey: null }, 0), "No profile changes.");
+assert.equal(importSummary({ ...result, profile: { ...section(0, 0), fields: [], deferred: [] }, registrations: section(0, 0), addresses: { ...section(0, 0), demotedIds: [], pastIds: [] }, identifiers: section(0, 0), corporationKey: null }, 0), "No profile changes.");
+assert.equal(importSummary({ ...result, profile: { ...section(0, 0), fields: [], deferred: ["incorporationNumber"] }, corporationKey: null }, 0), "Updated 2 registrations, 1 address and 2 tax numbers. The corporation number and date are recorded with Record incorporation.");
 assert.equal(importChangedSociety(result), true);
-assert.equal(importChangedSociety({ ...result, profile: { ...section(0, 0), fields: [] }, corporationKey: { ...section(0, 0), unchanged: 1, valueStored: true } }), false);
+assert.equal(importChangedSociety({ ...result, profile: { ...section(0, 0), fields: [], deferred: [] }, corporationKey: { ...section(0, 0), unchanged: 1, valueStored: true } }), false);
 
 // ---- unsaved-changes dots
 const saved = { name: "Example Holdings Inc.", fiscalYearEnd: "12-31", numbered: false, officialEmail: undefined, craBnStatus: "unknown" };

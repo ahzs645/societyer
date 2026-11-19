@@ -1,3 +1,5 @@
+import { JURISDICTION_WORKSPACE_CONFIGS } from "../../../shared/jurisdictionWorkspace";
+import { canonicalizeJurisdictionCode } from "../../../shared/organizationDomain";
 import { timeZoneAbbreviation } from "../../../shared/timeZones";
 import type { AttorneyStatus, PortalAccessEntry, RegistrationRow } from "./types";
 
@@ -15,6 +17,9 @@ const GENERIC_ZONE_NAMES: Readonly<Record<string, string>> = {
   "America/Vancouver": "PT",
   "America/Edmonton": "MT",
   "America/Regina": "CST",
+  "America/Whitehorse": "MT",
+  "America/Yellowknife": "MT",
+  "America/Iqaluit": "ET",
   "America/Winnipeg": "CT",
   "America/Toronto": "ET",
   "America/Halifax": "AT",
@@ -37,9 +42,28 @@ export function registrationTimeLabel(time: string | undefined, timeZone: string
   return zone ? `${clock} ${zone}` : clock;
 }
 
-/** The registry zone a new registration time most likely uses. */
+/** Each province's or territory's registry zone; federal (Corporations Canada, Ottawa) is Eastern. */
+const REGISTRY_ZONES: ReadonlyArray<[prefix: string, zone: string]> = [
+  ["CA-BC", "America/Vancouver"], ["CA-AB", "America/Edmonton"], ["CA-SK", "America/Regina"], ["CA-MB", "America/Winnipeg"],
+  ["CA-ON", "America/Toronto"], ["CA-QC", "America/Toronto"], ["CA-NB", "America/Halifax"], ["CA-NS", "America/Halifax"],
+  ["CA-PE", "America/Halifax"], ["CA-NL", "America/St_Johns"], ["CA-YT", "America/Whitehorse"], ["CA-NT", "America/Yellowknife"],
+  ["CA-NU", "America/Iqaluit"], ["CA-FED", "America/Toronto"],
+];
+
+/** Option values that name a province ("alberta", "nova_scotia"). */
+const PROVINCE_NAME_ZONES: Readonly<Record<string, string>> = {
+  alberta: "America/Edmonton", saskatchewan: "America/Regina", manitoba: "America/Winnipeg", quebec: "America/Toronto",
+  new_brunswick: "America/Halifax", nova_scotia: "America/Halifax", prince_edward_island: "America/Halifax",
+  newfoundland: "America/St_Johns", yukon: "America/Whitehorse", northwest_territories: "America/Yellowknife", nunavut: "America/Iqaluit",
+};
+
+/** The zone a registration time is most likely printed in, from the registering jurisdiction. */
 export function defaultRegistrationTimeZone(jurisdiction: string | undefined): string {
-  return /BC|british_columbia/i.test(jurisdiction ?? "") ? "America/Vancouver" : "America/Toronto";
+  const code = canonicalizeJurisdictionCode(jurisdiction);
+  if (code === "CA-BC") return "America/Vancouver";
+  const match = REGISTRY_ZONES.find(([prefix]) => code === prefix || code.startsWith(`${prefix}-`));
+  const named = Object.entries(PROVINCE_NAME_ZONES).find(([name]) => code.toLowerCase().startsWith(name));
+  return match?.[1] ?? named?.[1] ?? "America/Toronto";
 }
 
 /** Corporations Canada's public record page for a federal corporation number. */
@@ -110,4 +134,20 @@ export function corporationKeyState(vaultItemId: string | undefined, items: read
   const item = items.find((candidate) => candidate._id === vaultItemId);
   if (!item) return legacyIdentifier ? "reference" : "missing";
   return item.hasSecretValue ? "stored" : "reference";
+}
+
+/** Registry portal identifiers a registration's `registryPortalKey` holds ("bc_registry_societies"). */
+const REGISTRY_PORTAL_IDS: ReadonlySet<string> = new Set([
+  ...JURISDICTION_WORKSPACE_CONFIGS.map((config) => config.module.registryPortalKey),
+  "bc_registry_companies",
+  "generic_registry",
+]);
+
+/**
+ * True when a registration's `registryPortalKey` holds something other than a
+ * portal identifier: most likely a registry key someone typed in as plain text.
+ */
+export function isPlainTextPortalKey(value: string | undefined): boolean {
+  const text = value?.trim();
+  return Boolean(text) && !REGISTRY_PORTAL_IDS.has(text!);
 }

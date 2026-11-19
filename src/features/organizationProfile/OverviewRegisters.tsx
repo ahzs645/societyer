@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Badge } from "../../components/ui";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../../hooks/usePermissions";
@@ -8,7 +9,7 @@ import { optionLabel } from "../../lib/orgHubOptions";
 import { legalGovernanceProfile, requiredResidentCanadianDirectors } from "../../../shared/legalGovernanceProfiles";
 import { isCorporation, isFederalCbca, isPreparingIncorporation } from "../../../shared/organizationDomain";
 import { isBcJurisdiction, isExtraProvincialRegistration } from "./detailRows";
-import { anniversaryInYear, bcExtraProvincialReportWindow, cbcaAnnualReturnWindow } from "./deadlines";
+import { anniversaryInYear, bcExtraProvincialReportWindow, cbcaAnnualReturnWindow, recordedDueStatus } from "./deadlines";
 import type { OrganizationDetail, OrganizationRecord } from "./types";
 
 /**
@@ -74,21 +75,24 @@ function comingUpItems(society: OrganizationRecord, detail: OrganizationDetail |
     items.push({ id: "annual-return", title: annualReturn.title, when: windowText(opens, annualReturn.dueDate), note: annualReturn.status === "overdue" ? "Overdue" : undefined });
   } else if (!deadlinesReadable && isFederalCbca(society) && !isPreparingIncorporation(society)) {
     // Without the compliance engine, the CBCA rule still gives the window.
-    const window = cbcaAnnualReturnWindow(anchor, today);
-    if (window) items.push({ id: "annual-return", title: "Federal annual return", when: windowText(window.opens, window.due) });
+    const home = detail?.registrations.find((row) => row.registrationType === "home");
+    const window = cbcaAnnualReturnWindow(anchor, today, home?.lastAnnualReturnFiledDate);
+    if (window) items.push({ id: "annual-return", title: "Federal annual return", when: windowText(window.opens, window.due), note: window.overdue ? "Overdue" : undefined });
   }
   const meeting = deadlines?.find((deadline) => deadline.key === "agm");
   if (meeting) items.push({ id: "annual-meeting", title: meeting.title, when: meeting.status === "planned" ? `Planned ${formatDate(meeting.dueDate)}` : `Due ${formatDate(meeting.dueDate)}` });
   for (const row of detail?.registrations ?? []) {
     if (!isExtraProvincialRegistration(row) || row.status === "inactive") continue;
     const name = isBcJurisdiction(row.jurisdiction) ? "BC" : optionLabel("entityJurisdictions", row.jurisdiction);
-    if (row.annualReturnDueDate && row.annualReturnDueDate >= today) {
-      items.push({ id: `registration:${row._id}`, title: `${name} annual report`, when: `Due ${formatDate(row.annualReturnDueDate)}` });
+    // A recorded due date shows until that cycle is filed, overdue once it has passed.
+    const recorded = row.annualReturnDueDate ? recordedDueStatus(row.annualReturnDueDate, today, row.lastAnnualReturnFiledDate) : undefined;
+    if (row.annualReturnDueDate && recorded !== "filed") {
+      items.push({ id: `registration:${row._id}`, title: `${name} annual report`, when: `Due ${formatDate(row.annualReturnDueDate)}`, note: recorded === "overdue" ? "Overdue" : undefined });
       continue;
     }
     if (!isBcJurisdiction(row.jurisdiction)) continue;
     const window = bcExtraProvincialReportWindow(row.registrationDate, today, row.lastAnnualReturnFiledDate);
-    if (window) items.push({ id: `registration:${row._id}`, title: "BC annual report", when: windowText(window.opens, window.due), note: "Within 2 months after the BC registration anniversary" });
+    if (window) items.push({ id: `registration:${row._id}`, title: "BC annual report", when: windowText(window.opens, window.due), note: window.overdue ? "Overdue" : "Within 2 months after the BC registration anniversary" });
   }
   return items;
 }
@@ -115,7 +119,7 @@ export function ComingUpCard({ society, detail, deadlines, deadlinesReadable }: 
               {items.map((item) => (
                 <div key={item.id}>
                   <dt>{item.title}</dt>
-                  <dd>{item.when}{item.note && <span className="muted"> · {item.note}</span>}</dd>
+                  <dd>{item.when}{item.note === "Overdue" ? <> <Badge tone="danger">Overdue</Badge></> : item.note && <span className="muted"> · {item.note}</span>}</dd>
                 </div>
               ))}
             </dl>

@@ -12,6 +12,8 @@ const RegistryImportDrawer = lazy(() => import("./registryImport/RegistryImportD
  * drawers. Both write the organization directly, so afterwards the page's
  * form reloads from the saved organization once it reflects the change;
  * otherwise the stale (preparing) form could be saved back over it.
+ * `reseedFormWhen` does the same after "Save changes", so cleared values
+ * read back as saved.
  */
 export function useRegistryDrawers({ society, form, setForm, detail, documents, canEdit }: {
   society: OrganizationRecord | null | undefined;
@@ -92,5 +94,5 @@ export function useRegistryDrawers({ society, form, setForm, detail, documents, 
     </>
   ) : null;
 
-  return { openImport, openRecordIncorporation, element };
+  return { openImport, openRecordIncorporation, reseedFormWhen, element };
 }

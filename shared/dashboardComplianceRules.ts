@@ -447,7 +447,7 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       citation: "Societies Act records requirements",
       evidenceRequired: ["Linked constitution document"],
       remediationActions: [
-        { id: "upload-constitution", label: "Upload constitution", intent: "navigate", to: "/app/society" },
+        { id: "upload-constitution", label: "Upload constitution", intent: "navigate", to: "/app/society?tab=documents#governing-documents" },
         { id: "open-documents", label: "Documents", intent: "navigate", to: "/app/documents" },
         { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
       ],
@@ -482,7 +482,7 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       citation: "Societies Act records requirements",
       evidenceRequired: ["Linked bylaws document"],
       remediationActions: [
-        { id: "upload-bylaws", label: "Upload bylaws", intent: "navigate", to: "/app/society" },
+        { id: "upload-bylaws", label: "Upload bylaws", intent: "navigate", to: "/app/society?tab=documents#governing-documents" },
         { id: "open-documents", label: "Documents", intent: "navigate", to: "/app/documents" },
         { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
       ],
@@ -518,7 +518,7 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       evidenceRequired: ["Active bylaw rule set"],
       remediationActions: [
         { id: "open-bylaw-rules", label: "Configure rules", intent: "navigate", to: "/app/bylaw-rules" },
-        { id: "upload-bylaws", label: "Upload bylaws", intent: "navigate", to: "/app/society" },
+        { id: "upload-bylaws", label: "Upload bylaws", intent: "navigate", to: "/app/society?tab=documents#governing-documents" },
         { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
       ],
       passFail(context) {

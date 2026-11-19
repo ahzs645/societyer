@@ -78,16 +78,36 @@ export function entityPreparationDecision(organization?: (LegalEntityLike & Reco
   return { allowed, message };
 }
 
+/** A document Societyer generated (a packet draft or legal-document template), not one the registry issued. */
+export function isGeneratedLegalDocument(document: { importRecordKind?: unknown; sourceExternalIds?: unknown }): boolean {
+  const markers = Array.isArray(document.sourceExternalIds) ? document.sourceExternalIds.map(String) : [];
+  return document.importRecordKind === "generated_legal_document" || markers.some((marker) => marker.includes("packet-draft") || marker.includes("generated-legal-document"));
+}
+
+/** A document whose template provenance says it is still a draft. */
+export function hasDraftTemplateProvenance(document: { sourcePayloadJson?: unknown }): boolean {
+  try {
+    const payload: unknown = JSON.parse(typeof document.sourcePayloadJson === "string" ? document.sourcePayloadJson : "{}");
+    const provenance = payload && typeof payload === "object" ? (payload as { templateProvenance?: { documentState?: unknown } }).templateProvenance : undefined;
+    return provenance?.documentState === "draft";
+  } catch {
+    return false;
+  }
+}
+
+/** True for a document that can't stand as an official registry copy: generated, a draft, archived or flagged for deletion. */
+export function isUnofficialDocument(document: { importRecordKind?: unknown; sourceExternalIds?: unknown; sourcePayloadJson?: unknown; archivedAtISO?: unknown; flaggedForDeletion?: unknown }): boolean {
+  return Boolean(document.flaggedForDeletion || document.archivedAtISO) || isGeneratedLegalDocument(document) || hasDraftTemplateProvenance(document);
+}
+
 /** The user verifies the official certificate; generated drafts and URL-only records are insufficient evidence. */
 export function validateFormationEvidence(source: Record<string, any>, societyId?: string, document?: Record<string, any> | null, versions: Record<string, any>[] = []) {
   if (source.certificateEvidenceDocumentId && (!societyId || !document || String(document._id) !== String(source.certificateEvidenceDocumentId) || String(document.societyId) !== String(societyId))) throw new Error("Certificate documents not found in this organization.");
   if (source.formationStatus !== "incorporated") return;
   if (!source.certificateEvidenceDocumentId || !source.certificateReference?.trim() || !source.certificateDate) throw new Error("Verified incorporation requires an uploaded certificate document, official certificate reference and actual certificate date.");
   if (!societyId || !document || String(document._id) !== String(source.certificateEvidenceDocumentId) || String(document.societyId) !== String(societyId)) throw new Error("Certificate documents not found in this organization.");
-  if (document.flaggedForDeletion || document.archivedAtISO || document.importRecordKind === "generated_legal_document" || (document.sourceExternalIds ?? []).some((marker: string) => marker.includes("packet-draft") || marker.includes("generated-legal-document"))) throw new Error("A generated draft or unavailable document cannot establish verified incorporation. Upload the official certificate.");
-  let provenance: any;
-  try { provenance = JSON.parse(document.sourcePayloadJson ?? "{}").templateProvenance; } catch { provenance = undefined; }
-  if (provenance?.documentState === "draft") throw new Error("A generated draft cannot establish verified incorporation. Upload the official certificate.");
+  if (document.flaggedForDeletion || document.archivedAtISO || isGeneratedLegalDocument(document)) throw new Error("A generated draft or unavailable document cannot establish verified incorporation. Upload the official certificate.");
+  if (hasDraftTemplateProvenance(document)) throw new Error("A generated draft cannot establish verified incorporation. Upload the official certificate.");
   const uploadedVersion = versions.some((version) => String(version.documentId) === String(document._id) && String(version.societyId) === String(societyId) && version.storageKey && version.fileName && !["generated-inline", "demo"].includes(version.storageProvider) && version.storageProvider && !String(version.storageKey).startsWith("demo://"));
   if (!document.storageId && !uploadedVersion) throw new Error("Certificate verification requires an uploaded file. A note, planned date or URL-only document is insufficient.");
 }

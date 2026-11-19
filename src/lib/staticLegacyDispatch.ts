@@ -1409,6 +1409,8 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
       delete row.societyId; // A society is the tenant root, not a child of the default demo society.
       // Patch semantics, as on hosted Convex: a field passed as undefined keeps its stored value.
       for (const [key, value] of Object.entries(args ?? {})) if (value === undefined && key in existing) row[key] = existing[key];
+      // null clears an articles limit or source document, as on hosted Convex.
+      for (const key of ["articlesMinDirectors", "articlesMaxDirectors", "articlesSourceDocumentId"]) if (args?.[key] === null) delete row[key];
       validateNaicsSectorSelection(row.naicsSector);
       validateEntitySetup(row);
       validateArticlesProvisions(row);

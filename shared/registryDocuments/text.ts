@@ -4,32 +4,18 @@
  * .eml with raw quoted-printable and HTML bodies. Plain `pdftotext -layout`
  * output also works: runs of three or more spaces become TABs.
  */
+import { decodeEncodedWords, decodeQuotedPrintableBytes } from "./eml";
 import type { RegistryAddress } from "./types";
 
 const HTML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
-function decodeBytes(hexRun: string): string {
-  const bytes = hexRun.split("=").filter(Boolean).map((hex) => parseInt(hex, 16));
-  return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
-}
-
+/**
+ * Quoted-printable text: soft line breaks joined, then each run of =XX
+ * escapes (either hex case) decoded as UTF-8 bytes with eml.ts's decoder.
+ * Encoded words go through eml.ts too, which honours their charset.
+ */
 function decodeQuotedPrintable(text: string): string {
-  return text.replace(/=\n/g, "").replace(/(?:=[0-9A-F]{2})+/g, decodeBytes);
-}
-
-/** RFC 2047 encoded words in headers ("=?utf-8?Q?Access_type_updated?="). */
-function decodeEncodedWords(text: string): string {
-  return text
-    .replace(/(\?=)\s+(=\?)/g, "$1$2")
-    .replace(/=\?([\w-]+)\?([QB])\?([^?]*)\?=/gi, (_whole, _charset: string, encoding: string, body: string) => {
-      if (encoding.toUpperCase() === "Q") return decodeQuotedPrintable(body.replace(/_/g, " "));
-      try {
-        const binary = atob(body);
-        return new TextDecoder("utf-8", { fatal: false }).decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
-      } catch {
-        return body;
-      }
-    });
+  return text.replace(/=\r?\n/g, "").replace(/(?:=[0-9A-Fa-f]{2})+/g, (run) => new TextDecoder("utf-8", { fatal: false }).decode(decodeQuotedPrintableBytes(run)));
 }
 
 function stripHtml(text: string): string {
@@ -55,7 +41,7 @@ export function isEmailText(text: string): boolean {
  */
 export function normalizeRegistryText(raw: string): string {
   let text = raw.replace(/\r\n?/g, "\n");
-  const quotedPrintable = /Content-Transfer-Encoding:\s*quoted-printable/i.test(text) || (text.match(/=\n/g) ?? []).length >= 3 || /=C3=[89AB][0-9A-F]|=3D"/.test(text);
+  const quotedPrintable = /Content-Transfer-Encoding:\s*quoted-printable/i.test(text) || (text.match(/=\n/g) ?? []).length >= 3 || /=C3=[89AB][0-9A-F]|=3D"/i.test(text);
   if (quotedPrintable) text = decodeQuotedPrintable(text);
   text = decodeEncodedWords(text);
   if (/<\/?(?:p|br|td|tr|table|div|h\d|html|strong)\b/i.test(text)) text = stripHtml(text);
@@ -89,11 +75,13 @@ export function parseRegistryDate(value: string): string | undefined {
   return `${long[3]}-${String(month + 1).padStart(2, "0")}-${long[2].padStart(2, "0")}`;
 }
 
-/** "11:59 AM" → "11:59"; "1:05 PM" → "13:05". */
+/** "11:59 AM" → "11:59"; "1:05:30 PM" → "13:05". Hours outside 1–12 with AM/PM are not a time. */
 export function parseClockTime(value: string): string | undefined {
-  const match = /\b(\d{1,2}):(\d{2})\s*([AP])\.?M\.?/i.exec(value);
+  const match = /\b(\d{1,2}):([0-5]\d)(?::[0-5]\d)?\s*([AP])\.?M\.?/i.exec(value);
   if (!match) return undefined;
-  let hour = Number(match[1]) % 12;
+  const clock = Number(match[1]);
+  if (clock < 1 || clock > 12) return undefined;
+  let hour = clock % 12;
   if (match[3].toUpperCase() === "P") hour += 12;
   return `${String(hour).padStart(2, "0")}:${match[2]}`;
 }

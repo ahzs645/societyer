@@ -96,7 +96,8 @@ export const upsertRegistration = authorizedMutation("organizationDetails:upsert
     annualReturnDueDate: v.optional(v.string()),
     lastAnnualReturnFiledDate: v.optional(v.string()),
     registryProfileReportDate: v.optional(v.string()),
-    registryPortalKey: v.optional(v.string()),
+    // null removes the stored value.
+    registryPortalKey: v.optional(v.union(v.string(), v.null())),
     profileReportDocumentId: v.optional(v.id("documents")),
     companyKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     agentForServiceName: v.optional(v.string()),
@@ -188,6 +189,7 @@ export const applyRegistryImport = authorizedMutation("organizationDetails:apply
       officialEmail: v.optional(v.string()),
     })),
     registrations: v.optional(v.array(v.object({
+      id: v.optional(v.id("organizationRegistrations")),
       registrationType: v.string(),
       jurisdiction: v.string(),
       homeJurisdiction: v.optional(v.string()),
@@ -210,6 +212,7 @@ export const applyRegistryImport = authorizedMutation("organizationDetails:apply
       sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     }))),
     identifiers: v.optional(v.array(v.object({
+      id: v.optional(v.id("organizationIdentifiers")),
       kind: v.string(),
       number: v.string(),
       jurisdiction: v.optional(v.string()),

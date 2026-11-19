@@ -11,6 +11,9 @@ import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { organizationStatusForFormation, validateArticlesProvisions } from "../shared/entitySetup";
 import { CORPORATION_KEY_CUSTODY_LOCATION } from "../shared/functions/organizationDetails";
+import { buildRegistryImportProposal, defaultRegistryImportSelection, parseRegistryDocument, proposalToApplyArgs, withRegistryDocumentIds } from "../shared/registryDocuments";
+import { currentSnapshot, incorporationPrefill } from "../src/features/organizationProfile/registryImport/importModel";
+import type { OrganizationDetail, OrganizationRecord } from "../src/features/organizationProfile/types";
 
 type Row = Record<string, unknown> & { _id: string };
 
@@ -156,6 +159,108 @@ profile = await client.query("society:getById", { id: societyId }) as Row;
 assert.equal(profile.articlesMinDirectors, 1);
 assert.equal(profile.articlesShareTransferRestrictions, "No share may be transferred without board approval.");
 
+// Clearing: null removes an articles limit or the source document; an omitted field is unchanged.
+await client.mutation("society:upsert", { id: societyId, name: profile.name, isCharity: false, isMemberFunded: false, articlesMinDirectors: null, articlesSourceDocumentId: null });
+profile = await client.query("society:getById", { id: societyId }) as Row;
+assert.equal(profile.articlesMinDirectors, undefined, "null clears the minimum");
+assert.equal(profile.articlesSourceDocumentId, undefined, "null clears the source document");
+assert.equal(profile.articlesMaxDirectors, 10, "an omitted limit is unchanged");
+
+// Recording again: the same number and date is a no-op; a different one is refused.
+const again = await client.mutation("organizationDetails:recordIncorporation", recordArgs) as { registeredOfficeUpdated: boolean; homeRegistrationId: string | null };
+assert.equal(again.registeredOfficeUpdated, false);
+assert.equal(again.homeRegistrationId, recorded.homeRegistrationId);
+await assert.rejects(() => client.mutation("organizationDetails:recordIncorporation", { ...recordArgs, incorporationNumber: "1000002-2" }), /already recorded/);
+
+// An older registered office from the filings never retires a newer current one; it is kept as past.
+const newerOffice = await client.mutation("organizationDetails:upsertAddress", { societyId, type: "records_office", status: "current", street: "400 Newer Way", city: "Testville", postalCode: "V3V 3V3", country: "Canada", effectiveFrom: "2026-06-01" }) as string;
+const older = await client.mutation("organizationDetails:applyRegistryImport", { societyId, addresses: [{ type: "records_office", status: "current", street: "1 Older Road", city: "Testville", postalCode: "V4V 4V4", country: "Canada", effectiveFrom: "2026-03-02" }] }) as { addresses: { demotedIds: string[]; pastIds: string[]; created: number } };
+assert.deepEqual(older.addresses.demotedIds, []);
+assert.equal(older.addresses.pastIds.length, 1);
+overview = await client.query("organizationDetails:overview", { societyId }) as typeof overview;
+assert.equal(overview.addresses.find((row) => row._id === newerOffice)?.status, "current", "the newer office stays current");
+const olderRow = overview.addresses.find((row) => row._id === older.addresses.pastIds[0]);
+assert.equal(olderRow?.status, "past");
+assert.equal(olderRow?.effectiveTo, "2026-06-01");
+
+// The row the review compared against is patched, not duplicated, when the numbers differ.
+const bcRow = overview.registrations.find((row) => row.registrationType === "extra_provincial")!;
+const bnRow = overview.identifiers.find((row) => row.kind === "business_number")!;
+const byId = await client.mutation("organizationDetails:applyRegistryImport", {
+  societyId,
+  registrations: [{ id: bcRow._id, registrationType: "extra_provincial", jurisdiction: "CA-BC", registrationNumber: "A0000002", status: "active" }],
+  identifiers: [{ id: bnRow._id, kind: "business_number", number: "000000002", status: "active", accessLevel: "internal" }],
+}) as { registrations: { created: number; updated: number }; identifiers: { created: number; updated: number } };
+assert.deepEqual([byId.registrations.created, byId.registrations.updated, byId.identifiers.created, byId.identifiers.updated], [0, 1, 0, 1]);
+const afterById = await client.query("organizationDetails:overview", { societyId }) as typeof overview;
+assert.equal(afterById.registrations.length, overview.registrations.length);
+assert.equal(afterById.registrations.find((row) => row._id === bcRow._id)?.registrationNumber, "A0000002");
+assert.equal(afterById.identifiers.find((row) => row._id === bnRow._id)?.number, "000000002");
+await assert.rejects(() => client.mutation("organizationDetails:applyRegistryImport", { societyId, identifiers: [{ id: bnRow._id, kind: "income_tax", number: "000000002RC0001", status: "active", accessLevel: "restricted" }] }), /same kind/);
+
+// A key typed into a registration as plain text can be removed (null); it is never shown or re-sent.
+await client.mutation("organizationDetails:upsertRegistration", { id: bcRow._id, societyId, registrationType: "extra_provincial", jurisdiction: "CA-BC", status: "active", registryPortalKey: "Plain-Text-Key-1" });
+await client.mutation("organizationDetails:upsertRegistration", { id: bcRow._id, societyId, registrationType: "extra_provincial", jurisdiction: "CA-BC", status: "active" });
+assert.equal((await client.query("organizationDetails:overview", { societyId }) as typeof overview).registrations.find((row) => row._id === bcRow._id)?.registryPortalKey, "Plain-Text-Key-1", "an omitted key is unchanged");
+await client.mutation("organizationDetails:upsertRegistration", { id: bcRow._id, societyId, registrationType: "extra_provincial", jurisdiction: "CA-BC", status: "active", registryPortalKey: null });
+assert.equal((await client.query("organizationDetails:overview", { societyId }) as typeof overview).registrations.find((row) => row._id === bcRow._id)?.registryPortalKey, undefined, "null removes it");
+
+// ---- A filed (submitted) organization imports with the default selection ---
+// The number and date wait for "Record incorporation"; the import must not trip
+// the "preparing can't have a number" rule, and the prefill still carries them.
+const CERTIFICATE_TEXT = [
+  "Certificate of Incorporation\tCertificat de constitution Canada Business Corporations Act\tLoi canadienne sur les sociétés par actions",
+  "",
+  "Larchwood Sample Ltd.\nCorporate name / Dénomination sociale",
+  "",
+  "2000002-2\nCorporation number / Numéro de société",
+  "",
+  "I HEREBY CERTIFY that the above-named\tJE CERTIFIE que la société susmentionnée, dont corporation, the articles of incorporation of which les statuts constitutifs sont joints, est constituée are attached, is incorporated under the Canada\ten vertu de la Loi canadienne sur les sociétés par\nBusiness Corporations Act.\tactions.",
+  "",
+  "Lee Registrar\nDirector / Directeur\n2026-02-10\nDate of Incorporation (YYYY-MM-DD)\nDate de constitution (AAAA-MM-JJ)",
+].join("\n");
+const { societyId: filedId } = await client.mutation("society:createWorkspace", {
+  name: "Larchwood Sample Ltd.", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_",
+  actFormedUnder: "canada_business_corporations_act", legalSubtype: "federal_private_corporation",
+  formationStatus: "submitted", organizationStatus: "pre_incorporation",
+}) as { societyId: string };
+let filedOverview = await client.query("organizationDetails:overview", { societyId: filedId }) as OrganizationDetail & { registrations: Row[] };
+const filedHome = filedOverview.registrations.find((row) => row.registrationType === "home");
+if (filedHome) await client.mutation("organizationDetails:upsertRegistration", { id: filedHome._id, societyId: filedId, registrationType: "home", jurisdiction: "CA-FED-CBCA", status: "pending", notes: "Our own note." });
+const filedCertificate = await client.mutation("documents:create", { societyId: filedId, title: "Certificate of incorporation", category: "CertificateOfIncorporation", fileName: "certificate.pdf", mimeType: "application/pdf", tags: [] }) as string;
+await client.mutation("documentVersions:recordUploadedVersion", { societyId: filedId, documentId: filedCertificate, storageProvider: "local-filesystem", storageKey: `test-fixtures/${filedId}/certificate.pdf`, fileName: "certificate.pdf", mimeType: "application/pdf", fileSizeBytes: 32, sha256: "d".repeat(64) });
+const filedSociety = await client.query("society:getById", { id: filedId }) as OrganizationRecord;
+filedOverview = await client.query("organizationDetails:overview", { societyId: filedId }) as typeof filedOverview;
+const certificateDocument = parseRegistryDocument(CERTIFICATE_TEXT, "certificate.pdf");
+const filedProposal = buildRegistryImportProposal([certificateDocument], currentSnapshot(filedSociety, filedOverview, []));
+const filedSelection = defaultRegistryImportSelection(filedProposal);
+const numberField = filedProposal.groups.flatMap((group) => group.fields).find((field) => field.id === "profile.incorporationNumber");
+assert.equal(numberField?.target.scope, "info", "the number is shown for reference while filed");
+assert.match(numberField?.note ?? "", /Record incorporation/);
+assert.equal(filedSelection.selected["profile.incorporationNumber"], undefined);
+const filedIds = { [certificateDocument.fingerprint]: filedCertificate };
+const filedArgs = withRegistryDocumentIds(proposalToApplyArgs(filedProposal, filedSelection), filedIds);
+assert.equal(filedArgs.profile?.incorporationNumber, undefined);
+assert.equal(filedArgs.profile?.incorporationDate, undefined);
+await client.mutation("organizationDetails:applyRegistryImport", { societyId: filedId, ...filedArgs });
+let filedProfile = await client.query("society:getById", { id: filedId }) as Row;
+assert.equal(filedProfile.formationStatus, "submitted");
+assert.equal(filedProfile.incorporationNumber, undefined);
+// The server leaves the number and date for Record incorporation even when sent.
+const direct = await client.mutation("organizationDetails:applyRegistryImport", { societyId: filedId, profile: { incorporationNumber: "2000002-2", incorporationDate: "2026-02-10", officialEmail: "records@larchwood.example" } }) as { profile: { deferred: string[]; fields: string[] } };
+assert.deepEqual(direct.profile.deferred, ["incorporationNumber", "incorporationDate"]);
+assert.deepEqual(direct.profile.fields, ["officialEmail"]);
+const prefill = incorporationPrefill(filedProposal, filedSelection, filedIds);
+assert.deepEqual(prefill, { certificateDocumentId: filedCertificate, incorporationNumber: "2000002-2", incorporationDate: "2026-02-10", actFormedUnder: "canada_business_corporations_act" });
+await client.mutation("organizationDetails:recordIncorporation", { societyId: filedId, incorporationNumber: prefill!.incorporationNumber, incorporationDate: prefill!.incorporationDate, certificateEvidenceDocumentId: prefill!.certificateDocumentId, actFormedUnder: prefill!.actFormedUnder });
+filedProfile = await client.query("society:getById", { id: filedId }) as Row;
+assert.equal(filedProfile.formationStatus, "incorporated");
+assert.equal(filedProfile.incorporationNumber, "2000002-2");
+if (filedHome) {
+  const homeAfter = (await client.query("organizationDetails:overview", { societyId: filedId }) as typeof filedOverview).registrations.find((row) => row._id === filedHome._id);
+  assert.equal(homeAfter?.notes, "Our own note.", "a note on the home row is kept");
+}
+
 // ---- Hosted Convex (convex-test) -------------------------------------------
 const native = convexTest(schema, {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
@@ -208,5 +313,9 @@ const afterUpsert = await native.run(async (ctx) => ctx.db.get(hosted.id));
 assert.equal(afterUpsert?.homeJurisdictionCode, "CA-FED-CBCA");
 assert.equal(afterUpsert?.incorporationDate, FAKE_DATE);
 assert.equal(afterUpsert?.articlesMaxDirectors, 7);
+await owner.mutation(api.society.upsert, { id: hosted.id, name: "Hosted Test Works Inc.", isCharity: false, isMemberFunded: false, articlesMinDirectors: null });
+const afterClear = await native.run(async (ctx) => ctx.db.get(hosted.id));
+assert.equal(afterClear?.articlesMinDirectors, undefined, "null clears on hosted Convex");
+assert.equal(afterClear?.articlesMaxDirectors, 7);
 
 console.log("Registry import and incorporation recording passed on the local runtime and hosted Convex.");

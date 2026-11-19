@@ -2,6 +2,12 @@ import { entitySetupFields } from "../../../shared/entitySetup";
 import { addressLine, findCurrentAddress, guidedAddressText } from "./detailRows";
 import type { AddressRow, OrganizationRecord, ProfileForm } from "./types";
 
+/** The form's value; null when the form cleared a saved value; undefined (unchanged) when neither has one. */
+export function clearable<T>(value: T | undefined, saved: T | undefined): T | null | undefined {
+  if (value !== undefined && value !== null) return value;
+  return saved !== undefined && saved !== null ? null : undefined;
+}
+
 /**
  * The one `society.upsert` call behind "Save changes": every profile field,
  * from every tab. The plain-text office and mailing addresses follow the
@@ -50,13 +56,13 @@ export function profileUpsertArgs(form: ProfileForm, society: OrganizationRecord
     memberDataGapDocumented: !!form.memberDataGapDocumented,
     memberDataAccessReviewedAtISO: form.memberDataAccessReviewedAtISO,
     memberDataAccessNotes: form.memberDataAccessNotes,
-    // Articles. A number or document left blank keeps its saved value (the upsert patches).
-    articlesMinDirectors: form.articlesMinDirectors,
-    articlesMaxDirectors: form.articlesMaxDirectors,
+    // Articles. The upsert patches, so a limit or document cleared on the form is sent as null.
+    articlesMinDirectors: clearable(form.articlesMinDirectors, society.articlesMinDirectors),
+    articlesMaxDirectors: clearable(form.articlesMaxDirectors, society.articlesMaxDirectors),
     articlesShareTransferRestrictions: form.articlesShareTransferRestrictions,
     articlesBusinessRestrictions: form.articlesBusinessRestrictions,
     articlesOtherProvisions: form.articlesOtherProvisions,
-    articlesSourceDocumentId: form.articlesSourceDocumentId || undefined,
+    articlesSourceDocumentId: clearable(form.articlesSourceDocumentId || undefined, society.articlesSourceDocumentId),
     boardCadence: form.boardCadence,
     boardCadenceDayOfWeek: form.boardCadenceDayOfWeek,
     boardCadenceTime: form.boardCadenceTime,

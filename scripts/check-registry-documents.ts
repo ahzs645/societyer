@@ -7,11 +7,15 @@
  */
 import assert from "node:assert/strict";
 import { extractBytes } from "../shared/intake/extract";
+import { isUnofficialDocument } from "../shared/entitySetup";
+import { emailHeaderDateISO } from "../shared/registryDocuments/parse";
+import { parseClockTime } from "../shared/registryDocuments/text";
 import { readRegistryFile } from "../src/features/organizationProfile/registryImport/extractCore";
 import { buildImportFiles, importDocumentRows, restrictedWarning } from "../src/features/organizationProfile/registryImport/importModel";
 import {
   buildRegistryImportProposal,
   classifyRegistryDocument,
+  normalizeRegistryText,
   defaultRegistryImportSelection,
   emlAttachments,
   parseRegistryDocument,
@@ -91,7 +95,7 @@ const INFORMATION_SHEET = [
   "",
   "Northwind Example Inc.",
   "",
-  `Corporation number\t1234567-8\tNuméro de société\nCorporation key\tClé de société\nRequired for changes of\t${KEY}\tRequise pour mettre à jour en ligne l’adresse du siège\naddress or directors online\tsocial ou l’information concernant les administrateurs\nAnniversary date\t03-14\tDate anniversaire\nRequired to file annual return\t(mm-dd/mm-jj)\tRequise pour le dépôt du rapport annuel\nAnnual return filing period\t03-14 to/au 05-12\tPériode pour déposer le rapport annuel\nStarting in 2026\t(mm-dd/mm-jj)\tDébutant en 2026`,
+  `Corporation number\t1234567-8\tNuméro de société\nCorporation key\tClé de société\nRequired for changes of\t${KEY}\tRequise pour mettre à jour en ligne l’adresse du siège\naddress or directors online\tsocial ou l’information concernant les administrateurs\nAnniversary date\t03-14\tDate anniversaire\nRequired to file annual return\t(mm-dd/mm-jj)\tRequise pour le dépôt du rapport annuel\nAnnual return filing period\t03-14 to/au 05-13\tPériode pour déposer le rapport annuel\nStarting in 2026\t(mm-dd/mm-jj)\tDébutant en 2026`,
   "",
   "Corporation key\tClé de société\nYour corporation key is, in fact, a password. Do not share your corporation key with any unauthorized person.",
 ].join("\n");
@@ -334,7 +338,7 @@ const sheet = parseRegistryDocument(INFORMATION_SHEET, "Information-Sheet.pdf");
 check(sheet.restricted, "information sheet is restricted");
 check(sheet.facts.corporationNumber?.value === "1234567-8", "sheet corporation number");
 check(sheet.facts.anniversaryMonthDay?.value === "03-14", "anniversary");
-check(JSON.stringify(sheet.facts.annualReturnWindow?.value) === JSON.stringify({ start: "03-14", end: "05-12", firstYear: 2026 }), "annual return window");
+check(JSON.stringify(sheet.facts.annualReturnWindow?.value) === JSON.stringify({ start: "03-14", end: "05-13", firstYear: 2026 }), "annual return window");
 check(sheet.secrets.length === 1 && sheet.secrets[0].reveal() === KEY && sheet.secrets[0].kind === "corporation_key", "corporation key held as a secret");
 check(!JSON.stringify(sheet).includes(KEY), "corporation key absent from the parsed document JSON");
 check(!/\d/.test(sheet.secrets[0].masked), "mask carries no digits");
@@ -363,7 +367,7 @@ check(payment.facts.payment?.value.amount === "200.00" && payment.facts.payment.
 check(!JSON.stringify(payment).includes("ZQ71XK") && !JSON.stringify(payment).includes("9876"), "card number and authorization code not read");
 
 const access = parseRegistryDocument(ACCESS_EMAIL, "Access type updated.eml");
-check(access.facts.portalAccess?.value.organizationName === "Northwind Example Inc." && access.facts.portalAccess.value.updatedAtISO === "2025-03-14T18:00:00.000Z", "portal access hint");
+check(access.facts.portalAccess?.value.organizationName === "Northwind Example Inc." && access.facts.portalAccess.value.updatedAtISO === "2025-03-14T18:00:00+00:00", "portal access hint");
 
 const statement = parseRegistryDocument(BC_STATEMENT, "ColinReport.pdf");
 check(statement.facts.bcRegistrationNumber?.value === "A0999999", "BC registration number");
@@ -655,5 +659,63 @@ check(restrictedWarning(["the corporation key"]) === "Every director can open up
 check(importProposal.secrets.length === 1 && !JSON.stringify(importProposal).includes(KEY) && !JSON.stringify(rows.map((row) => row.entry)).includes(KEY), "the key read from an attachment stays out of the proposal and rows");
 const existingCopy = importDocumentRows(importProposal, importFiles, [{ _id: "doc_existing", title: rowFor("certificate.pdf").entry.suggestedTitle, category: "CertificateOfIncorporation" }]);
 check(existingCopy.find((row) => row.file.name === "certificate.pdf")?.existing?._id === "doc_existing" && !existingCopy.find((row) => row.file.name === "certificate.pdf")?.defaultUpload, "a copy already in Documents is linked, not uploaded again");
+
+// --- Review fixes ------------------------------------------------------------------------
+// The CBCA window is the anniversary plus 60 days (03-14 → 05-13), shown for reference.
+check(fieldById(proposal, "info.annualReturnWindow")?.display === "03-14 to 05-13, first in 2026", "parsed annual return window shown");
+
+// Email dates are the sender's calendar date, not UTC's.
+check(emailHeaderDateISO("Fri, 14 Mar 2025 21:30:00 -0700") === "2025-03-14T21:30:00-07:00", "evening email keeps its own date");
+check(emailHeaderDateISO("Fri, 14 Mar 2025 18:00 +0000") === "2025-03-14T18:00:00+00:00", "seconds optional");
+check(emailHeaderDateISO("not a date") === undefined, "unreadable date");
+const lateEmail = parseRegistryDocument(PAYMENT_EMAIL.replace("Date: Fri, 14 Mar 2025 17:30:00 +0000", "Date: Fri, 14 Mar 2025 21:30:00 -0700").replace("<td>2025-03-14 01:30:00</td>", "<td></td>"), "late.eml");
+check(lateEmail.facts.emailDateISO?.value.slice(0, 10) === "2025-03-14", "an evening Pacific email is dated that day");
+
+// Clock times: optional seconds; AM/PM hours are 1–12.
+check(parseClockTime("1:05:30 PM") === "13:05" && parseClockTime("12:00 AM") === "00:00" && parseClockTime("11:59 a.m.") === "11:59", "clock times");
+check(parseClockTime("13:45 PM") === undefined && parseClockTime("0:30 AM") === undefined, "impossible AM/PM hours rejected");
+
+// Quoted-printable in either hex case, and encoded words in their own charset.
+check(normalizeRegistryText("Content-Transfer-Encoding: quoted-printable\n\nLe fran=c3=a7ais suit").includes("Le français suit"), "lowercase quoted-printable hex");
+check(normalizeRegistryText("Subject: =?iso-8859-1?Q?D=E9p=F4t?=").includes("Dépôt"), "ISO-8859-1 encoded word");
+check(normalizeRegistryText("Subject: =?utf-8?B?Q2zDqSBkZSBzb2Npw6l0w6k=?=").includes("Clé de société"), "base64 encoded word");
+
+// A filed (submitted) organization: the number and date are for reference, left to Record incorporation.
+const filed = buildRegistryImportProposal(parsed, { formationStatus: "submitted", profile: { name: "Northwind Example Inc." } });
+const filedNumber = fieldById(filed, "profile.incorporationNumber");
+check(filedNumber?.target.scope === "info" && !filedNumber.selectedByDefault && /Record incorporation/.test(filedNumber.note ?? ""), "number is reference-only while filed");
+check(fieldById(filed, "profile.incorporationDate")?.target.scope === "info", "date is reference-only while filed");
+const filedArgs = proposalToApplyArgs(filed, defaultRegistryImportSelection(filed)).args;
+check(filedArgs.profile?.incorporationNumber === undefined && filedArgs.profile?.incorporationDate === undefined && filedArgs.profile?.articlesMaxDirectors === 7, "default selection leaves the number and date out");
+
+// An older filing never replaces a newer current address by default.
+const newerOffice = buildRegistryImportProposal(parsed, { addresses: [{ type: "registered_office", status: "current", effectiveFrom: "2025-09-01", street: "9 Later Street", city: "Sampletown", provinceState: "BC", postalCode: "V0V 0V9", country: "Canada" }] });
+const olderOffice = fieldById(newerOffice, "address.registered_office");
+check(olderOffice?.replacesCurrent === true && olderOffice.selectedByDefault === false && /Older than the current address/.test(olderOffice.note ?? ""), "older Form 2 address not pre-selected");
+const sameDayOffice = buildRegistryImportProposal(parsed, { addresses: [{ type: "registered_office", status: "current", effectiveFrom: "2025-01-01", street: "9 Earlier Street", city: "Sampletown", postalCode: "V0V 0V9", country: "Canada" }] });
+check(fieldById(sameDayOffice, "address.registered_office")?.selectedByDefault === true, "a newer filing still replaces an older address");
+
+// The rows the review compared against travel to the apply args.
+const withIds = buildRegistryImportProposal(parsed, {
+  registrations: [{ id: "reg_bc", registrationType: "extra_provincial", jurisdiction: "CA-BC", registrationNumber: "A0000001" }],
+  identifiers: [{ id: "idn_bn", kind: "business_number", number: "987654321" }],
+});
+const idArgs = proposalToApplyArgs(withIds, defaultRegistryImportSelection(withIds)).args;
+check(idArgs.registrations?.find((registration) => registration.registrationType === "extra_provincial")?.id === "reg_bc", "registration args carry the compared row's id");
+check(idArgs.registrations?.find((registration) => registration.registrationType === "home")?.id === undefined, "no id without a compared row");
+check(idArgs.identifiers?.find((identifier) => identifier.kind === "business_number")?.id === "idn_bn", "identifier args carry the compared row's id");
+check(fieldById(withIds, "registration.bc.registrationNumber")?.currentId === "reg_bc", "the field names the row it replaces");
+
+// Addresses and identifiers keep their source documents too.
+check((filled.addresses ?? []).every((address) => (address.sourceDocumentIds ?? []).length > 0), "address source documents");
+check((filled.identifiers ?? []).every((identifier) => (identifier.sourceDocumentIds ?? []).includes(ids[parsed[8].fingerprint])), "identifier source documents (the BN email)");
+check(plan.args.addresses?.every((address) => !("sourceDocumentIds" in address)), "plan addresses untouched");
+
+// A generated draft never stands in for the certificate.
+const certificateRow = rows.find((row) => row.file.name === "certificate.pdf")!;
+const draftCopy = { _id: "doc_draft", title: certificateRow.entry.suggestedTitle, category: "CertificateOfIncorporation", importRecordKind: "generated_legal_document" };
+check(isUnofficialDocument(draftCopy) && isUnofficialDocument({ sourcePayloadJson: JSON.stringify({ templateProvenance: { documentState: "draft" } }) }) && !isUnofficialDocument({ title: "x" }), "unofficial document markers");
+const withDraft = importDocumentRows(importProposal, importFiles, [draftCopy]);
+check(!withDraft.find((row) => row.file.name === "certificate.pdf")?.existing && withDraft.find((row) => row.file.name === "certificate.pdf")?.defaultUpload === true, "a generated draft with the same title is not reused");
 
 console.log(`registry documents: ${checks} checks passed`);

@@ -17,7 +17,8 @@ export const CBCA_ANNUAL_RETURN_DAYS = 60;
  * Two calendar months, not 60 days. */
 export const BC_EXTRA_PROVINCIAL_REPORT_MONTHS = 2;
 
-export type FilingWindow = { cycleYear: number; opens: string; due: string };
+/** `overdue`: the window has closed and the filing isn't recorded as made. */
+export type FilingWindow = { cycleYear: number; opens: string; due: string; overdue?: boolean };
 
 /** The same month and day in another year; Feb 29 falls back to Feb 28. */
 export function anniversaryInYear(dateISO: string | undefined, year: number): string | null {
@@ -29,9 +30,13 @@ export function anniversaryInYear(dateISO: string | undefined, year: number): st
 type WindowRule = { days: number } | { months: number };
 
 /**
- * The current or next filing window for an anniversary-anchored annual filing:
- * the first anniversary after `anchorISO` whose window has not closed by
- * `today`, skipping a cycle already filed (`lastFiledISO` on or after it opened).
+ * The filing window to act on for an anniversary-anchored annual filing.
+ *
+ * With a last filing date, it is the first cycle that opened after that
+ * filing: overdue (`overdue: true`) when its window has closed, otherwise
+ * the current or next one. Without one, it is the latest cycle that has
+ * opened (overdue once closed, until the next one opens), or the first one;
+ * earlier cycles aren't guessed at.
  */
 export function anniversaryFilingWindow(anchorISO: string | undefined, rule: WindowRule, today: string, lastFiledISO?: string): FilingWindow | null {
   const anchor = parseComplianceDate(anchorISO);
@@ -41,11 +46,19 @@ export function anniversaryFilingWindow(anchorISO: string | undefined, rule: Win
     const due = opens && ("days" in rule ? addComplianceDays(opens, rule.days) : addCalendarMonths(opens, rule.months));
     return opens && due ? { cycleYear: year, opens, due } : null;
   };
-  let year = Math.max(anchor.year + 1, Number(today.slice(0, 4)) - 1);
-  let window = windowFor(year);
-  while (window && window.due < today) window = windowFor(++year);
-  if (window && lastFiledISO && parseComplianceDate(lastFiledISO) && lastFiledISO >= window.opens) window = windowFor(year + 1);
-  return window;
+  const filed = lastFiledISO && parseComplianceDate(lastFiledISO) ? lastFiledISO : undefined;
+  let year = anchor.year + 1;
+  if (filed) {
+    // The first cycle that opened after the last filing.
+    while (windowFor(year) && windowFor(year)!.opens <= filed) year += 1;
+  } else {
+    year = Math.max(year, Number(today.slice(0, 4)) - 1);
+    // The latest cycle whose window has opened by today.
+    while (windowFor(year + 1) && windowFor(year + 1)!.opens <= today) year += 1;
+  }
+  const window = windowFor(year);
+  if (!window) return null;
+  return window.due < today ? { ...window, overdue: true } : window;
 }
 
 /** The BC extra-provincial annual report window for a BC registration date. */
@@ -56,4 +69,15 @@ export function bcExtraProvincialReportWindow(registrationDate: string | undefin
 /** The CBCA annual return window for the corporation's anniversary. */
 export function cbcaAnnualReturnWindow(anniversaryISO: string | undefined, today: string, lastFiledISO?: string) {
   return anniversaryFilingWindow(anniversaryISO, { days: CBCA_ANNUAL_RETURN_DAYS }, today, lastFiledISO);
+}
+
+/**
+ * A due date recorded on a registration: still ahead ("upcoming"), passed
+ * with no filing recorded for that cycle ("overdue"), or filed (a filing
+ * recorded in the year up to it, or after it).
+ */
+export function recordedDueStatus(dueISO: string, today: string, lastFiledISO?: string): "upcoming" | "overdue" | "filed" {
+  const cycleStart = addCalendarMonths(dueISO, -12);
+  if (lastFiledISO && cycleStart && lastFiledISO > cycleStart) return "filed";
+  return dueISO >= today ? "upcoming" : "overdue";
 }

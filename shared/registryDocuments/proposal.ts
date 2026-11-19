@@ -26,7 +26,9 @@ import type {
   RegistryFacts,
   RegistryFeeEntry,
   RegistryIdentifierKind,
+  RegistryImportAddressArgs,
   RegistryImportApplyArgs,
+  RegistryImportIdentifierArgs,
   RegistryImportProfileArgs,
   RegistryImportProposal,
   RegistryImportRegistrationArgs,
@@ -204,7 +206,7 @@ function makeField(
   target: RegistryProposalTarget,
   candidates: Candidate[],
   current: CurrentValue,
-  extra: { effectiveDate?: string } = {},
+  extra: { effectiveDate?: string; currentId?: string } = {},
 ): RegistryProposalField | undefined {
   if (!candidates.length) return undefined;
   const options: RegistryProposalOption[] = [];
@@ -234,6 +236,7 @@ function makeField(
     sources: options.flatMap((option) => option.sources),
     ...(conflict ? { conflict } : {}),
     ...(extra.effectiveDate ? { effectiveDate: extra.effectiveDate } : {}),
+    ...(extra.currentId ? { currentId: extra.currentId } : {}),
     equalsCurrent,
     replacesCurrent: Boolean(current && !equalsCurrent),
     selectedByDefault: !info && !equalsCurrent && !conflict,
@@ -264,6 +267,14 @@ export function buildRegistryImportProposal(parsed: ParsedRegistryDocument[], cu
   };
   const profileField = (field: RegistryProfileField, group: RegistryProposalGroupKey, label: string, candidates: Candidate[], digitsOnly = false) =>
     push(makeField(`profile.${field}`, group, label, { scope: "profile", field }, candidates, currentText(profile[field], digitsOnly)));
+  // Before the certificate is recorded, the number and date are shown for
+  // reference only: "Record incorporation" sets them, with the certificate.
+  const awaitingCertificate = current.formationStatus === "preparing" || current.formationStatus === "submitted";
+  const certificateField = (field: "incorporationNumber" | "incorporationDate", label: string, candidates: Candidate[], digitsOnly = false) => {
+    if (!awaitingCertificate) return profileField(field, "identity", label, candidates, digitsOnly);
+    const made = makeField(`profile.${field}`, "identity", label, { scope: "info" }, candidates, currentText(profile[field], digitsOnly));
+    push(made && { ...made, note: "Set by Record incorporation, with the certificate." });
+  };
 
   // Identity
   const names = [
@@ -276,18 +287,19 @@ export function buildRegistryImportProposal(parsed: ParsedRegistryDocument[], cu
     ...collect((facts) => facts.homeCorporationNumber, (value) => text(formatFederalNumber(value)), { digitsOnly: true }),
   ].sort((a, b) => b.priority - a.priority);
   const federalNumbers = corporationNumbers.filter((candidate) => candidate.value.kind === "text" && /^\d{7}-\d$/.test(candidate.value.value));
-  profileField("incorporationNumber", "identity", "Corporation number", federalNumbers, true);
+  certificateField("incorporationNumber", "Corporation number", federalNumbers, true);
   const incorporationDates = [
     ...collect((facts) => facts.incorporationDate, text),
     ...collect((facts) => facts.homeIncorporationDate, text),
   ].sort((a, b) => b.priority - a.priority);
-  profileField("incorporationDate", "identity", "Date of incorporation", incorporationDates);
+  certificateField("incorporationDate", "Date of incorporation", incorporationDates);
   const incorporationDate = incorporationDates[0]?.value.kind === "text" ? incorporationDates[0].value.value : undefined;
   profileField("anniversaryDate", "identity", "Anniversary date", collect((facts) => facts.anniversaryMonthDay ? { ...facts.anniversaryMonthDay, value: { monthDay: facts.anniversaryMonthDay.value, firstYear: facts.annualReturnWindow?.value.firstYear } } : undefined, ({ monthDay, firstYear }) => {
     if (incorporationDate && incorporationDate.slice(5) === monthDay) return text(incorporationDate);
     if (firstYear) return text(`${firstYear - 1}-${monthDay}`);
     return incorporationDate ? text(`${incorporationDate.slice(0, 4)}-${monthDay}`) : undefined;
   }));
+  push(makeField("info.annualReturnWindow", "identity", "Annual return window", { scope: "info" }, collect((facts) => facts.annualReturnWindow, (value) => text(`${value.start} to ${value.end}${value.firstYear ? `, first in ${value.firstYear}` : ""}`)), undefined));
   profileField("actFormedUnder", "identity", "Act", collect((facts) => facts.actFormedUnder, text));
   const jurisdictionCodes = collect((facts) => facts.jurisdictionCode, text);
   profileField("jurisdictionCode", "identity", "Jurisdiction", jurisdictionCodes);
@@ -322,9 +334,13 @@ export function buildRegistryImportProposal(parsed: ParsedRegistryDocument[], cu
   const currentRegistration = (target: RegistryRegistrationKey) => (current.registrations ?? []).find((registration) => target === "home"
     ? registration.registrationType === "home"
     : registration.registrationType === "extra_provincial" && incorporationJurisdictionForCode(registration.jurisdiction ?? "")?.id === "BC");
+  for (const target of registrationTargets) {
+    const existingId = currentRegistration(target.key)?.id;
+    if (existingId) target.existingId = existingId;
+  }
   const registrationField = (target: RegistryRegistrationKey, field: RegistryRegistrationField, label: string, candidates: Candidate[], currentValue: CurrentValue) => {
-    const prefix = registrationTargets.find((candidate) => candidate.key === target)?.label ?? target;
-    push(makeField(`registration.${target}.${field}`, "registrations", `${prefix} · ${label}`, { scope: "registration", registration: target, field }, candidates, currentValue));
+    const meta = registrationTargets.find((candidate) => candidate.key === target);
+    push(makeField(`registration.${target}.${field}`, "registrations", `${meta?.label ?? target} · ${label}`, { scope: "registration", registration: target, field }, candidates, currentValue, meta?.existingId ? { currentId: meta.existingId } : {}));
   };
   if (hasFederal) {
     const existing = currentRegistration("home");
@@ -358,7 +374,10 @@ export function buildRegistryImportProposal(parsed: ParsedRegistryDocument[], cu
       value: { kind: "address", value: { street: existing.street, ...(existing.unit ? { unit: existing.unit } : {}), city: existing.city, ...(existing.provinceState ? { provinceState: existing.provinceState } : {}), ...(existing.postalCode ? { postalCode: existing.postalCode } : {}), country: existing.country ?? "Canada" } },
       key: addressKey({ street: existing.street, unit: existing.unit ?? undefined, city: existing.city, provinceState: existing.provinceState ?? undefined, postalCode: existing.postalCode ?? undefined, country: existing.country ?? "" }),
     } : undefined;
-    push(makeField(`address.${type}`, "addresses", label, { scope: "address", addressType: type }, collect(pick, (value) => ({ kind: "address", value })), currentValue, effectiveDate ? { effectiveDate } : {}));
+    const made = makeField(`address.${type}`, "addresses", label, { scope: "address", addressType: type }, collect(pick, (value) => ({ kind: "address", value })), currentValue, effectiveDate ? { effectiveDate } : {});
+    // An older filing never replaces a newer current address by default; applied, it is kept as a past one.
+    const newer = made && !made.equalsCurrent && effectiveDate && existing?.effectiveFrom && effectiveDate < existing.effectiveFrom;
+    push(made && newer ? { ...made, selectedByDefault: false, note: `Older than the current address (from ${existing?.effectiveFrom}). Applied, it is kept as a past address.` } : made);
   };
   addressField("registered_office", "Registered office", (facts) => facts.registeredOfficeAddress, incorporationDate);
   const bcDateValue = bcDate?.value.kind === "text" ? bcDate.value.value : undefined;
@@ -373,7 +392,7 @@ export function buildRegistryImportProposal(parsed: ParsedRegistryDocument[], cu
     const existing = (current.identifiers ?? []).find((identifier) => identifier.kind === kind);
     const currentValue: CurrentValue = existing ? { value: text(existing.number), key: existing.number.replace(/[^0-9A-Za-z]/g, "").toUpperCase() } : undefined;
     const keyed = candidates.map((candidate) => ({ ...candidate, key: candidate.display.replace(/[^0-9A-Za-z]/g, "").toUpperCase() }));
-    push(makeField(`identifier.${kind}`, "tax", label, { scope: "identifier", identifierKind: kind }, keyed, currentValue, bnRegisteredAt ? { effectiveDate: bnRegisteredAt } : {}));
+    push(makeField(`identifier.${kind}`, "tax", label, { scope: "identifier", identifierKind: kind }, keyed, currentValue, { ...(bnRegisteredAt ? { effectiveDate: bnRegisteredAt } : {}), ...(existing?.id ? { currentId: existing.id } : {}) }));
   };
   identifierField("business_number", "Business number (BN)", businessNumbers);
   const incomeTax = collect((facts) => facts.businessNumber && facts.programAccounts ? { ...facts.programAccounts, value: { bn: facts.businessNumber.value, accounts: facts.programAccounts.value } } : undefined, ({ bn, accounts }) => {
@@ -566,6 +585,8 @@ export function proposalToApplyArgs(proposal: RegistryImportProposal, selection:
   const registrations = new Map<RegistryRegistrationKey, { args: RegistryImportRegistrationArgs<never>; sources: Set<string> }>();
   const addresses: NonNullable<RegistryImportApplyArgs<never>["addresses"]> = [];
   const identifiers: NonNullable<RegistryImportApplyArgs<never>["identifiers"]> = [];
+  const addressSources: string[][] = [];
+  const identifierSources: string[][] = [];
   let articlesSelected = false;
 
   for (const group of proposal.groups) {
@@ -584,7 +605,7 @@ export function proposalToApplyArgs(proposal: RegistryImportProposal, selection:
       } else if (target.scope === "registration") {
         const meta = proposal.registrationTargets.find((candidate) => candidate.key === target.registration);
         if (!meta) continue;
-        const entry = registrations.get(target.registration) ?? { args: { registrationType: meta.registrationType, jurisdiction: meta.jurisdiction, ...(meta.homeJurisdiction ? { homeJurisdiction: meta.homeJurisdiction } : {}), status: "active" }, sources: new Set<string>() };
+        const entry = registrations.get(target.registration) ?? { args: { ...(meta.existingId ? { id: meta.existingId } : {}), registrationType: meta.registrationType, jurisdiction: meta.jurisdiction, ...(meta.homeJurisdiction ? { homeJurisdiction: meta.homeJurisdiction } : {}), status: "active" }, sources: new Set<string>() };
         const args = entry.args;
         if (value.kind === "text" && (target.field === "registrationNumber" || target.field === "registrationDate" || target.field === "homeCorporationNumber" || target.field === "nameInHomeJurisdiction" || target.field === "publicRecordUrl")) args[target.field] = value.value;
         else if (value.kind === "boolean" && target.field === "reminderEmailsSubscribed") args.reminderEmailsSubscribed = value.value;
@@ -603,8 +624,10 @@ export function proposalToApplyArgs(proposal: RegistryImportProposal, selection:
         registrations.set(target.registration, entry);
       } else if (target.scope === "address" && value.kind === "address") {
         addresses.push({ type: target.addressType, status: "current", ...value.value, ...(field.effectiveDate ? { effectiveFrom: field.effectiveDate } : {}) });
+        addressSources.push(field.sources.map((source) => source.fingerprint));
       } else if (target.scope === "identifier" && value.kind === "text") {
-        identifiers.push({ kind: target.identifierKind, number: value.value, ...(field.effectiveDate ? { registeredAt: field.effectiveDate } : {}), status: "active", accessLevel: "restricted" });
+        identifiers.push({ ...(field.currentId ? { id: field.currentId } : {}), kind: target.identifierKind, number: value.value, ...(field.effectiveDate ? { registeredAt: field.effectiveDate } : {}), status: "active", accessLevel: "restricted" });
+        identifierSources.push(field.sources.map((source) => source.fingerprint));
       }
     }
   }
@@ -622,6 +645,8 @@ export function proposalToApplyArgs(proposal: RegistryImportProposal, selection:
     addRef(key === "home" ? proposal.documentRoles.federalCertificate : proposal.documentRoles.bcCertificate, { target: "registration.certificateDocumentId", registrationIndex });
     for (const fingerprint of entry.sources) addRef(fingerprint, { target: "registration.sourceDocumentIds", registrationIndex });
   }
+  addressSources.forEach((fingerprints, addressIndex) => new Set(fingerprints).forEach((fingerprint) => addRef(fingerprint, { target: "address.sourceDocumentIds", addressIndex })));
+  identifierSources.forEach((fingerprints, identifierIndex) => new Set(fingerprints).forEach((fingerprint) => addRef(fingerprint, { target: "identifier.sourceDocumentIds", identifierIndex })));
 
   const secret = proposal.secrets.find((candidate) => selection.selected[candidate.id]);
   const args: RegistryImportApplyArgs<never> = {
@@ -638,12 +663,19 @@ export function proposalToApplyArgs(proposal: RegistryImportProposal, selection:
 export function withRegistryDocumentIds<DocId extends string>(plan: RegistryApplyPlan, idsByFingerprint: Partial<Record<string, DocId>>): RegistryImportApplyArgs<DocId> {
   const profile: RegistryImportProfileArgs<DocId> | undefined = plan.args.profile ? { ...plan.args.profile } : undefined;
   const registrations: RegistryImportRegistrationArgs<DocId>[] | undefined = plan.args.registrations?.map((registration) => ({ ...registration }));
+  const addresses: RegistryImportAddressArgs<DocId>[] | undefined = plan.args.addresses?.map((address) => ({ ...address }));
+  const identifiers: RegistryImportIdentifierArgs<DocId>[] | undefined = plan.args.identifiers?.map((identifier) => ({ ...identifier }));
+  const addSource = (row: { sourceDocumentIds?: DocId[] } | undefined, id: DocId) => {
+    if (row && !row.sourceDocumentIds?.includes(id)) row.sourceDocumentIds = [...(row.sourceDocumentIds ?? []), id];
+  };
   let articlesId: DocId | undefined;
   for (const [fingerprint, refs] of Object.entries(plan.documentRefs)) {
     const id = idsByFingerprint[fingerprint];
     if (!id) continue;
     for (const ref of refs) {
       if (ref.target === "profile.articlesSourceDocumentId") articlesId = id;
+      if (ref.target === "address.sourceDocumentIds") addSource(addresses?.[ref.addressIndex], id);
+      if (ref.target === "identifier.sourceDocumentIds") addSource(identifiers?.[ref.identifierIndex], id);
       const registration = "registrationIndex" in ref ? registrations?.[ref.registrationIndex] : undefined;
       if (!registration) continue;
       if (ref.target === "registration.certificateDocumentId") registration.certificateDocumentId = id;
@@ -654,8 +686,8 @@ export function withRegistryDocumentIds<DocId extends string>(plan: RegistryAppl
   return {
     ...(finalProfile ? { profile: finalProfile } : {}),
     ...(registrations ? { registrations } : {}),
-    ...(plan.args.addresses ? { addresses: plan.args.addresses } : {}),
-    ...(plan.args.identifiers ? { identifiers: plan.args.identifiers } : {}),
+    ...(addresses ? { addresses } : {}),
+    ...(identifiers ? { identifiers } : {}),
     ...(plan.args.corporationKey ? { corporationKey: plan.args.corporationKey } : {}),
   };
 }

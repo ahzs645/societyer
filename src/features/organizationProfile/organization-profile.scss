@@ -187,6 +187,15 @@
   font-size: token('fs-sm');
 }
 
+// A registry key saved as plain text on a registration, flagged in its drawer.
+.org-plain-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+}
+
 // Registry portal access, in the registration drawer.
 .org-portal-access {
   display: flex;
