@@ -3,7 +3,7 @@ import { naicsSectorValidator } from "./lib/naics";
 import { normalizeAddressText } from "../shared/structuredAddress";
 import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../shared/onboarding";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
-import { entitySetupFields, validateEntitySetup, validateFormationEvidence, certificateAnniversaryDate } from "../shared/entitySetup";
+import { entitySetupFields, validateEntitySetup, validateFormationEvidence, certificateAnniversaryDate, validateArticlesProvisions } from "../shared/entitySetup";
 import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../shared/organizationDomain";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
@@ -200,8 +200,17 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     publicVolunteerIntakeEnabled: v.optional(v.boolean()),
     publicGrantIntakeEnabled: v.optional(v.boolean()),
     demoMode: v.optional(v.boolean()),
+    articlesMinDirectors: v.optional(v.number()),
+    articlesMaxDirectors: v.optional(v.number()),
+    articlesShareTransferRestrictions: v.optional(v.string()),
+    articlesBusinessRestrictions: v.optional(v.string()),
+    articlesOtherProvisions: v.optional(v.string()),
+    articlesSourceDocumentId: v.optional(v.id("documents")),
   },
   returns: v.any(),
+  // Patch semantics: a field the caller leaves out keeps its stored value, so
+  // pages that save a few fields (Privacy, Transparency, setup) never clear
+  // the rest. Derived fields are written only when they have a value.
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
     const portable = await toPortableMutationCtx(ctx);
@@ -228,6 +237,8 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     const previous = id ? await ctx.db.get(id) : {};
     const formation = { ...previous, ...rest };
     validateEntitySetup(formation);
+    validateArticlesProvisions(formation);
+    if (rest.articlesSourceDocumentId) await getOwned(portable, "documents", rest.articlesSourceDocumentId, id ?? "");
     const certificate = formation.certificateEvidenceDocumentId ? await getOwned(portable, "documents", formation.certificateEvidenceDocumentId, id ?? "") : undefined;
     const certificateVersions = certificate ? await ctx.db.query("documentVersions").withIndex("by_document", (q) => q.eq("documentId", certificate._id)).collect() : [];
     validateFormationEvidence(formation, id, certificate, certificateVersions);
@@ -244,11 +255,16 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
         throw new Error("Public slug is already in use by another society.");
       }
     }
-    const payload = {
-      ...rest,
+    // Convex's patch removes a field set to undefined, so a derived value is
+    // only included when it exists.
+    const derived = {
       incorporationDate: formation.formationStatus === "incorporated" ? formation.certificateDate : rest.incorporationDate,
       homeJurisdictionCode: rest.homeJurisdictionCode ?? rest.jurisdictionCode,
       anniversaryDate: certificateAnniversaryDate(previous ?? {}, formation),
+    };
+    const payload = {
+      ...rest,
+      ...Object.fromEntries(Object.entries(derived).filter(([, value]) => value !== undefined)),
       updatedAt: Date.now(),
     };
     if (id) {

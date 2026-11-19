@@ -90,6 +90,8 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "registered_mailing", label: "Registered Mailing" },
     { value: "records_office", label: "Records Office" },
     { value: "records_mailing", label: "Records Mailing" },
+    { value: "head_office_mailing", label: "Head office · mailing" },
+    { value: "head_office_delivery", label: "Head office · delivery" },
     { value: "mailing", label: "Mailing" },
     { value: "physical", label: "Physical" },
     { value: "other", label: "Other" },

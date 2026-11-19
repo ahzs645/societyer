@@ -56,6 +56,7 @@ jobs:
           npm run test:organization-vocabulary
           npm run test:organization-setup-steps
           npm run test:organization-setup-flow
+          npm run test:organization-registry-import
       - name: Authorization and portable wrapper parity
         run: |
           npm run test:authorization-policy

@@ -100,6 +100,31 @@ export function certificateAnniversaryDate(previous: Record<string, any>, format
   return formation.anniversaryDate ?? formation.certificateDate;
 }
 
+/**
+ * The workspace status that follows a formation status. Preparing or submitted
+ * work is pre-incorporation; a verified or existing incorporation makes a blank
+ * or pre-incorporation workspace active. Any other status (archived, removed,
+ * needs review) stays as it is.
+ */
+export function organizationStatusForFormation(formationStatus: string | undefined, current: string | undefined): string | undefined {
+  if (formationStatus === "preparing" || formationStatus === "submitted") return "pre_incorporation";
+  if ((formationStatus === "incorporated" || formationStatus === "unverified_existing") && (!current || current === "pre_incorporation")) return "active";
+  return current;
+}
+
+/** Director limits from the filed articles: whole numbers of at least one, minimum no more than maximum. */
+export function validateArticlesProvisions(source: { articlesMinDirectors?: unknown; articlesMaxDirectors?: unknown }) {
+  const limits = [["articlesMinDirectors", "Minimum number of directors"], ["articlesMaxDirectors", "Maximum number of directors"]] as const;
+  for (const [key, label] of limits) {
+    const value = source[key];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 1000) throw new Error(`${label} must be a whole number of at least 1.`);
+  }
+  const min = source.articlesMinDirectors;
+  const max = source.articlesMaxDirectors;
+  if (typeof min === "number" && typeof max === "number" && min > max) throw new Error("The minimum number of directors can't be more than the maximum.");
+}
+
 /** "MM-DD" (or a full YYYY-MM-DD) naming a real calendar day; Feb 29 is allowed. */
 export function isValidFiscalYearEnd(value: unknown): boolean {
   const text = String(value ?? "").trim();

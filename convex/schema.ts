@@ -13,6 +13,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { integrationSettingsValidator } from "./lib/integrationSettings";
 import { operativeArticlesValidator } from "./validators/operativeArticles";
+import { registrationAttorneyStatusValidator, registrationPortalAccessValidator } from "./validators/organizationRegistration";
 import { ycnRegisterTables } from "./tables/ycnRegisters";
 import { legalDocsTables } from "./tables/legalDocs";
 import { formationTables } from "./tables/formation";
@@ -279,6 +280,14 @@ export default defineSchema({
     // BC company only: which articles were adopted (Table 1 version or custom),
     // custom Parts and article overrides. See shared/operativeArticles.ts.
     operativeArticles: v.optional(operativeArticlesValidator),
+    // Articles as filed with the registry (federal Form 1 or the BC
+    // equivalent), read from the source document named below.
+    articlesMinDirectors: v.optional(v.number()),
+    articlesMaxDirectors: v.optional(v.number()),
+    articlesShareTransferRestrictions: v.optional(v.string()),
+    articlesBusinessRestrictions: v.optional(v.string()),
+    articlesOtherProvisions: v.optional(v.string()),
+    articlesSourceDocumentId: v.optional(v.id("documents")),
     updatedAt: v.number(),
   })
     .index("by_public_slug", ["publicSlug"])
@@ -286,7 +295,7 @@ export default defineSchema({
 
   organizationAddresses: defineTable({
     societyId: v.id("societies"),
-    type: v.string(), // registered_office | records_office | mailing | physical | other
+    type: v.string(), // registered_office | records_office | head_office_mailing | head_office_delivery | mailing | physical | other
     status: v.string(), // current | past | proposed
     effectiveFrom: v.optional(v.string()),
     effectiveTo: v.optional(v.string()),
@@ -334,6 +343,21 @@ export default defineSchema({
     principalOfficeAddress: v.optional(v.string()),
     representativeIds: v.array(v.string()),
     status: v.string(), // active | inactive | pending | needs_review
+    // Registry time of registration, in the registry's local time ("HH:mm")
+    // and its IANA zone (e.g. "America/Vancouver").
+    registrationTime: v.optional(v.string()),
+    registrationTimeZone: v.optional(v.string()),
+    // The entity's number and name in its home jurisdiction, as shown on an
+    // extra-provincial registration.
+    homeCorporationNumber: v.optional(v.string()),
+    nameInHomeJurisdiction: v.optional(v.string()),
+    attorneyStatus: v.optional(registrationAttorneyStatusValidator),
+    attorneyNotRequiredReason: v.optional(v.string()),
+    reminderEmailsSubscribed: v.optional(v.boolean()),
+    publicRecordUrl: v.optional(v.string()),
+    certificateDocumentId: v.optional(v.id("documents")),
+    // Who holds registry portal access (Online Filing Centre, BC Registry).
+    portalAccess: v.optional(v.array(registrationPortalAccessValidator)),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),

@@ -1,6 +1,8 @@
 import { assertValid, validateAccessCustodyInput } from "../shared/recordValidation";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { internalQuery, query, mutation } from "./lib/untypedServer";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { requireRole, canActAs } from "./users";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -119,6 +121,70 @@ async function logActivity(ctx: any, row: any, actorName: string, action: string
     summary,
     createdAtISO: new Date().toISOString(),
   });
+}
+
+/**
+ * Encrypts a corporation key read from registry documents into the vault, for
+ * `organizationDetails:applyRegistryImport`. An existing linked record holding
+ * the same value is left alone. The value never reaches a log or activity text.
+ */
+export async function writeCorporationKeyToVault(ctx: MutationCtx, input: {
+  societyId: string;
+  value: string;
+  label: string;
+  existingVaultItemId?: string;
+  sourceDocumentIds: string[];
+}): Promise<{ vaultItemId: string; outcome: "created" | "updated" | "unchanged" }> {
+  const societyId = input.societyId as Id<"societies">;
+  const { user } = await assertVaultWrite(ctx, societyId);
+  const now = new Date().toISOString();
+  const existing = input.existingVaultItemId
+    ? await ctx.db.get(input.existingVaultItemId as Id<"secretVaultItems">)
+    : null;
+  if (existing && existing.societyId === societyId) {
+    const current = existing.secretEncrypted ? await decryptSecret(existing.secretEncrypted).catch(() => undefined) : undefined;
+    const sourceDocumentIds = Array.from(new Set([...(existing.sourceDocumentIds ?? []), ...input.sourceDocumentIds])) as Id<"documents">[];
+    const sourcesChanged = sourceDocumentIds.length !== (existing.sourceDocumentIds ?? []).length;
+    if (current === input.value) {
+      if (sourcesChanged) await ctx.db.patch(existing._id, { sourceDocumentIds, updatedAtISO: now });
+      return { vaultItemId: existing._id, outcome: "unchanged" };
+    }
+    if (existing.revealPolicy === "owner_only" && !canActAs(user?.role, "Owner")) {
+      throw new ConvexError({ code: "FORBIDDEN", message: "Owner role required to change the value of an Owner-only record." });
+    }
+    await ctx.db.patch(existing._id, {
+      secretEncrypted: await encryptSecret(input.value),
+      secretPreview: previewFor(input.value),
+      secretUpdatedAtISO: now,
+      secretUpdatedByUserId: user?._id,
+      storageMode: "stored_encrypted",
+      ...(sourcesChanged ? { sourceDocumentIds } : {}),
+      updatedAtISO: now,
+    });
+    await logActivity(ctx, existing, user?.displayName ?? "You", "updated", `Updated access vault record "${existing.name}".`);
+    return { vaultItemId: existing._id, outcome: "updated" };
+  }
+  const row = {
+    societyId,
+    name: input.label,
+    service: "Corporate registry",
+    credentialType: "registry_key",
+    storageMode: "stored_encrypted",
+    secretEncrypted: await encryptSecret(input.value),
+    secretPreview: previewFor(input.value),
+    secretUpdatedAtISO: now,
+    secretUpdatedByUserId: user?._id,
+    revealPolicy: "owner_admin_custodian",
+    status: "Active",
+    sensitivity: "high",
+    accessLevel: "restricted",
+    ...(input.sourceDocumentIds.length ? { sourceDocumentIds: input.sourceDocumentIds as Id<"documents">[] } : {}),
+    createdAtISO: now,
+    updatedAtISO: now,
+  };
+  const id = await ctx.db.insert("secretVaultItems", row);
+  await logActivity(ctx, { societyId, _id: id }, user?.displayName ?? "You", "created", `Created access vault record "${input.label}".`);
+  return { vaultItemId: id, outcome: "created" };
 }
 
 export const list = authorizedQuery("secrets:list", query)({

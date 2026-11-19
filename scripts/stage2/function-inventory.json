@@ -20881,6 +20881,34 @@
     ]
   },
   {
+    "key": "convex:organizationDetails:applyRegistryImport",
+    "surface": "convex",
+    "name": "organizationDetails:applyRegistryImport",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/organizationDetails.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "profile.articlesSourceDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "corporationKey.sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:organizationDetails:backfillFromExistingRecords",
     "surface": "convex",
     "name": "organizationDetails:backfillFromExistingRecords",
@@ -20907,6 +20935,28 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:organizationDetails:recordIncorporation",
+    "surface": "convex",
+    "name": "organizationDetails:recordIncorporation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/organizationDetails.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "certificateEvidenceDocumentId",
+        "table": "documents",
         "array": false,
         "optional": false
       }
@@ -26932,6 +26982,12 @@
       },
       {
         "path": "certificateEvidenceDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "articlesSourceDocumentId",
         "table": "documents",
         "array": false,
         "optional": true
@@ -48379,6 +48435,34 @@
     ]
   },
   {
+    "key": "portable:organizationDetails:applyRegistryImport",
+    "surface": "portable",
+    "name": "organizationDetails:applyRegistryImport",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "profile.articlesSourceDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "corporationKey.sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:organizationDetails:backfillFromExistingRecords",
     "surface": "portable",
     "name": "organizationDetails:backfillFromExistingRecords",
@@ -48405,6 +48489,28 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:organizationDetails:recordIncorporation",
+    "surface": "portable",
+    "name": "organizationDetails:recordIncorporation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "certificateEvidenceDocumentId",
+        "table": "documents",
         "array": false,
         "optional": false
       }

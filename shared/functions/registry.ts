@@ -341,6 +341,14 @@ const BUSINESS_EVIDENCE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "businessEvidence:save", handler: businessEvidenceFns.save }),
 ];
 
+// Recording an incorporation and applying a registry-document import (kept
+// apart: one more entry in the list below is past what the checker can type).
+const ORGANIZATION_REGISTRY_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableMutation({ name: "organizationDetails:recordIncorporation", handler: organizationDetailsFns.recordIncorporationPortable }),
+  // Without the hosted vault writer, a corporation key is recorded as custody only (never stored in plain text).
+  definePortableMutation({ name: "organizationDetails:applyRegistryImport", handler: organizationDetailsFns.applyRegistryImportPortable }),
+];
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
   definePortableQuery({ name: "personHistory:profile", handler: personHistoryFns.profile }),
@@ -837,6 +845,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   ...BILLING_COMMERCE_FUNCTIONS,
   ...TASK_ATTACHMENT_FUNCTIONS,
   ...MEETING_NOTES_FUNCTIONS,
+  ...ORGANIZATION_REGISTRY_FUNCTIONS,
   // invoices
   definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
   definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),

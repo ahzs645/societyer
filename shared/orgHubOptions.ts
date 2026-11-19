@@ -127,7 +127,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "business_corporations_act__yukon_",
     "another_act",
   ],
-  addressTypes: ["registered_office", "registered_mailing", "records_office", "records_mailing", "mailing", "physical", "other"],
+  addressTypes: ["registered_office", "registered_mailing", "records_office", "records_mailing", "head_office_mailing", "head_office_delivery", "mailing", "physical", "other"],
   addressStatuses: ["current", "proposed", "past"],
   eventTypes: [
     "incorporation0",

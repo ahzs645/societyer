@@ -2,7 +2,7 @@ import { assertValid, validateAccessCustodyInput } from "../../shared/recordVali
 import portableManifest from "../../shared/functions/portable-manifest.json";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { mintEntityId } from "../../shared/portable/ids";
-import { validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
+import { validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate, validateArticlesProvisions } from "../../shared/entitySetup";
 import { validateNaicsSectorSelection } from "../../shared/naicsCanada2022";
 import { validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
@@ -1407,8 +1407,11 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
     }
     if (name === "society:upsert") {
       delete row.societyId; // A society is the tenant root, not a child of the default demo society.
+      // Patch semantics, as on hosted Convex: a field passed as undefined keeps its stored value.
+      for (const [key, value] of Object.entries(args ?? {})) if (value === undefined && key in existing) row[key] = existing[key];
       validateNaicsSectorSelection(row.naicsSector);
       validateEntitySetup(row);
+      validateArticlesProvisions(row);
       validateFormationEvidence(row, args?.id, store?.getRow("documents", row.certificateEvidenceDocumentId), store?.listRows("documentVersions", { documentId: row.certificateEvidenceDocumentId }) ?? []);
       if (row.formationStatus === "incorporated") {
         row.anniversaryDate = certificateAnniversaryDate(existing, row);
