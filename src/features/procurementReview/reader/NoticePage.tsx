@@ -188,7 +188,7 @@ export function NoticePage({
             ) : (
               !award && <p className="muted procurement-notice__no-description">The source published no description for this notice.</p>
             )}
-            <NoticeDocuments recordKey={recordKey} model={model} id={DOCUMENTS_ID} />
+            <NoticeDocuments recordKey={recordKey} model={model} id={DOCUMENTS_ID} defaultOpen={requested === "documents"} />
             {review && reviewRows && <ReviewDetails review={review} truncated={reviewRows.truncated} id={REVIEW_DETAILS_ID} />}
             {award && <RelatedAwards model={model} recordKey={recordKey} />}
             {wide ? sourceFields : <AllDetails folded={narrow} facts={facts} contacts={contacts} rest={sourceFields} />}

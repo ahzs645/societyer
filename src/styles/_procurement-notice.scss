@@ -266,6 +266,19 @@
     max-width: 75ch;
   }
 
+  // Folded by default: the head is the summary, with the same chevron as "All details".
+  details#{&}__docs-card {
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: token("s-3");
+      list-style: none;
+      &::-webkit-details-marker { display: none; }
+      &:focus-visible { outline: 2px solid token("border-focus"); outline-offset: -2px; border-radius: token("r-xs"); }
+    }
+    &[open] > summary .procurement-notice__all-chevron { transform: rotate(180deg); }
+  }
   &__docs { list-style: none; margin: 0; padding: 0; }
   &__doc {
     display: flex;
@@ -284,7 +297,7 @@
     display: flex;
     flex-direction: column;
     > span { overflow-wrap: anywhere; }
-    small { font-size: token("fs-xs"); }
+    small { font-size: token("fs-xs"); overflow-wrap: anywhere; }
   }
   &__doc-actions { display: flex; gap: 4px; margin-left: auto; }
   &__doc-busy { flex-basis: 100%; }

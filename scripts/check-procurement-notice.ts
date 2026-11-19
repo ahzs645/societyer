@@ -181,6 +181,8 @@ assert.deepEqual(rows.map((item) => [item.state, item.name, item.state === "else
 assert.equal(new Set(rows.map((item) => item.key)).size, rows.length, "Row keys are unique");
 assert.deepEqual(noticeDocumentRows([doc("Tender Documents.pdf", true)], attachments, false).map((item) => item.name), ["Tender Documents.pdf"], "Without the whole stored list, the source's list waits");
 assert.equal(noticeDocumentRows([], [], true).length, 0);
+const twice = [{ ...doc("Addendum 1", true), sha256: "aa" }, { ...doc("Addendum 2", true), sha256: "bb" }, { ...doc("Addendum 1", true), documentKey: "d:again", sha256: "aa" }];
+assert.deepEqual(noticeDocumentRows(twice, [], true).map((item) => item.key), ["d:Addendum 1", "d:Addendum 2"], "The same bytes stored twice show once");
 const amendmentData = {
   attachments: ["Tender.pdf"],
   addenda: [

@@ -573,7 +573,7 @@ export type NoticeDocumentRow<D> =
   /** Only on the source: stored without its file, or listed and never downloaded. `url` opens it there. */
   | { state: "elsewhere"; key: string; name: string; url?: string; document?: D };
 
-type DocumentListing = { name: string; available: boolean; sourceUrl?: string };
+type DocumentListing = { name: string; available: boolean; sourceUrl?: string; sha256?: string };
 const documentNameKey = (name: string) => name.trim().toLowerCase();
 
 function attachmentLinksByName(attachments: readonly NoticeAttachment[]) {
@@ -640,8 +640,15 @@ export type DocumentTipNames = ReturnType<typeof documentTipNames>;
  */
 export function noticeDocumentRows<D extends DocumentListing & { documentKey: string }>(stored: readonly D[], attachments: readonly NoticeAttachment[], withListed: boolean): NoticeDocumentRow<D>[] {
   const links = attachmentLinksByName(attachments);
-  const rows: NoticeDocumentRow<D>[] = stored.filter((document) => document.available)
-    .map((document) => ({ state: "downloaded", key: document.documentKey, name: document.name, document }));
+  // The same bytes stored twice (a notice fetched again under new keys) show once.
+  const seen = new Set<string>();
+  const rows: NoticeDocumentRow<D>[] = stored.filter((document) => {
+    if (!document.available) return false;
+    if (!document.sha256) return true;
+    if (seen.has(document.sha256)) return false;
+    seen.add(document.sha256);
+    return true;
+  }).map((document) => ({ state: "downloaded", key: document.documentKey, name: document.name, document }));
   for (const document of stored) {
     if (!document.available) rows.push({ state: "elsewhere", key: document.documentKey, name: document.name, url: documentSourceUrl(document, links), document });
   }

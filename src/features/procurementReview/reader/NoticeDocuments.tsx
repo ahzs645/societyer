@@ -2,11 +2,13 @@
  * The notice's files in one list: those Zoer downloaded first (previewed or
  * downloaded from the workspace's SharePoint folder, checked against their
  * SHA-256), then those it didn't download, which open on the source instead.
- * The heading says how many there are; a notice with none gets one line
- * rather than an empty card, pointing to the source, where they may be.
+ * The heading says how many there are, and the list stays folded under it
+ * until opened (or until the list's paperclip, `?tab=documents`, asks for it);
+ * a notice with none gets one line rather than an empty card, pointing to the
+ * source, where they may be.
  */
 import { useCallback, useState } from "react";
-import { Download, ExternalLink, Eye, FileText, Paperclip } from "lucide-react";
+import { ChevronDown, Download, ExternalLink, Eye, FileText, Paperclip } from "lucide-react";
 import { FilePreviewDialog, MAX_FILE_PREVIEW_BYTES } from "../../../components/FilePreviewDialog";
 import type { StoredProcurementDocument } from "../lib/documents";
 import { noticeDocumentRows, onDocumentSource, onSource, type NoticeModel } from "../lib/notice";
@@ -15,14 +17,32 @@ import { useReaderSource } from "./source";
 function size(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
+/** Short labels for the media types whose subtype reads as noise ("VND.OPENXMLFORMATS-…"). */
+const MEDIA_KINDS: Record<string, string> = {
+  "application/msword": "DOC",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+  "application/vnd.ms-excel": "XLS",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+  "application/vnd.ms-powerpoint": "PPT",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+  "application/x-zip-compressed": "ZIP",
+  "application/octet-stream": "",
+  "text/plain": "TXT",
+  "image/jpeg": "JPG",
+};
 function kindOf(name: string, mediaType = "") {
   const extension = /\.([a-z0-9]{2,5})$/i.exec(name)?.[1];
-  return extension ? extension.toUpperCase() : mediaType.split("/").pop()?.toUpperCase() ?? "";
+  if (extension) return extension.toUpperCase();
+  const type = mediaType.toLowerCase().split(";")[0].trim();
+  if (type in MEDIA_KINDS) return MEDIA_KINDS[type];
+  const subtype = type.split("/").pop() ?? "";
+  return /^[a-z0-9]{2,5}$/.test(subtype) ? subtype.toUpperCase() : "";
 }
 
-/** `id` is the section's anchor (`?tab=documents` scrolls to it). */
-export function NoticeDocuments({ recordKey, model, id }: { recordKey: string; model: NoticeModel; id: string }) {
+/** `id` is the section's anchor (`?tab=documents` scrolls to it); `defaultOpen` unfolds the list. */
+export function NoticeDocuments({ recordKey, model, id, defaultOpen = false }: { recordKey: string; model: NoticeModel; id: string; defaultOpen?: boolean }) {
   const source = useReaderSource();
+  const [open, setOpen] = useState(defaultOpen);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const documents = source.useDocuments(recordKey, cursors[cursors.length - 1]);
   const [preview, setPreview] = useState<StoredProcurementDocument | null>(null);
@@ -73,12 +93,13 @@ export function NoticeDocuments({ recordKey, model, id }: { recordKey: string; m
     );
 
   return (
-    <section className="card" id={id} aria-labelledby={`${id}-title`}>
-      <div className="card__head">
+    <details className="card procurement-notice__docs-card" id={id} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
         <h2 className="card__title" id={`${id}-title`}>
           Documents{count && count !== "0" && <> <span className="procurement-notice__count">{count}</span></>}
         </h2>
-      </div>
+        <ChevronDown size={16} aria-hidden="true" className="procurement-notice__all-chevron" />
+      </summary>
       <div className="card__body">
         {error && <p className="notice notice--danger" role="alert">{error}</p>}
         {!documents ? <p className="muted" role="status">Loading documents…</p>
@@ -141,6 +162,6 @@ export function NoticeDocuments({ recordKey, model, id }: { recordKey: string; m
           downloading={busy !== null}
         />
       )}
-    </section>
+    </details>
   );
 }
