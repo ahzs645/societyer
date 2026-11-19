@@ -405,8 +405,8 @@ for (const [label, organization, answers] of ORGS) {
 }
 
 /* ---------------- Name requests: pending, approved, expiring, rejected ---------------- */
-// Times read on Vancouver's clock use dates before 2026-11-01: B.C. has kept UTC-7 all year since then
-// (tzdata 2026b), so a later date would give a different answer on older and newer time zone data.
+// Times converted between zones use past dates (February 2026). B.C. has kept UTC-7 all year since
+// 2026-11-01 (tzdata 2026b), and later dates give different answers on older and newer time zone data.
 {
   const answers = preparingAnswers("federal_cbca");
   const ddc: SetupOrganization = { ...cbca, name: "DDC North Inc." };
@@ -509,18 +509,18 @@ for (const [label, organization, answers] of ORGS) {
   // Saved with the offset of the chosen zone on that day, daylight time included.
   assert.equal(zonedDateTimeISO("2026-02-18", "14:00", "America/Vancouver"), "2026-02-18T14:00:00-08:00");
   assert.equal(zonedDateTimeISO("2026-07-02", "14:00", "America/Vancouver"), "2026-07-02T14:00:00-07:00");
-  assert.equal(zonedDateTimeISO("2026-11-18", "14:00", "America/St_Johns"), "2026-11-18T14:00:00-03:30");
+  assert.equal(zonedDateTimeISO("2026-02-18", "14:00", "America/St_Johns"), "2026-02-18T14:00:00-03:30");
   assert.equal(zonedDateTimeISO("2026-03-08", "02:30", "America/Toronto"), "2026-03-08T03:30:00-04:00", "a skipped hour moves forward");
   assert.equal(timeZoneAbbreviation("America/St_Johns", Date.parse("2026-07-02T12:00:00Z")), "NDT");
   // Shown on the reader's clock, with its short name.
-  assert.equal(formatDecisionExpected("2026-11-18T14:00:00-08:00", { timeZone: "America/Toronto" }), "Nov 18, 5:00 p.m. EST");
-  assert.equal(formatDecisionExpected("2026-11-18T23:30:00-08:00", { timeZone: "America/Halifax" }), "Nov 19, 3:30 a.m. AST");
+  assert.equal(formatDecisionExpected("2026-02-18T14:00:00-08:00", { timeZone: "America/Toronto" }), "Feb 18, 5:00 p.m. EST");
+  assert.equal(formatDecisionExpected("2026-02-18T23:30:00-08:00", { timeZone: "America/Halifax" }), "Feb 19, 3:30 a.m. AST");
   assert.equal(formatDecisionExpected("2026-11-18", { timeZone: "America/Halifax" }), "Nov 18");
 
   // The form opens a saved time in the zone it was given in when it can tell.
   const vancouver = { viewerTimeZone: "America/Vancouver" };
   assert.deepEqual(decisionTimeFields("2026-02-18T14:00:00-08:00", vancouver), { date: "2026-02-18", time: "14:00", timeZone: "America/Vancouver" });
-  assert.deepEqual(decisionTimeFields("2026-11-18T14:00:00-05:00", vancouver), { date: "2026-11-18", time: "14:00", timeZone: "America/Toronto" }, "an Eastern offset opens in Eastern time");
+  assert.deepEqual(decisionTimeFields("2026-02-18T14:00:00-05:00", vancouver), { date: "2026-02-18", time: "14:00", timeZone: "America/Toronto" }, "an Eastern offset opens in Eastern time");
   assert.deepEqual(decisionTimeFields("2026-02-18T14:00:00+01:00", vancouver), { date: "2026-02-18", time: "05:00", timeZone: "America/Vancouver" }, "an unknown offset is converted to the viewer's zone");
   assert.deepEqual(decisionTimeFields("2026-11-18T14:00", { ...vancouver, sourceTimeZone: "America/Toronto" }), { date: "2026-11-18", time: "14:00", timeZone: "America/Toronto" }, "an older bare time opens in the organization's zone");
   assert.deepEqual(decisionTimeFields("2026-11-18", vancouver), { date: "2026-11-18", time: "", timeZone: "America/Vancouver" });
