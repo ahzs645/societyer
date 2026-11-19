@@ -140,8 +140,7 @@ test("date and time picker closes without losing an unsaved meeting drawer", asy
 });
 
 test("drawer and modal headers paint above mobile chrome and close by touch", async ({ page }) => {
-  await page.goto("/demo/app/society");
-  await page.getByText("More organization details", { exact: false }).click();
+  await page.goto("/demo/app/society?tab=offices");
   const address = page.getByRole("button", { name: "Address", exact: true });
   await address.click();
   const drawer = page.getByRole("dialog", { name: "New address", exact: true });

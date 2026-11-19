@@ -64,7 +64,7 @@ assert.equal(companyDefaults.proposedName.value, "Founder Labs Inc.");
 assert.equal(companyDefaults.proposedName.source, "profile");
 assert.equal(companyDefaults.namedCompany.value, false, "the numbered-name choice comes from the profile flag");
 assert.equal(companyDefaults.registeredOffice.value, "Suite 4, 100 Queen St, Ottawa, ON, K1P 1J9, Canada", "a proposed structured office beats the legacy text");
-assert.equal(companyDefaults.registeredOffice.href, "/app/society#registered-office");
+assert.equal(companyDefaults.registeredOffice.href, "/app/society?tab=offices#registered-office");
 assert.equal(companyDefaults.directors.value, "Alex Abroad (not a resident Canadian); Jane Founder (proposed, resident Canadian)", "current and proposed directors with residency; former ones are left out");
 assert.equal(companyDefaults.directors.label, "Directors register");
 assert.equal(companyDefaults.shareStructure.value, "Common (proposed)", "active and proposed share classes only");

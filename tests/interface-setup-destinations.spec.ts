@@ -41,27 +41,25 @@ test("setup destinations work for a corporation that is preparing incorporation"
   const phone = info.project.name === "phone" || info.project.name === "narrow-phone";
   await createPreparingCbcaWorkspace(page, `Destination Probe ${info.project.name} Inc.`);
 
-  // Profile: the proposed name and fiscal year end edit freely, one status shows,
-  // and the registered-office link opens the collapsed details section.
+  // Profile: the registered-office link from before the tabs opens Offices & contacts;
+  // the proposed name and fiscal year end edit freely and one status shows.
   await page.goto("/app/society#registered-office");
   await expect(page.getByRole("heading", { name: "Organization profile", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Offices & contacts", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#registered-office")).toBeInViewport();
+  await expect(page.getByRole("button", { name: "Address", exact: true })).toBeInViewport();
+  await page.getByRole("tab", { name: "Legal profile", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Proposed name", exact: true })).toBeEditable();
   await expect(page.getByRole("button", { name: /^Unlock / })).toHaveCount(0);
   await expect(page.getByText("Preparing incorporation", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Organization status", { exact: true })).toHaveCount(0);
-  await expect(page.locator("#more-organization-details")).toHaveJSProperty("open", true);
-  await expect(page.locator("#registered-office")).toBeInViewport();
-  await page.locator("#more-organization-details > summary").click();
-  await expect(page.locator("#more-organization-details")).toHaveJSProperty("open", false);
-  await page.getByRole("link", { name: "Manage", exact: true }).click();
-  await expect(page.locator("#more-organization-details")).toHaveJSProperty("open", true);
-  await expect(page.getByRole("button", { name: "Address", exact: true })).toBeInViewport();
+  await expect(page.getByText("Workspace status", { exact: true })).toHaveCount(0);
   if (phone) {
     // The everyday formatting buttons fit; the rest wait behind "More formatting".
     await expect(page.getByRole("button", { name: "More formatting", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Heading 1", exact: true })).toHaveCount(0);
   }
   await fits(page);
+  await page.getByRole("tab", { name: "Documents", exact: true }).click();
   const articlesRow = page.locator(".society-doc-table tr", { hasText: "Articles" });
   await expect(articlesRow.getByText("Missing", { exact: true })).toBeVisible();
 
@@ -75,7 +73,7 @@ test("setup destinations work for a corporation that is preparing incorporation"
   await page.getByRole("option", { name: "Articles of incorporation", exact: true }).click();
   await documentDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Document saved", { exact: true })).toBeVisible();
-  await page.goto("/app/society");
+  await page.goto("/app/society?tab=documents");
   await expect(page.locator(".society-doc-table tr", { hasText: "Articles" }).getByText("On file", { exact: true })).toBeVisible();
 
   // Corporation people: setup's deep link opens the add form, preset and proposed.
@@ -134,7 +132,7 @@ test("setup destinations work for a corporation that is preparing incorporation"
 });
 
 test("profile locks are visible, tappable buttons on an incorporated organization", async ({ page }) => {
-  await page.goto("/demo/app/society");
+  await page.goto("/demo/app/society?tab=legal");
   await expect(page.getByRole("heading", { name: "Organization profile", exact: true })).toBeVisible({ timeout: 60_000 });
   const unlock = page.getByRole("button", { name: "Unlock Legal name", exact: true });
   await expect(unlock).toBeVisible();

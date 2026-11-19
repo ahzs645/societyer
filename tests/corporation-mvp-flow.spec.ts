@@ -77,13 +77,11 @@ test("corporation MVP flow renders obligations, share register, registration, an
   await page.getByRole("button", { name: "Packet" }).click();
   await expect(page.getByText("Packet staged").last()).toBeVisible();
 
-  // Organization Details was merged into the Society page; the old route now
-  // redirects there, and the registration register lives in its expandable
-  // "More organization details" section.
+  // Organization Details was merged into the organization profile; the old
+  // route now redirects to its Registrations tab.
   await navigate("/app/organization-details");
   await expect(page.getByRole("heading", { name: "Organization profile" })).toBeVisible();
-  await expect(page.locator("input.input").first()).toHaveValue("Northstar Browser Flow Holdings Inc.");
-  await page.getByText("More organization details").click();
+  await expect(page.getByRole("tab", { name: /^Registrations/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Canada federal - CBCA").first()).toBeVisible();
   await expect(page.getByText("Ontario - OBCA").first()).toBeVisible();
   await expect(page.getByText("ON-BROWSER-001")).toBeVisible();

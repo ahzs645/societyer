@@ -132,7 +132,7 @@ for (const [label, organization, answers] of ORGS) {
   assert.equal(stepOf(progress, "name").note, "Working name saved: Northstar Corp.");
   assert.equal(progress.next?.key, "office");
   assert.equal(progress.next?.title, "Add the registered office address");
-  assert.equal(progress.next?.to, "/app/society#registered-office");
+  assert.equal(progress.next?.to, "/app/society?tab=offices#registered-office");
   // No step asks for an incorporation number before the certificate.
   assert.equal(hasStep(progress, "number"), false);
   assert.ok(!steps(progress).some((step) => step.phase === "prepare" && /incorporation number|corporation number/i.test(`${step.title} ${step.description}`)));

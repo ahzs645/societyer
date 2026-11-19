@@ -41,7 +41,7 @@ test("a document filed as Other is chosen as the articles from the profile, then
   await documentDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Document saved", { exact: true })).toBeVisible();
 
-  await page.goto("/app/society");
+  await page.goto("/app/society?tab=documents");
   await expect(page.getByRole("heading", { name: "Organization profile", exact: true })).toBeVisible();
   const articlesRow = page.locator(".society-doc-table tr", { hasText: "Articles" });
   await expect(articlesRow.getByText("Missing", { exact: true })).toBeVisible();
@@ -80,7 +80,7 @@ test("a document filed as Other is chosen as the articles from the profile, then
   await expect(page.locator("#step-articles")).toHaveClass(/setup-step--done/, { timeout: 30_000 });
 
   // Unlink, then undo.
-  await page.goto("/app/society");
+  await page.goto("/app/society?tab=documents");
   await expect(articlesRow.getByText("On file", { exact: true })).toBeVisible();
   await articlesRow.getByRole("button", { name: "Unlink Articles", exact: true }).click();
   await expect(articlesRow.getByText("Missing", { exact: true })).toBeVisible();

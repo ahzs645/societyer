@@ -393,23 +393,9 @@
   box-sizing: border-box;
 }
 
-/* ---- Society profile page ----------------------------------------------
- * Main/side layout: the left rail holds constitution and privacy state; the
- * right rail holds operational cards that should scan as reference material.
- * All helpers collapse to a single column at 1100px to match `.two-col`. */
+/* ---- Organization profile field grids ----------------------------------
+ * Two (or three) fields to a row; they collapse on phones (_chrome-society). */
 
-.society-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(360px, 0.95fr);
-  gap: token('s-4');
-  align-items: start;
-}
-.society-layout__main,
-.society-layout__side {
-  display: grid;
-  gap: token('s-4');
-  min-width: 0;
-}
 .society-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

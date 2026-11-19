@@ -4,7 +4,7 @@ test("organization GST account can be saved once and referenced while filing", a
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.clock.setFixedTime(new Date("2026-11-08T20:00:00Z"));
-  await page.goto("/app/society");
+  await page.goto("/app/society?tab=tax");
   await expect(page.getByTestId("gst-account-reference")).toBeVisible();
   await page.evaluate(async () => {
     const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
@@ -58,8 +58,9 @@ test("organization GST account can be saved once and referenced while filing", a
   await expect(filingModal.getByTestId("gst-account-reference")).toContainText("123456789RT0001");
   await expect(filingModal.getByTestId("gst-account-reference")).toContainText("does not change or verify a submitted return");
   await filingModal.getByRole("button", { name: "Cancel", exact: true }).click();
+  // The section link from before the profile had tabs opens the Tax accounts tab.
   await page.goto("/app/society#tax-identifiers");
-  await expect(page.locator("#more-organization-details")).toHaveAttribute("open", "");
+  await expect(page.getByRole("tab", { name: "Tax accounts", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#tax-identifiers")).toBeInViewport();
   // The content scroll must not shift the fixed-height outer layout and clip the page.
   await expect(page.locator("#main-content")).toHaveJSProperty("scrollTop", 0);

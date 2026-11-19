@@ -424,9 +424,6 @@
   white-space: nowrap;
 }
 @media (max-width: 1100px) {
-  .society-layout { grid-template-columns: 1fr; }
-}
-@media (max-width: 1100px) {
   .society-split { grid-template-columns: 1fr; gap: 0; }
   .society-split > * + * {
     padding-left: 0;
@@ -437,11 +434,6 @@
   }
 }
 @media (max-width: 760px) {
-  .society-layout,
-  .society-layout__main,
-  .society-layout__side {
-    gap: token('s-3');
-  }
   .society-field-grid {
     grid-template-columns: 1fr;
   }
@@ -454,49 +446,18 @@
   .society-field-grid--mobile-pair {
     grid-template-columns: 1fr 1fr;
   }
-  .society-layout .card__head,
-  .society-layout .card__body {
-    padding: token('s-3');
-  }
-  .society-layout .card__body .field {
+  .org-profile-panel .card__body .field {
     margin-bottom: token('s-3');
   }
-  .society-layout .card__body > .field:last-child,
-  .society-layout .card__body > .society-field-grid:last-child .field {
+  .org-profile-panel .card__body > .field:last-child,
+  .org-profile-panel .card__body > .society-field-grid:last-child .field {
     margin-bottom: 0;
   }
 }
 
-.society-bottom {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: token('s-4');
-  align-items: start;
-}
-.society-bottom > * { min-width: 0; }
-@media (max-width: 1100px) {
-  .society-bottom { grid-template-columns: 1fr; }
-}
-@media (max-width: 760px) {
-  .society-bottom { gap: token('s-3'); }
-}
+/* ---- Organization profile: shared field groups and registers ----------
+ * The tab layout itself lives in features/organizationProfile. */
 
-/* ---- Organization details page -----------------------------------------
- * Keep the registry dossier scannable by grouping fields into compact cards,
- * then treat detail tables as a register area instead of independent stripes. */
-
-.org-details-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
-  gap: token('s-4');
-  align-items: start;
-}
-.org-details-top > * {
-  min-width: 0;
-}
-.org-details-classification-card {
-  grid-column: 1 / -1;
-}
 /* Only the block margin: `.page--wide > *` centers the fieldset with auto
  * inline margins, and a `margin: 0` here pushed the form left of the header. */
 .society-fieldset {
@@ -505,23 +466,6 @@
   margin-block: 0;
   min-width: 0;
 }
-.org-details-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: token('s-1') token('s-2');
-  padding: token('s-4');
-  cursor: pointer;
-}
-.org-details-summary__title { font-weight: 600; }
-.org-details-summary__hint { font-size: token('fs-sm'); }
-.org-details-body {
-  display: flex;
-  flex-direction: column;
-  gap: token('s-4');
-  padding-top: 0;
-}
-.org-details-field-grid__wide { grid-column: 1 / -1; }
 .org-details-backfill {
   display: flex;
   flex-wrap: wrap;
@@ -533,23 +477,16 @@
   font-size: token('fs-sm');
 }
 /* Formation, tax and annual-date fields: titled groups instead of one long run. */
-.entity-setup-fields {
-  display: flex;
-  flex-direction: column;
-  gap: token('s-5');
-}
 .entity-setup-group {
   display: flex;
   flex-direction: column;
   gap: token('s-3');
   min-width: 0;
 }
-.entity-setup-group + .entity-setup-group,
-.entity-setup-fields + .entity-setup-group {
+.entity-setup-group + .entity-setup-group {
   padding-top: token('s-4');
   border-top: 1px solid token('border');
 }
-.entity-setup-fields + .entity-setup-group { margin-top: token('s-5'); }
 .entity-setup-group__title {
   margin: 0;
   font-size: token('fs-sm');
@@ -569,15 +506,6 @@
   gap: token('s-1');
 }
 .entity-setup-group .org-details-toggle-row { margin-top: 0; }
-.org-details-field-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: token('s-3');
-  align-items: start;
-}
-.org-details-field-grid > * {
-  min-width: 0;
-}
 .org-details-toggle-row {
   display: flex;
   flex-wrap: wrap;
@@ -615,17 +543,6 @@
   gap: token('s-2');
   align-items: center;
 }
-.org-detail-registers {
-  display: grid;
-  gap: token('s-4');
-  margin-top: token('s-4');
-}
-.org-detail-registers__pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: token('s-4');
-  align-items: start;
-}
 .org-detail-section {
   min-width: 0;
 }
@@ -650,24 +567,7 @@
 .structured-address-fields__region-row {
   grid-template-columns: minmax(0, 1fr) minmax(128px, 0.55fr);
 }
-@media (max-width: 1100px) {
-  .org-details-top,
-  .org-detail-registers__pair {
-    grid-template-columns: 1fr;
-  }
-  .org-details-classification-card {
-    grid-column: auto;
-  }
-}
 @media (max-width: 760px) {
-  .org-details-top,
-  .org-detail-registers,
-  .org-detail-registers__pair {
-    gap: token('s-3');
-  }
-  .org-details-field-grid {
-    grid-template-columns: 1fr;
-  }
   .org-details-date-row,
   .org-details-date-row--draft {
     grid-template-columns: 1fr;
@@ -970,11 +870,8 @@
   .society-field-grid--registry-dates .field__lock-text { display: none; }
 }
 @media (max-width: 380px) {
-  .society-layout .society-field-grid--registry-dates {
+  .society-field-grid--registry-dates {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .society-layout .society-field-grid--registry-dates > :first-child {
-    grid-column: auto;
   }
 }
 /* Headings receive focus programmatically on each step change (for screen

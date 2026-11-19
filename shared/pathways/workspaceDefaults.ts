@@ -57,8 +57,8 @@ const bounded = (value: string) => (value.length > TEXT_MAX ? `${value.slice(0, 
 
 export const PATHWAY_SOURCES = {
   profile: { source: "profile", label: "Organization profile", href: "/app/society" },
-  registeredOffice: { source: "registered-office", label: "Registered office address", href: "/app/society#registered-office" },
-  recordsOffice: { source: "records-office", label: "Records office address", href: "/app/society#registered-office" },
+  registeredOffice: { source: "registered-office", label: "Registered office address", href: "/app/society?tab=offices#registered-office" },
+  recordsOffice: { source: "records-office", label: "Records office address", href: "/app/society?tab=offices#registered-office" },
   directorsRegister: { source: "role-holders", label: "Directors register", href: "/app/role-holders?role=director" },
   societyDirectors: { source: "directors", label: "Directors", href: "/app/directors" },
   shareRegister: { source: "share-classes", label: "Share register", href: "/app/rights-ledger" },
