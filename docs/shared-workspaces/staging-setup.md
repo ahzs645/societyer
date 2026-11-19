@@ -13,7 +13,7 @@ Check what each candidate is used for before taking it over:
 | Candidate | Current use | Verdict |
 | --- | --- | --- |
 | `gallant-anteater-27` | DDC North development. `.env.local` points `npx convex dev` at it. | Avoid. Your dev loop would overwrite staging code. |
-| `reminiscent-marlin-243` | First Form development and qualification | Avoid. It holds qualification evidence. |
+| `reminiscent-marlin-243` | Former First Form development and qualification; deleted November 19, 2026 | Unavailable. Earlier qualification records describe its historical use. |
 | A new deployment | none | **Recommended** |
 
 Create a named deployment in the project that will most likely host production.

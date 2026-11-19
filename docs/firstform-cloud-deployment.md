@@ -14,8 +14,8 @@ configuration and transfer evidence.
 | Production Pages project | `societyer-ddcnorth`, Direct Upload |
 | Production frontend release | `bf8ab44f-d9cb-464f-9197-4029737631af`, source `7dcad5ef` |
 | Shared production | [industrious-cricket-610](https://dashboard.convex.dev/t/ahmad-jalil/societyer-ddcnorth/industrious-cricket-610) |
-| Development / qualification | `reminiscent-marlin-243`; not moved |
-| Former production | `elated-bee-460`; deleted November 19, 2026; First Form development and shared production retained |
+| Former development / qualification | `reminiscent-marlin-243`; deleted November 19, 2026 |
+| Former production | `elated-bee-460`; deleted November 19, 2026; shared production retained |
 
 ## Release
 
@@ -102,10 +102,13 @@ remain unqualified.
 
 The former backend's old identities were blocked after migration to prevent
 split writes. `elated-bee-460` was deleted on November 19 at
-`2026-11-19T18:02:22Z`; the subsequent lookup returned HTTP 404. Only that
-deployment was deleted. Shared production and First Form development remain,
-and the legacy Pages alias continues to use the shared backend for hosting
-rollback. The November 8 record identifies encrypted backups and recovery notes
+`2026-11-19T18:02:22Z`; the subsequent lookup returned HTTP 404. First Form
+development remained at that checkpoint. Its development/qualification
+deployment, `reminiscent-marlin-243`, was then deleted at
+`2026-11-19T18:11:32Z` with HTTP 200; its subsequent lookup returned HTTP 404.
+The First Form project remains with no deployments. Shared production remains,
+and the legacy Pages alias continues to use the shared backend for hosting rollback.
+The November 8 record identifies encrypted backups and recovery notes
 held privately outside Git; those files were not reverified during retirement.
 Recovery from those exports would require a fresh deployment and reconciliation
 of subsequent shared-production writes. Use the

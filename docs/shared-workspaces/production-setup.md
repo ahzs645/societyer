@@ -3,8 +3,9 @@
 Updated November 19, 2026 (America/Vancouver). The shared frontend and First Form
 domain move are live; Cloudflare domain, ownership and certificate validation
 are active. Both portals' sign-in presentation and shared script were verified
-in the browser. The obsolete First Form production backend was deleted on
-November 19; shared production and the retained frontend alias are unaffected.
+in the browser. The obsolete First Form production and development deployments
+were deleted on November 19; shared production and the retained frontend alias
+are unaffected.
 The November 8 database-migration evidence is preserved separately below.
 Use this page for the current production configuration, the [operator runbook](operator-runbook.md) for
 commands, and [lessons learned](lessons-learned.md) for the reasons and limits.
@@ -24,7 +25,8 @@ The feasibility review and October qualification records describe earlier states
 | Cloudflare account | `479e77f49d4ac5d7498529ee360f194b` |
 | Former First Form backend | `elated-bee-460`; deleted November 19, 2026; no longer a rollback target |
 | Transfer rehearsal | `rapid-ox-123`; isolated copy, temporary deploy key revoked |
-| Development | `gallant-anteater-27` (DDC), `reminiscent-marlin-243` (First Form); not repurposed |
+| Development | `gallant-anteater-27` (DDC); retained |
+| Former First Form development / qualification | `reminiscent-marlin-243`; deleted November 19, 2026 |
 
 ```mermaid
 flowchart TD
@@ -267,9 +269,9 @@ fix; it does not require new Cloudflare assets or a database migration.
 
 The official Convex Management API deletion of `elated-bee-460` returned HTTP
 200 at `2026-11-19T18:02:22Z`. A subsequent deployment lookup
-returned HTTP 404. Only that deployment was deleted; the First Form project
-remains and its inventory now contains only development deployment
-`reminiscent-marlin-243`. The shared project still contains production
+returned HTTP 404. At that checkpoint, only the production deployment had been
+deleted; the First Form project remained with development deployment
+`reminiscent-marlin-243`. The shared project inventory still contained production
 `industrious-cricket-610`, development `gallant-anteater-27` and rehearsal
 `rapid-ox-123`.
 
@@ -278,6 +280,15 @@ the meeting-transfer Worker use the shared backend. Deleting the obsolete
 deployment required no frontend, DNS, workspace-policy or shared-data change.
 The retained Pages release remains available for hosting rollback; it does not
 depend on `elated-bee-460`.
+
+The remaining First Form development/qualification deployment,
+`reminiscent-marlin-243`, was subsequently deleted through the same official
+Management API, which returned HTTP 200 at `2026-11-19T18:11:32Z`. Its subsequent
+lookup returned HTTP 404. The First Form project remains with no deployments;
+the shared project's three deployments listed above were unchanged. Current
+frontend profiles and the local production selector use the shared backend;
+the DDC development profile uses `gallant-anteater-27`. The development
+retirement required no application configuration or Cloudflare release.
 
 ### November 8, 2026: shared-backend migration
 
