@@ -14,7 +14,7 @@ const doc = { _id: "doc", societyId: "soc", title: "Example", category: "Filing"
 const db = new MemoryDb({ seed: {
   societies: [company],
   users: ["owner", "member", "viewer"].map(id => ({ _id: id, societyId: "soc", role: { owner: "Owner", member: "Member", viewer: "Viewer" }[id] })),
-  documents: [doc, { ...doc, _id: "foreignDoc", societyId: "foreign" }],
+  documents: [doc, { ...doc, _id: "doc2" }, { ...doc, _id: "foreignDoc", societyId: "foreign" }],
   directors: [{ _id: "director", societyId: "soc", consentOnFile: false }],
   rightsholdingTransfers: [{ _id: "issuance", societyId: "soc", transferType: "issuance", status: "posted", rightsClassId: "class", quantity: 10 }],
   rightsClasses: [{ _id: "class", societyId: "soc", className: "Class A" }],
@@ -65,6 +65,13 @@ assert.ok(evidenceRules(company, shares).sources.length);
 assert.equal(evidenceRules({ ...company, jurisdictionCode: "CA-ON" }, shares).sources.length, 0);
 assert.equal(evidenceRules({ ...company, legalSubtype: "ulc" }, shares).available, false);
 assert.equal(evidenceRules({ entityType: "society" }, shares).available, false);
+// A deleted supporting document leaves the entry listed and revisable without it.
+const consent = { societyId: "soc", register: "directorConsents" };
+const cited = await owner.runMutation<string>("businessEvidence:save", { ...consent, values: values.directorConsents, documentId: "doc2" });
+await db.delete("doc2");
+const orphan = (await owner.runQuery<any[]>("businessEvidence:list", consent)).find(row => row._id === cited);
+assert.equal(orphan?.documentMissing, true);
+await owner.runMutation("businessEvidence:save", { ...consent, values: values.directorConsents, previousId: cited });
 // A private source removes the linked entry from a reader's results.
 assert.deepEqual(await runtime("member").runQuery("businessEvidence:list", { societyId: "soc", register: "equitySubscriptions" }), []);
 const hosted = convexTest(schema, {

@@ -305,6 +305,17 @@ export const EXPORTABLE_TABLES = [
   "governanceExpectations",
   "continuityPeriodMarks",
   "agreements",
+  // Business records registers (share notices, director consents, supporting records).
+  "shareNotices",
+  "directorConsents",
+  "businessChannels",
+  "mailboxServices",
+  "bankRelationships",
+  "clientCardAccess",
+  "governanceDecisions",
+  "identifierDetails",
+  "recognitionDetails",
+  "equitySubscriptions",
 ] as const;
 
 export const listExportableTables = authorizedQuery("exports:listExportableTables", query)({

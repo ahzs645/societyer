@@ -55,8 +55,12 @@ export async function list(ctx: PortableQueryCtx, args: Scope) {
   }
   const visible = await Promise.all(rows.map(async row => {
     if (row.documentId) {
-      const doc = opens && await ctx.db.get(row.documentId, "documents");
-      if (!doc || !opens?.(doc)) return null;
+      if (!opens) return null;
+      const doc = await ctx.db.get(row.documentId, "documents");
+      // A deleted supporting document leaves the record listed, so it can be
+      // revised to cite another document or none. Unreadable documents stay hidden.
+      if (!doc) return { ...row, historical: superseded.has(row._id), documentMissing: true };
+      if (!opens(doc)) return null;
     }
     return { ...row, historical: superseded.has(row._id) };
   }));
@@ -151,7 +155,8 @@ export async function save(ctx: PortableMutationCtx, args: Scope & {
       particulars = previous.particulars;
     }
     if (register.table === "directorConsents" && previous.directorId !== values.directorId) throw new Error("A consent revision must refer to the same director.");
-    if (previous.documentId) await checkDocument(previous.documentId);
+    // Revising needs access to the document the record cites, unless it was deleted.
+    if (previous.documentId && await ctx.db.get(previous.documentId, "documents")) await checkDocument(previous.documentId);
     const newer = await ctx.db.query(register.table).withIndex("by_previous", q => q.eq("previousId", args.previousId)).first();
     if (newer) throw new Error("This record has a newer version. Open the latest entry.");
     if (register.table === "shareNotices" && previous.noticeNumber !== values.noticeNumber) throw new Error("A revised notice retains its number.");

@@ -5113,6 +5113,40 @@
     ]
   },
   {
+    "key": "convex:businessEvidence:choices",
+    "surface": "convex",
+    "name": "businessEvidence:choices",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/businessEvidence.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:businessEvidence:list",
+    "surface": "convex",
+    "name": "businessEvidence:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/businessEvidence.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:businessEvidence:save",
+    "surface": "convex",
+    "name": "businessEvidence:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/businessEvidence.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:bylawAmendments:createDraft",
     "surface": "convex",
     "name": "bylawAmendments:createDraft",
@@ -34747,6 +34781,40 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:businessEvidence:choices",
+    "surface": "portable",
+    "name": "businessEvidence:choices",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:businessEvidence:list",
+    "surface": "portable",
+    "name": "businessEvidence:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:businessEvidence:save",
+    "surface": "portable",
+    "name": "businessEvidence:save",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       }
     ]
   },

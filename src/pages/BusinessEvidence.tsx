@@ -15,7 +15,7 @@ type Choices = Record<string, Option[]>;
 type NoticeParticulars = { company?: string; holder?: string; shareClass?: string; quantity?: number; issueOrTransferDate?: string };
 interface EvidenceRow {
   particulars?: NoticeParticulars;
-  _id: string; historical: boolean; recordedAt: string; documentId?: string; sourcePage?: number;
+  _id: string; historical: boolean; recordedAt: string; documentId?: string; sourcePage?: number; documentMissing?: boolean;
   [key: string]: string | number | boolean | NoticeParticulars | undefined;
 }
 
@@ -46,7 +46,9 @@ function Register({ register, org, societyId }: { register: EvidenceRegister; or
       if (row?.[field.key] != null) values[field.key] = field.type === "money"
         ? displayValue(field, row[field.key], {}) : String(row[field.key]);
     }
-    setDraft({ ...values, documentId: row?.documentId ?? "", sourcePage: String(row?.sourcePage ?? "") });
+    // A deleted supporting document can't be cited again; the revision starts without one.
+    const documentId = row?.documentMissing ? "" : row?.documentId ?? "";
+    setDraft({ ...values, documentId, sourcePage: documentId ? String(row?.sourcePage ?? "") : "" });
     setPreviousId(row?._id);
     setError("");
   };
@@ -89,7 +91,8 @@ function Register({ register, org, societyId }: { register: EvidenceRegister; or
             <dl>{register.fields.filter(field => row[field.key] != null).map(field => <div key={field.key}>
               <dt>{field.label}</dt><dd>{displayValue(field, row[field.key], choices ?? {})}</dd>
             </div>)}</dl>
-            {row.documentId && <Link to={'/app/documents/' + row.documentId}>{docs?.find(doc => doc._id === row.documentId)?.title ?? "Supporting document"}{row.sourcePage && ' · p. ' + row.sourcePage}</Link>}
+            {row.documentMissing ? <p className="muted">Supporting document deleted{canWrite && !row.historical ? ". Revise the record to cite another document." : "."}</p>
+              : row.documentId && <Link to={'/app/documents/' + row.documentId}>{docs?.find(doc => doc._id === row.documentId)?.title ?? "Supporting document"}{row.sourcePage && ' · p. ' + row.sourcePage}</Link>}
             {canWrite && !row.historical && <p><button className="btn btn--sm" onClick={() => open(row)}>Revise record</button></p>}
           </div>
         </article>)}

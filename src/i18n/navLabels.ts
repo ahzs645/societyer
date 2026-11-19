@@ -66,6 +66,7 @@ export const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Grants: "nav.grants",
   "Procurement review": "nav.procurementReview",
   Agreements: "nav.agreements",
+  "Business records": "nav.businessRecords",
   Reconciliation: "nav.reconciliation",
   Approvals: "nav.approvals",
   Invoices: "nav.invoices",
