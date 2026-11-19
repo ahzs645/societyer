@@ -23,5 +23,27 @@ assert.equal(dashboard.counts.directors, 2);
 assert.ok(dashboard.board.some((row: any) => row._id === roleHolderId), "a corporation director keeps its actual roleHolders ID through return validation");
 assert.equal(dashboard.board.find((row: any) => row._id === roleHolderId)?.termStart, undefined, "a missing source date remains unknown");
 assert.equal(dashboard.board.find((row: any) => row._id === rosterId)?.termStart, "2026-01-01");
+
+// Exercise the hosted return validator, not just the portable handler: a
+// neutral preparation flag must be accepted for every pre-incorporation state.
+for (const state of [
+  { label: "preparing", formationStatus: "preparing", organizationStatus: undefined },
+  { label: "submitted", formationStatus: "submitted", organizationStatus: undefined },
+  { label: "legacy pre-incorporation", formationStatus: undefined, organizationStatus: "pre_incorporation" },
+] as const) {
+  await test.run(async ctx => ctx.db.patch(societyId, { formationStatus: state.formationStatus, organizationStatus: state.organizationStatus }));
+  const preparing = await owner.query(api.dashboard.summary, { societyId });
+  const note = preparing.complianceFlags.find((flag: any) => flag.ruleId === "DASHBOARD-COMPLIANCE-PREPARING");
+  assert.equal(note?.level, "info", `${state.label} returns its neutral preparation note through Convex validation`);
+  assert.ok(!preparing.complianceFlags.some((flag: any) => flag.ruleId.startsWith("LEGAL-")), `${state.label} does not run incorporated legal checks`);
+  await assert.rejects(() => test.query(api.dashboard.summary, { societyId }), /membership|Authentication/i);
+}
+
+// A recorded incorporation takes precedence over a stale legacy status and
+// restores the same legal checks as the existing incorporated/default path.
+await test.run(async ctx => ctx.db.patch(societyId, { formationStatus: "incorporated", organizationStatus: "pre_incorporation" }));
+const incorporated = await owner.query(api.dashboard.summary, { societyId });
+assert.deepEqual(incorporated.complianceFlags, dashboard.complianceFlags, "incorporation restores the existing compliance flags");
+assert.ok(!incorporated.complianceFlags.some((flag: any) => flag.ruleId === "DASHBOARD-COMPLIANCE-PREPARING"));
 await assert.rejects(() => test.query(api.dashboard.summary, { societyId }), /membership|Authentication/i);
-console.log("Corporation Convex dashboard passed: mixed director/role-holder IDs and unknown appointment dates validate; anonymous access stays denied.");
+console.log("Corporation Convex dashboard passed: mixed director/role-holder IDs, unknown appointment dates and all preparation states validate; incorporation restores legal checks and anonymous access stays denied.");

@@ -251,6 +251,17 @@ mappings remain unchanged. The legacy First Form alias keeps its existing sessio
 flow; it is not blanket-redirected. See the [release and rollback guide](shared-frontend-release.md).
 Authenticated business workflows were not requalified by this hosting release.
 
+### November 19, 2026: dashboard preparation notice fix
+
+An authenticated organization still preparing incorporation exposed a mismatch
+between the dashboard response and its Convex return validator: the neutral
+preparation notice used `info`, while the validator accepted only `ok`, `warn`
+and `err`. The hosted validator now covers every shared `ComplianceFlagLevel`.
+The existing Convex dashboard regression test reproduces the original rejection
+and checks preparing, submitted, legacy pre-incorporation and incorporated
+states, including anonymous-access denial. This is a backend response-validation
+fix; it does not require new Cloudflare assets or a database migration.
+
 ### November 8, 2026: shared-backend migration
 
 Shared-workspace features were already on main at `0135f7c8`. Configuration
