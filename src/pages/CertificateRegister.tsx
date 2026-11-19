@@ -1,3 +1,6 @@
+import { Link } from "react-router-dom";
+import { evidenceRules } from "../../shared/businessEvidenceRules";
+import { businessRegisters } from "../../shared/businessEvidence";
 import { useConfirm } from "../components/Modal";
 import { calendarDateKey } from "../lib/calendarDates";
 import { isCorporation } from "../../shared/organizationDomain";
@@ -159,6 +162,7 @@ export function CertificateRegisterPage() {
         }
       />
 
+      <div>{evidenceRules(society, businessRegisters.find(item => item.table === "shareNotices")!).available && <Link className="btn btn--sm" to="/app/business-records?register=shareNotices">Uncertificated share notices</Link>}</div>
       {list !== undefined && list.length > 0 && (
         <div className="register-asof">
           <label className="register-asof__date">

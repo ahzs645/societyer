@@ -152,6 +152,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (HANDLER_POLICIES.has(name) || PUBLIC_HANDLERS.has(name)) return null;
   if (name === "receipts:registrationHistory") return "society:read";
   if (name === "receipts:evidenceForReview") return "society:read";
+  // Each register enforces its own domain permission inside the portable handler.
+  if (name.startsWith("businessEvidence:")) return null;
   if (name === "receipts:recordRegistration") return "society:write";
   if (name === "seedRecordTableMetadata:ensureForSociety") return "settings:write";
   const [domain, action] = name.split(":");

@@ -174,6 +174,7 @@ const PersonReviewPage = React.lazy(() => import("./pages/PersonHistory").then(m
 const PersonProfilePage = React.lazy(() => import("./pages/PersonHistory").then(m => ({default:m.PersonProfilePage})));
 const PeopleDirectoryPage = React.lazy(() => import("./pages/PeopleDirectory").then((m) => ({ default: m.PeopleDirectoryPage })));
 const DividendsPage = React.lazy(() => import("./pages/Dividends").then((m) => ({ default: m.DividendsPage })));
+const BusinessEvidencePage = React.lazy(() => import("./pages/BusinessEvidence").then(m => ({ default: m.BusinessEvidencePage })));
 const ServiceProvidersPage = React.lazy(() => import("./pages/ServiceProviders").then((m) => ({ default: m.ServiceProvidersPage })));
 const ComplianceSettingsPage = React.lazy(() => import("./pages/ComplianceSettings").then((m) => ({ default: m.ComplianceSettingsPage })));
 const CorporateHistoryPage = React.lazy(() => import("./pages/CorporateHistory").then((m) => ({ default: m.CorporateHistoryPage })));
@@ -458,6 +459,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="coverage" element={<CoverageGapsPage />} />
             <Route path="people-directory/:id" element={<PersonProfilePage />} />
             <Route path="dividends" element={withEntityKind("/app/dividends", <DividendsPage />)} />
+            <Route path="business-records" element={<BusinessEvidencePage />} />
             <Route path="service-providers" element={<ServiceProvidersPage />} />
             <Route path="compliance-settings" element={<ComplianceSettingsPage />} />
             <Route path="corporate-history" element={<CorporateHistoryPage />} />
